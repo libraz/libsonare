@@ -14,6 +14,7 @@
 #include <variant>
 #include <vector>
 
+#include "util/json_key.h"
 #include "util/number_format.h"
 
 #ifndef SONARE_JSON_NAMESPACE
@@ -29,8 +30,21 @@ class JsonError : public std::runtime_error {
 
   std::size_t position() const noexcept { return position_; }
 
+ protected:
+  /// A message that locates itself by key path rather than by byte offset.
+  struct Located {};
+  JsonError(std::string message, std::size_t position, Located)
+      : std::runtime_error(std::move(message)), position_(position) {}
+
  private:
   std::size_t position_ = 0;
+};
+
+/// @brief A key repeated within one object, refused as "duplicate key <path>".
+class JsonDuplicateKeyError : public JsonError {
+ public:
+  JsonDuplicateKeyError(const std::string& path, std::size_t position)
+      : JsonError("duplicate key " + path, position, Located{}) {}
 };
 
 class JsonResourceError : public JsonError {
@@ -227,9 +241,12 @@ class Parser {
       // that demand a single authoritative value per field (e.g. the EQ band
       // C API) rely on this to fail fast on malformed input.
       if (reject_duplicate_keys_ && object.count(key) != 0) {
-        fail("duplicate JSON object key");
+        throw JsonDuplicateKeyError(path_text(key), pos_);
       }
-      object[std::move(key)] = parse_value(depth);
+      if (reject_duplicate_keys_) path_.emplace_back(false, key);
+      Value value = parse_value(depth);
+      if (reject_duplicate_keys_) path_.pop_back();
+      object[std::move(key)] = std::move(value);
       skip_ws();
       if (consume('}')) break;
       expect(',');
@@ -243,7 +260,9 @@ class Parser {
     skip_ws();
     if (consume(']')) return array;
     while (true) {
+      if (reject_duplicate_keys_) path_.emplace_back(true, std::to_string(array.size()));
       array.push_back(parse_value(depth));
+      if (reject_duplicate_keys_) path_.pop_back();
       skip_ws();
       if (consume(']')) break;
       expect(',');
@@ -416,6 +435,21 @@ class Parser {
   }
 
   [[noreturn]] void fail(const std::string& message) const { throw JsonError(message, pos_); }
+
+  // The key path of @p key in the object being read, spelled as util/json_schema.h spells it.
+  std::string path_text(const std::string& key) const {
+    std::string out;
+    for (const auto& [is_index, segment] : path_) {
+      if (is_index) {
+        out += "[" + segment + "]";
+        continue;
+      }
+      if (!out.empty()) out += '.';
+      out += ::sonare::util::json::escape_key(segment);
+    }
+    if (!out.empty()) out += '.';
+    return out + ::sonare::util::json::escape_key(key);
+  }
   [[noreturn]] void fail_resource(const std::string& message) const {
     throw JsonResourceError(message, pos_);
   }
@@ -424,6 +458,8 @@ class Parser {
   std::size_t pos_ = 0;
   std::size_t max_depth_ = kDefaultMaxDepth;
   bool reject_duplicate_keys_ = false;
+  std::vector<std::pair<bool, std::string>>
+      path_;  ///< (is index, key or index) from the root, strict mode only.
   ParseResourceLimits resource_limits_;
   std::size_t node_count_ = 0;
   std::size_t string_bytes_ = 0;

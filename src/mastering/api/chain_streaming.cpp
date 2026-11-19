@@ -32,6 +32,7 @@
 #include "streaming/realtime_limits.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/json_schema.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::mastering::api {
@@ -596,13 +597,13 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   }
   if (!std::isfinite(value) ||
       std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain parameter must be finite and representable");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, full_key,
+                                            ::sonare::util::json::schema::kFloatRangePredicate);
   }
   const float float_value = static_cast<float>(value);
   if (!std::isfinite(float_value)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain parameter must be finite and representable");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, full_key,
+                                            ::sonare::util::json::schema::kFloatRangePredicate);
   }
 
   const auto target = std::find_if(impl_->parameter_targets.begin(), impl_->parameter_targets.end(),

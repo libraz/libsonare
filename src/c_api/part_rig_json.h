@@ -12,6 +12,7 @@
 #include "midi/part_rig.h"
 #include "sonare_c_internal.h"
 #include "util/json_budget.h"
+#include "util/json_schema.h"
 
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/api/insert_factory.h"
@@ -32,20 +33,29 @@ inline SonareError parse_part_rig_inserts(const char* inserts_json,
     set_last_error(SONARE_ERROR_INVALID_FORMAT, ex.what());
     return SONARE_ERROR_INVALID_FORMAT;
   }
-  const auto bad_shape = [] {
-    set_last_error(SONARE_ERROR_INVALID_FORMAT,
-                   "inserts_json must be an array of {\"processor\": string, \"params\": object}");
+  namespace schema = sonare::util::json::schema;
+  const auto refuse = [](const std::string& message) {
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   };
-  if (!root.is_array()) return bad_shape();
+  if (!root.is_array()) return refuse(schema::must_be("", schema::Kind::Array));
+  std::size_t index = 0;
   for (const json::Value& item : root.as_array()) {
-    if (!item.is_object()) return bad_shape();
+    const std::string at = schema::index_path("", index++);
+    if (!item.is_object()) return refuse(schema::must_be(at, schema::Kind::Object));
+    const std::string processor_at = schema::child_path(at, "processor");
     const json::Value* processor = item.find("processor");
-    if (processor == nullptr || !processor->is_string()) return bad_shape();
+    if (processor == nullptr) return refuse(schema::missing_key(processor_at));
+    if (!processor->is_string()) return refuse(schema::must_be(processor_at, schema::Kind::String));
+    if (processor->as_string().empty()) {
+      return refuse(schema::refusal(processor_at, "must not be empty"));
+    }
     sonare::midi::PartRigStage stage;
     stage.processor = processor->as_string();
     if (const json::Value* params = item.find("params")) {
-      if (!params->is_object()) return bad_shape();
+      if (!params->is_object()) {
+        return refuse(schema::must_be(schema::child_path(at, "params"), schema::Kind::Object));
+      }
       stage.params_json = json::dump(*params);
     } else {
       stage.params_json = "{}";
@@ -61,16 +71,30 @@ inline SonareError parse_part_rig_inserts(const char* inserts_json,
 inline bool validate_part_rig_chain(const std::vector<sonare::midi::PartRigStage>& stages) {
   constexpr double kValidationSampleRate = 48000.0;
   constexpr int kValidationBlockSize = 512;
-  for (const sonare::midi::PartRigStage& stage : stages) {
+  namespace schema = sonare::util::json::schema;
+  const auto refuse = [](const std::string& message) {
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
+    return false;
+  };
+  for (std::size_t i = 0; i < stages.size(); ++i) {
+    const sonare::midi::PartRigStage& stage = stages[i];
+    const std::string at = schema::index_path("", i);
     try {
       auto insert = sonare::mastering::api::make_insert(stage.processor, stage.params_json);
-      if (!insert) return false;
+      if (!insert) {
+        return refuse(schema::refusal(schema::child_path(at, "processor"),
+                                      "must name a processor that can be built"));
+      }
       insert->prepare(kValidationSampleRate, kValidationBlockSize);
       if (insert->latency_samples_q8() > (sonare::midi::kMaxPartRigLatencySamples << 8)) {
-        return false;
+        return refuse(schema::refusal(
+            at, "must report a latency of at most " +
+                    std::to_string(sonare::midi::kMaxPartRigLatencySamples) + " samples"));
       }
-    } catch (const sonare::SonareException&) {
-      return false;
+    } catch (const sonare::SonareParameterRefusal& ex) {
+      return refuse(schema::relabel_under(ex, schema::child_path(at, "params"), ex.code()).what());
+    } catch (const sonare::SonareException& ex) {
+      return refuse(schema::refusal(at, std::string("is refused: ") + ex.what()));
     }
   }
   return true;

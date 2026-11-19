@@ -20,10 +20,11 @@ namespace sonare::serialize::detail {
 #endif
 
 SONARE_PROJECT_SERIALIZER_PRIVATE_HIDDEN const std::string* strict_string_field(
-    const sonare::util::json::Value& value, const char* key);
+    const sonare::util::json::Value& value, const std::string& path, const char* key);
 
 SONARE_PROJECT_SERIALIZER_PRIVATE_HIDDEN void sidecar_fields_from_json(
-    const sonare::util::json::Value& value, sonare::arrangement::AssistSidecar* out);
+    const sonare::util::json::Value& value, const std::string& path,
+    sonare::arrangement::AssistSidecar* out);
 
 SONARE_PROJECT_SERIALIZER_PRIVATE_HIDDEN bool sidecar_from_borrowed_payload(
     const std::string& encoded_payload, sonare::arrangement::AssistSidecar* out,

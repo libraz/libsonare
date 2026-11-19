@@ -1,12 +1,15 @@
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/realtime/config_ranges.h"
 #include "effects/formant_warp.h"
+#include "util/json_schema.h"
 
 namespace sonare::editing::voice_changer {
 namespace detail {
@@ -41,32 +44,56 @@ RealtimeVoiceChangerConfig normalize_config(const RealtimeVoiceChangerConfig& in
 
 using namespace detail;
 
+namespace {
+
+namespace schema = sonare::util::json::schema;
+
+// The member path of a config field as the reader the config came from spells it.
+std::string field_path(std::string_view member, ConfigFieldSpelling spelling) {
+  switch (spelling) {
+    case ConfigFieldSpelling::Member:
+      return std::string(member);
+    case ConfigFieldSpelling::PresetDocument:
+      return schema::child_path("dsp", member);
+    case ConfigFieldSpelling::FlatPod:
+      break;
+  }
+  // A flat POD key joins section and field in camel case; an enum named after its section is
+  // the section alone.
+  if (member == "voiceEngine.engine") return "voiceEngine";
+  if (member == "reverbVariation.variation") return "reverbVariation";
+  std::string out;
+  bool upper = false;
+  for (const char c : member) {
+    if (c == '.') {
+      upper = true;
+      continue;
+    }
+    out += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c;
+    upper = false;
+  }
+  return out;
+}
+
+}  // namespace
+
 bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& config,
                                             RealtimeVoiceChangerConfig* normalized,
-                                            std::string* error) {
+                                            std::string* error, ConfigFieldSpelling spelling) {
   if (error) error->clear();
   bool ok = true;
+  const auto path = [spelling](std::string_view member) { return field_path(member, spelling); };
   // The success path builds no strings: text is composed only once a field fails.
-  visit_scalar_fields(config, [&](const char* name, const float& v, const Range&, float) {
-    if (!ok || std::isfinite(v)) return;
+  visit_scalar_fields(config, [&](const char* name, const float& v, const Range& r, float) {
+    if (!ok || (v >= static_cast<float>(r.lo) && v <= static_cast<float>(r.hi))) return;
     ok = false;
-    if (error) *error = std::string("config field is not finite: ") + name;
+    if (error) *error = schema::refusal(path(name), schema::range_predicate(r.lo, r.hi));
   });
   if (ok && config.formant_mode != FormantMode::Relative &&
       config.formant_mode != FormantMode::Absolute) {
     ok = false;
-    if (error) *error = "formant mode must be 'relative' or 'absolute'";
+    if (error) *error = schema::refusal(path("formant.mode"), "must be 'relative' or 'absolute'");
   }
-  visit_scalar_fields(config, [&](const char* name, const float& v, const Range& r, float) {
-    if (!ok || (v >= static_cast<float>(r.lo) && v <= static_cast<float>(r.hi))) return;
-    ok = false;
-    if (error) {
-      char text[160];
-      std::snprintf(text, sizeof(text), "%s out of range [%.6g, %.6g], got %.6g", name, r.lo, r.hi,
-                    static_cast<double>(v));
-      *error = text;
-    }
-  });
   if (ok) {
     // The retune stage states its own domain; the scalars above already passed, so only the grain
     // can be refused here.
@@ -74,63 +101,65 @@ bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& co
         config.retune, nullptr, {"retune.pitchSemitones", "retune.mix", "retune.grainSizeSamples"});
     if (!problem.empty()) {
       ok = false;
+      if (error && spelling != ConfigFieldSpelling::Member) {
+        const std::string semitones = path("retune.pitchSemitones");
+        const std::string mix = path("retune.mix");
+        const std::string grain = path("retune.grainSizeSamples");
+        problem = streaming_retune_config_problem(config.retune, nullptr,
+                                                  {semitones.c_str(), mix.c_str(), grain.c_str()});
+      }
       if (error) *error = std::move(problem);
     }
   }
   visit_enum_fields(config, [&](const char* name, bool declared) {
     if (!ok || declared) return;
     ok = false;
-    if (error) *error = std::string("config field names no declared value: ") + name;
+    if (error) *error = schema::refusal(path(name), "must name a declared value");
   });
   visit_integer_fields(config, [&](const char* name, const int& v, const Range& r) {
     if (!ok || (v >= static_cast<int>(r.lo) && v <= static_cast<int>(r.hi))) return;
     ok = false;
-    if (error) {
-      char text[160];
-      std::snprintf(text, sizeof(text), "%s out of range [%d, %d], got %d", name,
-                    static_cast<int>(r.lo), static_cast<int>(r.hi), v);
-      *error = text;
-    }
+    if (error) *error = schema::refusal(path(name), schema::integer_range_predicate(r.lo, r.hi));
   });
   // The grain engine has no f0, so nothing that needs one can run on it.
   if (ok && config.voice_engine.engine == PitchEngine::Grain) {
-    const char* needs_f0 = nullptr;
+    std::string needs_f0;
     if (config.pitch_correction.mode != PitchCorrectionMode::Off) {
-      needs_f0 = "pitchCorrection.mode other than 'off'";
+      needs_f0 = path("pitchCorrection.mode") + " other than 'off'";
     } else if (config.harmony.voices > 0) {
-      needs_f0 = "harmony.voices above 0";
+      needs_f0 = path("harmony.voices") + " above 0";
     } else if (config.vocoder.enabled) {
-      needs_f0 = "vocoder.enabled";
+      needs_f0 = path("vocoder.enabled");
     }
-    if (needs_f0 != nullptr) {
+    if (!needs_f0.empty()) {
       ok = false;
       if (error) {
-        *error = std::string(needs_f0) +
-                 " needs voiceEngine.engine 'psola': the grain engine tracks no f0";
+        *error = schema::refusal(path("voiceEngine.engine"), "must be 'psola' for " + needs_f0 +
+                                                                 ": the grain engine tracks no f0");
       }
     }
   }
+  // Only a tempo delay can outrun the line: an echo's own delay range ends at its length.
   if (ok && space_delay_exceeds_limit(config.reverb_variation)) {
     ok = false;
     if (error) {
-      char text[200];
-      std::snprintf(text, sizeof(text),
-                    "reverbVariation delay out of range: %.6g ms exceeds the %.6g ms delay line",
-                    static_cast<double>(space_delay_ms(config.reverb_variation)),
-                    static_cast<double>(kMaxSpaceDelayMs));
-      *error = text;
+      *error = schema::refusal(path("reverbVariation.tempoBpm"),
+                               "must give a delay of at most " +
+                                   schema::bound_text(kMaxSpaceDelayMs) + " ms at " +
+                                   path("reverbVariation.division") + ", the delay line's length");
     }
   }
   // Only the grain engine warps the formants ahead of the shift; psola resamples its grains.
   if (ok && config.voice_engine.engine == PitchEngine::Grain &&
-      !formant_warp_is_reachable(config, error)) {
+      !formant_warp_is_reachable(config, error, spelling)) {
     ok = false;
   }
   if (normalized) *normalized = ok ? config : RealtimeVoiceChangerConfig{};
   return ok;
 }
 
-bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error) {
+bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error,
+                               ConfigFieldSpelling spelling) {
   if (config.formant_mode != FormantMode::Absolute) return true;
   double lo = 0.0;
   double hi = 0.0;
@@ -143,22 +172,21 @@ bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::st
   if (error) {
     char text[360];
     const double semitones = static_cast<double>(config.retune.semitones);
+    const std::string semitones_path = field_path("retune.pitchSemitones", spelling);
     if (named_lo > named_hi) {
       std::snprintf(text, sizeof(text),
-                    "absolute formant mode: no formant factor is reachable at a pitch shift of "
-                    "%.4g semitones (the warp reaches [%.4g, %.4g] there, outside formantFactor's "
-                    "[%.4g, %.4g])",
-                    semitones, lo, hi, static_cast<double>(kFormantFactorMin),
-                    static_cast<double>(kFormantFactorMax));
+                    "must be 'relative': no formant factor is reachable in absolute mode at %s "
+                    "%.4g (the warp reaches [%.4g, %.4g] there, outside [%.4g, %.4g])",
+                    semitones_path.c_str(), semitones, lo, hi,
+                    static_cast<double>(kFormantFactorMin), static_cast<double>(kFormantFactorMax));
+      *error = schema::refusal(field_path("formant.mode", spelling), text);
     } else {
       std::snprintf(text, sizeof(text),
-                    "absolute formant mode: formant factor must be in [%.4g, %.4g] at a pitch "
-                    "shift of %.4g semitones (the warp reaches [%.4g, %.4g] there, limited by "
-                    "formantFactor's [%.4g, %.4g]), got %.4g",
-                    named_lo, named_hi, semitones, lo, hi, static_cast<double>(kFormantFactorMin),
-                    static_cast<double>(kFormantFactorMax), factor);
+                    "must be in [%.4g, %.4g] in absolute formant mode at %s %.4g (the warp "
+                    "reaches [%.4g, %.4g] there)",
+                    named_lo, named_hi, semitones_path.c_str(), semitones, lo, hi);
+      *error = schema::refusal(field_path("formant.factor", spelling), text);
     }
-    *error = text;
   }
   return false;
 }

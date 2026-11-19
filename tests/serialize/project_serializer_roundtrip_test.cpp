@@ -707,17 +707,14 @@ TEST_CASE("project serialize/deserialize/serialize is byte-identical", "[seriali
   CHECK(s1 == s2);  // Round-trip is byte-for-byte stable.
 }
 
-TEST_CASE("project loader uses the last duplicate sampleRate key", "[serialize]") {
+TEST_CASE("project loader refuses a duplicate sampleRate key", "[serialize]") {
   const auto duplicate =
       project_from_json(R"({"version":7,"sampleRate":44100,"sampleRate":96000})");
-  const auto canonical = project_from_json(R"({"version":7,"sampleRate":96000})");
 
-  REQUIRE(duplicate.ok());
-  REQUIRE(canonical.ok());
-  REQUIRE(duplicate.project->sample_rate() == 96000.0);
-  REQUIRE(canonical.project->sample_rate() == 96000.0);
-  CHECK(project_to_json(*duplicate.project, duplicate.midi) ==
-        project_to_json(*canonical.project, canonical.midi));
+  REQUIRE_FALSE(duplicate.ok());
+  REQUIRE_FALSE(duplicate.diagnostics.empty());
+  CHECK(duplicate.diagnostics.back().code == "malformed_json");
+  CHECK(duplicate.diagnostics.back().message.find("duplicate key sampleRate") != std::string::npos);
 }
 
 TEST_CASE("opaque automation lanes omit the target kind", "[serialize]") {
@@ -1100,15 +1097,14 @@ TEST_CASE("a key no record reads is refused by its path at every level", "[seria
     CHECK_FALSE(refused.project.has_value());
     REQUIRE_FALSE(refused.diagnostics.empty());
     CHECK(refused.diagnostics.back().code == "invalid_format");
-    CHECK(refused.diagnostics.back().message ==
-          std::string("unknown project key '") + c.path + "'");
+    CHECK(refused.diagnostics.back().message == std::string("unknown key ") + c.path);
   }
 
-  // The embedded scene refuses through its own reader, prefixed with the subtree.
+  // The embedded scene refuses through its own reader, with paths from the project root.
   const auto scene = project_from_json(doc(R"("scene":{"version":1,"strips":[{"id":"a","x":1}]})"));
   CHECK_FALSE(scene.ok());
   REQUIRE_FALSE(scene.diagnostics.empty());
-  CHECK(scene.diagnostics.back().message == "scene: unknown scene key 'strips[0].x'");
+  CHECK(scene.diagnostics.back().message == "unknown key scene.strips[0].x");
 
   // A control character in a key cannot forge a second line.
   const auto forged = project_from_json(doc("\"clips\":[{\"id\":1,\"x\\nunknown\":1}]"));
@@ -1137,13 +1133,14 @@ TEST_CASE("a snake_case project key is refused naming the camelCase key to write
       {R"({"version":7,"sample_rate":48000})",
        "sample_rate is an earlier spelling; write sampleRate"},
       {R"({"version":7,"clips":[{"id":1,"start_ppq":0}]})",
-       "clips[0].start_ppq is an earlier spelling; write startPpq"},
+       "clips[0].start_ppq is an earlier spelling; write clips[0].startPpq"},
       {R"({"version":7,"clips":[{"id":1,"loop_period_seconds":1}]})",
-       "clips[0].loop_period_seconds is an earlier spelling; write loopPeriodSec"},
+       "clips[0].loop_period_seconds is an earlier spelling; write clips[0].loopPeriodSec"},
       {R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"target_kind":1}]}]})",
-       "tracks[0].automationLanes[0].target_kind is an earlier spelling; write targetKind"},
+       "tracks[0].automationLanes[0].target_kind is an earlier spelling; write "
+       "tracks[0].automationLanes[0].targetKind"},
       {R"({"version":7,"midiContent":{"__sysex_payloads":{}}})",
-       "midiContent.__sysex_payloads is an earlier spelling; write __sysexPayloads"},
+       "midiContent.__sysex_payloads is an earlier spelling; write midiContent.__sysexPayloads"},
   };
   for (const auto& c : kCases) {
     CAPTURE(c.document);
@@ -1380,7 +1377,7 @@ TEST_CASE("project deserialize refuses a track pan outside [-1, 1]", "[serialize
     REQUIRE_FALSE(result.ok());
     REQUIRE_FALSE(result.diagnostics.empty());
     CHECK(result.diagnostics.back().code == "invalid_format");
-    CHECK(result.diagnostics.back().message.find("tracks[].pan") != std::string::npos);
+    CHECK(result.diagnostics.back().message.find("tracks[0].pan") != std::string::npos);
   }
 }
 
@@ -1390,14 +1387,14 @@ TEST_CASE("project deserialize rejects float narrowing overflow with a field pat
     const char* field_path;
   };
   const std::vector<InvalidFloatField> documents = {
-      {R"({"version":7,"tracks":[{"id":1,"gain":1e39}]})", "tracks[].gain"},
-      {R"({"version":7,"tracks":[{"id":1,"pan":-1e39}]})", "tracks[].pan"},
+      {R"({"version":7,"tracks":[{"id":1,"gain":1e39}]})", "tracks[0].gain"},
+      {R"({"version":7,"tracks":[{"id":1,"pan":-1e39}]})", "tracks[0].pan"},
       {R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"points":[{"value":1e39}]}]}]})",
-       "tracks[].automationLanes[].points[].value"},
-      {R"({"version":7,"clips":[{"id":1,"gain":-1e39}]})", "clips[].gain"},
+       "tracks[0].automationLanes[0].points[0].value"},
+      {R"({"version":7,"clips":[{"id":1,"gain":-1e39}]})", "clips[0].gain"},
       {R"({"version":7,"annotation":{"tempoConfidence":1e39}})", "annotation.tempoConfidence"},
       {R"({"version":7,"annotation":{"onsets":[{"confidence":-1e39}]}})",
-       "annotation.onsets[].confidence"},
+       "annotation.onsets[0].confidence"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"inputTrimDb":1e39}]}})",
        "scene.strips[].inputTrimDb"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"faderDb":-1e39}]}})",
@@ -2309,21 +2306,21 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
   using sonare::serialize::detail::sidecar_from_json;
   using sonare::serialize::detail::str_or;
 
-  CHECK(str_or(util::json::Value(util::json::Object{}), "name", "fallback") == "fallback");
+  CHECK(str_or(util::json::Value(util::json::Object{}), "", "name", "fallback") == "fallback");
 
   util::json::Object present;
   present["name"] = "present";
-  CHECK(str_or(util::json::Value(std::move(present)), "name", "fallback") == "present");
+  CHECK(str_or(util::json::Value(std::move(present)), "", "name", "fallback") == "present");
 
   util::json::Object wrong_type;
   wrong_type["name"] = 17.0;
   bool wrong_type_threw = false;
   try {
-    (void)str_or(util::json::Value(std::move(wrong_type)), "name", "fallback");
+    (void)str_or(util::json::Value(std::move(wrong_type)), "", "name", "fallback");
   } catch (const SonareException& error) {
     wrong_type_threw = true;
     CHECK(error.code() == ErrorCode::InvalidFormat);
-    CHECK(std::string(error.what()) == "string field must be a string: name");
+    CHECK(std::string(error.what()) == "name must be a string");
   }
   CHECK(wrong_type_threw);
 
@@ -2333,10 +2330,10 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
   AssistSidecar metadata_sidecar;
   bool metadata_threw = false;
   try {
-    (void)sidecar_from_json(util::json::Value(std::move(metadata_first)), &metadata_sidecar);
+    (void)sidecar_from_json(util::json::Value(std::move(metadata_first)), "", &metadata_sidecar);
   } catch (const SonareException& error) {
     metadata_threw = true;
-    CHECK(std::string(error.what()) == "string field must be a string: moduleId");
+    CHECK(std::string(error.what()) == "moduleId must be a string");
   }
   CHECK(metadata_threw);
 
@@ -2346,7 +2343,7 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
   AssistSidecar malformed_sidecar;
   malformed_sidecar.payload = {0xA5u};
   CHECK_FALSE(
-      sidecar_from_json(util::json::Value(std::move(malformed_payload)), &malformed_sidecar));
+      sidecar_from_json(util::json::Value(std::move(malformed_payload)), "", &malformed_sidecar));
   CHECK(malformed_sidecar.module_id == "malformed.module");
   CHECK(malformed_sidecar.payload.empty());
 
@@ -2357,7 +2354,7 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
   AssistSidecar limited_sidecar;
   limited_sidecar.payload = {0x5Au};
   CHECK_FALSE(
-      sidecar_from_json(util::json::Value(std::move(resource_limited)), &limited_sidecar, 1u));
+      sidecar_from_json(util::json::Value(std::move(resource_limited)), "", &limited_sidecar, 1u));
   CHECK(limited_sidecar.module_id == "resource.module");
   CHECK(limited_sidecar.payload.empty());
 
@@ -2369,7 +2366,7 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
   binary_object["moduleId"] = "binary.module";
   binary_object["payloadB64"] = base64_encode(binary);
   AssistSidecar binary_sidecar;
-  REQUIRE(sidecar_from_json(util::json::Value(std::move(binary_object)), &binary_sidecar));
+  REQUIRE(sidecar_from_json(util::json::Value(std::move(binary_object)), "", &binary_sidecar));
   CHECK(binary_sidecar.payload == binary);
 
   const auto loader_payload_first =
@@ -2378,7 +2375,7 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
   REQUIRE_FALSE(loader_payload_first.diagnostics.empty());
   CHECK(loader_payload_first.diagnostics.front().code == "invalid_format");
   CHECK(loader_payload_first.diagnostics.front().message ==
-        "string field must be a string: payloadB64");
+        "assistSidecars[0].payloadB64 must be a string");
 }
 
 TEST_CASE("an absent annotation loads empty and a non-object one is refused", "[serialize]") {
@@ -3176,7 +3173,7 @@ TEST_CASE("a MIDI event word in its earlier spelling is refused naming the curre
     CHECK_FALSE(refused.ok());
     CHECK_FALSE(refused.project.has_value());
     REQUIRE_FALSE(refused.diagnostics.empty());
-    CHECK(refused.diagnostics.back().message.find(std::string("write ") + e.current_key) !=
-          std::string::npos);
+    CHECK(refused.diagnostics.back().message.find(std::string("write midiContent.1[0].") +
+                                                  e.current_key) != std::string::npos);
   }
 }

@@ -464,7 +464,8 @@ std::vector<NoteTarget> noteTargetsFromVal(const val& targets) {
     // float32 turns a finite value past FLT_MAX into an infinity, and the
     // correction clamp would then report the saturated bound as the answer.
     if (std::abs(target_midi) > static_cast<double>(std::numeric_limits<float>::max())) {
-      throw WasmRangeError(subject + ".targetMidi must be within the 32-bit float range");
+      throw WasmRangeError(subject +
+                           ".targetMidi must be finite and in [-3.4028235e38, 3.4028235e38]");
     }
     target.target_midi = static_cast<float>(target_midi);
     out.push_back(target);

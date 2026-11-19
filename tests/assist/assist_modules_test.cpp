@@ -904,10 +904,10 @@ TEST_CASE("read_generator_params refuses a wrong type instead of substituting a 
   std::string error;
 
   CHECK_FALSE(read_generator_params("{", &params, &error));
-  CHECK(reason_mentions(error, "params_json is not valid JSON"));
+  CHECK(reason_mentions(error, "at byte"));
 
   CHECK_FALSE(read_generator_params("[1, 2]", &params, &error));
-  CHECK(reason_mentions(error, "must be a JSON object"));
+  CHECK(reason_mentions(error, "the document must be an object"));
 
   CHECK_FALSE(read_generator_params("{\"low_note\": \"48\"}", &params, &error));
   CHECK(reason_mentions(error, "low_note"));
@@ -1183,8 +1183,8 @@ TEST_CASE("a malformed params document is REFUSED, naming the field", "[assist][
     const char* fragment;
   };
   const Case cases[] = {
-      {"{", "params_json is not valid JSON"},
-      {"[]", "must be a JSON object"},
+      {"{", "at byte"},
+      {"[]", "the document must be an object"},
       {"{\"target_clip_id\": \"1\"}", "target_clip_id"},
       {"{\"target_clip_id\": 1, \"low_note\": true}", "low_note"},
       {"{\"target_clip_id\": 1, \"velocity_scale\": 0}", "velocity_scale"},

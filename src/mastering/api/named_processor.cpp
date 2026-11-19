@@ -96,6 +96,7 @@
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/json.h"
+#include "util/json_schema.h"
 
 namespace sonare::mastering::api {
 
@@ -103,11 +104,11 @@ void validate_params(const Param* params, std::size_t count) {
   SONARE_CHECK_MSG(count == 0 || params != nullptr, ErrorCode::InvalidParameter,
                    "mastering parameter list is null");
   for (std::size_t index = 0; index < count; ++index) {
-    SONARE_CHECK_MSG(std::isfinite(params[index].value) &&
-                         std::fabs(params[index].value) <=
-                             static_cast<double>(std::numeric_limits<float>::max()),
-                     ErrorCode::InvalidParameter,
-                     "mastering parameters must be finite and representable");
+    if (!std::isfinite(params[index].value) ||
+        std::fabs(params[index].value) > static_cast<double>(std::numeric_limits<float>::max())) {
+      throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, params[index].key,
+                                              ::sonare::util::json::schema::kFloatRangePredicate);
+    }
   }
 }
 

@@ -175,7 +175,7 @@ inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const ch
   if (std::isfinite(number) &&
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
     throw Napi::RangeError::New(
-        env, std::string(name) + " must be a finite number within the 32-bit float range");
+        env, std::string(name) + " must be finite and in [-3.4028235e38, 3.4028235e38]");
   }
   return static_cast<float>(number);
 }
@@ -192,7 +192,7 @@ inline float node_narrow_finite_float(Napi::Env env, const Napi::Value& value, c
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!std::isfinite(number)) {
     throw Napi::RangeError::New(
-        env, std::string(name) + " must be a finite number within the 32-bit float range");
+        env, std::string(name) + " must be finite and in [-3.4028235e38, 3.4028235e38]");
   }
   return node_narrow_float(env, value, name);
 }

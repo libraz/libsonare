@@ -8,6 +8,7 @@
 #include "mastering/api/retired_names.h"
 #include "mixing/channel_strip_eq.h"
 #include "util/json.h"
+#include "util/json_schema.h"
 
 using namespace sonare_c_mixing_detail;
 
@@ -15,18 +16,57 @@ namespace {
 
 // Builds an insert from a loaded scene. make_insert refuses with InvalidParameter because its
 // params are the caller's argument elsewhere; here they are scene content, so the refusal is
-// InvalidFormat.
+// InvalidFormat, and a refusal naming a parameter is relabelled under the insert's document path.
 std::unique_ptr<sonare::rt::ProcessorBase> make_scene_insert(
-    const sonare::mixing::api::Insert& insert, std::vector<std::string>* unknown_keys,
-    int sample_rate) {
+    const sonare::mixing::api::Insert& insert, const std::string& insert_path,
+    std::vector<std::string>* unknown_keys, int sample_rate) {
+  namespace schema = sonare::util::json::schema;
   try {
     return sonare::mastering::api::make_insert(
         insert.processor_name, insert.params_json, unknown_keys,
         sonare::resource::kDefaultProjectImportResourceLimits, static_cast<double>(sample_rate));
+  } catch (const sonare::SonareParameterRefusal& e) {
+    if (e.code() != sonare::ErrorCode::InvalidParameter) throw;
+    schema::rethrow_under(e, schema::child_path(insert_path, "params"),
+                          sonare::ErrorCode::InvalidFormat);
   } catch (const sonare::SonareException& e) {
     if (e.code() != sonare::ErrorCode::InvalidParameter) throw;
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
   }
+}
+
+// Path of insert @p insert_index of strip or bus @p index in the scene document.
+std::string scene_insert_path(const char* list, size_t index, size_t insert_index) {
+  namespace schema = sonare::util::json::schema;
+  return schema::index_path(
+      schema::child_path(schema::index_path(schema::child_path(std::string(), list), index),
+                         "inserts"),
+      insert_index);
+}
+
+// A processor name the factory does not know, named by the document path of its key.
+[[noreturn]] void refuse_unknown_processor(const std::string& insert_path,
+                                           const std::string& name) {
+  namespace schema = sonare::util::json::schema;
+  throw sonare::SonareException(
+      sonare::ErrorCode::InvalidFormat,
+      schema::refusal(
+          schema::child_path(insert_path, "processor"),
+          "must name a known processor" + sonare::mastering::api::retired_processor_note(name)));
+}
+
+// One warning per insert carrying params no processor read.
+void note_unknown_params(const sonare::mixing::api::Insert& insert, const char* owner_kind,
+                         const std::string& owner_id, const std::vector<std::string>& unknown_keys,
+                         std::vector<std::string>* notes) {
+  if (unknown_keys.empty()) return;
+  std::string note = "insert '" + insert.processor_name + "' on " + owner_kind + " '" + owner_id +
+                     "' ignored unknown param" + (unknown_keys.size() > 1 ? "s" : "") + ": ";
+  for (size_t k = 0; k < unknown_keys.size(); ++k) {
+    if (k > 0) note += ", ";
+    note += unknown_keys[k];
+  }
+  notes->push_back(std::move(note));
 }
 
 std::vector<std::string> unique_vca_members(const std::vector<std::string>& members) {
@@ -504,7 +544,8 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     return nullptr;
   }
   std::unique_ptr<SonareMixer> mixer(created);
-  for (const auto& scene_strip : scene.strips) {
+  for (size_t strip_index = 0; strip_index < scene.strips.size(); ++strip_index) {
+    const auto& scene_strip = scene.strips[strip_index];
     // Build with the scene's metering: the meters are sized when the strip is
     // constructed, so this is the one point where a scene can opt out of the
     // full LUFS + true-peak configuration.
@@ -542,25 +583,13 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
                                      scene_strip.polarity_invert_right);
     strip->strip.set_channel_delay_samples(scene_strip.channel_delay_samples);
     sonare::mixing::apply_strip_eq(strip->strip, scene_strip.eq, nullptr);
-    for (const auto& insert : scene_strip.inserts) {
+    for (size_t insert_index = 0; insert_index < scene_strip.inserts.size(); ++insert_index) {
+      const auto& insert = scene_strip.inserts[insert_index];
+      const std::string insert_path = scene_insert_path("strips", strip_index, insert_index);
       std::vector<std::string> unknown_keys;
-      auto processor = make_scene_insert(insert, &unknown_keys, mixer->sample_rate);
-      if (!processor) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidFormat,
-            "unknown insert processor: " + insert.processor_name +
-                sonare::mastering::api::retired_processor_note(insert.processor_name) + " (strip " +
-                scene_strip.id + ")");
-      }
-      if (!unknown_keys.empty()) {
-        std::string note = "insert '" + insert.processor_name + "' on strip '" + scene_strip.id +
-                           "' ignored unknown param" + (unknown_keys.size() > 1 ? "s" : "") + ": ";
-        for (size_t k = 0; k < unknown_keys.size(); ++k) {
-          if (k > 0) note += ", ";
-          note += unknown_keys[k];
-        }
-        insert_param_notes.push_back(std::move(note));
-      }
+      auto processor = make_scene_insert(insert, insert_path, &unknown_keys, mixer->sample_rate);
+      if (!processor) refuse_unknown_processor(insert_path, insert.processor_name);
+      note_unknown_params(insert, "strip", scene_strip.id, unknown_keys, &insert_param_notes);
       const bool spo = sonare::mastering::api::channel_policy(insert.processor_name) ==
                        sonare::mastering::api::ChannelPolicy::StereoPairOnly;
       if (insert.slot == sonare::mixing::api::InsertSlot::PreFader) {
@@ -601,7 +630,8 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   // to be constructed inside build_and_compile, which runs again on every
   // unrelated topology edit and so discarded each insert's state (reverb tail,
   // delay line, envelope follower) one block after any strip change.
-  for (const auto& bus : mixer->buses) {
+  for (size_t bus_index = 0; bus_index < mixer->buses.size(); ++bus_index) {
+    const auto& bus = mixer->buses[bus_index];
     auto dsp = std::make_unique<SonareBusDsp>();
     dsp->id = bus.id;
     // Prepare before adding inserts, the same order sonare_mixer_add_strip_ex
@@ -620,23 +650,13 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     dsp->eq.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
     dsp->eq.prepare_channels(sonare::channel_count(sonare::ChannelLayout::SevenPointOne));
     sonare::mixing::apply_eq(dsp->eq, dsp->eq_enabled, bus.eq, nullptr);
-    for (const auto& insert : bus.inserts) {
+    for (size_t insert_index = 0; insert_index < bus.inserts.size(); ++insert_index) {
+      const auto& insert = bus.inserts[insert_index];
+      const std::string insert_path = scene_insert_path("buses", bus_index, insert_index);
       std::vector<std::string> unknown_keys;
-      auto processor = make_scene_insert(insert, &unknown_keys, mixer->sample_rate);
-      if (!processor) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidFormat,
-            "unknown bus insert processor: " + insert.processor_name + " (bus " + bus.id + ")");
-      }
-      if (!unknown_keys.empty()) {
-        std::string note = "insert '" + insert.processor_name + "' on bus '" + bus.id +
-                           "' ignored unknown param" + (unknown_keys.size() > 1 ? "s" : "") + ": ";
-        for (size_t k = 0; k < unknown_keys.size(); ++k) {
-          if (k > 0) note += ", ";
-          note += unknown_keys[k];
-        }
-        insert_param_notes.push_back(std::move(note));
-      }
+      auto processor = make_scene_insert(insert, insert_path, &unknown_keys, mixer->sample_rate);
+      if (!processor) refuse_unknown_processor(insert_path, insert.processor_name);
+      note_unknown_params(insert, "bus", bus.id, unknown_keys, &insert_param_notes);
       // Same channel policy the engine's bus chain passes, so a pair-only insert
       // on a surround bus touches the front pair alone in both.
       const bool spo = sonare::mastering::api::channel_policy(insert.processor_name) ==

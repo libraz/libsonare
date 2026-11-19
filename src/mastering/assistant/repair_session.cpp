@@ -4,6 +4,7 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -22,11 +23,13 @@
 #include "mastering/repair/dereverb_classical.h"
 #include "util/exception.h"
 #include "util/json.h"
+#include "util/json_schema.h"
 
 namespace sonare::mastering::assistant {
 namespace {
 
 namespace json = sonare::util::json;
+namespace schema = sonare::util::json::schema;
 using api::detail::ParamMap;
 
 enum class Stage { Declip, Declick, Decrackle, Dehum, Denoise, Dereverb };
@@ -92,11 +95,11 @@ std::optional<Stage> stage_from_name(const std::string& name) {
 }
 
 /// Parses @p text, refusing malformed JSON and a repeated key as an invalid request.
-json::Value parse_request(const std::string& text, const char* subject) {
+json::Value parse_request(const std::string& text) {
   try {
     return json::parse_strict(text);
   } catch (const json::JsonError& e) {
-    refuse_document(std::string(subject) + " is not valid JSON: " + e.what());
+    refuse_document(e.what());
   }
 }
 
@@ -170,20 +173,39 @@ json::Object settings_of(const repair::DereverbClassicalConfig& config) {
 
 #undef SONARE_WRITE_SETTING
 
+/// Refuses an unknown setting, with the current key as a path when the catalog renamed it.
+[[noreturn]] void refuse_unknown_setting(const std::string& stage_path, const std::string& key) {
+  const std::string path = schema::child_path(stage_path, key);
+  const std::string note = api::detail::renamed_param_note(key);
+  constexpr std::string_view kLead = " (renamed to ";
+  if (note.size() <= kLead.size() + 1) {
+    throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, path);
+  }
+  const std::string renamed = note.substr(kLead.size(), note.size() - kLead.size() - 1);
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, path,
+                                        schema::child_path(stage_path, renamed));
+}
+
+std::string choice_names(const std::vector<api::detail::EnumChoice>& choices) {
+  std::string out;
+  for (const api::detail::EnumChoice& choice : choices) {
+    if (!out.empty()) out += ", ";
+    out += choice.name;
+  }
+  return out;
+}
+
 /// Reads one stage object through @p reader, the stage's catalog config builder. An empty build
 /// first declares the keys and enum choices the builder reads, so an unknown key is refused by
 /// name rather than ignored and a choice may be given by name.
 template <typename Reader>
-auto read_settings(const json::Object& object, Stage stage, Reader reader) {
-  const std::string subject = std::string(stage_name(stage)) + ": ";
+auto read_settings(const json::Object& object, const std::string& stage_path, Reader reader) {
   ParamMap declared;
   (void)reader(declared);
   ParamMap map;
   for (const auto& [key, value] : object) {
     if (key == "stage") continue;
-    if (declared.probed_keys().count(key) == 0)
-      refuse_document(subject + "unknown setting '" + key + "'" +
-                      api::detail::renamed_param_note(key));
+    if (declared.probed_keys().count(key) == 0) refuse_unknown_setting(stage_path, key);
     if (value.is_bool()) {
       map[key] = value.as_bool() ? 1.0 : 0.0;
     } else if (value.is_number()) {
@@ -191,23 +213,29 @@ auto read_settings(const json::Object& object, Stage stage, Reader reader) {
     } else if (value.is_string()) {
       const auto choices = declared.probed_choices().find(key);
       if (choices == declared.probed_choices().end())
-        refuse_document(subject + key + " takes a number");
+        refuse_document(schema::refusal(schema::child_path(stage_path, key),
+                                        "takes a number, not a choice name"));
       const std::string& name = value.as_string();
       const auto choice =
           std::find_if(choices->second.begin(), choices->second.end(),
                        [&name](const api::detail::EnumChoice& c) { return c.name == name; });
       if (choice == choices->second.end()) {
-        refuse_document(subject + key + " has no choice '" + name + "'");
+        refuse_document(schema::refusal(schema::child_path(stage_path, key),
+                                        "must be one of " + choice_names(choices->second)));
       }
       map[key] = static_cast<double>(choice->value);
     } else {
-      refuse_document(subject + key + " must be a number, a boolean or a choice name");
+      refuse_document(schema::refusal(schema::child_path(stage_path, key),
+                                      "must be a number, a boolean or a choice name"));
     }
   }
   // The catalog builder refuses a value outside its range as an argument; here it is document
   // content.
   try {
     return reader(map);
+  } catch (const SonareParameterRefusal& e) {
+    if (e.code() != ErrorCode::InvalidParameter) throw;
+    schema::rethrow_under(e, stage_path, ErrorCode::InvalidFormat);
   } catch (const SonareException& e) {
     if (e.code() != ErrorCode::InvalidParameter) throw;
     throw SonareException(ErrorCode::InvalidFormat, e.what());
@@ -243,40 +271,46 @@ struct StagePlan {
 };
 
 StagePlan parse_stages(const std::string& stages_json) {
-  const json::Value root = parse_request(stages_json.empty() ? "[]" : stages_json, "stages");
-  if (!root.is_array()) refuse_document("stages must be an array");
+  const json::Value root = parse_request(stages_json.empty() ? "[]" : stages_json);
+  if (!root.is_array()) refuse_document(schema::must_be("", schema::Kind::Array));
   StagePlan plan;
+  std::size_t position = 0;
   for (const json::Value& entry : root.as_array()) {
-    if (!entry.is_object()) refuse_document("each stage must be an object");
+    const std::string stage_path = schema::index_path("", position++);
+    if (!entry.is_object()) refuse_document(schema::must_be(stage_path, schema::Kind::Object));
     const json::Object& object = entry.as_object();
+    const std::string name_path = schema::child_path(stage_path, "stage");
     const auto name = object.find("stage");
-    if (name == object.end() || !name->second.is_string())
-      refuse_document("each stage must name its stage");
+    if (name == object.end()) refuse_document(schema::missing_key(name_path));
+    if (!name->second.is_string()) {
+      refuse_document(schema::must_be(name_path, schema::Kind::String));
+    }
     const std::optional<Stage> stage = stage_from_name(name->second.as_string());
     if (!stage) {
-      refuse_document("unknown stage '" + name->second.as_string() +
-                      "'; expected declip, declick, decrackle, dehum, denoise or dereverb");
+      refuse_document(schema::refusal(
+          name_path, "must be one of declip, declick, decrackle, dehum, denoise, dereverb"));
     }
-    if (plan.has(*stage))
-      refuse_document(std::string("stage '") + stage_name(*stage) + "' appears twice");
+    if (plan.has(*stage)) {
+      refuse_document(schema::refusal(name_path, "must not repeat a stage given earlier"));
+    }
     switch (*stage) {
       case Stage::Declip:
-        plan.declip = read_settings(object, *stage, api::detail::declip_config);
+        plan.declip = read_settings(object, stage_path, api::detail::declip_config);
         break;
       case Stage::Declick:
-        plan.declick = read_settings(object, *stage, api::detail::declick_config);
+        plan.declick = read_settings(object, stage_path, api::detail::declick_config);
         break;
       case Stage::Decrackle:
-        plan.decrackle = read_settings(object, *stage, api::detail::decrackle_config);
+        plan.decrackle = read_settings(object, stage_path, api::detail::decrackle_config);
         break;
       case Stage::Dehum:
-        plan.dehum = read_settings(object, *stage, api::detail::dehum_config);
+        plan.dehum = read_settings(object, stage_path, api::detail::dehum_config);
         break;
       case Stage::Denoise:
-        plan.denoise = read_settings(object, *stage, api::detail::denoise_classical_config);
+        plan.denoise = read_settings(object, stage_path, api::detail::denoise_classical_config);
         break;
       case Stage::Dereverb:
-        plan.dereverb = read_settings(object, *stage, api::detail::dereverb_classical_config);
+        plan.dereverb = read_settings(object, stage_path, api::detail::dereverb_classical_config);
         break;
     }
   }
@@ -407,11 +441,14 @@ json::Value run_stage(Stage stage, const StagePlan& plan, std::vector<Audio>& wo
 AssistantConfig read_analyze_request(const std::string& request_json) {
   AssistantConfig config;
   if (request_json.empty()) return config;
-  const json::Value root = parse_request(request_json, "the analysis request");
-  if (!root.is_object()) refuse_document("the analysis request must be an object");
+  const json::Value root = parse_request(request_json);
+  if (!root.is_object()) refuse_document(schema::root_must_be_object());
   for (const auto& [key, value] : root.as_object()) {
-    if (key != "preferStreamingSafe") refuse_document("unknown analysis option '" + key + "'");
-    if (!value.is_bool()) refuse_document("preferStreamingSafe must be a boolean");
+    const std::string path = schema::child_path("", key);
+    if (key != "preferStreamingSafe") {
+      refuse_document(schema::unknown_key_expected(path, "preferStreamingSafe"));
+    }
+    if (!value.is_bool()) refuse_document(schema::must_be(path, schema::Kind::Boolean));
     config.prefer_streaming_safe = value.as_bool();
   }
   return config;

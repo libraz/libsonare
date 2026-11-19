@@ -400,19 +400,21 @@ TEST_CASE("an earlier key spelling is refused by name", "[playback][config]") {
   earlier(R"({"lfe_mix_db": 0})", "lfe_mix_db", "lfeMixDb");
   earlier(R"({"night_mode": {"amount": 0.5}})", "night_mode", "nightMode");
   earlier(R"({"output_limiter": {"enabled": true}})", "output_limiter", "outputLimiter");
-  earlier(R"({"outputLimiter": {"ceiling_db": -1}})", "outputLimiter.ceiling_db", "ceilingDb");
-  earlier(R"({"upmix": {"center_width": 0.3}})", "upmix.center_width", "centerWidth");
+  earlier(R"({"outputLimiter": {"ceiling_db": -1}})", "outputLimiter.ceiling_db",
+          "outputLimiter.ceilingDb");
+  earlier(R"({"upmix": {"center_width": 0.3}})", "upmix.center_width", "upmix.centerWidth");
   earlier(R"({"input": {"layout": "stereo", "channel_map": null}})", "input.channel_map",
-          "channelMap");
-  earlier(R"({"target": {"bass_management": {}}})", "target.bass_management", "bassManagement");
+          "input.channelMap");
+  earlier(R"({"target": {"bass_management": {}}})", "target.bass_management",
+          "target.bassManagement");
   earlier(R"({"target": {"bassManagement": {"crossover_hz": 80}}})",
-          "target.bassManagement.crossover_hz", "crossoverHz");
+          "target.bassManagement.crossover_hz", "target.bassManagement.crossoverHz");
   earlier(R"({"target": {"kind": "speakers", "layout": "5.1",
                          "speakers": {"left": {"trim_db": 1}}}})",
-          "target.speakers.left.trim_db", "trimDb");
+          "target.speakers.left.trim_db", "target.speakers.left.trimDb");
   earlier(R"({"target": {"kind": "speakers", "layout": "5.1",
                          "speakers": {"left": {"distance_m": 1}}}})",
-          "target.speakers.left.distance_m", "distanceM");
+          "target.speakers.left.distance_m", "target.speakers.left.distanceM");
 }
 
 TEST_CASE("an earlier speaker role token is refused by name", "[playback][config]") {
@@ -431,13 +433,12 @@ TEST_CASE("an earlier speaker role token is refused by name", "[playback][config
     CHECK(
         mentions(refusal(std::string(R"({"input": {"layout": "5.1", "channelMap": [")") + old_name +
                          R"(", "right", "center", "lfe", "leftSurround", "rightSurround"]}})"),
-                 std::string("input.channelMap.") + old_name + " is an earlier spelling; write " +
-                     new_name));
-    CHECK(mentions(
-        refusal(std::string(R"({"target": {"kind": "speakers", "layout": "7.1",
+                 std::string("input.channelMap[0] is an earlier spelling; write ") + new_name));
+    CHECK(mentions(refusal(std::string(R"({"target": {"kind": "speakers", "layout": "7.1",
                                   "speakers": {")") +
-                old_name + R"(": {}}}})"),
-        std::string("target.speakers.") + old_name + " is an earlier spelling; write " + new_name));
+                           old_name + R"(": {}}}})"),
+                   std::string("target.speakers.") + old_name +
+                       " is an earlier spelling; write target.speakers." + new_name));
   }
 }
 

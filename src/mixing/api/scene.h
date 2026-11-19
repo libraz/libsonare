@@ -183,7 +183,7 @@ struct Scene {
 std::string scene_to_json(const Scene& scene);
 
 /// Parses a scene document. A key the reader does not consume is refused as InvalidFormat
-/// naming its path (`unknown scene key '<path>'`, array indices are the original positions).
+/// naming its path (`unknown key <path>`, array indices are the original positions).
 /// Keys starting with `$` or `x-` are exempt at every level, and insert `params` bags are not
 /// walked.
 Scene scene_from_json(const std::string& json);
@@ -200,7 +200,10 @@ const std::vector<std::string>& scene_schema_paths();
 /// use this rather than dumping the sub-tree back to text and re-parsing it:
 /// the round trip costs a second parse and puts it under whatever resource
 /// limits that second parse happens to carry, instead of the ones the enclosing
-/// document was admitted under.
-Scene scene_from_value(const SONARE_JSON_NAMESPACE::Value& value);
+/// document was admitted under. @p root_path is the path of @p value in the enclosing document
+/// (empty for a standalone scene, `scene` inside a project file); every refusal names its path
+/// from that root.
+Scene scene_from_value(const SONARE_JSON_NAMESPACE::Value& value,
+                       const std::string& root_path = std::string());
 
 }  // namespace sonare::mixing::api

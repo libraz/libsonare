@@ -660,27 +660,26 @@ TEST_CASE("RealtimeVoiceChanger JSON round-trips the ISP limiter fields", "[voic
   }
 }
 
-TEST_CASE("RealtimeVoiceChanger JSON clamps out-of-int-range reverb seed", "[voice_changer]") {
-  // Regression (editing#4): the lenient JSON path read integer fields via
-  // static_cast<int>(double) after only a finite check. A finite JSON number
-  // outside [INT_MIN, INT_MAX] (e.g. 1e12) is undefined behaviour when cast to
-  // int. The parser must clamp such values to the int range instead of
-  // invoking UB, and still produce a usable config.
-  SECTION("absurdly large positive seed clamps to INT_MAX") {
-    const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":4,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":1000000000000}}}");
+TEST_CASE("RealtimeVoiceChanger JSON refuses a reverb seed outside the int range",
+          "[voice_changer]") {
+  using Catch::Matchers::ContainsSubstring;
+  SECTION("absurdly large positive seed is refused") {
+    REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(neutral_document_with(
+                            "reverb", "seed", sonare::util::json::Value(1000000000000.0))),
+                        ContainsSubstring("dsp.reverb.seed must be an integer in ["));
+  }
+
+  SECTION("absurdly large negative seed is refused") {
+    REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(neutral_document_with(
+                            "reverb", "seed", sonare::util::json::Value(-1000000000000.0))),
+                        ContainsSubstring("dsp.reverb.seed must be an integer in ["));
+  }
+
+  SECTION("a seed at the int limit drives the engine without crashing") {
+    const auto config = realtime_voice_changer_config_from_json(neutral_document_with(
+        "reverb", "seed",
+        sonare::util::json::Value(static_cast<double>(std::numeric_limits<int>::max()))));
     REQUIRE(config.reverb.seed == std::numeric_limits<int>::max());
-  }
-
-  SECTION("absurdly large negative seed clamps to INT_MIN") {
-    const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":4,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":-1000000000000}}}");
-    REQUIRE(config.reverb.seed == std::numeric_limits<int>::min());
-  }
-
-  SECTION("clamped-seed config drives the engine without crashing") {
-    const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":4,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":9e18,\"mix\":0.3}}}");
     RealtimeVoiceChanger changer(config);
     changer.prepare(48000, 128, 1);
     const auto input = sine(220.0f, 48000, 512);
@@ -696,28 +695,34 @@ TEST_CASE("RealtimeVoiceChanger JSON clamps out-of-int-range reverb seed", "[voi
 TEST_CASE("RealtimeVoiceChanger JSON refuses a present field of the wrong type",
           "[voice_changer]") {
   using Catch::Matchers::ContainsSubstring;
+  using sonare::util::json::Value;
   struct Case {
-    const char* json;
-    const char* path;
+    std::string json;
+    const char* message;
   };
   const Case cases[] = {
-      {R"({"dsp":{"wetMix":"loud"}})", "wetMix"},
-      {R"({"dsp":{"reverb":{"mix":null}}})", "reverb.mix"},
-      {R"({"dsp":{"reverb":{"seed":"7"}}})", "reverb.seed"},
-      {R"({"dsp":{"limiter":{"enableIspLimiter":1}}})", "limiter.enableIspLimiter"},
-      {R"({"dsp":{"formant":{"mode":3}}})", "formant.mode"},
-      {R"({"dsp":{"eq":[]}})", "eq must be an object"},
-      {R"({"dsp":5})", "dsp must be an object"},
-      {R"({"retunePitchSemitones":0,"retuneMix":"x"})", "retuneMix"},
+      {neutral_document_with("", "wetMix", Value("loud")), "dsp.wetMix must be a number"},
+      {neutral_document_with("reverb", "mix", Value(nullptr)), "dsp.reverb.mix must be a number"},
+      {neutral_document_with("reverb", "seed", Value("7")), "dsp.reverb.seed must be a number"},
+      {neutral_document_with("limiter", "enableIspLimiter", Value(1)),
+       "dsp.limiter.enableIspLimiter must be a boolean"},
+      {neutral_document_with("formant", "mode", Value(3)),
+       "dsp.formant.mode must be 'relative' or 'absolute'"},
+      {neutral_document_with("", "eq", sonare::util::json::Array{}), "dsp.eq must be an object"},
   };
   for (const auto& c : cases) {
     CAPTURE(c.json);
-    REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(c.json), ContainsSubstring(c.path));
+    REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(c.json),
+                        ContainsSubstring(c.message));
   }
-  // Control: right types load, and an absent field keeps its default.
-  const auto config = realtime_voice_changer_config_from_json(R"({"dsp":{"wetMix":0.5}})");
+  // A document holding a non-object dsp is refused.
+  REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(
+                          R"({"schemaVersion":4,"id":"x","name":"x","category":"custom","dsp":5})"),
+                      ContainsSubstring("dsp must be an object"));
+  // Control: right types load.
+  const auto config =
+      realtime_voice_changer_config_from_json(neutral_document_with("", "wetMix", Value(0.5)));
   REQUIRE(config.wet_mix == 0.5f);
-  REQUIRE(config.reverb.mix == RealtimeVoiceChangerConfig{}.reverb.mix);
 }
 
 TEST_CASE("ISP limiter bounds the original sample peaks, not only the reconstruction",
@@ -888,10 +893,9 @@ TEST_CASE("RealtimeVoiceChanger preset JSON refuses an older version document",
   std::string normalized;
   std::string error;
   CHECK_FALSE(validate_realtime_voice_changer_preset_json(legacy, &normalized, &error));
-  CHECK_THAT(error, Catch::Matchers::ContainsSubstring(
-                        "schemaVersion " + std::to_string(kVoiceChangerPresetSchemaVersion - 1)));
-  CHECK_THAT(error, Catch::Matchers::ContainsSubstring(
-                        "(" + std::to_string(kVoiceChangerPresetSchemaVersion) + ")"));
+  CHECK(error == "schemaVersion must be " + std::to_string(kVoiceChangerPresetSchemaVersion) +
+                     ", the version this release reads; the document was written for an older "
+                     "schema");
 
   RealtimeVoiceChangerConfig config;
   CHECK_FALSE(realtime_voice_changer_config_from_input(legacy, &config, &error));
@@ -902,8 +906,9 @@ TEST_CASE("RealtimeVoiceChanger preset JSON refuses an older version document",
       replace_all_text(current, version_field(kVoiceChangerPresetSchemaVersion),
                        version_field(kVoiceChangerPresetSchemaVersion + 1));
   CHECK_FALSE(validate_realtime_voice_changer_preset_json(newer, &normalized, &error));
-  CHECK_THAT(error, Catch::Matchers::ContainsSubstring(
-                        "schemaVersion " + std::to_string(kVoiceChangerPresetSchemaVersion + 1)));
+  CHECK(error == "schemaVersion must be " + std::to_string(kVoiceChangerPresetSchemaVersion) +
+                     ", the version this release reads; the document was written for a newer "
+                     "schema");
 }
 
 TEST_CASE("RealtimeVoiceChanger preset JSON round trip is stable at the current version",
@@ -988,7 +993,7 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
   CHECK(parsed.retune.grain_size == 0);
   // The flat shape is otherwise complete or refused: the base object misses the transformer keys.
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(base + "}", &parsed, &error));
-  CHECK(error == "missing field: $.voiceEngine");
+  CHECK(error == "voiceEngine must be given");
   SonareRealtimeVoiceChanger* handle = nullptr;
   CHECK(sonare_realtime_voice_changer_create_json((base + "}").c_str(), 48000, 128, 1, &handle) ==
         SONARE_ERROR_INVALID_FORMAT);
@@ -1001,6 +1006,7 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
     const char* named;
   };
   const Refusal refusals[] = {
+      {R"("retuneMix": 1)", R"("retuneMix": "x")", "retuneMix must be a number"},
       {R"("vocoderEnabled": true)", R"("vocoderEnabled": 1)", "vocoderEnabled"},
       {R"("characterType": "bbdChorus")", R"("characterType": 2)", "characterType"},
       {R"("characterType": "bbdChorus")", R"("characterType": "telephone")", "characterType"},
@@ -1008,10 +1014,12 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
       {R"("harmonySteps": [-2, 5, 7])", R"("harmonySteps": [-2, 5])", "harmonySteps"},
       {R"("harmonySteps": [-2, 5, 7])", R"("harmonySteps": 5)", "harmonySteps"},
       {R"("vocoderBands": 24)", R"("vocoderBands": 20.5)", "vocoderBands"},
-      {R"("harmonyVoices": 2)", R"("harmonyVoices": 4)", "harmony.voices"},
-      {R"("voiceEngineF0MinHz": 90)", R"("voiceEngineF0MinHz": 40)", "voiceEngine.f0MinHz"},
+      {R"("harmonyVoices": 2)", R"("harmonyVoices": 4)",
+       "harmonyVoices must be an integer in [0, 3]"},
+      {R"("voiceEngineF0MinHz": 90)", R"("voiceEngineF0MinHz": 40)",
+       "voiceEngineF0MinHz must be finite and in ["},
       {R"("dottedEighth", "midiRelease": "input")", R"("dottedEighth")",
-       "missing field: $.midiRelease"},
+       "midiRelease must be given"},
       {R"("retuneMix": 1)", R"("retuneMix": 1, "retuneGrainSizeSamples": 0)",
        "retuneGrainSizeSamples must not be 0"},
       {R"("retuneMix": 1)", R"("retuneMix": 1, "retuneGrainSizeSamples": null)",
@@ -1031,22 +1039,33 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
 TEST_CASE("RealtimeVoiceChanger JSON refuses a malformed transformer section as InvalidFormat",
           "[voice_changer][json]") {
   using Catch::Matchers::ContainsSubstring;
+  using sonare::util::json::Value;
   struct Case {
-    const char* json;
-    const char* path;
+    std::string json;
+    const char* message;
   };
   const Case cases[] = {
-      {R"({"dsp":{"vocoder":{"enabled":1}}})", "vocoder.enabled"},
-      {R"({"dsp":{"vocoder":{"bands":"20"}}})", "vocoder.bands"},
-      {R"({"dsp":{"harmony":{"steps":[1,"2"]}}})", "harmony.steps"},
-      {R"({"dsp":{"harmony":{"steps":[1,2,3,4]}}})", "harmony.steps"},
-      {R"({"dsp":{"harmony":{"steps":2}}})", "harmony.steps"},
-      {R"({"dsp":{"voiceEngine":{"engine":"phase"}}})", "voiceEngine.engine"},
-      {R"({"dsp":{"pitchCorrection":{"scale":1}}})", "pitchCorrection.scale"},
-      {R"({"dsp":{"character":null}})", "character must be an object"},
-      {R"({"dsp":{"reverbVariation":[]}})", "reverbVariation must be an object"},
-      {R"({"dsp":{"midi":{"release":null}}})", "midi.release"},
-      {R"({"retunePitchSemitones":0,"reverbVariation":"spring"})", "reverbVariation"},
+      {neutral_document_with("vocoder", "enabled", Value(1)),
+       "dsp.vocoder.enabled must be a boolean"},
+      {neutral_document_with("vocoder", "bands", Value("20")),
+       "dsp.vocoder.bands must be a number"},
+      {neutral_document_with("harmony", "steps",
+                             Value(sonare::util::json::Array{Value(1), Value("2")})),
+       "dsp.harmony.steps must be an array of at most 3 integers in [-7, 7]"},
+      {neutral_document_with(
+           "harmony", "steps",
+           Value(sonare::util::json::Array{Value(1), Value(2), Value(3), Value(4)})),
+       "dsp.harmony.steps must be an array of at most 3 integers in [-7, 7]"},
+      {neutral_document_with("harmony", "steps", Value(2)),
+       "dsp.harmony.steps must be an array of at most 3 integers in [-7, 7]"},
+      {neutral_document_with("voiceEngine", "engine", Value("phase")),
+       "dsp.voiceEngine.engine must be '"},
+      {neutral_document_with("pitchCorrection", "scale", Value(1)),
+       "dsp.pitchCorrection.scale must be '"},
+      {neutral_document_with("", "character", Value(nullptr)), "dsp.character must be an object"},
+      {neutral_document_with("", "reverbVariation", Value(sonare::util::json::Array{})),
+       "dsp.reverbVariation must be an object"},
+      {neutral_document_with("midi", "release", Value(nullptr)), "dsp.midi.release must be '"},
   };
   for (const auto& c : cases) {
     CAPTURE(c.json);
@@ -1055,7 +1074,7 @@ TEST_CASE("RealtimeVoiceChanger JSON refuses a malformed transformer section as 
       FAIL("expected a refusal");
     } catch (const sonare::SonareException& e) {
       CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
-      CHECK_THAT(std::string(e.what()), ContainsSubstring(c.path));
+      CHECK_THAT(std::string(e.what()), ContainsSubstring(c.message));
     }
   }
   // The C ABI JSON entry reports a type error and an out-of-range value as InvalidFormat alike.

@@ -122,8 +122,9 @@ inline std::vector<float> cutoffs(const ParamMap& params) {
 inline void refuse_earlier_lookahead(const ParamMap& params, const std::string& prefix) {
   const std::string earlier = prefix + "lookaheadMs";
   if (params.has(earlier)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          earlier + " is an earlier spelling; write " + prefix + "detectorDelayMs");
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, earlier,
+        "is an earlier spelling; write " + prefix + "detectorDelayMs");
   }
 }
 

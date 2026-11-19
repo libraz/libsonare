@@ -21,13 +21,12 @@ namespace sonare::mastering::eq {
 /// @brief Parses one EQ band with the keys and validation of `sonare_eq_set_band`'s JSON. An
 ///        earlier spelling of a key (snake_case, `lookaheadMs`, `dynEnabled`) is refused naming
 ///        the current key, as is a token outside the lowerCamel sets of band_strings.h.
-/// @param context Prefix for every thrown message (e.g. "sonare_eq_set_band: "
-///        or a scene field path), so a caller embedding this in a larger
-///        document names where the band came from.
+/// @param path Path of @p value in its document (empty for a standalone band document), the
+///        root every thrown message names its key from.
 /// @throws SonareException(InvalidFormat) on a value that is not a JSON
 ///         object, an unrecognised enum spelling, a wrongly-typed field, or a
 ///         numeric field that is non-finite or out of range.
-EqBand eq_band_from_value(const util::json::Value& value, const char* context);
+EqBand eq_band_from_value(const util::json::Value& value, const std::string& path);
 
 /// @brief Every key `eq_band_from_value` reads. A caller reporting unrecognised keys checks
 ///        against this list.

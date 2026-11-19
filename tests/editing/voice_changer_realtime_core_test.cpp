@@ -2,6 +2,7 @@
 /// @brief Realtime voice changer core behavior tests.
 
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <tuple>
 
 #include "editing/voice_changer/voice_changer_insert.h"
 #include "voice_changer_test_helpers.h"
@@ -38,24 +39,40 @@ TEST_CASE("RealtimeVoiceChanger processes realtime block sizes and resets determ
   REQUIRE(changer.latency_samples() > 0);
 }
 
-TEST_CASE("RealtimeVoiceChanger preset JSON ignores unknown keys and refuses out-of-domain values",
+TEST_CASE("RealtimeVoiceChanger preset JSON refuses unknown keys and out-of-domain values",
           "[voice_changer]") {
+  using sonare::util::json::Value;
   const auto config = realtime_voice_changer_config_from_json(
-      "{\"schemaVersion\":4,\"id\":\"x\",\"unknown\":true,\"dsp\":{\"retune\":{\"pitchSemitones\":"
-      "7}}}");
+      neutral_document_with("retune", "pitchSemitones", Value(7)));
   REQUIRE(config.retune.semitones == 7.0f);
 
-  // A value outside its domain is refused by name, never moved onto the nearest bound.
-  const std::pair<const char*, const char*> refused[] = {
-      {"\"retune\":{\"pitchSemitones\":99}", "retune.pitchSemitones"},
-      {"\"formant\":{\"factor\":9}", "formant.factor"},
-      {"\"limiter\":{\"ceilingDb\":3}", "limiter.ceilingDb"},
-      {"\"reverb\":{\"mix\":2}", "reverb.mix"},
+  // An unknown key, a duplicate key, a bare nested config, a partial flat POD and empty input
+  // are refused.
+  const std::pair<std::string, const char*> malformed[] = {
+      {std::string(R"({"schemaVersion":4,"id":"x","name":"x","category":"custom","unknown":true})"),
+       "unknown key unknown"},
+      {R"({"schemaVersion":4,"schemaVersion":4})", "duplicate key"},
+      {R"({"dsp":{"retune":{"pitchSemitones":7}}})", "schemaVersion must be given"},
+      // A partial flat POD is refused by the first flat key it lacks.
+      {R"({"retuneMix":0.5})", "inputGainDb must be given"},
+      {"", "voice changer config must not be empty"},
   };
-  for (const auto& [section, name] : refused) {
+  for (const auto& [document, message] : malformed) {
+    CAPTURE(document);
+    REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(document),
+                        Catch::Matchers::ContainsSubstring(message));
+  }
+
+  // A value outside its domain is refused by name, never moved onto the nearest bound.
+  const std::tuple<const char*, const char*, double, const char*> refused[] = {
+      {"retune", "pitchSemitones", 99, "dsp.retune.pitchSemitones"},
+      {"formant", "factor", 9, "dsp.formant.factor"},
+      {"limiter", "ceilingDb", 3, "dsp.limiter.ceilingDb"},
+      {"reverb", "mix", 2, "dsp.reverb.mix"},
+  };
+  for (const auto& [section, key, value, name] : refused) {
     CAPTURE(section);
-    const std::string document =
-        std::string("{\"schemaVersion\":4,\"id\":\"x\",\"dsp\":{") + section + "}}";
+    const std::string document = neutral_document_with(section, key, Value(value));
     try {
       (void)realtime_voice_changer_config_from_json(document);
       FAIL("expected a refusal naming " << name);
@@ -316,16 +333,15 @@ TEST_CASE(
 
 TEST_CASE("realtime_voice_changer_config_from_json refuses text exceeding the JSON byte budget",
           "[voice_changer][resource]") {
-  // The lenient duplicate-key-tolerant sibling (admit, not admit_strict) still
-  // runs under the same byte budget as every other JSON entry point.
+  // The reader runs under the same byte budget as every other JSON entry point.
   const std::string oversized =
       "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
-  REQUIRE_THROWS_AS(realtime_voice_changer_config_from_json(oversized),
-                    sonare::util::json::JsonError);
+  REQUIRE_THROWS_AS(realtime_voice_changer_config_from_json(oversized), sonare::SonareException);
 
   // An ordinary DSP object still parses, so the refusal above is the size and
   // not some other change to config parsing.
-  const auto config = realtime_voice_changer_config_from_json(R"({"dsp":{"inputGainDb":3}})");
+  const auto config = realtime_voice_changer_config_from_json(
+      neutral_document_with("", "inputGainDb", sonare::util::json::Value(3)));
   REQUIRE(config.input_gain_db == 3.0f);
 }
 
@@ -516,17 +532,17 @@ TEST_CASE("validate_realtime_voice_changer_config refuses finite out-of-range va
   std::string error;
   RealtimeVoiceChangerConfig normalized;
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  REQUIRE(error == "retune.pitchSemitones out of range [-24, 24], got 1000");
+  REQUIRE(error == "retune.pitchSemitones must be finite and in [-24, 24]");
 
   config = {};
   config.formant.factor = 3.0f;
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  REQUIRE(error == "formant.factor out of range [0.55, 1.65], got 3");
+  REQUIRE(error == "formant.factor must be finite and in [0.55, 1.65]");
 
   config = {};
   config.limiter.isp_ceiling_dbtp = 0.5f;
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  REQUIRE(error.find("limiter.ispCeilingDbtp out of range [-12, 0]") != std::string::npos);
+  REQUIRE(error.find("limiter.ispCeilingDbtp must be finite and in [-12, 0]") != std::string::npos);
 
   config = {};
   config.retune.grain_size = 100000;
@@ -589,7 +605,7 @@ TEST_CASE("realtime_voice_changer_config_from_input refuses an out-of-range flat
     "limiterReleaseMs":50,"limiterEnableIspLimiter":true,"limiterIspCeilingDbtp":-1)" +
                            std::string(kFlatTransformDefaults) + "}";
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(flat, &parsed, &error));
-  REQUIRE(error == "formant.factor out of range [0.55, 1.65], got 3");
+  REQUIRE(error == "formantFactor must be finite and in [0.55, 1.65]");
 
   std::string in_range = flat;
   in_range.replace(in_range.find("\"formantFactor\":3"), 17, "\"formantFactor\":1");

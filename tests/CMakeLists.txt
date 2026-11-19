@@ -348,6 +348,7 @@ if(BUILD_MASTERING)
     mastering/insert_factory_extra_test.cpp
     mastering/insert_latency_alignment_test.cpp
     mastering/insert_param_metadata_test.cpp
+    mastering/insert_param_refusal_key_test.cpp
     effects/lofi_hold_test.cpp
     mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp

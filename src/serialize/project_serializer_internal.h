@@ -98,21 +98,23 @@ class BoundedDiagnostics {
 // sub-tree stays optional.
 // ===========================================================================
 
-double num_or(const Value& obj, const char* key, double fallback);
-uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback);
-int int_or(const Value& obj, const char* key, int fallback);
-int8_t int8_or(const Value& obj, const char* key, int8_t fallback);
+// Every reader takes the document path of @p obj ("" for the root) so a refusal names the field.
+double num_or(const Value& obj, const std::string& path, const char* key, double fallback);
+uint32_t uint_or(const Value& obj, const std::string& path, const char* key, uint32_t fallback);
+int int_or(const Value& obj, const std::string& path, const char* key, int fallback);
+int8_t int8_or(const Value& obj, const std::string& path, const char* key, int8_t fallback);
 bool parse_uint32_key(const std::string& key, uint32_t* out);
-std::string str_or(const Value& obj, const char* key, const std::string& fallback);
-bool bool_or(const Value& obj, const char* key, bool fallback);
-uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
-                           BoundedDiagnostics* diagnostics);
+std::string str_or(const Value& obj, const std::string& path, const char* key,
+                   const std::string& fallback);
+bool bool_or(const Value& obj, const std::string& path, const char* key, bool fallback);
+uint32_t midi_word_or_warn(const Value& obj, const std::string& path, const char* key,
+                           uint32_t clip_id, BoundedDiagnostics* diagnostics);
 // Container readers: NULL when absent, InvalidFormat when present with the wrong type.
-const Array* array_at(const Value& obj, const char* key);
-const Value* object_value_at(const Value& obj, const char* key);
-const Object* object_at(const Value& obj, const char* key);
-/// Returns @p element, or throws InvalidFormat naming @p array_key when it is not an object.
-const Value& object_element(const Value& element, const char* array_key);
+const Array* array_at(const Value& obj, const std::string& path, const char* key);
+const Value* object_value_at(const Value& obj, const std::string& path, const char* key);
+const Object* object_at(const Value& obj, const std::string& path, const char* key);
+/// Returns @p element, or throws InvalidFormat naming @p element_path when it is not an object.
+const Value& object_element(const Value& element, const std::string& element_path);
 
 // ===========================================================================
 // Encode: arrangement model -> util::json::Value
@@ -141,10 +143,10 @@ Value scene_to_value(const mixing::api::Scene& scene);
 // Decode: util::json::Value -> arrangement model
 // ===========================================================================
 
-transport::TempoSegment tempo_segment_from_json(const Value& v);
-transport::TimeSignatureSegment time_signature_from_json(const Value& v);
-automation::AutomationLane automation_lane_from_json(const Value& v);
-arrangement::Track track_from_json(const Value& v);
+transport::TempoSegment tempo_segment_from_json(const Value& v, const std::string& path);
+transport::TimeSignatureSegment time_signature_from_json(const Value& v, const std::string& path);
+automation::AutomationLane automation_lane_from_json(const Value& v, const std::string& path);
+arrangement::Track track_from_json(const Value& v, const std::string& path);
 
 // ===========================================================================
 // Edit-API invariants on the load path
@@ -173,24 +175,25 @@ struct InvariantViolation {
 std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Project* project,
                                                               arrangement::MidiContentStore* midi,
                                                               BoundedDiagnostics* diagnostics);
-arrangement::ClipFade fade_from_json(const Value& v);
-arrangement::ClipTake take_from_json(const Value& v);
-arrangement::ClipCompSegment comp_segment_from_json(const Value& v);
-arrangement::ClipCompRenderPart comp_render_part_from_json(const Value& v);
-arrangement::EditClip clip_from_json(const Value& v);
-arrangement::WarpMapRef warp_map_from_json(const Value& v);
-arrangement::ClipSource source_from_json(const Value& v);
-arrangement::ChordSymbol chord_from_json(const Value& v);
-arrangement::KeySegment key_segment_from_json(const Value& v);
-void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a);
+arrangement::ClipFade fade_from_json(const Value& v, const std::string& path);
+arrangement::ClipTake take_from_json(const Value& v, const std::string& path);
+arrangement::ClipCompSegment comp_segment_from_json(const Value& v, const std::string& path);
+arrangement::ClipCompRenderPart comp_render_part_from_json(const Value& v, const std::string& path);
+arrangement::EditClip clip_from_json(const Value& v, const std::string& path);
+arrangement::WarpMapRef warp_map_from_json(const Value& v, const std::string& path);
+arrangement::ClipSource source_from_json(const Value& v, const std::string& path);
+arrangement::ChordSymbol chord_from_json(const Value& v, const std::string& path);
+arrangement::KeySegment key_segment_from_json(const Value& v, const std::string& path);
+void annotation_from_json(const Value& v, const std::string& path,
+                          arrangement::ProjectAnnotation* a);
 /// Returns true when @p module_id is an earlier snake_case spelling of a built-in assist module
 /// id, and stores the current lowerCamel id in @p current.
 bool earlier_assist_module_id(const std::string& module_id, std::string* current);
 
-bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out,
+bool sidecar_from_json(const Value& v, const std::string& path, arrangement::AssistSidecar* out,
                        size_t max_payload_bytes = std::numeric_limits<size_t>::max());
 /// Decodes the document's `scene` subtree; every refusal, an unknown key included, is
-/// InvalidFormat with its message prefixed by `scene: `.
+/// InvalidFormat.
 mixing::api::Scene scene_from_value(const Value& v);
 
 }  // namespace detail

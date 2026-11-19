@@ -380,7 +380,8 @@ inline std::uint32_t u32(const ParamMap& params, const char* key, std::uint32_t 
     return default_value;
   }
   if (it->second < 0.0) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be non-negative");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
+                                            "must be non-negative");
   }
   std::uint32_t converted = 0;
   if (!numeric::checked_integral_cast(it->second, &converted)) {
@@ -401,7 +402,7 @@ inline bool b(const ParamMap& params, const char* key, bool default_value) {
   params.note_default(key, default_value ? 1.0 : 0.0);
   auto it = params.find(key);
   if (it != params.end() && !common::valid_switch_value(it->second)) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be 0 or 1");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key, "must be 0 or 1");
   }
   const bool value = it == params.end() ? default_value : it->second == 1.0;
   params.note_effective(key, value ? 1.0 : 0.0);
@@ -425,8 +426,8 @@ inline Enum read_enum(const ParamMap& params, const char* key, Enum fallback) {
   }
   const Enum candidate = static_cast<Enum>(converted);
   if (!enum_value_declared(candidate)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " is not a declared value");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
+                                            "must name a declared value");
   }
   params.note_effective(key, converted);
   return candidate;
@@ -461,7 +462,13 @@ inline void read_enum_field(const ParamMap& params, const char* key, int& dst, E
   params.note_default(key, static_cast<double>(dst));
   if (params.records_declarations()) params.note_choices(key, enum_choices(name_of));
   auto it = params.find(key);
-  if (it != params.end()) assign_enum_value(dst, it->second, name_of);
+  if (it != params.end()) {
+    try {
+      assign_enum_value(dst, it->second, name_of);
+    } catch (const FieldValueRefusal& refusal) {
+      rethrow_keyed(refusal, key);
+    }
+  }
   params.note_effective(key, dst);
 }
 
@@ -485,7 +492,13 @@ inline void read_field(const ParamMap& params, const char* key, T& dst) {
     // initializer here, which is exactly the default this key falls back to.
     params.note_default(key, field_as_double(dst));
     auto it = params.find(key);
-    if (it != params.end()) assign_field(dst, it->second);
+    if (it != params.end()) {
+      try {
+        assign_field(dst, it->second);
+      } catch (const FieldValueRefusal& refusal) {
+        rethrow_keyed(refusal, key);
+      }
+    }
     params.note_effective(key, field_as_double(dst));
   }
 }

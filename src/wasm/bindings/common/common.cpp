@@ -433,8 +433,7 @@ float floatOption(val object, const char* key, float default_value) {
   const double number = numberFromVal(value, key);
   if (std::isfinite(number) &&
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw WasmRangeError(std::string(key) +
-                         " must be a finite number within the 32-bit float range");
+    throw WasmRangeError(std::string(key) + " must be finite and in [-3.4028235e38, 3.4028235e38]");
   }
   return std::isfinite(number) ? static_cast<float>(number) : default_value;
 }
@@ -619,8 +618,7 @@ float checkedFloatFromVal(const val& value, const char* key) {
   const double number = numberFromVal(value, key);
   if (!std::isfinite(number) ||
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw WasmRangeError(std::string(key) +
-                         " must be a finite number within the 32-bit float range");
+    throw WasmRangeError(std::string(key) + " must be finite and in [-3.4028235e38, 3.4028235e38]");
   }
   return static_cast<float>(number);
 }

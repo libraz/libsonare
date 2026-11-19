@@ -408,32 +408,32 @@ TEST_CASE("a chain document refuses what it cannot mean, naming the path",
     }
   };
 
-  refused(R"({"version":1,"params":{}})", "unsupported chain config version");
-  refused(R"({"version":"2","params":{}})", "unsupported chain config version");
+  refused(R"({"version":1,"params":{}})", "version must be 2, or left out");
+  refused(R"({"version":"2","params":{}})", "version must be 2, or left out");
   refused(R"({"params":{"eq.tilt.tiltDb":1,"eq":{"tilt":{"tiltDb":2}}}})",
-          "eq.tilt.tiltDb is given twice");
+          "duplicate key params.eq.tilt.tiltDb");
   refused(R"({"params":{"dynamics.multibandComp.cutoff0Hz":100,)"
           R"("dynamics.multibandComp.crossover.cutoffsHz":[200,300]}})",
-          "is given twice");
+          "duplicate key params.dynamics.multibandComp.");
   refused(R"({"params":{"eq.tilt.tiltDb":null}})",
-          "eq.tilt.tiltDb is null, not a number, boolean or token");
+          "params.eq.tilt.tiltDb must be a number, a boolean or a token");
   refused(R"({"params":{"dynamics.compressor.detector":1}})",
-          "dynamics.compressor.detector takes a token, not a number (valid names: ");
+          "params.dynamics.compressor.detector takes a token, not a number (valid names: ");
   refused(R"({"params":{"dynamics.compressor.detector":"loud"}})",
           "dynamics.compressor.detector: unknown name 'loud' (valid names: ");
-  refused(R"({"params":{"eq.tilt.tiltDb":"high"}})", "eq.tilt.tiltDb is a string");
+  refused(R"({"params":{"eq.tilt.tiltDb":"high"}})", "params.eq.tilt.tiltDb is a string");
   refused(R"({"params":{"repair.declip.clipThresholdDb":0.5}})",
-          "repair.declip.clipThresholdDb must be at or below 0 dBFS");
+          "params.repair.declip.clipThresholdDb must be at or below 0 dBFS");
   refused(R"({"params":{"repair.declip.enabled":false,"repair.declip.clipThresholdDb":3}})",
-          "repair.declip.clipThresholdDb must be at or below 0 dBFS");
+          "params.repair.declip.clipThresholdDb must be at or below 0 dBFS");
   refused(R"({"params":{"dynamics.multibandComp.lowCutoffHz":200}})",
-          "renamed to dynamics.multibandComp.crossover.cutoffsHz.0");
+          "renamed to params.dynamics.multibandComp.crossover.cutoffsHz.0");
   refused(R"({"params":{"dynamics.multibandComp.highCutoffHz":2000}})",
-          "renamed to dynamics.multibandComp.crossover.cutoffsHz.1");
-  refused(R"({"params":{"loudness":{"ceilingDb":-1}}})", "renamed to loudness.ceilingDbtp");
+          "renamed to params.dynamics.multibandComp.crossover.cutoffsHz.1");
+  refused(R"({"params":{"loudness":{"ceilingDb":-1}}})", "renamed to params.loudness.ceilingDbtp");
   refused(R"({"params":{"maximizer.truePeakLimiter.ceilingDb":-1}})",
-          "renamed to maximizer.truePeakLimiter.ceilingDbtp");
-  refused(R"({"params":{},"extra":1})", "unknown chain config key: extra");
+          "renamed to params.maximizer.truePeakLimiter.ceilingDbtp");
+  refused(R"({"params":{},"extra":1})", "unknown key extra");
 
   // Annotation keys pass at any depth, and a non-positive threshold is the declipper's own.
   const MasteringChainConfig annotated =
@@ -461,10 +461,9 @@ TEST_CASE("every document entry reads the same document and refuses as a documen
              (void)chain_config_overrides_from_json(preset_config(Preset::Pop), d);
            }}) {
     require_refused_with([&] { read(R"({"params":{"eq.tilt.noSuchKey":1}})"); },
-                         "unknown chain config key: eq.tilt.noSuchKey",
-                         sonare::ErrorCode::InvalidFormat);
+                         "unknown key params.eq.tilt.noSuchKey", sonare::ErrorCode::InvalidFormat);
     require_refused_with([&] { read(R"({"params":{"eq.tilt.tiltDb":null}})"); },
-                         "eq.tilt.tiltDb is null, not a number, boolean or token",
+                         "params.eq.tilt.tiltDb must be a number, a boolean or a token",
                          sonare::ErrorCode::InvalidFormat);
   }
 }
@@ -500,12 +499,13 @@ TEST_CASE("a multiband chain stage carries between two and 64 bands", "[masterin
     // The document reader walks the record as dotted paths, so it names the path it stopped at.
     require_refused_with(
         [&] { chain_config_from_json(one_band); },
-        "dynamics.multibandComp.crossover.cutoffsHz is an empty list, which has no flat spelling",
+        "params.dynamics.multibandComp.crossover.cutoffsHz must not be an empty list",
         sonare::ErrorCode::InvalidFormat);
-    require_refused_with([] { chain_config_from_json(v2_document_with_band_count(65)); },
-                         "multiband band index out of range: dynamics.multibandComp.bands.64."
-                         "attackMs",
-                         sonare::ErrorCode::InvalidFormat);
+    require_refused_with(
+        [] { chain_config_from_json(v2_document_with_band_count(65)); },
+        "params.dynamics.multibandComp.bands.64.attackMs is past the end of the band "
+        "list",
+        sonare::ErrorCode::InvalidFormat);
     REQUIRE(chain_config_from_json(v2_document_with_band_count(64))
                 .dynamics.multiband_comp.config.bands.size() == 64);
   }
@@ -559,32 +559,32 @@ TEST_CASE("a chain config document's flat params parse to the document's config"
 
 TEST_CASE("chain config flat params refuse what has no flat spelling",
           "[mastering][preset][json]") {
-  const std::string no_params = "chain config requires params";
+  const std::string no_params = "params must be given";
   require_refused_with([] { chain_config_flat_params(R"({"version":2})"); }, no_params,
                        sonare::ErrorCode::InvalidFormat);
   require_refused_with([] { chain_config_flat_params(R"({"params":[1]})"); },
-                       "params must be a JSON object", sonare::ErrorCode::InvalidFormat);
+                       "params must be an object", sonare::ErrorCode::InvalidFormat);
   REQUIRE(chain_config_flat_params(R"({"params":{}})").empty());
 
   require_refused_with([] { chain_config_flat_params(R"({"params":{"eq.tilt.tiltDb":"steep"}})"); },
-                       "eq.tilt.tiltDb is a string, but takes no token",
+                       "params.eq.tilt.tiltDb is a string, but takes no token",
                        sonare::ErrorCode::InvalidFormat);
   require_refused_with([] { chain_config_flat_params(R"({"params":{"eq.tilt.tiltDb":null}})"); },
-                       "eq.tilt.tiltDb is null, not a number, boolean or token",
+                       "params.eq.tilt.tiltDb must be a number, a boolean or a token",
                        sonare::ErrorCode::InvalidFormat);
   require_refused_with(
       [] {
         chain_config_flat_params(
             R"({"params":{"dynamics.multibandComp":{"bands":[{"ratio":"x"}]}}})");
       },
-      "dynamics.multibandComp.bands.0.ratio is a string, but takes no token",
+      "params.dynamics.multibandComp.bands.0.ratio is a string, but takes no token",
       sonare::ErrorCode::InvalidFormat);
   require_refused_with(
       [] {
         chain_config_flat_params(
             R"({"params":{"dynamics.multibandComp":{"crossover":{"cutoffsHz":[]}}}})");
       },
-      "dynamics.multibandComp.crossover.cutoffsHz is an empty list, which has no flat spelling",
+      "params.dynamics.multibandComp.crossover.cutoffsHz must not be an empty list",
       sonare::ErrorCode::InvalidFormat);
 }
 

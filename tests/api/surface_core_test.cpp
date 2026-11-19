@@ -178,7 +178,7 @@ TEST_CASE("Project scene refuses an unknown key instead of warning", "[surface][
   const char* typo = R"({"version":1,"strips":[{"id":"lead","faderDB":-3.0}],)"
                      R"("buses":[{"id":"master","role":"master"}]})";
   CHECK(sonare_project_set_mixer_scene_json(project, typo) == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(std::string(sonare_last_error_message()).find("unknown scene key 'strips[0].faderDB'") !=
+  CHECK(std::string(sonare_last_error_message()).find("unknown key strips[0].faderDB") !=
         std::string::npos);
   CHECK(diagnostic_codes_and_messages().empty());
   sonare_project_destroy(project);

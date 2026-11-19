@@ -215,8 +215,8 @@ TEST_CASE("Voice changer preset requires every transformer section and refuses a
     CHECK(error.find("schemaVersion") != std::string::npos);
     RealtimeVoiceChangerConfig loaded;
     REQUIRE_FALSE(realtime_voice_changer_config_from_input(text, &loaded, &error));
-    CHECK(error.find("(" + std::to_string(kVoiceChangerPresetSchemaVersion) + ")") !=
-          std::string::npos);
+    CHECK(error.find("schemaVersion must be " + std::to_string(kVoiceChangerPresetSchemaVersion) +
+                     ", the version this release reads") != std::string::npos);
   }
 }
 
@@ -269,7 +269,7 @@ TEST_CASE("preset JSON validator rejects invalid id patterns", "[voice_changer][
     REQUIRE_FALSE(error.empty());
     // Empty / oversized ids are caught by require_string's length check before
     // the regex check, so accept either error path provided the field is named.
-    REQUIRE(error.find("$.id") != std::string::npos);
+    REQUIRE(error.find("id must") != std::string::npos);
   }
 }
 
@@ -1165,12 +1165,12 @@ TEST_CASE("The POD config refuses an out-of-range field and keeps the previous c
   bad.formant_factor = 3.0f;
   CHECK(sonare_realtime_voice_changer_set_config(handle, &bad) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()) ==
-        "formant.factor out of range [0.55, 1.65], got 3");
+        "formant.factor must be finite and in [0.55, 1.65]");
   bad = config;
   bad.limiter_ceiling_db = 0.5f;
   CHECK(sonare_realtime_voice_changer_set_config(handle, &bad) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(std::string(sonare_last_error_message()),
-             Catch::Matchers::ContainsSubstring("limiter.ceilingDb out of range"));
+             Catch::Matchers::ContainsSubstring("limiter.ceilingDb must be finite and in ["));
 
   SonareRealtimeVoiceChangerConfig after{};
   REQUIRE(sonare_realtime_voice_changer_get_config(handle, &after) == SONARE_OK);

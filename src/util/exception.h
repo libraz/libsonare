@@ -5,6 +5,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include "util/number_format.h"
 #include "util/types.h"
@@ -29,6 +30,54 @@ class SonareException : public std::runtime_error {
 
  private:
   ErrorCode code_;
+};
+
+/// @brief A refusal of one parameter that carries its subject key as data.
+/// @details The layer that knows where the parameter sits in a document rethrows it with the
+///          document path joined in front. what() reads "<subject> <predicate>" or
+///          "unknown key <subject>[ (renamed to <renamed_to>)]".
+class SonareParameterRefusal : public SonareException {
+ public:
+  enum class Form { Predicate, UnknownKey };
+
+  /// @brief A refusal reading "<subject> <predicate>".
+  static SonareParameterRefusal predicate(ErrorCode code, const std::string& subject,
+                                          const std::string& predicate) {
+    return SonareParameterRefusal(code, Form::Predicate, subject, predicate, std::string());
+  }
+
+  /// @brief A refusal reading "unknown key <subject>", with the rename when @p renamed_to is set.
+  static SonareParameterRefusal unknown(ErrorCode code, const std::string& subject,
+                                        const std::string& renamed_to = std::string()) {
+    return SonareParameterRefusal(code, Form::UnknownKey, subject, std::string(), renamed_to);
+  }
+
+  Form form() const { return form_; }
+  const std::string& subject() const { return subject_; }
+  const std::string& predicate() const { return predicate_; }
+  const std::string& renamed_to() const { return renamed_to_; }
+
+ private:
+  SonareParameterRefusal(ErrorCode code, Form form, std::string subject, std::string predicate,
+                         std::string renamed_to)
+      : SonareException(code, compose(form, subject, predicate, renamed_to)),
+        form_(form),
+        subject_(std::move(subject)),
+        predicate_(std::move(predicate)),
+        renamed_to_(std::move(renamed_to)) {}
+
+  static std::string compose(Form form, const std::string& subject, const std::string& predicate,
+                             const std::string& renamed_to) {
+    if (form == Form::Predicate) return subject + " " + predicate;
+    std::string text = "unknown key " + subject;
+    if (!renamed_to.empty()) text += " (renamed to " + renamed_to + ")";
+    return text;
+  }
+
+  Form form_;
+  std::string subject_;
+  std::string predicate_;
+  std::string renamed_to_;
 };
 
 /// @def SONARE_CHECK

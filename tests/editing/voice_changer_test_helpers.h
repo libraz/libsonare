@@ -203,4 +203,20 @@ namespace {
   return static_cast<float>(std::sqrt(acc / static_cast<double>(end - start)));
 }
 
+/// The neutral-monitor preset document with one dsp key replaced; an empty section addresses a
+/// top-level dsp key.
+[[maybe_unused]] std::string neutral_document_with(const std::string& section,
+                                                   const std::string& key,
+                                                   sonare::util::json::Value value) {
+  auto document = sonare::util::json::parse_strict(
+      realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor));
+  auto& dsp = document.as_object().at("dsp").as_object();
+  if (section.empty()) {
+    dsp.at(key) = std::move(value);
+  } else {
+    dsp.at(section).as_object().at(key) = std::move(value);
+  }
+  return sonare::util::json::dump(document);
+}
+
 }  // namespace

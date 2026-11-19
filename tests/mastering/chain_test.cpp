@@ -2739,7 +2739,7 @@ TEST_CASE("parse_chain_config_params refuses a repair mode past the last enumera
     CAPTURE(key);
     const Param params[] = {{key, 7.0}};
     CHECK_THROWS_WITH(parse_chain_config_params(params, 1),
-                      ContainsSubstring("unknown") && ContainsSubstring("mode"));
+                      ContainsSubstring(std::string(key) + " is not a known"));
   }
 }
 
@@ -3323,11 +3323,11 @@ TEST_CASE("flat multiband list rules hold in any key order", "[mastering][chain]
           parse(
               {{mb_key("crossover.cutoffsHz.0"), 100.0}, {mb_key("crossover.cutoffsHz.2"), 300.0}});
         },
-        {"crossover cutoff indices must be contiguous from 0: "
-         "dynamics.multibandComp.crossover.cutoffsHz.2"});
+        {"dynamics.multibandComp.crossover.cutoffsHz.2 must continue the cutoff list from 0 "
+         "without a gap"});
     require_refused([] { parse({{mb_key("crossover.cutoffsHz.1"), 100.0}}); },
-                    {"crossover cutoff indices must be contiguous from 0: "
-                     "dynamics.multibandComp.crossover.cutoffsHz.1"});
+                    {"dynamics.multibandComp.crossover.cutoffsHz.1 must continue the cutoff list "
+                     "from 0 without a gap"});
   }
 
   SECTION("a band index past the resulting count is refused in either order") {
@@ -3339,7 +3339,7 @@ TEST_CASE("flat multiband list rules hold in any key order", "[mastering][chain]
     list_first.insert(list_first.end(), band.begin(), band.end());
     for (const auto* params : {&band_first, &list_first}) {
       require_refused([&] { parse(*params); },
-                      {"multiband band index out of range: dynamics.multibandComp.bands.2.ratio"});
+                      {"dynamics.multibandComp.bands.2.ratio is past the end of the band list"});
     }
   }
 

@@ -189,6 +189,11 @@ const Value* admit_insert_params(const std::string& json_params,
   return out_root;
 }
 
+// Refuses the parameter @p key; the caller's document layer may relabel it under a path.
+[[noreturn]] void refuse_param(const std::string& key, const std::string& predicate) {
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key, predicate);
+}
+
 // Decodes a little-endian f32 array carried as base64 under @p key. Two inserts
 // take an IR this way (the convolution reverb and the amp sim's cabinet), so the
 // key is a parameter rather than being baked in. Not FX-gated: the amp sim ships
@@ -198,16 +203,15 @@ std::vector<float> read_ir_f32_base64_key(const Value* root, const char* key) {
   const auto* value = root->find(key);
   if (value == nullptr) return {};
   if (!value->is_string()) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a string");
+    refuse_param(key, "must be a string");
   }
 
   std::vector<uint8_t> bytes;
   if (!base64_decode(value->as_string(), &bytes)) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " is malformed");
+    refuse_param(key, "is malformed");
   }
   if (bytes.size() % sizeof(float) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " byte length must be f32 aligned");
+    refuse_param(key, "byte length must be f32 aligned");
   }
 
   std::vector<float> ir(bytes.size() / sizeof(float), 0.0f);
@@ -220,8 +224,7 @@ std::vector<float> read_ir_f32_base64_key(const Value* root, const char* key) {
     float sample = 0.0f;
     std::memcpy(&sample, &bits, sizeof(sample));
     if (!std::isfinite(sample)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(key) + " contains non-finite samples");
+      refuse_param(key, "contains non-finite samples");
     }
     ir[i] = sample;
   }
@@ -236,7 +239,7 @@ std::string read_string_key(const Value* root, const char* key) {
   const auto* value = root->find(key);
   if (value == nullptr) return {};
   if (!value->is_string()) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a string");
+    refuse_param(key, "must be a string");
   }
   return value->as_string();
 }
@@ -280,8 +283,7 @@ std::vector<Param> insert_params_from_root(const Value* root, const std::string&
       // reported instead of dropped.
       continue;
     } else {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "JSON params values must be numbers or booleans");
+      refuse_param(key, "must be a number or a boolean");
     }
   }
   return params;
@@ -643,15 +645,14 @@ SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::SourceListener, 2);
 std::vector<float> acoustic_material_bands(const Value* value, const char* key) {
   if (value == nullptr) return {};
   if (!value->is_array()) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an array");
+    refuse_param(key, "must be an array");
   }
 
   std::vector<float> bands;
   bands.reserve(value->size());
   for (const auto& band : value->as_array()) {
     if (!band.is_number()) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(key) + " values must be within [0, 1]");
+      refuse_param(key, "values must be within [0, 1]");
     }
     bands.push_back(band.as_float());
   }
@@ -674,8 +675,7 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
   const int material_preset = detail::i(params, "materialPreset", 0, kNone);
   request.has_preset = material_preset_from_selector(material_preset, &request.preset);
   if (material_preset != 0 && !request.has_preset) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "materialPreset must be 0 (none) or a preset from 1 to 5");
+    refuse_param("materialPreset", "must be 0 (none) or a preset from 1 to 5");
   }
   request.absorption = f(params, "absorption", 0.2f, kNone);
   if (json_root != nullptr) {
@@ -1132,17 +1132,14 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
   }
   const int msb = detail::i(params, "typeMsb", 0, kNone);
   const int lsb = detail::i(params, "typeLsb", 0, kNone);
-  if (msb < 0 || msb > 127 || lsb < 0 || lsb > 127) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "effects.gsEfx type bytes must be in [0, 127]");
-  }
+  if (msb < 0 || msb > 127) refuse_param("typeMsb", "must be in [0, 127]");
+  if (lsb < 0 || lsb > 127) refuse_param("typeLsb", "must be in [0, 127]");
   const int realization_value = detail::i(params, "realization", 0);
   if (params.records_declarations()) {
     params.note_choices("realization", {{"modern", 0}, {"classic", 1}});
   }
   if (realization_value < 0 || realization_value > 1) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "effects.gsEfx realization must be 0 (modern) or 1 (classic)");
+    refuse_param("realization", "must be 0 (modern) or 1 (classic)");
   }
 
   GsEfx state;
@@ -1162,14 +1159,12 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
     const std::string key = "byte" + std::to_string(slot);
     const int value = detail::i(params, key.c_str(), state.params[slot], kNone);
     if (value < 0 || value > 127) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "effects.gsEfx " + key + " must be in [0, 127]");
+      refuse_param(key, "must be in [0, 127]");
     }
     state.params[slot] = static_cast<uint8_t>(value);
     if (state.type != 0 && !sonare::midi::synth::gs_efx_parameter_takes(
                                state.type, static_cast<uint8_t>(slot), state.params[slot])) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "effects.gsEfx " + key + " is outside the GS state list");
+      refuse_param(key, "is outside the GS state list");
     }
   }
 

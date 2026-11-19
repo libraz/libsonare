@@ -780,7 +780,7 @@ TEST_CASE("Validation refuses an unreachable absolute warp and names the formant
   // 2^(-9/12) = 0.5946, so the warp range reaches [0.327, 0.9811], which the factor's own
   // range [0.55, 1.65] narrows to [0.55, 0.9811].
   REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
-  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("-9 semitones"));
+  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("at retune.pitchSemitones -9"));
 
   config.formant.factor = 0.8f;
   REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));
@@ -823,6 +823,7 @@ TEST_CASE("The formant mode round-trips through the JSON documents",
   std::string bad = text;
   bad.replace(bad.find("absolute"), 8, "sideways");
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(bad, &parsed, &error));
+  REQUIRE(error == "dsp.formant.mode must be 'relative' or 'absolute'");
 
   // An unreachable config is not written, and an unreachable document is refused with the range.
   RealtimeVoiceChangerConfig unreachable = bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute);

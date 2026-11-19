@@ -12,6 +12,7 @@
 #include "midi/assist/modules/harmony_context.h"
 #include "midi/assist/modules/placement_judge.h"
 #include "util/json_budget.h"
+#include "util/json_schema.h"
 #endif
 
 // ============================================================================
@@ -24,6 +25,7 @@ namespace {
 namespace assist = sonare::midi::assist;
 namespace mods = sonare::midi::assist::modules;
 namespace json = sonare::util::json;
+namespace schema = sonare::util::json::schema;
 
 /// The built-in module set, held together so the query slots the generators
 /// point at outlive them. Constructed per call: every module is stateless, so
@@ -51,14 +53,16 @@ bool select_modules(const json::Value& root, bool* out_generator, bool* out_harm
     return true;
   }
   if (!modules->is_array()) {
-    *error = "modules must be an array of module ids";
+    *error = schema::must_be("modules", schema::Kind::Array);
     return false;
   }
   *out_generator = false;
   *out_harmonizer = false;
+  std::size_t index = 0;
   for (const json::Value& entry : modules->as_array()) {
+    const std::string at = schema::index_path("modules", index++);
     if (!entry.is_string()) {
-      *error = "modules must contain only strings";
+      *error = schema::must_be(at, schema::Kind::String);
       return false;
     }
     if (entry.as_string() == kGeneratorId) {
@@ -66,7 +70,8 @@ bool select_modules(const json::Value& root, bool* out_generator, bool* out_harm
     } else if (entry.as_string() == kHarmonizerId) {
       *out_harmonizer = true;
     } else {
-      *error = "unknown module id: " + entry.as_string();
+      *error =
+          schema::refusal(at, std::string("must be one of ") + kGeneratorId + ", " + kHarmonizerId);
       return false;
     }
   }
@@ -78,29 +83,32 @@ bool read_optional_ppq(const json::Value& scope, const char* key, std::optional<
   const json::Value* value = scope.find(key);
   if (value == nullptr) return true;
   if (!value->is_number()) {
-    *error = std::string("scope.") + key + " must be a number";
+    *error = schema::must_be(schema::child_path("scope", key), schema::Kind::Number);
     return false;
   }
   const double ppq = value->as_number();
   if (!sonare::transport::valid_public_ppq(ppq)) {
-    *error = std::string("scope.") + key + " is outside the representable PPQ range";
+    *error = schema::refusal(schema::child_path("scope", key),
+                             "must be inside the representable PPQ range");
     return false;
   }
   *out = ppq;
   return true;
 }
 
-bool read_u32(const json::Value& root, const char* key, uint32_t* out, std::string* error) {
+bool read_u32(const json::Value& root, const char* key, std::string_view parent, uint32_t* out,
+              std::string* error) {
   const json::Value* value = root.find(key);
   if (value == nullptr) return true;
+  const std::string at = schema::child_path(parent, key);
   if (!value->is_number()) {
-    *error = std::string(key) + " must be a number";
+    *error = schema::must_be(at, schema::Kind::Number);
     return false;
   }
   const double number = value->as_number();
   if (!std::isfinite(number) || number < 0.0 || number > 4294967295.0 ||
       number != std::floor(number)) {
-    *error = std::string(key) + " must be a non-negative 32-bit integer";
+    *error = schema::refusal(at, schema::integer_range_predicate(0.0, 4294967295.0));
     return false;
   }
   *out = static_cast<uint32_t>(number);
@@ -120,48 +128,52 @@ bool read_request(const char* request_json, assist::AssistRequest* out, bool* ou
   try {
     root = json::admit_strict(request_json);
   } catch (const json::JsonError& parse_error) {
-    *error = std::string("request_json is not valid JSON: ") + parse_error.what();
+    *error = parse_error.what();
     return false;
   }
   if (!root.is_object()) {
-    *error = "request_json must be a JSON object";
+    *error = schema::root_must_be_object();
     return false;
   }
   if (!select_modules(root, out_generator, out_harmonizer, error)) return false;
-  if (!read_u32(root, "seed", &out->seed, error)) return false;
+  if (!read_u32(root, "seed", "", &out->seed, error)) return false;
 
   if (const json::Value* scope = root.find("scope")) {
     if (!scope->is_object()) {
-      *error = "scope must be an object";
+      *error = schema::must_be("scope", schema::Kind::Object);
       return false;
     }
     if (!read_optional_ppq(*scope, "startPpq", &out->scope.start_ppq, error)) return false;
     if (!read_optional_ppq(*scope, "endPpq", &out->scope.end_ppq, error)) return false;
     if (const json::Value* ids = scope->find("trackIds")) {
+      const std::string ids_path = schema::child_path("scope", "trackIds");
       if (!ids->is_array()) {
-        *error = "scope.trackIds must be an array";
+        *error = schema::must_be(ids_path, schema::Kind::Array);
         return false;
       }
+      std::size_t index = 0;
       for (const json::Value& entry : ids->as_array()) {
         if (!entry.is_number()) {
-          *error = "scope.trackIds must contain only numbers";
+          *error = schema::must_be(schema::index_path(ids_path, index), schema::Kind::Number);
           return false;
         }
+        ++index;
         out->scope.track_ids.push_back(static_cast<sonare::arrangement::TrackId>(entry.as_int()));
       }
     }
   }
   if (const json::Value* budget = root.find("budget")) {
     if (!budget->is_object()) {
-      *error = "budget must be an object";
+      *error = schema::must_be("budget", schema::Kind::Object);
       return false;
     }
-    if (!read_u32(*budget, "maxTimeMs", &out->budget.max_time_ms, error)) return false;
-    if (!read_u32(*budget, "maxIterations", &out->budget.max_iterations, error)) return false;
+    if (!read_u32(*budget, "maxTimeMs", "budget", &out->budget.max_time_ms, error)) return false;
+    if (!read_u32(*budget, "maxIterations", "budget", &out->budget.max_iterations, error))
+      return false;
   }
   if (const json::Value* params = root.find("params")) {
     if (!params->is_object()) {
-      *error = "params must be an object";
+      *error = schema::must_be("params", schema::Kind::Object);
       return false;
     }
     out->params_json = json::dump(*params);

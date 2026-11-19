@@ -8,6 +8,7 @@
 #include "sonare_c_internal.h"
 #include "util/json_budget.h"
 #include "util/json_key.h"
+#include "util/json_schema.h"
 
 namespace {
 
@@ -24,24 +25,20 @@ namespace {
                                          "sonare_eq_set_band: " + message);
 }
 
-// A band fragment refuses an unknown key by name, where a whole scene document only
-// reports it; `$` and `x-` keys are exempt as they are in a scene.
+// A band fragment refuses its first unknown key by name; `$` and `x-` keys are exempt as they
+// are in a scene.
 void refuse_unknown_band_keys(const sonare::util::json::Value& json) {
   if (!json.is_object()) return;
   const auto& known = sonare::mastering::eq::eq_band_known_keys();
-  std::vector<std::string> unknown;
   for (const auto& entry : json.as_object()) {
     const std::string& key = entry.first;
     if (std::find(known.begin(), known.end(), key) != known.end() ||
         sonare::util::json::is_annotation_key(key)) {
       continue;
     }
-    unknown.push_back(sonare::util::json::escape_key(key));
+    malformed_eq_json(sonare::util::json::schema::unknown_key(
+        sonare::util::json::schema::child_path(std::string(), key)));
   }
-  if (unknown.empty()) return;
-  std::string message = "unknown band key '" + unknown.front() + "'";
-  if (unknown.size() > 1) message += " (and " + std::to_string(unknown.size() - 1) + " more)";
-  malformed_eq_json(message);
 }
 
 }  // namespace
@@ -54,13 +51,12 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
   try {
     json = sonare::util::json::admit_strict(band_json);
   } catch (const sonare::util::json::JsonError& ex) {
-    malformed_eq_json(std::string("invalid JSON: ") + ex.what());
+    malformed_eq_json(ex.what());
   }
-  // Field parsing and validation are shared with the scene walker; this call
-  // keeps the "sonare_eq_set_band: " prefix. It runs first so an earlier spelling of a
-  // known key is refused naming the current one rather than as an unknown key.
+  // Field parsing and validation are shared with the scene walker; it runs first so an earlier
+  // spelling of a known key is refused naming the current one rather than as an unknown key.
   const sonare::mastering::eq::EqBand band =
-      sonare::mastering::eq::eq_band_from_value(json, "sonare_eq_set_band: ");
+      sonare::mastering::eq::eq_band_from_value(json, std::string());
   refuse_unknown_band_keys(json);
   return band;
 }

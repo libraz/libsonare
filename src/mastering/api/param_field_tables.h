@@ -60,6 +60,7 @@
 #include "mastering/stereo/stereo_balance.h"
 #include "rt/aliasing_control.h"
 #include "util/exception.h"
+#include "util/json_schema.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::mastering::api::detail {
@@ -811,25 +812,44 @@ std::vector<EnumChoice> enum_choices() {
 
 namespace sonare::mastering::api {
 
-/// @brief Refuses a flat param value that no integral field can hold, naming
-///        @p subject and which of the two ways it failed.
-/// @details Fractional and out-of-range are different mistakes and a caller can
-///   only act on the one they made. One message for both told whoever wrote
-///   512.7 that their value was out of range, which it is not. Callers holding
-///   the dotted key pass it as @p subject; the table dispatch, which does not,
-///   names the parameter class instead. Outside `detail` because the flat param
-///   type is shared beyond this header, and so is the contract.
+/// @brief The predicate naming which way a double failed to become an integral value.
+/// @details Fractional and out-of-range are different mistakes and a caller can only act on the
+///   one they made.
+inline const char* integer_refusal_predicate(double value) {
+  return numeric::finite(value) && std::trunc(value) != value ? "must be a whole number"
+                                                              : "is out of range";
+}
+
+/// @brief Refuses a flat param value that no integral field can hold, naming @p subject.
 [[noreturn]] inline void reject_integer_param(const std::string& subject, double value) {
-  if (numeric::finite(value) && std::trunc(value) != value) {
-    throw SonareException(ErrorCode::InvalidParameter, subject + " must be a whole number");
-  }
-  throw SonareException(ErrorCode::InvalidParameter, subject + " is out of range");
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                          integer_refusal_predicate(value));
+}
+
+/// @brief A value refusal raised where the parameter's key is not known.
+/// @details The layer that holds the key rethrows it as a keyed SonareParameterRefusal.
+class FieldValueRefusal : public SonareException {
+ public:
+  explicit FieldValueRefusal(std::string predicate)
+      : SonareException(ErrorCode::InvalidParameter, "mastering parameter " + predicate),
+        predicate_(std::move(predicate)) {}
+
+  const std::string& predicate() const { return predicate_; }
+
+ private:
+  std::string predicate_;
+};
+
+/// @brief Rethrows @p refusal as a refusal of the parameter @p key.
+[[noreturn]] inline void rethrow_keyed(const FieldValueRefusal& refusal, const std::string& key) {
+  throw SonareParameterRefusal::predicate(refusal.code(), key, refusal.predicate());
 }
 
 /// @brief Converts a flat integer to a size, refusing a negative one by name.
 inline std::size_t checked_nonnegative_size(int value, const std::string& subject) {
   if (value < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, subject + " must be non-negative");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            "must be non-negative");
   }
   return static_cast<std::size_t>(value);
 }
@@ -858,19 +878,19 @@ namespace sonare::mastering::api::detail {
 inline void assign_field(float& dst, double value) {
   if (!numeric::finite(value) ||
       std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "mastering parameter is out of range");
+    throw FieldValueRefusal(::sonare::util::json::schema::kFloatRangePredicate);
   }
   dst = static_cast<float>(value);
 }
 inline void assign_field(double& dst, double value) {
   if (!numeric::finite(value)) {
-    throw SonareException(ErrorCode::InvalidParameter, "mastering parameter must be finite");
+    throw FieldValueRefusal("must be finite");
   }
   dst = value;
 }
 inline void assign_field(bool& dst, double value) {
   if (!numeric::finite(value)) {
-    throw SonareException(ErrorCode::InvalidParameter, "mastering parameter must be finite");
+    throw FieldValueRefusal("must be finite");
   }
   dst = value != 0.0;
 }
@@ -878,7 +898,9 @@ inline void assign_field(bool& dst, double value) {
 template <typename Int,
           std::enable_if_t<std::is_integral_v<Int> && !std::is_same_v<Int, bool>, int> = 0>
 inline void assign_field(Int& dst, double value) {
-  assign_int_param("mastering integer parameter", value, dst);
+  if (!numeric::checked_integral_cast(value, &dst)) {
+    throw FieldValueRefusal(integer_refusal_predicate(value));
+  }
 }
 
 inline void assign_enum_value(int& dst, double value, EnumNameFn name_of) {
@@ -886,10 +908,10 @@ inline void assign_enum_value(int& dst, double value, EnumNameFn name_of) {
   // An enum selector is an index into a closed set, so a fractional one names no
   // enumerator at all; rounding it would silently select a neighbour.
   if (!numeric::checked_integral_cast(value, &converted)) {
-    reject_integer_param("mastering enum parameter", value);
+    throw FieldValueRefusal(integer_refusal_predicate(value));
   }
   if (name_of(converted) == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "mastering enum parameter is out of range");
+    throw FieldValueRefusal("is out of range");
   }
   dst = converted;
 }

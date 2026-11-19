@@ -165,22 +165,22 @@ struct ChordConfig {
 };
 
 /// @brief Refuses a ChordConfig outside the argument domain every public surface shares.
-/// @throws SonareException(InvalidParameter) unless min_duration is finite and non-negative,
-///         smoothing_window is finite and non-negative (one hop or less, 0 included, smooths
+/// @throws SonareException(InvalidParameter) unless min_duration is finite and at least 0,
+///         smoothing_window is finite and at least 0 (one hop or less, 0 included, smooths
 ///         nothing), threshold is finite in [0, 1], n_fft and hop_length are positive, and
-///         hmm_beam_width is non-negative.
+///         hmm_beam_width is at least 0.
 inline void validate_chord_config(const ChordConfig& config) {
   SONARE_CHECK_MSG(numeric::finite_non_negative(config.min_duration), ErrorCode::InvalidParameter,
-                   "ChordConfig: min_duration must be finite and non-negative");
+                   "ChordConfig: min_duration must be finite and at least 0");
   SONARE_CHECK_MSG(numeric::finite_non_negative(config.smoothing_window),
                    ErrorCode::InvalidParameter,
-                   "ChordConfig: smoothing_window must be finite and non-negative");
+                   "ChordConfig: smoothing_window must be finite and at least 0");
   SONARE_CHECK_MSG(numeric::finite_in_closed_range(config.threshold, 0.0f, 1.0f),
                    ErrorCode::InvalidParameter, "ChordConfig: threshold must be finite in [0, 1]");
   SONARE_CHECK_MSG(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
                    "ChordConfig: n_fft and hop_length must be positive");
   SONARE_CHECK_MSG(config.hmm_beam_width >= 0, ErrorCode::InvalidParameter,
-                   "ChordConfig: hmm_beam_width must be non-negative");
+                   "ChordConfig: hmm_beam_width must be at least 0");
 }
 
 /// @brief Chord analyzer for detecting chords from audio.

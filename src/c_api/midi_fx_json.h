@@ -13,6 +13,7 @@
 #include "transport/tempo_map.h"
 #include "util/json_budget.h"
 #include "util/json_key.h"
+#include "util/json_schema.h"
 #include "util/numeric_validation.h"
 
 namespace sonare_c_detail {
@@ -20,6 +21,7 @@ namespace sonare_c_detail {
 namespace midi_fx_json_detail {
 
 namespace json = sonare::util::json;
+namespace schema = sonare::util::json::schema;
 
 inline double number_or(const json::Value& obj, const char* key, double fallback) {
   const json::Value* value = obj.find(key);
@@ -85,9 +87,11 @@ inline SonareError refuse_unknown_keys(const json::Value& root) {
       if (spelling.earlier != nullptr && key == spelling.earlier) earlier = &spelling;
     }
     if (known) continue;
-    const std::string message = earlier != nullptr
-                                    ? key + " is an earlier spelling; write " + earlier->current
-                                    : "unknown MIDI-FX key '" + json::escape_key(key) + "'";
+    const std::string at = schema::child_path("", key);
+    const std::string message =
+        earlier != nullptr ? schema::refusal(at, "is an earlier spelling; write " +
+                                                     schema::child_path("", earlier->current))
+                           : schema::unknown_key(at);
     set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
@@ -100,8 +104,9 @@ inline SonareError refuse_wrong_kinds(const json::Value& root) {
     const json::Value* value = root.find(spelling.current);
     if (value == nullptr) continue;
     if (spelling.array ? value->is_array() : value->is_number()) continue;
-    const std::string message = std::string(spelling.current) +
-                                (spelling.array ? " must be an array" : " must be a number");
+    const std::string message =
+        schema::must_be(schema::child_path("", spelling.current),
+                        spelling.array ? schema::Kind::Array : schema::Kind::Number);
     set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
@@ -132,7 +137,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   } catch (const json::JsonError& e) {
     return refuse(e.what());
   }
-  if (!root.is_object()) return refuse("MIDI-FX config must be a JSON object");
+  if (!root.is_object()) return refuse(schema::root_must_be_object());
   if (const SonareError key_err = refuse_unknown_keys(root); key_err != SONARE_OK) return key_err;
   if (const SonareError kind_err = refuse_wrong_kinds(root); kind_err != SONARE_OK) return kind_err;
 
@@ -140,7 +145,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   if (has_number(root, "transposeSemitones")) {
     transpose.enabled = true;
     if (!int_or(root, "transposeSemitones", 0, &transpose.semitones)) {
-      return refuse("transposeSemitones must be a whole number in range");
+      return refuse(schema::refusal("transposeSemitones", "must be a whole number in range"));
     }
     chain->set_transpose(transpose);
   }
@@ -155,10 +160,10 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
           std::tuple<const char*, float, float*>{"velocityOffset", 0.0f, &velocity.offset},
           std::tuple<const char*, float, float*>{"velocityGamma", 1.0f, &velocity.gamma}}) {
       if (!float_or(root, key, fallback, dst)) {
-        return refuse(std::string(key) + " is not representable as a 32-bit float");
+        return refuse(schema::refusal(key, "must be representable as a 32-bit float"));
       }
     }
-    if (velocity.gamma <= 0.0f) return refuse("velocityGamma must be > 0");
+    if (velocity.gamma <= 0.0f) return refuse(schema::refusal("velocityGamma", "must be > 0"));
     chain->set_velocity_curve(velocity);
   }
 
@@ -167,10 +172,10 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     const double strength = number_or(root, "quantizeStrength", 1.0);
     int64_t grid_frames = 0;
     if (!std::isfinite(grid_ppq) || grid_ppq <= 0.0 || !ppq_frames(grid_ppq, &grid_frames)) {
-      return refuse("quantizePpq must be a positive PPQ length in range");
+      return refuse(schema::refusal("quantizePpq", "must be a positive PPQ length in range"));
     }
     if (!std::isfinite(strength) || strength < 0.0 || strength > 1.0) {
-      return refuse("quantizeStrength must be in [0, 1]");
+      return refuse(schema::refusal("quantizeStrength", "must be in [0, 1]"));
     }
     sonare::midi::QuantizeConfig quantize;
     quantize.enabled = true;
@@ -184,14 +189,17 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     chord.enabled = true;
     const auto& values = intervals->as_array();
     if (values.empty() || values.size() > sonare::midi::ChordConfig::kMaxChordNotes) {
-      return refuse("chordIntervals must hold 1 to " +
-                    std::to_string(sonare::midi::ChordConfig::kMaxChordNotes) + " intervals");
+      return refuse(schema::refusal("chordIntervals",
+                                    "must hold 1 to " +
+                                        std::to_string(sonare::midi::ChordConfig::kMaxChordNotes) +
+                                        " intervals"));
     }
     chord.count = values.size();
     for (size_t i = 0; i < values.size(); ++i) {
       if (!values[i].is_number() ||
           !sonare::numeric::checked_integral_cast(values[i].as_number(), &chord.intervals[i])) {
-        return refuse("chordIntervals[" + std::to_string(i) + "] must be a whole number");
+        return refuse(
+            schema::refusal(schema::index_path("chordIntervals", i), "must be a whole number"));
       }
     }
     chain->set_chord(chord);
@@ -200,19 +208,23 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   if (const json::Value* arp_intervals = root.find("arpeggiatorIntervals")) {
     const auto& values = arp_intervals->as_array();
     if (values.empty() || values.size() > sonare::midi::ArpeggiatorConfig::kMaxArpSteps) {
-      return refuse("arpeggiatorIntervals must hold 1 to " +
-                    std::to_string(sonare::midi::ArpeggiatorConfig::kMaxArpSteps) + " intervals");
+      return refuse(schema::refusal(
+          "arpeggiatorIntervals",
+          "must hold 1 to " + std::to_string(sonare::midi::ArpeggiatorConfig::kMaxArpSteps) +
+              " intervals"));
     }
     const double step_ppq = number_or(root, "arpeggiatorStepPpq", 0.0);
     int64_t step_frames = 0;
     if (!std::isfinite(step_ppq) || step_ppq <= 0.0 || !ppq_frames(step_ppq, &step_frames)) {
-      return refuse("arpeggiatorStepPpq must be a positive PPQ length in range");
+      return refuse(
+          schema::refusal("arpeggiatorStepPpq", "must be a positive PPQ length in range"));
     }
     // Gate defaults to a full-length (legato) step when omitted.
     const double gate_ppq = number_or(root, "arpeggiatorGatePpq", step_ppq);
     int64_t gate_frames = 0;
     if (!std::isfinite(gate_ppq) || gate_ppq <= 0.0 || !ppq_frames(gate_ppq, &gate_frames)) {
-      return refuse("arpeggiatorGatePpq must be a positive PPQ length in range");
+      return refuse(
+          schema::refusal("arpeggiatorGatePpq", "must be a positive PPQ length in range"));
     }
     sonare::midi::ArpeggiatorConfig arpeggiator;
     arpeggiator.enabled = true;
@@ -220,7 +232,8 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     for (size_t i = 0; i < values.size(); ++i) {
       if (!values[i].is_number() || !sonare::numeric::checked_integral_cast(
                                         values[i].as_number(), &arpeggiator.intervals[i])) {
-        return refuse("arpeggiatorIntervals[" + std::to_string(i) + "] must be a whole number");
+        return refuse(schema::refusal(schema::index_path("arpeggiatorIntervals", i),
+                                      "must be a whole number"));
       }
     }
     arpeggiator.step_frames = std::max<int64_t>(1, step_frames);
@@ -236,14 +249,14 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     int seed = 0;
     int64_t timing_frames = 0;
     if (!std::isfinite(timing_ppq) || timing_ppq < 0.0 || !ppq_frames(timing_ppq, &timing_frames)) {
-      return refuse("humanizePpq must be a non-negative PPQ length in range");
+      return refuse(schema::refusal("humanizePpq", "must be a non-negative PPQ length in range"));
     }
     if (!int_or(root, "humanizeVelocity", 0, &velocity_amount) || velocity_amount < 0 ||
         velocity_amount > 127) {
-      return refuse("humanizeVelocity must be a whole number in [0, 127]");
+      return refuse(schema::refusal("humanizeVelocity", schema::integer_range_predicate(0, 127)));
     }
     if (!int_or(root, "seed", 0, &seed) || seed < 0) {
-      return refuse("seed must be a non-negative whole number in range");
+      return refuse(schema::refusal("seed", "must be a non-negative whole number in range"));
     }
     sonare::midi::HumanizeConfig humanize;
     humanize.enabled = true;

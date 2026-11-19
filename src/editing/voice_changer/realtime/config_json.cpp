@@ -46,22 +46,22 @@ using namespace detail;
 
 namespace {
 
-float finite_or(float value, float fallback) noexcept {
-  return std::isfinite(value) ? value : fallback;
+namespace schema = sonare::util::json::schema;
+using schema::Kind;
+
+[[noreturn]] void refuse(const std::string& message) {
+  throw SonareException(ErrorCode::InvalidFormat, message);
 }
 
-// A present key of the wrong type (a JSON null included) is refused naming its path; only an
-// absent key keeps the fallback. `section` is the enclosing object's key, "" at the top level.
-[[noreturn]] void refuse_type(const char* section, const char* key, const char* expected) {
-  const std::string path = section[0] == '\0' ? std::string(key) : std::string(section) + "." + key;
-  throw SonareException(ErrorCode::InvalidFormat, path + " must be " + expected);
-}
-
-// The nested object under @p key, or null when absent; a present non-object is refused.
+// The readers below run on a validated document; a present key of the wrong type is still refused
+// by its path, and only an absent key keeps the fallback. @p section is the enclosing object's
+// path.
 const sonare::util::json::Value* object_section(const sonare::util::json::Value& object,
-                                                const char* key) {
+                                                const char* section, const char* key) {
   const auto* value = object.find(key);
-  if (value != nullptr && !value->is_object()) refuse_type("", key, "an object");
+  if (value != nullptr && !value->is_object()) {
+    refuse(schema::must_be(schema::child_path(section, key), Kind::Object));
+  }
   return value;
 }
 
@@ -69,8 +69,9 @@ float object_number(const sonare::util::json::Value& object, const char* section
                     float fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse_type(section, key, "a number");
-  return finite_or(value->as_float(), fallback);
+  if (!value->is_number()) refuse(schema::must_be(schema::child_path(section, key), Kind::Number));
+  // An overflow reads as an infinity, which the config validator refuses by name.
+  return value->as_float();
 }
 
 int json_number_to_int(double n, int fallback) noexcept {
@@ -87,19 +88,18 @@ int object_int(const sonare::util::json::Value& object, const char* section, con
                int fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse_type(section, key, "a number");
+  if (!value->is_number()) refuse(schema::must_be(schema::child_path(section, key), Kind::Number));
   return json_number_to_int(value->as_number(), fallback);
 }
+
+constexpr const char* kGrainZeroPredicate = "must not be 0; omit it for the automatic grain";
 
 // The retune grain: an absent key is the automatic grain (0 in the config), and an explicit 0 is
 // refused so that "automatic" has one spelling in a document.
 int object_grain(const sonare::util::json::Value& object, const char* section, const char* key) {
   const int grain = object_int(object, section, key, 0);
   if (object.find(key) != nullptr && grain == 0) {
-    const std::string path =
-        section[0] == '\0' ? std::string(key) : std::string(section) + "." + key;
-    throw SonareException(ErrorCode::InvalidFormat,
-                          path + " must not be 0; omit it for the automatic grain");
+    refuse(schema::refusal(schema::child_path(section, key), kGrainZeroPredicate));
   }
   return grain;
 }
@@ -110,15 +110,15 @@ void object_steps(const sonare::util::json::Value& object, const char* section, 
                   int (&steps)[kMaxHarmonyVoices]) {
   const auto* value = object.find(key);
   if (!value) return;
-  if (!value->is_array()) refuse_type(section, key, "an array of numbers");
+  const std::string path = schema::child_path(section, key);
+  if (!value->is_array()) refuse(schema::must_be(path, Kind::Array));
   const auto& items = value->as_array();
   if (items.size() > static_cast<std::size_t>(kMaxHarmonyVoices)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string(section) + "." + key + " must have at most " +
-                              std::to_string(kMaxHarmonyVoices) + " entries");
+    refuse(schema::refusal(path,
+                           "must have at most " + std::to_string(kMaxHarmonyVoices) + " entries"));
   }
   for (std::size_t i = 0; i < items.size(); ++i) {
-    if (!items[i].is_number()) refuse_type(section, key, "an array of numbers");
+    if (!items[i].is_number()) refuse(schema::must_be(schema::index_path(path, i), Kind::Number));
     steps[i] = json_number_to_int(items[i].as_number(), steps[i]);
   }
 }
@@ -127,10 +127,11 @@ int object_enum_value(const sonare::util::json::Value& object, const char* secti
                       const EnumName* rows, std::size_t count, int fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_string()) refuse_type(section, key, "a string");
+  const std::string path = schema::child_path(section, key);
+  if (!value->is_string()) refuse(schema::must_be(path, Kind::String));
   int parsed = fallback;
   if (!enum_value_from_spelling(rows, count, value->as_string(), &parsed)) {
-    refuse_type(section, key, enum_spelling_list(rows, count).c_str());
+    refuse(schema::refusal(path, "must be " + enum_spelling_list(rows, count)));
   }
   return parsed;
 }
@@ -143,19 +144,24 @@ Enum object_enum(const sonare::util::json::Value& object, const char* section, c
                                              static_cast<int>(fallback)));
 }
 
+constexpr const char* kFormantModePredicate = "must be 'relative' or 'absolute'";
+
 FormantMode object_formant_mode(const sonare::util::json::Value& object, const char* section,
                                 const char* key, FormantMode fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_string()) refuse_type(section, key, "a string");
-  return parse_formant_mode(value->as_string());
+  const std::string path = schema::child_path(section, key);
+  if (!value->is_string()) refuse(schema::must_be(path, Kind::String));
+  if (value->as_string() == "relative") return FormantMode::Relative;
+  if (value->as_string() == "absolute") return FormantMode::Absolute;
+  refuse(schema::refusal(path, kFormantModePredicate));
 }
 
 bool object_bool(const sonare::util::json::Value& object, const char* section, const char* key,
                  bool fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_bool()) refuse_type(section, key, "a boolean");
+  if (!value->is_bool()) refuse(schema::must_be(schema::child_path(section, key), Kind::Boolean));
   return value->as_bool();
 }
 
@@ -327,10 +333,6 @@ std::string trim_copy(std::string_view text) {
   return std::string(text.substr(first, last - first));
 }
 
-// Validator helpers (has_allowed_keys, require_key, require_number,
-// require_string) now live in util/json_schema.h. Pull them into this anonymous
-// namespace under their old unqualified names so the validate_*() helpers below
-// stay readable.
 using sonare::util::json::schema::has_allowed_keys;
 using sonare::util::json::schema::require_key;
 using sonare::util::json::schema::require_number;
@@ -369,7 +371,8 @@ bool require_enum_in(const sonare::util::json::Value& object, const char* key, c
     return true;
   }
   if (error) {
-    *error = "field must be " + enum_spelling_list(rows, count) + ": " + path + "." + key;
+    *error = schema::refusal(schema::child_path(path, key),
+                             "must be " + enum_spelling_list(rows, count));
   }
   return false;
 }
@@ -385,7 +388,7 @@ bool require_bool(const sonare::util::json::Value& object, const char* key, cons
                   std::string* error) {
   const auto* value = object.find(key);
   if (value != nullptr && value->is_bool()) return true;
-  if (error) *error = std::string("field must be a boolean: ") + path + "." + key;
+  if (error) *error = schema::must_be(schema::child_path(path, key), Kind::Boolean);
   return false;
 }
 
@@ -425,7 +428,7 @@ bool require_formant_mode(const sonare::util::json::Value& object, const char* k
                           const char* path, std::string* error) {
   const auto* mode = object.find(key);
   if (!mode->is_string() || (mode->as_string() != "relative" && mode->as_string() != "absolute")) {
-    if (error) *error = std::string("field must be 'relative' or 'absolute': ") + path + "." + key;
+    if (error) *error = schema::refusal(schema::child_path(path, key), kFormantModePredicate);
     return false;
   }
   return true;
@@ -435,7 +438,7 @@ template <std::size_t N>
 bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec (&fields)[N],
                         std::string_view path, std::string* error) {
   if (!object.is_object()) {
-    if (error) *error = std::string(path) + " must be an object";
+    if (error) *error = schema::must_be(path, Kind::Object);
     return false;
   }
   for (const auto& [key, _value] : object.as_object()) {
@@ -447,7 +450,7 @@ bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec
       }
     }
     if (!allowed) {
-      if (error) *error = "unknown field: " + std::string(path) + "." + key;
+      if (error) *error = schema::unknown_key(schema::child_path(path, key));
       return false;
     }
   }
@@ -485,8 +488,8 @@ bool grain_in_domain(double n) {
          static_cast<int>(n) % kRetuneGrainStep == 0;
 }
 
-std::string grain_domain_text() {
-  return " must be a multiple of " + std::to_string(kRetuneGrainStep) + " in [" +
+std::string grain_domain_predicate() {
+  return "must be a multiple of " + std::to_string(kRetuneGrainStep) + " in [" +
          std::to_string(kRetuneGrainStep) + ", " + std::to_string(kMaxRetuneGrainSize) + "]";
 }
 
@@ -495,13 +498,11 @@ bool require_grain(const sonare::util::json::Value& object, const char* key, con
                    std::string* error) {
   const auto* value = object.find(key);
   if (value->is_number() && value->as_number() == 0.0) {
-    if (error) {
-      *error = std::string(path) + "." + key + " must not be 0; omit it for the automatic grain";
-    }
+    if (error) *error = schema::refusal(schema::child_path(path, key), kGrainZeroPredicate);
     return false;
   }
   if (value->is_number() && !grain_in_domain(value->as_number())) {
-    if (error) *error = std::string(path) + "." + key + grain_domain_text();
+    if (error) *error = schema::refusal(schema::child_path(path, key), grain_domain_predicate());
     return false;
   }
   return require_in(object, key, kGrainSize, path, error, true);
@@ -623,7 +624,11 @@ bool validate_transform_sections(const sonare::util::json::Value& dsp, std::stri
     }
     if (!steps_ok) {
       if (error) {
-        *error = "field must be an array of voices to 3 integers in [-7, 7]: dsp.harmony.steps";
+        *error = schema::refusal(
+            schema::child_path("dsp.harmony", "steps"),
+            "must be an array of at most " + std::to_string(kMaxHarmonyVoices) + " integers in [" +
+                schema::bound_text(kHarmonyStep.lo) + ", " + schema::bound_text(kHarmonyStep.hi) +
+                "], at least one per voice of dsp.harmony.voices");
       }
       return false;
     }
@@ -741,51 +746,27 @@ bool is_step_triple(const sonare::util::json::Value& value) {
   return true;
 }
 
-// Message for a preset document whose schemaVersion is not the one this release reads.
-std::string schema_version_refusal(double version) {
-  return "preset schemaVersion " + std::to_string(static_cast<long long>(version)) + " is " +
-         (version < kVoiceChangerPresetSchemaVersion ? "older" : "newer") +
-         " than the version this release reads (" +
-         std::to_string(kVoiceChangerPresetSchemaVersion) + ")";
-}
-
-// Refuses a preset document written for another schema; a bare configuration without a
-// schemaVersion reads as the current one.
-void refuse_other_schema(const sonare::util::json::Value& root) {
-  if (!root.is_object()) return;
-  const auto* version = root.find("schemaVersion");
-  if (version != nullptr && version->is_number() &&
-      version->as_number() != static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
-    throw SonareException(ErrorCode::InvalidFormat, schema_version_refusal(version->as_number()));
-  }
-}
-
-// Parses without range handling; every caller validates the result, and only presets clamp.
+// Reads a document whose keys and types were already checked; the config validator runs after it.
 RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& root) {
   RealtimeVoiceChangerConfig c;
-  const auto* dsp = root.find("dsp");
-  const auto* macros = root.find("macros");
-  if (dsp != nullptr && macros != nullptr) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "preset must contain exactly one of dsp or macros");
-  }
-  if (macros != nullptr) {
+  if (const auto* macros = root.find("macros")) {
     std::string error;
-    if (!apply_macro_section(*macros, &c, &error)) {
-      throw SonareException(ErrorCode::InvalidFormat, error);
-    }
+    if (!apply_macro_section(*macros, &c, &error)) refuse(error);
     return c;
   }
-  if (dsp != nullptr && !dsp->is_object()) refuse_type("", "dsp", "an object");
-  const auto& object = dsp ? *dsp : root;
-  c.input_gain_db = object_number(object, "", "inputGainDb", c.input_gain_db);
-  c.output_gain_db = object_number(object, "", "outputGainDb", c.output_gain_db);
-  c.wet_mix = object_number(object, "", "wetMix", c.wet_mix);
+  const bool flat = root.find("retunePitchSemitones") != nullptr;
+  const auto* dsp = flat ? &root : object_section(root, "", "dsp");
+  if (dsp == nullptr) refuse(schema::missing_key("dsp"));
+  const auto& object = *dsp;
+  const char* base = flat ? "" : "dsp";
+  c.input_gain_db = object_number(object, base, "inputGainDb", c.input_gain_db);
+  c.output_gain_db = object_number(object, base, "outputGainDb", c.output_gain_db);
+  c.wet_mix = object_number(object, base, "wetMix", c.wet_mix);
 
   // JS bindings expose preset configs as a flat POD for efficient FFI. Accept
   // that camelCase shape here, at the one parser shared by C ABI, Node, and
   // WASM, rather than making every binding hand-expand it into nested JSON.
-  if (object.find("retunePitchSemitones") != nullptr) {
+  if (flat) {
     c.retune.semitones = object_number(object, "", "retunePitchSemitones", c.retune.semitones);
     c.retune.mix = object_number(object, "", "retuneMix", c.retune.mix);
     c.retune.grain_size = object_grain(object, "", "retuneGrainSizeSamples");
@@ -878,133 +859,203 @@ RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& r
     return c;
   }
 
-  if (const auto* v = object_section(object, "retune")) {
-    c.retune.semitones = object_number(*v, "retune", "pitchSemitones", c.retune.semitones);
-    c.retune.mix = object_number(*v, "retune", "mix", c.retune.mix);
-    c.retune.grain_size = object_grain(*v, "retune", "grainSizeSamples");
+  if (const auto* v = object_section(object, "dsp", "retune")) {
+    c.retune.semitones = object_number(*v, "dsp.retune", "pitchSemitones", c.retune.semitones);
+    c.retune.mix = object_number(*v, "dsp.retune", "mix", c.retune.mix);
+    c.retune.grain_size = object_grain(*v, "dsp.retune", "grainSizeSamples");
   }
-  if (const auto* v = object_section(object, "formant")) {
-    c.formant.factor = object_number(*v, "formant", "factor", c.formant.factor);
-    c.formant.amount = object_number(*v, "formant", "amount", c.formant.amount);
-    c.formant.body = object_number(*v, "formant", "body", c.formant.body);
-    c.formant.brightness = object_number(*v, "formant", "brightness", c.formant.brightness);
-    c.formant.nasal = object_number(*v, "formant", "nasal", c.formant.nasal);
-    c.formant_mode = object_formant_mode(*v, "formant", "mode", c.formant_mode);
+  if (const auto* v = object_section(object, "dsp", "formant")) {
+    c.formant.factor = object_number(*v, "dsp.formant", "factor", c.formant.factor);
+    c.formant.amount = object_number(*v, "dsp.formant", "amount", c.formant.amount);
+    c.formant.body = object_number(*v, "dsp.formant", "body", c.formant.body);
+    c.formant.brightness = object_number(*v, "dsp.formant", "brightness", c.formant.brightness);
+    c.formant.nasal = object_number(*v, "dsp.formant", "nasal", c.formant.nasal);
+    c.formant_mode = object_formant_mode(*v, "dsp.formant", "mode", c.formant_mode);
   }
-  if (const auto* v = object_section(object, "eq")) {
-    c.eq.highpass_hz = object_number(*v, "eq", "highPassHz", c.eq.highpass_hz);
-    c.eq.body_db = object_number(*v, "eq", "bodyDb", c.eq.body_db);
-    c.eq.presence_db = object_number(*v, "eq", "presenceDb", c.eq.presence_db);
-    c.eq.air_db = object_number(*v, "eq", "airDb", c.eq.air_db);
+  if (const auto* v = object_section(object, "dsp", "eq")) {
+    c.eq.highpass_hz = object_number(*v, "dsp.eq", "highPassHz", c.eq.highpass_hz);
+    c.eq.body_db = object_number(*v, "dsp.eq", "bodyDb", c.eq.body_db);
+    c.eq.presence_db = object_number(*v, "dsp.eq", "presenceDb", c.eq.presence_db);
+    c.eq.air_db = object_number(*v, "dsp.eq", "airDb", c.eq.air_db);
   }
-  if (const auto* v = object_section(object, "gate")) {
-    c.gate.threshold_db = object_number(*v, "gate", "thresholdDb", c.gate.threshold_db);
-    c.gate.attack_ms = object_number(*v, "gate", "attackMs", c.gate.attack_ms);
-    c.gate.release_ms = object_number(*v, "gate", "releaseMs", c.gate.release_ms);
-    c.gate.range_db = object_number(*v, "gate", "rangeDb", c.gate.range_db);
+  if (const auto* v = object_section(object, "dsp", "gate")) {
+    c.gate.threshold_db = object_number(*v, "dsp.gate", "thresholdDb", c.gate.threshold_db);
+    c.gate.attack_ms = object_number(*v, "dsp.gate", "attackMs", c.gate.attack_ms);
+    c.gate.release_ms = object_number(*v, "dsp.gate", "releaseMs", c.gate.release_ms);
+    c.gate.range_db = object_number(*v, "dsp.gate", "rangeDb", c.gate.range_db);
   }
-  if (const auto* v = object_section(object, "compressor")) {
+  if (const auto* v = object_section(object, "dsp", "compressor")) {
     c.compressor.threshold_db =
-        object_number(*v, "compressor", "thresholdDb", c.compressor.threshold_db);
-    c.compressor.ratio = object_number(*v, "compressor", "ratio", c.compressor.ratio);
-    c.compressor.attack_ms = object_number(*v, "compressor", "attackMs", c.compressor.attack_ms);
-    c.compressor.release_ms = object_number(*v, "compressor", "releaseMs", c.compressor.release_ms);
+        object_number(*v, "dsp.compressor", "thresholdDb", c.compressor.threshold_db);
+    c.compressor.ratio = object_number(*v, "dsp.compressor", "ratio", c.compressor.ratio);
+    c.compressor.attack_ms =
+        object_number(*v, "dsp.compressor", "attackMs", c.compressor.attack_ms);
+    c.compressor.release_ms =
+        object_number(*v, "dsp.compressor", "releaseMs", c.compressor.release_ms);
     c.compressor.makeup_gain_db =
-        object_number(*v, "compressor", "makeupGainDb", c.compressor.makeup_gain_db);
+        object_number(*v, "dsp.compressor", "makeupGainDb", c.compressor.makeup_gain_db);
   }
-  if (const auto* v = object_section(object, "deesser")) {
-    c.deesser.frequency_hz = object_number(*v, "deesser", "frequencyHz", c.deesser.frequency_hz);
-    c.deesser.threshold_db = object_number(*v, "deesser", "thresholdDb", c.deesser.threshold_db);
-    c.deesser.ratio = object_number(*v, "deesser", "ratio", c.deesser.ratio);
-    c.deesser.range_db = object_number(*v, "deesser", "rangeDb", c.deesser.range_db);
+  if (const auto* v = object_section(object, "dsp", "deesser")) {
+    c.deesser.frequency_hz =
+        object_number(*v, "dsp.deesser", "frequencyHz", c.deesser.frequency_hz);
+    c.deesser.threshold_db =
+        object_number(*v, "dsp.deesser", "thresholdDb", c.deesser.threshold_db);
+    c.deesser.ratio = object_number(*v, "dsp.deesser", "ratio", c.deesser.ratio);
+    c.deesser.range_db = object_number(*v, "dsp.deesser", "rangeDb", c.deesser.range_db);
   }
-  if (const auto* v = object_section(object, "reverb")) {
-    c.reverb.mix = object_number(*v, "reverb", "mix", c.reverb.mix);
-    c.reverb.time_ms = object_number(*v, "reverb", "timeMs", c.reverb.time_ms);
-    c.reverb.damping = object_number(*v, "reverb", "damping", c.reverb.damping);
-    c.reverb.seed = object_int(*v, "reverb", "seed", c.reverb.seed);
+  if (const auto* v = object_section(object, "dsp", "reverb")) {
+    c.reverb.mix = object_number(*v, "dsp.reverb", "mix", c.reverb.mix);
+    c.reverb.time_ms = object_number(*v, "dsp.reverb", "timeMs", c.reverb.time_ms);
+    c.reverb.damping = object_number(*v, "dsp.reverb", "damping", c.reverb.damping);
+    c.reverb.seed = object_int(*v, "dsp.reverb", "seed", c.reverb.seed);
   }
-  if (const auto* v = object_section(object, "limiter")) {
-    c.limiter.ceiling_db = object_number(*v, "limiter", "ceilingDb", c.limiter.ceiling_db);
-    c.limiter.release_ms = object_number(*v, "limiter", "releaseMs", c.limiter.release_ms);
+  if (const auto* v = object_section(object, "dsp", "limiter")) {
+    c.limiter.ceiling_db = object_number(*v, "dsp.limiter", "ceilingDb", c.limiter.ceiling_db);
+    c.limiter.release_ms = object_number(*v, "dsp.limiter", "releaseMs", c.limiter.release_ms);
     c.limiter.enable_isp_limiter =
-        object_bool(*v, "limiter", "enableIspLimiter", c.limiter.enable_isp_limiter);
+        object_bool(*v, "dsp.limiter", "enableIspLimiter", c.limiter.enable_isp_limiter);
     c.limiter.isp_ceiling_dbtp =
-        object_number(*v, "limiter", "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
+        object_number(*v, "dsp.limiter", "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
   }
-  // Voice transformer sections; a bare configuration without them keeps the defaults.
-  if (const auto* v = object_section(object, "voiceEngine")) {
-    c.voice_engine.engine = object_enum(*v, "voiceEngine", "engine", c.voice_engine.engine);
+  if (const auto* v = object_section(object, "dsp", "voiceEngine")) {
+    c.voice_engine.engine = object_enum(*v, "dsp.voiceEngine", "engine", c.voice_engine.engine);
     c.voice_engine.f0_min_hz =
-        object_number(*v, "voiceEngine", "f0MinHz", c.voice_engine.f0_min_hz);
+        object_number(*v, "dsp.voiceEngine", "f0MinHz", c.voice_engine.f0_min_hz);
   }
-  if (const auto* v = object_section(object, "pitchCorrection")) {
+  if (const auto* v = object_section(object, "dsp", "pitchCorrection")) {
     PitchCorrectionConfig& pc = c.pitch_correction;
-    pc.mode = object_enum(*v, "pitchCorrection", "mode", pc.mode);
-    pc.amount = object_number(*v, "pitchCorrection", "amount", pc.amount);
-    pc.speed_ms = object_number(*v, "pitchCorrection", "speedMs", pc.speed_ms);
-    pc.key_root = object_int(*v, "pitchCorrection", "keyRoot", pc.key_root);
-    pc.scale = object_enum(*v, "pitchCorrection", "scale", pc.scale);
-    pc.robot_octave = object_int(*v, "pitchCorrection", "robotOctave", pc.robot_octave);
+    pc.mode = object_enum(*v, "dsp.pitchCorrection", "mode", pc.mode);
+    pc.amount = object_number(*v, "dsp.pitchCorrection", "amount", pc.amount);
+    pc.speed_ms = object_number(*v, "dsp.pitchCorrection", "speedMs", pc.speed_ms);
+    pc.key_root = object_int(*v, "dsp.pitchCorrection", "keyRoot", pc.key_root);
+    pc.scale = object_enum(*v, "dsp.pitchCorrection", "scale", pc.scale);
+    pc.robot_octave = object_int(*v, "dsp.pitchCorrection", "robotOctave", pc.robot_octave);
   }
-  if (const auto* v = object_section(object, "harmony")) {
+  if (const auto* v = object_section(object, "dsp", "harmony")) {
     HarmonyConfig& hm = c.harmony;
-    hm.voices = object_int(*v, "harmony", "voices", hm.voices);
-    object_steps(*v, "harmony", "steps", hm.steps);
-    hm.level = object_number(*v, "harmony", "level", hm.level);
-    hm.lead_level = object_number(*v, "harmony", "leadLevel", hm.lead_level);
-    hm.detune_cents = object_number(*v, "harmony", "detuneCents", hm.detune_cents);
-    hm.delay_ms = object_number(*v, "harmony", "delayMs", hm.delay_ms);
+    hm.voices = object_int(*v, "dsp.harmony", "voices", hm.voices);
+    object_steps(*v, "dsp.harmony", "steps", hm.steps);
+    hm.level = object_number(*v, "dsp.harmony", "level", hm.level);
+    hm.lead_level = object_number(*v, "dsp.harmony", "leadLevel", hm.lead_level);
+    hm.detune_cents = object_number(*v, "dsp.harmony", "detuneCents", hm.detune_cents);
+    hm.delay_ms = object_number(*v, "dsp.harmony", "delayMs", hm.delay_ms);
   }
-  if (const auto* v = object_section(object, "vocoder")) {
+  if (const auto* v = object_section(object, "dsp", "vocoder")) {
     VocoderConfig& vc = c.vocoder;
-    vc.enabled = object_bool(*v, "vocoder", "enabled", vc.enabled);
-    vc.bands = object_int(*v, "vocoder", "bands", vc.bands);
-    vc.attack_ms = object_number(*v, "vocoder", "attackMs", vc.attack_ms);
-    vc.release_ms = object_number(*v, "vocoder", "releaseMs", vc.release_ms);
-    vc.sibilance = object_number(*v, "vocoder", "sibilance", vc.sibilance);
-    vc.carrier_source = object_enum(*v, "vocoder", "carrierSource", vc.carrier_source);
-    vc.carrier_wave = object_enum(*v, "vocoder", "carrierWave", vc.carrier_wave);
+    vc.enabled = object_bool(*v, "dsp.vocoder", "enabled", vc.enabled);
+    vc.bands = object_int(*v, "dsp.vocoder", "bands", vc.bands);
+    vc.attack_ms = object_number(*v, "dsp.vocoder", "attackMs", vc.attack_ms);
+    vc.release_ms = object_number(*v, "dsp.vocoder", "releaseMs", vc.release_ms);
+    vc.sibilance = object_number(*v, "dsp.vocoder", "sibilance", vc.sibilance);
+    vc.carrier_source = object_enum(*v, "dsp.vocoder", "carrierSource", vc.carrier_source);
+    vc.carrier_wave = object_enum(*v, "dsp.vocoder", "carrierWave", vc.carrier_wave);
     vc.ensemble_detune_cents =
-        object_number(*v, "vocoder", "ensembleDetuneCents", vc.ensemble_detune_cents);
-    vc.level = object_number(*v, "vocoder", "level", vc.level);
+        object_number(*v, "dsp.vocoder", "ensembleDetuneCents", vc.ensemble_detune_cents);
+    vc.level = object_number(*v, "dsp.vocoder", "level", vc.level);
   }
-  if (const auto* v = object_section(object, "character")) {
-    c.character.type = object_enum(*v, "character", "type", c.character.type);
-    c.character.amount = object_number(*v, "character", "amount", c.character.amount);
-    c.character.tone = object_number(*v, "character", "tone", c.character.tone);
+  if (const auto* v = object_section(object, "dsp", "character")) {
+    c.character.type = object_enum(*v, "dsp.character", "type", c.character.type);
+    c.character.amount = object_number(*v, "dsp.character", "amount", c.character.amount);
+    c.character.tone = object_number(*v, "dsp.character", "tone", c.character.tone);
   }
-  if (const auto* v = object_section(object, "reverbVariation")) {
+  if (const auto* v = object_section(object, "dsp", "reverbVariation")) {
     ReverbVariationConfig& rv = c.reverb_variation;
-    rv.variation = object_enum(*v, "reverbVariation", "variation", rv.variation);
-    rv.delay_ms = object_number(*v, "reverbVariation", "delayMs", rv.delay_ms);
-    rv.feedback = object_number(*v, "reverbVariation", "feedback", rv.feedback);
-    rv.tempo_bpm = object_number(*v, "reverbVariation", "tempoBpm", rv.tempo_bpm);
-    rv.division = object_enum(*v, "reverbVariation", "division", rv.division);
+    rv.variation = object_enum(*v, "dsp.reverbVariation", "variation", rv.variation);
+    rv.delay_ms = object_number(*v, "dsp.reverbVariation", "delayMs", rv.delay_ms);
+    rv.feedback = object_number(*v, "dsp.reverbVariation", "feedback", rv.feedback);
+    rv.tempo_bpm = object_number(*v, "dsp.reverbVariation", "tempoBpm", rv.tempo_bpm);
+    rv.division = object_enum(*v, "dsp.reverbVariation", "division", rv.division);
   }
-  if (const auto* v = object_section(object, "midi")) {
-    c.midi.release = object_enum(*v, "midi", "release", c.midi.release);
+  if (const auto* v = object_section(object, "dsp", "midi")) {
+    c.midi.release = object_enum(*v, "dsp.midi", "release", c.midi.release);
   }
   return c;
 }
 
-RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
-  const std::string input = trim_copy(text);
-  if (input.empty()) return realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
-  if (input.front() != '{')
-    return realtime_voice_changer_preset(preset_from_id_or_throw(input, ErrorCode::InvalidFormat));
-  auto root = sonare::util::json::admit(input);
-  refuse_other_schema(root);
-  return parse_config_value(root);
+// The preset document reader: every key known, every required key given, every value typed and
+// in its domain, then the whole configuration through the config validator.
+bool read_preset_document(const sonare::util::json::Value& root, RealtimeVoiceChangerConfig* config,
+                          std::string* error) {
+  if (!has_allowed_keys(root,
+                        {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"},
+                        "", error)) {
+    return false;
+  }
+  for (const char* key : {"schemaVersion", "id", "name", "category"}) {
+    if (!require_key(root, key, "", error)) return false;
+  }
+  const auto& schema_version = *root.find("schemaVersion");
+  if (!schema_version.is_number()) {
+    if (error) *error = schema::must_be("schemaVersion", Kind::Number);
+    return false;
+  }
+  if (const double n = schema_version.as_number();
+      n != static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
+    if (error) {
+      const bool whole = std::isfinite(n) && std::floor(n) == n;
+      const char* written_for = !whole ? ""
+                                : n < kVoiceChangerPresetSchemaVersion
+                                    ? "; the document was written for an older schema"
+                                    : "; the document was written for a newer schema";
+      *error = schema::refusal("schemaVersion",
+                               "must be " + std::to_string(kVoiceChangerPresetSchemaVersion) +
+                                   ", the version this release reads" + written_for);
+    }
+    return false;
+  }
+  if (!require_string(root, "id", 1, 96, "", error)) return false;
+  if (!is_valid_preset_id(root.find("id")->as_string())) {
+    if (error) {
+      *error = schema::refusal("id",
+                               "must start with a lowercase letter or a digit and hold only "
+                               "letters, digits, '.', '_' and '-'");
+    }
+    return false;
+  }
+  if (!require_string(root, "name", 1, 96, "", error)) return false;
+  if (root.find("description") && !require_string(root, "description", 0, 512, "", error)) {
+    return false;
+  }
+  if (!require_string(root, "category", 1, 16, "", error)) return false;
+  {
+    static constexpr std::array<std::string_view, 11> kCategories = {
+        "monitor", "bright",  "soft",    "deep",      "robot", "dark",
+        "tune",    "harmony", "vocoder", "character", "custom"};
+    const auto& category = root.find("category")->as_string();
+    if (std::find(kCategories.begin(), kCategories.end(), category) == kCategories.end()) {
+      if (error) {
+        std::string list;
+        for (std::size_t i = 0; i < kCategories.size(); ++i) {
+          if (i > 0) list += i + 1 == kCategories.size() ? " or " : ", ";
+          list += '\'';
+          list += kCategories[i];
+          list += '\'';
+        }
+        *error = schema::refusal("category", "must be " + list);
+      }
+      return false;
+    }
+  }
+  const auto* dsp = root.find("dsp");
+  const auto* macros = root.find("macros");
+  if ((dsp == nullptr) == (macros == nullptr)) {
+    if (error) *error = "the document must hold exactly one of dsp and macros";
+    return false;
+  }
+  if (dsp != nullptr && !validate_dsp_section(*dsp, error)) return false;
+  *config = parse_config_value(root);
+  // What only the whole configuration can say; the same rule create and set_config apply.
+  return validate_realtime_voice_changer_config(
+      *config, nullptr, error,
+      dsp != nullptr ? ConfigFieldSpelling::PresetDocument : ConfigFieldSpelling::Member);
 }
 
 }  // namespace
 
 RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view text) {
-  // A value the document wrote is the caller's: it is refused with the strict text, never clamped.
-  RealtimeVoiceChangerConfig config = parse_config_json(text);
+  RealtimeVoiceChangerConfig config;
   std::string error;
-  if (!validate_realtime_voice_changer_config(config, nullptr, &error)) {
+  if (!realtime_voice_changer_config_from_input(text, &config, &error)) {
     throw SonareException(ErrorCode::InvalidFormat, error);
   }
   return config;
@@ -1036,91 +1087,16 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
   if (normalized_json) normalized_json->clear();
   if (error) error->clear();
   try {
-    const std::string trimmed = trim_copy(json);
-    // Strict parse: a preset document with duplicate keys (e.g. two `"id"`
-    // entries) is a user-config bug — fail fast rather than silently keeping
-    // the last value. `realtime_voice_changer_config_from_json` keeps `admit`, so it still
-    // accepts duplicate and unknown keys, though it refuses an out-of-domain value like this
-    // reader; both run under the same resource budget.
-    auto root = sonare::util::json::admit_strict(trimmed);
-    if (!has_allowed_keys(
-            root, {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"}, "$",
-            error)) {
-      return false;
-    }
-    for (const char* key : {"schemaVersion", "id", "name", "category"}) {
-      if (!require_key(root, key, "$", error)) return false;
-    }
-    // schemaVersion must be exactly the version read. as_int() silently truncates 1.5 -> 1,
-    // so check the raw double for both integral-ness and range before comparing.
-    const auto* schema = root.find("schemaVersion");
-    if (!schema || !schema->is_number()) {
-      if (error) *error = "field is not a valid schemaVersion: $.schemaVersion (must be integer)";
-      return false;
-    }
-    {
-      const double n = schema->as_number();
-      if (!std::isfinite(n) || std::floor(n) != n) {
-        if (error) {
-          *error = "field is not a valid schemaVersion: $.schemaVersion (must be an integer, " +
-                   std::to_string(kVoiceChangerPresetSchemaVersion) + " is the version read)";
-        }
-        return false;
-      }
-      if (n != static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
-        if (error) *error = schema_version_refusal(n);
-        return false;
-      }
-    }
-    // id: schema regex ^[a-z0-9][A-Za-z0-9._-]*$ + length 1..96. The C++ validator
-    // historically accepted any non-empty string up to 96 bytes, which let
-    // upper-case / whitespace / punctuation slip through and break downstream
-    // consumers that treat the id as a TS enum literal or comparison key.
-    if (!require_string(root, "id", 1, 96, "$", error)) return false;
-    if (const auto* id_value = root.find("id"); !is_valid_preset_id(id_value->as_string())) {
-      if (error) *error = "field is not a valid preset id: $.id";
-      return false;
-    }
-    if (!require_string(root, "name", 1, 96, "$", error)) return false;
-    if (root.find("description") && !require_string(root, "description", 0, 512, "$", error)) {
-      return false;
-    }
-    if (!require_string(root, "category", 1, 16, "$", error)) return false;
-    {
-      static constexpr std::array<std::string_view, 11> kCategories = {
-          "monitor", "bright",  "soft",    "deep",      "robot", "dark",
-          "tune",    "harmony", "vocoder", "character", "custom"};
-      const auto& category = root.find("category")->as_string();
-      if (std::find(kCategories.begin(), kCategories.end(), category) == kCategories.end()) {
-        if (error) *error = "preset category is invalid";
-        return false;
-      }
-    }
-    const auto* dsp = root.find("dsp");
-    const auto* macros = root.find("macros");
-    if ((dsp == nullptr) == (macros == nullptr)) {
-      if (error) *error = "preset must contain exactly one of dsp or macros";
-      return false;
-    }
-    if (dsp != nullptr && !validate_dsp_section(*dsp, error)) return false;
-    RealtimeVoiceChangerConfig macro_config;
-    if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
-    const auto config = parse_config_value(root);
-    // What only the whole configuration can say; the same rule create and set_config apply.
-    if (!validate_realtime_voice_changer_config(config, nullptr, error)) return false;
+    const auto root = sonare::util::json::admit_strict(trim_copy(json));
+    RealtimeVoiceChangerConfig config;
+    if (!read_preset_document(root, &config, error)) return false;
     if (normalized_json) {
-      // Re-attach the caller's own preset identity (id/name/description/category)
-      // instead of routing through realtime_voice_changer_config_to_json, whose
-      // "custom"/"Custom" placeholders are only correct for config-only entry
-      // points that never had a preset identity to begin with. Losing the real
-      // id here breaks find_voice_preset_in_pack lookups and a pack's own
-      // id-uniqueness contract on every round trip through this validator.
-      std::string out;
+      // The caller's own identity is written back, so a pack's ids survive the round trip.
       const auto* description = root.find("description");
-      dump_preset_envelope(out, root.find("id")->as_string(), root.find("name")->as_string(),
+      dump_preset_envelope(*normalized_json, root.find("id")->as_string(),
+                           root.find("name")->as_string(),
                            description ? &description->as_string() : nullptr,
                            root.find("category")->as_string(), config);
-      *normalized_json = out;
     }
     return true;
   } catch (const std::exception& ex) {
@@ -1150,93 +1126,109 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
       return true;
     }
 
-    // Public JS bindings also pass the 70-field camelCase POD returned by
-    // realtimeVoiceChangerPresetConfig(). It is intentionally not a preset
-    // document, but must be complete and type-correct so a partial object
-    // cannot silently fall back to unrelated defaults.
     const auto root = sonare::util::json::admit_strict(input);
-    if (root.is_object() && root.find("retunePitchSemitones") != nullptr) {
-      static constexpr std::array<const char*, 35> kFlatPodKeys = {
-          "inputGainDb",
-          "outputGainDb",
-          "wetMix",
-          "retunePitchSemitones",
-          "retuneMix",
-          "formantFactor",
-          "formantAmount",
-          "formantBody",
-          "formantBrightness",
-          "formantNasal",
-          "eqHighPassHz",
-          "eqBodyDb",
-          "eqPresenceDb",
-          "eqAirDb",
-          "gateThresholdDb",
-          "gateAttackMs",
-          "gateReleaseMs",
-          "gateRangeDb",
-          "compressorThresholdDb",
-          "compressorRatio",
-          "compressorAttackMs",
-          "compressorReleaseMs",
-          "compressorMakeupGainDb",
-          "deesserFrequencyHz",
-          "deesserThresholdDb",
-          "deesserRatio",
-          "deesserRangeDb",
-          "reverbMix",
-          "reverbTimeMs",
-          "reverbDamping",
-          "reverbSeed",
-          "limiterCeilingDb",
-          "limiterReleaseMs",
-          "limiterEnableIspLimiter",
-          "limiterIspCeilingDbtp",
-      };
-      // The voice transformer keys are part of the same complete shape: the bindings build
-      // this object at runtime from the whole POD and never persist it, so a missing key is
-      // refused like any other. Each carries its own type.
-      static constexpr std::array<const char*, 32> kTransformKeys = {
-          "voiceEngine",
-          "voiceEngineF0MinHz",
-          "pitchCorrectionMode",
-          "pitchCorrectionAmount",
-          "pitchCorrectionSpeedMs",
-          "pitchCorrectionKeyRoot",
-          "pitchCorrectionScale",
-          "pitchCorrectionRobotOctave",
-          "harmonyVoices",
-          "harmonySteps",
-          "harmonyLevel",
-          "harmonyLeadLevel",
-          "harmonyDetuneCents",
-          "harmonyDelayMs",
-          "vocoderEnabled",
-          "vocoderBands",
-          "vocoderAttackMs",
-          "vocoderReleaseMs",
-          "vocoderSibilance",
-          "vocoderCarrierSource",
-          "vocoderCarrierWave",
-          "vocoderEnsembleDetuneCents",
-          "vocoderLevel",
-          "characterType",
-          "characterAmount",
-          "characterTone",
-          "reverbVariation",
-          "reverbVariationDelayMs",
-          "reverbVariationFeedback",
-          "reverbVariationTempoBpm",
-          "reverbVariationDivision",
-          "midiRelease",
-      };
+    static constexpr std::array<const char*, 35> kFlatPodKeys = {
+        "inputGainDb",
+        "outputGainDb",
+        "wetMix",
+        "retunePitchSemitones",
+        "retuneMix",
+        "formantFactor",
+        "formantAmount",
+        "formantBody",
+        "formantBrightness",
+        "formantNasal",
+        "eqHighPassHz",
+        "eqBodyDb",
+        "eqPresenceDb",
+        "eqAirDb",
+        "gateThresholdDb",
+        "gateAttackMs",
+        "gateReleaseMs",
+        "gateRangeDb",
+        "compressorThresholdDb",
+        "compressorRatio",
+        "compressorAttackMs",
+        "compressorReleaseMs",
+        "compressorMakeupGainDb",
+        "deesserFrequencyHz",
+        "deesserThresholdDb",
+        "deesserRatio",
+        "deesserRangeDb",
+        "reverbMix",
+        "reverbTimeMs",
+        "reverbDamping",
+        "reverbSeed",
+        "limiterCeilingDb",
+        "limiterReleaseMs",
+        "limiterEnableIspLimiter",
+        "limiterIspCeilingDbtp",
+    };
+    // The voice transformer keys are part of the same complete shape: the bindings build
+    // this object at runtime from the whole POD and never persist it, so a missing key is
+    // refused like any other. Each carries its own type.
+    static constexpr std::array<const char*, 32> kTransformKeys = {
+        "voiceEngine",
+        "voiceEngineF0MinHz",
+        "pitchCorrectionMode",
+        "pitchCorrectionAmount",
+        "pitchCorrectionSpeedMs",
+        "pitchCorrectionKeyRoot",
+        "pitchCorrectionScale",
+        "pitchCorrectionRobotOctave",
+        "harmonyVoices",
+        "harmonySteps",
+        "harmonyLevel",
+        "harmonyLeadLevel",
+        "harmonyDetuneCents",
+        "harmonyDelayMs",
+        "vocoderEnabled",
+        "vocoderBands",
+        "vocoderAttackMs",
+        "vocoderReleaseMs",
+        "vocoderSibilance",
+        "vocoderCarrierSource",
+        "vocoderCarrierWave",
+        "vocoderEnsembleDetuneCents",
+        "vocoderLevel",
+        "characterType",
+        "characterAmount",
+        "characterTone",
+        "reverbVariation",
+        "reverbVariationDelayMs",
+        "reverbVariationFeedback",
+        "reverbVariationTempoBpm",
+        "reverbVariationDivision",
+        "midiRelease",
+    };
+    // The flat POD the bindings build from a whole config: an object holding a flat key and no
+    // preset-document key. It must be complete and typed key by key, so a partial object is
+    // refused by the key it lacks rather than read as a preset document.
+    const auto holds_flat_key = [&root] {
+      for (const auto& [key, _value] : root.as_object()) {
+        for (const char* flat : kFlatPodKeys)
+          if (key == flat) return true;
+        for (const char* flat : kTransformKeys)
+          if (key == flat) return true;
+      }
+      return false;
+    };
+    if (root.is_object() && root.find("schemaVersion") == nullptr && root.find("dsp") == nullptr &&
+        root.find("macros") == nullptr && holds_flat_key()) {
       static constexpr std::array<std::string_view, 9> kTransformEnumKeys = {
           "voiceEngine",          "pitchCorrectionMode",     "pitchCorrectionScale",
           "vocoderCarrierSource", "vocoderCarrierWave",      "characterType",
           "reverbVariation",      "reverbVariationDivision", "midiRelease"};
-      static constexpr std::array<std::string_view, 6> kIntegerKeys = {
-          "retuneGrainSizeSamples",     "reverbSeed",    "pitchCorrectionKeyRoot",
-          "pitchCorrectionRobotOctave", "harmonyVoices", "vocoderBands"};
+      struct IntegerKey {
+        std::string_view key;
+        Range range;
+      };
+      static constexpr std::array<IntegerKey, 5> kIntegerKeys = {
+          {{"reverbSeed", kReverbSeed},
+           {"pitchCorrectionKeyRoot", kKeyRoot},
+           {"pitchCorrectionRobotOctave", kRobotOctave},
+           {"harmonyVoices", kHarmonyVoices},
+           {"vocoderBands", kVocoderBands}}};
       const auto listed = [](const auto& keys, std::string_view key) {
         return std::find(keys.begin(), keys.end(), key) != keys.end();
       };
@@ -1250,29 +1242,40 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
         }
         for (const char* transform_key : kTransformKeys) {
           if (key != transform_key) continue;
-          const bool typed = listed(kTransformEnumKeys, key) ? _value.is_string()
-                             : key == "vocoderEnabled"       ? _value.is_bool()
-                             : key == "harmonySteps"         ? is_step_triple(_value)
-                                                             : _value.is_number();
-          if (!typed) {
-            if (error) *error = "flat voice changer POD has an invalid field: $." + key;
-            return false;
+          if (key == "harmonySteps") {
+            if (!is_step_triple(_value)) {
+              if (error) {
+                *error = schema::refusal(
+                    key, "must be an array of " + std::to_string(kMaxHarmonyVoices) + " integers");
+              }
+              return false;
+            }
+          } else {
+            const Kind kind = listed(kTransformEnumKeys, key) ? Kind::String
+                              : key == "vocoderEnabled"       ? Kind::Boolean
+                                                              : Kind::Number;
+            const bool typed = kind == Kind::String    ? _value.is_string()
+                               : kind == Kind::Boolean ? _value.is_bool()
+                                                       : _value.is_number();
+            if (!typed) {
+              if (error) *error = schema::must_be(key, kind);
+              return false;
+            }
           }
           allowed = true;
         }
         // The automatic grain is the absent key; a present one is a whole size in range.
         if (key == "retuneGrainSizeSamples") {
           if (!_value.is_number()) {
-            if (error) *error = "flat voice changer POD has an invalid field: $." + key;
+            if (error) *error = schema::must_be(key, Kind::Number);
             return false;
           }
           if (_value.as_number() == 0.0) {
-            if (error)
-              *error = "$.retuneGrainSizeSamples must not be 0; omit it for the automatic grain";
+            if (error) *error = schema::refusal(key, kGrainZeroPredicate);
             return false;
           }
           if (!grain_in_domain(_value.as_number())) {
-            if (error) *error = "$.retuneGrainSizeSamples" + grain_domain_text();
+            if (error) *error = schema::refusal(key, grain_domain_predicate());
             return false;
           }
           allowed = true;
@@ -1280,54 +1283,52 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
         // formantMode is optional: documents written before the mode existed omit it.
         if (key == "formantMode") {
           if (!_value.is_string()) {
-            if (error) *error = "flat voice changer POD has an invalid field: $.formantMode";
+            if (error) *error = schema::must_be(key, Kind::String);
             return false;
           }
           allowed = true;
         }
         if (!allowed) {
-          if (error) *error = "unknown field: $." + key;
+          if (error) *error = schema::unknown_key(key);
           return false;
         }
       }
       for (const char* key : kFlatPodKeys) {
-        if (!require_key(root, key, "$", error)) return false;
+        if (!require_key(root, key, "", error)) return false;
         const auto* value = root.find(key);
         const bool is_isp_enabled = std::string_view(key) == "limiterEnableIspLimiter";
-        if (!value || (is_isp_enabled ? !value->is_bool() : !value->is_number())) {
-          if (error) *error = "flat voice changer POD has an invalid field: $." + std::string(key);
+        if (is_isp_enabled ? !value->is_bool() : !value->is_number()) {
+          if (error) *error = schema::must_be(key, is_isp_enabled ? Kind::Boolean : Kind::Number);
           return false;
         }
       }
       for (const char* key : kTransformKeys) {
-        if (!require_key(root, key, "$", error)) return false;
+        if (!require_key(root, key, "", error)) return false;
       }
-      for (const auto& [key, value] : root.as_object()) {
-        if (!value.is_number()) continue;
-        const double n = value.as_number();
-        const bool is_int_key = listed(kIntegerKeys, key);
-        const bool fits = is_int_key ? (n >= kReverbSeed.lo && n <= kReverbSeed.hi)
-                                     : std::fabs(n) <= std::numeric_limits<float>::max();
-        if (!fits) {
-          if (error) *error = "flat voice changer POD field is out of range: $." + key;
-          return false;
-        }
-        if (is_int_key && std::floor(n) != n) {
-          if (error) *error = "flat voice changer POD field must be a whole number: $." + key;
+      // An integer key is checked before the int conversion could clamp it; a float key's overflow
+      // reads as an infinity, which the config validator refuses by name.
+      for (const IntegerKey& integer : kIntegerKeys) {
+        const double n = root.find(std::string(integer.key))->as_number();
+        if (!(std::floor(n) == n && n >= integer.range.lo && n <= integer.range.hi)) {
+          if (error) {
+            *error = schema::refusal(
+                integer.key, schema::integer_range_predicate(integer.range.lo, integer.range.hi));
+          }
           return false;
         }
       }
-      RealtimeVoiceChangerConfig normalized;
-      if (!validate_realtime_voice_changer_config(parse_config_json(input), &normalized, error)) {
+      RealtimeVoiceChangerConfig parsed = parse_config_value(root);
+      if (!validate_realtime_voice_changer_config(parsed, nullptr, error,
+                                                  ConfigFieldSpelling::FlatPod)) {
         return false;
       }
-      *config = normalized;
+      *config = parsed;
       return true;
     }
 
-    std::string normalized_json;
-    if (!validate_realtime_voice_changer_preset_json(input, &normalized_json, error)) return false;
-    *config = realtime_voice_changer_config_from_json(normalized_json);
+    RealtimeVoiceChangerConfig parsed;
+    if (!read_preset_document(root, &parsed, error)) return false;
+    *config = parsed;
     return true;
   } catch (const std::exception& ex) {
     if (error) *error = ex.what();

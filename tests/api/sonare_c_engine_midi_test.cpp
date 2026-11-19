@@ -871,7 +871,7 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
         "arpeggiator_gate_ppq is an earlier spelling; write arpeggiatorGatePpq");
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitone\":12}") ==
           SONARE_ERROR_INVALID_FORMAT);
-  CHECK(std::string(sonare_last_error_message()) == "unknown MIDI-FX key 'transposeSemitone'");
+  CHECK(std::string(sonare_last_error_message()) == "unknown key transposeSemitone");
   REQUIRE(sonare_engine_set_midi_fx(engine, 5,
                                     "{\"$comment\":\"up\",\"x-ui\":1,\"transposeSemitones\":12}") ==
           SONARE_OK);
@@ -904,9 +904,9 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
       {"{\"quantizePpq\":1,\"quantizeStrength\":2}", "quantizeStrength must be in [0, 1]"},
       {"{\"velocityGamma\":0}", "velocityGamma must be > 0"},
       {"{\"transposeSemitones\":1.5}", "transposeSemitones must be a whole number"},
-      {"{\"humanizeVelocity\":200}", "humanizeVelocity must be a whole number in [0, 127]"},
+      {"{\"humanizeVelocity\":200}", "humanizeVelocity must be an integer in [0, 127]"},
       {"{\"seed\":-1}", "seed must be a non-negative whole number"},
-      {"[]", "MIDI-FX config must be a JSON object"},
+      {"[]", "the document must be an object"},
   };
   for (const auto& [config, prefix] : out_of_domain) {
     INFO(config);

@@ -522,7 +522,7 @@ TEST_CASE("an unknown module id is an error, not a silent skip", "[c_api][assist
   CHECK(sonare_project_assist_preview_json(fixture.project, request.c_str(), document.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(document.c_str() == nullptr);
-  CHECK(text_contains(std::string(sonare_last_error_message()), "unknown module id"));
+  CHECK(text_contains(std::string(sonare_last_error_message()), "modules[0] must be one of"));
 
   // A well-formed selection of the SAME shape is accepted, so the refusal is
   // the id and not the field.
@@ -861,8 +861,8 @@ TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][as
   const json::Value bad_root = refused.parsed();
   CHECK(bad_root["status"].as_string() == "rejected");
   CHECK(bad_root["patches"].as_array().empty());
-  CHECK(bad_root["reason"].as_string() == "velocity_scale must be within (0, 2]");
-  CHECK(std::string(sonare_last_error_message()) == "velocity_scale must be within (0, 2]");
+  CHECK(bad_root["reason"].as_string() == "velocity_scale must be finite and in (0, 2]");
+  CHECK(std::string(sonare_last_error_message()) == "velocity_scale must be finite and in (0, 2]");
 
   // A field of the wrong type is reported by name too, rather than defaulted.
   Document mistyped;

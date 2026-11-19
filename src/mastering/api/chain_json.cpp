@@ -16,12 +16,14 @@
 #include "util/exception.h"
 #include "util/json_budget.h"
 #include "util/json_key.h"
+#include "util/json_schema.h"
 #include "util/resource_limits.h"
 
 namespace sonare::mastering::api {
 namespace {
 
 using JsonValue = sonare::util::json::Value;
+namespace schema = sonare::util::json::schema;
 
 // Tree builders. JSON goes through util::json::dump so number formatting is locale-independent
 // and survives a dump -> parse round-trip without drift.
@@ -245,6 +247,12 @@ constexpr sonare::resource::ProjectImportResourceLimits kChainJsonLimits{
 }
 
 constexpr int kChainDocumentVersion = 2;
+constexpr const char* kParamsKey = "params";
+
+// The document path of flat parameter @p flat_path.
+std::string params_path(const std::string& flat_path) {
+  return schema::child_path(kParamsKey, flat_path);
+}
 
 // `dynamics.multibandComp.cutoff<i>Hz` and `...crossover.cutoffsHz.<i>` name one value.
 std::string duplicate_identity(const std::string& path) {
@@ -280,39 +288,42 @@ class ParamsWalker {
     if (value.is_object()) {
       for (const auto& [key, member] : value.as_object()) {
         if (sonare::util::json::is_annotation_key(key)) continue;
-        append(path + "." + key, member);
+        append(schema::child_path(path, key), member);
       }
       return;
     }
     if (value.is_array()) {
       const auto& elements = value.as_array();
       if (elements.empty()) {
-        throw_invalid_json(path + " is an empty list, which has no flat spelling");
+        throw_invalid_json(schema::refusal(params_path(path), "must not be an empty list"));
       }
       for (std::size_t index = 0; index < elements.size(); ++index) {
-        append(path + "." + std::to_string(index), elements[index]);
+        append(schema::catalog_index_path(path, index), elements[index]);
       }
       return;
     }
     if (!seen_.insert(duplicate_identity(path)).second)
-      throw_invalid_json(path + " is given twice");
+      throw_invalid_json(schema::duplicate_key(params_path(path)));
     const std::optional<std::string> names = mastering_enum_names("", path);
-    if (value.is_null()) throw_invalid_json(path + " is null, not a number, boolean or token");
+    if (value.is_null())
+      throw_invalid_json(
+          schema::refusal(params_path(path), "must be a number, a boolean or a token"));
     if (value.is_string()) {
-      if (!names) throw_invalid_json(path + " is a string, but takes no token");
+      if (!names) throw_invalid_json(params_path(path) + " is a string, but takes no token");
       out_.push_back(
           ChainFlatParam{path, *mastering_enum_value("", path, value.as_string()), false});
       return;
     }
     if (names)
-      throw_invalid_json(path + " takes a token, not a number (valid names: " + *names + ")");
+      throw_invalid_json(params_path(path) +
+                         " takes a token, not a number (valid names: " + *names + ")");
     if (value.is_bool()) {
       out_.push_back(ChainFlatParam{path, value.as_bool() ? 1.0 : 0.0, true});
       return;
     }
     // A positive declip threshold names a level above full scale; refused enabled or not.
     if (path == "repair.declip.clipThresholdDb" && value.as_number() > 0.0) {
-      throw_invalid_json(path + " must be at or below 0 dBFS");
+      throw_invalid_json(schema::refusal(params_path(path), "must be at or below 0 dBFS"));
     }
     out_.push_back(ChainFlatParam{path, value.as_number(), false});
   }
@@ -325,24 +336,29 @@ class ParamsWalker {
 std::vector<ChainFlatParam> read_chain_document(const std::string& text) {
   try {
     const auto root = sonare::util::json::admit_strict(text, kChainJsonLimits);
-    if (!root.is_object()) throw_invalid_json("expected chain config JSON object");
+    if (!root.is_object()) throw_invalid_json(schema::root_must_be_object());
     for (const auto& [key, value] : root.as_object()) {
       if (key == "version" || key == "params" || sonare::util::json::is_annotation_key(key)) {
         continue;
       }
-      throw_invalid_json("unknown chain config key: " + key);
+      throw_invalid_json(schema::unknown_key(schema::child_path("", key)));
     }
     if (const JsonValue* version = root.find("version")) {
       if (!version->is_number() || version->as_number() != kChainDocumentVersion) {
-        throw_invalid_json("unsupported chain config version; write 2 or leave it out");
+        throw_invalid_json(schema::refusal("version", "must be 2, or left out"));
       }
     }
     const JsonValue* params = root.find("params");
-    if (params == nullptr) throw_invalid_json("chain config requires params");
-    if (!params->is_object()) throw_invalid_json("params must be a JSON object");
+    if (params == nullptr) throw_invalid_json(schema::missing_key(kParamsKey));
+    if (!params->is_object()) {
+      throw_invalid_json(schema::must_be(kParamsKey, schema::Kind::Object));
+    }
     return ParamsWalker{}.walk(*params);
   } catch (const sonare::util::json::JsonError& e) {
     throw SonareException(ErrorCode::InvalidFormat, e.what());
+  } catch (const SonareParameterRefusal& e) {
+    if (e.code() != ErrorCode::InvalidParameter) throw;
+    schema::rethrow_under(e, kParamsKey, ErrorCode::InvalidFormat);
   } catch (const SonareException& e) {
     if (e.code() != ErrorCode::InvalidParameter) throw;
     throw SonareException(ErrorCode::InvalidFormat, e.what());
@@ -401,6 +417,9 @@ MasteringChainConfig from_document(Build&& build) {
     MasteringChainConfig config = build();
     validate_mastering_chain_config(config);
     return config;
+  } catch (const SonareParameterRefusal& e) {
+    if (e.code() != ErrorCode::InvalidParameter) throw;
+    schema::rethrow_under(e, kParamsKey, ErrorCode::InvalidFormat);
   } catch (const SonareException& e) {
     if (e.code() != ErrorCode::InvalidParameter) throw;
     throw SonareException(ErrorCode::InvalidFormat, e.what());

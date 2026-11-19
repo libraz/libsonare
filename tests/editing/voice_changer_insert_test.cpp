@@ -417,7 +417,7 @@ TEST_CASE("voice.changer insert construction names the out-of-range field",
   } catch (const SonareException& e) {
     CHECK(e.code() == ErrorCode::InvalidParameter);
     CHECK(std::string(e.what()) ==
-          "voice.changer: formant.factor out of range [0.55, 1.65], got 3");
+          "voice.changer: formant.factor must be finite and in [0.55, 1.65]");
   }
 }
 

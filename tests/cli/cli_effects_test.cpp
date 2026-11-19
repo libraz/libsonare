@@ -857,12 +857,8 @@ TEST_CASE("CLI voice-change formant mode", "[cli][voice-change][argument-contrac
 
 TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown field",
           "[cli][voice-change][argument-contract]") {
-  // Regression: the native voice-change realtime branch parsed the
-  // resolved config through the tolerant realtime_voice_changer_config_from_json
-  // instead of the strict validator, so a mistyped section name silently
-  // rendered with unrelated defaults and exited 0. voice-preset-validate
-  // already used the strict validator, so the two entry points disagreed on
-  // the same malformed document.
+  // A mistyped section name is a format error on voice-change, as on voice-preset-validate,
+  // never a render with defaults.
   create_test_wav(TEST_WAV, 0.05f, 220.0f, 48000);
   std::remove(TEST_OUT.c_str());
 
@@ -888,7 +884,7 @@ TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown f
     std::remove(preset_path.c_str());
     // A refused preset document is a format error, as the C ABI reports it.
     REQUIRE(code == 5);
-    REQUIRE_THAT(output, ContainsSubstring("dsp.formnt"));
+    REQUIRE_THAT(output, ContainsSubstring("unknown key dsp.formnt"));
     std::ifstream f(TEST_OUT);
     REQUIRE_FALSE(f.good());
   }
@@ -905,7 +901,9 @@ TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown f
                                        TEST_WAV + " -o " + TEST_OUT + " -q");
     std::remove(preset_path.c_str());
     REQUIRE(code == 5);
-    REQUIRE_THAT(output, ContainsSubstring("schemaVersion 2 is older"));
+    REQUIRE_THAT(output,
+                 ContainsSubstring("schemaVersion must be 4, the version this release reads; "
+                                   "the document was written for an older schema"));
     std::ifstream f(TEST_OUT);
     REQUIRE_FALSE(f.good());
   }

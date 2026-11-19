@@ -681,39 +681,47 @@ std::vector<std::string> realtime_voice_changer_preset_names();
 const char* prepare_arguments_error(double sample_rate, int max_block_size,
                                     int num_channels) noexcept;
 
+/// @brief How a validator refusal spells a field: as the config member path ("retune.mix"), under
+///        a preset document's dsp object ("dsp.retune.mix"), or as a flat POD key ("retuneMix").
+enum class ConfigFieldSpelling { Member, PresetDocument, FlatPod };
+
 /// @brief Checks that @p config's formant warp is within reach.
 /// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones / 12) and the
 ///          warp is defined over [kFormantFactorMin, kFormantFactorMax]. On failure @p error names
 ///          the formant factors reachable at the configuration's semitones.
-bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error);
+bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error,
+                               ConfigFieldSpelling spelling = ConfigFieldSpelling::Member);
 
 /// @brief Validates a configuration: every field finite and inside its documented range.
-/// @details Returns false (with @p error naming the field, its range and the value, e.g.
-///          "formant.factor out of range [0.55, 1.65], got 3") for a non-finite or out-of-range
-///          field, an unknown formant mode or other enum value, a grain engine asked for pitch
-///          correction, harmony or the vocoder, an echo-family delay past kMaxSpaceDelayMs, or
-///          (grain engine only) an unreachable absolute formant warp. Nothing is clamped. On
-///          success @p normalized equals @p config; on failure it is default constructed. Allocates
-///          only when it fails and @p error is non-null.
-bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& config,
-                                            RealtimeVoiceChangerConfig* normalized,
-                                            std::string* error);
+/// @details Returns false, with @p error reading "<path> must ..." (e.g. "formant.factor must be
+///          finite and in [0.55, 1.65]"), for a non-finite or out-of-range field, an unknown
+///          formant mode or other enum value, a grain engine asked for pitch correction, harmony
+///          or the vocoder, a tempo delay past kMaxSpaceDelayMs, or (grain engine only) an
+///          unreachable absolute formant warp. @p spelling picks how the path is written. Nothing
+///          is clamped. On success @p normalized equals @p config; on failure it is default
+///          constructed. Allocates only when it fails and @p error is non-null.
+bool validate_realtime_voice_changer_config(
+    const RealtimeVoiceChangerConfig& config, RealtimeVoiceChangerConfig* normalized,
+    std::string* error, ConfigFieldSpelling spelling = ConfigFieldSpelling::Member);
 
-/// @brief Reads a preset id, a flat POD or a nested document, refusing every out-of-domain value.
-/// @throws SonareException(InvalidFormat) with the text of
-///         @ref validate_realtime_voice_changer_config for a value outside its domain.
-RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view json);
-/// Parses a configuration accepted at public realtime construction/update
-/// boundaries. Preset ids and complete flat PODs are supported for binding
-/// compatibility; every other JSON object must satisfy the strict preset
-/// schema, so partial nested configs cannot silently inherit defaults.
+/// @brief The one voice changer configuration reader: a preset id, a complete flat POD, or a
+///        preset document that satisfies the preset schema.
+/// @details An unknown key, a duplicate key, a missing key, a value of the wrong type and a value
+///          outside its domain are all refused, with @p error reading "<path> must ..." or
+///          "unknown key <path>" from the document root; nothing inherits a default. Empty input is
+///          refused. On failure @p config is default constructed.
 bool realtime_voice_changer_config_from_input(std::string_view input,
                                               RealtimeVoiceChangerConfig* config,
                                               std::string* error);
+/// @brief @ref realtime_voice_changer_config_from_input as a throwing call.
+/// @throws SonareException(InvalidFormat) with the reader's refusal text.
+RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view json);
 /// @throws SonareException(InvalidParameter) when @ref validate_realtime_voice_changer_config
 ///         refuses @p config.
 std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConfig& config);
 std::string realtime_voice_changer_preset_json(VoiceCharacterPreset preset);
+/// @brief Checks a preset document with the same reader, and writes it back normalized with the
+///        caller's own id, name, description and category.
 bool validate_realtime_voice_changer_preset_json(std::string_view json,
                                                  std::string* normalized_json, std::string* error);
 

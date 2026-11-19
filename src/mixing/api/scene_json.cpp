@@ -1,4 +1,6 @@
 #include <initializer_list>
+#include <limits>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -16,12 +18,14 @@
 #include "util/exception.h"
 #include "util/json_budget.h"
 #include "util/json_key.h"
+#include "util/json_schema.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::mixing::api {
 namespace {
 
 using JsonValue = sonare::util::json::Value;
+namespace schema = sonare::util::json::schema;
 
 const char* to_string(InsertSlot slot) { return slot == InsertSlot::PreFader ? "pre" : "post"; }
 
@@ -55,53 +59,67 @@ const char* to_string(PanMode mode) {
   return "balance";
 }
 
-InsertSlot insert_slot_from_string(const std::string& value) {
+std::optional<InsertSlot> insert_slot_from_string(const std::string& value) {
   if (value == "pre") return InsertSlot::PreFader;
   if (value == "post") return InsertSlot::PostFader;
-  throw SonareException(ErrorCode::InvalidFormat, "unknown insert slot: " + value);
+  return std::nullopt;
 }
 
-SendTiming send_timing_from_string(const std::string& value) {
+std::optional<SendTiming> send_timing_from_string(const std::string& value) {
   if (value == "preFader") return SendTiming::PreFader;
   if (value == "postFader") return SendTiming::PostFader;
-  throw SonareException(ErrorCode::InvalidFormat,
-                        "unknown send timing: " + value + " (expected preFader or postFader)");
+  return std::nullopt;
 }
 
-PanLaw pan_law_from_string(const std::string& value) {
+std::optional<PanLaw> pan_law_from_string(const std::string& value) {
   if (value == "const3Db") return PanLaw::Const3dB;
   if (value == "const4.5Db") return PanLaw::Const4p5dB;
   if (value == "const6Db") return PanLaw::Const6dB;
   if (value == "linear0Db") return PanLaw::Linear0dB;
-  throw SonareException(
-      ErrorCode::InvalidFormat,
-      "unknown pan law: " + value + " (expected const3Db, const4.5Db, const6Db or linear0Db)");
+  return std::nullopt;
 }
 
-PanMode pan_mode_from_string(const std::string& value) {
+std::optional<PanMode> pan_mode_from_string(const std::string& value) {
   if (value == "balance") return PanMode::Balance;
   if (value == "stereoPan") return PanMode::StereoPan;
   if (value == "dualPan") return PanMode::DualPan;
-  throw SonareException(ErrorCode::InvalidFormat,
-                        "unknown pan mode: " + value + " (expected balance, stereoPan or dualPan)");
+  return std::nullopt;
+}
+
+std::optional<ChannelLayout> channel_layout_token(const std::string& value) {
+  ChannelLayout layout = ChannelLayout::Stereo;
+  if (!channel_layout_from_string(value, layout)) return std::nullopt;
+  return layout;
+}
+
+[[noreturn]] void refuse(const std::string& message) {
+  throw SonareException(ErrorCode::InvalidFormat, message);
+}
+
+// A closed set is read only as its token; a number is refused naming the tokens.
+template <typename Enum>
+Enum token_value(const JsonValue& value, const std::string& at, const char* tokens,
+                 std::optional<Enum> (*from_string)(const std::string&)) {
+  if (!value.is_string()) {
+    if (value.is_number()) {
+      refuse(schema::refusal(
+          at, std::string("takes a token, not a number (valid names: ") + tokens + ")"));
+    }
+    refuse(schema::must_be(at, schema::Kind::String));
+  }
+  const auto parsed = from_string(value.as_string());
+  if (!parsed) refuse(schema::refusal(at, std::string("must be one of ") + tokens));
+  return *parsed;
 }
 
 // Reads an optional channel-layout string field. Absent -> fallback (so old
-// scenes without the field round-trip as stereo). Present-but-invalid throws,
-// matching the strict behavior of the slot/timing enums above.
-ChannelLayout channel_layout_or(const JsonValue& object, const char* key, ChannelLayout fallback) {
+// scenes without the field round-trip as stereo).
+ChannelLayout channel_layout_or(const JsonValue& object, const std::string& path, const char* key,
+                                ChannelLayout fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_string()) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string("channel layout must be a string: ") + key);
-  }
-  ChannelLayout layout = fallback;
-  if (!channel_layout_from_string(value->as_string(), layout)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "unknown channel layout: " + value->as_string());
-  }
-  return layout;
+  return token_value<ChannelLayout>(*value, schema::child_path(path, key), "mono, stereo, 5.1, 7.1",
+                                    &channel_layout_token);
 }
 
 // ---------------------------------------------------------------------------
@@ -131,98 +149,84 @@ void refuse_unknown_keys(const JsonValue& object, const std::string& path, const
   for (const auto& entry : object.as_object()) {
     const std::string& key = entry.first;
     if (known.count(key) != 0 || util::json::is_annotation_key(key)) continue;
-    throw SonareException(ErrorCode::InvalidFormat, "unknown scene key '" +
-                                                        (path.empty() ? "" : path + ".") +
-                                                        util::json::escape_key(key) + "'");
+    refuse(schema::unknown_key(schema::child_path(path, key)));
   }
-}
-
-std::string child_path(const std::string& path, const char* key) {
-  return path.empty() ? std::string(key) : path + "." + key;
 }
 
 // A present key of the wrong type (a JSON null included) is refused naming its path, as a
 // container of the wrong type is; only an absent key keeps the fallback.
-[[noreturn]] void refuse_type(const std::string& path, const char* key, const char* expected) {
-  throw SonareException(ErrorCode::InvalidFormat, child_path(path, key) + " must be " + expected);
+[[noreturn]] void refuse_type(const std::string& path, const char* key, schema::Kind kind) {
+  refuse(schema::must_be(schema::child_path(path, key), kind));
 }
 
 // An earlier spelling of a key is refused naming the current one; only `key` is read.
 const JsonValue* current_value(const JsonValue& object, const std::string& path, const char* key,
                                const char* earlier_key) {
   if (object.find(earlier_key) != nullptr) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          child_path(path, earlier_key) + " is an earlier spelling; write " + key);
+    refuse(schema::child_path(path, earlier_key) + " is an earlier spelling; write " +
+           schema::child_path(path, key));
   }
   return object.find(key);
 }
 
-float float_from(const JsonValue& value, const char* key, const char* field_path) {
+float float_from(const JsonValue& value, const std::string& at) {
   float converted = 0.0f;
   if (!numeric::checked_float_cast(value.as_number(), &converted)) {
-    throw SonareException(
-        ErrorCode::InvalidFormat,
-        std::string("floating-point field is non-finite or out of float range: ") +
-            (field_path != nullptr ? field_path : key));
+    refuse(schema::refusal(at, schema::kFloatRangePredicate));
   }
   return converted;
 }
 
-int int_from(const JsonValue& value, const char* key) {
+int int_from(const JsonValue& value, const std::string& at) {
   int converted = 0;
   if (!numeric::checked_integral_cast(value.as_number(), &converted)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string("integer field is fractional or out of range: ") + key);
+    refuse(schema::refusal(at, schema::integer_range_predicate(std::numeric_limits<int>::min(),
+                                                               std::numeric_limits<int>::max())));
   }
   return converted;
 }
 
-float number_or(const JsonValue& object, const std::string& path, const char* key, float fallback,
-                const char* field_path = nullptr) {
+float number_or(const JsonValue& object, const std::string& path, const char* key, float fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse_type(path, key, "a number");
-  return float_from(*value, key, field_path);
+  if (!value->is_number()) refuse_type(path, key, schema::Kind::Number);
+  return float_from(*value, schema::child_path(path, key));
 }
 
 float number_or_earlier(const JsonValue& object, const std::string& path, const char* key,
-                        const char* earlier_key, float fallback, const char* field_path = nullptr) {
+                        const char* earlier_key, float fallback) {
   const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse_type(path, key, "a number");
-  return float_from(*value, key, field_path);
+  if (!value->is_number()) refuse_type(path, key, schema::Kind::Number);
+  return float_from(*value, schema::child_path(path, key));
 }
 
 // Pan and width are refused outside their documented domains, naming the field.
-float checked_pan(float value, const char* field_path) {
+float checked_pan(float value, const std::string& path, const char* key) {
   if (!pan_in_range(value)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string(field_path) + " must be within [-1, 1]");
+    refuse(schema::refusal(schema::child_path(path, key), schema::range_predicate(-1.0, 1.0)));
   }
   return value;
 }
 
-float checked_width(float value, const char* field_path) {
+float checked_width(float value, const std::string& path, const char* key) {
   if (!width_in_range(value)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string(field_path) + " must be within [0, 2]");
+    refuse(schema::refusal(schema::child_path(path, key), schema::range_predicate(0.0, 2.0)));
   }
   return value;
 }
 
 // Surround placement is refused outside its domains with the same rule as the setters.
-float checked_surround_azimuth(float value, const char* field_path) {
+float checked_surround_azimuth(float value, const std::string& path, const char* key) {
   if (!surround_azimuth_in_range(value)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string(field_path) + " must be within [-180, 180]");
+    refuse(schema::refusal(schema::child_path(path, key), schema::range_predicate(-180.0, 180.0)));
   }
   return value;
 }
 
-float checked_surround_unit(float value, const char* field_path) {
+float checked_surround_unit(float value, const std::string& path, const char* key) {
   if (!surround_unit_in_range(value)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string(field_path) + " must be within [0, 1]");
+    refuse(schema::refusal(schema::child_path(path, key), schema::range_predicate(0.0, 1.0)));
   }
   return value;
 }
@@ -231,46 +235,39 @@ int int_or_earlier(const JsonValue& object, const std::string& path, const char*
                    const char* earlier_key, int fallback) {
   const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse_type(path, key, "an integer");
-  return int_from(*value, key);
+  if (!value->is_number()) refuse_type(path, key, schema::Kind::Number);
+  return int_from(*value, schema::child_path(path, key));
 }
 
-// A closed set is read only as its token; a number is refused naming the tokens.
 template <typename Enum>
 int token_or(const JsonValue& object, const std::string& path, const char* key,
              const char* earlier_key, int fallback, const char* tokens,
-             Enum (*from_string)(const std::string&)) {
+             std::optional<Enum> (*from_string)(const std::string&)) {
   const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_string()) refuse_type(path, key, tokens);
-  try {
-    return static_cast<int>(from_string(value->as_string()));
-  } catch (const SonareException&) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          child_path(path, key) + " is not a known token: " + value->as_string() +
-                              " (expected " + tokens + ")");
-  }
+  return static_cast<int>(
+      token_value<Enum>(*value, schema::child_path(path, key), tokens, from_string));
 }
 
 bool bool_or_earlier(const JsonValue& object, const std::string& path, const char* key,
                      const char* earlier_key, bool fallback) {
   const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_bool()) refuse_type(path, key, "a boolean");
+  if (!value->is_bool()) refuse_type(path, key, schema::Kind::Boolean);
   return value->as_bool();
 }
 
 int int_or(const JsonValue& object, const std::string& path, const char* key, int fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse_type(path, key, "an integer");
-  return int_from(*value, key);
+  if (!value->is_number()) refuse_type(path, key, schema::Kind::Number);
+  return int_from(*value, schema::child_path(path, key));
 }
 
 bool bool_or(const JsonValue& object, const std::string& path, const char* key, bool fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_bool()) refuse_type(path, key, "a boolean");
+  if (!value->is_bool()) refuse_type(path, key, schema::Kind::Boolean);
   return value->as_bool();
 }
 
@@ -278,7 +275,7 @@ std::string string_or(const JsonValue& object, const std::string& path, const ch
                       const std::string& fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
-  if (!value->is_string()) refuse_type(path, key, "a string");
+  if (!value->is_string()) refuse_type(path, key, schema::Kind::String);
   return value->as_string();
 }
 
@@ -286,7 +283,7 @@ std::string string_or_earlier(const JsonValue& object, const std::string& path, 
                               const char* earlier_key, const std::string& fallback) {
   const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_string()) refuse_type(path, key, "a string");
+  if (!value->is_string()) refuse_type(path, key, schema::Kind::String);
   return value->as_string();
 }
 
@@ -294,16 +291,13 @@ Insert insert_from_value(const JsonValue& object, const std::string& path) {
   static const KeySet kKnown = known_keys("strips[].inserts[]");
   Insert insert;
   if (const auto* slot = object.find("slot")) {
-    if (!slot->is_string()) {
-      throw SonareException(ErrorCode::InvalidFormat,
-                            "insert slot must be a string (\"pre\" or \"post\")");
-    }
-    insert.slot = insert_slot_from_string(slot->as_string());
+    insert.slot = token_value<InsertSlot>(*slot, schema::child_path(path, "slot"), "pre, post",
+                                          &insert_slot_from_string);
   }
   insert.processor_name =
       string_or_earlier(object, path, "processor", "processor_name", insert.processor_name);
   if (const auto* params = current_value(object, path, "params", "params_json")) {
-    if (!params->is_object()) refuse_type(path, "params", "a JSON object");
+    if (!params->is_object()) refuse_type(path, "params", schema::Kind::Object);
     insert.params_json = sonare::util::json::dump(*params);
   }
   insert.sidechain_key =
@@ -318,18 +312,13 @@ Insert insert_from_value(const JsonValue& object, const std::string& path) {
 template <typename T>
 std::vector<T> array_from_value(const JsonValue& array, const std::string& path,
                                 T (*parse)(const JsonValue&, const std::string&)) {
-  if (!array.is_array()) {
-    throw SonareException(ErrorCode::InvalidFormat, path + " must be an array");
-  }
+  if (!array.is_array()) refuse(schema::must_be(path, schema::Kind::Array));
   std::vector<T> out;
   out.reserve(array.as_array().size());
   size_t index = 0;
   for (const auto& entry : array.as_array()) {
-    const size_t position = index++;
-    const std::string element_path = path + "[" + std::to_string(position) + "]";
-    if (!entry.is_object()) {
-      throw SonareException(ErrorCode::InvalidFormat, element_path + " must be an object");
-    }
+    const std::string element_path = schema::index_path(path, index++);
+    if (!entry.is_object()) refuse(schema::must_be(element_path, schema::Kind::Object));
     out.push_back(parse(entry, element_path));
   }
   return out;
@@ -345,14 +334,10 @@ Send send_from_value(const JsonValue& object, const std::string& path) {
   send.id = string_or(object, path, "id", send.id);
   send.destination_bus_id = string_or_earlier(object, path, "destinationBusId",
                                               "destination_bus_id", send.destination_bus_id);
-  send.send_db = number_or_earlier(object, path, "sendDb", "send_db", send.send_db,
-                                   "scene.strips[].sends[].sendDb");
+  send.send_db = number_or_earlier(object, path, "sendDb", "send_db", send.send_db);
   if (const auto* timing = object.find("timing")) {
-    if (!timing->is_string()) {
-      throw SonareException(ErrorCode::InvalidFormat,
-                            "send timing must be a string (\"preFader\" or \"postFader\")");
-    }
-    send.timing = send_timing_from_string(timing->as_string());
+    send.timing = token_value<SendTiming>(*timing, schema::child_path(path, "timing"),
+                                          "preFader, postFader", &send_timing_from_string);
   }
   refuse_unknown_keys(object, path, kKnown);
   return send;
@@ -362,45 +347,37 @@ std::vector<Send> sends_from_value(const JsonValue& array, const std::string& pa
   return array_from_value<Send>(array, path, send_from_value);
 }
 
-// Strip and Bus share one EQ shape (StripEq) and one validation. `field_prefix`
-// names the enclosing entity ("scene.strips[]" or "scene.buses[]") for error
-// messages, matching the convention the other scene fields use.
-StripEq eq_from_value(const JsonValue& object, const char* field_prefix, const std::string& path) {
+// Strip and Bus share one EQ shape (StripEq) and one validation.
+StripEq eq_from_value(const JsonValue& object, const std::string& path) {
   static const KeySet kKnownEq = known_keys("strips[].eq");
   static const KeySet kKnownBand(mastering::eq::eq_band_known_keys().begin(),
                                  mastering::eq::eq_band_known_keys().end());
   StripEq eq;
   const auto* eq_value = object.find("eq");
   if (!eq_value) return eq;
-  const std::string eq_path = child_path(path, "eq");
-  if (!eq_value->is_object()) {
-    throw SonareException(ErrorCode::InvalidFormat, eq_path + " must be an object");
-  }
+  const std::string eq_path = schema::child_path(path, "eq");
+  if (!eq_value->is_object()) refuse(schema::must_be(eq_path, schema::Kind::Object));
   refuse_unknown_keys(*eq_value, eq_path, kKnownEq);
   eq.enabled = bool_or(*eq_value, eq_path, "enabled", eq.enabled);
   const auto* bands = eq_value->find("bands");
   if (!bands) return eq;
-  if (!bands->is_array()) {
-    throw SonareException(ErrorCode::InvalidFormat, eq_path + ".bands must be an array");
-  }
+  const std::string bands_path = schema::child_path(eq_path, "bands");
+  if (!bands->is_array()) refuse(schema::must_be(bands_path, schema::Kind::Array));
   const auto& array = bands->as_array();
   if (array.size() > mastering::eq::ParametricEq::kMaxBands) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string(field_prefix) + ".eq.bands has more than 24 bands");
+    refuse(schema::refusal(bands_path, "must have at most 24 bands"));
   }
-  const std::string band_context = std::string(field_prefix) + ".eq.bands[]: ";
   eq.bands.reserve(array.size());
   for (size_t index = 0; index < array.size(); ++index) {
     const auto& entry = array[index];
-    const mastering::eq::EqBand band =
-        mastering::eq::eq_band_from_value(entry, band_context.c_str());
-    refuse_unknown_keys(entry, eq_path + ".bands[" + std::to_string(index) + "]", kKnownBand);
+    const std::string band_path = schema::index_path(bands_path, index);
+    const mastering::eq::EqBand band = mastering::eq::eq_band_from_value(entry, band_path);
+    refuse_unknown_keys(entry, band_path, kKnownBand);
     // ParametricEq has no tilt design; the shared codec stays permissive for EqualizerProcessor.
     if (band.type == mastering::eq::EqBandType::TiltShelf ||
         band.type == mastering::eq::EqBandType::FlatTilt) {
-      throw SonareException(
-          ErrorCode::InvalidFormat,
-          band_context + "tiltShelf/flatTilt is not supported on a strip or bus EQ");
+      refuse(schema::refusal(schema::child_path(band_path, "type"),
+                             "must not be tiltShelf or flatTilt on a strip or bus EQ"));
     }
     eq.bands.push_back(band);
   }
@@ -413,66 +390,56 @@ Strip strip_from_value(const JsonValue& object, const std::string& path) {
   static const KeySet kKnownMetering = known_keys("strips[].metering");
   Strip strip;
   strip.id = string_or(object, path, "id", strip.id);
-  strip.input_trim_db = number_or_earlier(object, path, "inputTrimDb", "input_trim_db",
-                                          strip.input_trim_db, "scene.strips[].inputTrimDb");
-  strip.fader_db = number_or_earlier(object, path, "faderDb", "fader_db", strip.fader_db,
-                                     "scene.strips[].faderDb");
-  strip.vca_offset_db = number_or_earlier(object, path, "vcaOffsetDb", "vca_offset_db",
-                                          strip.vca_offset_db, "scene.strips[].vcaOffsetDb");
+  strip.input_trim_db =
+      number_or_earlier(object, path, "inputTrimDb", "input_trim_db", strip.input_trim_db);
+  strip.fader_db = number_or_earlier(object, path, "faderDb", "fader_db", strip.fader_db);
+  strip.vca_offset_db =
+      number_or_earlier(object, path, "vcaOffsetDb", "vca_offset_db", strip.vca_offset_db);
   // Pan and width outside their domains are refused, like the enums and counts below.
-  strip.pan = checked_pan(number_or(object, path, "pan", strip.pan, "scene.strips[].pan"),
-                          "scene.strips[].pan");
-  strip.width = checked_width(number_or(object, path, "width", strip.width, "scene.strips[].width"),
-                              "scene.strips[].width");
+  strip.pan = checked_pan(number_or(object, path, "pan", strip.pan), path, "pan");
+  strip.width = checked_width(number_or(object, path, "width", strip.width), path, "width");
   strip.muted = bool_or(object, path, "muted", strip.muted);
   strip.soloed = bool_or(object, path, "soloed", strip.soloed);
   strip.solo_safe = bool_or_earlier(object, path, "soloSafe", "solo_safe", strip.solo_safe);
   // Out-of-range values are refused in the one canonical scene walker, so standalone mixer JSON
   // and project-embedded scene JSON stay identical.
-  strip.pan_mode = token_or(object, path, "panMode", "pan_mode", strip.pan_mode,
-                            "balance, stereoPan or dualPan", &pan_mode_from_string);
-  strip.dual_pan_left =
-      checked_pan(number_or_earlier(object, path, "dualPanLeft", "dual_pan_left",
-                                    strip.dual_pan_left, "scene.strips[].dualPanLeft"),
-                  "scene.strips[].dualPanLeft");
-  strip.dual_pan_right =
-      checked_pan(number_or_earlier(object, path, "dualPanRight", "dual_pan_right",
-                                    strip.dual_pan_right, "scene.strips[].dualPanRight"),
-                  "scene.strips[].dualPanRight");
+  strip.pan_mode = token_or<PanMode>(object, path, "panMode", "pan_mode", strip.pan_mode,
+                                     "balance, stereoPan, dualPan", &pan_mode_from_string);
+  strip.dual_pan_left = checked_pan(
+      number_or_earlier(object, path, "dualPanLeft", "dual_pan_left", strip.dual_pan_left), path,
+      "dualPanLeft");
+  strip.dual_pan_right = checked_pan(
+      number_or_earlier(object, path, "dualPanRight", "dual_pan_right", strip.dual_pan_right), path,
+      "dualPanRight");
   strip.polarity_invert_left = bool_or_earlier(object, path, "polarityInvertLeft",
                                                "polarity_invert_left", strip.polarity_invert_left);
   strip.polarity_invert_right = bool_or_earlier(
       object, path, "polarityInvertRight", "polarity_invert_right", strip.polarity_invert_right);
-  strip.pan_law = token_or(object, path, "panLaw", "pan_law", strip.pan_law,
-                           "const3Db, const4.5Db, const6Db or linear0Db", &pan_law_from_string);
+  strip.pan_law =
+      token_or<PanLaw>(object, path, "panLaw", "pan_law", strip.pan_law,
+                       "const3Db, const4.5Db, const6Db, linear0Db", &pan_law_from_string);
   strip.channel_delay_samples = int_or_earlier(
       object, path, "channelDelaySamples", "channel_delay_samples", strip.channel_delay_samples);
   if (strip.channel_delay_samples < 0 || strip.channel_delay_samples > kMaxAlignmentDelaySamples) {
-    throw SonareException(ErrorCode::InvalidFormat, "channelDelaySamples must be in [0, 192000]");
+    refuse(schema::refusal(schema::child_path(path, "channelDelaySamples"),
+                           schema::integer_range_predicate(0, kMaxAlignmentDelaySamples)));
   }
-  strip.source_layout = channel_layout_or(object, "sourceLayout", strip.source_layout);
+  strip.source_layout = channel_layout_or(object, path, "sourceLayout", strip.source_layout);
   if (const auto* sp = object.find("surroundPan")) {
-    const std::string surround_path = child_path(path, "surroundPan");
-    if (!sp->is_object()) {
-      throw SonareException(ErrorCode::InvalidFormat, surround_path + " must be an object");
-    }
+    const std::string surround_path = schema::child_path(path, "surroundPan");
+    if (!sp->is_object()) refuse(schema::must_be(surround_path, schema::Kind::Object));
     refuse_unknown_keys(*sp, surround_path, kKnownSurround);
     SurroundPanParams parsed;
     parsed.azimuth = checked_surround_azimuth(
-        number_or(*sp, surround_path, "azimuth", strip.surround_pan.azimuth,
-                  "scene.strips[].surroundPan.azimuth"),
-        "scene.strips[].surroundPan.azimuth");
-    parsed.elevation = number_or(*sp, surround_path, "elevation", strip.surround_pan.elevation,
-                                 "scene.strips[].surroundPan.elevation");
+        number_or(*sp, surround_path, "azimuth", strip.surround_pan.azimuth), surround_path,
+        "azimuth");
+    parsed.elevation = number_or(*sp, surround_path, "elevation", strip.surround_pan.elevation);
     parsed.divergence = checked_surround_unit(
-        number_or(*sp, surround_path, "divergence", strip.surround_pan.divergence,
-                  "scene.strips[].surroundPan.divergence"),
-        "scene.strips[].surroundPan.divergence");
-    parsed.lfe = checked_surround_unit(number_or(*sp, surround_path, "lfe", strip.surround_pan.lfe,
-                                                 "scene.strips[].surroundPan.lfe"),
-                                       "scene.strips[].surroundPan.lfe");
-    parsed.distance = number_or(*sp, surround_path, "distance", strip.surround_pan.distance,
-                                "scene.strips[].surroundPan.distance");
+        number_or(*sp, surround_path, "divergence", strip.surround_pan.divergence), surround_path,
+        "divergence");
+    parsed.lfe = checked_surround_unit(number_or(*sp, surround_path, "lfe", strip.surround_pan.lfe),
+                                       surround_path, "lfe");
+    parsed.distance = number_or(*sp, surround_path, "distance", strip.surround_pan.distance);
     // Domains are refused above; the panner's own resolution settles the distance default.
     const SurroundPanParams stored = clamp_surround_pan_params(parsed);
     strip.surround_pan.azimuth = stored.azimuth;
@@ -482,10 +449,8 @@ Strip strip_from_value(const JsonValue& object, const std::string& path) {
     strip.surround_pan.distance = stored.distance;
   }
   if (const auto* metering = object.find("metering")) {
-    const std::string metering_path = child_path(path, "metering");
-    if (!metering->is_object()) {
-      throw SonareException(ErrorCode::InvalidFormat, metering_path + " must be an object");
-    }
+    const std::string metering_path = schema::child_path(path, "metering");
+    if (!metering->is_object()) refuse(schema::must_be(metering_path, schema::Kind::Object));
     refuse_unknown_keys(*metering, metering_path, kKnownMetering);
     strip.metering.enabled = bool_or(*metering, metering_path, "enabled", strip.metering.enabled);
     strip.metering.lufs = bool_or(*metering, metering_path, "lufs", strip.metering.lufs);
@@ -495,17 +460,17 @@ Strip strip_from_value(const JsonValue& object, const std::string& path) {
         int_or(*metering, metering_path, "truePeakOversample", strip.metering.true_peak_oversample);
     // The realtime meter's own rule, so a scene never stores a factor it cannot run.
     if (!is_realtime_true_peak_oversample(strip.metering.true_peak_oversample)) {
-      throw SonareException(ErrorCode::InvalidFormat,
-                            "metering.truePeakOversample must be in {4, 8}");
+      refuse(schema::refusal(schema::child_path(metering_path, "truePeakOversample"),
+                             "must be 4 or 8"));
     }
   }
   if (const auto* inserts = object.find("inserts")) {
-    strip.inserts = inserts_from_value(*inserts, child_path(path, "inserts"));
+    strip.inserts = inserts_from_value(*inserts, schema::child_path(path, "inserts"));
   }
   if (const auto* sends = object.find("sends")) {
-    strip.sends = sends_from_value(*sends, child_path(path, "sends"));
+    strip.sends = sends_from_value(*sends, schema::child_path(path, "sends"));
   }
-  strip.eq = eq_from_value(object, "scene.strips[]", path);
+  strip.eq = eq_from_value(object, path);
   refuse_unknown_keys(object, path, kKnown);
   return strip;
 }
@@ -519,30 +484,27 @@ Bus bus_from_value(const JsonValue& object, const std::string& path) {
   Bus bus;
   bus.id = string_or(object, path, "id", bus.id);
   bus.role = string_or(object, path, "role", bus.role);
-  bus.layout = channel_layout_or(object, "layout", bus.layout);
-  bus.input_trim_db = number_or_earlier(object, path, "inputTrimDb", "input_trim_db",
-                                        bus.input_trim_db, "scene.buses[].inputTrimDb");
-  // Same domain as scene.strips[].width above.
-  bus.width = checked_width(number_or(object, path, "width", bus.width, "scene.buses[].width"),
-                            "scene.buses[].width");
+  bus.layout = channel_layout_or(object, path, "layout", bus.layout);
+  bus.input_trim_db =
+      number_or_earlier(object, path, "inputTrimDb", "input_trim_db", bus.input_trim_db);
+  // Same domain as a strip's width above.
+  bus.width = checked_width(number_or(object, path, "width", bus.width), path, "width");
   bus.polarity_invert_left = bool_or_earlier(object, path, "polarityInvertLeft",
                                              "polarity_invert_left", bus.polarity_invert_left);
   bus.polarity_invert_right = bool_or_earlier(object, path, "polarityInvertRight",
                                               "polarity_invert_right", bus.polarity_invert_right);
   // Pan: same field names and ranges as Strip's above.
-  bus.pan = checked_pan(number_or(object, path, "pan", bus.pan, "scene.buses[].pan"),
-                        "scene.buses[].pan");
-  bus.pan_mode = token_or(object, path, "panMode", "pan_mode", bus.pan_mode,
-                          "balance, stereoPan or dualPan", &pan_mode_from_string);
-  bus.dual_pan_left = checked_pan(number_or_earlier(object, path, "dualPanLeft", "dual_pan_left",
-                                                    bus.dual_pan_left, "scene.buses[].dualPanLeft"),
-                                  "scene.buses[].dualPanLeft");
-  bus.dual_pan_right =
-      checked_pan(number_or_earlier(object, path, "dualPanRight", "dual_pan_right",
-                                    bus.dual_pan_right, "scene.buses[].dualPanRight"),
-                  "scene.buses[].dualPanRight");
-  bus.pan_law = token_or(object, path, "panLaw", "pan_law", bus.pan_law,
-                         "const3Db, const4.5Db, const6Db or linear0Db", &pan_law_from_string);
+  bus.pan = checked_pan(number_or(object, path, "pan", bus.pan), path, "pan");
+  bus.pan_mode = token_or<PanMode>(object, path, "panMode", "pan_mode", bus.pan_mode,
+                                   "balance, stereoPan, dualPan", &pan_mode_from_string);
+  bus.dual_pan_left = checked_pan(
+      number_or_earlier(object, path, "dualPanLeft", "dual_pan_left", bus.dual_pan_left), path,
+      "dualPanLeft");
+  bus.dual_pan_right = checked_pan(
+      number_or_earlier(object, path, "dualPanRight", "dual_pan_right", bus.dual_pan_right), path,
+      "dualPanRight");
+  bus.pan_law = token_or<PanLaw>(object, path, "panLaw", "pan_law", bus.pan_law,
+                                 "const3Db, const4.5Db, const6Db, linear0Db", &pan_law_from_string);
   // A surround bus has no pan or stereo-width stage, so a non-default value there is
   // refused rather than dropped.
   if (channel_count(bus.layout) > 2) {
@@ -562,14 +524,13 @@ Bus bus_from_value(const JsonValue& object, const std::string& path) {
       offending = "dualPanRight";
     }
     if (offending != nullptr) {
-      throw SonareException(ErrorCode::InvalidFormat, "bus '" + bus.id + "' has a non-default " +
-                                                          offending +
-                                                          " on a surround (>2 channel) layout");
+      refuse(schema::refusal(schema::child_path(path, offending),
+                             "must stay at its default on a surround (>2 channel) layout"));
     }
   }
-  bus.eq = eq_from_value(object, "scene.buses[]", path);
+  bus.eq = eq_from_value(object, path);
   if (const auto* inserts = object.find("inserts")) {
-    bus.inserts = inserts_from_value(*inserts, child_path(path, "inserts"));
+    bus.inserts = inserts_from_value(*inserts, schema::child_path(path, "inserts"));
   }
   refuse_unknown_keys(object, path, kKnown);
   return bus;
@@ -583,19 +544,15 @@ VcaGroup vca_group_from_value(const JsonValue& object, const std::string& path) 
   static const KeySet kKnown = known_keys("vcaGroups[]");
   VcaGroup group;
   group.id = string_or(object, path, "id", group.id);
-  group.gain_db = number_or_earlier(object, path, "gainDb", "gain_db", group.gain_db,
-                                    "scene.vcaGroups[].gainDb");
+  group.gain_db = number_or_earlier(object, path, "gainDb", "gain_db", group.gain_db);
   if (const auto* members = object.find("members")) {
-    const std::string members_path = child_path(path, "members");
-    if (!members->is_array()) {
-      throw SonareException(ErrorCode::InvalidFormat, members_path + " must be an array");
-    }
+    const std::string members_path = schema::child_path(path, "members");
+    if (!members->is_array()) refuse(schema::must_be(members_path, schema::Kind::Array));
     group.members.reserve(members->as_array().size());
     size_t index = 0;
     for (const auto& entry : members->as_array()) {
       if (!entry.is_string()) {
-        throw SonareException(ErrorCode::InvalidFormat,
-                              members_path + "[" + std::to_string(index) + "] must be a string");
+        refuse(schema::must_be(schema::index_path(members_path, index), schema::Kind::String));
       }
       group.members.push_back(entry.as_string());
       ++index;
@@ -985,29 +942,34 @@ const std::vector<std::string>& scene_schema_paths() {
   return paths;
 }
 
-Scene scene_from_value(const JsonValue& root) {
-  if (!root.is_object()) {
-    throw SonareException(ErrorCode::InvalidFormat, "scene JSON must be an object");
-  }
+Scene scene_from_value(const JsonValue& root, const std::string& root_path) {
+  if (!root.is_object()) refuse(schema::must_be(root_path, schema::Kind::Object));
   static const KeySet kKnownRoot = known_keys("");
   Scene scene;
-  scene.version = int_or(root, std::string(), "version", 1);
+  scene.version = int_or(root, root_path, "version", 1);
   if (scene.version != 1) {
-    throw SonareException(ErrorCode::InvalidFormat, "unsupported scene JSON version");
+    refuse(schema::refusal(schema::child_path(root_path, "version"), "must be 1"));
   }
-  if (const auto* strips = root.find("strips")) scene.strips = strips_from_value(*strips, "strips");
-  if (const auto* buses = root.find("buses")) scene.buses = buses_from_value(*buses, "buses");
-  if (const auto* groups = current_value(root, std::string(), "vcaGroups", "vca_groups"))
-    scene.vca_groups = vca_groups_from_value(*groups, "vcaGroups");
-  if (const auto* connections = root.find("connections"))
-    scene.connections = connections_from_value(*connections, "connections");
-  refuse_unknown_keys(root, "", kKnownRoot);
+  if (const auto* strips = root.find("strips")) {
+    scene.strips = strips_from_value(*strips, schema::child_path(root_path, "strips"));
+  }
+  if (const auto* buses = root.find("buses")) {
+    scene.buses = buses_from_value(*buses, schema::child_path(root_path, "buses"));
+  }
+  if (const auto* groups = current_value(root, root_path, "vcaGroups", "vca_groups")) {
+    scene.vca_groups = vca_groups_from_value(*groups, schema::child_path(root_path, "vcaGroups"));
+  }
+  if (const auto* connections = root.find("connections")) {
+    scene.connections =
+        connections_from_value(*connections, schema::child_path(root_path, "connections"));
+  }
+  refuse_unknown_keys(root, root_path, kKnownRoot);
   return scene;
 }
 
-// Budgeted like every caller-supplied document; duplicate keys stay tolerated.
+// Budgeted like every caller-supplied document; a repeated key is refused.
 Scene scene_from_json(const std::string& json) {
-  return scene_from_value(sonare::util::json::admit(json));
+  return scene_from_value(sonare::util::json::admit_strict(json), std::string());
 }
 
 }  // namespace sonare::mixing::api

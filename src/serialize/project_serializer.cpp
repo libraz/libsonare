@@ -28,6 +28,7 @@
 #include "util/exception.h"
 #include "util/json_budget.h"
 #include "util/json_key.h"
+#include "util/json_schema.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
 
@@ -38,6 +39,7 @@ namespace json = sonare::util::json;
 using json::Array;
 using json::Object;
 using json::Value;
+namespace schema = json::schema;
 
 using namespace detail;
 
@@ -64,22 +66,26 @@ Value part_rig_to_json(const arrangement::ProjectPartRig& entry) {
 
 // Returns nullopt for a value no part rig can take (part or mode out of range).
 // Whether the stages fit the mode is left to Project::set_part_rig.
-std::optional<arrangement::ProjectPartRig> part_rig_from_json(const Value& v) {
+std::optional<arrangement::ProjectPartRig> part_rig_from_json(const Value& v,
+                                                              const std::string& path) {
   arrangement::ProjectPartRig entry;
-  entry.destination_id = uint_or(v, "destinationId", 0);
+  entry.destination_id = uint_or(v, path, "destinationId", 0);
   uint8_t part = 0;
-  if (!numeric::checked_integral_cast(num_or(v, "part", 0.0), &part)) return std::nullopt;
+  if (!numeric::checked_integral_cast(num_or(v, path, "part", 0.0), &part)) return std::nullopt;
   entry.part = part;
-  const std::string mode = str_or(v, "mode", "");
+  const std::string mode = str_or(v, path, "mode", "");
   const auto* found = std::find(std::begin(kPartRigModeNames), std::end(kPartRigModeNames), mode);
   if (found == std::end(kPartRigModeNames)) return std::nullopt;
   entry.rig.mode = static_cast<midi::PartRigMode>(found - std::begin(kPartRigModeNames));
-  if (const auto* inserts = array_at(v, "inserts")) {
+  if (const auto* inserts = array_at(v, path, "inserts")) {
+    const std::string inserts_path = schema::child_path(path, "inserts");
+    std::size_t index = 0;
     for (const auto& sv : *inserts) {
+      const std::string insert_path = schema::index_path(inserts_path, index++);
       if (!sv.is_object()) return std::nullopt;
       const Value* params = sv.find("params");
       if (params != nullptr && !params->is_object()) return std::nullopt;
-      entry.rig.stages.push_back({str_or(sv, "processor", ""),
+      entry.rig.stages.push_back({str_or(sv, insert_path, "processor", ""),
                                   params != nullptr ? json::dump(*params) : std::string("{}")});
     }
   }
@@ -87,10 +93,6 @@ std::optional<arrangement::ProjectPartRig> part_rig_from_json(const Value& v) {
 }
 
 using KeyList = std::initializer_list<const char*>;
-
-std::string key_path(const std::string& parent, const std::string& key) {
-  return parent.empty() ? key : parent + "." + key;
-}
 
 // The current spelling of a snake_case key: lowerCamelCase, with a spelled-out `_seconds`
 // unit folded to `Sec`.
@@ -128,10 +130,11 @@ void refuse_unknown_keys(const Value& object, const std::string& path, KeyList k
     if (key.find('_') != std::string::npos && is_known(current)) {
       throw SonareException(
           ErrorCode::InvalidFormat,
-          key_path(path, json::escape_key(key)) + " is an earlier spelling; write " + current);
+          schema::refusal(schema::child_path(path, key),
+                          "is an earlier spelling; write " + schema::child_path(path, current)));
     }
     throw SonareException(ErrorCode::InvalidFormat,
-                          "unknown project key '" + key_path(path, json::escape_key(key)) + "'");
+                          schema::unknown_key(schema::child_path(path, key)));
   }
 }
 
@@ -144,14 +147,14 @@ void each_record(const Value& parent, const char* key, const std::string& path, 
   const auto& elements = array->as_array();
   for (std::size_t index = 0; index < elements.size(); ++index) {
     if (!elements[index].is_object()) continue;
-    check(elements[index], key_path(path, key) + "[" + std::to_string(index) + "]");
+    check(elements[index], schema::index_path(schema::child_path(path, key), index));
   }
 }
 
 template <typename Check>
 void with_object(const Value& parent, const char* key, const std::string& path, Check check) {
   const Value* object = parent.find(key);
-  if (object != nullptr && object->is_object()) check(*object, key_path(path, key));
+  if (object != nullptr && object->is_object()) check(*object, schema::child_path(path, key));
 }
 
 void check_clip_keys(const Value& clip, const std::string& path) {
@@ -221,23 +224,24 @@ void check_annotation_keys(const Value& annotation, const std::string& path) {
 void check_midi_content_keys(const Value& content, const std::string& path) {
   for (const auto& [clip_key, events] : content.as_object()) {
     if (clip_key == "__sysex_payloads") {
-      throw SonareException(
-          ErrorCode::InvalidFormat,
-          key_path(path, clip_key) + " is an earlier spelling; write __sysexPayloads");
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::refusal(schema::child_path(path, clip_key),
+                                            "is an earlier spelling; write " +
+                                                schema::child_path(path, "__sysexPayloads")));
     }
     if (clip_key == "__sysexPayloads" || !events.is_array()) continue;
     const auto& elements = events.as_array();
     for (std::size_t index = 0; index < elements.size(); ++index) {
       const Value& event = elements[index];
       if (!event.is_object()) continue;
-      const std::string event_path =
-          key_path(path, json::escape_key(clip_key)) + "[" + std::to_string(index) + "]";
+      const std::string event_path = schema::index_path(schema::child_path(path, clip_key), index);
       for (const auto& [earlier, current] :
            {std::pair<const char*, const char*>{"data0", "word0"}, {"data1", "word1"}}) {
         if (event.find(earlier) != nullptr) {
-          throw SonareException(
-              ErrorCode::InvalidFormat,
-              key_path(event_path, earlier) + " is an earlier spelling; write " + current);
+          throw SonareException(ErrorCode::InvalidFormat,
+                                schema::refusal(schema::child_path(event_path, earlier),
+                                                "is an earlier spelling; write " +
+                                                    schema::child_path(event_path, current)));
         }
       }
       refuse_unknown_keys(event, event_path, {"ppq", "word0", "word1", "sysexHandle"});
@@ -515,8 +519,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
   Value root;
   try {
-    // The project format tolerates duplicate keys, so admit rather than admit_strict.
-    root = json::admit(json_text, import_limits);
+    root = json::admit_strict(json_text, import_limits);
   } catch (const json::JsonResourceError& e) {
     result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded", e.what()});
     return result;
@@ -533,7 +536,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
   try {
     if (!root.is_object()) {
       result.diagnostics.push_back(
-          {DiagnosticSeverity::kError, "not_an_object", "top-level JSON value is not an object"});
+          {DiagnosticSeverity::kError, "not_an_object", schema::root_must_be_object()});
       return result;
     }
 
@@ -546,15 +549,19 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     const auto* version = root.find("version");
     if (!version || !version->is_number()) {
-      result.diagnostics.push_back(
-          {DiagnosticSeverity::kError, "missing_version", "missing mandatory \"version\" field"});
+      result.diagnostics.push_back({DiagnosticSeverity::kError, "missing_version",
+                                    version == nullptr
+                                        ? schema::missing_key("version")
+                                        : schema::must_be("version", schema::Kind::Number)});
       return result;
     }
     const double version_d = version->as_number();
     uint32_t schema_version = 0;
     if (!numeric::checked_integral_cast(version_d, &schema_version)) {
-      result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_version",
-                                    "schema version must be a non-negative uint32 integer"});
+      result.diagnostics.push_back(
+          {DiagnosticSeverity::kError, "invalid_version",
+           schema::refusal("version", schema::integer_range_predicate(
+                                          0, std::numeric_limits<uint32_t>::max()))});
       return result;
     }
     if (schema_version != SONARE_PROJECT_SCHEMA_VERSION) {
@@ -573,26 +580,31 @@ DeserializeResult project_from_json(const std::string& json_text) {
     const auto invalid_entity_id = [](uint32_t id) {
       return id == 0 || id == std::numeric_limits<uint32_t>::max();
     };
-    const auto reject_entity_id = [&](const char* entity, uint32_t id, bool duplicate) {
+    const auto reject_entity_id = [&](const std::string& element_path, bool duplicate) {
       result.diagnostics.push_back(
           {DiagnosticSeverity::kError, duplicate ? "duplicate_entity_id" : "invalid_entity_id",
-           std::string(entity) + " id " + std::to_string(id) +
-               (duplicate ? " is duplicated" : " is reserved or out of range")});
+           schema::refusal(schema::child_path(element_path, "id"),
+                           duplicate ? "must be unique" : "must not be 0 or 4294967295")});
     };
     // Default matches arrangement::Project's constructor default (48 kHz, the
     // conventional DAW render rate) so a document that omits "sampleRate"
     // round-trips to the same rate an in-memory project would have.
-    const double sample_rate = num_or(root, "sampleRate", kDefaultDawSampleRate);
+    const double sample_rate = num_or(root, "", "sampleRate", kDefaultDawSampleRate);
     if (!is_supported_sample_rate(sample_rate)) {
       result.diagnostics.push_back(
           {DiagnosticSeverity::kError, "invalid_sample_rate",
-           "sampleRate must be a whole number of hertz within the supported range"});
+           schema::refusal("sampleRate",
+                           "must be a whole number of hertz within the supported range")});
       return result;
     }
     project.set_sample_rate(sample_rate);
-    const uint32_t overlap_policy = uint_or(root, "overlapPolicy", 0);
+    const uint32_t overlap_policy = uint_or(root, "", "overlapPolicy", 0);
     if (overlap_policy > kMaxSerializedOrdinal<arrangement::OverlapPolicy>) {
-      throw SonareException(ErrorCode::InvalidFormat, "overlapPolicy enum is out of range");
+      throw SonareException(
+          ErrorCode::InvalidFormat,
+          schema::refusal("overlapPolicy",
+                          schema::integer_range_predicate(
+                              0, kMaxSerializedOrdinal<arrangement::OverlapPolicy>)));
     }
     project.set_overlap_policy(static_cast<arrangement::OverlapPolicy>(overlap_policy));
 
@@ -602,28 +614,29 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // propagated; the surviving segments are sorted by start_ppq and de-duped on
     // start_ppq (last writer wins) so the in-memory map is well-ordered.
     std::vector<transport::TempoSegment> tempo;
-    if (const auto* arr = array_at(root, "tempoSegments")) {
+    if (const auto* arr = array_at(root, "", "tempoSegments")) {
       size_t index = 0;
       for (const auto& sv : *arr) {
-        transport::TempoSegment s = tempo_segment_from_json(object_element(sv, "tempoSegments"));
+        const std::string at = schema::index_path("tempoSegments", index);
+        transport::TempoSegment s = tempo_segment_from_json(object_element(sv, at), at);
         if (!std::isfinite(s.start_ppq)) {
           result.diagnostics.push_back(
               {DiagnosticSeverity::kError, "invalid_tempo_start_ppq",
-               "tempo segment " + std::to_string(index) + " has non-finite startPpq"});
+               schema::refusal(schema::child_path(at, "startPpq"), "must be finite")});
           return result;
         }
         if (!std::isfinite(s.bpm) || s.bpm <= 0.0) {
           result.diagnostics.push_back(
               {DiagnosticSeverity::kError, "invalid_tempo_bpm",
-               "tempo segment " + std::to_string(index) + " has non-finite or non-positive bpm"});
+               schema::refusal(schema::child_path(at, "bpm"), "must be finite and positive")});
           return result;
         }
         // end_bpm == 0 means "constant tempo"; any explicit end_bpm must be a
         // finite positive ramp target.
         if (s.end_bpm != 0.0 && (!std::isfinite(s.end_bpm) || s.end_bpm < 0.0)) {
-          result.diagnostics.push_back(
-              {DiagnosticSeverity::kError, "invalid_tempo_end_bpm",
-               "tempo segment " + std::to_string(index) + " has invalid endBpm"});
+          result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_tempo_end_bpm",
+                                        schema::refusal(schema::child_path(at, "endBpm"),
+                                                        "must be 0 or finite and positive")});
           return result;
         }
         if (!std::isfinite(s.start_sample)) s.start_sample = 0.0;
@@ -636,21 +649,22 @@ DeserializeResult project_from_json(const std::string& json_text) {
     project.set_tempo_segments(std::move(tempo));
 
     std::vector<transport::TimeSignatureSegment> sigs;
-    if (const auto* arr = array_at(root, "timeSignatures")) {
+    if (const auto* arr = array_at(root, "", "timeSignatures")) {
       size_t index = 0;
       for (const auto& sv : *arr) {
-        transport::TimeSignatureSegment s =
-            time_signature_from_json(object_element(sv, "timeSignatures"));
+        const std::string at = schema::index_path("timeSignatures", index);
+        transport::TimeSignatureSegment s = time_signature_from_json(object_element(sv, at), at);
         if (!std::isfinite(s.start_ppq)) {
           result.diagnostics.push_back(
               {DiagnosticSeverity::kError, "invalid_time_signature_start_ppq",
-               "time signature segment " + std::to_string(index) + " has non-finite startPpq"});
+               schema::refusal(schema::child_path(at, "startPpq"), "must be finite")});
           return result;
         }
         if (s.time_sig.numerator <= 0 || s.time_sig.denominator <= 0) {
-          result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_time_signature",
-                                        "time signature segment " + std::to_string(index) +
-                                            " has non-positive numerator or denominator"});
+          const char* bad = s.time_sig.numerator <= 0 ? "numerator" : "denominator";
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kError, "invalid_time_signature",
+               schema::refusal(schema::child_path(at, bad), "must be positive")});
           return result;
         }
         sigs.push_back(s);
@@ -665,18 +679,20 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // later add_* allocates a fresh non-colliding id).
     uint32_t max_source_id = 0;
     std::unordered_set<arrangement::SourceId> source_ids;
-    if (const auto* arr = array_at(root, "sources")) {
+    if (const auto* arr = array_at(root, "", "sources")) {
+      std::size_t index = 0;
       for (const auto& sv : *arr) {
-        arrangement::ClipSource src = source_from_json(object_element(sv, "sources"));
+        const std::string at = schema::index_path("sources", index++);
+        arrangement::ClipSource src = source_from_json(object_element(sv, at), at);
         const arrangement::SourceId sid = arrangement::source_id(src);
         if (invalid_entity_id(sid)) {
-          reject_entity_id("source", sid, false);
+          reject_entity_id(at, false);
           return result;
         }
         if (sid > max_source_id) max_source_id = sid;
         if (!source_ids.insert(sid).second ||
             !project.insert_source_raw(std::move(src), arrangement::Project::kAppend, true)) {
-          reject_entity_id("source", sid, true);
+          reject_entity_id(at, true);
           return result;
         }
       }
@@ -693,18 +709,20 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // Tracks.
     uint32_t max_track_id = 0;
     std::unordered_set<arrangement::TrackId> track_ids;
-    if (const auto* arr = array_at(root, "tracks")) {
+    if (const auto* arr = array_at(root, "", "tracks")) {
+      std::size_t index = 0;
       for (const auto& tv : *arr) {
-        arrangement::Track t = track_from_json(object_element(tv, "tracks"));
+        const std::string at = schema::index_path("tracks", index++);
+        arrangement::Track t = track_from_json(object_element(tv, at), at);
         if (invalid_entity_id(t.id)) {
-          reject_entity_id("track", t.id, false);
+          reject_entity_id(at, false);
           return result;
         }
         if (t.id > max_track_id) max_track_id = t.id;
         const uint32_t id = t.id;
         if (!track_ids.insert(id).second ||
             !project.insert_track_raw(std::move(t), arrangement::Project::kAppend, true)) {
-          reject_entity_id("track", id, true);
+          reject_entity_id(at, true);
           return result;
         }
       }
@@ -715,11 +733,13 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // arrangement exactly, including comp lanes that intentionally overlap).
     uint32_t max_clip_id = 0;
     std::unordered_set<arrangement::ClipId> clip_ids;
-    if (const auto* arr = array_at(root, "clips")) {
+    if (const auto* arr = array_at(root, "", "clips")) {
+      std::size_t index = 0;
       for (const auto& cv : *arr) {
-        arrangement::EditClip c = clip_from_json(object_element(cv, "clips"));
+        const std::string at = schema::index_path("clips", index++);
+        arrangement::EditClip c = clip_from_json(object_element(cv, at), at);
         if (invalid_entity_id(c.id)) {
-          reject_entity_id("clip", c.id, false);
+          reject_entity_id(at, false);
           return result;
         }
         if (c.id > max_clip_id) max_clip_id = c.id;
@@ -729,7 +749,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
         // every clip field no matter which decoder produced it.
         if (!clip_ids.insert(id).second ||
             !project.insert_clip_raw(std::move(c), arrangement::Project::kAppend, true)) {
-          reject_entity_id("clip", id, true);
+          reject_entity_id(at, true);
           return result;
         }
       }
@@ -738,9 +758,11 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     // Warp maps (plain project metadata referenced by EditClip::warp_ref_id).
     std::unordered_set<arrangement::WarpRefId> warp_ids;
-    if (const auto* arr = array_at(root, "warpMaps")) {
+    if (const auto* arr = array_at(root, "", "warpMaps")) {
+      std::size_t index = 0;
       for (const auto& wv : *arr) {
-        arrangement::WarpMapRef map = warp_map_from_json(object_element(wv, "warpMaps"));
+        const std::string at = schema::index_path("warpMaps", index++);
+        arrangement::WarpMapRef map = warp_map_from_json(object_element(wv, at), at);
         const uint32_t map_id = map.id;
         if (!project.set_warp_map(std::move(map))) {
           decode_diagnostics.warn("invalid_warp_map",
@@ -754,9 +776,11 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     // Part rigs (plain project metadata). An entry that fails the shared shape
     // check is dropped with a warning.
-    if (const auto* arr = array_at(root, "partRigs")) {
+    if (const auto* arr = array_at(root, "", "partRigs")) {
+      std::size_t index = 0;
       for (const auto& rv : *arr) {
-        const auto entry = part_rig_from_json(object_element(rv, "partRigs"));
+        const std::string at = schema::index_path("partRigs", index++);
+        const auto entry = part_rig_from_json(object_element(rv, at), at);
         if (!entry || !project.set_part_rig(*entry)) {
           decode_diagnostics.warn("invalid_part_rig",
                                   "a part rig entry has an invalid part, mode or inserts "
@@ -861,34 +885,42 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // Markers.
     uint32_t max_marker_id = 0;
     std::unordered_set<uint32_t> marker_ids;
-    if (const auto* arr = array_at(root, "markers")) {
+    if (const auto* arr = array_at(root, "", "markers")) {
+      std::size_t index = 0;
       for (const auto& element : *arr) {
-        const Value& mv = object_element(element, "markers");
+        const std::string at = schema::index_path("markers", index++);
+        const Value& mv = object_element(element, at);
         arrangement::ProjectMarker m;
-        m.id = uint_or(mv, "id", 0);
-        m.ppq = num_or(mv, "ppq", 0.0);
-        m.name = str_or(mv, "name", "");
-        const uint32_t marker_kind = uint_or(mv, "kind", 0);
+        m.id = uint_or(mv, at, "id", 0);
+        m.ppq = num_or(mv, at, "ppq", 0.0);
+        m.name = str_or(mv, at, "name", "");
+        const uint32_t marker_kind = uint_or(mv, at, "kind", 0);
         if (marker_kind > kMaxSerializedOrdinal<arrangement::MarkerKind>) {
-          throw SonareException(ErrorCode::InvalidFormat, "marker kind enum is out of range");
+          throw SonareException(
+              ErrorCode::InvalidFormat,
+              schema::refusal(schema::child_path(at, "kind"),
+                              schema::integer_range_predicate(
+                                  0, kMaxSerializedOrdinal<arrangement::MarkerKind>)));
         }
         m.kind = static_cast<uint8_t>(marker_kind);
         // Read unconditionally, and written by marker_to_json whenever non-zero
         // regardless of kind, so a marker that carries key fields on a non-key
         // kind (which the C ABI accepts) survives a save/load unchanged. Only
         // key-signature markers carry the SMF fifths range restriction.
-        m.key_fifths = int8_or(mv, "keyFifths", 0);
+        m.key_fifths = int8_or(mv, at, "keyFifths", 0);
         if (m.kind == static_cast<uint8_t>(arrangement::MarkerKind::kKeySignature) &&
             (m.key_fifths < -7 || m.key_fifths > 7)) {
-          throw SonareException(ErrorCode::InvalidFormat, "keyFifths must be within [-7, 7]");
+          throw SonareException(ErrorCode::InvalidFormat,
+                                schema::refusal(schema::child_path(at, "keyFifths"),
+                                                schema::integer_range_predicate(-7, 7)));
         }
-        m.key_minor = bool_or(mv, "keyMinor", false);
+        m.key_minor = bool_or(mv, at, "keyMinor", false);
         if (invalid_entity_id(m.id)) {
-          reject_entity_id("marker", m.id, false);
+          reject_entity_id(at, false);
           return result;
         }
         if (!marker_ids.insert(m.id).second) {
-          reject_entity_id("marker", m.id, true);
+          reject_entity_id(at, true);
           return result;
         }
         if (m.id > max_marker_id) max_marker_id = m.id;
@@ -898,12 +930,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (max_marker_id > 0) project.ensure_next_marker_id(max_marker_id);
 
     // Annotation.
-    if (const auto* av = object_value_at(root, "annotation")) {
-      annotation_from_json(*av, &project.annotation());
+    if (const auto* av = object_value_at(root, "", "annotation")) {
+      annotation_from_json(*av, "annotation", &project.annotation());
     }
 
     // Mixer scene.
-    if (const auto* sv = object_value_at(root, "scene")) {
+    if (const auto* sv = object_value_at(root, "", "scene")) {
       project.scene() = scene_from_value(*sv);
     }
 
@@ -911,11 +943,13 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // string is borrowed from the admitted root until decode completes; this
     // keeps the loader's payload-first limit/error order without copying it.
     std::size_t decoded_payload_bytes = 0;
-    if (const auto* arr = array_at(root, "assistSidecars")) {
+    if (const auto* arr = array_at(root, "", "assistSidecars")) {
+      std::size_t index = 0;
       for (const auto& element : *arr) {
-        const Value& sv = object_element(element, "assistSidecars");
+        const std::string at = schema::index_path("assistSidecars", index++);
+        const Value& sv = object_element(element, at);
         static const std::string kEmptyPayload;
-        const std::string* encoded_payload = strict_string_field(sv, "payloadB64");
+        const std::string* encoded_payload = strict_string_field(sv, at, "payloadB64");
         const std::string& payload = encoded_payload != nullptr ? *encoded_payload : kEmptyPayload;
         const std::size_t remaining_payload_bytes =
             import_limits.max_decoded_payload_bytes - decoded_payload_bytes;
@@ -925,17 +959,18 @@ DeserializeResult project_from_json(const std::string& json_text) {
           return result;
         }
         arrangement::AssistSidecar sidecar;
-        sidecar_fields_from_json(sv, &sidecar);
+        sidecar_fields_from_json(sv, at, &sidecar);
         if (std::string current_id; earlier_assist_module_id(sidecar.module_id, &current_id)) {
-          result.diagnostics.push_back({DiagnosticSeverity::kError, "legacy_assist_module_id",
-                                        "assist sidecar module id \"" + sidecar.module_id +
-                                            "\" is an earlier spelling; write \"" + current_id +
-                                            "\""});
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kError, "legacy_assist_module_id",
+               schema::refusal(schema::child_path(at, "moduleId"),
+                               "is an earlier spelling; write " + current_id)});
           return result;
         }
         if (!sidecar_from_borrowed_payload(payload, &sidecar, remaining_payload_bytes)) {
-          result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sidecar_payload",
-                                        "assist sidecar payload base64 is malformed"});
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kError, "invalid_sidecar_payload",
+               schema::refusal(schema::child_path(at, "payloadB64"), "must be valid base64")});
           return result;
         }
         if (!resource::bounded_accumulate(sidecar.payload.size(),
@@ -950,17 +985,19 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
 
     // MIDI content store (keyed by clip id string).
-    if (const auto* mc = object_at(root, "midiContent")) {
+    if (const auto* mc = object_at(root, "", "midiContent")) {
       for (const auto& [key, value] : *mc) {
         if (key == "__sysexPayloads") {
+          const std::string table_path = schema::child_path("midiContent", key);
           if (!value.is_object()) {
             throw SonareException(ErrorCode::InvalidFormat,
-                                  "MIDI SysEx payload table must be an object");
+                                  schema::must_be(table_path, schema::Kind::Object));
           }
           for (const auto& [handle_key, payload_value] : value.as_object()) {
+            const std::string payload_path = schema::child_path(table_path, handle_key);
             if (!payload_value.is_string()) {
               throw SonareException(ErrorCode::InvalidFormat,
-                                    "MIDI SysEx payload must be a base64 string");
+                                    schema::must_be(payload_path, schema::Kind::String));
             }
             arrangement::ClipId handle = 0;
             if (!parse_uint32_key(handle_key, &handle)) {
@@ -979,7 +1016,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
             std::vector<uint8_t> payload;
             if (!base64_decode(payload_value.as_string(), &payload, remaining_payload_bytes)) {
               result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sysex_payload",
-                                            "MIDI SysEx payload base64 is malformed"});
+                                            schema::refusal(payload_path, "must be valid base64")});
               return result;
             }
             if (!resource::bounded_accumulate(payload.size(),
@@ -993,9 +1030,10 @@ DeserializeResult project_from_json(const std::string& json_text) {
           }
           continue;
         }
+        const std::string content_path = schema::child_path("midiContent", key);
         if (!value.is_array()) {
           throw SonareException(ErrorCode::InvalidFormat,
-                                "MIDI content entry must be an array of events");
+                                schema::must_be(content_path, schema::Kind::Array));
         }
         arrangement::ClipId clip_id = 0;
         if (!parse_uint32_key(key, &clip_id)) {
@@ -1005,13 +1043,15 @@ DeserializeResult project_from_json(const std::string& json_text) {
           continue;
         }
         arrangement::MidiClipEventList events;
+        std::size_t event_index = 0;
         for (const auto& element : value.as_array()) {
-          const Value& ev = object_element(element, "midiContent");
+          const std::string event_path = schema::index_path(content_path, event_index++);
+          const Value& ev = object_element(element, event_path);
           arrangement::MidiClipEvent e;
-          e.ppq = num_or(ev, "ppq", 0.0);
-          e.word0 = midi_word_or_warn(ev, "word0", clip_id, &decode_diagnostics);
-          e.word1 = midi_word_or_warn(ev, "word1", clip_id, &decode_diagnostics);
-          e.sysex_handle = uint_or(ev, "sysexHandle", 0);
+          e.ppq = num_or(ev, event_path, "ppq", 0.0);
+          e.word0 = midi_word_or_warn(ev, event_path, "word0", clip_id, &decode_diagnostics);
+          e.word1 = midi_word_or_warn(ev, event_path, "word1", clip_id, &decode_diagnostics);
+          e.sysex_handle = uint_or(ev, event_path, "sysexHandle", 0);
           events.push_back(e);
         }
         result.midi.events[clip_id] = std::move(events);

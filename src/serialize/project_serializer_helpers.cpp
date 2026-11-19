@@ -12,10 +12,13 @@
 #include "serialize/project_serializer_private.h"
 #include "util/base64.h"
 #include "util/exception.h"
+#include "util/json_schema.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::serialize {
 namespace detail {
+
+namespace schema = sonare::util::json::schema;
 
 // ===========================================================================
 // Deterministic base64 (for opaque AssistSidecar binary payloads). The core
@@ -72,12 +75,12 @@ bool base64_decode(const std::string& text, std::vector<uint8_t>* out, size_t ma
 // that the next save writes over the user's file.
 // ===========================================================================
 
-double num_or(const Value& obj, const char* key, double fallback) {
+double num_or(const Value& obj, const std::string& path, const char* key, double fallback) {
   const auto* v = obj.find(key);
   if (!v) return fallback;
   if (!v->is_number()) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          "numeric field must be a number: " + std::string(key));
+                          schema::must_be(schema::child_path(path, key), schema::Kind::Number));
   }
   return v->as_number();
 }
@@ -85,33 +88,36 @@ double num_or(const Value& obj, const char* key, double fallback) {
 namespace {
 
 template <typename Int>
-Int integral_or(const Value& obj, const char* key, Int fallback) {
+Int integral_or(const Value& obj, const std::string& path, const char* key, Int fallback) {
   const auto* v = obj.find(key);
   if (!v) return fallback;
+  const std::string at = schema::child_path(path, key);
   if (!v->is_number()) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "integer field must be numeric: " + std::string(key));
+    throw SonareException(ErrorCode::InvalidFormat, schema::must_be(at, schema::Kind::Number));
   }
   Int converted = 0;
   if (!numeric::checked_integral_cast(v->as_number(), &converted)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "integer field is fractional or out of range: " + std::string(key));
+    throw SonareException(
+        ErrorCode::InvalidFormat,
+        schema::refusal(at, schema::integer_range_predicate(
+                                static_cast<double>(std::numeric_limits<Int>::lowest()),
+                                static_cast<double>(std::numeric_limits<Int>::max()))));
   }
   return converted;
 }
 
 }  // namespace
 
-uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback) {
-  return integral_or(obj, key, fallback);
+uint32_t uint_or(const Value& obj, const std::string& path, const char* key, uint32_t fallback) {
+  return integral_or(obj, path, key, fallback);
 }
 
-int int_or(const Value& obj, const char* key, int fallback) {
-  return integral_or(obj, key, fallback);
+int int_or(const Value& obj, const std::string& path, const char* key, int fallback) {
+  return integral_or(obj, path, key, fallback);
 }
 
-int8_t int8_or(const Value& obj, const char* key, int8_t fallback) {
-  return integral_or(obj, key, fallback);
+int8_t int8_or(const Value& obj, const std::string& path, const char* key, int8_t fallback) {
+  return integral_or(obj, path, key, fallback);
 }
 
 bool parse_uint32_key(const std::string& key, uint32_t* out) {
@@ -127,27 +133,28 @@ bool parse_uint32_key(const std::string& key, uint32_t* out) {
   return true;
 }
 
-const std::string* strict_string_field(const Value& obj, const char* key) {
+const std::string* strict_string_field(const Value& obj, const std::string& path, const char* key) {
   const auto* v = obj.find(key);
   if (!v) return nullptr;
   if (!v->is_string()) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          "string field must be a string: " + std::string(key));
+                          schema::must_be(schema::child_path(path, key), schema::Kind::String));
   }
   return &v->as_string();
 }
 
-std::string str_or(const Value& obj, const char* key, const std::string& fallback) {
-  const std::string* value = strict_string_field(obj, key);
+std::string str_or(const Value& obj, const std::string& path, const char* key,
+                   const std::string& fallback) {
+  const std::string* value = strict_string_field(obj, path, key);
   return value != nullptr ? *value : fallback;
 }
 
-bool bool_or(const Value& obj, const char* key, bool fallback) {
+bool bool_or(const Value& obj, const std::string& path, const char* key, bool fallback) {
   const auto* v = obj.find(key);
   if (!v) return fallback;
   if (!v->is_bool()) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          "boolean field must be a boolean: " + std::string(key));
+                          schema::must_be(schema::child_path(path, key), schema::Kind::Boolean));
   }
   return v->as_bool();
 }
@@ -157,13 +164,13 @@ bool bool_or(const Value& obj, const char* key, bool fallback) {
 // to 0 / 0xFFFFFFFF and recorded as a warning, instead of being silently zeroed.
 // An absent field stays a silent 0; a present but non-numeric one is malformed
 // input and is rejected like every other wrong-typed scalar.
-uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
-                           BoundedDiagnostics* diagnostics) {
+uint32_t midi_word_or_warn(const Value& obj, const std::string& path, const char* key,
+                           uint32_t clip_id, BoundedDiagnostics* diagnostics) {
   const auto* v = obj.find(key);
   if (!v) return 0;
+  const std::string at = schema::child_path(path, key);
   if (!v->is_number()) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "MIDI data word must be numeric: " + std::string(key));
+    throw SonareException(ErrorCode::InvalidFormat, schema::must_be(at, schema::Kind::Number));
   }
   const double d = v->as_number();
   constexpr double kMaxWord = 4294967295.0;  // 2^32 - 1
@@ -178,40 +185,40 @@ uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
   uint32_t converted = 0;
   if (!numeric::checked_integral_cast(d, &converted)) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          "MIDI data word is fractional: " + std::string(key));
+                          schema::refusal(at, schema::integer_range_predicate(0, kMaxWord)));
   }
   return converted;
 }
 
-const Array* array_at(const Value& obj, const char* key) {
+const Array* array_at(const Value& obj, const std::string& path, const char* key) {
   const auto* v = obj.find(key);
   if (!v) return nullptr;
   if (!v->is_array()) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          "array field must be an array: " + std::string(key));
+                          schema::must_be(schema::child_path(path, key), schema::Kind::Array));
   }
   return &v->as_array();
 }
 
-const Value* object_value_at(const Value& obj, const char* key) {
+const Value* object_value_at(const Value& obj, const std::string& path, const char* key) {
   const auto* v = obj.find(key);
   if (!v) return nullptr;
   if (!v->is_object()) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          "object field must be an object: " + std::string(key));
+                          schema::must_be(schema::child_path(path, key), schema::Kind::Object));
   }
   return v;
 }
 
-const Object* object_at(const Value& obj, const char* key) {
-  const Value* v = object_value_at(obj, key);
+const Object* object_at(const Value& obj, const std::string& path, const char* key) {
+  const Value* v = object_value_at(obj, path, key);
   return v != nullptr ? &v->as_object() : nullptr;
 }
 
-const Value& object_element(const Value& element, const char* array_key) {
+const Value& object_element(const Value& element, const std::string& element_path) {
   if (!element.is_object()) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          "array element must be an object: " + std::string(array_key));
+                          schema::must_be(element_path, schema::Kind::Object));
   }
   return element;
 }

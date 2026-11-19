@@ -104,13 +104,13 @@ TEST_CASE("mastering integer parameters refuse a fractional value instead of rou
   CHECK(named_key.find("repair.denoise.hopLength") != std::string::npos);
   CHECK(named_key.find("whole number") != std::string::npos);
 
-  // The table dispatch holds no key, so it names the parameter class instead.
+  // The table dispatch names the key it was handed.
   const std::string table_field = refusal([] {
     parse_chain_config_params(std::vector<Param>{{"saturation.tape.oversampleFactor", 2.5}}.data(),
                               1);
   });
   CAPTURE(table_field);
-  CHECK(table_field.find("integer parameter") != std::string::npos);
+  CHECK(table_field.find("saturation.tape.oversampleFactor") != std::string::npos);
   CHECK(table_field.find("whole number") != std::string::npos);
 
   // Fractional and out-of-range stay separable: a caller can only act on the
@@ -404,13 +404,12 @@ TEST_CASE("named-processor enum params reject a value past the enum's cardinalit
 
   // The repair enums are read through the field tables, whose enum reader names every
   // declared enumerator, so they share its refusal.
-  const std::string table_refusal = "mastering enum parameter is out of range";
-  CHECK(mono("repair.decrackle", "mode", 2.0) == table_refusal);
-  CHECK(mono("repair.decrackle", "mode", -1.0) == table_refusal);
-  CHECK(mono("repair.dehum", "mode", 2.0) == table_refusal);
-  CHECK(mono("repair.denoiseClassical", "mode", 3.0) == table_refusal);
-  CHECK(mono("repair.denoiseClassical", "noiseEstimator", 4.0) == table_refusal);
-  CHECK(mono("repair.trimSilence", "mode", 2.0) == table_refusal);
+  CHECK(mono("repair.decrackle", "mode", 2.0) == "mode is out of range");
+  CHECK(mono("repair.decrackle", "mode", -1.0) == "mode is out of range");
+  CHECK(mono("repair.dehum", "mode", 2.0) == "mode is out of range");
+  CHECK(mono("repair.denoiseClassical", "mode", 3.0) == "mode is out of range");
+  CHECK(mono("repair.denoiseClassical", "noiseEstimator", 4.0) == "noiseEstimator is out of range");
+  CHECK(mono("repair.trimSilence", "mode", 2.0) == "mode is out of range");
 
   CHECK(pair("match.applyMatchEq", "phase", 2.0) == "invalid match EQ FIR phase");
   CHECK(pair("match.abSwitch", "selection", 2.0) == "invalid A/B selection");

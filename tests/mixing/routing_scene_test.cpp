@@ -586,9 +586,9 @@ TEST_CASE("Scene refuses out-of-domain pan, width and surround scalars", "[mixin
     return sonare::mixing::api::scene_from_json(
         std::string(R"({"version":1,"strips":[{"id":"a",)") + fields + "}]}");
   };
-  REQUIRE_THROWS_WITH(load(R"("pan":1.5)"), ContainsSubstring("scene.strips[].pan"));
+  REQUIRE_THROWS_WITH(load(R"("pan":1.5)"), ContainsSubstring("strips[0].pan"));
   REQUIRE_THROWS_WITH(load(R"("pan":-1.5)"), ContainsSubstring("[-1, 1]"));
-  REQUIRE_THROWS_WITH(load(R"("width":4.0)"), ContainsSubstring("scene.strips[].width"));
+  REQUIRE_THROWS_WITH(load(R"("width":4.0)"), ContainsSubstring("strips[0].width"));
   REQUIRE_THROWS_WITH(load(R"("width":-0.5)"), ContainsSubstring("[0, 2]"));
   REQUIRE_THROWS_WITH(load(R"("dualPanLeft":-9.0)"), ContainsSubstring("dualPanLeft"));
   REQUIRE_THROWS_WITH(load(R"("dualPanRight":9.0)"), ContainsSubstring("dualPanRight"));
@@ -607,7 +607,7 @@ TEST_CASE("Scene refuses an out-of-domain bus width", "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   REQUIRE_THROWS_WITH(
       sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"wide","width":4.0}]})"),
-      ContainsSubstring("scene.buses[].width"));
+      ContainsSubstring("buses[0].width"));
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
                           R"({"version":1,"buses":[{"id":"narrow","width":-1.0}]})"),
                       ContainsSubstring("[0, 2]"));
@@ -1016,7 +1016,7 @@ TEST_CASE("Scene insert params load from an object and refuse a string", "[mixin
   REQUIRE(from_object.strips[0].inserts.size() == 1);
   CHECK(from_object.strips[0].inserts[0].params_json == "{\"ratio\":3.25,\"thresholdDb\":-22}");
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(stringified),
-                      ContainsSubstring("params must be a JSON object"));
+                      ContainsSubstring("params must be an object"));
 
   // And the writer emits the bag as a real object, so a consumer reads one
   // document rather than parsing a field out of it a second time.
@@ -1214,7 +1214,7 @@ TEST_CASE("Scene load refuses an unknown key at every nesting level, naming its 
   };
   for (const Case& c : cases) {
     CAPTURE(c.document);
-    CHECK(scene_refusal(c.document) == std::string("unknown scene key '") + c.path + "'");
+    CHECK(scene_refusal(c.document) == std::string("unknown key ") + c.path);
   }
 }
 
@@ -1223,7 +1223,7 @@ TEST_CASE(
     "characters",
     "[mixing][routing]") {
   CHECK(scene_refusal(R"({"version":1,"strips":[{"id":"a"},{"id":"b"},{"id":"c","bogus":1}]})") ==
-        "unknown scene key 'strips[2].bogus'");
+        "unknown key strips[2].bogus");
   // A non-object element is refused too.
   CHECK_THROWS_AS(
       sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[1,{"id":"b","bogus":1}]})"),
@@ -1251,14 +1251,14 @@ TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing]"
     "connections": [{"source": "a", "destination": "m", "x-c": 1}]
   })";
   CHECK_NOTHROW(sonare::mixing::api::scene_from_json(annotated));
-  CHECK(scene_refusal(R"({"version":1,"xnote":1})") == "unknown scene key 'xnote'");
+  CHECK(scene_refusal(R"({"version":1,"xnote":1})") == "unknown key xnote");
 }
 
 TEST_CASE("Scene load reports an earlier spelling as such, not as an unknown key",
           "[mixing][routing]") {
   const auto message = scene_refusal(R"({"version":1,"strips":[{"id":"a","fader_db":-1}]})");
-  CHECK(message.find("is an earlier spelling; write faderDb") != std::string::npos);
-  CHECK(message.find("unknown scene key") == std::string::npos);
+  CHECK(message.find("is an earlier spelling; write strips[0].faderDb") != std::string::npos);
+  CHECK(message.find("unknown key") == std::string::npos);
 }
 
 TEST_CASE("Scene load refuses every earlier snake_case spelling, naming the current one",
@@ -1336,7 +1336,7 @@ TEST_CASE("Scene load refuses the earlier pan and send-timing values, naming the
   REQUIRE_THROWS_WITH(
       sonare::mixing::api::scene_from_json(
           R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","params":"{}"}]}]})"),
-      ContainsSubstring("strips[0].inserts[0].params") && ContainsSubstring("JSON object"));
+      ContainsSubstring("strips[0].inserts[0].params must be an object"));
 }
 
 TEST_CASE("Scene writer output loads without an unknown key", "[mixing][routing]") {
@@ -1396,7 +1396,7 @@ TEST_CASE("sonare_mixer_from_scene_json refuses an unknown scene key", "[mixing]
   })";
   CHECK(sonare_mixer_from_scene_json(typo.c_str(), 48000, 512) == nullptr);
   CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(std::string(sonare_last_error_message()).find("unknown scene key 'strips[0].faderDB'") !=
+  CHECK(std::string(sonare_last_error_message()).find("unknown key strips[0].faderDB") !=
         std::string::npos);
   CHECK(sonare_last_diagnostic_count() == 0);
 }
@@ -1589,11 +1589,9 @@ TEST_CASE("Scene refuses out-of-domain bus pan and dual pan", "[mixing][routing]
     return sonare::mixing::api::scene_from_json(std::string(R"({"version":1,"buses":[{"id":"b",)") +
                                                 fields + "}]}");
   };
-  REQUIRE_THROWS_WITH(load(R"("pan":1.5)"), ContainsSubstring("scene.buses[].pan"));
-  REQUIRE_THROWS_WITH(load(R"("dualPanLeft":-9.0)"),
-                      ContainsSubstring("scene.buses[].dualPanLeft"));
-  REQUIRE_THROWS_WITH(load(R"("dualPanRight":9.0)"),
-                      ContainsSubstring("scene.buses[].dualPanRight"));
+  REQUIRE_THROWS_WITH(load(R"("pan":1.5)"), ContainsSubstring("buses[0].pan"));
+  REQUIRE_THROWS_WITH(load(R"("dualPanLeft":-9.0)"), ContainsSubstring("buses[0].dualPanLeft"));
+  REQUIRE_THROWS_WITH(load(R"("dualPanRight":9.0)"), ContainsSubstring("buses[0].dualPanRight"));
 
   const auto edge = load(R"("pan":-1.0,"dualPanLeft":-1.0,"dualPanRight":1.0)");
   REQUIRE(edge.buses.size() == 1);
@@ -1612,14 +1610,13 @@ TEST_CASE("Scene rejects an out-of-range bus panMode/panLaw", "[mixing][routing]
       ContainsSubstring("panLaw"));
 }
 
-TEST_CASE("Scene rejects a non-default pan on a surround bus, naming the bus and the field",
+TEST_CASE("Scene rejects a non-default pan on a surround bus, naming the field",
           "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   const std::string surround_pan = R"({"version":1,"buses":[
       {"id":"surround-verb","layout":"5.1","pan":0.5}]})";
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(surround_pan),
-                      ContainsSubstring("surround-verb"));
-  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(surround_pan), ContainsSubstring("pan"));
+                      ContainsSubstring("buses[0].pan"));
 
   // A surround bus at the default pan still loads.
   const auto ok = sonare::mixing::api::scene_from_json(

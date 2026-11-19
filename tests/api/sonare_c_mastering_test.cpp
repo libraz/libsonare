@@ -980,9 +980,9 @@ TEST_CASE(
   }
 
   REQUIRE_THROWS_WITH(parse_eq_band_json(R"({"enabled":1})"),
-                      ContainsSubstring("expected boolean JSON field: enabled"));
+                      ContainsSubstring("enabled must be a boolean"));
   REQUIRE_THROWS_WITH(parse_eq_band_json(R"({"dynamic":1})"),
-                      ContainsSubstring("expected boolean JSON field: dynamic"));
+                      ContainsSubstring("dynamic must be a boolean"));
 
   const char* earlier_tokens[] = {
       R"({"type":"Peak"})",     R"({"type":"Bell"})",         R"({"type":"bell"})",
@@ -992,7 +992,7 @@ TEST_CASE(
   };
   for (const char* json : earlier_tokens) {
     INFO(json);
-    REQUIRE_THROWS_WITH(parse_eq_band_json(json), ContainsSubstring("(expected "));
+    REQUIRE_THROWS_WITH(parse_eq_band_json(json), ContainsSubstring("must be one of "));
   }
   REQUIRE_THROWS_WITH(parse_eq_band_json(R"({"type":"Bell"})"),
                       ContainsSubstring("peak, lowShelf, highShelf, lowPass, highPass, bandPass"));

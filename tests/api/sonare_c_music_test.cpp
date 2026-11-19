@@ -248,7 +248,7 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, -0.1f, 2.0f, 0.5f, 0, 2048,
                                  512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 0.0f, 0.5f, 0, 2048,
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, -1.0f, 0.5f, 0, 2048,
                                  512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, -0.1f, 0, 2048,
                                  512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
