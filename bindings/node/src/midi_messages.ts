@@ -1,4 +1,5 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { assertMidiCcBindingListBytes } from './internal/midi_cc_binding.js';
 import {
   midi2Byte,
   midi2Event,
@@ -557,6 +558,7 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
   return withEntry('midiParamToCc', () => {
     const fn = 'midiParamToCc';
     const record = requestObject(fn, request, 'request', true);
+    assertMidiCcBindingListBytes(record.bindings);
     return addon.midiParamToCc(
       record.bindings,
       requireNumber(record.paramId, 'paramId'),
@@ -811,6 +813,7 @@ export function midiCcToBreakpoint(
 ): ProjectAutomationPoint | null {
   return withEntry('midiCcToBreakpoint', () => {
     const r = requestObject('midiCcToBreakpoint', request, 'request', true);
+    assertMidiCcBindingListBytes(r.bindings);
     const native = addon.midiCcToBreakpoint(r.bindings, r.event) as {
       ppq: number;
       value: number;

@@ -820,7 +820,7 @@ export function optionalId(
     throw refuse(`${argName} must not be 0 (omit it ${hint})`);
   }
   if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
-    throw refuse(`${argName} must be an unsigned 32-bit integer`);
+    throw refuse(`${argName} must be an integer in [${allowZero ? 0 : 1}, 4294967295]`);
   }
   return value;
 }

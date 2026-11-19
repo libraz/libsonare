@@ -195,6 +195,62 @@
         "value": 127,
         "accepted": true,
         "c_representable": true
+      },
+      {
+        "id": "cc_number_above_data_range_128",
+        "field": "ccNumber",
+        "value": 128,
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "cc_number_above_data_range_255",
+        "field": "ccNumber",
+        "value": 255,
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "cc_lsb_number_above_data_range_128",
+        "field": "ccLsbNumber",
+        "value": 128,
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "cc_lsb_number_above_data_range_255",
+        "field": "ccLsbNumber",
+        "value": 255,
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "selector_msb_above_data_range_128",
+        "field": "selectorMsb",
+        "value": 128,
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "selector_msb_above_data_range_255",
+        "field": "selectorMsb",
+        "value": 255,
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "selector_lsb_above_data_range_128",
+        "field": "selectorLsb",
+        "value": 128,
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "selector_lsb_above_data_range_255",
+        "field": "selectorLsb",
+        "value": 255,
+        "accepted": false,
+        "c_representable": true
       }
     ]
   },

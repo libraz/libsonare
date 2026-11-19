@@ -1,4 +1,5 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { assertMidiCcBindingListBytes } from './internal/midi_cc_binding.js';
 import { packMidi2Program } from './internal/midi_program_pack.js';
 import {
   assertEventPpq,
@@ -754,6 +755,7 @@ export function midiCcToBreakpoint(
     if (typeof event !== 'object' || event === null || Array.isArray(event)) {
       throw refuseType('event must be an object');
     }
+    assertMidiCcBindingListBytes(bindings);
     const native = projectModule().midiCcToBreakpoint(bindings, event);
     return native === null ? null : projectAutomationPointFromNative(native);
   });
@@ -768,6 +770,7 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
   return withEntry('midiParamToCc', () => {
     const fn = 'midiParamToCc';
     const r = requestObject(fn, request, 'request', true);
+    assertMidiCcBindingListBytes(r.bindings);
     return projectModule().midiParamToCc(
       r.bindings,
       num(r.paramId, 'paramId'),

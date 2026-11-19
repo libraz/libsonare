@@ -43,7 +43,7 @@ type MixOptionCase = {
 };
 type MidiCcBindingCase = {
   id: string;
-  field: 'channel' | 'ccNumber';
+  field: 'channel' | 'ccNumber' | 'ccLsbNumber' | 'selectorMsb' | 'selectorLsb';
   value: number;
   accepted: boolean;
 };
@@ -182,6 +182,35 @@ describe('shared public-input conformance corpus', () => {
         );
       }
     });
+  }
+
+  // Each byte field with the binding kind that reads it and an in-range value the
+  // library accepts there (a 14-bit LSB controller is the MSB's pair, 32..63).
+  const midiCcByteFields = {
+    ccNumber: ['controlChange7', 127],
+    ccLsbNumber: ['controlChange14', 33],
+    selectorMsb: ['rpn', 127],
+    selectorLsb: ['nrpn', 127],
+  } as const;
+
+  for (const [field, [kind, accepted]] of Object.entries(midiCcByteFields)) {
+    for (const value of [128, 255]) {
+      // The C fields are uint8, so 128..255 fit the struct and only the MIDI domain refuses them.
+      it(`refuses ${field} = ${value}, above the MIDI data range, by name`, () => {
+        const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+        try {
+          const binding = (byte: number) => ({ ccNumber: 1, paramId: 1, kind, [field]: byte });
+          expect(() => engine.bindMidiCc(binding(value) as never)).toThrow(
+            new RangeError(`RealtimeEngine.bindMidiCc: ${field} must be an integer in [0, 127]`),
+          );
+          expect(engine.midiCcBindingCount).toBe(0);
+          engine.bindMidiCc(binding(accepted) as never);
+          expect(engine.midiCcBindingCount).toBe(1);
+        } finally {
+          engine.destroy();
+        }
+      });
+    }
   }
 
   // The corpus above drives only out-of-range/fractional byte values (all

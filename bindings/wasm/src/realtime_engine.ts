@@ -21,6 +21,7 @@ import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
+import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
@@ -41,6 +42,7 @@ import type { ProjectTimeline } from './project_class.js';
 import {
   normalizePartRig,
   normalizeSynthInstrument,
+  optionalId,
   projectTimelineNativeId,
 } from './project_internal.js';
 import type {
@@ -923,6 +925,7 @@ export class RealtimeEngine {
    * `[minValue, maxValue]` for `paramId`.
    */
   bindMidiCc(binding: ProjectMidiCcBinding): void {
+    assertMidiCcBindingBytes(binding);
     this.native.bindMidiCcBinding(binding);
   }
 
@@ -2838,7 +2841,7 @@ export class RealtimeEngine {
     requestObject('freezeOffline', options, 'options', true);
     const { blockSize, clipId, ...rest } = options;
     const block = optionalCount('blockSize', blockSize);
-    const clip = optionalCount('clipId', clipId);
+    const clip = optionalId('clipId', clipId);
     return this.native.freezeOffline({
       ...rest,
       ...(block === undefined ? {} : { blockSize: block }),

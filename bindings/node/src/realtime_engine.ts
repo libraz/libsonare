@@ -3,6 +3,7 @@ import { ErrorCode, SonareError } from './errors.js';
 import { nativeClipPageProviderOf } from './internal/clip_page_native.js';
 import { codedError, entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
+import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { requireOneOf } from './internal/one_of.js';
@@ -118,6 +119,21 @@ function optionalNonZero(value: unknown, argName: string): number | undefined {
   const number = requireFinite(value, argName);
   if (number === 0) {
     throw refuse(`${argName} must not be 0 (omit it for the default)`);
+  }
+  return number;
+}
+
+/** An optional uint32 id whose `0` would mean "none": absent stays `undefined`, and an explicit `0` is refused. */
+function optionalId(argName: string, value: unknown): number | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  const number = requireFinite(value, argName);
+  if (number === 0) {
+    throw refuse(`${argName} must not be 0 (omit it for the default)`);
+  }
+  if (!Number.isInteger(number) || number < 1 || number > 0xffffffff) {
+    throw refuse(`${argName} must be an integer in [1, 4294967295]`);
   }
   return number;
 }
@@ -2028,7 +2044,7 @@ export class RealtimeEngine {
     if (optionalNonZero(native.blockSize, 'blockSize') === undefined) {
       delete native.blockSize;
     }
-    if (optionalCount('clipId', native.clipId) === undefined) {
+    if (optionalId('clipId', native.clipId) === undefined) {
       delete native.clipId;
     }
     return this.native.freezeOffline(native);
@@ -2292,6 +2308,7 @@ export class RealtimeEngine {
 
   /** Bind a 7/14-bit CC, RPN, or NRPN descriptor to a live parameter. */
   bindMidiCc(binding: ProjectMidiCcBinding): void {
+    assertMidiCcBindingBytes(binding);
     this.native.bindMidiCcBinding(binding);
   }
 
