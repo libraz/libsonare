@@ -830,8 +830,8 @@ def test_mastering_suggest_named_options_reach_the_assistant(monkeypatch, capsys
         (("--params", "target_platform=club"), "earlier spelling; write targetPlatform"),
         (("--params", "notAKey=1"), "notAKey"),
         # The index the C ABI carries is a transport detail, not a CLI value.
-        (("--params", "preset=3"), "3"),
-        (("--params", "targetPlatform=2"), "2"),
+        (("--params", "preset=3"), "params.preset must be one of "),
+        (("--params", "targetPlatform=2"), "params.targetPlatform must be one of "),
     ],
 )
 def test_mastering_suggest_refuses_a_contradiction_or_an_unknown(
