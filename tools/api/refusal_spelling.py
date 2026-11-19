@@ -82,19 +82,28 @@ def main(argv: list[str]) -> int:
     )
     if args.report:
         for leak in result["leaks"]:
-            print(f"  {leak['entry']}: {leak['tokens']} <- {leak['message'][:160]} ({leak['file']})")
+            print(
+                f"  {leak['entry']}: {leak['tokens']} <- {leak['message'][:160]} ({leak['file']})"
+            )
     if result["refusals_read"] == 0:
-        print("refusal spelling: the capture holds no refusal; the suite fed nothing", file=sys.stderr)
+        print(
+            "refusal spelling: the capture holds no refusal; the suite fed nothing", file=sys.stderr
+        )
         return 1
     if args.write:
         ratchet["surfaces"][args.surface]["leaking_refusals"] = count
         RATCHET.write_text(json.dumps(ratchet, indent=2) + "\n", encoding="utf-8")
         return 0
     if count > allowed:
-        print(f"refusal spelling: {count} > {allowed}; a new refusal names a C field", file=sys.stderr)
+        print(
+            f"refusal spelling: {count} > {allowed}; a new refusal names a C field", file=sys.stderr
+        )
         return 1
     if count < allowed:
-        print(f"refusal spelling: {count} < {allowed}; lower the ratchet with --write", file=sys.stderr)
+        print(
+            f"refusal spelling: {count} < {allowed}; lower the ratchet with --write",
+            file=sys.stderr,
+        )
         return 1
     return 0
 
