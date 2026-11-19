@@ -288,14 +288,12 @@ def test_resolve_audio_refuses_a_non_file_scheme_by_name(takes: SimpleNamespace)
     assert not output.exists()
 
 
-def test_a_missing_output_is_an_invalid_parameter_not_a_usage_error(
-    takes: SimpleNamespace,
-) -> None:
+def test_a_missing_output_is_a_usage_error(takes: SimpleNamespace) -> None:
     """Every command here that writes a file refuses an absent -o the same way."""
     result = _run_console("project", "align-takes", str(takes.document), "--reference-source", "1")
 
-    assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
-    assert "requires --output" in result.stderr
+    assert result.returncode == 2, result.stderr
+    assert "Missing required option '--output'" in result.stderr
 
 
 def test_a_document_with_no_take_is_a_refused_request_not_an_empty_success(

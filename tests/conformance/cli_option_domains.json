@@ -3,22 +3,18 @@
   "contract": "native-cli-option-domains",
   "comment": [
     "The accepted value set of every native CLI option whose contract is narrower",
-    "than its scalar type, and every required option whose absence is reported as",
-    "an invalid parameter rather than a usage error.",
+    "than its scalar type.",
     "",
-    "This is the declaration the two CLIs agree on. reject_exit names the exit-code",
-    "class the refusal carries: 'usage' (2) is what the Python parser reports for a",
-    "type=/choices= rejection, and 'invalid_parameter' (3) is what its handler",
-    "reports after parsing. tests/conformance/cli_contract_v2.json drives the same",
-    "values through both executables; this file is what the native registry is",
-    "pinned against, so a domain cannot be added, moved between classes, or dropped",
-    "without the change showing up here."
+    "This is the declaration the two CLIs agree on. A value outside it is refused on the",
+    "command line, exit 2, before any input is read. tests/conformance/cli_contract_v2.json",
+    "drives the same values through both executables; this file is what the native",
+    "registry is pinned against, so a domain cannot be added or dropped without the",
+    "change showing up here."
   ],
   "domains": [
     {
       "command": "analyze",
       "option": "chroma-high-pass-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -28,7 +24,6 @@
     {
       "command": "analyze",
       "option": "meter-denominator",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -38,7 +33,6 @@
     {
       "command": "boundaries",
       "option": "threshold",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -48,7 +42,6 @@
     {
       "command": "boundaries",
       "option": "absolute-threshold",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -58,7 +51,6 @@
     {
       "command": "boundaries",
       "option": "kernel-size",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -68,7 +60,6 @@
     {
       "command": "boundaries",
       "option": "n-mfcc",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -78,7 +69,6 @@
     {
       "command": "boundaries",
       "option": "n-chroma",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -88,7 +78,6 @@
     {
       "command": "boundaries",
       "option": "peak-distance",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -98,7 +87,6 @@
     {
       "command": "boundaries",
       "option": "reference-window",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -108,7 +96,6 @@
     {
       "command": "chords",
       "option": "smoothing-window",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -118,7 +105,6 @@
     {
       "command": "project.bounce",
       "option": "frames",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0,
       "exclusive_minimum": true,
@@ -128,7 +114,6 @@
     {
       "command": "project.bounce",
       "option": "channels",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0,
       "exclusive_minimum": true,
@@ -138,7 +123,6 @@
     {
       "command": "midi-render",
       "option": "frames",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0,
       "exclusive_minimum": true,
@@ -148,7 +132,6 @@
     {
       "command": "midi-render",
       "option": "channels",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0,
       "exclusive_minimum": true,
@@ -158,7 +141,6 @@
     {
       "command": "key",
       "option": "genre-hint",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "auto",
         "edm",
@@ -176,7 +158,6 @@
     {
       "command": "chords",
       "option": "chroma-method",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "cqt",
         "stft",
@@ -190,7 +171,6 @@
     {
       "command": "chords",
       "option": "hmm-beam-width",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -200,7 +180,6 @@
     {
       "command": "sections",
       "option": "min-duration-sec",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -210,7 +189,6 @@
     {
       "command": "sections",
       "option": "threshold",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -220,7 +198,6 @@
     {
       "command": "dynamics",
       "option": "window-sec",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -230,7 +207,6 @@
     {
       "command": "rhythm",
       "option": "start-bpm",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -240,7 +216,6 @@
     {
       "command": "rhythm",
       "option": "bpm-min",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -250,7 +225,6 @@
     {
       "command": "rhythm",
       "option": "bpm-max",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -260,7 +234,6 @@
     {
       "command": "melody",
       "option": "threshold",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -270,7 +243,6 @@
     {
       "command": "melody",
       "option": "hop-length",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -280,7 +252,6 @@
     {
       "command": "melody",
       "option": "f0-min-hz",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -290,7 +261,6 @@
     {
       "command": "melody",
       "option": "f0-max-hz",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -300,7 +270,6 @@
     {
       "command": "eq",
       "option": "bits",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
@@ -313,7 +282,6 @@
     {
       "command": "eq",
       "option": "coeff-mode",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1"
@@ -326,7 +294,6 @@
     {
       "command": "eq",
       "option": "phase-mode",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -341,7 +308,6 @@
     {
       "command": "eq",
       "option": "placement",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -357,7 +323,6 @@
     {
       "command": "eq",
       "option": "resolution",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -374,7 +339,6 @@
     {
       "command": "eq",
       "option": "type",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -395,7 +359,6 @@
     {
       "command": "mastering",
       "option": "bits",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
@@ -408,7 +371,6 @@
     {
       "command": "mastering-normalize-loudness",
       "option": "bits",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
@@ -421,7 +383,6 @@
     {
       "command": "mastering",
       "option": "target-platform",
-      "reject_exit": "usage",
       "choices": [
         "streaming",
         "youtube",
@@ -440,7 +401,6 @@
     {
       "command": "mastering-normalize-loudness",
       "option": "true-peak-oversample",
-      "reject_exit": "usage",
       "choices": [
         "1",
         "2",
@@ -456,7 +416,6 @@
     {
       "command": "mastering-pair-processor",
       "option": "bits",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
@@ -469,7 +428,6 @@
     {
       "command": "mastering-processor",
       "option": "bits",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
@@ -482,7 +440,6 @@
     {
       "command": "mastering-suggest",
       "option": "target-platform",
-      "reject_exit": "usage",
       "choices": [
         "streaming",
         "youtube",
@@ -501,7 +458,6 @@
     {
       "command": "suggest-mix",
       "option": "tempo-bpm",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -511,7 +467,6 @@
     {
       "command": "repair",
       "option": "bits",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
@@ -524,7 +479,6 @@
     {
       "command": "note-move",
       "option": "onset-sample",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -534,7 +488,6 @@
     {
       "command": "note-move",
       "option": "onset-sec",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -544,7 +497,6 @@
     {
       "command": "note-move",
       "option": "offset-sample",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -554,7 +506,6 @@
     {
       "command": "note-move",
       "option": "offset-sec",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -564,7 +515,6 @@
     {
       "command": "note-move",
       "option": "target-onset-sample",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -574,7 +524,6 @@
     {
       "command": "note-move",
       "option": "target-onset-sec",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -584,7 +533,6 @@
     {
       "command": "note-stretch",
       "option": "onset-sample",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -594,7 +542,6 @@
     {
       "command": "note-stretch",
       "option": "onset-sec",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -604,7 +551,6 @@
     {
       "command": "note-stretch",
       "option": "offset-sample",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -614,7 +560,6 @@
     {
       "command": "note-stretch",
       "option": "offset-sec",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -624,7 +569,6 @@
     {
       "command": "plp",
       "option": "bpm-min",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -634,7 +578,6 @@
     {
       "command": "plp",
       "option": "bpm-max",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -644,7 +587,6 @@
     {
       "command": "pitch",
       "option": "algorithm",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "yin",
         "pyin"
@@ -657,7 +599,6 @@
     {
       "command": "pitch",
       "option": "f0-max-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -667,7 +608,6 @@
     {
       "command": "pitch",
       "option": "f0-min-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -677,7 +617,6 @@
     {
       "command": "pitch",
       "option": "hop-length",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -687,7 +626,6 @@
     {
       "command": "pitch",
       "option": "threshold",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -697,7 +635,6 @@
     {
       "command": "vector-normalize",
       "option": "norm-type",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -712,7 +649,6 @@
     {
       "command": "scale-quantize",
       "option": "root",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -722,7 +658,6 @@
     {
       "command": "scale-quantize",
       "option": "mode-mask",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 1.0,
       "exclusive_minimum": false,
@@ -732,7 +667,6 @@
     {
       "command": "scale-quantize",
       "option": "reference-midi",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -742,7 +676,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "mode",
-      "reject_exit": "usage",
       "choices": [
         "midi",
         "scale"
@@ -755,7 +688,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "target-midi",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -765,7 +697,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "hop-length",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -775,7 +706,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "scale-root",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -785,7 +715,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "scale-mode-mask",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 1.0,
       "exclusive_minimum": false,
@@ -795,7 +724,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "retune-amount",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -805,7 +733,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "max-correction-semitones",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -815,7 +742,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "retune-speed-ms",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -825,7 +751,6 @@
     {
       "command": "pitch-correct-timevarying",
       "option": "vibrato-threshold-cents",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -835,7 +760,6 @@
     {
       "command": "project.align-takes",
       "option": "reference-source",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 1.0,
       "exclusive_minimum": false,
@@ -845,7 +769,6 @@
     {
       "command": "project.align-takes",
       "option": "hop-length",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -855,7 +778,6 @@
     {
       "command": "project.align-takes",
       "option": "bins-per-octave",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -865,7 +787,6 @@
     {
       "command": "transcribe",
       "option": "tempo-bpm",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -875,7 +796,6 @@
     {
       "command": "transcribe",
       "option": "monophonic-model",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "segments",
         "singing"
@@ -888,7 +808,6 @@
     {
       "command": "transcribe",
       "option": "max-polyphony",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 1.0,
       "exclusive_minimum": false,
@@ -898,7 +817,6 @@
     {
       "command": "transcribe",
       "option": "min-note-division",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 1.0,
       "exclusive_minimum": false,
@@ -908,7 +826,6 @@
     {
       "command": "transcribe",
       "option": "min-frame-peak-ratio",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -918,7 +835,6 @@
     {
       "command": "transcribe",
       "option": "min-ridge-peak-ratio",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -928,7 +844,6 @@
     {
       "command": "tune-to-midi",
       "option": "track",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -938,7 +853,6 @@
     {
       "command": "tune-to-midi",
       "option": "unmatched-policy",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "leave",
         "mute",
@@ -952,7 +866,6 @@
     {
       "command": "tune-to-midi",
       "option": "min-overlap-ratio",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -962,7 +875,6 @@
     {
       "command": "tune-to-midi",
       "option": "max-correction-semitones",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -972,7 +884,6 @@
     {
       "command": "decompose-stems",
       "option": "init",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "random",
         "nndsvd"
@@ -985,7 +896,6 @@
     {
       "command": "hpss",
       "option": "n-fft",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -995,7 +905,6 @@
     {
       "command": "hpss",
       "option": "hop-length",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1005,7 +914,6 @@
     {
       "command": "pitch-shift",
       "option": "n-fft",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1015,7 +923,6 @@
     {
       "command": "pitch-shift",
       "option": "hop-length",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1025,7 +932,6 @@
     {
       "command": "voice-change",
       "option": "formant-mode",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "relative",
         "absolute"
@@ -1038,7 +944,6 @@
     {
       "command": "time-stretch",
       "option": "n-fft",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1048,7 +953,6 @@
     {
       "command": "time-stretch",
       "option": "hop-length",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1058,7 +962,6 @@
     {
       "command": "tone",
       "option": "sample-rate",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,
       "exclusive_minimum": false,
@@ -1068,7 +971,6 @@
     {
       "command": "chirp",
       "option": "sample-rate",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,
       "exclusive_minimum": false,
@@ -1078,7 +980,6 @@
     {
       "command": "clicks",
       "option": "sample-rate",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,
       "exclusive_minimum": false,
@@ -1088,7 +989,6 @@
     {
       "command": "mel",
       "option": "fmin-hz",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1098,7 +998,6 @@
     {
       "command": "mel",
       "option": "fmax-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1108,7 +1007,6 @@
     {
       "command": "mel-to-audio",
       "option": "fmin-hz",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1118,7 +1016,6 @@
     {
       "command": "mel-to-audio",
       "option": "fmax-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1128,7 +1025,6 @@
     {
       "command": "mfcc-to-audio",
       "option": "fmin-hz",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1138,7 +1034,6 @@
     {
       "command": "mfcc-to-audio",
       "option": "fmax-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1148,7 +1043,6 @@
     {
       "command": "chirp",
       "option": "fmin-hz",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1158,7 +1052,6 @@
     {
       "command": "chirp",
       "option": "fmax-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1168,7 +1061,6 @@
     {
       "command": "cqt",
       "option": "fmin-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1178,7 +1070,6 @@
     {
       "command": "vqt",
       "option": "fmin-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1188,7 +1079,6 @@
     {
       "command": "estimate-room",
       "option": "n-octave-bands",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1198,7 +1088,6 @@
     {
       "command": "synthesize-rir",
       "option": "absorption",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1208,7 +1097,6 @@
     {
       "command": "synthesize-rir",
       "option": "seed",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1218,7 +1106,6 @@
     {
       "command": "synthesize-rir",
       "option": "max-sec",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1228,7 +1115,6 @@
     {
       "command": "room-morph",
       "option": "absorption",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1238,7 +1124,6 @@
     {
       "command": "room-morph",
       "option": "seed",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1248,7 +1133,6 @@
     {
       "command": "room-morph",
       "option": "max-sec",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1258,7 +1142,6 @@
     {
       "command": "room-morph",
       "option": "receiver-spacing",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1268,7 +1151,6 @@
     {
       "command": "playback",
       "option": "target",
-      "reject_exit": "usage",
       "choices": [
         "headphones",
         "stereo",
@@ -1283,7 +1165,6 @@
     {
       "command": "playback",
       "option": "input-layout",
-      "reject_exit": "usage",
       "choices": [
         "auto",
         "mono",
@@ -1299,7 +1180,6 @@
     {
       "command": "mix-strip",
       "option": "pan-mode",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "balance",
         "stereo-pan",
@@ -1313,7 +1193,6 @@
     {
       "command": "mix-strip",
       "option": "pan",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": -1.0,
       "exclusive_minimum": false,
@@ -1323,7 +1202,6 @@
     {
       "command": "mix-strip",
       "option": "width",
-      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1333,7 +1211,6 @@
     {
       "command": "playback",
       "option": "room",
-      "reject_exit": "usage",
       "choices": [
         "none",
         "living-room",
@@ -1348,7 +1225,6 @@
     {
       "command": "playback",
       "option": "night",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1358,7 +1234,6 @@
     {
       "command": "playback",
       "option": "dialogue-db",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": -12.0,
       "exclusive_minimum": false,
@@ -1368,7 +1243,6 @@
     {
       "command": "playback",
       "option": "program-lufs",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": -70.0,
       "exclusive_minimum": false,
@@ -1378,7 +1252,6 @@
     {
       "command": "playback",
       "option": "target-lufs",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": -40.0,
       "exclusive_minimum": false,
@@ -1388,7 +1261,6 @@
     {
       "command": "vocal-notes",
       "option": "f0-max-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1398,7 +1270,6 @@
     {
       "command": "vocal-notes",
       "option": "f0-min-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1408,7 +1279,6 @@
     {
       "command": "vocal-notes",
       "option": "frame-length-samples",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1418,7 +1288,6 @@
     {
       "command": "vocal-notes",
       "option": "hop-length-samples",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1428,7 +1297,6 @@
     {
       "command": "vocal-notes",
       "option": "min-note-ms",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1438,7 +1306,6 @@
     {
       "command": "vocal-notes",
       "option": "reference-hz",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1448,7 +1315,6 @@
     {
       "command": "vocal-notes",
       "option": "segmentation-threshold-cents",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1458,7 +1324,6 @@
     {
       "command": "vocal-notes",
       "option": "voiced-threshold",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": false,
@@ -1468,7 +1333,6 @@
     {
       "command": "vocal-notes",
       "option": "yin-threshold",
-      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
@@ -1478,7 +1342,6 @@
     {
       "command": "normalize",
       "option": "mode",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "peak",
         "rms"
@@ -1491,7 +1354,6 @@
     {
       "command": "filter",
       "option": "type",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "hp",
         "lp",
@@ -1506,7 +1368,6 @@
     {
       "command": "filter",
       "option": "order",
-      "reject_exit": "invalid_parameter",
       "choices": [
         "2",
         "4"
@@ -1515,152 +1376,6 @@
       "exclusive_minimum": false,
       "maximum": null,
       "exclusive_maximum": false
-    }
-  ],
-  "requiredInvalidParameter": [
-    {
-      "command": "chirp",
-      "option": "output"
-    },
-    {
-      "command": "clicks",
-      "option": "output"
-    },
-    {
-      "command": "decompose-stems",
-      "option": "output"
-    },
-    {
-      "command": "deemphasis",
-      "option": "output"
-    },
-    {
-      "command": "fade",
-      "option": "output"
-    },
-    {
-      "command": "filter",
-      "option": "output"
-    },
-    {
-      "command": "filter",
-      "option": "type"
-    },
-    {
-      "command": "gain",
-      "option": "output"
-    },
-    {
-      "command": "hpss",
-      "option": "output"
-    },
-    {
-      "command": "mel-to-audio",
-      "option": "output"
-    },
-    {
-      "command": "mfcc-to-audio",
-      "option": "output"
-    },
-    {
-      "command": "midi-render",
-      "option": "output"
-    },
-    {
-      "command": "normalize",
-      "option": "output"
-    },
-    {
-      "command": "note-move",
-      "option": "output"
-    },
-    {
-      "command": "note-stretch",
-      "option": "output"
-    },
-    {
-      "command": "pitch-correct",
-      "option": "output"
-    },
-    {
-      "command": "pitch-correct-timevarying",
-      "option": "output"
-    },
-    {
-      "command": "pitch-shift",
-      "option": "output"
-    },
-    {
-      "command": "playback",
-      "option": "output"
-    },
-    {
-      "command": "polyphonic-render",
-      "option": "output"
-    },
-    {
-      "command": "preemphasis",
-      "option": "output"
-    },
-    {
-      "command": "project.align-takes",
-      "option": "output"
-    },
-    {
-      "command": "project.bounce",
-      "option": "output"
-    },
-    {
-      "command": "project.export-midi2",
-      "option": "output"
-    },
-    {
-      "command": "project.export-smf",
-      "option": "output"
-    },
-    {
-      "command": "project.import-midi2",
-      "option": "output"
-    },
-    {
-      "command": "project.import-smf",
-      "option": "output"
-    },
-    {
-      "command": "project.new",
-      "option": "output"
-    },
-    {
-      "command": "resample",
-      "option": "output"
-    },
-    {
-      "command": "room-morph",
-      "option": "output"
-    },
-    {
-      "command": "synthesize-rir",
-      "option": "output"
-    },
-    {
-      "command": "time-stretch",
-      "option": "output"
-    },
-    {
-      "command": "tone",
-      "option": "output"
-    },
-    {
-      "command": "transcribe",
-      "option": "output"
-    },
-    {
-      "command": "tune-to-midi",
-      "option": "output"
-    },
-    {
-      "command": "voice-change",
-      "option": "output"
     }
   ]
 }

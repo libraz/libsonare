@@ -101,8 +101,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -148,8 +147,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -205,8 +203,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -232,8 +229,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -339,8 +335,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -433,8 +428,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -496,7 +490,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -558,8 +552,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -610,8 +603,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -630,8 +622,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -754,8 +745,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -777,8 +767,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -851,8 +840,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -919,8 +907,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -968,8 +955,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -1027,8 +1013,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -1074,8 +1059,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -1087,7 +1071,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -1155,8 +1139,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -1289,8 +1272,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -1437,8 +1419,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -1459,8 +1440,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -1534,8 +1514,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -1610,8 +1589,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -1708,8 +1686,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -1976,8 +1953,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -1995,8 +1971,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2012,8 +1987,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2081,8 +2055,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2098,8 +2071,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2131,7 +2103,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -2211,8 +2183,7 @@
             "minimum": -1,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2232,8 +2203,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2249,8 +2219,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 2,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -2337,8 +2306,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2350,7 +2318,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -2388,8 +2356,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2405,8 +2372,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2422,8 +2388,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2439,8 +2404,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2452,7 +2416,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -2468,8 +2432,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2485,8 +2448,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -2514,8 +2476,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2531,8 +2492,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2548,8 +2508,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2565,8 +2524,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2578,7 +2536,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -2663,8 +2621,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2680,8 +2637,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2697,8 +2653,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2724,8 +2679,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2751,8 +2705,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -2786,7 +2739,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -2814,8 +2767,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2841,8 +2793,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2861,8 +2812,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2874,7 +2824,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -2900,8 +2850,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2917,8 +2866,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2934,8 +2882,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 4095,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2951,8 +2898,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 11,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2968,8 +2914,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 127,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -2985,8 +2930,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -3004,8 +2948,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3031,8 +2974,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3044,7 +2986,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -3054,7 +2996,7 @@
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -3072,8 +3014,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3089,8 +3030,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3186,7 +3126,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -3204,8 +3144,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3221,8 +3160,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3238,8 +3176,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3255,8 +3192,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3282,8 +3218,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3309,8 +3244,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3326,8 +3260,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3343,8 +3276,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3360,8 +3292,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -3401,8 +3332,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3418,8 +3348,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3451,7 +3380,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -3509,8 +3438,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3526,8 +3454,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3549,7 +3476,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -3565,8 +3492,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3612,7 +3538,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -3636,7 +3562,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -3660,7 +3586,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -3684,7 +3610,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -3708,7 +3634,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -3785,8 +3711,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3882,7 +3807,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -3910,8 +3835,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3927,8 +3851,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -3974,8 +3897,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -3993,8 +3915,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4080,8 +4001,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4093,7 +4013,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -4109,8 +4029,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": 4,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4136,8 +4055,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4225,8 +4143,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 4095,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4242,8 +4159,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 127,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4259,8 +4175,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 11,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -4422,8 +4337,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -4441,8 +4355,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4528,8 +4441,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4541,7 +4453,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -4577,8 +4489,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4730,8 +4641,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4757,8 +4667,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4770,7 +4679,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -4780,7 +4689,7 @@
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -4848,8 +4757,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 64,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4865,8 +4773,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4882,8 +4789,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 128,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4909,8 +4815,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4929,8 +4834,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -4942,7 +4846,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -4998,8 +4902,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5101,8 +5004,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5118,8 +5020,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5131,7 +5032,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -5157,8 +5058,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5178,8 +5078,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -5222,8 +5121,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5245,7 +5143,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -5399,8 +5297,7 @@
             "minimum": -12.0,
             "exclusive_minimum": false,
             "maximum": 12.0,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5426,8 +5323,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5453,8 +5349,7 @@
             "minimum": 0.0,
             "exclusive_minimum": false,
             "maximum": 1.0,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5476,7 +5371,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -5492,8 +5387,7 @@
             "minimum": -70.0,
             "exclusive_minimum": false,
             "maximum": 0.0,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5509,8 +5403,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5526,8 +5419,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -5543,8 +5435,7 @@
             "minimum": -40.0,
             "exclusive_minimum": false,
             "maximum": -5.0,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ]
@@ -6503,8 +6394,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -6550,8 +6440,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -7299,8 +7188,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -7322,7 +7210,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -7507,7 +7395,7 @@
             "sideways",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -7915,8 +7803,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8063,8 +7950,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -8225,8 +8111,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8300,8 +8185,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -8396,8 +8280,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8483,8 +8366,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8496,7 +8378,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -8532,8 +8414,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8660,8 +8541,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8677,8 +8557,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8724,8 +8603,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -8832,8 +8710,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8849,8 +8726,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8866,8 +8742,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8893,8 +8768,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -8920,8 +8794,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -9048,8 +8921,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9068,8 +8940,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9192,8 +9063,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9215,8 +9085,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9289,8 +9158,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9357,8 +9225,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -9521,8 +9388,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9664,8 +9530,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9677,7 +9542,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -9780,8 +9645,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9807,8 +9671,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9820,7 +9683,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -9830,7 +9693,7 @@
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -9888,8 +9751,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9915,8 +9777,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -9928,7 +9789,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -9938,7 +9799,7 @@
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -10012,7 +9873,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -10093,8 +9954,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -10110,8 +9970,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -10127,8 +9986,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -10144,8 +10002,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -10157,7 +10014,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -10306,8 +10163,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -10323,8 +10179,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -10450,8 +10305,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -10467,8 +10321,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -11057,8 +10910,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -11104,8 +10956,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -11117,7 +10968,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -11385,8 +11236,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -11543,7 +11393,7 @@
             "polka",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -11605,7 +11455,7 @@
             "",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -11649,8 +11499,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -11676,8 +11525,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -11783,8 +11631,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12020,8 +11867,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -12487,7 +12333,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -12544,8 +12390,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12561,8 +12406,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12578,8 +12422,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12595,8 +12438,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12622,8 +12464,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12649,8 +12490,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12666,8 +12506,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12683,8 +12522,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -12700,8 +12538,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -12847,7 +12684,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -12914,8 +12751,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -13001,8 +12837,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -13014,7 +12849,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -13030,8 +12865,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": 4,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -13057,8 +12891,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -13626,7 +13459,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -13710,8 +13543,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -13727,8 +13559,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -13760,7 +13591,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -13864,7 +13695,7 @@
             "4",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -13943,8 +13774,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -13960,8 +13790,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -13983,7 +13812,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -13999,8 +13828,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -14201,7 +14029,7 @@
             "{align_takes_finer_output}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
@@ -14224,7 +14052,7 @@
             "{align_takes_finer_output}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
@@ -14247,7 +14075,7 @@
             "{align_takes_finer_output}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
@@ -14291,7 +14119,7 @@
             "{align_takes_finer_output}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
@@ -14312,7 +14140,7 @@
             "{align_takes_finer_output}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
@@ -14472,7 +14300,7 @@
             "2={audio_take}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
@@ -14559,7 +14387,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -14619,7 +14447,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -14679,7 +14507,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -14740,7 +14568,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -14825,8 +14653,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -15233,8 +15060,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -15747,7 +15573,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "use 'ceiling_dbtp'"
+            "unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)"
           ]
         },
         {
@@ -15765,7 +15591,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "missing ceiling_dbtp"
+            "platforms[0].ceiling_dbtp must be given"
           ]
         }
       ],
@@ -15790,8 +15616,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16043,8 +15868,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 4095,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16060,8 +15884,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 127,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16077,8 +15900,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 11,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -16119,7 +15941,7 @@
             "12",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16134,7 +15956,7 @@
             "0",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16149,7 +15971,7 @@
             "200",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16250,7 +16072,7 @@
             "0x1000",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16275,8 +16097,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16302,8 +16123,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16322,8 +16142,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16335,7 +16154,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -16361,8 +16180,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16378,8 +16196,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16395,8 +16212,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 4095,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16412,8 +16228,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 11,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16429,8 +16244,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 127,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16446,8 +16260,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -16527,7 +16340,7 @@
             "500",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16544,7 +16357,7 @@
             "0",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16561,7 +16374,7 @@
             "99",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16578,7 +16391,7 @@
             "0",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16670,7 +16483,7 @@
             "1.5",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16687,7 +16500,7 @@
             "-1",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16704,7 +16517,7 @@
             "-1",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16721,7 +16534,7 @@
             "-1",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -16774,8 +16587,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16791,8 +16603,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16808,8 +16619,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16825,8 +16635,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16838,7 +16647,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -16854,8 +16663,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -16871,8 +16679,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -16982,7 +16789,7 @@
             "0.02",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17106,8 +16913,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -17362,8 +17168,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -17425,7 +17230,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -17483,7 +17288,7 @@
             "bogus",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17559,8 +17364,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -17576,8 +17380,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -17609,7 +17412,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -17719,7 +17522,7 @@
             "3",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17874,8 +17677,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 64,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -17891,8 +17693,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -17908,8 +17709,7 @@
             "minimum": 1,
             "exclusive_minimum": false,
             "maximum": 128,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -17935,8 +17735,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -17955,8 +17754,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -17968,7 +17766,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -18024,8 +17822,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -18229,8 +18026,7 @@
             "minimum": 0,
             "exclusive_minimum": true,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -18455,8 +18251,7 @@
             "minimum": -1,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -18476,8 +18271,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -18493,8 +18287,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 2,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -18590,7 +18383,7 @@
             "bogus",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18607,7 +18400,7 @@
             "1.5",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18624,7 +18417,7 @@
             "3",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18659,8 +18452,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -18676,8 +18468,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 1,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -18689,7 +18480,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -18715,8 +18506,7 @@
             "minimum": 0,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         },
         {
@@ -18736,8 +18526,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "invalid_parameter"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -18914,7 +18703,7 @@
             "hum",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18933,7 +18722,7 @@
             "-1",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18971,7 +18760,7 @@
             "1.5",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18990,7 +18779,7 @@
             "-0.1",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -19009,7 +18798,7 @@
             "-1",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -19024,7 +18813,7 @@
             "{melody_reference}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -19091,8 +18880,7 @@
             "minimum": -12.0,
             "exclusive_minimum": false,
             "maximum": 12.0,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -19118,8 +18906,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -19145,8 +18932,7 @@
             "minimum": 0.0,
             "exclusive_minimum": false,
             "maximum": 1.0,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -19168,7 +18954,7 @@
             "o"
           ],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -19184,8 +18970,7 @@
             "minimum": -70.0,
             "exclusive_minimum": false,
             "maximum": 0.0,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -19201,8 +18986,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -19218,8 +19002,7 @@
             "minimum": null,
             "exclusive_minimum": false,
             "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         },
         {
@@ -19235,8 +19018,7 @@
             "minimum": -40.0,
             "exclusive_minimum": false,
             "maximum": -5.0,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
+            "exclusive_maximum": false
           }
         }
       ],
@@ -19545,7 +19327,7 @@
         "bogus",
         "--json"
       ],
-      "exit": 3,
+      "exit": 2,
       "stdout": "empty",
       "payload": "none"
     },
@@ -19623,7 +19405,7 @@
         "8",
         "--json"
       ],
-      "exit": 3,
+      "exit": 2,
       "stdout": "empty",
       "payload": "none"
     },
@@ -19636,7 +19418,7 @@
         "8",
         "--json"
       ],
-      "exit": 3,
+      "exit": 2,
       "stdout": "empty",
       "payload": "none"
     },

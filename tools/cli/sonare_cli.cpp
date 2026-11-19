@@ -202,10 +202,6 @@ void emit_inventory_default(JsonBuilder& json, const CliOptionMetadata& option) 
 // assuming the two agree. An option whose contract has not been narrowed emits
 // `null`, which is what makes "one surface narrowed it and the other did not"
 // a visible difference rather than an invisible one.
-//
-// `reject_exit` names the exit-code class the refusal carries, because both CLIs
-// report some domains at parse time (usage) and others from the handler
-// (invalid parameter), and a `shared` command has to agree on which.
 void emit_inventory_domain(JsonBuilder& json, const CliOptionMetadata& option) {
   json.key("domain");
   if (option.domain.empty()) {
@@ -226,10 +222,7 @@ void emit_inventory_domain(JsonBuilder& json, const CliOptionMetadata& option) {
   } else {
     json.null_value();
   }
-  json.kv("exclusive_maximum", option.domain.exclusive_maximum)
-      .kv("reject_exit",
-          option.domain.stage == CliOptionDomainStage::Parameter ? "invalid_parameter" : "usage")
-      .end_object();
+  json.kv("exclusive_maximum", option.domain.exclusive_maximum).end_object();
 }
 
 void emit_inventory_option(JsonBuilder& json, const CliOptionMetadata& option) {
@@ -449,12 +442,6 @@ int main(int argc, char* argv[]) {
         validate_cli_arguments(args, cmd ? cmd->requires_audio : false);
     if (!argument_error.empty()) {
       std::cerr << color::red << "Error: " << argument_error.message << color::reset << "\n";
-      // A rejected option value carries its own exit class from the registry:
-      // a parse-time domain (the Python parser's `type=` / `choices=`) is a
-      // usage failure, and a domain the Python CLI enforces in its handler is
-      // an invalid-parameter failure. The usage banner belongs to the first
-      // kind only -- the second is a value the caller spelled correctly.
-      if (argument_error.invalid_parameter) return kExitInvalidParameter;
       print_usage_hint();
       return kExitUsage;
     }

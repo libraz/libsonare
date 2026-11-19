@@ -190,14 +190,15 @@ def test_polyphonic_render_cli_refuses_a_bad_edit(assignment: str, message: str)
 
 
 def test_polyphonic_render_cli_requires_an_output_file() -> None:
-    """A render with nowhere to go is a parameter error, as on the native CLI."""
+    """A render with nowhere to go is a usage error, as on the native CLI."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "chord.wav")
         _write_polyphonic_chord(wav_path)
 
         result = _run_cli(["polyphonic-render", wav_path, "--json"])
 
-        assert result.returncode == 3, result.stdout
+        assert result.returncode == 2, result.stdout
+        assert "Missing required option '--output'" in result.stderr
 
 
 _TUNE_SR = 48000
@@ -456,7 +457,7 @@ def test_tune_to_midi_cli_forwards_a_correction_bound_of_zero() -> None:
 def test_tune_to_midi_cli_refuses_a_value_outside_its_domain(
     extra: list[str], message: str
 ) -> None:
-    """Each refusal is a parameter error, not argparse's usage error."""
+    """Each refusal is a usage error, decided before the input is read."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path, smf_path = _tune_fixture(tmpdir, *_TUNE_REFERENCE_MIDI)
         out_path = os.path.join(tmpdir, "tuned.wav")
@@ -474,20 +475,20 @@ def test_tune_to_midi_cli_refuses_a_value_outside_its_domain(
             ]
         )
 
-        assert result.returncode == 3, result.stdout
+        assert result.returncode == 2, result.stdout
         assert message in result.stderr
         assert not os.path.exists(out_path)
 
 
 def test_tune_to_midi_cli_requires_an_output_file() -> None:
-    """A render with nowhere to go is a parameter error, as on the native CLI."""
+    """A render with nowhere to go is a usage error, as on the native CLI."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path, smf_path = _tune_fixture(tmpdir, *_TUNE_REFERENCE_MIDI)
 
         result = _run_cli(["tune-to-midi", wav_path, "--reference-smf", smf_path, "--json"])
 
-        assert result.returncode == 3, result.stdout
-        assert "tune-to-midi requires an output file (-o/--output)" in result.stderr
+        assert result.returncode == 2, result.stdout
+        assert "Missing required option '--output'" in result.stderr
 
 
 def test_tune_to_midi_cli_requires_a_reference_melody() -> None:
@@ -586,7 +587,7 @@ def test_pitch_correct_timevarying_cli_refuses_out_of_range_parameters(option) -
         result = _run_cli(
             ["pitch-correct-timevarying", source, "-o", os.path.join(tmpdir, "o.wav"), *option]
         )
-        assert result.returncode == 3, result.stderr
+        assert result.returncode == 2, result.stderr
 
 
 def test_pitch_correct_timevarying_cli_reads_a_mode_name_and_an_explicit_zero_anchor() -> None:
@@ -634,7 +635,7 @@ def test_scale_quantize_cli_reads_a_mode_name_and_an_explicit_zero_anchor() -> N
     for spelling in ("0x6AD", "0X6ad", "0o3255", "0b11010101101", "1_709", " 1709 "):
         assert by_name.stdout == quantize("--mode-mask", spelling).stdout, spelling
     assert quantize("--mode-mask", "010").returncode == 2
-    assert quantize("--mode-mask", "0x1000").returncode == 3
+    assert quantize("--mode-mask", "0x1000").returncode == 2
     default = quantize()
     assert by_name.stdout != default.stdout
 
@@ -644,8 +645,8 @@ def test_scale_quantize_cli_reads_a_mode_name_and_an_explicit_zero_anchor() -> N
     unknown = quantize("--mode-mask", "bogus")
     assert unknown.returncode == 2
     assert "--mode-mask" in unknown.stderr
-    assert quantize("--mode-mask", "0").returncode == 3
-    assert quantize("--mode-mask", "4096").returncode == 3
+    assert quantize("--mode-mask", "0").returncode == 2
+    assert quantize("--mode-mask", "4096").returncode == 2
 
 
 def test_pitch_frames_cli_reports_the_contour_with_null_for_unvoiced_frames() -> None:
@@ -781,7 +782,7 @@ def test_note_bounds_refuse_both_spellings_and_negatives(tmp_path, command, opti
     wav = tmp_path / "in.wav"
     _write_test_wav(str(wav), [0.0] * 2205, 22050)
     result = _run_cli([command, str(wav), "-o", str(tmp_path / "out.wav"), *options])
-    assert result.returncode == 3, result.stderr
+    assert result.returncode == 2, result.stderr
     assert message in result.stderr
 
 

@@ -613,7 +613,6 @@ def _emit_effect_result(
     *,
     extra: dict[str, object] | None = None,
     label: str,
-    requires_output: bool = True,
 ) -> int:
     """Write the optional output WAV and print an offline-effect result.
 
@@ -635,15 +634,9 @@ def _emit_effect_result(
     published: neither converts to the other without the sample rate, and the
     native CLI's callers read one while these read the other.
 
-    A command that renders audio requires an output destination (``requires_output``),
-    so running it without ``-o`` is a parameter error (exit ``EXIT_INVALID_PARAMETER``)
-    rather than silently discarding the render, matching the native CLI. Commands
-    that double as analysis (e.g. ``trim-silence`` reporting the trimmed length)
-    pass ``requires_output=False`` to keep the destination optional.
+    A render's required ``-o`` is refused at parse time (``_REQUIRED_OPTIONS``);
+    ``trim-silence`` doubles as analysis, so its destination stays optional.
     """
-    if requires_output and not args.output:
-        print(f"Error: {label} requires an output file (-o/--output)", file=sys.stderr)
-        return EXIT_INVALID_PARAMETER
     if args.output:
         _write_channel_output(args.output, channels, sr)
 

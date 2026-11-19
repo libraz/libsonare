@@ -615,23 +615,15 @@ def test_resample_falls_back_to_linear_without_native_lib(monkeypatch) -> None:
     assert np.allclose(result, expected, rtol=0.0, atol=1e-6)
 
 
-def test_rir_and_morph_missing_output_raise_value_error() -> None:
-    """Missing --output raises ValueError so the exit code is EXIT_ERROR (L-15)."""
-    from libsonare import cli
-
-    with pytest.raises(ValueError, match="requires --output"):
-        cli.cmd_synthesize_rir(argparse.Namespace(output=""))
-    with pytest.raises(ValueError, match="requires --output"):
-        cli.cmd_room_morph(argparse.Namespace(output=""))
-
-
-def test_synthesize_rir_missing_output_uses_error_exit_code() -> None:
-    """The missing-arg failure maps to EXIT_INVALID_PARAMETER."""
-    from libsonare.cli import EXIT_INVALID_PARAMETER
-
-    result = _run_cli(["synthesize-rir"])
-    assert result.returncode == EXIT_INVALID_PARAMETER
-    assert "requires --output" in result.stderr
+@pytest.mark.parametrize(
+    "argv",
+    [["synthesize-rir"], ["room-morph", "/nonexistent/sonare-tests/unreadable.wav"]],
+)
+def test_rir_and_morph_refuse_a_missing_output_before_reading(argv: list[str]) -> None:
+    result = _run_cli(argv)
+    assert result.returncode == 2, result.stderr
+    assert "Missing required option '--output'" in result.stderr
+    assert "unreadable" not in result.stderr
 
 
 def test_chords_json_reports_c_bass_not_root(monkeypatch, capsys) -> None:

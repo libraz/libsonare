@@ -48,20 +48,20 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     auto [move_code, move_output] =
         exec_command(CLI + " note-move --target-onset-sample 0 --target-onset-sec 0 " + TEST_WAV +
                      " -o " + TEST_OUT + " -q");
-    CHECK(move_code == 3);
+    CHECK(move_code == 2);
     CHECK_THAT(move_output,
                ContainsSubstring("give --target-onset-sample or --target-onset-sec, not both"));
     auto [stretch_code, stretch_output] =
         exec_command(CLI + " note-stretch --offset-sample 100 --offset-sec 0.01 " + TEST_WAV +
                      " -o " + TEST_OUT + " -q");
-    CHECK(stretch_code == 3);
+    CHECK(stretch_code == 2);
     CHECK_THAT(stretch_output, ContainsSubstring("give --offset-sample or --offset-sec, not both"));
   }
 
   SECTION("note bounds refuse a negative position") {
     auto [code, output] =
         exec_command(CLI + " note-move --onset-sec -0.01 " + TEST_WAV + " -o " + TEST_OUT + " -q");
-    CHECK(code == 3);
+    CHECK(code == 2);
   }
 
   SECTION("voice-change reports the requested factor") {
@@ -431,7 +431,7 @@ TEST_CASE("CLI project command group", "[cli]") {
       INFO(count);
       auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                    " --frames 256 --channels " + count + " -q");
-      REQUIRE(bc == 3);
+      REQUIRE(bc == 2);
       REQUIRE_THAT(bo, ContainsSubstring("argument --channels: must be one of 1, 2, 6, 8; leave it "
                                          "out for the scene master's width"));
       std::ifstream out_file(wav);
@@ -442,7 +442,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     // report the file failure first.
     auto [missing_code, missing_output] = exec_command(
         CLI + " project bounce no-such-project.json -o " + wav + " --frames 256 --channels 3 -q");
-    REQUIRE(missing_code == 3);
+    REQUIRE(missing_code == 2);
     REQUIRE_THAT(missing_output, ContainsSubstring("--channels"));
 
     std::remove(proj.c_str());
@@ -879,7 +879,7 @@ TEST_CASE("CLI tune-to-midi refuses each rejected argument in its own exit class
     auto [code, output] =
         exec_command(CLI + " tune-to-midi " + take + " --reference-smf " + reference);
     INFO(output);
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("--output"));
   }
 
@@ -895,7 +895,7 @@ TEST_CASE("CLI tune-to-midi refuses each rejected argument in its own exit class
   SECTION("a negative track index is an invalid parameter") {
     auto [code, output] = exec_command(base + " --track -1");
     INFO(output);
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("--track"));
   }
 
@@ -904,7 +904,7 @@ TEST_CASE("CLI tune-to-midi refuses each rejected argument in its own exit class
       CAPTURE(value);
       auto [code, output] = exec_command(base + " --min-overlap-ratio " + value);
       INFO(output);
-      REQUIRE(code == 3);
+      REQUIRE(code == 2);
       REQUIRE_THAT(output, ContainsSubstring("--min-overlap-ratio"));
     }
     // Both bounds are inclusive, so neither end is refused.
@@ -919,7 +919,7 @@ TEST_CASE("CLI tune-to-midi refuses each rejected argument in its own exit class
   SECTION("a negative correction bound is an invalid parameter") {
     auto [code, output] = exec_command(base + " --max-correction-semitones -1");
     INFO(output);
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("--max-correction-semitones"));
     // Zero is legal and means no note moves, so it cannot double as a sentinel.
     auto [zero_code, zero_output] = exec_command(base + " --max-correction-semitones 0 --json");
@@ -930,7 +930,7 @@ TEST_CASE("CLI tune-to-midi refuses each rejected argument in its own exit class
   SECTION("an unknown policy name is an invalid parameter") {
     auto [code, output] = exec_command(base + " --unmatched-policy bogus");
     INFO(output);
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("--unmatched-policy"));
   }
 }
@@ -1008,11 +1008,18 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
     REQUIRE(default_payload["note_count"].as_int() > capped_payload["note_count"].as_int());
   }
 
-  SECTION("each rejected value is an invalid parameter") {
-    for (const char* bad :
-         {"--reattack-ratio 0.5", "--reattack-ratio -1", "--max-polyphony 0", "--max-polyphony 65",
-          "--min-frame-peak-ratio -0.1", "--min-ridge-peak-ratio -0.1",
-          "--min-frame-peak-ratio 1.5", "--min-ridge-peak-ratio 1.5"}) {
+  SECTION("each value outside a declared domain is a usage error") {
+    for (const char* bad : {"--max-polyphony 0", "--max-polyphony 65",
+                            "--min-frame-peak-ratio -0.1", "--min-ridge-peak-ratio -0.1",
+                            "--min-frame-peak-ratio 1.5", "--min-ridge-peak-ratio 1.5"}) {
+      auto [code, output] = exec_command(base + " " + bad);
+      INFO(bad << ": " << output);
+      REQUIRE(code == 2);
+    }
+  }
+
+  SECTION("a reattack ratio between 0 and 1 is an invalid parameter") {
+    for (const char* bad : {"--reattack-ratio 0.5", "--reattack-ratio -1"}) {
       auto [code, output] = exec_command(base + " " + bad);
       INFO(bad << ": " << output);
       REQUIRE(code == 3);
@@ -1038,13 +1045,15 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
     REQUIRE(fine_payload["note_count"].as_int() > whole_payload["note_count"].as_int());
   }
 
-  SECTION("a rejected note division is an invalid parameter") {
-    for (const char* bad : {"--min-note-division 0", "--min-note-division 129",
-                            "--min-note-division 32 --min-note-ms 30"}) {
+  SECTION("a note division outside its domain is a usage error") {
+    for (const char* bad : {"--min-note-division 0", "--min-note-division 129"}) {
       auto [code, output] = exec_command(base + " " + bad);
       INFO(bad << ": " << output);
-      REQUIRE(code == 3);
+      REQUIRE(code == 2);
     }
+    auto [both_code, both_output] = exec_command(base + " --min-note-division 32 --min-note-ms 30");
+    INFO(both_output);
+    REQUIRE(both_code == 3);
   }
 
   SECTION("the monophonic model is accepted by name and an unknown name is refused") {
@@ -1056,7 +1065,7 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
     }
     auto [bad_code, bad_output] = exec_command(mono + " --monophonic-model choir");
     INFO(bad_output);
-    REQUIRE(bad_code == 3);
+    REQUIRE(bad_code == 2);
     REQUIRE_THAT(bad_output, ContainsSubstring("monophonic-model"));
   }
 

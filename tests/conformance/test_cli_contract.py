@@ -1082,11 +1082,13 @@ class CliContractSelfTest(unittest.TestCase):
             for option in command["options"]
             if option.get("domain")
         )
-        option["domain"]["rejectExit"] = option["domain"].pop("reject_exit")
+        option["domain"]["exclusiveMinimum"] = option["domain"].pop("exclusive_minimum")
         errors, _ = CHECKER._validate_inventory(drifted, "native")
         snake = [error for error in errors if "snake_case" in error]
         self.assertTrue(any("inventory.native.schemaVersion" in error for error in snake))
-        self.assertTrue(any(error.split(":")[0].endswith(".domain.rejectExit") for error in snake))
+        self.assertTrue(
+            any(error.split(":")[0].endswith(".domain.exclusiveMinimum") for error in snake)
+        )
 
     def test_active_option_inventory_rejects_shared_and_one_sided_drift(self) -> None:
         """Canonical metadata catches equal drift; cross-surface catches asymmetric drift."""
@@ -1295,7 +1297,6 @@ class CliContractSelfTest(unittest.TestCase):
                     "exclusive_minimum": False,
                     "maximum": None,
                     "exclusive_maximum": False,
-                    "reject_exit": "usage",
                 },
             },
             {
@@ -1334,7 +1335,6 @@ class CliContractSelfTest(unittest.TestCase):
                     "exclusive_minimum": False,
                     "maximum": None,
                     "exclusive_maximum": False,
-                    "reject_exit": "usage",
                 },
             ),
             (1, "domain", None),
@@ -1342,12 +1342,11 @@ class CliContractSelfTest(unittest.TestCase):
                 1,
                 "domain",
                 {
-                    "choices": ["one", "two"],
+                    "choices": ["one", "three"],
                     "minimum": None,
                     "exclusive_minimum": False,
                     "maximum": None,
                     "exclusive_maximum": False,
-                    "reject_exit": "invalid_parameter",
                 },
             ),
         ):

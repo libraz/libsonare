@@ -125,14 +125,11 @@ struct CliArgs {
 
 /// One rejected invocation. `message` is empty when the invocation is valid.
 ///
-/// `invalid_parameter` selects between the two exit codes the CLI contract
-/// publishes for a refused argument: false is the usage code (2), true is the
-/// invalid-parameter code (3). Which one an option uses is part of that
-/// option's contract rather than a property of the checking code, because the
-/// two CLIs must agree per option -- see CliOptionDomainStage.
+/// Every refusal decided from the command line alone is a usage failure (exit 2),
+/// reported before any input is read; the invalid-parameter code (3) is left to a
+/// library refusal that needed the input.
 struct CliValidationError {
   std::string message;
-  bool invalid_parameter = false;
 
   bool empty() const noexcept { return message.empty(); }
 };

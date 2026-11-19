@@ -64,7 +64,7 @@ def test_bounce_refuses_a_width_no_speaker_layout_has(tmp_path: Path) -> None:
         result = _run_console(
             "project", "bounce", str(project), "-o", str(output), "--channels", count
         )
-        assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
+        assert result.returncode == 2, result.stderr
         assert not output.exists()
 
 

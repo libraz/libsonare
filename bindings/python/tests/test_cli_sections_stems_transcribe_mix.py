@@ -196,7 +196,7 @@ def test_sections_threshold_reaches_the_boundary_picker() -> None:
 @pytest.mark.parametrize("value", ["-0.5", "nan", "inf"])
 def test_sections_refuses_an_out_of_domain_threshold(melody_wav: str, value: str) -> None:
     result = _run_cli(["sections", melody_wav, f"--threshold={value}", "--json"])
-    assert result.returncode == (3 if value == "-0.5" else 2)
+    assert result.returncode == 2
     assert result.stdout == ""
 
 
@@ -246,15 +246,15 @@ def test_decompose_stems_writes_components_that_sum_back(melody_wav: str) -> Non
 
 def test_decompose_stems_requires_an_output(melody_wav: str) -> None:
     result = _run_cli(["decompose-stems", melody_wav, "--json"])
-    assert result.returncode == 3
-    assert "--output" in result.stderr
+    assert result.returncode == 2
+    assert "Missing required option '--output'" in result.stderr
 
 
 def test_decompose_stems_names_an_unknown_initialiser(melody_wav: str) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         output = os.path.join(tmpdir, "stem.wav")
         result = _run_cli(["decompose-stems", melody_wav, "-o", output, "--init", "warm"])
-        assert result.returncode == 3
+        assert result.returncode == 2
         assert "--init" in result.stderr
 
 
@@ -484,7 +484,7 @@ def test_transcribe_refuses_an_out_of_domain_min_note_division(
     with tempfile.TemporaryDirectory() as tmpdir:
         output = os.path.join(tmpdir, "take.mid")
         result = _run_cli(["transcribe", melody_wav, "-o", output, "--min-note-division", division])
-        assert result.returncode == 3
+        assert result.returncode == 2
         assert "argument --min-note-division: must be an integer in [1, 128]" in result.stderr
         assert not os.path.exists(output)
 

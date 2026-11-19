@@ -135,7 +135,7 @@ def test_voice_change_absolute_mode_reports_mode_and_refuses_unreachable_factor(
     unknown = _run_cli(
         "voice-change", str(source), "--output", str(tmp_path / "x.wav"), "--formant-mode", "no"
     )
-    assert unknown.returncode == 3
+    assert unknown.returncode == 2
 
     with_preset = _run_cli(
         "voice-change",

@@ -665,7 +665,6 @@ def register_analysis_parsers(
             "(default: auto)",
         ),
         choices=_GENRE_HINTS,
-        reject_exit="invalid_parameter",
     )
     sub.add_parser("beats", parents=[stdout_options], help="Detect beat times")
     sub.add_parser("downbeats", parents=[stdout_options], help="Detect downbeat times")
@@ -688,7 +687,6 @@ def register_analysis_parsers(
         ),
         minimum=0,
         exclusive_minimum=True,
-        reject_exit="invalid_parameter",
     )
     chords_p.add_argument(
         "--threshold",
@@ -706,7 +704,6 @@ def register_analysis_parsers(
             help="Chroma extraction: cqt, stft or nnls (default: cqt)",
         ),
         choices=("cqt", "stft", "nnls"),
-        reject_exit="invalid_parameter",
     )
     chords_p.add_argument(
         "--no-beat-sync", action="store_true", help="Disable beat-synchronous chroma pooling"
@@ -724,7 +721,6 @@ def register_analysis_parsers(
             help="HMM decoder beam width (default: 24)",
         ),
         minimum=0,
-        reject_exit="invalid_parameter",
     )
     chords_p.add_argument(
         "--key-context", action="store_true", help="Bias detection with a key context"
@@ -753,7 +749,6 @@ def register_analysis_parsers(
             help="Minimum section duration in seconds (default: 4.0)",
         ),
         minimum=0.0,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         sections_p.add_argument(
@@ -763,7 +758,6 @@ def register_analysis_parsers(
             help="Relative boundary threshold (default: 0.22)",
         ),
         minimum=0.0,
-        reject_exit="invalid_parameter",
     )
     analyze_p = sub.add_parser("analyze", parents=[stdout_options], help="Full music analysis")
     analyze_p.add_argument(
@@ -793,10 +787,7 @@ def register_analysis_parsers(
         help="Beat unit reported for the detected meter (default: 4)",
     )
     mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
-    # A lower band edge of 0 Hz is a real edge, so the range is closed at the
-    # bottom. Declared on the action rather than on the type callable: argparse
-    # takes any finite number here and the filterbank is what refuses a negative,
-    # so the refusal is the invalid-parameter class, not the usage one.
+    # A lower band edge of 0 Hz is a real edge, so the range is closed at the bottom.
     _cli_domain(
         mel_p.add_argument(
             "--fmin-hz",
@@ -805,7 +796,6 @@ def register_analysis_parsers(
             help="Lowest mel band frequency in Hz (default: 0.0)",
         ),
         minimum=0,
-        reject_exit="invalid_parameter",
     )
     mel_p.add_argument(
         "--fmax-hz",
@@ -826,7 +816,6 @@ def register_analysis_parsers(
     _cli_domain(
         pitch_p.add_argument("--algorithm", default="pyin"),
         choices=("yin", "pyin"),
-        reject_exit="invalid_parameter",
     )
     pitch_p.add_argument(
         "--frames",

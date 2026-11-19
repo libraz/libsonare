@@ -20,17 +20,6 @@ enum class CliOptionArity { Flag, RequiredValue, OptionalValue };
 enum class CliOptionScalarType { Boolean, Integer, Number, Path, String };
 enum class CliOptionDefaultKind { Null, Boolean, Integer, Number, String, StringArray };
 
-/// Where a refused option value or a missing required option is reported.
-///
-/// `Usage` is the parse-time class (exit 2) and mirrors an argparse-level
-/// rejection on the Python CLI -- a `type=` callable or a `choices=` tuple.
-/// `Parameter` is the semantic class (exit 3) and mirrors a Python handler that
-/// raises after parsing. Both CLIs publish one exit-code contract for a `shared`
-/// command, so the stage has to be declared per option next to the domain
-/// itself; deciding it inside the validator would make every option that needs
-/// the other class an exception written somewhere else.
-enum class CliOptionDomainStage { Usage, Parameter };
-
 /// A typed value in the immutable CLI registry.  `Null` means that the option
 /// has no static default; it is also how required values are represented.
 struct CliOptionValue {
@@ -57,7 +46,6 @@ struct CliOptionDomain {
   double maximum = 0.0;
   bool exclusive_maximum = false;
   std::vector<std::string> choices;
-  CliOptionDomainStage stage = CliOptionDomainStage::Usage;
 
   bool empty() const noexcept { return !has_minimum && !has_maximum && choices.empty(); }
 };
@@ -66,7 +54,7 @@ struct CliOptionDomain {
 /// spelling before the command/path is known; validation still gates it by the
 /// selected leaf's option list.  `implicit_optional_default` is used for a
 /// bare optional-value occurrence (for example `--synth`).  `domain` and
-/// `required_stage` are the option's accepted-value and presence contracts;
+/// `required` are the option's accepted-value and presence contracts;
 /// `validate_cli_arguments` is the only place either is enforced.
 struct CliOptionSpec {
   std::string name;
@@ -76,11 +64,6 @@ struct CliOptionSpec {
   CliOptionValue default_value;
   CliOptionValue implicit_optional_default;
   bool required = false;
-  /// Which exit class a missing required option reports. A registry-required
-  /// option is a usage error by default; an option the Python CLI leaves
-  /// optional in its parser and rejects in its handler declares Parameter so
-  /// both CLIs refuse the same invocation with the same code.
-  CliOptionDomainStage required_stage = CliOptionDomainStage::Usage;
   CliOptionDomain domain;
   bool repeatable = false;
   bool global_lexical = false;
@@ -171,7 +154,6 @@ struct CliOptionMetadata {
   /// which is what lets the cross-surface checker compare it with the Python
   /// parser's `choices=` / `type=` domains instead of assuming they agree.
   CliOptionDomain domain;
-  CliOptionDomainStage required_stage = CliOptionDomainStage::Usage;
   /// `cli_option_stated_default`, the text `--help` prints.
   std::string stated_default;
 };

@@ -606,7 +606,7 @@ TEST_CASE("CLI boundaries command", "[cli]") {
     REQUIRE(local["count"].as_int() != global["count"].as_int());
 
     auto [bad_code, bad_output] = exec_command(base + " --reference-window -1");
-    REQUIRE(bad_code == 3);
+    REQUIRE(bad_code == 2);
   }
 }
 
@@ -739,7 +739,7 @@ TEST_CASE("CLI pitch command", "[cli]") {
 
   SECTION("rejects unknown algorithm") {
     auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --algorithm typo -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("argument --algorithm: must be one of "));
   }
 

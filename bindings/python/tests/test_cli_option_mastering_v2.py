@@ -735,7 +735,7 @@ def test_no_streaming_safe_reaches_the_suggester(capsys, monkeypatch) -> None:
     ],
 )
 def test_eq_refuses_an_enumerator_index_outside_its_enumeration(
-    option, first_rejected, last_accepted
+    option, first_rejected, last_accepted, capsys
 ) -> None:
     """An index past the enumeration maps to the first enumerator without this.
 
@@ -747,8 +747,10 @@ def test_eq_refuses_an_enumerator_index_outside_its_enumeration(
 
     parser = cli._build_parser()
     for value in (first_rejected, -1):
-        with pytest.raises(ValueError, match=f"argument --{option}: must be one of "):
+        with pytest.raises(SystemExit) as exc_info:
             parser.parse_args(["eq", "input.wav", f"--{option}={value}", "--json"])
+        assert exc_info.value.code == 2
+        assert f"argument --{option}: must be one of " in capsys.readouterr().err
 
     # The last enumerator is inside the domain, so it must get past validation
     # rather than be refused by an off-by-one bound.

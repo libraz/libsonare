@@ -168,13 +168,13 @@ def test_pan_mode_spellings_select_the_mode_they_name(stereo_wav: Path, tmp_path
 
 
 @pytest.mark.parametrize("value", ["sideways", "stereopan", "stereoPan", "dualpan"])
-def test_a_pan_mode_that_is_not_kebab_case_is_a_parameter_error(
+def test_a_pan_mode_that_is_not_kebab_case_is_a_usage_error(
     stereo_wav: Path, tmp_path: Path, value: str
 ) -> None:
     result = _run_cli(
         ["mix-strip", str(stereo_wav), "--pan-mode", value, "-o", str(tmp_path / "out.wav")]
     )
-    assert result.returncode == EXIT_INVALID_PARAMETER
+    assert result.returncode == 2
     assert "argument --pan-mode: must be one of balance, stereo-pan, dual-pan" in result.stderr
     assert not (tmp_path / "out.wav").exists()
 

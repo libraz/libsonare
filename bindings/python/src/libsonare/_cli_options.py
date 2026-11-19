@@ -23,6 +23,7 @@ from typing import Any, NoReturn, cast
 
 from ._cli_common import EXIT_USAGE, _cli_mode_names, _parse_mode
 from ._cli_inventory import (
+    _REQUIRED_OPTIONS,
     _action_domain,
     _canonical_option_string,
     _cli_domain,
@@ -123,9 +124,8 @@ class _ContractArgumentParser(argparse.ArgumentParser):
 
         The domain record is the one the inventory publishes, so the value set the
         cross-surface checker compares is also the one enforced here, and every
-        refusal is worded as the native option formatter words it. A usage-class
-        domain refuses through the parser; an invalid-parameter one is raised as a
-        ``ValueError``, which the entry point reports with that exit code.
+        refusal is worded as the native option formatter words it, and refused
+        through the parser as a usage failure.
         """
         option = _canonical_option_string(action) if action.option_strings else action.dest
         try:
@@ -138,10 +138,7 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         if domain is None or not _outside_domain(domain, value):
             return value
         predicate = _domain_predicate(domain, _option_type(action, option.lstrip("-")))
-        message = f"argument {option}: {predicate}"
-        if domain["reject_exit"] == "invalid_parameter":
-            raise ValueError(message)
-        raise argparse.ArgumentError(None, message)
+        raise argparse.ArgumentError(None, f"argument {option}: {predicate}")
 
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
@@ -160,12 +157,16 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         self._record_supplied_options(parsed, argv)
         _restore_parser_compat_defaults(parsed)
         _reject_stdout_output(parsed, self)
-        # The subparser's prog spells the leaf (`sonare project bounce`); the
-        # top-level parser falls back to the command it dispatched to.
-        path = ".".join(self.prog.split()[1:]) or getattr(parsed, "command", None)
-        validator = _COMMAND_VALIDATORS.get(path or "")
-        if validator is not None:
-            validator(parsed, self)
+        # Run once, on the top-level parser, where a flag spelled before the
+        # project subcommand has been merged into the namespace.
+        path = _command_path(parsed) if " " not in self.prog else None
+        if path is not None:
+            for name in _REQUIRED_OPTIONS.get(path, ()):
+                if getattr(parsed, name.replace("-", "_"), None) in (None, ""):
+                    self.error(f"Missing required option '--{name}'")
+            validator = _COMMAND_VALIDATORS.get(path)
+            if validator is not None:
+                validator(parsed, self)
         return parsed, extras
 
     def _expand_flag_values(self, argv: list[str]) -> list[str]:
@@ -501,7 +502,6 @@ def _add_wav_bits_argument(parser: argparse.ArgumentParser) -> argparse.Action:
     return _cli_domain(
         parser.add_argument("--bits", type=_c_int, default=16),
         choices=(16, 24),
-        reject_exit="invalid_parameter",
     )
 
 
@@ -580,8 +580,9 @@ def _validate_rhythm_namespace(args: argparse.Namespace, parser: argparse.Argume
     bpm_min = _RHYTHM_DEFAULT_BPM_MIN if bpm_min is None else bpm_min
     bpm_max = _RHYTHM_DEFAULT_BPM_MAX if bpm_max is None else bpm_max
     if bpm_max <= bpm_min:
-        raise ValueError(
-            f"--bpm-max must be greater than --bpm-min (--bpm-min {bpm_min:g}, --bpm-max {bpm_max:g})"
+        parser.error(
+            "--bpm-max must be greater than --bpm-min "
+            f"(--bpm-min {bpm_min:g}, --bpm-max {bpm_max:g})"
         )
 
 
@@ -595,7 +596,7 @@ def _validate_key_namespace(args: argparse.Namespace, parser: argparse.ArgumentP
     if not getattr(args, "hpss", False) or hop_length is None:
         return
     if hop_length < _MIN_KEY_HPSS_HOP_LENGTH:
-        raise ValueError(
+        parser.error(
             f"--hop-length must be at least {_MIN_KEY_HPSS_HOP_LENGTH} with --hpss "
             f"(got {hop_length})"
         )
@@ -605,21 +606,73 @@ def _validate_render_channels(args: argparse.Namespace, parser: argparse.Argumen
     channels = getattr(args, "channels", None)
     if channels is None or channels in (1, 2, 6, 8):
         return
-    raise ValueError(
+    parser.error(
         "argument --channels: must be one of 1, 2, 6, 8; leave it out for the scene master's width"
     )
 
 
+def _validate_repair_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    # --output is required to repair and refused when --detect only measures.
+    detect = bool(getattr(args, "detect", False))
+    output = getattr(args, "output", None)
+    if detect and output:
+        parser.error("--output cannot be combined with --detect")
+    if not detect and not output:
+        parser.error("--output is required unless --detect is given")
+
+
+def _validate_mix_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    # Rendering needs both ends: inputs to mix and a file to write them to.
+    if args.input and not args.output:
+        parser.error("mix with --input requires --output")
+    if args.output and not args.input:
+        parser.error("mix with --output requires at least one --input")
+
+
+def _refuse_both_bound_spellings(
+    args: argparse.Namespace, parser: argparse.ArgumentParser, bounds: tuple[str, ...]
+) -> None:
+    # A position is spelled in samples or in seconds; both at once is refused by name.
+    for bound in bounds:
+        attr = bound.replace("-", "_")
+        if getattr(args, f"{attr}_sample") is not None and getattr(args, f"{attr}_sec") is not None:
+            parser.error(f"give --{bound}-sample or --{bound}-sec, not both")
+
+
+def _validate_note_move_bounds(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    _refuse_both_bound_spellings(args, parser, ("onset", "offset", "target-onset"))
+
+
+def _validate_note_stretch_bounds(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    _refuse_both_bound_spellings(args, parser, ("onset", "offset"))
+
+
 # Cross-option checks, keyed by command path, run once parsing has succeeded and
 # before any handler reads its input -- the native registry's command validators.
+# Each refuses as a usage failure: it is decided from the command line alone.
 _COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentParser], None]] = {
     "pitch": _validate_pitch_namespace,
     "vocal-notes": _validate_vocal_notes_namespace,
     "rhythm": _validate_rhythm_namespace,
     "key": _validate_key_namespace,
+    "mix": _validate_mix_namespace,
+    "note-move": _validate_note_move_bounds,
+    "note-stretch": _validate_note_stretch_bounds,
+    "repair": _validate_repair_namespace,
     "project.bounce": _validate_render_channels,
     "midi-render": _validate_render_channels,
 }
+
+
+def _command_path(args: argparse.Namespace) -> str | None:
+    """The leaf a parsed namespace dispatches to (``project.bounce``), or None."""
+    command = getattr(args, "command", None)
+    if command == "project":
+        subcommand = getattr(args, "project_command", None)
+        return f"project.{subcommand}" if subcommand else None
+    return command
 
 
 def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:

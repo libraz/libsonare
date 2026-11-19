@@ -224,8 +224,6 @@ def _project_bounce(
     command_name: str = "project bounce",
     binds_source_audio: bool = True,
 ) -> int:
-    if not args.output:
-        raise ValueError(f"{command_name} requires --output")
     preset = _synth_preset(args.synth, bare_flag=not force_synth)
     project = _load_project(args.input)
     try:
@@ -345,8 +343,6 @@ def _project_align_takes(args: argparse.Namespace) -> int:
     """Warp every take in a document onto one reference source's timeline."""
     from . import align_take_to_reference
 
-    if not args.output:
-        raise ValueError("project align-takes requires --output")
     reference_source = int(args.reference_source)
 
     document = _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES)
@@ -468,8 +464,6 @@ def cmd_project(args: argparse.Namespace) -> int:
         print(_strict_json_dumps({"abi_version": version}) if args.json else version)
         return 0
     if subcommand == "new":
-        if not args.output:
-            raise ValueError("project new requires --output")
         project = Project()
         try:
             # A rate the caller spelled reaches the library as written, a zero included.
@@ -580,8 +574,6 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand == "align-takes":
         return _project_align_takes(args)
     if subcommand == "export-smf":
-        if not args.output:
-            raise ValueError("project export-smf requires --output")
         project = cast(Project, _load_project(args.input))
         try:
             data = cast(Any, project).export_smf()
@@ -595,8 +587,6 @@ def cmd_project(args: argparse.Namespace) -> int:
         )
         return 0
     if subcommand == "import-smf":
-        if not args.output:
-            raise ValueError("project import-smf requires --output")
         data = _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES)
         project = Project()
         try:
@@ -614,8 +604,6 @@ def cmd_project(args: argparse.Namespace) -> int:
             print(f"  Imported SMF: {args.output}")
         return 0
     if subcommand == "export-midi2":
-        if not args.output:
-            raise ValueError("project export-midi2 requires --output")
         project = cast(Project, _load_project(args.input))
         try:
             data = cast(Any, project).export_clip_file()
@@ -629,8 +617,6 @@ def cmd_project(args: argparse.Namespace) -> int:
         )
         return 0
     if subcommand == "import-midi2":
-        if not args.output:
-            raise ValueError("project import-midi2 requires --output")
         data = _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES)
         project = Project()
         try:
@@ -666,9 +652,6 @@ def cmd_midi_render(args: argparse.Namespace) -> int:
 
 def cmd_transcribe(args: argparse.Namespace) -> int:
     from . import Project
-
-    if not args.output:
-        raise ValueError("transcribe requires --output")
 
     samples, sr = _load_audio(args.file)
     project = Project()
@@ -866,12 +849,10 @@ def register_project_parsers(
         palign.add_argument(
             "--reference-source",
             type=_int64,
-            required=True,
             help="Audio source id whose timeline every take is aligned to",
         ),
         minimum=1,
         maximum=0xFFFFFFFF,
-        reject_exit="invalid_parameter",
     )
     palign.add_argument(
         "--audio",
@@ -900,7 +881,6 @@ def register_project_parsers(
         ),
         minimum=0,
         exclusive_minimum=True,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         palign.add_argument(
@@ -911,7 +891,6 @@ def register_project_parsers(
         ),
         minimum=0,
         exclusive_minimum=True,
-        reject_exit="invalid_parameter",
     )
     pexport_smf = project_sub.add_parser("export-smf", parents=[project_common], help="Export SMF")
     pexport_smf.add_argument("input", metavar="project.json", help="Input project JSON")
@@ -1025,7 +1004,6 @@ def register_project_parsers(
         ),
         minimum=1.0,
         maximum=128.0,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         transcribe_p.add_argument(
@@ -1037,7 +1015,6 @@ def register_project_parsers(
         ),
         minimum=1.0,
         maximum=64.0,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         transcribe_p.add_argument(
@@ -1049,7 +1026,6 @@ def register_project_parsers(
         ),
         minimum=0.0,
         maximum=1.0,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         transcribe_p.add_argument(
@@ -1061,7 +1037,6 @@ def register_project_parsers(
         ),
         minimum=0.0,
         maximum=1.0,
-        reject_exit="invalid_parameter",
     )
     transcribe_p.add_argument(
         "--reattack-ratio",
@@ -1087,7 +1062,6 @@ def register_project_parsers(
             "--polyphonic",
         ),
         choices=["segments", "singing"],
-        reject_exit="invalid_parameter",
     )
     transcribe_p.add_argument(
         "--velocity-floor-db",

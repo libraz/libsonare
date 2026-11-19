@@ -3,8 +3,10 @@
 ///        registry, option domains and exit codes.
 
 #include <algorithm>
+#include <cstdlib>
 #include <deque>
 #include <functional>
+#include <sstream>
 
 #include "analysis/section_analyzer.h"
 #include "cli/cli_test_helpers.h"
@@ -270,7 +272,7 @@ TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]"
       found_pitch_shift = true;
       REQUIRE(command["options"][0]["name"].as_string() == "json");
       REQUIRE(command["options"][1]["name"].as_string() == "pitch-semitones");
-      REQUIRE_FALSE(command["options"][1]["required"].as_bool());
+      REQUIRE(command["options"][1]["required"].as_bool());
       REQUIRE(command["options"][1]["default"].is_null());
     } else if (path == "resample") {
       found_resample = true;
@@ -474,9 +476,8 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(output->aliases == std::vector<std::string>{"o"});
   REQUIRE(output->global_lexical);
   // A command that cannot run without writing a file declares that in the
-  // registry, together with the exit class its absence reports.
+  // registry; its absence is refused before dispatch.
   REQUIRE(output->required);
-  REQUIRE(output->required_stage == CliOptionDomainStage::Parameter);
   REQUIRE(output->default_value.kind == CliOptionDefaultKind::Null);
   // A command that only writes when asked keeps it optional.
   const auto* optional_output = cli_option_spec_for_command("trim-silence", "output");
@@ -485,7 +486,7 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
 
   const auto* semitones = cli_option_spec_for_command("pitch-shift", "pitch-semitones");
   REQUIRE(semitones != nullptr);
-  REQUIRE_FALSE(semitones->required);
+  REQUIRE(semitones->required);
   REQUIRE(semitones->default_value.kind == CliOptionDefaultKind::Null);
 
   const auto* target_rate = cli_option_spec_for_command("resample", "target-sample-rate");
@@ -742,10 +743,6 @@ TEST_CASE("CLI option domains match the cross-surface declaration", "[cli][argum
   const std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
   const auto fixture = sonare::util::json::parse_strict(text);
 
-  const auto stage_name = [](CliOptionDomainStage stage) {
-    return stage == CliOptionDomainStage::Parameter ? std::string("invalid_parameter")
-                                                    : std::string("usage");
-  };
   // A command absent from the registry was compiled out by whichever feature
   // gate governs it (arrangement, playback, ...); this checks registry
   // membership rather than repeating one `#ifndef SONARE_WITH_<FEATURE>` per
@@ -757,7 +754,6 @@ TEST_CASE("CLI option domains match the cross-surface declaration", "[cli][argum
   };
   // "<command>\t<option>" keys, so a mismatch names both halves.
   std::set<std::string> declared_domains;
-  std::set<std::string> declared_required;
   for (const auto& record : fixture["domains"].as_array()) {
     const std::string command = record["command"].as_string();
     if (compiled_out(command)) continue;
@@ -767,7 +763,6 @@ TEST_CASE("CLI option domains match the cross-surface declaration", "[cli][argum
     const CliOptionSpec* spec = cli_option_spec_for_command(command, option);
     REQUIRE(spec != nullptr);
     REQUIRE_FALSE(spec->domain.empty());
-    REQUIRE(stage_name(spec->domain.stage) == record["reject_exit"].as_string());
     std::vector<std::string> choices;
     for (const auto& choice : record["choices"].as_array()) choices.push_back(choice.as_string());
     REQUIRE(spec->domain.choices == choices);
@@ -782,18 +777,6 @@ TEST_CASE("CLI option domains match the cross-surface declaration", "[cli][argum
       REQUIRE(spec->domain.exclusive_maximum == record["exclusive_maximum"].as_bool());
     }
   }
-  for (const auto& record : fixture["requiredInvalidParameter"].as_array()) {
-    const std::string command = record["command"].as_string();
-    if (compiled_out(command)) continue;
-    const std::string option = record["option"].as_string();
-    CAPTURE(command, option);
-    declared_required.insert(command + "\t" + option);
-    const CliOptionSpec* spec = cli_option_spec_for_command(command, option);
-    REQUIRE(spec != nullptr);
-    REQUIRE(spec->required);
-    REQUIRE(spec->required_stage == CliOptionDomainStage::Parameter);
-  }
-
   // The other direction: a domain added to the registry without a line here.
   for (const auto& command : cli_command_registry()) {
     for (const auto& option : command.options) {
@@ -801,10 +784,6 @@ TEST_CASE("CLI option domains match the cross-surface declaration", "[cli][argum
       if (!option.domain.empty()) {
         CAPTURE(command.path, option.name);
         REQUIRE(declared_domains.count(key) == 1);
-      }
-      if (option.required && option.required_stage == CliOptionDomainStage::Parameter) {
-        CAPTURE(command.path, option.name);
-        REQUIRE(declared_required.count(key) == 1);
       }
     }
   }
@@ -839,13 +818,11 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
     REQUIRE(defaulted.get_int("hop-length", defaulted.hop_length) == 512);
   }
 
-  SECTION("pitch domains are refused in the class the Python CLI reports") {
-    // Parse-time domains on the Python side (`type=` callables): usage.
+  SECTION("pitch domains are refused before dispatch") {
     for (const auto* value : {"-50", "0"}) {
       CAPTURE(value);
       const CliValidationError error = reject({"sonare-cli", "pitch", "--f0-min-hz", value}, true);
       REQUIRE_FALSE(error.empty());
-      REQUIRE_FALSE(error.invalid_parameter);
     }
     REQUIRE_FALSE(reject({"sonare-cli", "pitch", "--threshold", "0"}, true).empty());
     REQUIRE_FALSE(reject({"sonare-cli", "pitch", "--threshold", "1.5"}, true).empty());
@@ -861,16 +838,11 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
                                                "--f0-max-hz", "500", "--algorithm", algorithm},
                                               true);
       REQUIRE_FALSE(error.empty());
-      REQUIRE_FALSE(error.invalid_parameter);
     }
     REQUIRE(
         reject({"sonare-cli", "pitch", "--f0-min-hz", "100", "--f0-max-hz", "1000"}, true).empty());
 
-    // A handler-level domain on the Python side: invalid parameter.
-    const CliValidationError algorithm =
-        reject({"sonare-cli", "pitch", "--algorithm", "bogus"}, true);
-    REQUIRE_FALSE(algorithm.empty());
-    REQUIRE(algorithm.invalid_parameter);
+    REQUIRE_FALSE(reject({"sonare-cli", "pitch", "--algorithm", "bogus"}, true).empty());
     REQUIRE(reject({"sonare-cli", "pitch", "--algorithm", "yin"}, true).empty());
   }
 
@@ -882,37 +854,31 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
       CAPTURE(command);
       const CliValidationError error = reject({"sonare-cli", command, "--bits", "8"}, true);
       REQUIRE_FALSE(error.empty());
-      REQUIRE(error.invalid_parameter);
     }
     // The same domain on a command that also has a required option: the missing
     // option is reported first, so supply it to reach the value check.
     const CliValidationError processor_bits =
         reject({"sonare-cli", "mastering-processor", "--processor", "gain", "--bits", "8"}, true);
     REQUIRE_FALSE(processor_bits.empty());
-    REQUIRE(processor_bits.invalid_parameter);
     REQUIRE(reject({"sonare-cli", "eq", "--bits", "24"}, true).empty());
 
-    // An argparse `choices=` tuple on the Python side: usage.
-    const CliValidationError oversample =
-        reject({"sonare-cli", "mastering-normalize-loudness", "--true-peak-oversample", "3"}, true);
-    REQUIRE_FALSE(oversample.empty());
-    REQUIRE_FALSE(oversample.invalid_parameter);
+    REQUIRE_FALSE(
+        reject({"sonare-cli", "mastering-normalize-loudness", "--true-peak-oversample", "3"}, true)
+            .empty());
     REQUIRE(
         reject({"sonare-cli", "mastering-normalize-loudness", "--true-peak-oversample", "8"}, true)
             .empty());
   }
 #endif
 
-  SECTION("a required output is refused as an invalid parameter, not a usage error") {
-    const CliValidationError error = reject({"sonare-cli", "gain", "--gain-db", "3"}, true);
-    REQUIRE_FALSE(error.empty());
-    REQUIRE(error.invalid_parameter);
+  SECTION("a missing required option is refused before dispatch") {
+    REQUIRE(reject({"sonare-cli", "gain", "--gain-db", "3"}, true).message ==
+            "Missing required option '--output'");
     REQUIRE(reject({"sonare-cli", "gain", "--gain-db", "3", "-o", "out.wav"}, true).empty());
-    // A registry-required option with no Python handler counterpart keeps the
-    // usage class it always had.
-    const CliValidationError usage = reject({"sonare-cli", "resample", "-o", "out.wav"}, true);
-    REQUIRE_FALSE(usage.empty());
-    REQUIRE_FALSE(usage.invalid_parameter);
+    REQUIRE(reject({"sonare-cli", "resample", "-o", "out.wav"}, true).message ==
+            "Missing required option '--target-sample-rate'");
+    REQUIRE(reject({"sonare-cli", "pitch-shift", "-o", "out.wav"}, true).message ==
+            "Missing required option '--pitch-semitones'");
   }
 }
 
@@ -1106,6 +1072,67 @@ TEST_CASE("CLI enforces registry requirements and canonical option aliases",
       REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
     }
   }
+}
+
+TEST_CASE("CLI refuses every registry domain before the input is read",
+          "[cli][argument-contract]") {
+  // A value outside a declared domain is decided from the command line alone, so
+  // validation refuses it by name; main() turns any validation error into the
+  // usage exit before an input is opened.
+  const auto number_text = [](double value) {
+    std::ostringstream text;
+    text << value;
+    return text.str();
+  };
+  const auto outside = [&](const CliOptionDomain& domain) -> std::string {
+    if (!domain.choices.empty()) {
+      double highest = 0.0;
+      for (const auto& choice : domain.choices) {
+        char* end = nullptr;
+        const double value = std::strtod(choice.c_str(), &end);
+        if (end == choice.c_str() || *end != '\0') return "not-a-choice";
+        highest = std::max(highest, value);
+      }
+      return number_text(highest + 1.0);
+    }
+    if (domain.has_minimum) {
+      return number_text(domain.exclusive_minimum ? domain.minimum : domain.minimum - 1.0);
+    }
+    return number_text(domain.exclusive_maximum ? domain.maximum : domain.maximum + 1.0);
+  };
+  const auto inside = [&](const CliOptionSpec& option) -> std::string {
+    if (!option.domain.choices.empty()) return option.domain.choices.front();
+    if (option.domain.has_minimum) {
+      return number_text(option.domain.exclusive_minimum ? option.domain.minimum + 1.0
+                                                         : option.domain.minimum);
+    }
+    return option.scalar_type == CliOptionScalarType::Path ? "out.wav" : "1";
+  };
+
+  size_t compared = 0;
+  for (const auto& command : cli_command_registry()) {
+    for (const auto& option : command.options) {
+      if (option.domain.empty()) continue;
+      std::vector<std::string> words{"sonare-cli"};
+      std::istringstream path(command.path);
+      for (std::string word; std::getline(path, word, '.');) words.push_back(word);
+      words.push_back("--" + option.name);
+      words.push_back(outside(option.domain));
+      for (const auto& other : command.options) {
+        if (!other.required || other.name == option.name) continue;
+        words.push_back("--" + other.name);
+        words.push_back(inside(other));
+      }
+      std::vector<char*> argv;
+      for (auto& word : words) argv.push_back(word.data());
+      const CliArgs args = ArgParser::parse(static_cast<int>(argv.size()), argv.data());
+      const CliValidationError error = validate_cli_arguments(args, false);
+      CAPTURE(command.path, option.name, words);
+      REQUIRE(error.message.rfind("argument --" + option.name + ": must ", 0) == 0);
+      ++compared;
+    }
+  }
+  REQUIRE(compared > 100);
 }
 
 TEST_CASE("CLI generic parser failures use the usage exit code", "[cli][argument-contract]") {
@@ -1431,12 +1458,12 @@ TEST_CASE("CLI refuses an enumerator index outside its enumeration", "[cli][argu
 
     auto [rejected_code, rejected_output] =
         exec_command(CLI + " " + option.command + flag + option.first_rejected + " " + option.rest);
-    REQUIRE(rejected_code == 3);
+    REQUIRE(rejected_code == 2);
     REQUIRE_THAT(rejected_output, ContainsSubstring(expected));
 
     auto [negative_code, negative_output] =
         exec_command(CLI + " " + option.command + flag + "-1 " + option.rest);
-    REQUIRE(negative_code == 3);
+    REQUIRE(negative_code == 2);
     REQUIRE_THAT(negative_output, ContainsSubstring(expected));
 
     // The last enumerator is inside the domain, so it must get past validation
@@ -1552,12 +1579,12 @@ TEST_CASE("CLI error handling", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("Error"));
   }
 
-  SECTION("handler parameter failure") {
+  SECTION("missing required transform amount") {
     create_test_wav(TEST_WAV);
     auto [code, output] =
         exec_command(CLI + " pitch-shift " + TEST_WAV + " -o " + TEST_OUT + " -q");
-    REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--pitch-semitones required"));
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Missing required option '--pitch-semitones'"));
   }
 }
 

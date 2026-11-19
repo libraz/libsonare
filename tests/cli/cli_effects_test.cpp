@@ -14,14 +14,14 @@ TEST_CASE("CLI effect commands require an output destination", "[cli]") {
 
   SECTION("normalize") {
     auto [code, output] = exec_command(CLI + " normalize " + TEST_WAV + " -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--output'"));
   }
 
   SECTION("resample") {
     auto [code, output] =
         exec_command(CLI + " resample --target-sample-rate 16000 " + TEST_WAV + " -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--output'"));
   }
 }
@@ -64,7 +64,7 @@ TEST_CASE("CLI normalize keeps stereo source order and validates mode first", "[
 
   const auto [invalid_code, invalid_message] =
       exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
-  REQUIRE(invalid_code == 3);
+  REQUIRE(invalid_code == 2);
   REQUIRE_THAT(invalid_message, ContainsSubstring("argument --mode: must be one of peak, rms"));
   REQUIRE_FALSE(std::ifstream(invalid_output).good());
 
@@ -277,7 +277,7 @@ TEST_CASE("CLI acoustic commands keep zero as the default seed and refuse a nega
   const auto [synth_negative_code, synth_negative_output] =
       exec_command(CLI + " synthesize-rir -o " + unique_temp_path("_seed_synth_negative.wav") +
                    synth_options + " --seed -1");
-  REQUIRE(synth_negative_code == 3);
+  REQUIRE(synth_negative_code == 2);
   REQUIRE_THAT(synth_negative_output, ContainsSubstring("--seed"));
 
   // The C field is a uint32 and every other surface reaches all of it. This
@@ -292,7 +292,7 @@ TEST_CASE("CLI acoustic commands keep zero as the default seed and refuse a nega
   const auto [synth_over_code, synth_over_output] =
       exec_command(CLI + " synthesize-rir -o " + unique_temp_path("_seed_synth_over.wav") +
                    synth_options + " --seed 4294967296");
-  REQUIRE(synth_over_code == 3);
+  REQUIRE(synth_over_code == 2);
   REQUIRE_THAT(synth_over_output, ContainsSubstring("--seed"));
   // The bound is written out rather than left to the stream's default precision,
   // which rendered it as "4.29497e+09" -- a number the caller cannot type back.
@@ -328,7 +328,7 @@ TEST_CASE("CLI acoustic commands keep zero as the default seed and refuse a nega
   const auto [morph_negative_code, morph_negative_output] =
       exec_command(CLI + " room-morph " + input + " -o " +
                    unique_temp_path("_seed_morph_negative.wav") + morph_options + " --seed -1");
-  REQUIRE(morph_negative_code == 3);
+  REQUIRE(morph_negative_code == 2);
   REQUIRE_THAT(morph_negative_output, ContainsSubstring("--seed"));
   std::remove(input.c_str());
 }
@@ -559,7 +559,7 @@ TEST_CASE("CLI mix-strip --pan-mode takes the kebab spellings in any case", "[cl
     auto [code, message] =
         exec_command(CLI + " mix-strip " + input + " -o " + out + " --pan-mode " + refused + " -q");
     INFO(refused);
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(message, ContainsSubstring("balance, stereo-pan, dual-pan"));
     REQUIRE_FALSE(std::ifstream(out).good());
   }
@@ -609,16 +609,16 @@ TEST_CASE("CLI filter takes hp, lp, bp or notch and refuses any other spelling",
     CAPTURE(type);
     auto [code, output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --type " +
                                        type + " --cutoff-hz 1000 -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("argument --type: must be one of hp, lp, bp, notch"));
   }
   auto [order_code, order_output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out +
                                                  " --type lp --cutoff-hz 1000 --order 3 -q");
-  REQUIRE(order_code == 3);
+  REQUIRE(order_code == 2);
   REQUIRE_THAT(order_output, ContainsSubstring("argument --order: must be one of 2, 4"));
   auto [missing_code, missing_output] =
       exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --cutoff-hz 1000 -q");
-  REQUIRE(missing_code == 3);
+  REQUIRE(missing_code == 2);
   REQUIRE_THAT(missing_output, ContainsSubstring("Missing required option '--type'"));
   REQUIRE_FALSE(std::ifstream(out).good());
 }
@@ -685,15 +685,15 @@ TEST_CASE("CLI pitch-shift command", "[cli]") {
   SECTION("missing output file") {
     auto [code, output] =
         exec_command(CLI + " pitch-shift --pitch-semitones 3 " + TEST_WAV + " -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--output'"));
   }
 
   SECTION("missing semitones") {
     auto [code, output] =
         exec_command(CLI + " pitch-shift " + TEST_WAV + " -o " + TEST_OUT + " -q");
-    REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--pitch-semitones required"));
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Missing required option '--pitch-semitones'"));
   }
 }
 
@@ -763,15 +763,15 @@ TEST_CASE("CLI time-stretch command", "[cli]") {
 
   SECTION("missing output file") {
     auto [code, output] = exec_command(CLI + " time-stretch --rate 0.8 " + TEST_WAV + " -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--output'"));
   }
 
   SECTION("missing rate") {
     auto [code, output] =
         exec_command(CLI + " time-stretch " + TEST_WAV + " -o " + TEST_OUT + " -q");
-    REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--rate required"));
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Missing required option '--rate'"));
   }
 }
 
@@ -855,7 +855,7 @@ TEST_CASE("CLI voice-change formant mode", "[cli][voice-change][argument-contrac
 
   auto [unknown_code, unknown_output] =
       exec_command(CLI + " voice-change --formant-mode sideways " + wav + " -o " + out + " 2>&1");
-  REQUIRE(unknown_code == 3);
+  REQUIRE(unknown_code == 2);
 
   auto [preset_code, preset_output] =
       exec_command(CLI + " voice-change --preset brightIdol --formant-mode absolute " + wav +
@@ -979,7 +979,7 @@ TEST_CASE("CLI hpss command", "[cli]") {
 
   SECTION("missing output file") {
     auto [code, output] = exec_command(CLI + " hpss " + TEST_WAV + " -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--output'"));
   }
 }
@@ -1006,7 +1006,7 @@ TEST_CASE("CLI scale-quantize reads a mode name where it reads a mask", "[cli][s
     REQUIRE(quantize(std::string("--mode-mask '") + spelling + "'").second == by_number);
   }
   REQUIRE(quantize("--mode-mask 010").first == 2);
-  REQUIRE(quantize("--mode-mask 0x1000").first == 3);
+  REQUIRE(quantize("--mode-mask 0x1000").first == 2);
   const auto [upper_code, by_upper_name] = quantize("--mode-mask DORIAN");
   REQUIRE(upper_code == 0);
   REQUIRE(by_upper_name == by_name);
@@ -1021,9 +1021,9 @@ TEST_CASE("CLI scale-quantize reads a mode name where it reads a mask", "[cli][s
     REQUIRE_THAT(output, !ContainsSubstring("bogus"));
   }
 
-  SECTION("an integer outside the twelve-bit range stays an invalid parameter") {
-    REQUIRE(quantize("--mode-mask 0").first == 3);
-    REQUIRE(quantize("--mode-mask 4096").first == 3);
+  SECTION("an integer outside the twelve-bit range is a usage error") {
+    REQUIRE(quantize("--mode-mask 0").first == 2);
+    REQUIRE(quantize("--mode-mask 4096").first == 2);
   }
 
   SECTION("an explicit anchor of 0 is used as given and agrees with the default") {
@@ -1076,7 +1076,7 @@ TEST_CASE("CLI pitch-correct-timevarying exposes the correction parameters",
          {"--retune-amount 1.5", "--retune-amount -0.1", "--max-correction-semitones -1",
           "--retune-speed-ms -1", "--vibrato-threshold-cents -1"}) {
       INFO(option);
-      REQUIRE(run(option, output).first == 3);
+      REQUIRE(run(option, output).first == 2);
     }
     std::remove(output.c_str());
   }

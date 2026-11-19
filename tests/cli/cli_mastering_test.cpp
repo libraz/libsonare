@@ -1265,7 +1265,7 @@ TEST_CASE("CLI repair --detect and the options it refuses", "[cli][mastering][re
     const std::string out = unique_temp_path("_detect_refused.wav");
     std::remove(out.c_str());
     auto [code, output] = exec_command(CLI + " repair " + TEST_WAV + " --detect -q -o " + out);
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("--output cannot be combined with --detect"));
     std::ifstream f(out);
     REQUIRE_FALSE(f.good());
@@ -1273,7 +1273,7 @@ TEST_CASE("CLI repair --detect and the options it refuses", "[cli][mastering][re
 
   SECTION("--output is required unless --detect is given") {
     auto [code, output] = exec_command(CLI + " repair " + TEST_WAV + " -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("--output is required unless --detect is given"));
   }
 

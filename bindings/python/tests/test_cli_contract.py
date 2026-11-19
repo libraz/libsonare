@@ -339,14 +339,15 @@ def test_fft_consumer_commands_run_end_to_end(tmp_path, command) -> None:
 def test_effect_commands_require_output(tmp_path, command, effect_args) -> None:
     """Audio-rendering effect commands require -o, matching the native CLI.
 
-    Running one without an output destination is a parameter error (exit 3), not
-    a silent no-op, so the same argv fails identically on the native and Python
+    Running one without an output destination is a usage error (exit 2), not a
+    silent no-op, so the same argv fails identically on the native and Python
     surfaces.
     """
     source = tmp_path / "tone.wav"
     _write_tone_wav(source)
     missing = _run_console(command, str(source), *effect_args)
-    assert missing.returncode == 3, missing.stderr
+    assert missing.returncode == 2, missing.stderr
+    assert "Missing required option '--output'" in missing.stderr
     out = tmp_path / "out.wav"
     ok = _run_console(command, str(source), "-o", str(out), *effect_args)
     assert ok.returncode == 0, ok.stderr
@@ -354,7 +355,10 @@ def test_effect_commands_require_output(tmp_path, command, effect_args) -> None:
 
 @pytest.mark.parametrize(
     ("command", "required_flag"),
-    [("pitch-shift", "--pitch-semitones required"), ("time-stretch", "--rate required")],
+    [
+        ("pitch-shift", "Missing required option '--pitch-semitones'"),
+        ("time-stretch", "Missing required option '--rate'"),
+    ],
 )
 def test_transform_commands_require_their_primary_parameter(
     tmp_path, command, required_flag
@@ -365,17 +369,17 @@ def test_transform_commands_require_their_primary_parameter(
     _write_tone_wav(source)
 
     result = _run_console(command, str(source), "-o", str(output))
-    assert result.returncode == 3
+    assert result.returncode == 2
     assert required_flag in result.stderr
 
 
-def test_cli_invalid_parameter_exit_code_matches_native_pitch_command(tmp_path) -> None:
-    """Semantic validation happens after parsing and uses exit 3 on both CLIs."""
+def test_cli_out_of_domain_choice_is_a_usage_error_on_both_clis(tmp_path) -> None:
+    """A value outside an option's domain is refused on the command line, exit 2."""
     source = tmp_path / "tone.wav"
     _write_tone_wav(source)
 
     result = _run_console("pitch", str(source), "--algorithm", "typo")
-    assert result.returncode == 3
+    assert result.returncode == 2
     assert "argument --algorithm: must be one of yin, pyin" in result.stderr
 
 
@@ -1054,7 +1058,7 @@ def test_mastering_cli_uses_requested_true_peak_oversample(tmp_path) -> None:
 
 @pytest.mark.parametrize(
     ("has_input", "has_output", "expected_code"),
-    [(False, False, 0), (False, True, 3), (True, False, 3), (True, True, 0)],
+    [(False, False, 0), (False, True, 2), (True, False, 2), (True, True, 0)],
 )
 def test_mix_input_output_contract(tmp_path, has_input, has_output, expected_code) -> None:
     """All four input/output combinations have an explicit artifact contract."""

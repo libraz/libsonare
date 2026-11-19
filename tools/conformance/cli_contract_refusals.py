@@ -28,7 +28,8 @@ from _repo import REPO_ROOT
 
 DOMAINS_PATH = REPO_ROOT / "tests" / "conformance" / "cli_option_domains.json"
 
-EXIT_FOR_CLASS = {"usage": 2, "invalid_parameter": 3}
+# Anything decidable from the command line alone is refused with this exit.
+EXIT_USAGE = 2
 
 # An input no front-end can open; reading it before validating fails the row.
 UNREADABLE_INPUT = "/nonexistent/sonare-conformance/unreadable.wav"
@@ -174,10 +175,6 @@ def run_domain_refusals(
     only without an input, each with its reason.
     """
     declaration = json.loads(DOMAINS_PATH.read_text(encoding="utf-8"))
-    required_parameter: dict[str, set[str]] = {}
-    for record in declaration["requiredInvalidParameter"]:
-        required_parameter.setdefault(record["command"], set()).add(record["option"])
-
     compared = 0
     not_compared: list[str] = []
     for row in declaration["domains"]:
@@ -194,8 +191,7 @@ def run_domain_refusals(
         required = [
             token
             for record in options
-            if record["name"] != name
-            and (record["required"] or record["name"] in required_parameter.get(path, set()))
+            if record["name"] != name and record["required"]
             for token in (f"--{record['name']}", inside_value(record, directory))
         ]
         if path not in positionals:
@@ -208,7 +204,7 @@ def run_domain_refusals(
             required,
         )
         expected_text = f"argument --{name}: {expected_predicate(row, option['type'])}"
-        expected_exit = EXIT_FOR_CLASS[row["reject_exit"]]
+        expected_exit = EXIT_USAGE
         texts = {}
         for surface, executable in (("native", native_executable), ("python", python_executable)):
             result = run(surface, executable, argv, timeout)
@@ -252,59 +248,49 @@ def run_domain_refusals(
     return compared, not_compared
 
 
-# (argv, the one line both front-ends must print, exit). ``{input}`` is an unreadable
+# (argv, the one line both front-ends must print); each is refused with exit 2. ``{input}`` is an unreadable
 # input and ``{output}`` a scratch path; each pair is legal option by option.
-CROSS_OPTION_ROWS: tuple[tuple[list[str], str, int], ...] = (
+CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     (
         ["key", "{input}", "--hpss", "--hop-length", "8"],
         "--hop-length must be at least 16 with --hpss (got 8)",
-        3,
     ),
     (
         ["rhythm", "{input}", "--bpm-min", "200", "--bpm-max", "100"],
         "--bpm-max must be greater than --bpm-min (--bpm-min 200, --bpm-max 100)",
-        3,
     ),
     (
         ["rhythm", "{input}", "--bpm-min", "250"],
         "--bpm-max must be greater than --bpm-min (--bpm-min 250, --bpm-max 200)",
-        3,
     ),
     (
         ["pitch", "{input}", "--f0-max-hz", "50"],
         "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 65, --f0-max-hz 50)",
-        2,
     ),
     (
         ["vocal-notes", "{input}", "--f0-min-hz", "3000"],
         "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 3000, --f0-max-hz 2093)",
-        2,
     ),
     (
         ["note-move", "{input}", "--onset-sample", "0", "--onset-sec", "0", "-o", "{output}"],
         "give --onset-sample or --onset-sec, not both",
-        3,
     ),
     (
         ["note-stretch", "{input}", "--offset-sample", "9", "--offset-sec", "1", "-o", "{output}"],
         "give --offset-sample or --offset-sec, not both",
-        3,
     ),
-    (["repair", "{input}"], "--output is required unless --detect is given", 3),
+    (["repair", "{input}"], "--output is required unless --detect is given"),
     (
         ["repair", "{input}", "--detect", "-o", "{output}"],
         "--output cannot be combined with --detect",
-        3,
     ),
     (
         ["project", "bounce", "{input}", "--channels", "3", "-o", "{output}"],
         "argument --channels: must be one of 1, 2, 6, 8; leave it out for the scene master's width",
-        3,
     ),
     (
         ["midi-render", "{input}", "--channels", "3", "-o", "{output}"],
         "argument --channels: must be one of 1, 2, 6, 8; leave it out for the scene master's width",
-        3,
     ),
 )
 
@@ -319,16 +305,16 @@ def run_cross_option_refusals(
 ) -> int:
     """Run every cross-option row on both front-ends; returns the number of rows compared."""
     tokens = {"{input}": UNREADABLE_INPUT, "{output}": str(directory / "cross_option.wav")}
-    for template, expected, expected_exit in CROSS_OPTION_ROWS:
+    for template, expected in CROSS_OPTION_ROWS:
         argv = [tokens.get(token, token) for token in template]
         for surface, executable in (("native", native_executable), ("python", python_executable)):
             result = run(surface, executable, argv, timeout)
             label = f"cross-option.{surface}.{argv!r}"
             tail = repr(result["stderr"].strip()[-200:])
-            if result["returncode"] != expected_exit:
+            if result["returncode"] != EXIT_USAGE:
                 detail = result.get("error") or f"exit {result['returncode']}"
                 report.append(
-                    ("fail", f"{label}: expected exit {expected_exit}, got {detail}: {tail}")
+                    ("fail", f"{label}: expected exit {EXIT_USAGE}, got {detail}: {tail}")
                 )
             lines = result["stderr"].splitlines()
             if not any(line == expected or line.endswith(f": {expected}") for line in lines):

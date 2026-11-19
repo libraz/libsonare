@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -85,10 +84,6 @@ from ._effects_level import _DEFAULT_NORMALIZE_TARGET_DB
 
 def cmd_hpss(args: argparse.Namespace) -> int:
     from . import hpss, hpss_with_residual
-
-    if not args.output:
-        print("Error: hpss requires an output file (-o/--output)", file=sys.stderr)
-        return EXIT_INVALID_PARAMETER
 
     modes = [
         name
@@ -186,10 +181,6 @@ def cmd_hpss(args: argparse.Namespace) -> int:
 def cmd_decompose_stems(args: argparse.Namespace) -> int:
     from . import decompose_stems
 
-    if not args.output:
-        print("Error: decompose-stems requires an output file (-o/--output)", file=sys.stderr)
-        return EXIT_INVALID_PARAMETER
-
     samples, sr = _load_audio(args.file)
     result = decompose_stems(
         samples,
@@ -235,8 +226,6 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
 def cmd_pitch_shift(args: argparse.Namespace) -> int:
     from . import pitch_shift
 
-    if args.pitch_semitones is None:
-        raise ValueError("--pitch-semitones required")
     samples, sr = _load_audio(args.file)
     result = pitch_shift(
         samples,
@@ -257,8 +246,6 @@ def cmd_pitch_shift(args: argparse.Namespace) -> int:
 def cmd_time_stretch(args: argparse.Namespace) -> int:
     from . import time_stretch
 
-    if args.rate is None:
-        raise ValueError("--rate required")
     samples, sr = _load_audio(args.file)
     result = time_stretch(
         samples,
@@ -342,7 +329,6 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
         label=label,
         # trim-silence doubles as analysis (it reports the trimmed length), so an
         # output file is optional here, matching the native CLI.
-        requires_output=False,
     )
 
 
@@ -443,9 +429,6 @@ def cmd_split_silence(args: argparse.Namespace) -> int:
 
 
 def cmd_resample(args: argparse.Namespace) -> int:
-    if not args.output:
-        print("Error: resample requires an output file (-o/--output)", file=sys.stderr)
-        return EXIT_INVALID_PARAMETER
 
     target_rate = args.target_sample_rate
     samples, sr = _load_audio(args.file)
@@ -639,7 +622,6 @@ def _add_spectral_geometry(parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"),
         minimum=0,
         exclusive_minimum=True,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         parser.add_argument(
@@ -647,7 +629,6 @@ def _add_spectral_geometry(parser: argparse.ArgumentParser) -> None:
         ),
         minimum=0,
         exclusive_minimum=True,
-        reject_exit="invalid_parameter",
     )
 
 
@@ -715,7 +696,6 @@ def register_effects_parsers(
             help="NMF initialisation: random or nndsvd (default: random)",
         ),
         choices=("random", "nndsvd"),
-        reject_exit="invalid_parameter",
     )
     stems_p.add_argument(
         "--mask-power",
@@ -751,7 +731,6 @@ def register_effects_parsers(
     _cli_domain(
         normalize_p.add_argument("--mode", default="peak", help="Normalization mode: peak or rms"),
         choices=("peak", "rms"),
-        reject_exit="invalid_parameter",
     )
     normalize_p.add_argument(
         "--target-db",
@@ -826,7 +805,6 @@ def register_effects_parsers(
         "--target-sample-rate",
         dest="target_sample_rate",
         type=_c_int,
-        required=True,
         help="Target sample rate in Hz",
     )
     voice_change_p = sub.add_parser(
@@ -851,7 +829,6 @@ def register_effects_parsers(
             help="How --formant-factor relates to the pitch shift: relative or absolute",
         ),
         choices=("relative", "absolute"),
-        reject_exit="invalid_parameter",
     )
     voice_change_p.add_argument(
         "--preset", default=None, help="Realtime voice changer preset id (default: none)"

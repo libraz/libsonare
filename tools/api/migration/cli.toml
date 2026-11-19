@@ -64,7 +64,7 @@ test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_fl
 [[entry]]
 kind = "flag"
 old = "chords --nnls"
-changed = "use --chroma-method nnls"
+changed = "use --chroma-method nnls; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
 to = "chords --chroma-method"
 domain = "analysis"
 rule = "cli-front-end-parity"
@@ -82,37 +82,47 @@ test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_fl
 [[entry]]
 kind = "flag"
 old = "note-move --onset"
-new = "note-move --onset-sample"
+changed = "renamed --onset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "note-move --onset-sample"
 domain = "effects"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
 
 [[entry]]
 kind = "flag"
 old = "note-move --offset"
-new = "note-move --offset-sample"
+changed = "renamed --offset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "note-move --offset-sample"
 domain = "effects"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
 
 [[entry]]
 kind = "flag"
 old = "note-move --target-onset"
-new = "note-move --target-onset-sample"
+changed = "renamed --target-onset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "note-move --target-onset-sample"
 domain = "effects"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
 
 [[entry]]
 kind = "flag"
 old = "note-stretch --onset"
-new = "note-stretch --onset-sample"
+changed = "renamed --onset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "note-stretch --onset-sample"
 domain = "effects"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
 
 [[entry]]
 kind = "flag"
 old = "note-stretch --offset"
-new = "note-stretch --offset-sample"
+changed = "renamed --offset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "note-stretch --offset-sample"
 domain = "effects"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
 
 [[entry]]
 kind = "flag"
@@ -239,7 +249,7 @@ test = "tests/conformance/cli_contract_v2.json::bpm_min_zero_refused"
 [[entry]]
 kind = "flag"
 old = "rhythm --bpm-max"
-changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo"
+changed = "a value at or below 0 is refused as a usage error (exit 2) rather than a usage error (exit 2) before the input is read, as on every flag that takes a tempo"
 domain = "analysis"
 rule = "tempo-range"
 test = "tests/conformance/cli_contract_v2.json::bpm_min_zero_refused"
@@ -263,7 +273,7 @@ rule = "individual"
 [[entry]]
 kind = "flag"
 old = "key --genre-hint"
-changed = "a value that names no genre hint (auto, edm, electronic, dance, pop, classical, jazz), an empty one included, is refused as an invalid parameter (exit 3) on the native CLI too, rather than read as auto or as not given; any letter case is accepted"
+changed = "a value that names no genre hint (auto, edm, electronic, dance, pop, classical, jazz), an empty one included, is refused as a usage error (exit 2) before the input is read on the native CLI too, rather than read as auto or as not given; any letter case is accepted"
 domain = "analysis"
 rule = "token-case"
 test = "tests/conformance/cli_contract_v2.json::genre_hint_unknown"
@@ -287,7 +297,7 @@ test = "tests/conformance/cli_contract_v2.json::frames_zero_refused"
 [[entry]]
 kind = "flag"
 old = "project.bounce --channels"
-changed = "omitted, the render takes the scene master's layout width rather than 2; an explicit 0 or a negative value is refused as a usage error (exit 2) rather than read as the default"
+changed = "omitted, the render takes the scene master's layout width rather than 2; an explicit 0 or a negative value is refused as a usage error (exit 2) rather than read as the default; a width no speaker layout has (not 1, 2, 6 or 8) is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "tests/conformance/cli_contract_v2.json::channels_zero_refused"
@@ -311,7 +321,7 @@ test = "tests/conformance/cli_contract_v2.json::frames_zero_refused"
 [[entry]]
 kind = "flag"
 old = "midi-render --channels"
-changed = "omitted, the render takes the scene master's layout width rather than 2; an explicit 0 or a negative value is refused as a usage error (exit 2) rather than read as the default"
+changed = "omitted, the render takes the scene master's layout width rather than 2; an explicit 0 or a negative value is refused as a usage error (exit 2) rather than read as the default; a width no speaker layout has (not 1, 2, 6 or 8) is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "tests/conformance/cli_contract_v2.json::channels_zero_refused"
@@ -328,9 +338,11 @@ frontend = "python"
 [[entry]]
 kind = "flag"
 old = "mel --fmin"
-new = "mel --fmin-hz"
+changed = "renamed --fmin-hz; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "mel --fmin-hz"
 domain = "analysis"
 rule = "frequency-bounds"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
 
 [[entry]]
 kind = "flag"
@@ -387,7 +399,7 @@ rule = "frequency-bounds"
 kind = "flag"
 old = "melody --fmin"
 frontend = "native"
-changed = "renamed --f0-min-hz; omitted, the library default (65 Hz) applies rather than 80 Hz; pass the 1.x value to keep 1.x output"
+changed = "renamed --f0-min-hz; omitted, the library default (65 Hz) applies rather than 80 Hz; pass the 1.x value to keep 1.x output; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
 to = "melody --f0-min-hz"
 domain = "analysis"
 rule = "library-owned-defaults"
@@ -397,7 +409,7 @@ test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reprodu
 kind = "flag"
 old = "melody --fmax"
 frontend = "native"
-changed = "renamed --f0-max-hz; omitted, the library default (2093 Hz) applies rather than 1000 Hz; pass the 1.x value to keep 1.x output"
+changed = "renamed --f0-max-hz; omitted, the library default (2093 Hz) applies rather than 1000 Hz; pass the 1.x value to keep 1.x output; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
 to = "melody --f0-max-hz"
 domain = "analysis"
 rule = "library-owned-defaults"
@@ -406,10 +418,12 @@ test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reprodu
 [[entry]]
 kind = "flag"
 old = "mel-to-audio --fmin"
-new = "mel-to-audio --fmin-hz"
+changed = "renamed --fmin-hz; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "mel-to-audio --fmin-hz"
 frontend = "native"
 domain = "analysis"
 rule = "frequency-bounds"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
 
 [[entry]]
 kind = "flag"
@@ -424,10 +438,12 @@ test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge t
 [[entry]]
 kind = "flag"
 old = "mfcc-to-audio --fmin"
-new = "mfcc-to-audio --fmin-hz"
+changed = "renamed --fmin-hz; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "mfcc-to-audio --fmin-hz"
 frontend = "native"
 domain = "analysis"
 rule = "frequency-bounds"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
 
 [[entry]]
 kind = "flag"
@@ -462,10 +478,12 @@ test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge t
 [[entry]]
 kind = "flag"
 old = "chirp --fmin"
-new = "chirp --fmin-hz"
+changed = "renamed --fmin-hz; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "chirp --fmin-hz"
 frontend = "native"
 domain = "core"
 rule = "frequency-bounds"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
 
 [[entry]]
 kind = "flag"
@@ -480,9 +498,11 @@ test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge t
 [[entry]]
 kind = "flag"
 old = "pitch-shift --semitones"
-new = "pitch-shift --pitch-semitones"
+changed = "renamed --pitch-semitones; leaving it out is refused as a usage error (exit 2) before the input is read, rather than exit 3 on the Python CLI and exit 1 on the native one"
+to = "pitch-shift --pitch-semitones"
 domain = "effects"
 rule = "pitch-semitones"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
 
 [[entry]]
 kind = "flag"
@@ -494,9 +514,11 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "flag"
 old = "sections --min-duration"
-new = "sections --min-duration-sec"
+changed = "renamed --min-duration-sec; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "sections --min-duration-sec"
 domain = "analysis"
 rule = "seconds-suffix"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
 
 [[entry]]
 kind = "flag"
@@ -586,26 +608,32 @@ rule = "individual"
 [[entry]]
 kind = "flag"
 old = "tone --sr"
-new = "tone --sample-rate"
+changed = "renamed --sample-rate; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "tone --sample-rate"
 frontend = "native"
 domain = "core"
 rule = "sample-rate-name"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
 
 [[entry]]
 kind = "flag"
 old = "chirp --sr"
-new = "chirp --sample-rate"
+changed = "renamed --sample-rate; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "chirp --sample-rate"
 frontend = "native"
 domain = "core"
 rule = "sample-rate-name"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
 
 [[entry]]
 kind = "flag"
 old = "clicks --sr"
-new = "clicks --sample-rate"
+changed = "renamed --sample-rate; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+to = "clicks --sample-rate"
 frontend = "native"
 domain = "core"
 rule = "sample-rate-name"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
 
 [[entry]]
 kind = "command"
@@ -791,7 +819,7 @@ rule = "mastering-names"
 [[entry]]
 kind = "flag"
 old = "mix-strip --pan-mode"
-changed = "takes balance, stereo-pan or dual-pan in any letter case; stereopan, dualpan and the scene JSON's stereoPan / dualPan are refused as an invalid parameter (exit 3)"
+changed = "takes balance, stereo-pan or dual-pan in any letter case; stereopan, dualpan and the scene JSON's stereoPan / dualPan are refused as a usage error (exit 2) before the input is read"
 domain = "mastering"
 rule = "token-case"
 test = "tests/cli/cli_effects_test.cpp::CLI mix-strip --pan-mode takes the kebab spellings in any case"
@@ -952,7 +980,7 @@ test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reprodu
 kind = "flag"
 old = "melody --hop-length"
 frontend = "native"
-changed = "omitted, the library hop of 256 samples applies rather than 512; pass --hop-length 512 to keep 1.x output"
+changed = "omitted, the library hop of 256 samples applies rather than 512; pass --hop-length 512 to keep 1.x output; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
@@ -1033,7 +1061,7 @@ test = "tests/conformance/cli_contract_v2.json::synth_empty_refused"
 [[entry]]
 kind = "flag"
 old = "project.align-takes --hop-length"
-changed = "omitted, the library's chroma hop applies; an explicit 0 is refused as an invalid parameter (exit 3) rather than read as the library value"
+changed = "omitted, the library's chroma hop applies; an explicit 0 is refused as a usage error (exit 2) before the input is read rather than read as the library value"
 domain = "project"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::hop_length_zero_refused"
@@ -1041,7 +1069,7 @@ test = "tests/conformance/cli_contract_v2.json::hop_length_zero_refused"
 [[entry]]
 kind = "flag"
 old = "project.align-takes --bins-per-octave"
-changed = "omitted, the library's chroma resolution applies; an explicit 0 is refused as an invalid parameter (exit 3) rather than read as the library value"
+changed = "omitted, the library's chroma resolution applies; an explicit 0 is refused as a usage error (exit 2) before the input is read rather than read as the library value"
 domain = "project"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::bins_per_octave_zero_refused"
@@ -1050,7 +1078,829 @@ test = "tests/conformance/cli_contract_v2.json::bins_per_octave_zero_refused"
 kind = "flag"
 old = "filter --type"
 frontend = "native"
-changed = "takes hp, lp, bp or notch in any letter case and is required; highpass, lowpass and bandpass are refused as an invalid parameter (exit 3)"
+changed = "takes hp, lp, bp or notch in any letter case and is required; highpass, lowpass and bandpass are refused as a usage error (exit 2) before the input is read"
 domain = "effects"
 rule = "token-case"
 test = "tests/cli/cli_effects_test.cpp::CLI filter takes hp, lp, bp or notch and refuses any other spelling"
+
+[[entry]]
+kind = "flag"
+old = "boundaries --absolute-threshold"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "boundaries --kernel-size"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "boundaries --n-chroma"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "boundaries --n-mfcc"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "boundaries --peak-distance"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "boundaries --reference-window"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "boundaries --threshold"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "chirp --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "chords --hmm-beam-width"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "chords --smoothing-window"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "clicks --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "decompose-stems --init"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "decompose-stems --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "deemphasis --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "dynamics --window-sec"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "eq --bits"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "eq --coeff-mode"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "eq --phase-mode"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "eq --placement"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "eq --resolution"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "eq --type"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "fade --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "filter --order"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "filter --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "gain --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "hpss --hop-length"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "hpss --n-fft"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "hpss --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "key --hop-length"
+changed = "a value below 16 with --hpss is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "mastering --bits"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "mastering-pair-processor --bits"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "mastering-processor --bits"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "mel-to-audio --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "melody --threshold"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "mfcc-to-audio --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "midi-render --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "mix --output"
+frontend = "python"
+changed = "giving it without --input, or --input without it, is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "engine"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "mix-strip --pan"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "mix-strip --width"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "normalize --mode"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "normalize --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "note-move --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "note-stretch --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "pitch --algorithm"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --hop-length"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --max-correction-semitones"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --retune-amount"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --retune-speed-ms"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --scale-mode-mask"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --scale-root"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --target-midi"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-correct-timevarying --vibrato-threshold-cents"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-shift --hop-length"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-shift --n-fft"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "pitch-shift --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "playback --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "engine"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "polyphonic-render --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "preemphasis --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "project.align-takes --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "project.align-takes --reference-source"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "project.bounce --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "project.export-midi2 --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "project.export-smf --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "project.import-midi2 --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "project.import-smf --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "project.new --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "repair --bits"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "repair --output"
+changed = "leaving it out without --detect, or giving it with --detect, is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "resample --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "room-morph --absorption"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "room-morph --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "room-morph --receiver-spacing"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "room-morph --seed"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "scale-quantize --mode-mask"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "scale-quantize --reference-midi"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "scale-quantize --root"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "sections --threshold"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "synthesize-rir --absorption"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "synthesize-rir --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "synthesize-rir --seed"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "time-stretch --hop-length"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "time-stretch --n-fft"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "time-stretch --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "time-stretch --rate"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than exit 3 on the Python CLI and exit 1 on the native one"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "tone --output"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --max-polyphony"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --min-frame-peak-ratio"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --min-note-division"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --min-ridge-peak-ratio"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "tune-to-midi --max-correction-semitones"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "tune-to-midi --min-overlap-ratio"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "tune-to-midi --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "tune-to-midi --track"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "tune-to-midi --unmatched-policy"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "vector-normalize --norm-type"
+frontend = "native"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "voice-change --formant-mode"
+changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "voice-change --output"
+changed = "leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"

@@ -205,8 +205,6 @@ def _render_via_reporting_handle(
 
 
 def cmd_playback(args: argparse.Namespace) -> int:
-    if not args.output:
-        raise SonareValueError("playback requires --output")
 
     planes, sample_rate = _load_audio_channels(args.file)
     channels = len(planes)

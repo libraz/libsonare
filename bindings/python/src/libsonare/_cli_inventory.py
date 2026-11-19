@@ -41,13 +41,50 @@ _PATH_OPTION_NAMES = frozenset(
 # native CLI's record field for field, because the cross-surface checker
 # compares them directly: that comparison is what turns "one surface narrowed an
 # option and the other did not" from an invisible drift into a failure.
-#
-# ``reject_exit`` names the exit-code class the refusal carries. ``usage`` (2) is
-# an argparse-level rejection -- a ``type=`` callable or a ``choices=`` tuple --
-# and ``invalid_parameter`` (3) is a handler that rejects after parsing. Both
-# exist here, so the class is part of the declaration rather than something a
-# reader has to infer from where the check happens to live.
 _DOMAIN_ATTRIBUTE = "sonare_cli_domain"
+
+# Options a command cannot run without, keyed by command path. One table rather
+# than argparse's ``required=True`` because a parent parser shares one action
+# across commands (``-o`` is required on a render, optional on ``trim-silence``),
+# and because the refusal is worded as the native CLI words it. The inventory
+# publishes these as required and the parser refuses a missing one before any
+# handler reads its input.
+_REQUIRED_OPTIONS: dict[str, tuple[str, ...]] = {
+    **{
+        path: ("output",)
+        for path in (
+            "decompose-stems",
+            "hpss",
+            "midi-render",
+            "normalize",
+            "note-move",
+            "note-stretch",
+            "pitch-correct",
+            "pitch-correct-timevarying",
+            "playback",
+            "polyphonic-render",
+            "project.bounce",
+            "project.export-midi2",
+            "project.export-smf",
+            "project.import-midi2",
+            "project.import-smf",
+            "project.new",
+            "room-morph",
+            "synthesize-rir",
+            "transcribe",
+            "voice-change",
+        )
+    },
+    "mastering-pair-analyze": ("analysis", "reference"),
+    "mastering-pair-processor": ("processor", "reference"),
+    "mastering-processor": ("processor",),
+    "mastering-stereo-analyze": ("analysis", "reference"),
+    "pitch-shift": ("pitch-semitones", "output"),
+    "project.align-takes": ("output", "reference-source"),
+    "resample": ("target-sample-rate", "output"),
+    "time-stretch": ("rate", "output"),
+    "tune-to-midi": ("reference-smf", "output"),
+}
 
 
 def _domain_record(
@@ -57,7 +94,6 @@ def _domain_record(
     exclusive_minimum: bool = False,
     maximum: float | None = None,
     exclusive_maximum: bool = False,
-    reject_exit: str = "usage",
 ) -> dict[str, Any]:
     """Build one published domain record."""
     return {
@@ -66,7 +102,6 @@ def _domain_record(
         "exclusive_minimum": exclusive_minimum,
         "maximum": maximum,
         "exclusive_maximum": exclusive_maximum,
-        "reject_exit": reject_exit,
     }
 
 
@@ -123,10 +158,8 @@ def _token_of(tokens: Sequence[str] | Callable[[], Sequence[str]]) -> Callable[[
 def _action_domain(action: argparse.Action) -> dict[str, Any] | None:
     """Return the published domain for one action, or None when unnarrowed.
 
-    A domain declared on the action itself wins: that is how an option the
-    parser accepts and the handler later refuses records its contract. Otherwise
-    an argparse ``choices=`` tuple and a domain recorded on the ``type=``
-    callable are both parser-level, so they publish the usage class.
+    A domain declared on the action itself wins; otherwise an argparse
+    ``choices=`` tuple or a domain recorded on the ``type=`` callable is published.
     """
     declared = getattr(action, _DOMAIN_ATTRIBUTE, None)
     if declared is not None:
@@ -239,11 +272,13 @@ def _stated_default(action: argparse.Action) -> str | None:
     return None
 
 
-def _inventory_option(action: argparse.Action) -> dict[str, Any] | None:
+def _inventory_option(
+    action: argparse.Action, required_options: tuple[str, ...] = ()
+) -> dict[str, Any] | None:
     """Convert one argparse option action to a schema-v2 record.
 
-    ``required`` describes argparse's unconditional parser-level requirement,
-    not whether a handler later rejects a missing value.  Required options
+    ``required`` is the command's own requirement (``required_options``, from
+    @ref _REQUIRED_OPTIONS) or argparse's unconditional one.  Required options
     deliberately report ``null`` regardless of argparse's internal default;
     repeatable options report ``[]`` so their accumulation shape is explicit.
     """
@@ -257,7 +292,7 @@ def _inventory_option(action: argparse.Action) -> dict[str, Any] | None:
     canonical_option = _canonical_option_string(action)
     canonical = canonical_option.lstrip("-")
     aliases = [option.lstrip("-") for option in action.option_strings if option != canonical_option]
-    required = bool(action.required)
+    required = bool(action.required) or canonical in required_options
     repeatable = _is_repeatable(action)
     option_type = _option_type(action, canonical)
 
@@ -302,8 +337,11 @@ def _leaf_command_parsers(
 
 
 def _command_record(path: str, parser: argparse.ArgumentParser) -> dict[str, Any]:
+    required_options = _REQUIRED_OPTIONS.get(path, ())
     options = [
-        option for action in parser._actions if (option := _inventory_option(action)) is not None
+        option
+        for action in parser._actions
+        if (option := _inventory_option(action, required_options)) is not None
     ]
     return {"path": path, "aliases": [], "options": options}
 

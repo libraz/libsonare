@@ -21,7 +21,7 @@
 // Offline-effect output contract: a command that renders an audio buffer
 // requires -o/--output. Running it without a destination has no useful result
 // (the render would be computed and thrown away), so the missing-output case is
-// a hard error mapped to the invalid-parameter exit code, not a silent no-op.
+// refused before dispatch, not a silent no-op.
 // trim-silence is the deliberate exception: it doubles as an analysis command
 // (it reports the trimmed length), so its output stays optional.
 //
@@ -32,11 +32,6 @@
 // caller happened to run.
 
 int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
-  if (!args.has("pitch-semitones")) {
-    std::cerr << color::red << "Error: --pitch-semitones required" << color::reset << "\n";
-    return 1;
-  }
-
   float semitones = args.get_float("pitch-semitones", 0.0f);
   PitchShiftConfig config;
   config.n_fft = args.get_int("n-fft", config.n_fft);
@@ -69,11 +64,6 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
-  if (!args.has("rate")) {
-    std::cerr << color::red << "Error: --rate required" << color::reset << "\n";
-    return 1;
-  }
-
   float rate = args.get_float("rate", 1.0f);
   TimeStretchConfig config;
   config.n_fft = args.get_int("n-fft", config.n_fft);

@@ -340,7 +340,6 @@ def register_advanced_parsers(
         ),
         minimum=0,
         exclusive_minimum=True,
-        reject_exit="invalid_parameter",
     )
     # Dynamics windows the loudness series but runs no FFT, so it takes the hop
     # control without the matching --n-fft.

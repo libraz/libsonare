@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import argparse
 import math
-import sys
 from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _MAX_PROJECT_OR_MIDI_BYTES,
-    EXIT_INVALID_PARAMETER,
     PITCH_NAMES,
     _audio_array,
     _emit_effect_result,
@@ -39,7 +37,6 @@ from ._cli_options import (
     _read_number_text,
 )
 from ._effects_note_ops import _UNMATCHED_POLICIES
-from ._errors import SonareValueError
 from ._narrowing import _resolve_sample_bound
 
 if TYPE_CHECKING:
@@ -108,14 +105,6 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
     return _emit_effect_result(args, [result], sr, label="Time-varying pitch correct")
 
 
-def _refuse_both_bound_spellings(args: argparse.Namespace, bounds: tuple[str, ...]) -> None:
-    """Refuse a position given both in samples and in seconds, naming the flags."""
-    for bound in bounds:
-        attr = bound.replace("-", "_")
-        if getattr(args, f"{attr}_sample") is not None and getattr(args, f"{attr}_sec") is not None:
-            raise SonareValueError(f"give --{bound}-sample or --{bound}-sec, not both")
-
-
 def _note_bound_sample(args: argparse.Namespace, bound: str, sample_rate: int) -> int | None:
     """Resolve ``--<bound>-sample`` / ``--<bound>-sec`` to a sample index, or None if absent."""
     attr = bound.replace("-", "_")
@@ -131,7 +120,6 @@ def _note_bound_sample(args: argparse.Namespace, bound: str, sample_rate: int) -
 def cmd_note_move(args: argparse.Namespace) -> int:
     from . import note_move
 
-    _refuse_both_bound_spellings(args, ("onset", "offset", "target-onset"))
     samples, sr = _load_audio(args.file)
     result = note_move(
         samples,
@@ -160,7 +148,6 @@ def cmd_scale_quantize(args: argparse.Namespace) -> int:
 def cmd_note_stretch(args: argparse.Namespace) -> int:
     from . import note_stretch
 
-    _refuse_both_bound_spellings(args, ("onset", "offset"))
     samples, sr = _load_audio(args.file)
     onset = _note_bound_sample(args, "onset", sr)
     onset = 0 if onset is None else onset
@@ -215,10 +202,6 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
         pitch_pyin,
         render_notes,
     )
-
-    if not args.output:
-        print("Error: tune-to-midi requires an output file (-o/--output)", file=sys.stderr)
-        return EXIT_INVALID_PARAMETER
 
     # Only what the caller spelled is forwarded: 0 is legal for both, so neither
     # can double as the sentinel that asks for the library default.
@@ -516,9 +499,6 @@ def cmd_polyphonic_render(args: argparse.Namespace) -> int:
 
     # Checked before the analysis rather than in _emit_effect_result: the chain is
     # the expensive part of the command and a missing destination is already known.
-    if not args.output:
-        print("Error: polyphonic-render requires an output file (-o/--output)", file=sys.stderr)
-        return EXIT_INVALID_PARAMETER
 
     assignments = list(getattr(args, "edit", None) or [])
     samples, sr = _load_audio(args.file)
@@ -548,7 +528,7 @@ def cmd_polyphonic_render(args: argparse.Namespace) -> int:
 
 def _position(action: argparse.Action) -> argparse.Action:
     """Publish a note-region position's domain; the handler refuses a negative one."""
-    return _cli_domain(action, minimum=0, reject_exit="invalid_parameter")
+    return _cli_domain(action, minimum=0)
 
 
 def register_note_edit_parsers(
@@ -590,7 +570,6 @@ def register_note_edit_parsers(
         pitch_tv_p.add_argument("--target-midi", type=_finite_float, default=69.0),
         minimum=0,
         maximum=127,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         pitch_tv_p.add_argument(
@@ -598,7 +577,6 @@ def register_note_edit_parsers(
         ),
         minimum=0,
         exclusive_minimum=True,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         pitch_tv_p.add_argument(
@@ -606,7 +584,6 @@ def register_note_edit_parsers(
         ),
         minimum=0,
         maximum=11,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         pitch_tv_p.add_argument(
@@ -617,7 +594,6 @@ def register_note_edit_parsers(
         ),
         minimum=1,
         maximum=4095,
-        reject_exit="invalid_parameter",
     )
     pitch_tv_p.add_argument(
         "--reference-midi",
@@ -636,7 +612,6 @@ def register_note_edit_parsers(
         ),
         minimum=0,
         maximum=1,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         pitch_tv_p.add_argument(
@@ -646,7 +621,6 @@ def register_note_edit_parsers(
             help="Largest correction in semitones (default: 12.0)",
         ),
         minimum=0,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         pitch_tv_p.add_argument(
@@ -656,7 +630,6 @@ def register_note_edit_parsers(
             help="Retune time constant in ms (default: 50.0)",
         ),
         minimum=0,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         pitch_tv_p.add_argument(
@@ -666,7 +639,6 @@ def register_note_edit_parsers(
             help="Vibrato below this depth is preserved, in cents (default: 20.0)",
         ),
         minimum=0,
-        reject_exit="invalid_parameter",
     )
     note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
     _position(
@@ -724,7 +696,6 @@ def register_note_edit_parsers(
         scale_quantize_p.add_argument("--root", type=_c_int, default=0),
         minimum=0,
         maximum=11,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         scale_quantize_p.add_argument(
@@ -735,13 +706,11 @@ def register_note_edit_parsers(
         ),
         minimum=1,
         maximum=4095,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         scale_quantize_p.add_argument("--reference-midi", type=_finite_float, default=69.0),
         minimum=0,
         maximum=127,
-        reject_exit="invalid_parameter",
     )
     note_stretch_p = sub.add_parser(
         "note-stretch", parents=[common], help="Time-stretch a single note region"
@@ -787,7 +756,6 @@ def register_note_edit_parsers(
     )
     tune_to_midi_p.add_argument(
         "--reference-smf",
-        required=True,
         metavar="PATH",
         help="Standard MIDI File holding the reference melody",
     )
@@ -802,11 +770,9 @@ def register_note_edit_parsers(
             help="MIDI-bearing track the melody is read from",
         ),
         minimum=0,
-        reject_exit="invalid_parameter",
     )
-    # Declared rather than given to argparse as choices=: an unknown name is
-    # refused by the handler, which carries the invalid-parameter class the
-    # command's other value domains carry rather than argparse's usage class.
+    # Declared rather than given to argparse as choices=, so the refusal states the
+    # library's predicate like the command's other value domains.
     _cli_domain(
         tune_to_midi_p.add_argument(
             "--unmatched-policy",
@@ -820,7 +786,6 @@ def register_note_edit_parsers(
             ),
         ),
         choices=_UNMATCHED_POLICY_NAMES,
-        reject_exit="invalid_parameter",
     )
     # Neither of the next two carries a CLI default: 0 is a legal value for both,
     # so an absent flag has to reach the handler as None and leave the library's
@@ -835,7 +800,6 @@ def register_note_edit_parsers(
         ),
         minimum=0.0,
         maximum=1.0,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         tune_to_midi_p.add_argument(
@@ -846,7 +810,6 @@ def register_note_edit_parsers(
             help="Where an assigned pitch shift saturates (library default: 12)",
         ),
         minimum=0.0,
-        reject_exit="invalid_parameter",
     )
     sub.add_parser(
         "polyphonic-notes",

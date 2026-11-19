@@ -187,25 +187,23 @@ CliOptionSpec optional_string(const char* name, const char* implicit = "true",
 // answers depending on which code path reached it first.
 // ---------------------------------------------------------------------------
 
-CliOptionDomain greater_than(double minimum, CliOptionDomainStage stage) {
+CliOptionDomain greater_than(double minimum) {
   CliOptionDomain domain;
   domain.has_minimum = true;
   domain.minimum = minimum;
   domain.exclusive_minimum = true;
-  domain.stage = stage;
   return domain;
 }
 
-CliOptionDomain at_least(double minimum, CliOptionDomainStage stage) {
+CliOptionDomain at_least(double minimum) {
   CliOptionDomain domain;
   domain.has_minimum = true;
   domain.minimum = minimum;
-  domain.stage = stage;
   return domain;
 }
 
-CliOptionDomain above_zero_up_to(double maximum, CliOptionDomainStage stage) {
-  CliOptionDomain domain = greater_than(0.0, stage);
+CliOptionDomain above_zero_up_to(double maximum) {
+  CliOptionDomain domain = greater_than(0.0);
   domain.has_maximum = true;
   domain.maximum = maximum;
   return domain;
@@ -214,17 +212,16 @@ CliOptionDomain above_zero_up_to(double maximum, CliOptionDomainStage stage) {
 // An inclusive numeric range. Expressing one as a choices list is exact for a
 // dozen enumerators and absurd for a twelve-bit mask, so a range that is a
 // range says so.
-CliOptionDomain between(double minimum, double maximum, CliOptionDomainStage stage) {
-  CliOptionDomain domain = at_least(minimum, stage);
+CliOptionDomain between(double minimum, double maximum) {
+  CliOptionDomain domain = at_least(minimum);
   domain.has_maximum = true;
   domain.maximum = maximum;
   return domain;
 }
 
-CliOptionDomain choices_of(std::vector<std::string> values, CliOptionDomainStage stage) {
+CliOptionDomain choices_of(std::vector<std::string> values) {
   CliOptionDomain domain;
   domain.choices = std::move(values);
-  domain.stage = stage;
   return domain;
 }
 
@@ -236,16 +233,12 @@ CliOptionDomain choices_of(std::vector<std::string> values, CliOptionDomainStage
 // applies a peak filter, prints a normal JSON result and exits 0. Declaring the
 // range makes the refusal happen here, once, alongside every other domain --
 // rather than each handler re-deriving an enumerator count the registry cannot
-// see. `[lowest, highest]` is inclusive, and the refusal takes the
-// invalid-parameter class because the caller spelled a number correctly and
-// named a target that does not exist, which is what
-// mastering::api::checked_enum already reports for the same mistake arriving
-// through --params.
-CliOptionDomain enum_index(int lowest, int highest, CliOptionDomainStage stage) {
+// see. `[lowest, highest]` is inclusive.
+CliOptionDomain enum_index(int lowest, int highest) {
   std::vector<std::string> values;
   values.reserve(static_cast<size_t>(highest - lowest + 1));
   for (int value = lowest; value <= highest; ++value) values.push_back(std::to_string(value));
-  return choices_of(std::move(values), stage);
+  return choices_of(std::move(values));
 }
 
 CliOptionSpec with_domain(CliOptionSpec spec, CliOptionDomain domain) {
@@ -255,20 +248,16 @@ CliOptionSpec with_domain(CliOptionSpec spec, CliOptionDomain domain) {
 
 // One spelling of a position given in samples or in seconds, from a builder with
 // no default: absence lets the handler apply the library's own.
-CliOptionSpec position(CliOptionSpec spec) {
-  return with_domain(std::move(spec), at_least(0.0, CliOptionDomainStage::Parameter));
-}
+CliOptionSpec position(CliOptionSpec spec) { return with_domain(std::move(spec), at_least(0.0)); }
 
 // A tempo, on every command that takes one, is refused at the flag unless it is
 // greater than 0, so no command reaches the library with a tempo nobody can play.
-CliOptionSpec tempo(CliOptionSpec spec) {
-  return with_domain(std::move(spec), greater_than(0.0, CliOptionDomainStage::Usage));
-}
+CliOptionSpec tempo(CliOptionSpec spec) { return with_domain(std::move(spec), greater_than(0.0)); }
 
 // A render length or channel count the library chooses when the flag is left out;
 // a value the caller spells is refused at the flag unless it is greater than 0.
 CliOptionSpec library_sized(CliOptionSpec spec) {
-  return with_domain(std::move(spec), greater_than(0.0, CliOptionDomainStage::Usage));
+  return with_domain(std::move(spec), greater_than(0.0));
 }
 
 // A twelve-bit scale mask the caller may also name by mode. It stays an Integer
@@ -285,42 +274,22 @@ CliOptionSpec mode_mask_value(const char* name) {
   return spec;
 }
 
-/// Marks an option required and declares which exit class its absence reports.
-CliOptionSpec required_with_stage(CliOptionSpec spec, CliOptionDomainStage stage) {
-  spec.required = true;
-  spec.default_value = null_default();
-  spec.required_stage = stage;
-  return spec;
-}
-
 CliOptionSpec output_value(bool required = false) {
   return path_value("output", required, true, true, {"o"});
 }
 
-// An output file the command cannot run without. The Python CLI leaves `-o`
-// optional in its parser and rejects the absent case inside the handler with
-// its invalid-parameter code, so the native contract declares the same class
-// here rather than letting the registry's default usage class diverge from it.
-CliOptionSpec required_output() {
-  return required_with_stage(output_value(), CliOptionDomainStage::Parameter);
-}
+// An output file the command cannot run without.
+CliOptionSpec required_output() { return output_value(true); }
 
 #ifdef SONARE_WITH_MASTERING
-// Output bit depth for every command that writes a WAV. The Python CLI parses
-// it as a plain int and rejects anything but 16/24 inside the handler, which is
-// its invalid-parameter class; declaring the same set and stage here makes the
-// check unconditional (it used to sit inside the `-o` branch) without changing
-// which code either CLI reports.
-CliOptionSpec bits_value() {
-  return with_domain(int_value("bits", 16),
-                     choices_of({"16", "24"}, CliOptionDomainStage::Parameter));
-}
+// Output bit depth for every command that writes a WAV. Declared as a domain so
+// the check is unconditional rather than sitting inside the `-o` branch.
+CliOptionSpec bits_value() { return with_domain(int_value("bits", 16), choices_of({"16", "24"})); }
 
 // The Python CLI declares this one as an argparse `choices=` tuple, which is a
 // parse-time rejection, so the native contract has to report it as usage.
 CliOptionSpec true_peak_oversample_value() {
-  return with_domain(int_value("true-peak-oversample", 4),
-                     choices_of({"1", "2", "4", "8", "16"}, CliOptionDomainStage::Usage));
+  return with_domain(int_value("true-peak-oversample", 4), choices_of({"1", "2", "4", "8", "16"}));
 }
 
 // Delivery target for the mastering assistant. The accepted names come from
@@ -330,9 +299,8 @@ CliOptionSpec true_peak_oversample_value() {
 // default matches AssistantConfig::target_platform, so an invocation without the
 // option keeps the streaming convention it had before the option existed.
 CliOptionSpec target_platform_value() {
-  return with_domain(
-      string_value("target-platform", "streaming"),
-      choices_of(sonare::mastering::assistant::platform_names(), CliOptionDomainStage::Usage));
+  return with_domain(string_value("target-platform", "streaming"),
+                     choices_of(sonare::mastering::assistant::platform_names()));
 }
 
 // `repair` writes a repaired file, so `--output` is normally required; `--detect`
@@ -341,10 +309,10 @@ CliOptionSpec target_platform_value() {
 // the command carries this validator instead.
 CliValidationError validate_repair_output(const CliArgs& args) {
   if (args.has("detect") && args.has("output")) {
-    return {"--output cannot be combined with --detect", true};
+    return {"--output cannot be combined with --detect"};
   }
   if (args.has("detect") || args.has("output")) return {};
-  return {"--output is required unless --detect is given", true};
+  return {"--output is required unless --detect is given"};
 }
 #endif
 
@@ -366,7 +334,7 @@ CliValidationError validate_pitch_frequency_order(const CliArgs& args) {
   std::ostringstream message;
   message << "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz " << minimum
           << ", --f0-max-hz " << maximum << ")";
-  return {message.str(), false};
+  return {message.str()};
 }
 
 // The same ordering rule as `pitch`, for a vocal session. Neither
@@ -381,7 +349,7 @@ CliValidationError validate_vocal_frequency_order(const CliArgs& args) {
   std::ostringstream message;
   message << "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz " << minimum
           << ", --f0-max-hz " << maximum << ")";
-  return {message.str(), false};
+  return {message.str()};
 }
 
 // The detector combines the MFCC and chroma streams frame-for-frame, so with
@@ -391,8 +359,7 @@ CliValidationError validate_boundary_feature_streams(const CliArgs& args) {
   if (!args.has("no-mfcc") || !args.has("no-chroma")) return {};
   return {
       "--no-mfcc and --no-chroma cannot both be given: boundary detection "
-      "needs at least one feature stream",
-      true};
+      "needs at least one feature stream"};
 }
 
 // A position is spelled in samples or in seconds; both at once is refused by
@@ -403,7 +370,7 @@ CliValidationError refuse_both_bound_spellings(const CliArgs& args,
     const std::string sample = std::string(bound) + "-sample";
     const std::string sec = std::string(bound) + "-sec";
     if (args.has(sample) && args.has(sec)) {
-      return {"give --" + sample + " or --" + sec + ", not both", true};
+      return {"give --" + sample + " or --" + sec + ", not both"};
     }
   }
   return {};
@@ -427,7 +394,7 @@ CliValidationError validate_rhythm_tempo_range(const CliArgs& args) {
   std::ostringstream message;
   message << "--bpm-max must be greater than --bpm-min (--bpm-min " << minimum << ", --bpm-max "
           << maximum << ")";
-  return {message.str(), true};
+  return {message.str()};
 }
 
 // Compared against the band the analyzer will use, not the raw options: an absent
@@ -440,7 +407,7 @@ CliValidationError validate_melody_frequency_band(const CliArgs& args) {
   std::ostringstream message;
   message << "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz " << minimum
           << ", --f0-max-hz " << maximum << ")";
-  return {message.str(), true};
+  return {message.str()};
 }
 
 // Only when HPSS is on: the separation needs enough overlap to resynthesize, and
@@ -454,7 +421,7 @@ CliValidationError validate_key_hpss_hop(const CliArgs& args) {
   std::ostringstream message;
   message << "--hop-length must be at least " << sonare::kMinKeyHpssHopLength
           << " with --hpss (got " << args.hop_length << ")";
-  return {message.str(), true};
+  return {message.str()};
 }
 
 #ifdef SONARE_WITH_ARRANGEMENT
@@ -481,8 +448,7 @@ CliValidationError validate_project_bounce_channels(const CliArgs& args) {
     return {};
   }
   return {"argument --channels: must be one of " + std::to_string(mono) + ", " +
-              std::to_string(stereo) + ", 6, 8; leave it out for the scene master's width",
-          true};
+          std::to_string(stereo) + ", 6, 8; leave it out for the scene master's width"};
 }
 #endif
 
@@ -601,9 +567,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          // The Python CLI parses this through a non-negative finite
          // checker, so the native contract declares the same domain and
          // the same (parse-time) class.
-         library_default(with_domain(number_value("chroma-high-pass-hz"),
-                                     at_least(0.0, CliOptionDomainStage::Usage)),
-                         "80.0"),
+         library_default(with_domain(number_value("chroma-high-pass-hz"), at_least(0.0)), "80.0"),
          // An odd meter is only ever reported if its numerator was
          // asked for, so without these the CLI cannot reach one. The
          // list is a string here and validated by the core, which is
@@ -612,9 +576,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                          joined_numbers(sonare::MusicAnalyzerConfig{}.meter_candidate_numerators)),
          // The Python CLI parses this through its positive-integer
          // checker, so the domain and the (parse-time) class match it.
-         library_default(with_domain(int_value("meter-denominator"),
-                                     greater_than(0.0, CliOptionDomainStage::Usage)),
-                         "4")});
+         library_default(with_domain(int_value("meter-denominator"), greater_than(0.0)), "4")});
     for (const char* path : {"bpm", "beats", "downbeats", "onsets"})
       add_command(commands, path, true, {});
     add_command(commands, "timbre", true,
@@ -630,8 +592,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_stated_default(nullable_string_value("profile"), "chosen by --genre-hint"),
          with_stated_default(with_domain(nullable_string_value("genre-hint"),
                                          choices_of({"auto", "edm", "electronic", "dance", "pop",
-                                                     "classical", "jazz"},
-                                                    CliOptionDomainStage::Parameter)),
+                                                     "classical", "jazz"})),
                              sonare::KeyConfig{}.genre_hint)},
         {}, validate_key_hpss_hop);
     // `smoothing-window` and `hmm-beam-width` carry the C entry point's domains;
@@ -644,35 +605,26 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         {library_default(global_int("n-fft"), "2048"),
          library_default(global_int("hop-length"), "512"),
          library_default(number_value("min-duration-sec"), "0.3"),
-         library_default(with_domain(number_value("smoothing-window"),
-                                     greater_than(0.0, CliOptionDomainStage::Parameter)),
-                         "2.0"),
+         library_default(with_domain(number_value("smoothing-window"), greater_than(0.0)), "2.0"),
          library_default(number_value("threshold"), "0.5"), flag("with-seventh"),
-         library_default(
-             with_domain(nullable_string_value("chroma-method"),
-                         choices_of({"cqt", "stft", "nnls"}, CliOptionDomainStage::Parameter)),
-             "cqt"),
+         library_default(with_domain(nullable_string_value("chroma-method"),
+                                     choices_of({"cqt", "stft", "nnls"})),
+                         "cqt"),
          flag("no-beat-sync"), flag("no-hmm"),
-         library_default(with_domain(int_value("hmm-beam-width"),
-                                     at_least(0.0, CliOptionDomainStage::Parameter)),
-                         "24"),
+         library_default(with_domain(int_value("hmm-beam-width"), at_least(0.0)), "24"),
          flag("key-context"), library_default(nullable_string_value("key-root"), "C"),
          library_default(nullable_string_value("key-mode"), "major"), flag("detect-inversions")});
-    add_command(commands, "sections", true,
-                {library_default(with_domain(number_value("min-duration-sec"),
-                                             at_least(0.0, CliOptionDomainStage::Parameter)),
-                                 "4.0"),
-                 library_default(with_domain(number_value("threshold"),
-                                             at_least(0.0, CliOptionDomainStage::Parameter)),
-                                 sonare::kSectionBoundaryThreshold),
-                 library_default(global_int("n-fft"), "2048"),
-                 library_default(global_int("hop-length"), "512")});
+    add_command(
+        commands, "sections", true,
+        {library_default(with_domain(number_value("min-duration-sec"), at_least(0.0)), "4.0"),
+         library_default(with_domain(number_value("threshold"), at_least(0.0)),
+                         sonare::kSectionBoundaryThreshold),
+         library_default(global_int("n-fft"), "2048"),
+         library_default(global_int("hop-length"), "512")});
     // DynamicsAnalyzer floors a tiny or negative window to avoid a 0/0 rather
     // than refusing it, so the refusal the other surfaces get has to be here.
     add_command(commands, "dynamics", true,
-                {library_default(with_domain(number_value("window-sec"),
-                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                                 "0.4"),
+                {library_default(with_domain(number_value("window-sec"), greater_than(0.0)), "0.4"),
                  library_default(global_int("hop-length"), "512")});
     // Neither RhythmAnalyzer nor the BeatAnalyzer it forwards to validates any of
     // the three tempo bounds; the derived periods are merely floored at 1.
@@ -689,20 +641,14 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // and the loop does not terminate. The plain-YIN entry it calls
     // (yin_with_confidence) validates nothing either -- the checks live in
     // yin_track, which this path does not go through.
-    add_command(commands, "melody", true,
-                {library_default(with_domain(number_value("threshold"),
-                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                                 "0.1"),
-                 library_default(with_domain(int_value("hop-length", false, true),
-                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                                 "256"),
-                 library_default(with_domain(number_value("f0-min-hz"),
-                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                                 "65.0"),
-                 library_default(with_domain(number_value("f0-max-hz"),
-                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                                 "2093.0")},
-                {}, validate_melody_frequency_band);
+    add_command(
+        commands, "melody", true,
+        {library_default(with_domain(number_value("threshold"), greater_than(0.0)), "0.1"),
+         library_default(with_domain(int_value("hop-length", false, true), greater_than(0.0)),
+                         "256"),
+         library_default(with_domain(number_value("f0-min-hz"), greater_than(0.0)), "65.0"),
+         library_default(with_domain(number_value("f0-max-hz"), greater_than(0.0)), "2093.0")},
+        {}, validate_melody_frequency_band);
     // The whole of BoundaryConfig, so a command line can reach the same detector
     // the other surfaces do. `absolute-threshold` is the one that was missing and
     // mattered: `threshold` is relative to the curve's own maximum, so it cannot
@@ -711,58 +657,46 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // default and so are spelled as negations. Each size is refused at zero
     // because the detector has no behaviour there, and the C entry the other
     // surfaces reach refuses the same values with the same class.
-    add_command(
-        commands, "boundaries", true,
-        {with_domain(number_value("threshold", 0.3),
-                     at_least(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(number_value("absolute-threshold", 0.005),
-                     at_least(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(int_value("kernel-size", 64),
-                     greater_than(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(int_value("n-mfcc", 13), greater_than(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(int_value("n-chroma", 12), greater_than(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(number_value("peak-distance", 2.0),
-                     at_least(0.0, CliOptionDomainStage::Parameter)),
-         // One-sided seconds the relative threshold is measured against; 0 disables it.
-         with_domain(number_value("reference-window", 60.0),
-                     at_least(0.0, CliOptionDomainStage::Parameter)),
-         flag("no-mfcc"), flag("no-chroma"), library_default(global_int("n-fft"), "2048"),
-         library_default(global_int("hop-length"), "512")},
-        {}, validate_boundary_feature_streams);
+    add_command(commands, "boundaries", true,
+                {with_domain(number_value("threshold", 0.3), at_least(0.0)),
+                 with_domain(number_value("absolute-threshold", 0.005), at_least(0.0)),
+                 with_domain(int_value("kernel-size", 64), greater_than(0.0)),
+                 with_domain(int_value("n-mfcc", 13), greater_than(0.0)),
+                 with_domain(int_value("n-chroma", 12), greater_than(0.0)),
+                 with_domain(number_value("peak-distance", 2.0), at_least(0.0)),
+                 // One-sided seconds the relative threshold is measured against; 0 disables it.
+                 with_domain(number_value("reference-window", 60.0), at_least(0.0)),
+                 flag("no-mfcc"), flag("no-chroma"), library_default(global_int("n-fft"), "2048"),
+                 library_default(global_int("hop-length"), "512")},
+                {}, validate_boundary_feature_streams);
 
     // Processing leaves.
     // The native spectral backend repairs a non-positive analysis geometry into
     // the librosa defaults instead of refusing it, five lines above a comment
     // saying a geometry that cannot be overlap-added is an error rather than
     // something to repair. These two make the refusal the one a caller gets.
-    add_command(commands, "pitch-shift", true,
-                {number_value("pitch-semitones"), required_output(),
-                 with_domain(library_default(global_int("n-fft"), "2048"),
-                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(library_default(global_int("hop-length"), "n_fft/4"),
-                             greater_than(0.0, CliOptionDomainStage::Parameter))});
-    add_command(commands, "time-stretch", true,
-                {number_value("rate"), required_output(),
-                 with_domain(library_default(global_int("n-fft"), "2048"),
-                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(library_default(global_int("hop-length"), "n_fft/4"),
-                             greater_than(0.0, CliOptionDomainStage::Parameter))});
+    add_command(
+        commands, "pitch-shift", true,
+        {number_value("pitch-semitones", true), required_output(),
+         with_domain(library_default(global_int("n-fft"), "2048"), greater_than(0.0)),
+         with_domain(library_default(global_int("hop-length"), "n_fft/4"), greater_than(0.0))});
+    add_command(
+        commands, "time-stretch", true,
+        {number_value("rate", true), required_output(),
+         with_domain(library_default(global_int("n-fft"), "2048"), greater_than(0.0)),
+         with_domain(library_default(global_int("hop-length"), "n_fft/4"), greater_than(0.0))});
     add_command(
         commands, "pitch-correct", true,
         {number_value("current-midi", 69.0), number_value("target-midi", 69.0), required_output()});
     // The MIDI value is the positional, and the three narrowed options carry
     // the ranges the scale quantizer refuses outside of -- the pitch class, the
     // twelve-bit mode mask, and the grid anchor. Each is a value the caller
-    // spelled correctly and the library will not act on, so all three take the
-    // invalid-parameter class the Python CLI already reports for them.
-    add_command(
-        commands, "scale-quantize", false,
-        {with_domain(int_value("root", 0), between(0.0, 11.0, CliOptionDomainStage::Parameter)),
-         with_domain(mode_mask_value("mode-mask", 0xAB5),
-                     between(1.0, 4095.0, CliOptionDomainStage::Parameter)),
-         with_domain(number_value("reference-midi", 69.0),
-                     between(0.0, 127.0, CliOptionDomainStage::Parameter))},
-        {}, nullptr, 1);
+    // spelled correctly and the library will not act on.
+    add_command(commands, "scale-quantize", false,
+                {with_domain(int_value("root", 0), between(0.0, 11.0)),
+                 with_domain(mode_mask_value("mode-mask", 0xAB5), between(1.0, 4095.0)),
+                 with_domain(number_value("reference-midi", 69.0), between(0.0, 127.0))},
+                {}, nullptr, 1);
     // The scale arguments are checked whichever target mode is selected, and
     // --target-midi names a note in both, so all three carry their range here
     // rather than only on the branch that reads them. --reference-midi is
@@ -770,33 +704,22 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // only, and declaring a range would refuse a value the library accepts.
     // The four retune options carry the ranges the library's correction config
     // refuses outside of.
-    add_command(commands, "pitch-correct-timevarying", true,
-                {with_domain(string_value("mode", "midi"),
-                             choices_of({"midi", "scale"}, CliOptionDomainStage::Usage)),
-                 with_domain(number_value("target-midi", 69.0),
-                             between(0.0, 127.0, CliOptionDomainStage::Parameter)),
-                 library_default(with_domain(int_value("hop-length"),
-                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                                 "512"),
-                 library_default(with_domain(int_value("scale-root"),
-                                             between(0.0, 11.0, CliOptionDomainStage::Parameter)),
-                                 "0"),
-                 with_domain(library_default(mode_mask_value("scale-mode-mask"), "2741"),
-                             between(1.0, 4095.0, CliOptionDomainStage::Parameter)),
-                 library_default(number_value("reference-midi"), "69.0"),
-                 library_default(with_domain(number_value("retune-amount"),
-                                             between(0.0, 1.0, CliOptionDomainStage::Parameter)),
-                                 "1.0"),
-                 library_default(with_domain(number_value("max-correction-semitones"),
-                                             at_least(0.0, CliOptionDomainStage::Parameter)),
-                                 "12.0"),
-                 library_default(with_domain(number_value("retune-speed-ms"),
-                                             at_least(0.0, CliOptionDomainStage::Parameter)),
-                                 "50.0"),
-                 library_default(with_domain(number_value("vibrato-threshold-cents"),
-                                             at_least(0.0, CliOptionDomainStage::Parameter)),
-                                 "20.0"),
-                 required_output()});
+    add_command(
+        commands, "pitch-correct-timevarying", true,
+        {with_domain(string_value("mode", "midi"), choices_of({"midi", "scale"})),
+         with_domain(number_value("target-midi", 69.0), between(0.0, 127.0)),
+         library_default(with_domain(int_value("hop-length"), greater_than(0.0)), "512"),
+         library_default(with_domain(int_value("scale-root"), between(0.0, 11.0)), "0"),
+         with_domain(library_default(mode_mask_value("scale-mode-mask"), "2741"),
+                     between(1.0, 4095.0)),
+         library_default(number_value("reference-midi"), "69.0"),
+         library_default(with_domain(number_value("retune-amount"), between(0.0, 1.0)), "1.0"),
+         library_default(with_domain(number_value("max-correction-semitones"), at_least(0.0)),
+                         "12.0"),
+         library_default(with_domain(number_value("retune-speed-ms"), at_least(0.0)), "50.0"),
+         library_default(with_domain(number_value("vibrato-threshold-cents"), at_least(0.0)),
+                         "20.0"),
+         required_output()});
     // Each bound is given in samples or in seconds, never both, and an omitted
     // one takes the library's default (0, or the end of the input for an offset),
     // which the handler resolves.
@@ -816,24 +739,17 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // the session spells them. None carries a default here: an omitted one is
     // not passed, so the session's own default applies, and `--no-centered` is
     // the only way to turn the (default-on) centred framing off.
-    add_command(
-        commands, "vocal-notes", true,
-        {with_domain(number_value("segmentation-threshold-cents"),
-                     greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(number_value("min-note-ms"), greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(int_value("frame-length-samples"),
-                     greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(int_value("hop-length-samples"),
-                     greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(number_value("f0-min-hz"), greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(number_value("f0-max-hz"), greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(number_value("yin-threshold"),
-                     above_zero_up_to(1.0, CliOptionDomainStage::Usage)),
-         with_domain(number_value("voiced-threshold"),
-                     between(0.0, 1.0, CliOptionDomainStage::Usage)),
-         flag("no-centered"),
-         with_domain(number_value("reference-hz"), greater_than(0.0, CliOptionDomainStage::Usage))},
-        {}, &validate_vocal_frequency_order);
+    add_command(commands, "vocal-notes", true,
+                {with_domain(number_value("segmentation-threshold-cents"), greater_than(0.0)),
+                 with_domain(number_value("min-note-ms"), greater_than(0.0)),
+                 with_domain(int_value("frame-length-samples"), greater_than(0.0)),
+                 with_domain(int_value("hop-length-samples"), greater_than(0.0)),
+                 with_domain(number_value("f0-min-hz"), greater_than(0.0)),
+                 with_domain(number_value("f0-max-hz"), greater_than(0.0)),
+                 with_domain(number_value("yin-threshold"), above_zero_up_to(1.0)),
+                 with_domain(number_value("voiced-threshold"), between(0.0, 1.0)),
+                 flag("no-centered"), with_domain(number_value("reference-hz"), greater_than(0.0))},
+                {}, &validate_vocal_frequency_order);
     // One assignment per --edit occurrence, as --set does: the value reaches the
     // field parser as written, so no separator a fold could pick has to be
     // reserved.
@@ -845,7 +761,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          path_value("preset-pack"), string_value("set", "", false, true),
          number_value("pitch-semitones"), number_value("formant-factor"),
          with_domain(string_value("formant-mode", "relative"),
-                     choices_of({"relative", "absolute"}, CliOptionDomainStage::Parameter)),
+                     choices_of({"relative", "absolute"})),
          required_output()});
     add_command(commands, "voice-presets", false, {});
     add_command(commands, "voice-preset", false, {string_value("preset", "neutralMonitor")});
@@ -860,10 +776,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         {library_default(int_value("kernel-harmonic"), "31"),
          library_default(int_value("kernel-percussive"), "31"), required_output(),
          flag("harmonic-only"), flag("percussive-only"), flag("with-residual"), flag("hard-mask"),
-         with_domain(library_default(global_int("n-fft"), "2048"),
-                     greater_than(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(library_default(global_int("hop-length"), "n_fft/4"),
-                     greater_than(0.0, CliOptionDomainStage::Parameter))});
+         with_domain(library_default(global_int("n-fft"), "2048"), greater_than(0.0)),
+         with_domain(library_default(global_int("hop-length"), "n_fft/4"), greater_than(0.0))});
     // `init` is refused here because nothing below refuses it: the core's
     // validate_config checks the numeric fields only and reads any other name
     // as its own default, so an unrecognised initialiser is caught at the
@@ -873,8 +787,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         {library_default(int_value("n-components"), "4"),
          library_default(int_value("n-iter"), "100"), library_default(number_value("beta"), "2.0"),
          library_default(
-             with_domain(nullable_string_value("init"),
-                         choices_of({"random", "nndsvd"}, CliOptionDomainStage::Parameter)),
+             with_domain(nullable_string_value("init"), choices_of({"random", "nndsvd"})),
              "random"),
          library_default(number_value("mask-power"), "1.0"), required_output(),
          library_default(global_int("n-fft"), "2048"),
@@ -903,8 +816,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  library_default(global_int("hop-length"), sonare::kDefaultSilenceHopLength)},
                 {}, nullptr, kUnboundedPositionals);
     add_command(commands, "normalize", true,
-                {with_domain(string_value("mode", "peak"),
-                             choices_of({"peak", "rms"}, CliOptionDomainStage::Parameter)),
+                {with_domain(string_value("mode", "peak"), choices_of({"peak", "rms"})),
                  with_stated_default(number_value("target-db"),
                                      stated_number(sonare::kDefaultPeakTargetDb) + " (peak) or " +
                                          stated_number(sonare::kDefaultRmsTargetDb) + " (rms)"),
@@ -913,14 +825,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "gain", true, {number_value("gain-db"), required_output()});
     add_command(commands, "fade", true,
                 {number_value("fade-in-sec"), number_value("fade-out-sec"), required_output()});
-    add_command(
-        commands, "filter", true,
-        {with_domain(required_with_stage(string_value("type"), CliOptionDomainStage::Parameter),
-                     choices_of({"hp", "lp", "bp", "notch"}, CliOptionDomainStage::Parameter)),
-         with_domain(int_value("order", 2),
-                     choices_of({"2", "4"}, CliOptionDomainStage::Parameter)),
-         number_value("cutoff-hz", 0.0), number_value("center", 0.0),
-         number_value("bandwidth", 0.0), required_output(), flag("zero-phase")});
+    add_command(commands, "filter", true,
+                {with_domain(string_value("type", true), choices_of({"hp", "lp", "bp", "notch"})),
+                 with_domain(int_value("order", 2), choices_of({"2", "4"})),
+                 number_value("cutoff-hz", 0.0), number_value("center", 0.0),
+                 number_value("bandwidth", 0.0), required_output(), flag("zero-phase")});
     add_command(commands, "resample", true,
                 {required_int("target-sample-rate"), required_output()});
     // The generators accept any positive rate, so a rate the library's own decoder
@@ -931,30 +840,24 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {number_value("frequency-hz"),
                  library_default(
                      with_domain(int_value("sample-rate"),
-                                 between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
-                                         CliOptionDomainStage::Parameter)),
+                                 between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate)),
                      "22050"),
                  library_default(number_value("duration-sec"), "1.0"),
                  library_default(number_value("phase"), "0.0"),
                  library_default(number_value("amplitude"), "1.0"), required_output()});
-    add_command(
-        commands, "chirp", false,
-        {library_default(
-             with_domain(int_value("sample-rate"),
-                         between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
-                                 CliOptionDomainStage::Parameter)),
-             "22050"),
-         library_default(number_value("duration-sec"), "1.0"), required_output(),
-         flag("exponential"),
-         with_domain(global_number("fmin-hz", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(number_value("fmax-hz", true, true),
-                     greater_than(0.0, CliOptionDomainStage::Usage))});
+    add_command(commands, "chirp", false,
+                {library_default(
+                     with_domain(int_value("sample-rate"),
+                                 between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate)),
+                     "22050"),
+                 library_default(number_value("duration-sec"), "1.0"), required_output(),
+                 flag("exponential"), with_domain(global_number("fmin-hz", 0.0), at_least(0.0)),
+                 with_domain(number_value("fmax-hz", true, true), greater_than(0.0))});
     add_command(commands, "clicks", false,
                 {string_value("times"),
                  library_default(
                      with_domain(int_value("sample-rate"),
-                                 between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
-                                         CliOptionDomainStage::Parameter)),
+                                 between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate)),
                      "22050"),
                  library_default(int_value("length"), "0"),
                  library_default(number_value("frequency-hz"), "1000.0"),
@@ -994,21 +897,19 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          // so an index past the end is refused instead of mapping to the first
          // enumerator. `type` takes it from the enum's last enumerator.
          with_domain(int_value("type", 0),
-                     enum_index(0, static_cast<int>(sonare::mastering::eq::EqBandType::AllPass),
-                                CliOptionDomainStage::Parameter)),
+                     enum_index(0, static_cast<int>(sonare::mastering::eq::EqBandType::AllPass))),
          number_value("frequency-hz", 1000.0), number_value("gain-db", 0.0), number_value("q", 1.0),
-         with_domain(int_value("coeff-mode", 0), enum_index(0, 1, CliOptionDomainStage::Parameter)),
-         int_value("slope-db-oct", 12),
-         with_domain(int_value("placement", 0), enum_index(0, 4, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("coeff-mode", 0), enum_index(0, 1)), int_value("slope-db-oct", 12),
+         with_domain(int_value("placement", 0), enum_index(0, 4)),
          number_value("threshold-db", -24.0), number_value("ratio", 2.0),
          number_value("range-db", -6.0), number_value("attack-ms", 5.0),
          number_value("release-ms", 50.0), number_value("detector-delay-ms", 0.0),
          number_value("sidechain-freq-hz", -1.0), number_value("sidechain-q", 1.0),
-         with_domain(int_value("phase-mode", 1), enum_index(0, 3, CliOptionDomainStage::Parameter)),
-         with_domain(int_value("resolution", 0), enum_index(0, 5, CliOptionDomainStage::Parameter)),
-         number_value("gain-scale", 1.0), number_value("output-gain-db", 0.0),
-         number_value("output-pan", 0.0), bits_value(), output_value(), flag("proportional-q"),
-         flag("dynamic"), flag("auto-threshold"), flag("auto-gain")},
+         with_domain(int_value("phase-mode", 1), enum_index(0, 3)),
+         with_domain(int_value("resolution", 0), enum_index(0, 5)), number_value("gain-scale", 1.0),
+         number_value("output-gain-db", 0.0), number_value("output-pan", 0.0), bits_value(),
+         output_value(), flag("proportional-q"), flag("dynamic"), flag("auto-threshold"),
+         flag("auto-gain")},
         {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mastering-pair-processor", true,
                 {required_string("processor"), required_path("reference"), string_value("params"),
@@ -1044,17 +945,13 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // `mix-strip` is the only spelling for the strip. `mix` names the Python
     // CLI's scene mixer, which this front-end has no equivalent of, so it is
     // refused here as an unknown command rather than carried as an alias.
-    add_command(
-        commands, "mix-strip", true,
-        {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
-         with_domain(number_value("pan", 0.0), between(-1.0, 1.0, CliOptionDomainStage::Parameter)),
-         with_domain(
-             string_value("pan-mode", "balance"),
-             choices_of({"balance", "stereo-pan", "dual-pan"}, CliOptionDomainStage::Parameter)),
-         with_domain(number_value("width", 1.0),
-                     between(0.0, 2.0, CliOptionDomainStage::Parameter)),
-         output_value()},
-        {}, nullptr, 0, /*preserves_stereo_input=*/true);
+    add_command(commands, "mix-strip", true,
+                {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
+                 with_domain(number_value("pan", 0.0), between(-1.0, 1.0)),
+                 with_domain(string_value("pan-mode", "balance"),
+                             choices_of({"balance", "stereo-pan", "dual-pan"})),
+                 with_domain(number_value("width", 1.0), between(0.0, 2.0)), output_value()},
+                {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mixing-presets", false, {});
     // The advertised default has to be one the command can actually run: an
     // empty string reaches the preset lookup and fails, and the handler's own
@@ -1078,16 +975,15 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // an omitted `fmax-hz` is the Nyquist frequency, so a spelled one must be above 0.
     // `n-mels` needs none -- the filterbank's own ceiling refuses an oversized band
     // count for every command and every surface at once.
-    add_command(commands, "mel", true,
-                {library_default(global_int("n-fft"), "2048"),
-                 library_default(global_int("hop-length"), "512"),
-                 library_default(global_int("n-mels"), "128"),
-                 with_domain(library_default(global_number("fmin-hz"), "0.0"),
-                             at_least(0.0, CliOptionDomainStage::Parameter)),
-                 with_stated_default(with_domain(number_value("fmax-hz", false, true),
-                                                 greater_than(0.0, CliOptionDomainStage::Usage)),
-                                     "the Nyquist frequency"),
-                 flag("htk")});
+    add_command(
+        commands, "mel", true,
+        {library_default(global_int("n-fft"), "2048"),
+         library_default(global_int("hop-length"), "512"),
+         library_default(global_int("n-mels"), "128"),
+         with_domain(library_default(global_number("fmin-hz"), "0.0"), at_least(0.0)),
+         with_stated_default(with_domain(number_value("fmax-hz", false, true), greater_than(0.0)),
+                             "the Nyquist frequency"),
+         flag("htk")});
     add_command(commands, "chroma", true,
                 {library_default(global_int("n-fft"), "2048"),
                  library_default(global_int("hop-length"), "512")});
@@ -1097,25 +993,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "spectral", true,
                 {library_default(global_int("n-fft"), "2048"),
                  library_default(global_int("hop-length"), "512")});
-    // Every domain the Python CLI declares for this command, in the same
-    // classes: the frequency/threshold `type=` callables are parse-time (usage)
-    // and the algorithm name is a handler-level rejection (invalid parameter).
-    add_command(commands, "pitch", true,
-                {flag("frames"),
-                 with_domain(string_value("algorithm", "pyin"),
-                             choices_of({"yin", "pyin"}, CliOptionDomainStage::Parameter)),
-                 library_default(with_domain(number_value("threshold"),
-                                             above_zero_up_to(1.0, CliOptionDomainStage::Usage)),
-                                 "0.1"),
-                 with_domain(library_default(global_int("hop-length"), "512"),
-                             greater_than(0.0, CliOptionDomainStage::Usage)),
-                 library_default(with_domain(number_value("f0-min-hz"),
-                                             greater_than(0.0, CliOptionDomainStage::Usage)),
-                                 "65.0"),
-                 library_default(with_domain(number_value("f0-max-hz"),
-                                             greater_than(0.0, CliOptionDomainStage::Usage)),
-                                 "2093.0")},
-                {}, &validate_pitch_frequency_order);
+    // Every domain the Python CLI declares for this command.
+    add_command(
+        commands, "pitch", true,
+        {flag("frames"),
+         with_domain(string_value("algorithm", "pyin"), choices_of({"yin", "pyin"})),
+         library_default(with_domain(number_value("threshold"), above_zero_up_to(1.0)), "0.1"),
+         with_domain(library_default(global_int("hop-length"), "512"), greater_than(0.0)),
+         library_default(with_domain(number_value("f0-min-hz"), greater_than(0.0)), "65.0"),
+         library_default(with_domain(number_value("f0-max-hz"), greater_than(0.0)), "2093.0")},
+        {}, &validate_pitch_frequency_order);
     add_command(commands, "onset-strength", true,
                 {library_default(global_int("n-fft"), "2048"),
                  library_default(global_int("hop-length"), "512"),
@@ -1140,26 +1027,22 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {library_default(int_value("n-bins"), "84"),
                  library_default(int_value("bins-per-octave"), "12"),
                  library_default(global_int("hop-length"), "512"),
-                 with_domain(number_value("fmin-hz", false, true),
-                             greater_than(0.0, CliOptionDomainStage::Usage))});
+                 with_domain(number_value("fmin-hz", false, true), greater_than(0.0))});
     add_command(commands, "vqt", true,
                 {library_default(int_value("n-bins"), "84"),
                  library_default(int_value("bins-per-octave"), "12"),
                  library_default(number_value("gamma"), "-1.0"),
                  library_default(number_value("filter-scale"), "1.0"),
                  library_default(global_int("hop-length"), "512"),
-                 with_domain(number_value("fmin-hz", false, true),
-                             greater_than(0.0, CliOptionDomainStage::Usage))});
+                 with_domain(number_value("fmin-hz", false, true), greater_than(0.0))});
     add_command(
         commands, "mel-to-audio", true,
         {library_default(int_value("n-iter"), sonare::constants::kDefaultGriffinLimIterations),
          required_output(), library_default(global_int("n-fft"), "2048"),
          library_default(global_int("hop-length"), "512"),
          library_default(global_int("n-mels"), "128"),
-         with_domain(library_default(global_number("fmin-hz"), "0.0"),
-                     at_least(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(number_value("fmax-hz", false, true),
-                     greater_than(0.0, CliOptionDomainStage::Usage))});
+         with_domain(library_default(global_number("fmin-hz"), "0.0"), at_least(0.0)),
+         with_domain(number_value("fmax-hz", false, true), greater_than(0.0))});
     add_command(
         commands, "mfcc-to-audio", true,
         {int_value("n-mfcc", 13),
@@ -1167,10 +1050,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          required_output(), library_default(global_int("n-fft"), "2048"),
          library_default(global_int("hop-length"), "512"),
          library_default(global_int("n-mels"), "128"),
-         with_domain(library_default(global_number("fmin-hz"), "0.0"),
-                     at_least(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(number_value("fmax-hz", false, true),
-                     greater_than(0.0, CliOptionDomainStage::Usage))});
+         with_domain(library_default(global_number("fmin-hz"), "0.0"), at_least(0.0)),
+         with_domain(number_value("fmax-hz", false, true), greater_than(0.0))});
     add_command(commands, "acoustic", true,
                 {flag("ir"), library_default(int_value("n-octave-bands"), "6"),
                  library_default(number_value("min-decay-db"), "30.0"),
@@ -1194,34 +1075,26 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // refusal of anything outside [0, 1] has no counterpart on this path. `seed`
     // keeps 0 as the library-default sentinel the C ABI spells the same way, and
     // refuses the negatives the handler currently swallows into that default.
-    add_command(
-        commands, "synthesize-rir", false,
-        {library_default(number_value("length"), "7.0"),
-         library_default(number_value("width"), "5.0"),
-         library_default(number_value("height"), "3.0"),
-         library_default(with_domain(number_value("absorption"),
-                                     between(0.0, 1.0, CliOptionDomainStage::Parameter)),
-                         "0.2"),
-         library_default(number_value("source-x"), "1.0"),
-         library_default(number_value("source-y"), "1.0"),
-         library_default(number_value("source-z"), "1.2"),
-         library_default(number_value("listener-x"), "5.0"),
-         library_default(number_value("listener-y"), "4.0"),
-         library_default(number_value("listener-z"), "1.7"), int_value("sample-rate", 48000),
-         library_default(int_value("ism-order"), "3"),
-         library_default(with_domain(int_value("seed"),
-                                     between(0.0, kMaxCliSeed, CliOptionDomainStage::Parameter)),
-                         "1"),
-         with_stated_default(
-             with_domain(number_value("max-sec"), greater_than(0.0, CliOptionDomainStage::Usage)),
-             "natural length"),
-         required_output(), flag("sabine")});
+    add_command(commands, "synthesize-rir", false,
+                {library_default(number_value("length"), "7.0"),
+                 library_default(number_value("width"), "5.0"),
+                 library_default(number_value("height"), "3.0"),
+                 library_default(with_domain(number_value("absorption"), between(0.0, 1.0)), "0.2"),
+                 library_default(number_value("source-x"), "1.0"),
+                 library_default(number_value("source-y"), "1.0"),
+                 library_default(number_value("source-z"), "1.2"),
+                 library_default(number_value("listener-x"), "5.0"),
+                 library_default(number_value("listener-y"), "4.0"),
+                 library_default(number_value("listener-z"), "1.7"),
+                 int_value("sample-rate", 48000), library_default(int_value("ism-order"), "3"),
+                 library_default(with_domain(int_value("seed"), between(0.0, kMaxCliSeed)), "1"),
+                 with_stated_default(with_domain(number_value("max-sec"), greater_than(0.0)),
+                                     "natural length"),
+                 required_output(), flag("sabine")});
     add_command(
         commands, "room-morph", true,
         {number_value("length", 7.0), number_value("width", 5.0), number_value("height", 3.0),
-         library_default(with_domain(number_value("absorption"),
-                                     between(0.0, 1.0, CliOptionDomainStage::Parameter)),
-                         "0.2"),
+         library_default(with_domain(number_value("absorption"), between(0.0, 1.0)), "0.2"),
          library_default(number_value("source-x"), "1.0"),
          library_default(number_value("source-y"), "1.0"),
          library_default(number_value("source-z"), "1.2"),
@@ -1230,14 +1103,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          library_default(number_value("listener-z"), "1.7"),
          library_default(number_value("suppression"), "0.5"),
          library_default(number_value("wet"), "0.5"), library_default(int_value("ism-order"), "3"),
-         library_default(with_domain(int_value("seed"),
-                                     between(0.0, kMaxCliSeed, CliOptionDomainStage::Parameter)),
-                         "1"),
-         with_stated_default(
-             with_domain(number_value("max-sec"), greater_than(0.0, CliOptionDomainStage::Usage)),
-             "natural length"),
-         library_default(with_domain(number_value("receiver-spacing"),
-                                     above_zero_up_to(4.0, CliOptionDomainStage::Parameter)),
+         library_default(with_domain(int_value("seed"), between(0.0, kMaxCliSeed)), "1"),
+         with_stated_default(with_domain(number_value("max-sec"), greater_than(0.0)),
+                             "natural length"),
+         library_default(with_domain(number_value("receiver-spacing"), above_zero_up_to(4.0)),
                          "0.5"),
          required_output(), flag("sabine")},
         {}, nullptr, 0, /*preserves_stereo_input=*/true);
@@ -1299,9 +1168,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {string_value("values"),
                  // Indexes NormType (inf, L1, L2, power); an index past the end used to
                  // fall through to the inf norm and report success.
-                 library_default(with_domain(int_value("norm-type"),
-                                             enum_index(0, 3, CliOptionDomainStage::Parameter)),
-                                 "0"),
+                 library_default(with_domain(int_value("norm-type"), enum_index(0, 3)), "0"),
                  library_default(number_value("threshold"), "0.0")});
     add_command(
         commands, "pcen", false,
@@ -1350,23 +1217,17 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          string_value("audio", false, true), flag("resolve-audio")},
         &validate_project_bounce_channels, kProjectJsonPositional);
     // `align-takes` reads the source FILES rather than binding PCM, so it shares
-    // `--audio` / `--resolve-audio` with `bounce` and nothing else. Its three
-    // numeric options carry the invalid-parameter class: each is a value the
-    // caller spelled correctly and the measurement then refuses. The C entry spells
+    // `--audio` / `--resolve-audio` with `bounce` and nothing else. The C entry spells
     // "library value" as 0 for the two resolution options, so an explicit 0 is refused
     // here and only an absent flag sends it; their grid stays with the core.
     add_project_command(
         "project.align-takes",
         {required_output(),
          with_domain(int_value("reference-source", true),
-                     between(1.0, static_cast<double>(std::numeric_limits<std::uint32_t>::max()),
-                             CliOptionDomainStage::Parameter)),
+                     between(1.0, static_cast<double>(std::numeric_limits<std::uint32_t>::max()))),
          string_value("audio", false, true), flag("resolve-audio"),
-         with_domain(library_default(global_int("hop-length"), "512"),
-                     greater_than(0.0, CliOptionDomainStage::Parameter)),
-         library_default(with_domain(int_value("bins-per-octave"),
-                                     greater_than(0.0, CliOptionDomainStage::Parameter)),
-                         "12")},
+         with_domain(library_default(global_int("hop-length"), "512"), greater_than(0.0)),
+         library_default(with_domain(int_value("bins-per-octave"), greater_than(0.0)), "12")},
         nullptr, kProjectJsonPositional);
     // `project bounce` with the synth pinned on, as a top-level leaf: it takes
     // no subcommand positional, and `--synth` is a plain value rather than an
@@ -1400,46 +1261,33 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                          transcribe_defaults.segmentation_threshold_cents),
          // The polyphonic values below are the transcriber's own and appear in no
          // header, so each one's stated-default row is what pins it.
-         library_default(with_domain(int_value("max-polyphony"),
-                                     between(1.0, 64.0, CliOptionDomainStage::Parameter)),
-                         10),
-         with_domain(int_value("min-note-division"),
-                     between(1.0, 128.0, CliOptionDomainStage::Parameter)),
-         library_default(with_domain(number_value("min-frame-peak-ratio"),
-                                     between(0.0, 1.0, CliOptionDomainStage::Parameter)),
+         library_default(with_domain(int_value("max-polyphony"), between(1.0, 64.0)), 10),
+         with_domain(int_value("min-note-division"), between(1.0, 128.0)),
+         library_default(with_domain(number_value("min-frame-peak-ratio"), between(0.0, 1.0)),
                          "0.2"),
-         library_default(with_domain(number_value("min-ridge-peak-ratio"),
-                                     between(0.0, 1.0, CliOptionDomainStage::Parameter)),
+         library_default(with_domain(number_value("min-ridge-peak-ratio"), between(0.0, 1.0)),
                          "0.1"),
          library_default(number_value("reattack-ratio"), "2.0"),
          library_default(number_value("velocity-floor-db"), transcribe_defaults.velocity_floor_db),
          int_value("fixed-velocity"), library_default(int_value("channel"), "0"),
-         library_default(
-             with_domain(nullable_string_value("monophonic-model"),
-                         choices_of({"segments", "singing"}, CliOptionDomainStage::Parameter)),
-             "segments")});
+         library_default(with_domain(nullable_string_value("monophonic-model"),
+                                     choices_of({"segments", "singing"})),
+                         "segments")});
     // The reference melody is read by the arrangement library and assigned by the
-    // pitch editor, so the leaf exists only where both do. `--reference-smf` is
-    // required in the parser on both front-ends and so keeps the usage class,
-    // while every value domain below is one the Python handler enforces after
-    // parsing and therefore carries the invalid-parameter class.
+    // pitch editor, so the leaf exists only where both do.
     //
     // The two bounds are the null-default overload rather than a restated 0.5 and
     // 12: both values are legal inputs, so an absent flag cannot be spelled as a
     // sentinel and the handler leaves NoteTargetAssignConfig's own field alone.
 #ifdef SONARE_WITH_PITCH_EDITOR
-    add_command(commands, "tune-to-midi", true,
-                {required_path("reference-smf"),
-                 with_domain(int_value("track", 0), at_least(0.0, CliOptionDomainStage::Parameter)),
-                 library_default(with_domain(nullable_string_value("unmatched-policy"),
-                                             choices_of({"leave", "mute", "nearest"},
-                                                        CliOptionDomainStage::Parameter)),
-                                 "leave"),
-                 with_domain(number_value("min-overlap-ratio"),
-                             between(0.0, 1.0, CliOptionDomainStage::Parameter)),
-                 with_domain(number_value("max-correction-semitones"),
-                             at_least(0.0, CliOptionDomainStage::Parameter)),
-                 required_output()});
+    add_command(
+        commands, "tune-to-midi", true,
+        {required_path("reference-smf"), with_domain(int_value("track", 0), at_least(0.0)),
+         library_default(with_domain(nullable_string_value("unmatched-policy"),
+                                     choices_of({"leave", "mute", "nearest"})),
+                         "leave"),
+         with_domain(number_value("min-overlap-ratio"), between(0.0, 1.0)),
+         with_domain(number_value("max-correction-semitones"), at_least(0.0)), required_output()});
 #endif
     add_project_command("project.export-smf", {required_output()}, nullptr, kProjectJsonPositional);
     add_project_command("project.import-smf", {required_output()}, nullptr, "song.mid");
@@ -1455,34 +1303,27 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // property of the file rather than an option value, so it is checked by
     // the handler once the file is open rather than by a domain here.
     const sonare::playback::RealtimeConfig playback_defaults;
-    add_command(
-        commands, "playback", true,
-        {library_default(with_domain(nullable_string_value("target"),
-                                     choices_of({"headphones", "stereo", "5.1", "7.1"},
-                                                CliOptionDomainStage::Usage)),
-                         "headphones"),
-         library_default(with_domain(nullable_string_value("input-layout"),
-                                     choices_of({"auto", "mono", "stereo", "5.1", "7.1"},
-                                                CliOptionDomainStage::Usage)),
-                         "auto"),
-         path_value("config"), flag("no-upmix"),
-         library_default(
-             with_domain(number_value("night"), between(0.0, 1.0, CliOptionDomainStage::Usage)),
-             playback_defaults.night_amount),
-         library_default(with_domain(number_value("dialogue-db"),
-                                     between(-12.0, 12.0, CliOptionDomainStage::Usage)),
-                         playback_defaults.dialogue_level_db),
-         with_stated_default(with_domain(number_value("program-lufs"),
-                                         between(-70.0, 0.0, CliOptionDomainStage::Usage)),
-                             "measured from the whole input"),
-         library_default(with_domain(number_value("target-lufs"),
-                                     between(-40.0, -5.0, CliOptionDomainStage::Usage)),
-                         playback_defaults.target_lufs),
-         with_domain(nullable_string_value("room"),
-                     choices_of({"none", "living-room", "home-theater", "screening-room"},
-                                CliOptionDomainStage::Usage)),
-         path_value("hrtf"), required_output()},
-        {}, nullptr, 0, /*preserves_stereo_input=*/false, /*preserves_multichannel_input=*/true);
+    add_command(commands, "playback", true,
+                {library_default(with_domain(nullable_string_value("target"),
+                                             choices_of({"headphones", "stereo", "5.1", "7.1"})),
+                                 "headphones"),
+                 library_default(with_domain(nullable_string_value("input-layout"),
+                                             choices_of({"auto", "mono", "stereo", "5.1", "7.1"})),
+                                 "auto"),
+                 path_value("config"), flag("no-upmix"),
+                 library_default(with_domain(number_value("night"), between(0.0, 1.0)),
+                                 playback_defaults.night_amount),
+                 library_default(with_domain(number_value("dialogue-db"), between(-12.0, 12.0)),
+                                 playback_defaults.dialogue_level_db),
+                 with_stated_default(with_domain(number_value("program-lufs"), between(-70.0, 0.0)),
+                                     "measured from the whole input"),
+                 library_default(with_domain(number_value("target-lufs"), between(-40.0, -5.0)),
+                                 playback_defaults.target_lufs),
+                 with_domain(nullable_string_value("room"),
+                             choices_of({"none", "living-room", "home-theater", "screening-room"})),
+                 path_value("hrtf"), required_output()},
+                {}, nullptr, 0, /*preserves_stereo_input=*/false,
+                /*preserves_multichannel_input=*/true);
 #endif
     return commands;
   }();

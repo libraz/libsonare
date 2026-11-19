@@ -57,10 +57,10 @@ def stereo_source(tmp_path: Path) -> Path:
 @pytest.mark.parametrize(
     "option,value,expected_exit",
     [
-        ("--pan", "1.5", EXIT_INVALID_PARAMETER),
-        ("--pan", "-1.5", EXIT_INVALID_PARAMETER),
-        ("--width", "-1", EXIT_INVALID_PARAMETER),
-        ("--width", "2.5", EXIT_INVALID_PARAMETER),
+        ("--pan", "1.5", 2),
+        ("--pan", "-1.5", 2),
+        ("--width", "-1", 2),
+        ("--width", "2.5", 2),
         ("--fader-db", "1e100", 2),
         ("--input-trim-db", "1e100", 2),
         ("--pan", "nan", 2),

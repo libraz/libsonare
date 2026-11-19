@@ -906,18 +906,15 @@ def register_mastering_parsers(
     mproc_p.add_argument(
         "--processor",
         type=_token_of(_library_catalog("mastering_processor_names")),
-        required=True,
         help="Processor name",
     )
     mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
     _add_wav_bits_argument(mproc_p)
     eq_p = sub.add_parser("eq", parents=[common], help="Apply the unified equalizer")
     eq_p.add_argument("--params", default="", help="Params as k=v,k=v (overrides band shortcuts)")
-    # Each of these selects an enumerator by index. cmd_eq refuses an index
-    # outside the enumeration after parsing, which is why the published domain
-    # records the invalid-parameter class rather than the usage one; without the
-    # refusal the underlying switch answers an unknown index with its first
-    # enumerator, so a typo applies a different filter and exits 0.
+    # Each of these selects an enumerator by index. Without the domain the
+    # underlying switch answers an unknown index with its first enumerator, so a
+    # typo applies a different filter and exits 0.
     _cli_domain(
         eq_p.add_argument(
             "--type",
@@ -929,7 +926,6 @@ def register_mastering_parsers(
             ),
         ),
         choices=range(_EQ_ENUM_BOUNDS["type"] + 1),
-        reject_exit="invalid_parameter",
     )
     eq_p.add_argument("--frequency-hz", type=_finite_float, default=1000.0)
     eq_p.add_argument("--gain-db", type=_finite_float, default=0.0)
@@ -937,7 +933,6 @@ def register_mastering_parsers(
     _cli_domain(
         eq_p.add_argument("--coeff-mode", type=_c_int, default=0, help="0 RBJ, 1 Vicanek"),
         choices=range(_EQ_ENUM_BOUNDS["coeff_mode"] + 1),
-        reject_exit="invalid_parameter",
     )
     eq_p.add_argument("--slope-db-oct", type=_c_int, default=12)
     _cli_domain(
@@ -945,7 +940,6 @@ def register_mastering_parsers(
             "--placement", type=_c_int, default=0, help="0 stereo, 1 left, 2 right, 3 mid, 4 side"
         ),
         choices=range(_EQ_ENUM_BOUNDS["placement"] + 1),
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         eq_p.add_argument(
@@ -955,7 +949,6 @@ def register_mastering_parsers(
             help="0 inherit, 1 zero latency, 2 natural, 3 linear",
         ),
         choices=range(_EQ_ENUM_BOUNDS["phase_mode"] + 1),
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         eq_p.add_argument(
@@ -965,7 +958,6 @@ def register_mastering_parsers(
             help="0 custom/default, 1 low, 2 medium, 3 high, 4 very high, 5 maximum",
         ),
         choices=range(_EQ_ENUM_BOUNDS["resolution"] + 1),
-        reject_exit="invalid_parameter",
     )
     eq_p.add_argument("--auto-gain", action="store_true")
     eq_p.add_argument("--gain-scale", type=_finite_float, default=1.0)
@@ -1001,11 +993,10 @@ def register_mastering_parsers(
         parents=[stdout_options],
         help="Run a two-input mastering analysis (always JSON output)",
     )
-    mpa_p.add_argument("--reference", required=True, help="Reference audio file")
+    mpa_p.add_argument("--reference", help="Reference audio file")
     mpa_p.add_argument(
         "--analysis",
         type=_token_of(_library_catalog("mastering_pair_analysis_names")),
-        required=True,
         help="Analysis name",
     )
     mpa_p.add_argument("--params", default="")
@@ -1017,10 +1008,9 @@ def register_mastering_parsers(
     mpp_p.add_argument(
         "--processor",
         type=_token_of(_library_catalog("mastering_pair_processor_names")),
-        required=True,
         help="Pair processor name",
     )
-    mpp_p.add_argument("--reference", required=True, help="Reference audio file")
+    mpp_p.add_argument("--reference", help="Reference audio file")
     mpp_p.add_argument("--params", default="")
     _add_wav_bits_argument(mpp_p)
     msa_p = sub.add_parser(
@@ -1028,11 +1018,10 @@ def register_mastering_parsers(
         parents=[stdout_options],
         help="Run a stereo mastering analysis (always JSON output)",
     )
-    msa_p.add_argument("--reference", required=True, help="Right-channel audio file")
+    msa_p.add_argument("--reference", help="Right-channel audio file")
     msa_p.add_argument(
         "--analysis",
         type=_token_of(_library_catalog("mastering_stereo_analysis_names")),
-        required=True,
         help="Analysis name",
     )
     msa_p.add_argument("--params", default="")

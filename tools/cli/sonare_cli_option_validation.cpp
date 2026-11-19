@@ -180,23 +180,13 @@ std::vector<CliOptionMetadata> cli_option_metadata_for_command(const std::string
     metadata.repeatable = option.repeatable;
     metadata.arity = option.arity;
     metadata.scalar_type = option.scalar_type;
-    // The published `required` field describes the PARSER contract, which is
-    // what the cross-surface checker compares: an option the Python parser
-    // declares `required=True` refuses the invocation at parse time (usage),
-    // while one its handler refuses after parsing stays optional in its
-    // inventory. An option this registry requires with the Parameter stage is
-    // the second kind, so it publishes the same `false` -- the fact that the
-    // command cannot run without it is declared in
-    // tests/conformance/cli_option_domains.json, and the behaviour is pinned by
-    // the shared parser cases.
-    metadata.required = option.required && option.required_stage == CliOptionDomainStage::Usage;
+    metadata.required = option.required;
     metadata.global_lexical = option.global_lexical;
     metadata.inventory = option.inventory;
     metadata.has_implicit_optional_default =
         option.implicit_optional_default.kind != CliOptionDefaultKind::Null;
     metadata.implicit_optional_default = option.implicit_optional_default;
     metadata.domain = option.domain;
-    metadata.required_stage = option.required_stage;
     result.push_back(std::move(metadata));
   }
   return result;
@@ -239,26 +229,24 @@ CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_aud
   // Checked before the generic unknown-option sweep: `-o` reaches the option map
   // like any other option now, and this names the actual problem.
   if (!args.output_file.empty() && !accepts_option("output")) {
-    return {"Command '" + args.command + "' does not produce a file output; remove -o/--output",
-            false};
+    return {"Command '" + args.command + "' does not produce a file output; remove -o/--output"};
   }
   for (const auto& key : args.global_options) {
     if (!accepts_option(key))
-      return {"Unknown option '--" + key + "' for command '" + args.command + "'", false};
+      return {"Unknown option '--" + key + "' for command '" + args.command + "'"};
   }
   for (const auto& option : args.options) {
     const std::string& key = option.first;
     if (!accepts_option(key)) {
       return {"Unknown option '" + (key.rfind("-", 0) == 0 ? key : "--" + key) + "' for command '" +
-                  args.command + "'",
-              false};
+              args.command + "'"};
     }
   }
   if (!args.missing_value_options.empty())
-    return {"Missing value for option '" + args.missing_value_options.front() + "'", false};
+    return {"Missing value for option '" + args.missing_value_options.front() + "'"};
   if (const std::string numeric_error = validate_numeric_option_values(args);
       !numeric_error.empty())
-    return {numeric_error, false};
+    return {numeric_error};
   if (command != nullptr) {
     // Presence and domain, for every option of the selected leaf, from the
     // registry alone. A handler adds nothing to this: the same (command,
@@ -266,8 +254,7 @@ CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_aud
     // class, whichever handler ends up consuming it.
     for (const auto& option : command->options) {
       if (option.required && !args.has(option.name)) {
-        return {"Missing required option '--" + option.name + "'",
-                option.required_stage == CliOptionDomainStage::Parameter};
+        return {"Missing required option '--" + option.name + "'"};
       }
       if (option.domain.empty() || !args.has(option.name)) continue;
       std::string value = args.get_string(option.name);
@@ -275,7 +262,7 @@ CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_aud
         value = std::to_string(parse_mode_mask_option(option.name, value));
       }
       if (const std::string error = domain_error_for(option, value); !error.empty()) {
-        return {error, option.domain.stage == CliOptionDomainStage::Parameter};
+        return {error};
       }
     }
     if (command->validate != nullptr) {
@@ -297,14 +284,12 @@ CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_aud
   }
   if (args.positionals.size() > max_positionals) {
     return {"Unexpected positional argument '" + args.positionals[max_positionals] +
-                "' for command '" + args.command + "'",
-            false};
+            "' for command '" + args.command + "'"};
   }
   if (command != nullptr && !command->positional_name.empty() &&
       args.positionals.size() < command->positional_count) {
     return {"Missing required positional argument <" + command->positional_name +
-                "> for command '" + args.command + "'",
-            false};
+            "> for command '" + args.command + "'"};
   }
   return {};
 }

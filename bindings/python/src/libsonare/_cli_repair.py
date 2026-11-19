@@ -277,11 +277,9 @@ def cmd_repair(args: argparse.Namespace) -> int:
                 "runs, so none was chosen -- drop --detect to see why the assistant "
                 "would pick a stage"
             )
-        for name in ("preset", "stages", "params", "bits", "output"):
+        for name in ("preset", "stages", "params", "bits"):
             if _option_supplied(args, name):
                 raise ValueError(f"--{name} cannot be combined with --detect")
-    elif not output:
-        raise ValueError("--output is required unless --detect is given")
 
     if stages_raw is not None and preset:
         raise ValueError("--stages cannot be combined with --preset")

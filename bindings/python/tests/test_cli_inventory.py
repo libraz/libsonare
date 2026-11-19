@@ -50,9 +50,7 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
             }
 
     # The accepted value set an option narrows, published so the cross-surface
-    # checker can compare it with the native registry. A parse-time domain (a
-    # `type=` callable or a `choices=` tuple) reports the usage class; one the
-    # handler enforces after parsing reports the invalid-parameter class.
+    # checker can compare it with the native registry.
     pitch_record = next(command for command in payload["commands"] if command["path"] == "pitch")
     assert _option(pitch_record, "f0-min-hz")["domain"] == {
         "choices": [],
@@ -60,7 +58,6 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
         "exclusive_minimum": True,
         "maximum": None,
         "exclusive_maximum": False,
-        "reject_exit": "usage",
     }
     assert _option(pitch_record, "algorithm")["domain"] == {
         "choices": ["yin", "pyin"],
@@ -68,7 +65,6 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
         "exclusive_minimum": False,
         "maximum": None,
         "exclusive_maximum": False,
-        "reject_exit": "invalid_parameter",
     }
     loudness_record = next(
         command
@@ -139,20 +135,19 @@ def test_inventory_exposes_canonical_aliases_and_handler_options() -> None:
         assert _option(commands["mastering-pair-analyze"], option_name)["default"] is None
 
 
-def test_handler_level_requirements_remain_outside_argparse() -> None:
-    parser = _parser()
-
-    # These commands historically report a missing destination/value from the
-    # handler (invalid-parameter), so parser construction must remain lenient.
-    for argv in (
-        ["pitch-shift", "input.wav"],
-        ["time-stretch", "input.wav"],
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["pitch-shift", "input.wav", "-o", "out.wav"],
+        ["pitch-shift", "input.wav", "--pitch-semitones", "1"],
+        ["time-stretch", "input.wav", "-o", "out.wav"],
         ["hpss", "input.wav"],
-    ):
-        parser.parse_args(argv)
-
+        ["resample", "input.wav"],
+    ],
+)
+def test_a_missing_required_option_is_a_parser_error(argv: list[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
-        parser.parse_args(["resample", "input.wav"])
+        _parser().parse_args(argv)
     assert exc_info.value.code == 2
 
 

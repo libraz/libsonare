@@ -183,8 +183,6 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
 def cmd_synthesize_rir(args: argparse.Namespace) -> int:
     from . import synthesize_rir
 
-    if not args.output:
-        raise ValueError("synthesize-rir requires --output")
     try:
         result = synthesize_rir(
             sample_rate=args.sample_rate,
@@ -234,8 +232,6 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
 def cmd_room_morph(args: argparse.Namespace) -> int:
     from . import room_morph, room_morph_stereo
 
-    if not args.output:
-        raise ValueError("room-morph requires --output")
     planes, sr = _load_channels_or_downmix(args.file)
     use_stereo = len(planes) == 2
     options: dict[str, Any] = {
@@ -332,8 +328,7 @@ def register_acoustic_parsers(
             default=None if library_geometry else 3.0,
             help="Room height (m)" + (" (default: 3.0)" if library_geometry else ""),
         )
-        # The room builder clamps rather than validates, so the refusal comes from
-        # the material check beside it -- an invalid parameter, not a usage error.
+        # The room builder clamps rather than validates, so the domain is stated here.
         _cli_domain(
             p.add_argument(
                 "--absorption",
@@ -343,7 +338,6 @@ def register_acoustic_parsers(
             ),
             minimum=0,
             maximum=1,
-            reject_exit="invalid_parameter",
         )
         p.add_argument(
             "--source-x",
@@ -398,7 +392,6 @@ def register_acoustic_parsers(
             ),
             minimum=0,
             maximum=0xFFFFFFFF,
-            reject_exit="invalid_parameter",
         )
         p.add_argument(
             "--max-sec",
@@ -468,5 +461,4 @@ def register_acoustic_parsers(
         minimum=0,
         exclusive_minimum=True,
         maximum=_MAX_RECEIVER_SPACING_M,
-        reject_exit="invalid_parameter",
     )

@@ -298,11 +298,6 @@ def _mix_strip_channels(
 def cmd_mix(args: argparse.Namespace) -> int:
     from . import Mixer, mixing_scene_preset
 
-    if args.input and not args.output:
-        raise ValueError("mix with --input requires --output")
-    if args.output and not args.input:
-        raise ValueError("mix with --output requires at least one --input")
-
     # Resolve the scene JSON from either a file or a built-in preset.
     if args.scene:
         with open(args.scene, encoding="utf-8") as fh:
@@ -639,7 +634,6 @@ def register_mixing_parsers(
         ),
         minimum=-1.0,
         maximum=1.0,
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         mix_strip_p.add_argument(
@@ -648,7 +642,6 @@ def register_mixing_parsers(
             help="Pan mode: balance, stereo-pan or dual-pan",
         ),
         choices=tuple(_cli_token(mode) for mode in _MIX_STRIP_PAN_MODES),
-        reject_exit="invalid_parameter",
     )
     _cli_domain(
         mix_strip_p.add_argument(
@@ -656,5 +649,4 @@ def register_mixing_parsers(
         ),
         minimum=0.0,
         maximum=2.0,
-        reject_exit="invalid_parameter",
     )

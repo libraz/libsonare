@@ -1105,20 +1105,15 @@ _OPTION_RECORD_FIELDS = {
 }
 
 # One option's accepted value set, published by both surfaces so the comparison
-# below can see a domain that only one of them declares.  ``reject_exit`` names
-# the exit-code class the refusal carries: ``usage`` (2) is a parse-time
-# rejection and ``invalid_parameter`` (3) is a handler that refuses after
-# parsing.  Both CLIs report some domains each way, so a shared command has to
-# agree on the class as well as on the values.
+# below can see a domain that only one of them declares.  A value outside it is
+# refused on the command line, exit 2, before any input is read.
 _DOMAIN_RECORD_FIELDS = {
     "choices",
     "minimum",
     "exclusive_minimum",
     "maximum",
     "exclusive_maximum",
-    "reject_exit",
 }
-_DOMAIN_REJECT_EXITS = {"usage", "invalid_parameter"}
 
 
 def _domain_is_well_formed(domain: Any) -> bool:
@@ -1134,7 +1129,6 @@ def _domain_is_well_formed(domain: Any) -> bool:
         and (domain["maximum"] is None or isinstance(domain["maximum"], (int, float)))
         and isinstance(domain["exclusive_minimum"], bool)
         and isinstance(domain["exclusive_maximum"], bool)
-        and domain["reject_exit"] in _DOMAIN_REJECT_EXITS
     )
 
 

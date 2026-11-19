@@ -354,7 +354,7 @@ def test_mix_cli_rejects_output_without_inputs(tmp_path) -> None:
     output = tmp_path / "missing.wav"
     result = _run_cli(["mix", "--preset", "vocalReverbSend", "-o", str(output)])
 
-    assert result.returncode == 3
+    assert result.returncode == 2
     assert "requires at least one --input" in result.stderr
     assert not output.exists()
 
