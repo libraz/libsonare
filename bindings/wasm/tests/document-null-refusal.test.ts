@@ -69,7 +69,7 @@ describe('an unset playback renderer value is an absent key', () => {
 
   it('refuses the old outputLimiter.ceilingDbtp key', () => {
     expect(() => create({ outputLimiter: { ceilingDbtp: -1 } })).toThrow(
-      refusal('unknown key: outputLimiter.ceilingDbtp'),
+      refusal('unknown key outputLimiter.ceilingDbtp'),
     );
     const speakers = { kind: 'speakers', layout: 'stereo' };
     expect(() =>

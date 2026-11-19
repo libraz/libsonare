@@ -222,7 +222,7 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
     expect(() =>
       // @ts-expect-error preset metadata is deliberately omitted; the runtime rejects it
       vc.setConfig({ schemaVersion: 4, dsp: { retune: { pitchSemitones: 3 } } }),
-    ).toThrow(/missing field|field must/i);
+    ).toThrow(/\bid must be given$/);
     vc.destroy();
   });
 
@@ -275,7 +275,9 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
       retunePitchSemitones: -9,
     };
     expect(() => make(unreachable)).toThrow(/\[0\.55, 0\.9811\]/);
-    expect(() => make(unreachable)).toThrow(/limited by formantFactor's \[0\.55, 1\.65\]/);
+    expect(() => make(unreachable)).toThrow(
+      /formantFactor must be in \[0\.55, 0\.9811\] in absolute formant mode at retunePitchSemitones -9/,
+    );
   });
 
   it('refuses an out-of-range field instead of clamping it and keeps the previous config', () => {
@@ -288,18 +290,20 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
       const before = changer.configJson();
       expect(() => changer.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
       expect(() => changer.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(
-        /formant\.factor out of range \[0\.55, 1\.65\], got 3/,
+        /formantFactor must be finite and in \[0\.55, 1\.65\]/,
       );
       expect(() => changer.setConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(RangeError);
       expect(() => changer.setConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(
-        /limiter\.ceilingDb out of range/,
+        /limiterCeilingDb must be finite and in \[/,
       );
       expect(changer.configJson()).toBe(before);
     } finally {
       changer.destroy();
     }
     expect(() => make({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
-    expect(() => make({ ...pod, formantFactor: 3.0 })).toThrow(/formant\.factor out of range/);
+    expect(() => make({ ...pod, formantFactor: 3.0 })).toThrow(
+      /formantFactor must be finite and in \[0\.55, 1\.65\]/,
+    );
   });
 
   it('requires formantMode on a flat POD in the constructor and in setConfig', () => {

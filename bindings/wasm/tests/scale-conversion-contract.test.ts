@@ -42,7 +42,7 @@ const HOP = 512;
 const SATURATED_FRAME_INDEX = 2147483647;
 
 /** The suffix every float-range refusal ends with, whatever the key is. */
-const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
+const RANGE_MESSAGE = 'must be finite and in [-3.4028235e38, 3.4028235e38]';
 
 /**
  * Finite numbers a caller could choose that embind's f32 demotion turns into an

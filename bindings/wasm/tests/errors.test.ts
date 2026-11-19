@@ -46,7 +46,7 @@ describe('SonareError', () => {
     // An unsupported version is a content defect of the document: also InvalidFormat.
     const unsupported = load('{"version":999}');
     expect(unsupported.code).toBe(ErrorCode.InvalidFormat);
-    expect(unsupported.message).toContain('unsupported scene JSON version');
+    expect(unsupported.message).toContain('version must be 1');
   });
 
   it('rethrows a native C++ exception as a coded SonareError', () => {

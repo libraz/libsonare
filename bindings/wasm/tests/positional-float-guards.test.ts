@@ -38,7 +38,7 @@ import { expectArgumentRefusal } from './_helpers';
 const SR = 44100;
 
 /** The suffix every one of these refusals ends with, whatever the key is. */
-const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
+const RANGE_MESSAGE = 'must be finite and in [-3.4028235e38, 3.4028235e38]';
 
 /**
  * Values that saturate onto a legal float. These are the ones that matter: each
@@ -64,7 +64,7 @@ function capture(run: () => unknown): unknown {
 function expectRangeRefusal(caught: unknown, key: string, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
   expect(error.message, context).toMatch(
-    new RegExp(`^(?:[A-Za-z0-9]+: )?${key} ${RANGE_MESSAGE}$`),
+    new RegExp(`^(?:[A-Za-z0-9]+: )?${key} ${RANGE_MESSAGE.replace(/[[\].]/g, '\\$&')}$`),
   );
 }
 

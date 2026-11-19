@@ -47,7 +47,7 @@ import { expectArgumentRefusal } from './_helpers';
 const SR = 44100;
 
 /** The suffix every one of these refusals ends with, whatever the key is. */
-const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
+const RANGE_MESSAGE = 'must be finite and in [-3.4028235e38, 3.4028235e38]';
 
 /**
  * Values that saturate onto a legal float. These are the ones that matter: each
