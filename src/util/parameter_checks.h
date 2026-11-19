@@ -164,6 +164,24 @@ inline void sum_at_most(double a, double b, double bound, const char* subject_a,
   }
 }
 
+/// @brief Refuses a null @p pointer: "<subject> must not be NULL".
+inline void non_null(const void* pointer, const char* subject) {
+  if (pointer == nullptr) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            refusal::kNonNullPredicate);
+  }
+}
+
+/// @brief Refuses a null @p pointer while @p count is not 0:
+///        "<subject> must not be NULL when <count_subject> is not 0".
+inline void non_null_when_count(const void* pointer, std::size_t count, const char* subject,
+                                const char* count_subject) {
+  if (pointer == nullptr && count != 0) {
+    throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter, {subject, count_subject},
+                                           refusal::kNonNullWhenCountRelation);
+  }
+}
+
 /// @brief Refuses a relation between members; @p text writes subject @c i as "{i}".
 [[noreturn]] inline void refuse_relation(std::vector<std::string> subjects,
                                          const std::string& text) {

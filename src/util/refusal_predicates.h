@@ -155,4 +155,10 @@ inline std::string integer_at_least_predicate(long long bound) {
 /// @brief "must name a declared value".
 inline constexpr const char* kDeclaredValuePredicate = "must name a declared value";
 
+/// @brief "must not be NULL", for a pointer the call reads or writes.
+inline constexpr const char* kNonNullPredicate = "must not be NULL";
+
+/// @brief "{0} must not be NULL when {1} is not 0", for a pointer read only while a count is set.
+inline constexpr const char* kNonNullWhenCountRelation = "{0} must not be NULL when {1} is not 0";
+
 }  // namespace sonare::util::refusal

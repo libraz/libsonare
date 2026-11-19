@@ -641,4 +641,28 @@ TEST_CASE("playback entry points return NOT_SUPPORTED when compiled out",
   sonare_playback_loudness_meter_destroy(nullptr);
 }
 
+TEST_CASE("a NULL argument is refused by its parameter name", "[playback][capi]") {
+  int channels = -1;
+  CHECK(sonare_playback_config_num_output_channels(nullptr, &channels) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "config_json must not be NULL");
+  CHECK(channels == 0);
+
+  SonarePlaybackRenderer* renderer = create_renderer(headphones_config());
+  CHECK(sonare_playback_renderer_max_input_channels(renderer, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out must not be NULL");
+  sonare_playback_renderer_destroy(renderer);
+
+  SonarePlaybackLoudnessMeter* meter = nullptr;
+  REQUIRE(sonare_playback_loudness_meter_create(2, 48000, &meter) == SONARE_OK);
+  CHECK(sonare_playback_loudness_meter_push_interleaved(meter, nullptr, 4) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "in must not be NULL when frames is not 0");
+  // No samples to read, so a NULL buffer is accepted and the last error is cleared.
+  CHECK(sonare_playback_loudness_meter_push_interleaved(meter, nullptr, 0) == SONARE_OK);
+  CHECK(sonare_last_error_code() == SONARE_OK);
+  sonare_playback_loudness_meter_destroy(meter);
+}
+
 #endif

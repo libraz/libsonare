@@ -133,6 +133,10 @@ bool vocal_edit_compiled_in() noexcept;
 /// @details The diagnostic writer is no-throw, so this function never lets a
 ///          caught C++ exception escape a C-ABI entry point.
 SonareError record_current_exception() noexcept;
+/// @brief Records "<param> must not be NULL" as the last error and returns its code.
+SonareError refuse_null(const char* param) noexcept;
+/// @brief Records "<param> must not be NULL when <count> is not 0" and returns its code.
+SonareError refuse_null_when_count(const char* param, const char* count) noexcept;
 /// @brief Validates an offline audio buffer shared by every run_*_offline entry.
 /// @details EMPTY-AUDIO POLICY: a NULL @p samples or @c length == 0 is rejected
 ///          with @c SONARE_ERROR_INVALID_PARAMETER (empty audio is never treated
@@ -392,6 +396,19 @@ inline std::string join_names(const std::vector<std::string>& values) {
 // tests/conformance/check_c_api_entry_guard.py holds every exported entry to this
 // family: cleared on entry, and everything that can throw inside SONARE_C_TRY.
 #define SONARE_C_API_ENTRY sonare_c_detail::clear_last_error()
+
+// Refuse a NULL argument by its parameter name, spelled as the public header spells it.
+// The _WHEN_COUNT form refuses it only while the count that sizes it is not 0.
+#define SONARE_C_REQUIRE_NONNULL(param)                                    \
+  do {                                                                     \
+    if ((param) == nullptr) return ::sonare_c_detail::refuse_null(#param); \
+  } while (0)
+#define SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(param, count)               \
+  do {                                                                  \
+    if ((param) == nullptr && (count) != 0) {                           \
+      return ::sonare_c_detail::refuse_null_when_count(#param, #count); \
+    }                                                                   \
+  } while (0)
 
 // The two realtime engine process functions deliberately do not touch the
 // thread-local diagnostic strings. First use of a thread-local object can

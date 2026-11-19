@@ -176,3 +176,18 @@ TEST_CASE("an unknown key and a wrong type are shape refusals, a domain refusal 
   CHECK(respelled.shape_error());
   CHECK(std::string(respelled.what()) == "irBase64 must be a string");
 }
+
+TEST_CASE("a NULL pointer is refused by name, alone or while its count is set", "[util][refusal]") {
+  const int value = 0;
+  CHECK_NOTHROW(check::non_null(&value, "out"));
+  CHECK(refusal_text([] { check::non_null(nullptr, "out"); }) == "out must not be NULL");
+
+  CHECK_NOTHROW(check::non_null_when_count(nullptr, 0, "samples", "length"));
+  CHECK_NOTHROW(check::non_null_when_count(&value, 3, "samples", "length"));
+  const auto counted =
+      caught_refusal([] { check::non_null_when_count(nullptr, 3, "samples", "length"); });
+  CHECK(std::string(counted.what()) == "samples must not be NULL when length is not 0");
+  CHECK(std::string(check::camel_spelled(counted).what()) ==
+        "samples must not be NULL when length is not 0");
+  CHECK_FALSE(counted.shape_error());
+}

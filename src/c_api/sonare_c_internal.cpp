@@ -6,6 +6,7 @@
 #include "c_api/sonare_c_error_mapping.h"
 #include "c_api/sonare_c_last_refusal.h"
 #include "util/error_classification.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare_c_detail {
 
@@ -112,6 +113,25 @@ SonareError record_current_exception() noexcept {
   } catch (...) {
     set_last_error(SONARE_ERROR_UNKNOWN, kUnknownExceptionMessage);
     return SONARE_ERROR_UNKNOWN;
+  }
+}
+
+SonareError refuse_null(const char* param) noexcept {
+  try {
+    throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter, param,
+                                                    sonare::util::refusal::kNonNullPredicate);
+  } catch (...) {
+    return record_current_exception();
+  }
+}
+
+SonareError refuse_null_when_count(const char* param, const char* count) noexcept {
+  try {
+    throw sonare::SonareParameterRefusal::relation(
+        sonare::ErrorCode::InvalidParameter, {param, count},
+        sonare::util::refusal::kNonNullWhenCountRelation);
+  } catch (...) {
+    return record_current_exception();
   }
 }
 
