@@ -57,8 +57,7 @@ inline void check_rir_synth_config(const ::sonare::acoustic::RirSynthConfig& con
   check::in_range(config.max_seconds, 0.0, ::sonare::acoustic::kMaxRirSeconds, "max_seconds");
   check::in_range(config.mixing_time_ms, 0.0, ::sonare::acoustic::kMaxRirMixingTimeMs,
                   "mixing_time_ms");
-  check::in_range(config.crossfade_ms, 0.0, ::sonare::acoustic::kMaxRirCrossfadeMs,
-                  "crossfade_ms");
+  check::in_range(config.crossfade_ms, 0.0, ::sonare::acoustic::kMaxRirCrossfadeMs, "crossfade_ms");
   if (config.air_absorption_enabled) {
     check::greater_than(config.air.temperature_c, ::sonare::acoustic::kAbsoluteZeroCelsius,
                         "air.temperature_c");

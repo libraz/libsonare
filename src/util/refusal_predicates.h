@@ -14,7 +14,8 @@
 
 namespace sonare::util::refusal {
 
-/// @brief @p text with its exponent written bare: "3.4028235e+38" -> "3.4028235e38", "1e-05" -> "1e-5".
+/// @brief @p text with its exponent written bare: "3.4028235e+38" -> "3.4028235e38", "1e-05" ->
+/// "1e-5".
 inline std::string bare_exponent(std::string text) {
   const std::string::size_type e = text.find('e');
   if (e == std::string::npos) return text;

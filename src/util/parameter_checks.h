@@ -126,9 +126,9 @@ inline void sum_at_most(double a, double b, double bound, const char* subject_a,
                         const char* subject_b) {
   const double sum = a + b;
   if (!(std::isfinite(sum) && sum <= bound)) {
-    throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter, {subject_a, subject_b},
-                                           "{0} + {1} must be at most " +
-                                               refusal::bound_text(bound));
+    throw SonareParameterRefusal::relation(
+        ErrorCode::InvalidParameter, {subject_a, subject_b},
+        "{0} + {1} must be at most " + refusal::bound_text(bound));
   }
 }
 
@@ -142,8 +142,7 @@ inline void sum_at_most(double a, double b, double bound, const char* subject_a,
 [[noreturn]] inline void rethrow_under_member(const SonareParameterRefusal& e,
                                               const std::string& parent) {
   throw e.respelled(
-      e.code(), [&parent](const std::string& subject) { return parent + "." + subject; },
-      false);
+      e.code(), [&parent](const std::string& subject) { return parent + "." + subject; }, false);
 }
 
 }  // namespace sonare::util::check
