@@ -485,12 +485,14 @@ def mixing_assistant_source_class_from_name(name: str) -> int:
     """Resolve a source-class identifier to its enum value.
 
     Raises:
+        TypeError: If ``name`` is not a string.
         SonareValueError: If ``name`` is not one of :func:`mixing_assistant_source_class_names`.
     """
+    refusal = f"name must be one of {', '.join(mixing_assistant_source_class_names())}"
+    if not isinstance(name, str):
+        raise _refuse_type(refusal)
     lib = _get_lib()
     value = int(lib.sonare_mixing_assistant_source_class_from_name(_utf8_arg(name, "name")))
     if value < 0:
-        raise _refuse(
-            "name must be the name of a source class listed by mixing_assistant_source_class_names"
-        )
+        raise _refuse(refusal)
     return value

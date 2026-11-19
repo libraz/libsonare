@@ -153,14 +153,21 @@ def test_source_class_names_resolve_to_their_index():
 
 
 def test_an_unknown_source_class_name_is_refused():
-    from libsonare import SonareValueError, mixing_assistant_source_class_from_name
-
-    with pytest.raises(
+    from libsonare import (
         SonareValueError,
-        match="^mixing_assistant_source_class_from_name: name must be the name of a source "
-        "class listed by mixing_assistant_source_class_names$",
-    ):
+        mixing_assistant_source_class_from_name,
+        mixing_assistant_source_class_names,
+    )
+
+    expected = "mixing_assistant_source_class_from_name: name must be one of " + ", ".join(
+        mixing_assistant_source_class_names()
+    )
+    with pytest.raises(SonareValueError) as unknown:
         mixing_assistant_source_class_from_name("not-a-source-class")
+    assert str(unknown.value) == expected
+    with pytest.raises(TypeError) as wrong_type:
+        mixing_assistant_source_class_from_name(3)  # type: ignore[arg-type]
+    assert str(wrong_type.value) == expected
 
 
 def test_suggest_over_mono_tracks(mono_tracks, mono_suggestion):
