@@ -633,13 +633,20 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
             : R"([{"name":"custom","target_lufs":-14,")" + old_key + R"(":-1}])";
     const SplitResult refused = run(record);
     CHECK(refused.exit_code == 3);
-    CHECK_THAT(refused.err,
-               ContainsSubstring("unknown key '" + old_key + "'; use '" + new_key + "'"));
+    CHECK_THAT(refused.err, ContainsSubstring("unknown key platforms[0]." + old_key +
+                                              " (renamed to platforms[0]." + new_key + ")"));
   }
 
   const SplitResult missing = run(R"([{"name":"custom","target_lufs":-14}])");
   CHECK(missing.exit_code == 3);
-  CHECK_THAT(missing.err, ContainsSubstring("missing ceiling_dbtp"));
+  CHECK_THAT(missing.err, ContainsSubstring("platform is missing ceiling_dbtp"));
+
+  const SplitResult unknown =
+      run(R"([{"name":"custom","target_lufs":-14,"ceiling_dbtp":-1,"x":1}])");
+  CHECK(unknown.exit_code == 3);
+  CHECK_THAT(
+      unknown.err,
+      ContainsSubstring("unknown key platforms[0].x (expected name, target_lufs, ceiling_dbtp)"));
 }
 
 TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a number",

@@ -1535,11 +1535,27 @@ def test_mastering_ceiling_is_spelled_and_echoed_in_dbtp(tmp_path: Path) -> None
 @pytest.mark.parametrize(
     ("record", "message"),
     [
-        ('{"name":"x","targetLufs":-14,"ceiling_dbtp":-1}', "use 'target_lufs'"),
-        ('{"name":"x","target_lufs":-14,"ceilingDb":-1}', "use 'ceiling_dbtp'"),
-        ('{"name":"x","target_lufs":-14,"ceilingDbtp":-1}', "use 'ceiling_dbtp'"),
-        ('{"name":"x","target_lufs":-14,"ceiling_db":-1}', "use 'ceiling_dbtp'"),
-        ('{"name":"x","target_lufs":-14}', "missing ceiling_dbtp"),
+        (
+            '{"name":"x","targetLufs":-14,"ceiling_dbtp":-1}',
+            "unknown key platforms[0].targetLufs (renamed to platforms[0].target_lufs)",
+        ),
+        (
+            '{"name":"x","target_lufs":-14,"ceilingDb":-1}',
+            "unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)",
+        ),
+        (
+            '{"name":"x","target_lufs":-14,"ceilingDbtp":-1}',
+            "unknown key platforms[0].ceilingDbtp (renamed to platforms[0].ceiling_dbtp)",
+        ),
+        (
+            '{"name":"x","target_lufs":-14,"ceiling_db":-1}',
+            "unknown key platforms[0].ceiling_db (renamed to platforms[0].ceiling_dbtp)",
+        ),
+        ('{"name":"x","target_lufs":-14}', "platform is missing ceiling_dbtp"),
+        (
+            '{"name":"x","target_lufs":-14,"ceiling_dbtp":-1,"x":1}',
+            "unknown key platforms[0].x (expected name, target_lufs, ceiling_dbtp)",
+        ),
     ],
 )
 def test_mastering_streaming_takes_one_platform_record_spelling(

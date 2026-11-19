@@ -179,25 +179,34 @@ float streaming_platform_number(const sonare::util::json::Value& entry, const ch
   return value.as_float();
 }
 
-void check_streaming_platform_keys(const sonare::util::json::Value& entry) {
+// The texts are the library's own platform-record refusals, keyed by the record's path.
+void check_streaming_platform_keys(const sonare::util::json::Value& entry,
+                                   const std::string& where) {
   for (const auto& [key, unused] : entry.as_object()) {
     (void)unused;
     for (const auto& [old_key, new_key] : kStreamingPlatformRenamed) {
       if (key == old_key) {
-        throw std::invalid_argument("--platforms: unknown key '" + key + "'; use '" + new_key +
-                                    "'");
+        throw std::invalid_argument("--platforms: unknown key " + where + "." + key +
+                                    " (renamed to " + where + "." + new_key + ")");
       }
     }
     bool known = false;
-    for (const char* expected : kStreamingPlatformKeys) known = known || key == expected;
-    if (!known) throw std::invalid_argument("--platforms: unknown key '" + key + "'");
+    std::string expected_list;
+    for (const char* expected : kStreamingPlatformKeys) {
+      known = known || key == expected;
+      expected_list += (expected_list.empty() ? "" : ", ") + std::string(expected);
+    }
+    if (!known) {
+      throw std::invalid_argument("--platforms: unknown key " + where + "." + key + " (expected " +
+                                  expected_list + ")");
+    }
   }
   std::string missing;
   for (const char* expected : kStreamingPlatformKeys) {
     if (entry.find(expected) == nullptr)
       missing += (missing.empty() ? "" : ", ") + std::string(expected);
   }
-  if (!missing.empty()) throw std::invalid_argument("--platforms: missing " + missing);
+  if (!missing.empty()) throw std::invalid_argument("--platforms: platform is missing " + missing);
 }
 
 }  // namespace
@@ -216,7 +225,7 @@ std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& 
     if (!entry.is_object()) {
       throw std::invalid_argument("--platforms entries must be JSON objects");
     }
-    check_streaming_platform_keys(entry);
+    check_streaming_platform_keys(entry, "platforms[" + std::to_string(platforms.size()) + "]");
     StreamingPlatformSpec spec;
     const sonare::util::json::Value& name = *entry.find("name");
     if (!name.is_string() || name.as_string().empty()) {
