@@ -140,8 +140,7 @@ def _entry(name: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
             except (SonareError, TypeError) as exc:
                 bare = getattr(exc, _BARE_TEXT, None)
                 if bare is not None:
-                    # Native text that already opens with this entry keeps a single name.
-                    text = bare if bare.startswith(f"{name}: ") else f"{name}: {bare}"
+                    text = f"{name}: {bare}"
                     if isinstance(exc, SonareError) and not isinstance(exc, SonareValueError):
                         text = f"[{int(exc.code)}] {text}"
                     exc.args = (text,)

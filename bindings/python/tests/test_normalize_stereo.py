@@ -234,18 +234,7 @@ class TestNormalizeStereoPairRefusals:
         rate_parameters = [name for name in parameters if "sample_rate" in name]
         assert rate_parameters == ["sample_rate"]
 
-    @pytest.mark.parametrize(
-        "call",
-        [
-            libsonare.normalize_stereo,
-            pytest.param(
-                _RMS_STEREO,
-                marks=pytest.mark.xfail(
-                    strict=True, reason="the rms mode runs sonare_normalize_rms_stereo"
-                ),
-            ),
-        ],
-    )
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_a_non_positive_sample_rate_is_refused_by_the_c_layer(self, call: object) -> None:
         """And it is the C layer refusing it, not a Python-side guard.
 

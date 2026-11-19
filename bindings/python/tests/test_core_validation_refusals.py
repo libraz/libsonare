@@ -41,6 +41,20 @@ _RESAMPLE = _CORPUS["resample"]
 _ZERO_CROSSINGS = _CORPUS["zero_crossings"]
 _MASTER = _CORPUS["master_audio"]
 
+# Every function the C headers declare: the oracle for "this prefix is a C entry name".
+_C_ENTRIES = frozenset(
+    name
+    for header in (Path(__file__).resolve().parents[3] / "include/sonare").glob("*.h")
+    for name in re.findall(r"\b(sonare_[a-z0-9_]+)\s*\(", header.read_text())
+)
+_DOUBLE_PREFIX = re.compile(r"^(?:\[\d+\] )?([a-z][a-z0-9_]*): ([a-z][a-z0-9_]*): ")
+
+
+def _without_c_entry(message: str) -> str:
+    """The core text as the binding raises it: a leading C entry name is dropped."""
+    head, sep, rest = message.partition(": ")
+    return rest if sep and f"sonare_{head}" in _C_ENTRIES else message
+
 
 def _mfcc() -> np.ndarray:
     shape = (_MFCC["input"]["n_mfcc"], _MFCC["input"]["n_frames"])
@@ -255,8 +269,8 @@ def test_resample_refuses(case: dict) -> None:
     with pytest.raises(error_class):
         libsonare.resample(samples, case["src_sr"], case["target_sr"])
     # The facade's buffer guard names a non-finite sample first, so the core's message is
-    # read through the ctypes wrapper that reaches the C entry directly.
-    with pytest.raises(error_class, match=re.escape(case["message"])):
+    # read through the ctypes wrapper that reaches the C entry directly, without its C name.
+    with pytest.raises(error_class, match=re.escape(_without_c_entry(case["message"]))):
         _conversions._resample_float32(samples, case["src_sr"], case["target_sr"])
 
 
@@ -301,8 +315,8 @@ def test_zero_crossings_refuses(case: dict) -> None:
     with pytest.raises(error_class):
         libsonare.zero_crossings(samples)
     # The facade's buffer guard names a non-finite sample first, so the core's message is
-    # read through a direct call to the C entry.
-    with pytest.raises(error_class, match=re.escape(case["message"])):
+    # read through a direct call to the C entry, without its C name.
+    with pytest.raises(error_class, match=re.escape(_without_c_entry(case["message"]))):
         _zero_crossings_core(samples)
 
 
@@ -343,3 +357,58 @@ def test_master_audio_accepts(case: dict) -> None:
     np.testing.assert_array_equal(pair.right, tone)
     audio = libsonare.Audio.from_buffer(tone, rate)
     np.testing.assert_array_equal(audio.master_audio(overrides=case["overrides"]).samples, tone)
+
+
+def _public_refusals() -> list[tuple[str, dict, Callable[[], object]]]:
+    def retune(case: dict) -> None:
+        with libsonare.StreamingRetune() as stream:
+            stream.prepare(case["sample_rate"], case["max_block_size"])
+
+    def chain(case: dict) -> None:
+        libsonare.StreamingMasteringChain(
+            sample_rate=case["sample_rate"],
+            num_channels=_CHAIN["input"]["num_channels"],
+            max_block_size=case["max_block_size"],
+        )
+
+    n_mels = _MFCC_AUDIO["input"]["n_mels"]
+    tone, rate = _master_tone(), _MASTER["input"]["sample_rate"]
+    routes: dict[str, Callable[[dict], object]] = {
+        "mfcc_to_mel": lambda c: libsonare.mfcc_to_mel(_mfcc(), n_mels=c["n_mels"]),
+        "mel_to_audio": lambda c: libsonare.mel_to_audio(_mel(), n_iter=c["n_iter"]),
+        "mfcc_to_audio": lambda c: libsonare.mfcc_to_audio(
+            _mfcc_audio(), n_mels=n_mels, n_iter=c["n_iter"]
+        ),
+        "streaming_mastering_chain_prepare": chain,
+        "equalizer_prepare": lambda c: libsonare.StreamingEqualizer(
+            sample_rate=c["sample_rate"], max_block_size=c["max_block_size"]
+        ),
+        "streaming_retune_prepare": retune,
+        "master_audio": lambda c: libsonare.master_audio(tone, rate),
+    }
+    return [
+        (key, case, (lambda route=route, case=case: route(case)))
+        for key, route in routes.items()
+        for case in _CORPUS[key]["refused"]
+    ]
+
+
+_PUBLIC_REFUSALS = _public_refusals()
+
+
+@pytest.mark.parametrize(
+    ("key", "case", "call"),
+    _PUBLIC_REFUSALS,
+    ids=[f"{key}-{case['id']}" for key, case, _ in _PUBLIC_REFUSALS],
+)
+def test_refusal_names_no_c_entry_after_the_public_name(
+    key: str, case: dict, call: Callable[[], object]
+) -> None:
+    # The public entry names itself; the C entry it reached must not follow that name.
+    with pytest.raises((SonareValueError, TypeError)) as caught:
+        call()
+    match = _DOUBLE_PREFIX.match(str(caught.value))
+    if match is not None:
+        token = match.group(2)
+        assert f"sonare_{token}" not in _C_ENTRIES and token not in _C_ENTRIES, str(caught.value)
+    assert _without_c_entry(case["message"]) in str(caught.value)

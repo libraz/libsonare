@@ -10,6 +10,7 @@ import inspect
 import json
 import math
 import operator
+import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, SupportsIndex, TypeVar, cast
 
@@ -89,13 +90,36 @@ def _generic_error(rc: int) -> SonareError:
     return _coded_error(rc, text)
 
 
+# A leading ``"<token>: "`` the C layer put on its text, before the entry check.
+_LEADING_TOKEN = re.compile(r"([a-z][a-z0-9_]*): ")
+
+
+def _strip_c_entry(message: str) -> str:
+    """Drop a leading ``"<token>: "`` when ``sonare_<token>`` is an exported C entry.
+
+    The public Python entry names itself on the way out, so the C name it called
+    must not stay in front of the cause. Other prefixes (a struct or subsystem
+    name) are part of the cause and stay.
+    """
+    match = _LEADING_TOKEN.match(message)
+    if match is None:
+        return message
+    token = match.group(1)
+    symbol = token if token.startswith("sonare_") else f"sonare_{token}"
+    if not hasattr(_get_lib(), symbol):
+        return message
+    return message[match.end() :]
+
+
 def _coded_error(code: int, message: str) -> SonareError:
     """Build the exception for a C-ABI failure, split by cause.
 
     InvalidParameter is always a refused caller argument, so it is a
     :class:`SonareValueError` with the plain message; every other code is a coded
-    :class:`SonareError`. Either way the calling entry prefixes its name on the way out.
+    :class:`SonareError`. Either way the calling entry prefixes its name on the way out,
+    in place of a C entry name the text opened with.
     """
+    message = _strip_c_entry(message)
     exc = (
         SonareValueError(message)
         if code == int(ErrorCode.INVALID_PARAMETER)
@@ -150,7 +174,7 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
     lib = _get_lib()
     code = int(lib.sonare_last_error_code())
     raw = lib.sonare_last_error_message()
-    detail = raw.decode("utf-8", errors="replace") if raw else ""
+    detail = _strip_c_entry(raw.decode("utf-8", errors="replace")) if raw else ""
     message = f"{fallback_message}: {detail}" if detail else fallback_message
     return _coded_error(code if code != SONARE_OK else default_code, message)
 

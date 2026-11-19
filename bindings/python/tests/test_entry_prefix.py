@@ -23,6 +23,7 @@ import pytest
 import libsonare
 from libsonare import Audio, SonareError, SonareValueError
 from libsonare._errors import _BARE_TEXT, _ENTRY_NAME
+from libsonare._runtime import _coded_error
 
 _PACKAGE = Path(libsonare.__file__).parent
 
@@ -233,3 +234,20 @@ def test_a_method_a_classmethod_and_a_constructor_name_their_entry() -> None:
         with pytest.raises((SonareValueError, TypeError)) as caught:
             call()
         assert str(caught.value).startswith(f"{name}: "), str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("native", "bare"),
+    [
+        ("project_add_clip: clip id is unknown", "clip id is unknown"),
+        ("mel_spectrogram_ex: sample_rate is out of range", "sample_rate is out of range"),
+        ("sonare_eq_set_band: band index is out of range", "band index is out of range"),
+        ("mixer: unknown strip id", "mixer: unknown strip id"),
+        ("StftConfig: n_fft must be even", "StftConfig: n_fft must be even"),
+        ("not_a_c_entry_at_all: text", "not_a_c_entry_at_all: text"),
+    ],
+)
+def test_a_c_entry_name_in_front_of_the_native_text_is_dropped(native: str, bare: str) -> None:
+    # The public entry names itself, so the C entry it reached is not repeated after it.
+    exc = _coded_error(int(libsonare.ErrorCode.INVALID_PARAMETER), native)
+    assert getattr(exc, _BARE_TEXT) == bare

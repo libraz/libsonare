@@ -35,6 +35,7 @@ from ._runtime import (
     _out_int_array,
     _resolve_optional_non_negative,
     _resolve_zero_default,
+    _strip_c_entry,
     _to_c_float,
     _to_c_float_array,
     _to_c_float_matrix,
@@ -91,7 +92,7 @@ def _refused_argument(fallback_message: str) -> SonareValueError:
     raw = lib.sonare_last_error_message()
     if not raw:
         return _refuse(fallback_message)
-    detail = raw.decode("utf-8", errors="replace")
+    detail = _strip_c_entry(raw.decode("utf-8", errors="replace"))
     exc = SonareValueError(detail, code or int(ErrorCode.INVALID_PARAMETER))
     setattr(exc, _BARE_TEXT, detail)
     return exc

@@ -383,25 +383,6 @@ _SPECTRAL_TRANSFORMS = {
 }
 
 
-# Transforms whose C entry is still a versioned variant, so the core names that
-# entry ("mel_spectrogram_ex: ...") rather than the public function.
-_VERSIONED_C_ENTRY = {
-    "mel_spectrogram": "sonare_mel_spectrogram_ex",
-    "mfcc": "sonare_mfcc_ex",
-    "chroma_cens": "sonare_chroma_cens_ex",
-    "chroma_cqt": "sonare_chroma_cqt_ex",
-}
-
-
-def _rate_refusal_case(name: str) -> object:
-    entry = _VERSIONED_C_ENTRY.get(name)
-    if entry is None:
-        return name
-    return pytest.param(
-        name, marks=pytest.mark.xfail(strict=True, reason=f"the core names {entry}")
-    )
-
-
 class TestSpectralTransformsMatchSiblingGuards:
     """Each spectral transform routes its buffer through the sibling preflight."""
 
@@ -430,7 +411,7 @@ class TestSpectralTransformsMatchSiblingGuards:
         with pytest.raises(SonareValueError, match=rf"{name}: samples must not be empty"):
             _SPECTRAL_TRANSFORMS[name](np.empty(0, dtype=np.float32), SR)
 
-    @pytest.mark.parametrize("name", [_rate_refusal_case(n) for n in sorted(_SPECTRAL_TRANSFORMS)])
+    @pytest.mark.parametrize("name", sorted(_SPECTRAL_TRANSFORMS))
     def test_invalid_sample_rate_keeps_sonare_error_code(self, name):
         # Preflight covers the buffer only; scalar arguments stay the C ABI's job.
         with pytest.raises(SonareValueError) as exc_info:
