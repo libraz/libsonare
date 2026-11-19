@@ -1129,7 +1129,7 @@ export function roomMorph(...args: unknown[]): RoomMorphResult {
  * Returns both channels (input length plus the reverb tail) and the target-room
  * synthesis `diagnostics`, with the same codes as {@link RoomMorphResult}.
  *
- * @throws {TypeError} when `sampleRate` is missing
+ * @throws {TypeError} when `sampleRate` is missing or `receiverSpacingM` is not a number
  * @throws {RangeError} if the channel lengths differ, `receiverSpacingM` is
  *   non-finite or outside (0, 4], or the room geometry is unusable.
  */

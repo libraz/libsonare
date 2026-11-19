@@ -240,8 +240,9 @@ export function masteringNormalizeLoudness(...args: unknown[]): MasteringNormali
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
  * @param options - `processor` (required), `params`
- * @throws {TypeError} when `sampleRate` or `processor` is missing or a field has the wrong type
- * @throws {RangeError} on audio out of domain, an unknown processor or a parameter it refuses
+ * @throws {TypeError} when `sampleRate` or `processor` is missing, a field has the wrong type or a
+ *   parameter key is one the processor does not read
+ * @throws {RangeError} on audio out of domain, an unknown processor or a parameter value it refuses
  */
 export function masteringApplyProcessor<P extends SoloProcessor>(
   request: MasteringApplyProcessorRequest<P>,
@@ -271,7 +272,8 @@ export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
 /**
  * Stereo counterpart of {@link masteringApplyProcessor}; takes a request object only.
  *
- * @throws {TypeError} when `sampleRate` or `processor` is missing or a field has the wrong type
+ * @throws {TypeError} when `sampleRate` or `processor` is missing, a field has the wrong type or a
+ *   parameter key is one the processor does not read
  * @throws {RangeError} on audio out of domain, unequal channel lengths, an unknown processor
  *   or a parameter it refuses
  */
@@ -324,8 +326,9 @@ function assertPairAudio(
  * independent lengths and rates: a reference at `referenceSampleRate` is
  * resampled onto `sampleRate` first. Takes a request object only.
  *
- * @throws {TypeError} when `sampleRate` or `processor` is missing or a field has the wrong type
- * @throws {RangeError} on audio out of domain, an unknown processor or a parameter it refuses
+ * @throws {TypeError} when `sampleRate` or `processor` is missing, a field has the wrong type or a
+ *   parameter key is one the processor does not read
+ * @throws {RangeError} on audio out of domain, an unknown processor or a parameter value it refuses
  */
 export function masteringApplyPairProcessor<P extends PairProcessor>(
   request: MasteringApplyPairProcessorRequest<P>,
@@ -352,7 +355,8 @@ export function masteringApplyPairProcessor<P extends PairProcessor>(
  * Apply the stereo `match.abCrossfade` processor. Source and reference stereo
  * pairs may have independent lengths, but each pair must have equal channels.
  *
- * @throws {TypeError} when `sampleRate` or `processor` is missing or a field has the wrong type
+ * @throws {TypeError} when `sampleRate` or `processor` is missing, a field has the wrong type or a
+ *   parameter key is one the processor does not read
  * @throws {RangeError} on audio out of domain or a pair whose channels differ in length
  */
 export function masteringApplyPairProcessorStereo(

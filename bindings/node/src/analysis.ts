@@ -988,7 +988,7 @@ export function roomMorph(...args: unknown[]): RoomMorphResult {
  * `left` and `right` must have the same length. The result carries both channels
  * (input length plus the reverb tail) and the synthesis `diagnostics`.
  *
- * @throws {TypeError} when `sampleRate` is missing
+ * @throws {TypeError} when `sampleRate` is missing or `receiverSpacingM` is not a number
  * @throws {RangeError} on a length mismatch, `receiverSpacingM` outside (0, 4], an
  *   unusable room geometry, or an explicit 0 where omission selects the default
  */
