@@ -96,6 +96,17 @@ type RetuneCase = {
   message?: string;
 };
 type RetuneRoute = { accepted: RetuneCase[]; refused: RetuneCase[] };
+type RetuneConfigField = 'semitones' | 'mix' | 'grain_size';
+type RetuneConfigCase = {
+  id: string;
+  semitones: number | 'nan' | 'inf';
+  mix: number | 'nan' | 'inf';
+  grain_size: number;
+  field?: RetuneConfigField;
+  cause?: Cause;
+  predicate?: string;
+};
+type RetuneConfigRoute = { accepted: RetuneConfigCase[]; refused: RetuneConfigCase[] };
 type ResampleCase = {
   id: string;
   src_sr: number;
@@ -142,6 +153,7 @@ const corpus = JSON.parse(
   streaming_mastering_chain_prepare: RateBlockRoute;
   equalizer_prepare: EqualizerRoute;
   streaming_retune_prepare: RetuneRoute;
+  streaming_retune_config: RetuneConfigRoute;
   resample: ResampleRoute;
   zero_crossings: ZeroCrossingsRoute;
   master_audio: MasterAudioRoute;
@@ -643,6 +655,54 @@ describe('streaming retune prepare refusals come from the core', () => {
     } finally {
       retune.destroy();
       handle.delete();
+    }
+  });
+});
+
+const retuneConfigKey: Record<RetuneConfigField, string> = {
+  semitones: 'pitchSemitones',
+  mix: 'mix',
+  grain_size: 'grainSizeSamples',
+};
+const corpusNumber = (value: number | 'nan' | 'inf') =>
+  value === 'nan' ? Number.NaN : value === 'inf' ? Number.POSITIVE_INFINITY : value;
+// Grain 0 is the C spelling of an omitted grain.
+const retuneControls = ({ semitones, mix, grain_size }: RetuneConfigCase) => ({
+  pitchSemitones: corpusNumber(semitones),
+  mix: corpusNumber(mix),
+  ...(grain_size === 0 ? {} : { grainSizeSamples: grain_size }),
+});
+
+describe('streaming retune config refusals come from the core', () => {
+  const { accepted, refused } = corpus.streaming_retune_config;
+
+  it.each(accepted)('accepts $id', (item) => {
+    const controls = retuneControls(item);
+    const retune = new StreamingRetune(controls);
+    try {
+      expect(retune.config()).toEqual(controls);
+      expect(() => retune.setConfig(controls)).not.toThrow();
+    } finally {
+      retune.destroy();
+    }
+  });
+
+  it.each(refused)('refuses $id, and a refused update changes nothing', (item) => {
+    const kind = errorClassFor[item.cause as Cause];
+    const message = `${retuneConfigKey[item.field as RetuneConfigField]} ${item.predicate}`;
+    const controls = retuneControls(item);
+    expect(expectRefusalOf(() => new StreamingRetune(controls), kind).message).toMatch(
+      literal(`StreamingRetune: ${message}`),
+    );
+    const retune = new StreamingRetune({ pitchSemitones: 3, mix: 0.5 });
+    try {
+      const before = retune.config();
+      expect(expectRefusalOf(() => retune.setConfig(controls), kind).message).toMatch(
+        literal(`StreamingRetune.setConfig: ${message}`),
+      );
+      expect(retune.config()).toEqual(before);
+    } finally {
+      retune.destroy();
     }
   });
 });
