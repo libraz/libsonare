@@ -37,9 +37,11 @@ const ERROR_CODE_NAMES = new Map<number, ErrorCodeName>(
  * {@link ErrorCode}) and its canonical `codeName`.
  *
  * A refused caller argument is not a `SonareError`: the C ABI's
- * `InvalidParameter` surfaces as a `RangeError` (a wrong JS type stays a
- * `TypeError`), so a coded `SonareError` always means a library or object-state
- * failure. `ErrorCode.InvalidParameter` stays for parity with the C ABI numbering.
+ * `InvalidParameter` surfaces as a `TypeError` when the shape is wrong — a
+ * wrong JS type, or a key the request object or parameter bag does not
+ * declare — and as a `RangeError` when a value is outside its domain, whichever
+ * layer refused it; so a coded `SonareError` always means a library or
+ * object-state failure. `ErrorCode.InvalidParameter` stays for parity with the C ABI numbering.
  *
  * Narrow a caught value with {@link isSonareError} or with `instanceof`; both
  * accept the same values. This class exists as a runtime value so the WASM

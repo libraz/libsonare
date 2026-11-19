@@ -8,8 +8,9 @@ import {
 } from '../src/index.js';
 
 /**
- * The failure class follows the cause: every refused caller argument is a plain
- * RangeError, whichever layer refused it, and never a coded SonareError.
+ * The failure class follows the cause: a refused caller argument is a plain
+ * RangeError when its value is out of domain and a TypeError when its shape is
+ * wrong (an undeclared key), whichever layer refused it, and never a coded SonareError.
  */
 const SR = 22050;
 const capture = (run: () => unknown): unknown => {
@@ -21,13 +22,16 @@ const capture = (run: () => unknown): unknown => {
   }
 };
 
-function expectRefusal(caught: unknown): void {
-  expect(caught).toBeInstanceOf(RangeError);
+function expectRefusal(
+  caught: unknown,
+  kind: typeof RangeError | typeof TypeError = RangeError,
+): void {
+  expect(caught).toBeInstanceOf(kind);
   expect(isSonareError(caught)).toBe(false);
   expect((caught as { code?: unknown }).code).toBeUndefined();
 }
 
-describe('a refused argument is a RangeError', () => {
+describe('a refused argument is a RangeError or a TypeError, never a SonareError', () => {
   it('hzToNote refuses a negative frequency', () => {
     const caught = capture(() => hzToNote(-1));
     expectRefusal(caught);
@@ -50,7 +54,7 @@ describe('a refused argument is a RangeError', () => {
         params: { notAParameter: 1 } as never,
       }),
     );
-    expectRefusal(mono);
+    expectRefusal(mono, TypeError);
     expect((mono as Error).message).toMatch(/notAParameter/);
     const stereo = capture(() =>
       masteringApplyProcessorStereo({
@@ -61,7 +65,7 @@ describe('a refused argument is a RangeError', () => {
         params: { notAParameter: 1 } as never,
       }),
     );
-    expectRefusal(stereo);
+    expectRefusal(stereo, TypeError);
     expect((stereo as Error).message).toMatch(/notAParameter/);
   });
 });
