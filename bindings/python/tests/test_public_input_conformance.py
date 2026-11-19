@@ -17,6 +17,7 @@ from libsonare import (
     Project,
     ProjectMidiCcBindingKind,
     RealtimeEngine,
+    SonareError,
     SonareValueError,
     StreamingRetune,
     mix_stereo,
@@ -457,3 +458,21 @@ def test_room_morph_stereo_spacing_follows_the_corpus(case: dict[str, Any]) -> N
     text = f"{_ROOM['fn']}: {case['key']} {case['predicate']}"
     with pytest.raises(_GM_REFUSALS[case["refused"]], match=rf"^{re.escape(text)}$"):
         fn(_ROOM_IMPULSE, _ROOM_IMPULSE, **kwargs)
+
+
+_SCENE = _CORPUS["scene_insert_refusal"]
+
+
+@pytest.mark.parametrize("case", _SCENE["cases"], ids=lambda case: case["id"])
+def test_scene_insert_refusal_follows_the_corpus(case: dict[str, Any]) -> None:
+    scene = json.loads(json.dumps(_SCENE["scene"]))
+    scene["strips"][0]["inserts"][0]["params"][case["param"]] = case["value"]
+    text = json.dumps(scene)
+    if case.get("accepted"):
+        libsonare.Mixer.from_json(text, **_SCENE["options"]).close()
+        return
+    with pytest.raises(SonareError) as refused:
+        libsonare.Mixer.from_json(text, **_SCENE["options"])
+    assert refused.value.code_name == case["code_name"]
+    assert not isinstance(refused.value, SonareValueError)
+    assert str(refused.value) == f"[{int(refused.value.code)}] Mixer.from_json: {case['message']}"
