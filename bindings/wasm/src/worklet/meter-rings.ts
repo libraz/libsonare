@@ -1,5 +1,6 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import type { EngineMeterTelemetryWide } from '../index.js';
+import { codedError, refuse, withEntry } from '../internal/entry.js';
 import { decodeFrame } from './engine-rings.js';
 import {
   attachProtocolVersion,
@@ -193,135 +194,141 @@ export const SONARE_FLOOR_DB = -120;
 
 /** Byte length of a meter ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function meterRingBufferByteLength(options: { capacity: number }): number {
-  const capacity = resolveRingCapacity('meterRingBufferByteLength', options, undefined);
-  return overwriteRingByteLength(
-    SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
-    SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT,
-    capacity,
-  );
+  return withEntry('meterRingBufferByteLength', () => {
+    const capacity = resolveRingCapacity(options, undefined);
+    return overwriteRingByteLength(
+      SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+      SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT,
+      capacity,
+    );
+  });
 }
 
 /** Creates a shared meter ring. RangeError outside the domain, TypeError for an unknown key. */
 export function createMeterRingBuffer(options?: RingCapacityOptions): MeterRingBuffer {
-  const clampedCapacity = resolveRingCapacity('createMeterRingBuffer', options, 128);
-  const sharedBuffer = new SharedArrayBuffer(
-    meterRingBufferByteLength({ capacity: clampedCapacity }),
-  );
-  const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const recordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
-  const header = new Int32Array(sharedBuffer, 0, SONARE_METER_RING_HEADER_INTS);
-  const records = new Float32Array(
-    sharedBuffer,
-    headerBytes,
-    clampedCapacity * SONARE_METER_RING_RECORD_FLOATS,
-  );
-  const slotStates = makeOverwriteSlotStates(
-    sharedBuffer,
-    headerBytes,
-    recordBytes,
-    clampedCapacity,
-  );
-  Atomics.store(header, 0, 0);
-  Atomics.store(header, 1, clampedCapacity);
-  Atomics.store(header, 2, SONARE_METER_RING_RECORD_FLOATS);
-  Atomics.store(header, 3, 0);
-  slotStates.fill(0);
-  return { sharedBuffer, header, records, slotStates, capacity: clampedCapacity };
+  return withEntry('createMeterRingBuffer', () => {
+    const clampedCapacity = resolveRingCapacity(options, 128);
+    const sharedBuffer = new SharedArrayBuffer(
+      meterRingBufferByteLength({ capacity: clampedCapacity }),
+    );
+    const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+    const recordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+    const header = new Int32Array(sharedBuffer, 0, SONARE_METER_RING_HEADER_INTS);
+    const records = new Float32Array(
+      sharedBuffer,
+      headerBytes,
+      clampedCapacity * SONARE_METER_RING_RECORD_FLOATS,
+    );
+    const slotStates = makeOverwriteSlotStates(
+      sharedBuffer,
+      headerBytes,
+      recordBytes,
+      clampedCapacity,
+    );
+    Atomics.store(header, 0, 0);
+    Atomics.store(header, 1, clampedCapacity);
+    Atomics.store(header, 2, SONARE_METER_RING_RECORD_FLOATS);
+    Atomics.store(header, 3, 0);
+    slotStates.fill(0);
+    return { sharedBuffer, header, records, slotStates, capacity: clampedCapacity };
+  });
 }
 
 /** Reads the meter snapshots published since `readIndex` (default `0`) and returns them with the index to resume from. */
 export function readMeterRingBuffer(ring: MeterRingBuffer, readIndex = 0): MeterRingReadResult {
-  const { sharedBuffer, header, records, slotStates, capacity } = ring;
-  const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const recordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
-  validateOverwriteViews(
-    sharedBuffer,
-    header,
-    records,
-    slotStates,
-    headerBytes,
-    recordBytes,
-    capacity,
-    'meter ring',
-  );
-  if (
-    Atomics.load(header, 1) !== capacity ||
-    Atomics.load(header, 2) !== SONARE_METER_RING_RECORD_FLOATS
-  ) {
-    throw new SonareError(ErrorCode.InvalidFormat, 'meter ring has invalid descriptors.');
-  }
-  const writeIndex = loadSonareRingCursor(header, 0, capacity);
-  const version = Atomics.load(header, 3);
-  if (version === 0 && writeIndex === 0) {
-    return { nextReadIndex: writeIndex, meters: [] };
-  }
-  if (version !== SONARE_METER_RING_PROTOCOL_VERSION) {
-    throw new SonareError(
-      ErrorCode.AbiMismatch,
-      `meter ring protocol version ${version} is incompatible; expected ${SONARE_METER_RING_PROTOCOL_VERSION}.`,
+  return withEntry('readMeterRingBuffer', () => {
+    const { sharedBuffer, header, records, slotStates, capacity } = ring;
+    const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+    const recordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+    validateOverwriteViews(
+      sharedBuffer,
+      header,
+      records,
+      slotStates,
+      headerBytes,
+      recordBytes,
+      capacity,
+      'meter ring',
     );
-  }
-  const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
-  const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
-  const meters: WorkletMeterSnapshot[] = [];
-  let nextReadIndex = writeIndex;
-  for (let i = 0; i < count; i++) {
-    const cursor = (firstReadable + i) % ringCursorSpan(capacity);
-    if (!tryAcquireOverwriteRead(slotStates, capacity, cursor)) {
-      // A writer is still publishing this record; resume here on the next read.
-      nextReadIndex = cursor;
-      break;
+    if (
+      Atomics.load(header, 1) !== capacity ||
+      Atomics.load(header, 2) !== SONARE_METER_RING_RECORD_FLOATS
+    ) {
+      throw codedError(ErrorCode.InvalidFormat, 'meter ring has invalid descriptors.');
     }
-    try {
-      const currentWriteIndex = loadSonareRingCursor(header, 0, capacity);
-      const age = sonareRingCursorDistance(cursor, currentWriteIndex, capacity);
-      if (age < 1 || age > capacity) {
-        continue;
-      }
-      const offset = sonareRingCursorSlot(cursor, capacity) * SONARE_METER_RING_RECORD_FLOATS;
-      const meter: WorkletMeterSnapshot = {
-        type: 'meter',
-        frame: decodeFrame(records[offset], records[offset + 1]),
-        targetId: records[offset + 2],
-        peakDbL: records[offset + 3],
-        peakDbR: records[offset + 4],
-        rmsDbL: records[offset + 5],
-        rmsDbR: records[offset + 6],
-        correlation: records[offset + 7],
-        truePeakDbtpL: records[offset + 8],
-        truePeakDbtpR: records[offset + 9],
-        momentaryLufs: records[offset + 10],
-        shortTermLufs: records[offset + 11],
-        integratedLufs: records[offset + 12],
-        gainReductionDb: records[offset + 13],
-        inputPeakDbL: records[offset + 14],
-        inputPeakDbR: records[offset + 15],
-      };
-      const channelCount = records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET];
-      if (channelCount > 2) {
-        const planes = Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS);
-        const plane = (kind: number): number[] =>
-          Array.from(
-            records.subarray(
-              offset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS,
-              offset +
-                SONARE_METER_RING_PLANES_OFFSET +
-                kind * SONARE_METER_RING_MAX_CHANNELS +
-                planes,
-            ),
-          );
-        meter.numChannels = planes;
-        meter.peakDb = plane(0);
-        meter.rmsDb = plane(1);
-        meter.truePeakDbtp = plane(2);
-        meter.inputPeakDb = plane(3);
-      }
-      meters.push(meter);
-    } finally {
-      releaseOverwriteRead(slotStates, capacity, cursor);
+    const writeIndex = loadSonareRingCursor(header, 0, capacity);
+    const version = Atomics.load(header, 3);
+    if (version === 0 && writeIndex === 0) {
+      return { nextReadIndex: writeIndex, meters: [] };
     }
-  }
-  return { nextReadIndex, meters };
+    if (version !== SONARE_METER_RING_PROTOCOL_VERSION) {
+      throw codedError(
+        ErrorCode.AbiMismatch,
+        `meter ring protocol version ${version} is incompatible; expected ${SONARE_METER_RING_PROTOCOL_VERSION}.`,
+      );
+    }
+    const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
+    const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
+    const meters: WorkletMeterSnapshot[] = [];
+    let nextReadIndex = writeIndex;
+    for (let i = 0; i < count; i++) {
+      const cursor = (firstReadable + i) % ringCursorSpan(capacity);
+      if (!tryAcquireOverwriteRead(slotStates, capacity, cursor)) {
+        // A writer is still publishing this record; resume here on the next read.
+        nextReadIndex = cursor;
+        break;
+      }
+      try {
+        const currentWriteIndex = loadSonareRingCursor(header, 0, capacity);
+        const age = sonareRingCursorDistance(cursor, currentWriteIndex, capacity);
+        if (age < 1 || age > capacity) {
+          continue;
+        }
+        const offset = sonareRingCursorSlot(cursor, capacity) * SONARE_METER_RING_RECORD_FLOATS;
+        const meter: WorkletMeterSnapshot = {
+          type: 'meter',
+          frame: decodeFrame(records[offset], records[offset + 1]),
+          targetId: records[offset + 2],
+          peakDbL: records[offset + 3],
+          peakDbR: records[offset + 4],
+          rmsDbL: records[offset + 5],
+          rmsDbR: records[offset + 6],
+          correlation: records[offset + 7],
+          truePeakDbtpL: records[offset + 8],
+          truePeakDbtpR: records[offset + 9],
+          momentaryLufs: records[offset + 10],
+          shortTermLufs: records[offset + 11],
+          integratedLufs: records[offset + 12],
+          gainReductionDb: records[offset + 13],
+          inputPeakDbL: records[offset + 14],
+          inputPeakDbR: records[offset + 15],
+        };
+        const channelCount = records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET];
+        if (channelCount > 2) {
+          const planes = Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS);
+          const plane = (kind: number): number[] =>
+            Array.from(
+              records.subarray(
+                offset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS,
+                offset +
+                  SONARE_METER_RING_PLANES_OFFSET +
+                  kind * SONARE_METER_RING_MAX_CHANNELS +
+                  planes,
+              ),
+            );
+          meter.numChannels = planes;
+          meter.peakDb = plane(0);
+          meter.rmsDb = plane(1);
+          meter.truePeakDbtp = plane(2);
+          meter.inputPeakDb = plane(3);
+        }
+        meters.push(meter);
+      } finally {
+        releaseOverwriteRead(slotStates, capacity, cursor);
+      }
+    }
+    return { nextReadIndex, meters };
+  });
 }
 
 /** Options of the spectrum ring helpers; the byte-length helper requires `capacity`. */
@@ -333,11 +340,10 @@ export interface SpectrumRingOptions {
 }
 
 function resolveSpectrumRingOptions(
-  fn: string,
   options: unknown,
   defaultCapacity: number | undefined,
 ): { capacity: number; bands: number } {
-  const resolved = resolveRingOptions(fn, options, { capacity: defaultCapacity, bands: 16 });
+  const resolved = resolveRingOptions(options, { capacity: defaultCapacity, bands: 16 });
   return {
     capacity: requireRingDimension(resolved.capacity, 'capacity', 1),
     bands: requireRingDimension(resolved.bands, 'bands', 1),
@@ -348,55 +354,54 @@ function resolveSpectrumRingOptions(
 export function spectrumRingBufferByteLength(
   options: SpectrumRingOptions & { capacity: number },
 ): number {
-  const { capacity, bands } = resolveSpectrumRingOptions(
-    'spectrumRingBufferByteLength',
-    options,
-    undefined,
-  );
-  // Record layout: [frameLo, frameHi, bandCount, band0, band1, ...]. frame is
-  // split across two Float32 lanes for exact reconstruction beyond 2^24.
-  return overwriteRingByteLength(
-    SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
-    (3 + bands) * Float32Array.BYTES_PER_ELEMENT,
-    capacity,
-  );
+  return withEntry('spectrumRingBufferByteLength', () => {
+    const { capacity, bands } = resolveSpectrumRingOptions(options, undefined);
+    // Record layout: [frameLo, frameHi, bandCount, band0, band1, ...]. frame is
+    // split across two Float32 lanes for exact reconstruction beyond 2^24.
+    return overwriteRingByteLength(
+      SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+      (3 + bands) * Float32Array.BYTES_PER_ELEMENT,
+      capacity,
+    );
+  });
 }
 
 /** Creates a shared spectrum ring. RangeError outside the domain, TypeError for an unknown key. */
 export function createSpectrumRingBuffer(options?: SpectrumRingOptions): SpectrumRingBuffer {
-  const { capacity: clampedCapacity, bands: clampedBands } = resolveSpectrumRingOptions(
-    'createSpectrumRingBuffer',
-    options,
-    128,
-  );
-  const sharedBuffer = new SharedArrayBuffer(
-    spectrumRingBufferByteLength({ capacity: clampedCapacity, bands: clampedBands }),
-  );
-  const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const recordFloats = 3 + clampedBands;
-  const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
-  const header = new Int32Array(sharedBuffer, 0, SONARE_SPECTRUM_RING_HEADER_INTS);
-  const records = new Float32Array(sharedBuffer, headerBytes, clampedCapacity * recordFloats);
-  const slotStates = makeOverwriteSlotStates(
-    sharedBuffer,
-    headerBytes,
-    recordBytes,
-    clampedCapacity,
-  );
-  Atomics.store(header, 0, 0);
-  Atomics.store(header, 1, clampedCapacity);
-  Atomics.store(header, 2, recordFloats);
-  Atomics.store(header, 3, clampedBands);
-  Atomics.store(header, 4, 0);
-  slotStates.fill(0);
-  return {
-    sharedBuffer,
-    header,
-    records,
-    slotStates,
-    capacity: clampedCapacity,
-    bands: clampedBands,
-  };
+  return withEntry('createSpectrumRingBuffer', () => {
+    const { capacity: clampedCapacity, bands: clampedBands } = resolveSpectrumRingOptions(
+      options,
+      128,
+    );
+    const sharedBuffer = new SharedArrayBuffer(
+      spectrumRingBufferByteLength({ capacity: clampedCapacity, bands: clampedBands }),
+    );
+    const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+    const recordFloats = 3 + clampedBands;
+    const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
+    const header = new Int32Array(sharedBuffer, 0, SONARE_SPECTRUM_RING_HEADER_INTS);
+    const records = new Float32Array(sharedBuffer, headerBytes, clampedCapacity * recordFloats);
+    const slotStates = makeOverwriteSlotStates(
+      sharedBuffer,
+      headerBytes,
+      recordBytes,
+      clampedCapacity,
+    );
+    Atomics.store(header, 0, 0);
+    Atomics.store(header, 1, clampedCapacity);
+    Atomics.store(header, 2, recordFloats);
+    Atomics.store(header, 3, clampedBands);
+    Atomics.store(header, 4, 0);
+    slotStates.fill(0);
+    return {
+      sharedBuffer,
+      header,
+      records,
+      slotStates,
+      capacity: clampedCapacity,
+      bands: clampedBands,
+    };
+  });
 }
 
 /** Reads the spectrum snapshots published since `readIndex` (default `0`) and returns them with the index to resume from. */
@@ -404,68 +409,70 @@ export function readSpectrumRingBuffer(
   ring: SpectrumRingBuffer,
   readIndex = 0,
 ): SpectrumRingReadResult {
-  const { sharedBuffer, header, records, slotStates, capacity, bands } = ring;
-  const recordFloats = 3 + bands;
-  const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
-  validateOverwriteViews(
-    sharedBuffer,
-    header,
-    records,
-    slotStates,
-    headerBytes,
-    recordBytes,
-    capacity,
-    'spectrum ring',
-  );
-  if (
-    Atomics.load(header, 1) !== capacity ||
-    Atomics.load(header, 2) !== recordFloats ||
-    Atomics.load(header, 3) !== bands
-  ) {
-    throw new SonareError(ErrorCode.InvalidFormat, 'spectrum ring has invalid descriptors.');
-  }
-  const writeIndex = loadSonareRingCursor(header, 0, capacity);
-  const version = Atomics.load(header, 4);
-  if (version === 0 && writeIndex === 0) {
-    return { nextReadIndex: writeIndex, spectra: [] };
-  }
-  if (version !== SONARE_SPECTRUM_RING_PROTOCOL_VERSION) {
-    throw new SonareError(
-      ErrorCode.AbiMismatch,
-      `spectrum ring protocol version ${version} is incompatible; expected ${SONARE_SPECTRUM_RING_PROTOCOL_VERSION}.`,
+  return withEntry('readSpectrumRingBuffer', () => {
+    const { sharedBuffer, header, records, slotStates, capacity, bands } = ring;
+    const recordFloats = 3 + bands;
+    const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+    const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
+    validateOverwriteViews(
+      sharedBuffer,
+      header,
+      records,
+      slotStates,
+      headerBytes,
+      recordBytes,
+      capacity,
+      'spectrum ring',
     );
-  }
-  const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
-  const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
-  const spectra: WorkletSpectrumSnapshot[] = [];
-  let nextReadIndex = writeIndex;
-  for (let i = 0; i < count; i++) {
-    const cursor = (firstReadable + i) % ringCursorSpan(capacity);
-    if (!tryAcquireOverwriteRead(slotStates, capacity, cursor)) {
-      // A writer is still publishing this record; resume here on the next read.
-      nextReadIndex = cursor;
-      break;
+    if (
+      Atomics.load(header, 1) !== capacity ||
+      Atomics.load(header, 2) !== recordFloats ||
+      Atomics.load(header, 3) !== bands
+    ) {
+      throw codedError(ErrorCode.InvalidFormat, 'spectrum ring has invalid descriptors.');
     }
-    try {
-      const currentWriteIndex = loadSonareRingCursor(header, 0, capacity);
-      const age = sonareRingCursorDistance(cursor, currentWriteIndex, capacity);
-      if (age < 1 || age > capacity) {
-        continue;
+    const writeIndex = loadSonareRingCursor(header, 0, capacity);
+    const version = Atomics.load(header, 4);
+    if (version === 0 && writeIndex === 0) {
+      return { nextReadIndex: writeIndex, spectra: [] };
+    }
+    if (version !== SONARE_SPECTRUM_RING_PROTOCOL_VERSION) {
+      throw codedError(
+        ErrorCode.AbiMismatch,
+        `spectrum ring protocol version ${version} is incompatible; expected ${SONARE_SPECTRUM_RING_PROTOCOL_VERSION}.`,
+      );
+    }
+    const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
+    const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
+    const spectra: WorkletSpectrumSnapshot[] = [];
+    let nextReadIndex = writeIndex;
+    for (let i = 0; i < count; i++) {
+      const cursor = (firstReadable + i) % ringCursorSpan(capacity);
+      if (!tryAcquireOverwriteRead(slotStates, capacity, cursor)) {
+        // A writer is still publishing this record; resume here on the next read.
+        nextReadIndex = cursor;
+        break;
       }
-      const offset = sonareRingCursorSlot(cursor, capacity) * recordFloats;
-      const values = new Float32Array(bands);
-      values.set(records.subarray(offset + 3, offset + 3 + bands));
-      spectra.push({
-        type: 'spectrum',
-        frame: decodeFrame(records[offset], records[offset + 1]),
-        bands: values,
-      });
-    } finally {
-      releaseOverwriteRead(slotStates, capacity, cursor);
+      try {
+        const currentWriteIndex = loadSonareRingCursor(header, 0, capacity);
+        const age = sonareRingCursorDistance(cursor, currentWriteIndex, capacity);
+        if (age < 1 || age > capacity) {
+          continue;
+        }
+        const offset = sonareRingCursorSlot(cursor, capacity) * recordFloats;
+        const values = new Float32Array(bands);
+        values.set(records.subarray(offset + 3, offset + 3 + bands));
+        spectra.push({
+          type: 'spectrum',
+          frame: decodeFrame(records[offset], records[offset + 1]),
+          bands: values,
+        });
+      } finally {
+        releaseOverwriteRead(slotStates, capacity, cursor);
+      }
     }
-  }
-  return { nextReadIndex, spectra };
+    return { nextReadIndex, spectra };
+  });
 }
 
 export function meterRingFromSharedBuffer(
@@ -474,7 +481,7 @@ export function meterRingFromSharedBuffer(
 ): SharedMeterRingWriter {
   const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
-    throw new RangeError('meterSharedBuffer is too small for the ring header.');
+    throw refuse('meterSharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_METER_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 1);
@@ -500,7 +507,7 @@ export function meterRingFromSharedBuffer(
     Atomics.load(header, 2) !== SONARE_METER_RING_RECORD_FLOATS ||
     Atomics.load(header, 1) !== capacity
   ) {
-    throw new SonareError(ErrorCode.InvalidFormat, 'meter ring has invalid descriptors.');
+    throw codedError(ErrorCode.InvalidFormat, 'meter ring has invalid descriptors.');
   }
   requireProtocolVersion(header, 3, SONARE_METER_RING_PROTOCOL_VERSION, 'meter ring');
   requireNoUnpublishedRecords(header, 3, capacity, 'meter ring');
@@ -520,7 +527,7 @@ export function spectrumRingFromSharedBuffer(
 ): SharedSpectrumRingWriter {
   const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
-    throw new RangeError('spectrumSharedBuffer is too small for the ring header.');
+    throw refuse('spectrumSharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_SPECTRUM_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 1);
@@ -532,10 +539,10 @@ export function spectrumRingFromSharedBuffer(
   );
   const bands = existingBands || fallbackBands || 16;
   if (!Number.isSafeInteger(bands) || bands < 1) {
-    throw new RangeError('spectrumBands must be a positive integer');
+    throw refuse('spectrumBands must be a positive integer');
   }
   if (fallbackBands !== undefined && existingBands !== 0 && existingBands !== fallbackBands) {
-    throw new RangeError('spectrumBands does not match the shared-buffer descriptor');
+    throw refuse('spectrumBands does not match the shared-buffer descriptor');
   }
   const recordFloats = 3 + bands;
   const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
@@ -552,7 +559,7 @@ export function spectrumRingFromSharedBuffer(
     'spectrum ring',
   );
   if (Atomics.load(header, 2) !== recordFloats || Atomics.load(header, 3) !== bands) {
-    throw new SonareError(ErrorCode.InvalidFormat, 'spectrum ring has invalid descriptors.');
+    throw codedError(ErrorCode.InvalidFormat, 'spectrum ring has invalid descriptors.');
   }
   requireProtocolVersion(header, 4, SONARE_SPECTRUM_RING_PROTOCOL_VERSION, 'spectrum ring');
   requireNoUnpublishedRecords(header, 4, capacity, 'spectrum ring');

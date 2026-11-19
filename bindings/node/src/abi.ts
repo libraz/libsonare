@@ -1,5 +1,6 @@
 import { EXPECTED_ABI_VERSION } from './abi_version.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { codedError } from './internal/entry.js';
 
 export { EXPECTED_ABI_VERSION };
 
@@ -16,7 +17,7 @@ export function checkAbiVersion(actual: unknown): void {
   }
   const hex = (value: unknown): string =>
     typeof value === 'number' ? `0x${(value >>> 0).toString(16).padStart(8, '0')}` : String(value);
-  throw new SonareError(
+  throw codedError(
     ErrorCode.AbiMismatch,
     `libsonare native addon ABI mismatch: the addon reports version ${hex(actual)}, ` +
       `but this package expects ${hex(expected)}. Rebuild the addon (yarn build) so it matches the package.`,

@@ -5,6 +5,7 @@ import type {
   EngineTrackMonitorMode,
   RealtimeEngine,
 } from '../index.js';
+import { refuseType } from '../internal/entry.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import { requestObject, resolveRenderFrame } from '../validation.js';
 import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
@@ -69,7 +70,7 @@ export function setTrackMonitorMode(
   // Resolve the mode before declaring a lane or touching either engine. This
   // keeps numbers, booleans and unknown spellings from reaching the queue.
   if (typeof mode === 'number') {
-    throw new TypeError("setTrackMonitorMode: mode must be 'off', 'pfl' or 'afl', not a number");
+    throw refuseType("mode must be 'off', 'pfl' or 'afl', not a number");
   }
   const modeOrdinal = trackMonitorModeCode(mode);
   const laneIndex = ctx.ensureTrackLane(target);
@@ -78,7 +79,7 @@ export function setTrackMonitorMode(
     {
       type: SonareEngineCommandType.SetTrackMonitorMode,
       targetId: laneIndex,
-      renderFrame: resolveRenderFrame('setTrackMonitorMode', renderFrame),
+      renderFrame: resolveRenderFrame(renderFrame),
       argInt: modeOrdinal,
     },
     (offline) => offline.setTrackMonitorMode(ctx.trackLaneIds[laneIndex], mode, renderFrame),

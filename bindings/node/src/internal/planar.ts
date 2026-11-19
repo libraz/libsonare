@@ -1,3 +1,4 @@
+import { refuse, refuseType } from './entry.js';
 /** Planar channel arrays and the interleaved layout the native project calls read and write. */
 
 /** One interleaved buffer and the geometry it was built from. */
@@ -10,26 +11,22 @@ export interface InterleavedAudio {
  * Interleave planar channels, refusing a non-array, an empty list, a plane that is
  * not a `Float32Array` and planes of unequal length, each by name.
  */
-export function interleavePlanar(
-  fnName: string,
-  channels: unknown,
-  argName = 'channels',
-): InterleavedAudio {
+export function interleavePlanar(channels: unknown, argName = 'channels'): InterleavedAudio {
   if (!Array.isArray(channels)) {
-    throw new TypeError(`${fnName}: ${argName} must be an array of Float32Array`);
+    throw refuseType(`${argName} must be an array of Float32Array`);
   }
   if (channels.length === 0) {
-    throw new RangeError(`${fnName}: ${argName} must not be empty`);
+    throw refuse(`${argName} must not be empty`);
   }
   channels.forEach((plane, index) => {
     if (!(plane instanceof Float32Array)) {
-      throw new TypeError(`${fnName}: ${argName}[${index}] must be a Float32Array`);
+      throw refuseType(`${argName}[${index}] must be a Float32Array`);
     }
   });
   const planes = channels as Float32Array[];
   const frames = (planes[0] as Float32Array).length;
   if (planes.some((plane) => plane.length !== frames)) {
-    throw new RangeError(`${fnName}: ${argName} must all have the same length`);
+    throw refuse(`${argName} must all have the same length`);
   }
   const numChannels = planes.length;
   const data = new Float32Array(frames * numChannels);

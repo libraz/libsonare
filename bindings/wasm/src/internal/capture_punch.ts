@@ -1,4 +1,5 @@
 import { resolveSampleBound } from '../validation.js';
+import { refuse } from './entry.js';
 import { requireOneOf } from './one_of.js';
 
 /**
@@ -15,13 +16,11 @@ export function capturePunchBound(
 ): number {
   const [ppqName, sampleName, secName] = names;
   const given = requireOneOf(
-    'configureCapture',
     names.map((name) => `punch.${name}`),
     [ppq, sample, sec].map((value) => value !== undefined && value !== null),
   );
   if (given !== 0) {
     return resolveSampleBound(
-      'configureCapture',
       sample,
       sec,
       sampleRate,
@@ -30,7 +29,7 @@ export function capturePunchBound(
     ) as number;
   }
   if (typeof ppq !== 'number' || !Number.isFinite(ppq) || ppq < 0) {
-    throw new RangeError(`configureCapture: punch.${ppqName} must be a non-negative number`);
+    throw refuse(`punch.${ppqName} must be a non-negative number`);
   }
   return sampleAtPpq(ppq);
 }

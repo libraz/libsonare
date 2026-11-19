@@ -30,9 +30,9 @@ async function expectCycleIsSafe(internalFirst: boolean): Promise<void> {
   // A refused bare preset string and a non-bank object are the two branches that
   // stay clear of the native module, and between them they read both cycle
   // participants: the function from one module, the class from the other.
-  expect(() => normalizeSynthInstrument('cycle', 'sawLead')).toThrow(TypeError);
-  expect(() => normalizeSynthInstrument('cycle', { sampleBank: {} })).toThrow(TypeError);
-  expect(normalizeSynthInstrument('cycle', { engineMode: 'sample' })).toEqual({
+  expect(() => normalizeSynthInstrument('sawLead')).toThrow(TypeError);
+  expect(() => normalizeSynthInstrument({ sampleBank: {} })).toThrow(TypeError);
+  expect(normalizeSynthInstrument({ engineMode: 'sample' })).toEqual({
     engineMode: 'sample',
   });
 }

@@ -1,3 +1,4 @@
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
@@ -53,10 +54,10 @@ export interface SplitSilenceCommonRequest {
 export type SplitSilenceCommonWithReportRequest = SplitSilenceCommonRequest;
 
 /** An empty or non-array `signals` is the addon's own `TypeError`; only each element's content is checked here. */
-function assertSilenceSignals(fnName: string, request: SplitSilenceCommonRequest): void {
+function assertSilenceSignals(request: SplitSilenceCommonRequest): void {
   if (Array.isArray(request.signals)) {
     request.signals.forEach((signal, i) => {
-      assertAudioSamples(fnName, signal, request, `signals[${i}]`);
+      assertAudioSamples(signal, request, `signals[${i}]`);
     });
   }
 }
@@ -152,18 +153,15 @@ export function trim(
   options?: OptionsOf<TrimRequest>,
 ): Float32Array;
 export function trim(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<TrimRequest>('trim', args);
-  assertAudioInput('trim', request.samples, request.sampleRate, request);
-  const thresholdDb = request.thresholdDb ?? -60.0;
-  assertFiniteScalar('trim', thresholdDb, 'thresholdDb');
-  const frameLength = resolvePositiveIntegerOption(
-    'trim',
-    'frameLength',
-    request.frameLength,
-    2048,
-  );
-  const hopLength = resolvePositiveIntegerOption('trim', 'hopLength', request.hopLength, 512);
-  return addon.trim(request.samples, request.sampleRate, thresholdDb, frameLength, hopLength);
+  return withEntry('trim', () => {
+    const request = sampleOneShot<TrimRequest>('trim', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const thresholdDb = request.thresholdDb ?? -60.0;
+    assertFiniteScalar(thresholdDb, 'thresholdDb');
+    const frameLength = resolvePositiveIntegerOption('frameLength', request.frameLength, 2048);
+    const hopLength = resolvePositiveIntegerOption('hopLength', request.hopLength, 512);
+    return addon.trim(request.samples, request.sampleRate, thresholdDb, frameLength, hopLength);
+  });
 }
 
 /** First-order pre-emphasis filter. */
@@ -174,11 +172,13 @@ export function preemphasis(
   options?: OptionsOf<PreemphasisRequest>,
 ): Float32Array;
 export function preemphasis(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<PreemphasisRequest>('preemphasis', args);
-  assertAudioInput('preemphasis', request.samples, request.sampleRate, request);
-  return request.zi === undefined
-    ? addon.preemphasis(request.samples, request.coef ?? 0.97)
-    : addon.preemphasis(request.samples, request.coef ?? 0.97, request.zi);
+  return withEntry('preemphasis', () => {
+    const request = sampleOneShot<PreemphasisRequest>('preemphasis', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return request.zi === undefined
+      ? addon.preemphasis(request.samples, request.coef ?? 0.97)
+      : addon.preemphasis(request.samples, request.coef ?? 0.97, request.zi);
+  });
 }
 
 /** Inverse of {@link preemphasis}. */
@@ -189,22 +189,23 @@ export function deemphasis(
   options?: OptionsOf<DeemphasisRequest>,
 ): Float32Array;
 export function deemphasis(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<DeemphasisRequest>('deemphasis', args);
-  assertAudioInput('deemphasis', request.samples, request.sampleRate, request);
-  return request.zi === undefined
-    ? addon.deemphasis(request.samples, request.coef ?? 0.97)
-    : addon.deemphasis(request.samples, request.coef ?? 0.97, request.zi);
+  return withEntry('deemphasis', () => {
+    const request = sampleOneShot<DeemphasisRequest>('deemphasis', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return request.zi === undefined
+      ? addon.deemphasis(request.samples, request.coef ?? 0.97)
+      : addon.deemphasis(request.samples, request.coef ?? 0.97, request.zi);
+  });
 }
 
 // Framing rule every silence entry shares: both positive, no other domain.
 function resolveSilenceFraming(
-  fnName: string,
   frameLength: number | undefined,
   hopLength: number | undefined,
 ): { frameLength: number; hopLength: number } {
   return {
-    frameLength: resolvePositiveIntegerOption(fnName, 'frameLength', frameLength, 2048),
-    hopLength: resolvePositiveIntegerOption(fnName, 'hopLength', hopLength, 512),
+    frameLength: resolvePositiveIntegerOption('frameLength', frameLength, 2048),
+    hopLength: resolvePositiveIntegerOption('hopLength', hopLength, 512),
   };
 }
 
@@ -216,15 +217,17 @@ export function trimSilence(
   options?: OptionsOf<TrimSilenceRequest>,
 ): TrimResult;
 export function trimSilence(...args: unknown[]): TrimResult {
-  const request = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
-  assertAudioInput('trimSilence', request.samples, request.sampleRate, request);
-  const framing = resolveSilenceFraming('trimSilence', request.frameLength, request.hopLength);
-  return addon.trimSilence(
-    request.samples,
-    request.topDb ?? 60,
-    framing.frameLength,
-    framing.hopLength,
-  );
+  return withEntry('trimSilence', () => {
+    const request = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const framing = resolveSilenceFraming(request.frameLength, request.hopLength);
+    return addon.trimSilence(
+      request.samples,
+      request.topDb ?? 60,
+      framing.frameLength,
+      framing.hopLength,
+    );
+  });
 }
 
 /** Non-silent intervals as flat `[start, end, ...]` sample pairs. */
@@ -235,15 +238,17 @@ export function splitSilence(
   options?: OptionsOf<SplitSilenceRequest>,
 ): Int32Array;
 export function splitSilence(...args: unknown[]): Int32Array {
-  const request = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
-  assertAudioInput('splitSilence', request.samples, request.sampleRate, request);
-  const framing = resolveSilenceFraming('splitSilence', request.frameLength, request.hopLength);
-  return addon.splitSilence(
-    request.samples,
-    request.topDb ?? 60,
-    framing.frameLength,
-    framing.hopLength,
-  );
+  return withEntry('splitSilence', () => {
+    const request = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const framing = resolveSilenceFraming(request.frameLength, request.hopLength);
+    return addon.splitSilence(
+      request.samples,
+      request.topDb ?? 60,
+      framing.frameLength,
+      framing.hopLength,
+    );
+  });
 }
 
 /**
@@ -265,20 +270,18 @@ export function splitSilence(...args: unknown[]): Int32Array {
  */
 export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array;
 export function splitSilenceCommon(...args: unknown[]): Int32Array {
-  const request = requestOnly<SplitSilenceCommonRequest>('splitSilenceCommon', args);
-  assertSilenceSignals('splitSilenceCommon', request);
-  // As splitSilence: `split_silence_common` applies the same framing rule to every signal.
-  const framing = resolveSilenceFraming(
-    'splitSilenceCommon',
-    request.frameLength,
-    request.hopLength,
-  );
-  return addon.splitSilenceCommon(
-    request.signals,
-    request.topDb ?? 60,
-    framing.frameLength,
-    framing.hopLength,
-  );
+  return withEntry('splitSilenceCommon', () => {
+    const request = requestOnly<SplitSilenceCommonRequest>('splitSilenceCommon', args);
+    assertSilenceSignals(request);
+    // As splitSilence: `split_silence_common` applies the same framing rule to every signal.
+    const framing = resolveSilenceFraming(request.frameLength, request.hopLength);
+    return addon.splitSilenceCommon(
+      request.signals,
+      request.topDb ?? 60,
+      framing.frameLength,
+      framing.hopLength,
+    );
+  });
 }
 
 /**
@@ -310,22 +313,20 @@ export function splitSilenceCommonWithReport(
 export function splitSilenceCommonWithReport(
   ...args: unknown[]
 ): SplitSilenceCommonWithReportResult {
-  const request = requestOnly<SplitSilenceCommonWithReportRequest>(
-    'splitSilenceCommonWithReport',
-    args,
-  );
-  assertSilenceSignals('splitSilenceCommonWithReport', request);
-  const framing = resolveSilenceFraming(
-    'splitSilenceCommonWithReport',
-    request.frameLength,
-    request.hopLength,
-  );
-  return addon.splitSilenceCommonWithReport(
-    request.signals,
-    request.topDb ?? 60,
-    framing.frameLength,
-    framing.hopLength,
-  );
+  return withEntry('splitSilenceCommonWithReport', () => {
+    const request = requestOnly<SplitSilenceCommonWithReportRequest>(
+      'splitSilenceCommonWithReport',
+      args,
+    );
+    assertSilenceSignals(request);
+    const framing = resolveSilenceFraming(request.frameLength, request.hopLength);
+    return addon.splitSilenceCommonWithReport(
+      request.signals,
+      request.topDb ?? 60,
+      framing.frameLength,
+      framing.hopLength,
+    );
+  });
 }
 
 /** Slices a signal into overlapping frames. Returns rows = `frameLength` samples, cols = frames. */
@@ -336,15 +337,17 @@ export function frameSignal(
   options: OptionsOf<FrameSignalRequest>,
 ): Matrix2D;
 export function frameSignal(...args: unknown[]): Matrix2D {
-  const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);
-  assertAudioInput('frameSignal', request.samples, request.sampleRate, request);
-  // Both positive, as the sibling framing entries; neither has a default.
-  assertIntegerValue('frameSignal', request.frameLength, 'frameLength');
-  assertIntegerValue('frameSignal', request.hopLength, 'hopLength');
-  assertPositiveInteger('frameSignal', request.frameLength, 'frameLength');
-  assertPositiveInteger('frameSignal', request.hopLength, 'hopLength');
-  const r = addon.frameSignal(request.samples, request.frameLength, request.hopLength);
-  return toMatrix2D(r.frames, request.frameLength, r.nFrames);
+  return withEntry('frameSignal', () => {
+    const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    // Both positive, as the sibling framing entries; neither has a default.
+    assertIntegerValue(request.frameLength, 'frameLength');
+    assertIntegerValue(request.hopLength, 'hopLength');
+    assertPositiveInteger(request.frameLength, 'frameLength');
+    assertPositiveInteger(request.hopLength, 'hopLength');
+    const r = addon.frameSignal(request.samples, request.frameLength, request.hopLength);
+    return toMatrix2D(r.frames, request.frameLength, r.nFrames);
+  });
 }
 
 /**
@@ -365,10 +368,12 @@ export function frameSignal(...args: unknown[]): Matrix2D {
  */
 export function padCenter(request: PadCenterRequest): Float32Array;
 export function padCenter(...args: unknown[]): Float32Array {
-  const r = requestOnly<PadCenterRequest>('padCenter', args);
-  assertFloat32Array('padCenter', r.values, 'values');
-  assertIntegerValue('padCenter', r.targetSize, 'targetSize');
-  return addon.padCenter(r.values, r.targetSize, r.padValue ?? 0);
+  return withEntry('padCenter', () => {
+    const r = requestOnly<PadCenterRequest>('padCenter', args);
+    assertFloat32Array(r.values, 'values');
+    assertIntegerValue(r.targetSize, 'targetSize');
+    return addon.padCenter(r.values, r.targetSize, r.padValue ?? 0);
+  });
 }
 
 /**
@@ -388,22 +393,26 @@ export function padCenter(...args: unknown[]): Float32Array {
  */
 export function fixLength(request: FixLengthRequest): Float32Array;
 export function fixLength(...args: unknown[]): Float32Array {
-  const r = requestOnly<FixLengthRequest>('fixLength', args);
-  assertFloat32Array('fixLength', r.values, 'values');
-  assertIntegerValue('fixLength', r.targetSize, 'targetSize');
-  return addon.fixLength(r.values, r.targetSize, r.padValue ?? 0);
+  return withEntry('fixLength', () => {
+    const r = requestOnly<FixLengthRequest>('fixLength', args);
+    assertFloat32Array(r.values, 'values');
+    assertIntegerValue(r.targetSize, 'targetSize');
+    return addon.fixLength(r.values, r.targetSize, r.padValue ?? 0);
+  });
 }
 
 /** Clips or pads a list of frame indices to `[xMin, xMax]`. */
 export function fixFrames(request: FixFramesRequest): Int32Array;
 export function fixFrames(...args: unknown[]): Int32Array {
-  const r = requestOnly<FixFramesRequest>('fixFrames', args);
-  return addon.fixFrames(
-    toNativeIndexList('fixFrames', r.frames, 'frames'),
-    r.xMin ?? 0,
-    resolveOptionalNonNegative('fixFrames', r.xMax, 'xMax'),
-    r.pad ?? true,
-  );
+  return withEntry('fixFrames', () => {
+    const r = requestOnly<FixFramesRequest>('fixFrames', args);
+    return addon.fixFrames(
+      toNativeIndexList(r.frames, 'frames'),
+      r.xMin ?? 0,
+      resolveOptionalNonNegative(r.xMax, 'xMax'),
+      r.pad ?? true,
+    );
+  });
 }
 
 /**
@@ -413,14 +422,16 @@ export function fixFrames(...args: unknown[]): Int32Array {
  */
 export function vectorNormalize(request: VectorNormalizeRequest): Float32Array;
 export function vectorNormalize(...args: unknown[]): Float32Array {
-  const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
-  assertFloat32Array('vectorNormalize', r.values, 'values');
-  const norm = r.norm ?? 'max';
-  if (typeof norm !== 'string') {
-    throw new TypeError('vectorNormalize: norm must be a string');
-  }
-  if (!Object.hasOwn(NORM_ORDINALS, norm)) {
-    throw new RangeError(`vectorNormalize: unknown norm '${norm}'`);
-  }
-  return addon.vectorNormalize(r.values, NORM_ORDINALS[norm], r.threshold ?? 0);
+  return withEntry('vectorNormalize', () => {
+    const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
+    assertFloat32Array(r.values, 'values');
+    const norm = r.norm ?? 'max';
+    if (typeof norm !== 'string') {
+      throw refuseType('norm must be a string');
+    }
+    if (!Object.hasOwn(NORM_ORDINALS, norm)) {
+      throw refuse(`unknown norm '${norm}'`);
+    }
+    return addon.vectorNormalize(r.values, NORM_ORDINALS[norm], r.threshold ?? 0);
+  });
 }

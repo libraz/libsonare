@@ -1,3 +1,4 @@
+import { refuse, withEntry } from '../internal/entry.js';
 import {
   loadSonareRingCursor,
   RING_CURSOR_RANGE,
@@ -53,15 +54,13 @@ export interface ExternalMidiRingReadResult {
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function externalMidiRingBufferByteLength(options: { capacity: number }): number {
-  const clampedCapacity = resolveRingCapacity(
-    'externalMidiRingBufferByteLength',
-    options,
-    undefined,
-  );
-  return (
-    SONARE_EXTERNAL_MIDI_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
-    clampedCapacity * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
-  );
+  return withEntry('externalMidiRingBufferByteLength', () => {
+    const clampedCapacity = resolveRingCapacity(options, undefined);
+    return (
+      SONARE_EXTERNAL_MIDI_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+      clampedCapacity * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
+    );
+  });
 }
 
 export function externalMidiRingFromSharedBuffer(
@@ -77,7 +76,7 @@ export function externalMidiRingFromSharedBuffer(
     'externalMidiRingCapacity',
   );
   if (sharedBuffer.byteLength < externalMidiRingBufferByteLength({ capacity })) {
-    throw new RangeError('externalMidiSharedBuffer is too small for the requested ring capacity.');
+    throw refuse('externalMidiSharedBuffer is too small for the requested ring capacity.');
   }
   Atomics.store(header, 2, capacity);
   Atomics.store(header, 3, SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S);
@@ -96,15 +95,17 @@ export function externalMidiRingFromSharedBuffer(
 export function createExternalMidiRingBuffer(
   options?: RingCapacityOptions,
 ): ExternalMidiRingBuffer {
-  const clampedCapacity = resolveRingCapacity('createExternalMidiRingBuffer', options, 256);
-  const sharedBuffer = new SharedArrayBuffer(
-    externalMidiRingBufferByteLength({ capacity: clampedCapacity }),
-  );
-  const ring = externalMidiRingFromSharedBuffer(sharedBuffer, clampedCapacity);
-  Atomics.store(ring.header, 0, 0);
-  Atomics.store(ring.header, 1, 0);
-  Atomics.store(ring.header, 4, 0);
-  return { sharedBuffer, header: ring.header, records: ring.records, capacity: ring.capacity };
+  return withEntry('createExternalMidiRingBuffer', () => {
+    const clampedCapacity = resolveRingCapacity(options, 256);
+    const sharedBuffer = new SharedArrayBuffer(
+      externalMidiRingBufferByteLength({ capacity: clampedCapacity }),
+    );
+    const ring = externalMidiRingFromSharedBuffer(sharedBuffer, clampedCapacity);
+    Atomics.store(ring.header, 0, 0);
+    Atomics.store(ring.header, 1, 0);
+    Atomics.store(ring.header, 4, 0);
+    return { sharedBuffer, header: ring.header, records: ring.records, capacity: ring.capacity };
+  });
 }
 
 /** Whether one more external-MIDI record fits the ring now. */

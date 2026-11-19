@@ -204,7 +204,9 @@ describe('vocal edit Worker client', () => {
       expect(worker.lastMutation.baseToken?.requestId).toBe('0');
     }
     await session.destroy();
-    await expect(session.notes()).rejects.toThrow(/disposed/);
+    await expect(session.notes()).rejects.toThrow(
+      /^VocalEditWorkerSession\.notes: VocalEditWorkerSession has been destroyed$/,
+    );
     await client.destroy();
   });
 
@@ -439,7 +441,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     expect(worker.createdSessions).toBe(1);
     client.destroy();
 
-    await expect(task).rejects.toThrow(/disposed/);
+    await expect(task).rejects.toThrow(/VocalEditWorkerClient has been destroyed$/);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(worker.disposedSessions).toBe(1);
     releaseResponse();
@@ -459,7 +461,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     client.destroy();
     releaseInitialization();
 
-    await expect(task).rejects.toThrow(/disposed/);
+    await expect(task).rejects.toThrow(/VocalEditWorkerClient has been destroyed$/);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(worker.createdSessions).toBe(0);
     expect(worker.disposedSessions).toBe(0);
@@ -475,9 +477,16 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       expect(open[Symbol.asyncDispose]()).toBe(destroying);
       await expect(destroying).resolves.toBeUndefined();
       expect(() => open.token).toThrow(expect.objectContaining({ code: ErrorCode.InvalidState }));
+      expect(() => open.token).toThrow(
+        /^VocalEditWorkerDraft\.token: VocalEditWorkerDraft has been destroyed$/,
+      );
 
       const committed = await session.beginEdit();
       await committed.commit();
+      // A later call names the act that ended the draft, not a destroy().
+      expect(() => committed.token).toThrow(
+        /^VocalEditWorkerDraft\.token: VocalEditWorkerDraft has been committed$/,
+      );
       await expect(committed.destroy()).resolves.toBeUndefined();
 
       const orphan = await session.beginEdit();
@@ -800,7 +809,9 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     client.destroy();
     await expect(pending).rejects.toSatisfy(
       (error: unknown) =>
-        isSonareError(error) && error.code === 7 && /disposed/.test(error.message),
+        isSonareError(error) &&
+        error.code === 7 &&
+        /VocalEditWorkerClient has been destroyed$/.test(error.message),
     );
     await expect(
       client.create({ samples: new Float32Array([0]), sampleRate: 16000 }),

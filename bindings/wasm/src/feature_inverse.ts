@@ -3,6 +3,7 @@
  * or MFCC representation, and the phase reconstruction they share.
  */
 
+import { refuse, withEntry } from './internal/entry.js';
 import { validatePositiveIntegers } from './internal/feature_validation.js';
 import {
   resolveEffectFftOptions,
@@ -33,14 +34,13 @@ function requireModule() {
 
 /** The `nFft` / `hopLength` pair of a Griffin-Lim inverse: an omitted hop is left to the core. */
 function resolveInverseFftOptions(
-  fnName: string,
   nFft: unknown,
   hopLength: unknown,
 ): { nFft: number; hopLength: number } {
-  assertIntegerValue(fnName, nFft, 'nFft');
+  assertIntegerValue(nFft, 'nFft');
   return {
-    nFft: resolveFftOptions(fnName, nFft, undefined).nFft,
-    hopLength: resolveResynthesisHop(fnName, hopLength),
+    nFft: resolveFftOptions(nFft, undefined).nFft,
+    hopLength: resolveResynthesisHop(hopLength),
   };
 }
 
@@ -138,33 +138,35 @@ export interface GriffinLimRequest {
  */
 export function melToStft(request: MelToStftRequest): Matrix2D;
 export function melToStft(...args: unknown[]): Matrix2D {
-  const r = requestOnly<MelToStftRequest>('melToStft', args);
-  const sampleRate = r.sampleRate ?? 22050;
-  assertSampleRate('melToStft', sampleRate);
-  const power = assertMatrix2D('melToStft', r.power, 'power');
-  // Not on the shared FFT rule: this inverts a filterbank rather than running a
-  // transform, so `nFft` only sizes the output to `nFft / 2 + 1` bins and an odd
-  // size is accepted by the core and by the Node surface alike.
-  const nFft = r.nFft ?? 2048;
-  validatePositiveIntegers('melToStft', { nFft });
-  const fminHz = r.fminHz ?? 0;
-  const fmaxHz = r.fmaxHz ?? 0;
-  assertFloatFields('melToStft', { fminHz, fmaxHz });
-  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-  if (r.fmaxHz !== undefined) {
-    assertPositiveFloatValue('melToStft', fmaxHz, 'fmaxHz');
-  }
-  const native = requireModule().melToStft(
-    power.data,
-    power.rows,
-    power.cols,
-    sampleRate,
-    nFft,
-    fminHz,
-    fmaxHz,
-    r.htk ?? false,
-  );
-  return toMatrix2D(native.magnitude, native.nBins, native.nFrames);
+  return withEntry('melToStft', () => {
+    const r = requestOnly<MelToStftRequest>('melToStft', args);
+    const sampleRate = r.sampleRate ?? 22050;
+    assertSampleRate(sampleRate);
+    const power = assertMatrix2D(r.power, 'power');
+    // Not on the shared FFT rule: this inverts a filterbank rather than running a
+    // transform, so `nFft` only sizes the output to `nFft / 2 + 1` bins and an odd
+    // size is accepted by the core and by the Node surface alike.
+    const nFft = r.nFft ?? 2048;
+    validatePositiveIntegers({ nFft });
+    const fminHz = r.fminHz ?? 0;
+    const fmaxHz = r.fmaxHz ?? 0;
+    assertFloatFields({ fminHz, fmaxHz });
+    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+    if (r.fmaxHz !== undefined) {
+      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
+    }
+    const native = requireModule().melToStft(
+      power.data,
+      power.rows,
+      power.cols,
+      sampleRate,
+      nFft,
+      fminHz,
+      fmaxHz,
+      r.htk ?? false,
+    );
+    return toMatrix2D(native.magnitude, native.nBins, native.nFrames);
+  });
 }
 
 /**
@@ -175,68 +177,66 @@ export function melToStft(...args: unknown[]): Matrix2D {
  */
 export function melToAudio(request: MelToAudioRequest): Float32Array;
 export function melToAudio(...args: unknown[]): Float32Array {
-  const r = requestOnly<MelToAudioRequest>('melToAudio', args);
-  const sampleRate = r.sampleRate ?? 22050;
-  assertSampleRate('melToAudio', sampleRate);
-  const power = assertMatrix2D('melToAudio', r.power, 'power');
-  const fft = resolveInverseFftOptions('melToAudio', r.nFft ?? 2048, r.hopLength);
-  const nIter = r.nIter ?? 32;
-  assertInt32('melToAudio', nIter, 'nIter');
-  const fminHz = r.fminHz ?? 0;
-  const fmaxHz = r.fmaxHz ?? 0;
-  assertFloatFields('melToAudio', { fminHz, fmaxHz });
-  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-  if (r.fmaxHz !== undefined) {
-    assertPositiveFloatValue('melToAudio', fmaxHz, 'fmaxHz');
-  }
-  return requireModule().melToAudio(
-    power.data,
-    power.rows,
-    power.cols,
-    sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    fminHz,
-    fmaxHz,
-    nIter,
-    r.htk ?? false,
-  );
+  return withEntry('melToAudio', () => {
+    const r = requestOnly<MelToAudioRequest>('melToAudio', args);
+    const sampleRate = r.sampleRate ?? 22050;
+    assertSampleRate(sampleRate);
+    const power = assertMatrix2D(r.power, 'power');
+    const fft = resolveInverseFftOptions(r.nFft ?? 2048, r.hopLength);
+    const nIter = r.nIter ?? 32;
+    assertInt32(nIter, 'nIter');
+    const fminHz = r.fminHz ?? 0;
+    const fmaxHz = r.fmaxHz ?? 0;
+    assertFloatFields({ fminHz, fmaxHz });
+    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+    if (r.fmaxHz !== undefined) {
+      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
+    }
+    return requireModule().melToAudio(
+      power.data,
+      power.rows,
+      power.cols,
+      sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      fminHz,
+      fmaxHz,
+      nIter,
+      r.htk ?? false,
+    );
+  });
 }
 
 /** A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them. */
 function assertGriffinLimFftSize(nBins: number, nFft: number): void {
   if (nFft !== (nBins - 1) * 2) {
-    throw new RangeError(
-      `griffinLim: nFft must equal (nBins - 1) * 2 (got ${nFft} for ${nBins} bins)`,
-    );
+    throw refuse(`nFft must equal (nBins - 1) * 2 (got ${nFft} for ${nBins} bins)`);
   }
 }
 
 /** Reconstruct audio from an STFT magnitude matrix via Griffin-Lim. */
 export function griffinLim(request: GriffinLimRequest): Float32Array;
 export function griffinLim(...args: unknown[]): Float32Array {
-  const r = requestOnly<GriffinLimRequest>('griffinLim', args);
-  const sampleRate = r.sampleRate;
-  assertSampleRate('griffinLim', sampleRate);
-  const magnitude = assertMatrix2D('griffinLim', r.magnitude, 'magnitude');
-  const fft = resolveInverseFftOptions(
-    'griffinLim',
-    r.nFft ?? (magnitude.rows - 1) * 2,
-    r.hopLength,
-  );
-  assertGriffinLimFftSize(magnitude.rows, fft.nFft);
-  const nIter = r.nIter ?? 32;
-  validatePositiveIntegers('griffinLim', { nIter });
-  return requireModule().griffinLim(
-    magnitude.data,
-    magnitude.rows,
-    magnitude.cols,
-    sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    nIter,
-    r.momentum ?? 0.99,
-  );
+  return withEntry('griffinLim', () => {
+    const r = requestOnly<GriffinLimRequest>('griffinLim', args);
+    const sampleRate = r.sampleRate;
+    assertSampleRate(sampleRate);
+    const magnitude = assertMatrix2D(r.magnitude, 'magnitude');
+    const fft = resolveInverseFftOptions(r.nFft ?? (magnitude.rows - 1) * 2, r.hopLength);
+    assertGriffinLimFftSize(magnitude.rows, fft.nFft);
+    const nIter = r.nIter ?? 32;
+    validatePositiveIntegers({ nIter });
+    return requireModule().griffinLim(
+      magnitude.data,
+      magnitude.rows,
+      magnitude.cols,
+      sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      nIter,
+      r.momentum ?? 0.99,
+    );
+  });
 }
 
 /**
@@ -247,18 +247,20 @@ export function griffinLim(...args: unknown[]): Float32Array {
  */
 export function mfccToMel(request: MfccToMelRequest): Matrix2D;
 export function mfccToMel(...args: unknown[]): Matrix2D {
-  const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
-  const coefficients = assertMatrix2D('mfccToMel', r.coefficients, 'coefficients');
-  const nMels = r.nMels ?? 128;
-  assertInt32('mfccToMel', nMels, 'nMels');
-  const native = requireModule().mfccToMel(
-    coefficients.data,
-    coefficients.rows,
-    coefficients.cols,
-    nMels,
-    r.lifter ?? 0,
-  );
-  return toMatrix2D(native.power, native.nMels, native.nFrames);
+  return withEntry('mfccToMel', () => {
+    const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
+    const coefficients = assertMatrix2D(r.coefficients, 'coefficients');
+    const nMels = r.nMels ?? 128;
+    assertInt32(nMels, 'nMels');
+    const native = requireModule().mfccToMel(
+      coefficients.data,
+      coefficients.rows,
+      coefficients.cols,
+      nMels,
+      r.lifter ?? 0,
+    );
+    return toMatrix2D(native.power, native.nMels, native.nFrames);
+  });
 }
 
 /**
@@ -269,36 +271,38 @@ export function mfccToMel(...args: unknown[]): Matrix2D {
  */
 export function mfccToAudio(request: MfccToAudioRequest): Float32Array;
 export function mfccToAudio(...args: unknown[]): Float32Array {
-  const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
-  const sampleRate = r.sampleRate ?? 22050;
-  assertSampleRate('mfccToAudio', sampleRate);
-  const coefficients = assertMatrix2D('mfccToAudio', r.coefficients, 'coefficients');
-  const fft = resolveInverseFftOptions('mfccToAudio', r.nFft ?? 2048, r.hopLength);
-  const nMels = r.nMels ?? 128;
-  const nIter = r.nIter ?? 32;
-  assertInt32('mfccToAudio', nMels, 'nMels');
-  assertInt32('mfccToAudio', nIter, 'nIter');
-  const fminHz = r.fminHz ?? 0;
-  const fmaxHz = r.fmaxHz ?? 0;
-  assertFloatFields('mfccToAudio', { fminHz, fmaxHz });
-  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-  if (r.fmaxHz !== undefined) {
-    assertPositiveFloatValue('mfccToAudio', fmaxHz, 'fmaxHz');
-  }
-  return requireModule().mfccToAudio(
-    coefficients.data,
-    coefficients.rows,
-    coefficients.cols,
-    nMels,
-    sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    fminHz,
-    fmaxHz,
-    nIter,
-    r.htk ?? false,
-    r.lifter ?? 0,
-  );
+  return withEntry('mfccToAudio', () => {
+    const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
+    const sampleRate = r.sampleRate ?? 22050;
+    assertSampleRate(sampleRate);
+    const coefficients = assertMatrix2D(r.coefficients, 'coefficients');
+    const fft = resolveInverseFftOptions(r.nFft ?? 2048, r.hopLength);
+    const nMels = r.nMels ?? 128;
+    const nIter = r.nIter ?? 32;
+    assertInt32(nMels, 'nMels');
+    assertInt32(nIter, 'nIter');
+    const fminHz = r.fminHz ?? 0;
+    const fmaxHz = r.fmaxHz ?? 0;
+    assertFloatFields({ fminHz, fmaxHz });
+    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+    if (r.fmaxHz !== undefined) {
+      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
+    }
+    return requireModule().mfccToAudio(
+      coefficients.data,
+      coefficients.rows,
+      coefficients.cols,
+      nMels,
+      sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      fminHz,
+      fmaxHz,
+      nIter,
+      r.htk ?? false,
+      r.lifter ?? 0,
+    );
+  });
 }
 
 /** Request for {@link phaseVocoder}. */
@@ -332,14 +336,16 @@ export function phaseVocoder(
   options: OptionsOf<PhaseVocoderRequest>,
 ): Float32Array;
 export function phaseVocoder(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<PhaseVocoderRequest>('phaseVocoder', args);
-  assertAudioInput('phaseVocoder', r.samples, r.sampleRate, r);
-  assertNumber('phaseVocoder', r.speedRatio, 'speedRatio');
-  // Matches the addon. A finite value too wide for a float is not covered here
-  // and cannot be — it is still finite to Number.isFinite; the core's own guard
-  // refuses the infinity it becomes.
-  assertFiniteScalar('phaseVocoder', r.speedRatio, 'speedRatio');
-  assertPositiveFloatValue('phaseVocoder', r.speedRatio, 'speedRatio');
-  const { nFft, hopLength } = resolveEffectFftOptions('phaseVocoder', r.nFft, r.hopLength);
-  return requireModule().phaseVocoder(r.samples, r.sampleRate, r.speedRatio, nFft, hopLength);
+  return withEntry('phaseVocoder', () => {
+    const r = sampleOneShot<PhaseVocoderRequest>('phaseVocoder', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    assertNumber(r.speedRatio, 'speedRatio');
+    // Matches the addon. A finite value too wide for a float is not covered here
+    // and cannot be — it is still finite to Number.isFinite; the core's own guard
+    // refuses the infinity it becomes.
+    assertFiniteScalar(r.speedRatio, 'speedRatio');
+    assertPositiveFloatValue(r.speedRatio, 'speedRatio');
+    const { nFft, hopLength } = resolveEffectFftOptions(r.nFft, r.hopLength);
+    return requireModule().phaseVocoder(r.samples, r.sampleRate, r.speedRatio, nFft, hopLength);
+  });
 }

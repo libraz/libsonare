@@ -1,5 +1,6 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import type { EngineTelemetry } from '../index.js';
+import { codedError, refuse, withEntry } from '../internal/entry.js';
 import {
   attachProtocolVersion,
   commitOverwriteWrite,
@@ -167,14 +168,14 @@ function validateEngineTelemetryPublicationWrapped(
     publicationWrapped.byteLength !== Int32Array.BYTES_PER_ELEMENT ||
     publicationWrapped.length !== 1
   ) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.InvalidFormat,
       'engine telemetry ring has an invalid publicationWrapped view.',
     );
   }
   const value = Atomics.load(publicationWrapped, 0);
   if (value !== 0 && value !== 1) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.InvalidFormat,
       'engine telemetry ring has an invalid publicationWrapped value.',
     );
@@ -183,57 +184,57 @@ function validateEngineTelemetryPublicationWrapped(
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function engineTelemetryRingBufferByteLength(options: { capacity: number }): number {
-  const clampedCapacity = resolveRingCapacity(
-    'engineTelemetryRingBufferByteLength',
-    options,
-    undefined,
-  );
-  return (
-    overwriteRingByteLength(
-      SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
-      SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
-      clampedCapacity,
-    ) + Int32Array.BYTES_PER_ELEMENT
-  );
+  return withEntry('engineTelemetryRingBufferByteLength', () => {
+    const clampedCapacity = resolveRingCapacity(options, undefined);
+    return (
+      overwriteRingByteLength(
+        SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+        SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+        clampedCapacity,
+      ) + Int32Array.BYTES_PER_ELEMENT
+    );
+  });
 }
 
 /** Creates a shared engine telemetry ring (default `capacity` 128). RangeError outside the domain, TypeError for an unknown key. */
 export function createEngineTelemetryRingBuffer(
   options?: RingCapacityOptions,
 ): EngineTelemetryRingBuffer {
-  const clampedCapacity = resolveRingCapacity('createEngineTelemetryRingBuffer', options, 128);
-  const sharedBuffer = new SharedArrayBuffer(
-    engineTelemetryRingBufferByteLength({ capacity: clampedCapacity }),
-  );
-  const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const header = new Int32Array(sharedBuffer, 0, SONARE_ENGINE_RING_HEADER_INTS);
-  const view = new DataView(
-    sharedBuffer,
-    headerBytes,
-    clampedCapacity * SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
-  );
-  const slotStates = makeOverwriteSlotStates(
-    sharedBuffer,
-    headerBytes,
-    SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
-    clampedCapacity,
-  );
-  const publicationWrapped = makeEngineTelemetryPublicationWrapped(sharedBuffer, clampedCapacity);
-  Atomics.store(header, 0, 0);
-  Atomics.store(header, 1, 0);
-  Atomics.store(header, 2, clampedCapacity);
-  Atomics.store(header, 3, SONARE_ENGINE_TELEMETRY_RECORD_BYTES);
-  Atomics.store(header, 4, 0);
-  slotStates.fill(0);
-  Atomics.store(publicationWrapped, 0, 0);
-  return {
-    sharedBuffer,
-    header,
-    view,
-    slotStates,
-    publicationWrapped,
-    capacity: clampedCapacity,
-  };
+  return withEntry('createEngineTelemetryRingBuffer', () => {
+    const clampedCapacity = resolveRingCapacity(options, 128);
+    const sharedBuffer = new SharedArrayBuffer(
+      engineTelemetryRingBufferByteLength({ capacity: clampedCapacity }),
+    );
+    const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+    const header = new Int32Array(sharedBuffer, 0, SONARE_ENGINE_RING_HEADER_INTS);
+    const view = new DataView(
+      sharedBuffer,
+      headerBytes,
+      clampedCapacity * SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+    );
+    const slotStates = makeOverwriteSlotStates(
+      sharedBuffer,
+      headerBytes,
+      SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+      clampedCapacity,
+    );
+    const publicationWrapped = makeEngineTelemetryPublicationWrapped(sharedBuffer, clampedCapacity);
+    Atomics.store(header, 0, 0);
+    Atomics.store(header, 1, 0);
+    Atomics.store(header, 2, clampedCapacity);
+    Atomics.store(header, 3, SONARE_ENGINE_TELEMETRY_RECORD_BYTES);
+    Atomics.store(header, 4, 0);
+    slotStates.fill(0);
+    Atomics.store(publicationWrapped, 0, 0);
+    return {
+      sharedBuffer,
+      header,
+      view,
+      slotStates,
+      publicationWrapped,
+      capacity: clampedCapacity,
+    };
+  });
 }
 
 export function writeSonareEngineTelemetryRingBuffer(
@@ -360,68 +361,67 @@ export function readEngineTelemetryRingBuffer(
   ring: EngineTelemetryRingBuffer,
   readIndex = 0,
 ): EngineTelemetryRingReadResult {
-  const { sharedBuffer, header, view, slotStates, publicationWrapped, capacity } = ring;
-  const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  validateOverwriteViews(
-    sharedBuffer,
-    header,
-    view,
-    slotStates,
-    headerBytes,
-    SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
-    capacity,
-    'engine telemetry ring',
-    Int32Array.BYTES_PER_ELEMENT,
-  );
-  validateEngineTelemetryPublicationWrapped(sharedBuffer, publicationWrapped, capacity);
-  if (
-    Atomics.load(header, 2) !== capacity ||
-    Atomics.load(header, 3) !== SONARE_ENGINE_TELEMETRY_RECORD_BYTES
-  ) {
-    throw new SonareError(
-      ErrorCode.InvalidFormat,
-      'engine telemetry ring has invalid descriptors.',
+  return withEntry('readEngineTelemetryRingBuffer', () => {
+    const { sharedBuffer, header, view, slotStates, publicationWrapped, capacity } = ring;
+    const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+    validateOverwriteViews(
+      sharedBuffer,
+      header,
+      view,
+      slotStates,
+      headerBytes,
+      SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+      capacity,
+      'engine telemetry ring',
+      Int32Array.BYTES_PER_ELEMENT,
     );
-  }
-  const writeIndex = loadSonareRingCursor(header, 0, capacity);
-  const version = Atomics.load(header, 1);
-  if (version === 0 && writeIndex === 0) {
-    return { nextReadIndex: writeIndex, telemetry: [] };
-  }
-  if (version !== SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION) {
-    throw new SonareError(
-      ErrorCode.AbiMismatch,
-      `engine telemetry ring protocol version ${version} is incompatible; expected ${SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION}.`,
-    );
-  }
-  const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
-  const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
-  const telemetry: EngineTelemetryRecord[] = [];
-  let nextReadIndex = writeIndex;
-  for (let i = 0; i < count; i++) {
-    const cursor = (firstReadable + i) % ringCursorSpan(capacity);
-    if (!tryAcquireOverwriteRead(slotStates, capacity, cursor)) {
-      // A writer is still publishing this record; resume here on the next read.
-      nextReadIndex = cursor;
-      break;
+    validateEngineTelemetryPublicationWrapped(sharedBuffer, publicationWrapped, capacity);
+    if (
+      Atomics.load(header, 2) !== capacity ||
+      Atomics.load(header, 3) !== SONARE_ENGINE_TELEMETRY_RECORD_BYTES
+    ) {
+      throw codedError(ErrorCode.InvalidFormat, 'engine telemetry ring has invalid descriptors.');
     }
-    try {
-      const currentWriteIndex = loadSonareRingCursor(header, 0, capacity);
-      const age = sonareRingCursorDistance(cursor, currentWriteIndex, capacity);
-      if (age < 1 || age > capacity) {
-        continue;
-      }
-      telemetry.push(
-        readEngineTelemetryRecord(
-          view,
-          recordOffset(cursor, capacity, SONARE_ENGINE_TELEMETRY_RECORD_BYTES),
-        ),
+    const writeIndex = loadSonareRingCursor(header, 0, capacity);
+    const version = Atomics.load(header, 1);
+    if (version === 0 && writeIndex === 0) {
+      return { nextReadIndex: writeIndex, telemetry: [] };
+    }
+    if (version !== SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION) {
+      throw codedError(
+        ErrorCode.AbiMismatch,
+        `engine telemetry ring protocol version ${version} is incompatible; expected ${SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION}.`,
       );
-    } finally {
-      releaseOverwriteRead(slotStates, capacity, cursor);
     }
-  }
-  return { nextReadIndex, telemetry };
+    const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
+    const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
+    const telemetry: EngineTelemetryRecord[] = [];
+    let nextReadIndex = writeIndex;
+    for (let i = 0; i < count; i++) {
+      const cursor = (firstReadable + i) % ringCursorSpan(capacity);
+      if (!tryAcquireOverwriteRead(slotStates, capacity, cursor)) {
+        // A writer is still publishing this record; resume here on the next read.
+        nextReadIndex = cursor;
+        break;
+      }
+      try {
+        const currentWriteIndex = loadSonareRingCursor(header, 0, capacity);
+        const age = sonareRingCursorDistance(cursor, currentWriteIndex, capacity);
+        if (age < 1 || age > capacity) {
+          continue;
+        }
+        telemetry.push(
+          readEngineTelemetryRecord(
+            view,
+            recordOffset(cursor, capacity, SONARE_ENGINE_TELEMETRY_RECORD_BYTES),
+          ),
+        );
+      } finally {
+        releaseOverwriteRead(slotStates, capacity, cursor);
+      }
+    }
+    return { nextReadIndex, telemetry };
+  });
 }
 
 export function engineRingFromSharedBuffer(
@@ -439,7 +439,7 @@ export function engineRingFromSharedBuffer(
   );
   const minBytes = headerBytes + capacity * recordBytes;
   if (sharedBuffer.byteLength < minBytes) {
-    throw new RangeError('engine SharedArrayBuffer is too small for the requested ring capacity.');
+    throw refuse('engine SharedArrayBuffer is too small for the requested ring capacity.');
   }
   Atomics.store(header, 2, capacity);
   Atomics.store(header, 3, recordBytes);
@@ -457,7 +457,7 @@ export function engineTelemetryRingFromSharedBuffer(
 ): EngineTelemetryRingBuffer {
   const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
-    throw new RangeError('telemetrySharedBuffer is too small for the ring header.');
+    throw refuse('telemetrySharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_ENGINE_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 2);
@@ -494,10 +494,7 @@ export function engineTelemetryRingFromSharedBuffer(
     Atomics.load(header, 2) !== capacity ||
     Atomics.load(header, 3) !== SONARE_ENGINE_TELEMETRY_RECORD_BYTES
   ) {
-    throw new SonareError(
-      ErrorCode.InvalidFormat,
-      'engine telemetry ring has invalid descriptors.',
-    );
+    throw codedError(ErrorCode.InvalidFormat, 'engine telemetry ring has invalid descriptors.');
   }
   requireProtocolVersion(
     header,
@@ -506,7 +503,7 @@ export function engineTelemetryRingFromSharedBuffer(
     'engine telemetry ring',
   );
   if (Atomics.load(header, 1) === 0 && loadSonareRingCursor(header, 0, capacity) !== 0) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.InvalidFormat,
       'engine telemetry ring has records without a compatible producer.',
     );
@@ -545,10 +542,7 @@ function ensureEngineTelemetryRingAttached(
     Atomics.load(header, 2) !== capacity ||
     Atomics.load(header, 3) !== SONARE_ENGINE_TELEMETRY_RECORD_BYTES
   ) {
-    throw new SonareError(
-      ErrorCode.InvalidFormat,
-      'engine telemetry ring has invalid descriptors.',
-    );
+    throw codedError(ErrorCode.InvalidFormat, 'engine telemetry ring has invalid descriptors.');
   }
   requireProtocolVersion(
     header,
@@ -557,7 +551,7 @@ function ensureEngineTelemetryRingAttached(
     'engine telemetry ring',
   );
   if (Atomics.load(header, 1) === 0 && loadSonareRingCursor(header, 0, capacity) !== 0) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.InvalidFormat,
       'engine telemetry ring has records without a compatible producer.',
     );

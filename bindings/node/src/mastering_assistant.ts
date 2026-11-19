@@ -1,5 +1,5 @@
 import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_config.js';
-import { withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { masteringPlatformNames, masteringPresetNames } from './mastering_catalog.js';
@@ -106,29 +106,29 @@ export interface MasteringStreamingPreviewRequest {
 }
 
 /** The preview targets in the native spelling: absent is the built-in set, an empty list is refused. */
-function previewPlatforms(fnName: string, platforms: unknown): StreamingPlatform[] {
+function previewPlatforms(platforms: unknown): StreamingPlatform[] {
   if (platforms === undefined || platforms === null) {
     return [];
   }
   if (!Array.isArray(platforms)) {
-    throw new TypeError(`${fnName}: platforms must be an array`);
+    throw refuseType(`platforms must be an array`);
   }
   if (platforms.length === 0) {
-    throw new RangeError(`${fnName}: platforms must not be empty; omit it for the built-in set`);
+    throw refuse(`platforms must not be empty; omit it for the built-in set`);
   }
   platforms.forEach((platform, i) => {
     if (typeof platform !== 'object' || platform === null || Array.isArray(platform)) {
-      throw new TypeError(`${fnName}: platforms[${i}] must be an object`);
+      throw refuseType(`platforms[${i}] must be an object`);
     }
     const { name, targetLufs, ceilingDbtp } = platform as Record<string, unknown>;
     if (typeof name !== 'string') {
-      throw new TypeError(`${fnName}: platforms[${i}].name must be a string`);
+      throw refuseType(`platforms[${i}].name must be a string`);
     }
     if (typeof targetLufs !== 'number') {
-      throw new TypeError(`${fnName}: platforms[${i}].targetLufs must be a number`);
+      throw refuseType(`platforms[${i}].targetLufs must be a number`);
     }
     if (typeof ceilingDbtp !== 'number') {
-      throw new TypeError(`${fnName}: platforms[${i}].ceilingDbtp must be a number`);
+      throw refuseType(`platforms[${i}].ceilingDbtp must be a number`);
     }
   });
   return platforms as StreamingPlatform[];
@@ -174,7 +174,6 @@ function profileFromNative(json: string): MasteringAudioProfile {
 
 /** Native params of an audio-profile request; the profile always runs the defect detectors unless told not to. */
 function profileParams(
-  fnName: string,
   r: Pick<
     MasteringAudioProfileRequest,
     'nFft' | 'hopLength' | 'truePeakOversample' | 'detectDefects'
@@ -184,7 +183,7 @@ function profileParams(
   for (const key of ['nFft', 'hopLength', 'truePeakOversample'] as const) {
     const value = r[key];
     if (value !== undefined && value !== null) {
-      assertPositiveInteger(fnName, value, key);
+      assertPositiveInteger(value, key);
       params[key] = value;
     }
   }
@@ -193,19 +192,16 @@ function profileParams(
 }
 
 /** Native params of an assistant request, with the two name-valued fields checked against the library's tables. */
-function assistantParams(
-  fnName: string,
-  r: MasteringAssistantSettings,
-): Record<string, number | boolean | string> {
+function assistantParams(r: MasteringAssistantSettings): Record<string, number | boolean | string> {
   const params: Record<string, number | boolean | string> = {};
   for (const key of ['targetLufs', 'ceilingDbtp'] as const) {
     if (r[key] !== undefined && r[key] !== null) {
-      assertFloatValue(fnName, r[key], key);
+      assertFloatValue(r[key], key);
       params[key] = r[key];
     }
   }
   if (r.speechMonoAmount !== undefined && r.speechMonoAmount !== null) {
-    assertFloatValue(fnName, r.speechMonoAmount, 'speechMonoAmount');
+    assertFloatValue(r.speechMonoAmount, 'speechMonoAmount');
     params.speechMonoAmount = r.speechMonoAmount;
   }
   for (const key of ['enableRepair', 'preferStreamingSafe'] as const) {
@@ -214,11 +210,11 @@ function assistantParams(
     }
   }
   if (r.targetPlatform !== undefined && r.targetPlatform !== null) {
-    assertClosedToken(fnName, r.targetPlatform, masteringPlatformNames(), 'targetPlatform');
+    assertClosedToken(r.targetPlatform, masteringPlatformNames(), 'targetPlatform');
     params.targetPlatform = r.targetPlatform;
   }
   if (r.preset !== undefined && r.preset !== null) {
-    assertClosedToken(fnName, r.preset, masteringPresetNames(), 'preset');
+    assertClosedToken(r.preset, masteringPresetNames(), 'preset');
     params.preset = r.preset;
   }
   return params;
@@ -243,15 +239,17 @@ export function masteringAssistantSuggest(
   options?: OptionsOf<MasteringAssistantSuggestRequest>,
 ): MasteringAssistantResult;
 export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistantResult {
-  const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggest', args);
-  assertAudioInput('masteringAssistantSuggest', r.samples, r.sampleRate, r);
-  return assistantResultFromNative(
-    addon.masteringAssistantSuggest(
-      r.samples,
-      r.sampleRate,
-      withEntry('masteringAssistantSuggest', () => assistantParams('masteringAssistantSuggest', r)),
-    ),
-  );
+  return withEntry('masteringAssistantSuggest', () => {
+    const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggest', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return assistantResultFromNative(
+      addon.masteringAssistantSuggest(
+        r.samples,
+        r.sampleRate,
+        withEntry('masteringAssistantSuggest', () => assistantParams(r)),
+      ),
+    );
+  });
 }
 
 /**
@@ -271,17 +269,20 @@ export function masteringAssistantSuggestChain(
   options?: OptionsOf<MasteringAssistantSuggestRequest>,
 ): MasteringChainConfig;
 export function masteringAssistantSuggestChain(...args: unknown[]): MasteringChainConfig {
-  const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggestChain', args);
-  assertAudioInput('masteringAssistantSuggestChain', r.samples, r.sampleRate, r);
-  return chainConfigFromJson(
-    addon.masteringAssistantSuggestChain(
-      r.samples,
-      r.sampleRate,
-      withEntry('masteringAssistantSuggestChain', () =>
-        assistantParams('masteringAssistantSuggestChain', r),
+  return withEntry('masteringAssistantSuggestChain', () => {
+    const r = sampleOneShot<MasteringAssistantSuggestRequest>(
+      'masteringAssistantSuggestChain',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return chainConfigFromJson(
+      addon.masteringAssistantSuggestChain(
+        r.samples,
+        r.sampleRate,
+        withEntry('masteringAssistantSuggestChain', () => assistantParams(r)),
       ),
-    ),
-  );
+    );
+  });
 }
 
 /**
@@ -300,11 +301,13 @@ export function masteringAudioProfile(
   options?: OptionsOf<MasteringAudioProfileRequest>,
 ): MasteringAudioProfile;
 export function masteringAudioProfile(...args: unknown[]): MasteringAudioProfile {
-  const r = sampleOneShot<MasteringAudioProfileRequest>('masteringAudioProfile', args);
-  assertAudioInput('masteringAudioProfile', r.samples, r.sampleRate, r);
-  return profileFromNative(
-    addon.masteringAudioProfile(r.samples, r.sampleRate, profileParams('masteringAudioProfile', r)),
-  );
+  return withEntry('masteringAudioProfile', () => {
+    const r = sampleOneShot<MasteringAudioProfileRequest>('masteringAudioProfile', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return profileFromNative(
+      addon.masteringAudioProfile(r.samples, r.sampleRate, profileParams(r)),
+    );
+  });
 }
 
 /**
@@ -322,15 +325,13 @@ export function masteringStreamingPreview(
   options?: OptionsOf<MasteringStreamingPreviewRequest>,
 ): MasteringStreamingPreviewResult;
 export function masteringStreamingPreview(...args: unknown[]): MasteringStreamingPreviewResult {
-  const r = sampleOneShot<MasteringStreamingPreviewRequest>('masteringStreamingPreview', args);
-  assertAudioInput('masteringStreamingPreview', r.samples, r.sampleRate, r);
-  return previewFromNative(
-    addon.masteringStreamingPreview(
-      r.samples,
-      r.sampleRate,
-      previewPlatforms('masteringStreamingPreview', r.platforms),
-    ),
-  );
+  return withEntry('masteringStreamingPreview', () => {
+    const r = sampleOneShot<MasteringStreamingPreviewRequest>('masteringStreamingPreview', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return previewFromNative(
+      addon.masteringStreamingPreview(r.samples, r.sampleRate, previewPlatforms(r.platforms)),
+    );
+  });
 }
 
 /**
@@ -346,21 +347,22 @@ export function masteringStreamingPreview(...args: unknown[]): MasteringStreamin
 export function masteringAssistantSuggestStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): MasteringAssistantResult {
-  const r = requestOnly<MasteringAssistantSuggestStereoRequest>('masteringAssistantSuggestStereo', [
-    request,
-  ]);
-  assertAudioInput('masteringAssistantSuggestStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringAssistantSuggestStereo', r.right, r.sampleRate, r, 'right');
-  return assistantResultFromNative(
-    addon.masteringAssistantSuggestStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      withEntry('masteringAssistantSuggestStereo', () =>
-        assistantParams('masteringAssistantSuggestStereo', r),
+  return withEntry('masteringAssistantSuggestStereo', () => {
+    const r = requestOnly<MasteringAssistantSuggestStereoRequest>(
+      'masteringAssistantSuggestStereo',
+      [request],
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return assistantResultFromNative(
+      addon.masteringAssistantSuggestStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        withEntry('masteringAssistantSuggestStereo', () => assistantParams(r)),
       ),
-    ),
-  );
+    );
+  });
 }
 
 /**
@@ -371,22 +373,22 @@ export function masteringAssistantSuggestStereo(
 export function masteringAssistantSuggestChainStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): MasteringChainConfig {
-  const r = requestOnly<MasteringAssistantSuggestStereoRequest>(
-    'masteringAssistantSuggestChainStereo',
-    [request],
-  );
-  assertAudioInput('masteringAssistantSuggestChainStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringAssistantSuggestChainStereo', r.right, r.sampleRate, r, 'right');
-  return chainConfigFromJson(
-    addon.masteringAssistantSuggestChainStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      withEntry('masteringAssistantSuggestChainStereo', () =>
-        assistantParams('masteringAssistantSuggestChainStereo', r),
+  return withEntry('masteringAssistantSuggestChainStereo', () => {
+    const r = requestOnly<MasteringAssistantSuggestStereoRequest>(
+      'masteringAssistantSuggestChainStereo',
+      [request],
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return chainConfigFromJson(
+      addon.masteringAssistantSuggestChainStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        withEntry('masteringAssistantSuggestChainStereo', () => assistantParams(r)),
       ),
-    ),
-  );
+    );
+  });
 }
 
 /**
@@ -402,19 +404,16 @@ export function masteringAssistantSuggestChainStereo(
 export function masteringAudioProfileStereo(
   request: MasteringAudioProfileStereoRequest,
 ): MasteringAudioProfile {
-  const r = requestOnly<MasteringAudioProfileStereoRequest>('masteringAudioProfileStereo', [
-    request,
-  ]);
-  assertAudioInput('masteringAudioProfileStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringAudioProfileStereo', r.right, r.sampleRate, r, 'right');
-  return profileFromNative(
-    addon.masteringAudioProfileStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      profileParams('masteringAudioProfileStereo', r),
-    ),
-  );
+  return withEntry('masteringAudioProfileStereo', () => {
+    const r = requestOnly<MasteringAudioProfileStereoRequest>('masteringAudioProfileStereo', [
+      request,
+    ]);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return profileFromNative(
+      addon.masteringAudioProfileStereo(r.left, r.right, r.sampleRate, profileParams(r)),
+    );
+  });
 }
 
 /**
@@ -429,17 +428,20 @@ export function masteringAudioProfileStereo(
 export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
 ): MasteringStreamingPreviewResult {
-  const r = requestOnly<MasteringStreamingPreviewStereoRequest>('masteringStreamingPreviewStereo', [
-    request,
-  ]);
-  assertAudioInput('masteringStreamingPreviewStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringStreamingPreviewStereo', r.right, r.sampleRate, r, 'right');
-  return previewFromNative(
-    addon.masteringStreamingPreviewStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      previewPlatforms('masteringStreamingPreviewStereo', r.platforms),
-    ),
-  );
+  return withEntry('masteringStreamingPreviewStereo', () => {
+    const r = requestOnly<MasteringStreamingPreviewStereoRequest>(
+      'masteringStreamingPreviewStereo',
+      [request],
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return previewFromNative(
+      addon.masteringStreamingPreviewStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        previewPlatforms(r.platforms),
+      ),
+    );
+  });
 }

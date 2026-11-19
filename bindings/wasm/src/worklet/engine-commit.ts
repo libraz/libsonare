@@ -1,7 +1,8 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import type { RealtimeEngine } from '../index.js';
+import { codedError, refuse } from '../internal/entry.js';
 import { isValidCommandRecord } from './engine-node.js';
-import { type SonareEngineCommandRecord, SonareEngineCommandType } from './protocol.js';
+import type { SonareEngineCommandRecord } from './protocol.js';
 
 /**
  * The one transaction every SonareEngine control edit goes through: validate,
@@ -29,21 +30,20 @@ export interface EngineCommitContext {
 
 /**
  * Throws `ErrorCode.OutOfMemory` when a command that was well formed did not
- * fit the live command ring; `method` names the call that sent it.
+ * fit the live command ring.
  */
-export function requireQueued(accepted: boolean, method: string): void {
+export function requireQueued(accepted: boolean): void {
   if (!accepted) {
-    throw new SonareError(ErrorCode.OutOfMemory, `${method}: the engine command queue is full`);
+    throw codedError(ErrorCode.OutOfMemory, `the engine command queue is full`);
   }
 }
 
 /** The refusal for a command the live engine would not take: a bad value or a full ring. */
 function refusedCommand(command: SonareEngineCommandRecord): Error {
-  const name = SonareEngineCommandType[command.type] ?? `command ${String(command.type)}`;
   if (!isValidCommandRecord(command)) {
-    return new RangeError(`${name}: a value is outside the range the engine accepts`);
+    return refuse(`a value is outside the range the engine accepts`);
   }
-  return new SonareError(ErrorCode.OutOfMemory, `${name}: the engine command queue is full`);
+  return codedError(ErrorCode.OutOfMemory, `the engine command queue is full`);
 }
 
 /**

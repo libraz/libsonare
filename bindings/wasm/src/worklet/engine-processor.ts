@@ -1,6 +1,7 @@
 import type { EngineClip, SynthPatch } from '../index.js';
 import { ClipPageProvider, RealtimeEngine } from '../index.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
+import { refuse, refuseType } from '../internal/entry.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import {
   DEFAULT_METRONOME_CONFIG,
@@ -79,7 +80,7 @@ function captureTransferList(channels: readonly Float32Array[]): Transferable[] 
   for (const channel of channels) {
     const buffer = channel.buffer;
     if (!(buffer instanceof ArrayBuffer)) {
-      throw new TypeError('capture response channels must use plain ArrayBuffers');
+      throw refuseType('capture response channels must use plain ArrayBuffers');
     }
     if (!seen.has(buffer)) {
       seen.add(buffer);
@@ -199,22 +200,11 @@ export class SonareRealtimeEngineWorkletProcessor {
   };
 
   constructor(options: SonareRealtimeEngineWorkletProcessorConstructorOptions) {
-    assertKnownProcessorOptions(
-      'SonareRealtimeEngineWorkletProcessor',
-      'engineProcessorConstructor',
-      options,
-    );
-    this.sampleRate = resolveScopeSampleRate(
-      options.sampleRate,
-      'SonareRealtimeEngineWorkletProcessor',
-    );
+    assertKnownProcessorOptions('engineProcessorConstructor', options);
+    this.sampleRate = resolveScopeSampleRate(options.sampleRate);
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
     this.blockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
-    this.numChannels = requireChannelCount(
-      options.numChannels,
-      'SonareRealtimeEngineWorkletProcessor',
-      'numChannels',
-    );
+    this.numChannels = requireChannelCount(options.numChannels, 'numChannels');
     this.transport = options.transport;
     // Zero is the off switch for meter publication, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(
@@ -265,7 +255,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         )
       : undefined;
     if (this.commandRing && this.commandRing.capacity > 65536) {
-      throw new RangeError('commandRingCapacity must be at most 65536');
+      throw refuse('commandRingCapacity must be at most 65536');
     }
     this.engine = new RealtimeEngine({
       sampleRate: this.sampleRate,
@@ -1204,7 +1194,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         // refused (reported as InvalidCommand telemetry), never rounded.
         const outSample = Number(command.argFloat ?? 0);
         if (!Number.isSafeInteger(outSample) || outSample < 0) {
-          throw new RangeError('Punch out sample must be a non-negative integer');
+          throw refuse('Punch out sample must be a non-negative integer');
         }
         this.native.setCapturePunch(Number(command.argInt ?? 0), outSample, true);
         break;
@@ -1244,7 +1234,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         const rawMode = command.argInt;
         const mode = typeof rawMode === 'bigint' ? Number(rawMode) : rawMode;
         if (typeof mode !== 'number' || !Number.isSafeInteger(mode) || mode < 0 || mode > 2) {
-          throw new RangeError(`Invalid track monitor mode: ${String(rawMode)}`);
+          throw refuse(`Invalid track monitor mode: ${String(rawMode)}`);
         }
         const laneIndex = command.targetId;
         if (
@@ -1253,7 +1243,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           laneIndex < 0 ||
           laneIndex > 0xffff_ffff
         ) {
-          throw new RangeError(`Invalid track monitor lane index: ${String(laneIndex)}`);
+          throw refuse(`Invalid track monitor lane index: ${String(laneIndex)}`);
         }
         this.native.setTrackMonitorMode(laneIndex, mode, renderFrame);
         break;
@@ -1523,7 +1513,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     const bandCount = Math.min(ringBands, +this.native.scopeScratchBandCount());
     const pointCount = Math.min(ringMaxPoints, +this.native.scopeScratchPointCount());
     if (bandCount > SONARE_SCOPE_MAX_BANDS || pointCount > SONARE_SCOPE_MAX_POINTS) {
-      throw new RangeError('scope scratch exceeds the processor scratch capacity.');
+      throw refuse('scope scratch exceeds the processor scratch capacity.');
     }
     for (let i = 0; i < bandCount; i++) {
       bandScratch[i] = +this.native.scopeScratchBand(i);

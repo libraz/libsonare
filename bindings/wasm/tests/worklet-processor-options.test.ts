@@ -65,13 +65,11 @@ describe('processorOptions refuses undeclared keys', () => {
     ])('the processor constructor refuses the retired %s by name', (key, value) => {
       const Processor = registered(registerSonareRealtimeVoiceChangerWorkletProcessor, 'vc-test');
       expect(() => new Processor({ processorOptions: { ...base, [key]: value } })).toThrow(
-        new TypeError(`vc-test: unknown option '${key}'`),
+        new TypeError(`unknown option '${key}'`),
       );
       expect(
         () => new SonareRealtimeVoiceChangerWorkletProcessor({ ...base, [key]: value } as never),
-      ).toThrow(
-        new TypeError(`SonareRealtimeVoiceChangerWorkletProcessor: unknown option '${key}'`),
-      );
+      ).toThrow(new TypeError(`unknown option '${key}'`));
     });
 
     it('accepts every declared key', () => {
@@ -96,16 +94,16 @@ describe('processorOptions refuses undeclared keys', () => {
       const Processor = registered(registerSonarePlaybackWorkletProcessor, 'pb-test');
       expect(
         () => new Processor({ processorOptions: { sampleRate: 48000, [key]: value } }),
-      ).toThrow(new TypeError(`pb-test: unknown option '${key}'`));
+      ).toThrow(new TypeError(`unknown option '${key}'`));
       expect(
         () => new SonarePlaybackWorkletProcessor({ sampleRate: 48000, [key]: value } as never),
-      ).toThrow(new TypeError(`SonarePlaybackWorkletProcessor: unknown option '${key}'`));
+      ).toThrow(new TypeError(`unknown option '${key}'`));
     });
 
     it('refuses processorOptions that are not an object', () => {
       const Processor = registered(registerSonarePlaybackWorkletProcessor, 'pb-test');
       expect(() => new Processor({ processorOptions: 'config' })).toThrow(
-        new TypeError('pb-test: options must be an object'),
+        new TypeError('options must be an object'),
       );
     });
   });
@@ -119,10 +117,10 @@ describe('processorOptions refuses undeclared keys', () => {
       );
       const Processor = registered(registerSonareStreamAnalyzerWorkletProcessor, 'sa-test');
       expect(() => new Processor({ processorOptions: { bufferSize: 4096 } })).toThrow(
-        new TypeError("sa-test: unknown option 'bufferSize'"),
+        new TypeError("unknown option 'bufferSize'"),
       );
       expect(() => new SonareStreamAnalyzerWorkletProcessor({ bufferSize: 4096 } as never)).toThrow(
-        new TypeError("SonareStreamAnalyzerWorkletProcessor: unknown option 'bufferSize'"),
+        new TypeError("unknown option 'bufferSize'"),
       );
     });
   });
@@ -136,7 +134,7 @@ describe('processorOptions refuses undeclared keys', () => {
     ] as const)('the %s processorOptions refuse %s by name', (_label, key, register) => {
       const Processor = registered(register, 'carry-test');
       expect(() => new Processor({ processorOptions: { [key]: {} } })).toThrow(
-        new TypeError(`carry-test: unknown option '${key}'`),
+        new TypeError(`unknown option '${key}'`),
       );
     });
 
@@ -147,11 +145,11 @@ describe('processorOptions refuses undeclared keys', () => {
       expect(posted).toEqual([{ type: 'ready' }]);
       expect(analyzer).toBeInstanceOf(SonareStreamAnalyzerWorkletProcessor);
       expect(() => new SonareStreamAnalyzerWorkletProcessor({ transport: port } as never)).toThrow(
-        new TypeError("SonareStreamAnalyzerWorkletProcessor: unknown option 'transport'"),
+        new TypeError("unknown option 'transport'"),
       );
       expect(
         () => new SonarePlaybackWorkletProcessor({ sampleRate: 48000, transport: port } as never),
-      ).toThrow(new TypeError("SonarePlaybackWorkletProcessor: unknown option 'transport'"));
+      ).toThrow(new TypeError("unknown option 'transport'"));
     });
   });
 });

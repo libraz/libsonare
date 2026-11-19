@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
@@ -158,9 +159,11 @@ export interface TempogramRatioRequest {
 /** Rolls onset events back to the preceding energy minimum. Request-only. */
 export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;
 export function onsetBacktrack(...args: unknown[]): Int32Array {
-  const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
-  assertFloat32Array('onsetBacktrack', r.energy, 'energy');
-  return addon.onsetBacktrack(toNativeIndexList('onsetBacktrack', r.events, 'events'), r.energy);
+  return withEntry('onsetBacktrack', () => {
+    const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
+    assertFloat32Array(r.energy, 'energy');
+    return addon.onsetBacktrack(toNativeIndexList(r.events, 'events'), r.energy);
+  });
 }
 
 /**
@@ -201,79 +204,87 @@ export function onsetBacktrack(...args: unknown[]): Int32Array {
  */
 export function peakPick(request: PeakPickRequest): Int32Array;
 export function peakPick(...args: unknown[]): Int32Array {
-  const r = requestOnly<PeakPickRequest>('peakPick', args);
-  assertFloat32Array('peakPick', r.values, 'values');
-  // Each is a frame count that may legitimately be zero.
-  assertNonNegativeSafeInteger('peakPick', r.preMax, 'preMax');
-  assertNonNegativeSafeInteger('peakPick', r.postMax, 'postMax');
-  assertNonNegativeSafeInteger('peakPick', r.preAvg, 'preAvg');
-  assertNonNegativeSafeInteger('peakPick', r.postAvg, 'postAvg');
-  assertNonNegativeSafeInteger('peakPick', r.wait, 'wait');
-  assertFloatValue('peakPick', r.delta, 'delta');
-  return addon.peakPick(r.values, r.preMax, r.postMax, r.preAvg, r.postAvg, r.delta, r.wait);
+  return withEntry('peakPick', () => {
+    const r = requestOnly<PeakPickRequest>('peakPick', args);
+    assertFloat32Array(r.values, 'values');
+    // Each is a frame count that may legitimately be zero.
+    assertNonNegativeSafeInteger(r.preMax, 'preMax');
+    assertNonNegativeSafeInteger(r.postMax, 'postMax');
+    assertNonNegativeSafeInteger(r.preAvg, 'preAvg');
+    assertNonNegativeSafeInteger(r.postAvg, 'postAvg');
+    assertNonNegativeSafeInteger(r.wait, 'wait');
+    assertFloatValue(r.delta, 'delta');
+    return addon.peakPick(r.values, r.preMax, r.postMax, r.preAvg, r.postAvg, r.delta, r.wait);
+  });
 }
 
 /** Autocorrelation or cosine tempogram. Returns rows = `winLength` lags, cols = frames. */
 export function tempogram(request: TempogramRequest): Matrix2D;
 export function tempogram(...args: unknown[]): Matrix2D {
-  const r = requestOnly<TempogramRequest>('tempogram', args);
-  assertFloat32Array('tempogram', r.onsetEnvelope, 'onsetEnvelope');
-  const sampleRate = r.sampleRate ?? 22050;
-  assertSampleRate('tempogram', sampleRate);
-  assertPositiveInteger('tempogram', r.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('tempogram', r.winLength ?? 384, 'winLength');
-  const out = addon.tempogram(
-    r.onsetEnvelope,
-    sampleRate,
-    r.hopLength ?? 512,
-    r.winLength ?? 384,
-    r.mode ?? 'autocorrelation',
-    r.center ?? true,
-    r.norm ?? true,
-  );
-  return toMatrix2D(out.data, out.winLength, out.nFrames);
+  return withEntry('tempogram', () => {
+    const r = requestOnly<TempogramRequest>('tempogram', args);
+    assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
+    const sampleRate = r.sampleRate ?? 22050;
+    assertSampleRate(sampleRate);
+    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
+    assertPositiveInteger(r.winLength ?? 384, 'winLength');
+    const out = addon.tempogram(
+      r.onsetEnvelope,
+      sampleRate,
+      r.hopLength ?? 512,
+      r.winLength ?? 384,
+      r.mode ?? 'autocorrelation',
+      r.center ?? true,
+      r.norm ?? true,
+    );
+    return toMatrix2D(out.data, out.winLength, out.nFrames);
+  });
 }
 
 /** Tempogram folded onto one tempo octave. Returns rows = `nBins`, cols = frames. */
 export function cyclicTempogram(request: CyclicTempogramRequest): Matrix2D;
 export function cyclicTempogram(...args: unknown[]): Matrix2D {
-  const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
-  assertFloat32Array('cyclicTempogram', r.onsetEnvelope, 'onsetEnvelope');
-  const sampleRate = r.sampleRate;
-  assertSampleRate('cyclicTempogram', sampleRate);
-  assertPositiveInteger('cyclicTempogram', r.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('cyclicTempogram', r.winLength ?? 384, 'winLength');
-  if (r.nBins !== undefined) {
-    assertPositiveInteger('cyclicTempogram', r.nBins, 'nBins');
-  }
-  const out = addon.cyclicTempogram(
-    r.onsetEnvelope,
-    sampleRate,
-    r.hopLength ?? 512,
-    r.winLength ?? 384,
-    r.bpmMin,
-    r.nBins,
-  );
-  return toMatrix2D(out.data, out.nBins, out.nFrames);
+  return withEntry('cyclicTempogram', () => {
+    const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
+    assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
+    const sampleRate = r.sampleRate;
+    assertSampleRate(sampleRate);
+    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
+    assertPositiveInteger(r.winLength ?? 384, 'winLength');
+    if (r.nBins !== undefined) {
+      assertPositiveInteger(r.nBins, 'nBins');
+    }
+    const out = addon.cyclicTempogram(
+      r.onsetEnvelope,
+      sampleRate,
+      r.hopLength ?? 512,
+      r.winLength ?? 384,
+      r.bpmMin,
+      r.nBins,
+    );
+    return toMatrix2D(out.data, out.nBins, out.nFrames);
+  });
 }
 
 /** Predominant local pulse curve, one value per onset-envelope frame. */
 export function plp(request: PlpRequest): Float32Array;
 export function plp(...args: unknown[]): Float32Array {
-  const r = requestOnly<PlpRequest>('plp', args);
-  assertFloat32Array('plp', r.onsetEnvelope, 'onsetEnvelope');
-  const sampleRate = r.sampleRate ?? 22050;
-  assertSampleRate('plp', sampleRate);
-  assertPositiveInteger('plp', r.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('plp', r.winLength ?? 384, 'winLength');
-  return addon.plp(
-    r.onsetEnvelope,
-    sampleRate,
-    r.hopLength ?? 512,
-    r.bpmMin,
-    r.bpmMax,
-    r.winLength ?? 384,
-  );
+  return withEntry('plp', () => {
+    const r = requestOnly<PlpRequest>('plp', args);
+    assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
+    const sampleRate = r.sampleRate ?? 22050;
+    assertSampleRate(sampleRate);
+    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
+    assertPositiveInteger(r.winLength ?? 384, 'winLength');
+    return addon.plp(
+      r.onsetEnvelope,
+      sampleRate,
+      r.hopLength ?? 512,
+      r.bpmMin,
+      r.bpmMax,
+      r.winLength ?? 384,
+    );
+  });
 }
 
 /** Onset strength envelope, one value per frame. */
@@ -284,17 +295,19 @@ export function onsetStrength(
   options?: OptionsOf<OnsetStrengthRequest>,
 ): Float32Array;
 export function onsetStrength(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<OnsetStrengthRequest>('onsetStrength', args);
-  assertAudioInput('onsetStrength', request.samples, request.sampleRate, request);
-  const fft = resolveFftOptions('onsetStrength', request.nFft, request.hopLength);
-  assertPositiveInteger('onsetStrength', request.nMels ?? 128, 'nMels');
-  return addon.onsetEnvelope(
-    request.samples,
-    request.sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.nMels ?? 128,
-  );
+  return withEntry('onsetStrength', () => {
+    const request = sampleOneShot<OnsetStrengthRequest>('onsetStrength', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    assertPositiveInteger(request.nMels ?? 128, 'nMels');
+    return addon.onsetEnvelope(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      request.nMels ?? 128,
+    );
+  });
 }
 
 /** Per-band onset strength. Returns rows = bands, cols = frames. */
@@ -305,56 +318,62 @@ export function onsetStrengthMulti(
   options?: OptionsOf<OnsetStrengthMultiRequest>,
 ): Matrix2D;
 export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
-  const request = sampleOneShot<OnsetStrengthMultiRequest>('onsetStrengthMulti', args);
-  assertAudioInput('onsetStrengthMulti', request.samples, request.sampleRate, request);
-  const fft = resolveFftOptions('onsetStrengthMulti', request.nFft, request.hopLength);
-  assertPositiveInteger('onsetStrengthMulti', request.nMels ?? 128, 'nMels');
-  assertPositiveInteger('onsetStrengthMulti', request.nBands ?? 3, 'nBands');
-  const out = addon.onsetStrengthMulti(
-    request.samples,
-    request.sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.nMels ?? 128,
-    request.nBands ?? 3,
-  );
-  return toMatrix2D(out.data, out.nBands, out.nFrames);
+  return withEntry('onsetStrengthMulti', () => {
+    const request = sampleOneShot<OnsetStrengthMultiRequest>('onsetStrengthMulti', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    assertPositiveInteger(request.nMels ?? 128, 'nMels');
+    assertPositiveInteger(request.nBands ?? 3, 'nBands');
+    const out = addon.onsetStrengthMulti(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      request.nMels ?? 128,
+      request.nBands ?? 3,
+    );
+    return toMatrix2D(out.data, out.nBands, out.nFrames);
+  });
 }
 
 /** Fourier tempogram. Returns rows = tempo bins, cols = frames. */
 export function fourierTempogram(request: FourierTempogramRequest): Matrix2D;
 export function fourierTempogram(...args: unknown[]): Matrix2D {
-  const r = requestOnly<FourierTempogramRequest>('fourierTempogram', args);
-  assertFloat32Array('fourierTempogram', r.onsetEnvelope, 'onsetEnvelope');
-  const sampleRate = r.sampleRate ?? 22050;
-  assertSampleRate('fourierTempogram', sampleRate);
-  assertPositiveInteger('fourierTempogram', r.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('fourierTempogram', r.winLength ?? 384, 'winLength');
-  assertFiniteSamples('fourierTempogram', r.onsetEnvelope, true, 'onsetEnvelope');
-  const out = addon.fourierTempogram(
-    r.onsetEnvelope,
-    sampleRate,
-    r.hopLength ?? 512,
-    r.winLength ?? 384,
-    r.center ?? true,
-    true,
-  );
-  return toMatrix2D(out.data, out.nBins, out.nFrames);
+  return withEntry('fourierTempogram', () => {
+    const r = requestOnly<FourierTempogramRequest>('fourierTempogram', args);
+    assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
+    const sampleRate = r.sampleRate ?? 22050;
+    assertSampleRate(sampleRate);
+    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
+    assertPositiveInteger(r.winLength ?? 384, 'winLength');
+    assertFiniteSamples(r.onsetEnvelope, true, 'onsetEnvelope');
+    const out = addon.fourierTempogram(
+      r.onsetEnvelope,
+      sampleRate,
+      r.hopLength ?? 512,
+      r.winLength ?? 384,
+      r.center ?? true,
+      true,
+    );
+    return toMatrix2D(out.data, out.nBins, out.nFrames);
+  });
 }
 
 /** Tempo-ratio features of an autocorrelation tempogram. Returns one value per frame. */
 export function tempogramRatio(request: TempogramRatioRequest): Float32Array;
 export function tempogramRatio(...args: unknown[]): Float32Array {
-  const r = requestOnly<TempogramRatioRequest>('tempogramRatio', args);
-  const sampleRate = r.sampleRate ?? 22050;
-  assertSampleRate('tempogramRatio', sampleRate);
-  assertMatrix2D('tempogramRatio', r.tempogram, 'tempogram');
-  assertPositiveInteger('tempogramRatio', r.hopLength ?? 512, 'hopLength');
-  return addon.tempogramRatio(
-    r.tempogram.data,
-    r.tempogram.rows,
-    sampleRate,
-    r.hopLength ?? 512,
-    r.factors,
-  );
+  return withEntry('tempogramRatio', () => {
+    const r = requestOnly<TempogramRatioRequest>('tempogramRatio', args);
+    const sampleRate = r.sampleRate ?? 22050;
+    assertSampleRate(sampleRate);
+    assertMatrix2D(r.tempogram, 'tempogram');
+    assertPositiveInteger(r.hopLength ?? 512, 'hopLength');
+    return addon.tempogramRatio(
+      r.tempogram.data,
+      r.tempogram.rows,
+      sampleRate,
+      r.hopLength ?? 512,
+      r.factors,
+    );
+  });
 }

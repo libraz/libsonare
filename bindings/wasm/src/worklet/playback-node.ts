@@ -1,6 +1,6 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode, type SonareError } from '../errors.js';
 import { init, isInitialized } from '../index.js';
-import { entryClass } from '../internal/entry.js';
+import { codedError, entryClass, invalidState, refuseType, withEntry } from '../internal/entry.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
@@ -21,7 +21,7 @@ function configObject(config: PlaybackRendererConfig | undefined): PlaybackRende
     return {};
   }
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError('SonarePlaybackNode.create: config must be a configuration object');
+    throw refuseType('config must be a configuration object');
   }
   return config;
 }
@@ -49,7 +49,7 @@ function configObject(config: PlaybackRendererConfig | undefined): PlaybackRende
  * video.addEventListener('seeking', () => playback.reset());
  * ```
  */
-@entryClass('SonarePlaybackNode')
+@entryClass('SonarePlaybackNode', ['post', 'refused', 'shutdown'])
 export class SonarePlaybackNode {
   /** AudioWorkletNode that renders the playback; connect a source to it and it to the destination. */
   readonly node: AudioWorkletNode;
@@ -67,17 +67,20 @@ export class SonarePlaybackNode {
 
   private constructor(node: AudioWorkletNode) {
     this.node = node;
-    this.ready = new Promise((resolve, reject) => {
-      this.resolveReady = resolve;
-      this.rejectReady = reject;
-    });
+    // The consumer awaits the field, so a startup failure is named by it.
+    this.ready = withEntry(
+      'SonarePlaybackNode.ready',
+      () =>
+        new Promise<void>((resolve, reject) => {
+          this.resolveReady = resolve;
+          this.rejectReady = reject;
+        }),
+    );
     // A caller that never awaits `ready` must not see an unhandled rejection.
     this.ready.catch(() => undefined);
     // A processor constructor that throws surfaces only as this event.
     this.node.addEventListener?.('processorerror', () => {
-      this.rejectReady(
-        new SonareError(ErrorCode.Unknown, 'SonarePlaybackNode: the processor failed to start'),
-      );
+      this.rejectReady(codedError(ErrorCode.Unknown, 'the processor failed to start'));
     });
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
       if (this.destroyed || !isRecord(event.data)) {
@@ -108,13 +111,9 @@ export class SonarePlaybackNode {
     context: BaseAudioContext,
     options: SonarePlaybackNodeOptions = {},
   ): Promise<SonarePlaybackNode> {
-    assertKnownProcessorOptions('SonarePlaybackNode.create', 'playbackNode', options);
+    assertKnownProcessorOptions('playbackNode', options);
     const config = configObject(options.config);
-    const sampleRate = resolveContextSampleRate(
-      options.sampleRate,
-      context,
-      'SonarePlaybackNode.create',
-    );
+    const sampleRate = resolveContextSampleRate(options.sampleRate, context);
     if (!isInitialized()) {
       await init(options.wasmBinary === undefined ? undefined : { wasmBinary: options.wasmBinary });
     }
@@ -198,16 +197,13 @@ export class SonarePlaybackNode {
 
   private post(message: SonarePlaybackMessage): void {
     if (this.destroyed) {
-      throw new SonareError(ErrorCode.InvalidState, 'SonarePlaybackNode is destroyed.');
+      throw invalidState('SonarePlaybackNode has been destroyed');
     }
     this.node.port.postMessage(message);
   }
 
   private refused(message: SonarePlaybackErrorMessage): void {
-    const error = new SonareError(
-      ErrorCode.Unknown,
-      String(message.message ?? 'AudioWorklet error'),
-    );
+    const error = codedError(ErrorCode.Unknown, String(message.message ?? 'AudioWorklet error'));
     if (message.request === 'init') {
       this.rejectReady(error);
     } else if (message.request === 'diagnostics') {
@@ -231,7 +227,7 @@ export class SonarePlaybackNode {
     this.node.disconnect();
     this.node.port.onmessage = null;
     this.errorListeners.clear();
-    const released = new SonareError(ErrorCode.InvalidState, 'SonarePlaybackNode is destroyed.');
+    const released = invalidState('SonarePlaybackNode has been destroyed');
     for (const pending of this.pendingDiagnostics.splice(0)) {
       pending.reject(released);
     }

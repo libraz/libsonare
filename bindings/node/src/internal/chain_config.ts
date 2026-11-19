@@ -1,4 +1,5 @@
 import type { MasteringChainConfig } from '../types.js';
+import { refuseType } from './entry.js';
 
 /**
  * Serialize a chain config to the document the native chain reader takes. The
@@ -7,12 +8,12 @@ import type { MasteringChainConfig } from '../types.js';
  *
  * @throws TypeError when `config` is given and is not an object
  */
-export function chainConfigJson(fnName: string, field: string, config: unknown): string | null {
+export function chainConfigJson(field: string, config: unknown): string | null {
   if (config === undefined || config === null) {
     return null;
   }
   if (typeof config !== 'object' || Array.isArray(config)) {
-    throw new TypeError(`${fnName}: ${field} must be an object`);
+    throw refuseType(`${field} must be an object`);
   }
   return JSON.stringify({ params: config });
 }

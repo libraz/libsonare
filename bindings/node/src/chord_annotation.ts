@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { CHORD_QUALITY, KEY_MODE, tokenName } from './internal/project_tokens.js';
 import { addon } from './native.js';
 import type { AnalysisChord, Chord } from './types_analysis.js';
@@ -34,15 +35,17 @@ export type ChordSymbolFields = Required<
  * ```
  */
 export function chordSymbolFromAnalysis(chord: Chord | AnalysisChord): ChordSymbolFields {
-  const { slashBassPc, ...native } = addon.chordSymbolFromAnalysis(chord);
-  const fields: ChordSymbolFields = {
-    ...native,
-    quality: tokenName(CHORD_QUALITY, native.quality, 'chord quality'),
-  };
-  if (slashBassPc !== NO_SLASH_BASS) {
-    fields.slashBassPc = slashBassPc;
-  }
-  return fields;
+  return withEntry('chordSymbolFromAnalysis', () => {
+    const { slashBassPc, ...native } = addon.chordSymbolFromAnalysis(chord);
+    const fields: ChordSymbolFields = {
+      ...native,
+      quality: tokenName(CHORD_QUALITY, native.quality, 'chord quality'),
+    };
+    if (slashBassPc !== NO_SLASH_BASS) {
+      fields.slashBassPc = slashBassPc;
+    }
+    return fields;
+  });
 }
 
 /**
@@ -53,5 +56,7 @@ export function chordSymbolFromAnalysis(chord: Chord | AnalysisChord): ChordSymb
  *         unrecognised mode name.
  */
 export function keyModeFromAnalysis(mode: string): ProjectKeyMode {
-  return tokenName(KEY_MODE, addon.keyModeFromAnalysis(mode), 'key mode');
+  return withEntry('keyModeFromAnalysis', () => {
+    return tokenName(KEY_MODE, addon.keyModeFromAnalysis(mode), 'key mode');
+  });
 }

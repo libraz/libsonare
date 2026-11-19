@@ -5,6 +5,7 @@ import type {
   RealtimeEngine,
 } from '../index.js';
 import { capturePunchBound } from '../internal/capture_punch.js';
+import { refuse, refuseType, withEntry } from '../internal/entry.js';
 import { assignMarkerIds } from '../internal/marker_ids.js';
 import type { SonareEngineSyncCaptureMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
@@ -25,13 +26,9 @@ export type CaptureSyncConfig = Omit<SonareEngineSyncCaptureMessage, 'type'> & {
 };
 
 /** Refuses a value that is not a plain object, naming the argument. */
-export function requireObject(
-  method: string,
-  what: string,
-  value: unknown,
-): asserts value is object {
+export function requireObject(what: string, value: unknown): asserts value is object {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new TypeError(`${method}: ${what} must be an object`);
+    throw refuseType(`${what} must be an object`);
   }
 }
 
@@ -59,29 +56,25 @@ export function buildCaptureConfig(
   requestObject('configureCapture', options, 'options', true);
   const rawSource: unknown = options.source ?? 'output';
   if (typeof rawSource === 'number') {
-    throw new TypeError("configureCapture: source must be 'output' or 'input', not a number");
+    throw refuseType("source must be 'output' or 'input', not a number");
   }
   if (rawSource !== 'output' && rawSource !== 'input') {
-    throw new RangeError("capture source must be 'output' or 'input'");
+    throw refuse("capture source must be 'output' or 'input'");
   }
   const source = rawSource;
   let monitor = { enabled: true, gain: 1 };
   if (options.inputMonitor !== undefined && options.inputMonitor !== null) {
-    requireObject('configureCapture', 'inputMonitor', options.inputMonitor);
+    requireObject('inputMonitor', options.inputMonitor);
     const gain = options.inputMonitor.gain ?? 1;
-    assertFloatValue('configureCapture', gain, 'inputMonitor.gain');
+    assertFloatValue(gain, 'inputMonitor.gain');
     monitor = {
-      enabled: requireBoolean(
-        'configureCapture',
-        options.inputMonitor.enabled,
-        'inputMonitor.enabled',
-      ),
+      enabled: requireBoolean(options.inputMonitor.enabled, 'inputMonitor.enabled'),
       gain,
     };
   }
   let punch: { startSample: number; endSample: number } | undefined;
   if (options.punch !== undefined && options.punch !== null) {
-    requireObject('configureCapture', 'punch', options.punch);
+    requireObject('punch', options.punch);
     const { punch: window } = options;
     punch = {
       startSample: capturePunchBound(
@@ -167,45 +160,54 @@ export interface EngineTransportContext extends EngineCommitContext {
   setLoop(loop: EngineLoop): void;
 }
 
-/** Builds the public transport facade that fans control to both engines. */
+/**
+ * Builds the public transport facade that fans control to both engines. The
+ * facade is a field, so each method names its own refusals as
+ * `SonareEngine.transport.<method>`.
+ */
 export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineTransportFacade {
   return {
-    play: (renderFrame) => {
-      requireQueued(ctx.realtimeNode.play(renderFrame), 'play');
-    },
-    stop: (renderFrame) => {
-      requireQueued(ctx.realtimeNode.stop(renderFrame), 'stop');
-    },
-    seekPpq: (ppq, renderFrame) => {
-      commitCommand(
-        ctx,
-        {
-          type: SonareEngineCommandType.TransportSeekPpq,
-          renderFrame: renderFrame ?? -1,
-          argFloat: ppq,
-        },
-        (offline) => offline.seekPpq(ppq, renderFrame),
-      );
-    },
-    seekSec: (timeSec, renderFrame) => {
-      // A negative position is refused, never clamped onto the start.
-      if (timeSec < 0) {
-        throw new RangeError('seekSec: timeSec must be non-negative');
-      }
-      const timelineSample = secondsToSampleCount('seekSec', timeSec, ctx.sampleRate, 'timeSec');
-      commitCommand(
-        ctx,
-        {
-          type: SonareEngineCommandType.TransportSeekSample,
-          renderFrame: renderFrame ?? -1,
-          argInt: timelineSample,
-        },
-        (offline) => offline.seekSample(timelineSample, renderFrame),
-      );
-    },
-    setTempo: (bpm) => ctx.setTempo(bpm),
-    setTempoSegments: (segments) => ctx.setTempoSegments(segments),
-    setLoop: (loop) => ctx.setLoop(loop),
+    play: (renderFrame) =>
+      withEntry('SonareEngine.transport.play', () => {
+        requireQueued(ctx.realtimeNode.play(renderFrame));
+      }),
+    stop: (renderFrame) =>
+      withEntry('SonareEngine.transport.stop', () => {
+        requireQueued(ctx.realtimeNode.stop(renderFrame));
+      }),
+    seekPpq: (ppq, renderFrame) =>
+      withEntry('SonareEngine.transport.seekPpq', () => {
+        commitCommand(
+          ctx,
+          {
+            type: SonareEngineCommandType.TransportSeekPpq,
+            renderFrame: renderFrame ?? -1,
+            argFloat: ppq,
+          },
+          (offline) => offline.seekPpq(ppq, renderFrame),
+        );
+      }),
+    seekSec: (timeSec, renderFrame) =>
+      withEntry('SonareEngine.transport.seekSec', () => {
+        // A negative position is refused, never clamped onto the start.
+        if (timeSec < 0) {
+          throw refuse('timeSec must be non-negative');
+        }
+        const timelineSample = secondsToSampleCount(timeSec, ctx.sampleRate, 'timeSec');
+        commitCommand(
+          ctx,
+          {
+            type: SonareEngineCommandType.TransportSeekSample,
+            renderFrame: renderFrame ?? -1,
+            argInt: timelineSample,
+          },
+          (offline) => offline.seekSample(timelineSample, renderFrame),
+        );
+      }),
+    setTempo: (bpm) => withEntry('SonareEngine.transport.setTempo', () => ctx.setTempo(bpm)),
+    setTempoSegments: (segments) =>
+      withEntry('SonareEngine.transport.setTempoSegments', () => ctx.setTempoSegments(segments)),
+    setLoop: (loop) => withEntry('SonareEngine.transport.setLoop', () => ctx.setLoop(loop)),
   };
 }
 
@@ -227,16 +229,16 @@ export function normalizeTrackLanes(
   const ids: number[] = [];
   for (const entry of entries) {
     if (!Number.isInteger(entry.trackId) || entry.trackId <= 0) {
-      throw new RangeError(`Invalid track id for mixer lane: ${String(entry.trackId)}`);
+      throw refuse(`Invalid track id for mixer lane: ${String(entry.trackId)}`);
     }
     ids.push(entry.trackId);
   }
   if (new Set(ids).size !== ids.length) {
-    throw new RangeError('Duplicate track id in mixer lane list');
+    throw refuse('Duplicate track id in mixer lane list');
   }
   for (let index = 0; index < existing.length; index++) {
     if (ids[index] !== existing[index]) {
-      throw new RangeError(
+      throw refuse(
         'Mixer lanes are append-only: keep existing lanes in order and only append new track ids',
       );
     }
@@ -263,14 +265,14 @@ export function resolveMarkerSet(
     // enforces; checking only finiteness here hands a negative ppq on to be
     // refused a layer down, under that layer's name for the argument.
     if (!Number.isFinite(marker.ppq) || marker.ppq < 0) {
-      throw new RangeError(`Invalid marker ppq: ${String(marker.ppq)}`);
+      throw refuse(`Invalid marker ppq: ${String(marker.ppq)}`);
     }
     if (marker.id !== undefined) {
       if (!Number.isInteger(marker.id) || marker.id <= 0) {
-        throw new RangeError(`Invalid marker id: ${String(marker.id)}`);
+        throw refuse(`Invalid marker id: ${String(marker.id)}`);
       }
       if (seen.has(marker.id)) {
-        throw new RangeError(`Duplicate marker id: ${marker.id}`);
+        throw refuse(`Duplicate marker id: ${marker.id}`);
       }
       seen.add(marker.id);
     }

@@ -1,3 +1,4 @@
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './types.js';
@@ -87,37 +88,30 @@ interface NativeTrackArrays {
 
 /** A track's one or two planes; a stereo pair must agree in length. */
 function trackChannels(
-  fnName: string,
   prefix: string,
   channels: unknown,
 ): [Float32Array, Float32Array | undefined] {
   if (!Array.isArray(channels)) {
-    throw new TypeError(`${fnName}: ${prefix}.channels must be an array of Float32Array`);
+    throw refuseType(`${prefix}.channels must be an array of Float32Array`);
   }
   if (channels.length < 1 || channels.length > 2) {
-    throw new RangeError(
-      `${fnName}: ${prefix}.channels must hold 1 or 2 channels, got ${channels.length}`,
-    );
+    throw refuse(`${prefix}.channels must hold 1 or 2 channels, got ${channels.length}`);
   }
   channels.forEach((plane, ch) => {
     if (!(plane instanceof Float32Array)) {
-      throw new TypeError(`${fnName}: ${prefix}.channels[${ch}] must be a Float32Array`);
+      throw refuseType(`${prefix}.channels[${ch}] must be a Float32Array`);
     }
   });
   const [first, second] = channels as Float32Array[];
   if (second !== undefined && second.length !== first.length) {
-    throw new RangeError(`${fnName}: ${prefix}.channels must have equal lengths`);
+    throw refuse(`${prefix}.channels must have equal lengths`);
   }
   return [first, second];
 }
 
-function normalizeTracks(
-  fnName: string,
-  tracks: MixAssistantTrack[],
-  sampleRate: number,
-): NativeTrackArrays {
+function normalizeTracks(tracks: MixAssistantTrack[], sampleRate: number): NativeTrackArrays {
   if (!Array.isArray(tracks)) {
-    throw new TypeError(`${fnName}: tracks must be an array`);
+    throw refuseType(`tracks must be an array`);
   }
   const left: Float32Array[] = [];
   const right: (Float32Array | null)[] = [];
@@ -132,21 +126,21 @@ function normalizeTracks(
   tracks.forEach((track, index) => {
     const prefix = `tracks[${index}]`;
     if (track === null || typeof track !== 'object') {
-      throw new TypeError(`${fnName}: ${prefix} must be an object`);
+      throw refuseType(`${prefix} must be an object`);
     }
     if (typeof track.id !== 'string' || track.id === '') {
-      throw new TypeError(`${fnName}: ${prefix}.id must be a non-empty string`);
+      throw refuseType(`${prefix}.id must be a non-empty string`);
     }
     if (seen.has(track.id)) {
-      throw new RangeError(`${fnName}: duplicate track id '${track.id}'`);
+      throw refuse(`duplicate track id '${track.id}'`);
     }
     seen.add(track.id);
-    const [first, second] = trackChannels(fnName, prefix, track.channels);
+    const [first, second] = trackChannels(prefix, track.channels);
     if (track.name !== undefined && typeof track.name !== 'string') {
-      throw new TypeError(`${fnName}: ${prefix}.name must be a string when present`);
+      throw refuseType(`${prefix}.name must be a string when present`);
     }
     if (track.sampleRate !== undefined) {
-      assertSampleRate(fnName, track.sampleRate, `${prefix}.sampleRate`);
+      assertSampleRate(track.sampleRate, `${prefix}.sampleRate`);
     }
     left.push(first);
     right.push(second ?? null);
@@ -188,11 +182,9 @@ const OPTION_KEYS = [
 ] as const;
 
 /** Absence is the transport fallback; the C entry's `0` for it is not a value a caller may pass. */
-function assertTempo(fnName: string, value: unknown): void {
+function assertTempo(value: unknown): void {
   if (typeof value === 'number' && !(value > 0)) {
-    throw new RangeError(
-      `${fnName}: tempoBpm must be positive; omit it to use the transport's fallback tempo`,
-    );
+    throw refuse(`tempoBpm must be positive; omit it to use the transport's fallback tempo`);
   }
 }
 
@@ -200,7 +192,6 @@ function assertTempo(fnName: string, value: unknown): void {
 const INTEGER_OPTION_KEYS = ['nFft', 'hopLength'] as const;
 
 function normalizeOptions(
-  fnName: string,
   request: MixingAssistantSuggestRequest,
 ): Record<string, number | boolean> {
   // Only the supplied keys are forwarded, so the core refuses a wrongly typed value exactly as it
@@ -216,7 +207,7 @@ function normalizeOptions(
   for (const key of INTEGER_OPTION_KEYS) {
     const value = request[key];
     if (value !== undefined && value !== null) {
-      assertPositiveInteger(fnName, value, key);
+      assertPositiveInteger(value, key);
     }
   }
   return params;
@@ -245,22 +236,24 @@ function normalizeOptions(
  */
 export function mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult;
 export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
-  const fnName = 'mixingAssistantSuggest';
-  const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
-  assertSampleRate(fnName, req.sampleRate);
-  const tracks = normalizeTracks(fnName, req.tracks, req.sampleRate);
-  assertTempo(fnName, req.tempoBpm);
-  const params = normalizeOptions(fnName, req);
-  const json = addon.mixingAssistantSuggest(
-    tracks.left,
-    tracks.right,
-    tracks.ids,
-    tracks.names,
-    tracks.sampleRates,
-    req.sampleRate,
-    params,
-  );
-  return parseRecordJson(json) as unknown as MixAssistantResult;
+  return withEntry('mixingAssistantSuggest', () => {
+    const fnName = 'mixingAssistantSuggest';
+    const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
+    assertSampleRate(req.sampleRate);
+    const tracks = normalizeTracks(req.tracks, req.sampleRate);
+    assertTempo(req.tempoBpm);
+    const params = normalizeOptions(req);
+    const json = addon.mixingAssistantSuggest(
+      tracks.left,
+      tracks.right,
+      tracks.ids,
+      tracks.names,
+      tracks.sampleRates,
+      req.sampleRate,
+      params,
+    );
+    return parseRecordJson(json) as unknown as MixAssistantResult;
+  });
 }
 
 /** The source-class identifiers the assistant can report, in native ordinal order. */
@@ -274,13 +267,14 @@ export function mixingAssistantSourceClassNames(): MixSourceClass[] {
  * @throws TypeError when `name` is not a string; RangeError for an unknown name
  */
 export function mixingAssistantSourceClassFromName(name: MixSourceClass): number {
-  const fnName = 'mixingAssistantSourceClassFromName';
-  if (typeof name !== 'string') {
-    throw new TypeError(`${fnName}: name must be a string`);
-  }
-  const index: number = addon.mixingAssistantSourceClassFromName(name);
-  if (index < 0) {
-    throw new RangeError(`${fnName}: unknown source class '${name}'`);
-  }
-  return index;
+  return withEntry('mixingAssistantSourceClassFromName', () => {
+    if (typeof name !== 'string') {
+      throw refuseType(`name must be a string`);
+    }
+    const index: number = addon.mixingAssistantSourceClassFromName(name);
+    if (index < 0) {
+      throw refuse(`unknown source class '${name}'`);
+    }
+    return index;
+  });
 }

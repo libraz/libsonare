@@ -1,8 +1,9 @@
 import type { ChannelLayout } from '../audio.js';
 import { sidechainSourceKindCode } from '../codes.js';
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode, type SonareError } from '../errors.js';
 import type { EngineBus, EngineTrackLane, EngineTrackSend, RealtimeEngine } from '../index.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
+import { codedError, refuse, refuseType } from '../internal/entry.js';
 import type {
   SonareEngineSyncMessage,
   SonareEngineSyncMixerInsertParamOverride,
@@ -85,7 +86,7 @@ function hasOwn(object: SceneObject, key: string): boolean {
 }
 
 function sceneFormatError(message: string): SonareError {
-  return new SonareError(ErrorCode.InvalidFormat, message);
+  return codedError(ErrorCode.InvalidFormat, message);
 }
 
 /**
@@ -646,10 +647,10 @@ export function replayInsertParamOverrides(
 export function setTrackLanes(ctx: EngineMixerContext, lanes: readonly EngineTrackLane[]): void {
   for (const lane of lanes) {
     if (typeof lane !== 'object' || lane === null) {
-      throw new TypeError('setTrackLanes: each lane must be an EngineTrackLane object');
+      throw refuseType('each lane must be an EngineTrackLane object');
     }
     if (lane.sourceChannelLayout !== undefined && lane.sourceChannelLayout !== 'stereo') {
-      throw new RangeError(
+      throw refuse(
         'track lane sourceChannelLayout must be stereo; multichannel lanes are not implemented',
       );
     }
@@ -677,7 +678,7 @@ export function setTrackLanes(ctx: EngineMixerContext, lanes: readonly EngineTra
 function ensureTrackLaneInDraft(draft: MixerRoutingDraft, target: string | number): number {
   const trackId = resolveTargetId(target);
   if (!Number.isInteger(trackId) || trackId <= 0) {
-    throw new RangeError(`Invalid track id for mixer lane: ${String(target)}`);
+    throw refuse(`Invalid track id for mixer lane: ${String(target)}`);
   }
   const existing = draft.trackLaneIds.indexOf(trackId);
   if (existing >= 0) {
@@ -708,7 +709,7 @@ export function setTrackOutputBus(
   busId: number | null,
 ): void {
   if (busId === 0) {
-    throw new RangeError('setTrackOutputBus: busId must not be 0 (pass null for the master mix)');
+    throw refuse('busId must not be 0 (pass null for the master mix)');
   }
   const draft = cloneMixerRouting(ctx);
   const laneIndex = ensureTrackLaneInDraft(draft, target);
@@ -725,13 +726,13 @@ export function setTrackOutputBus(
 function sidechainKey(method: RequestFn, source: SidechainSource): { kind: number; id: number } {
   requestObject(method, source, 'source', true);
   if (typeof source.kind === 'number') {
-    throw new TypeError(`${method}: source.kind must be a string`);
+    throw refuseType(`source.kind must be a string`);
   }
   if (typeof source.id !== 'number') {
-    throw new TypeError(`${method}: source.id must be a number`);
+    throw refuseType(`source.id must be a number`);
   }
   if (source.id === 0) {
-    throw new RangeError(`${method}: source.id must not be 0 (pass null to remove the binding)`);
+    throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
   }
   return { kind: sidechainSourceKindCode(source.kind), id: source.id };
 }
@@ -775,7 +776,7 @@ export function setStripSidechain(
     return;
   }
   if (key.kind !== 0) {
-    throw new RangeError("setStripSidechain: a track strip accepts only a 'track' source");
+    throw refuse("a track strip accepts only a 'track' source");
   }
   const laneIndex = ctx.ensureTrackLane(target);
   const trackId = ctx.trackLaneIds[laneIndex];

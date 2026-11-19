@@ -311,6 +311,6 @@ describe('Audio keeps its closed-handle error', () => {
     audio.destroy();
     const error = capture(() => audio.rmsDb());
     expect(codeOf(error)).toBe(ErrorCode.InvalidState);
-    expect((error as Error).message).toBe('Audio has been destroyed');
+    expect((error as Error).message).toBe('Audio.rmsDb: Audio has been destroyed');
   });
 });

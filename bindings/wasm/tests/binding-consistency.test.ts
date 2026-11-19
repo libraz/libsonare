@@ -81,7 +81,7 @@ describe('WASM cross-binding consistency', () => {
       // spellings, so the in-domain 0..3 are refused exactly like 4, -1 or NaN.
       for (const waveform of [0, 3, 4, -1, 2 ** 31, Number.POSITIVE_INFINITY, Number.NaN]) {
         expect(() => bounceWaveform(waveform), `waveform ${waveform}`).toThrow(
-          new TypeError('bounceWithBuiltinInstruments: waveform must be a name'),
+          new TypeError('Project.bounceWithBuiltinInstruments: waveform must be a name'),
         );
       }
     });

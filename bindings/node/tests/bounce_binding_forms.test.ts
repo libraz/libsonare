@@ -66,7 +66,7 @@ describe.each(FAMILIES)('$name', (family) => {
     expect(() => family.call(project, family.binding)).toThrow(TypeError);
     expect(() => family.call(project, family.binding)).toThrow(
       new TypeError(
-        `${family.name}: instruments must be an array of { destinationId?, instrument } pairs`,
+        `Project.${family.name}: instruments must be an array of { destinationId?, instrument } pairs`,
       ),
     );
     const listed = family.call(project, [family.binding]);
@@ -87,12 +87,12 @@ describe.each(FAMILIES)('$name', (family) => {
     using project = midiProject();
     expect(() => family.call(project, [family.binding, [family.binding]])).toThrow(TypeError);
     expect(() => family.call(project, [family.binding, [family.binding]])).toThrow(
-      /ProjectInstrumentBinding: request must be an object/,
+      new RegExp(`Project\\.${family.name}: request must be an object`),
     );
     expect(() => family.call(project, 42)).toThrow(/instruments must be an array/);
     expect(() => family.call(project, null)).toThrow(TypeError);
     expect(() => family.call(project, [{ destinationId: 0 }])).toThrow(
-      new TypeError(`${family.name}: binding.instrument must be an object`),
+      new TypeError(`Project.${family.name}: binding.instrument must be an object`),
     );
   });
 });

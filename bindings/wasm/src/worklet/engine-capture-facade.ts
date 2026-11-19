@@ -1,5 +1,5 @@
-import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, RealtimeEngine } from '../index.js';
+import { invalidState } from '../internal/entry.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions } from '../public_types_engine.js';
 import { requestObject, requireBoolean } from '../validation.js';
@@ -48,9 +48,9 @@ export function configureCapture(ctx: EngineCaptureContext, options: CaptureOpti
 /** Arms or disarms the engine-global capture path; per-track capture is not implemented. */
 export function armCapture(ctx: EngineCaptureContext, state: { armed: boolean }): void {
   requestObject('armCapture', state, 'state', true);
-  const armed = requireBoolean('armCapture', state.armed, 'armed');
+  const armed = requireBoolean(state.armed, 'armed');
   if (armed && !ctx.getCaptureConfig()) {
-    throw new SonareError(ErrorCode.InvalidState, 'Capture buffer is not configured');
+    throw invalidState('Capture buffer is not configured');
   }
   commitCommand(
     ctx,

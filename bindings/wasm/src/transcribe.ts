@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import { projectModule } from './project_internal.js';
 import type { TranscribeOptions, TranscribeResult } from './project_types.js';
@@ -82,12 +83,14 @@ export function transcribe(
   options?: OptionsOf<TranscribeRequest>,
 ): TranscribeResult;
 export function transcribe(...args: unknown[]): TranscribeResult {
-  const request = sampleOneShot<TranscribeRequest>('transcribe', args);
-  assertAudioInput('transcribe', request.samples, request.sampleRate, request);
-  const { samples, sampleRate, tempoBpm, ...rest } = request;
-  if (tempoBpm !== undefined && tempoBpm !== null) {
-    assertPositiveFloatValue('transcribe', tempoBpm, 'tempoBpm');
-  }
-  const nativeOptions = nativeTranscribeOptions('transcribe', rest);
-  return projectModule().transcribe(samples, sampleRate, tempoBpm, nativeOptions);
+  return withEntry('transcribe', () => {
+    const request = sampleOneShot<TranscribeRequest>('transcribe', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const { samples, sampleRate, tempoBpm, ...rest } = request;
+    if (tempoBpm !== undefined && tempoBpm !== null) {
+      assertPositiveFloatValue(tempoBpm, 'tempoBpm');
+    }
+    const nativeOptions = nativeTranscribeOptions(rest);
+    return projectModule().transcribe(samples, sampleRate, tempoBpm, nativeOptions);
+  });
 }

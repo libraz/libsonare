@@ -142,7 +142,9 @@ describe('stereo mastering design APIs', () => {
         sampleRate: SR,
       });
     expect(sourceMismatch).toThrow(RangeError);
-    expect(sourceMismatch).toThrow(/Source left and right channel lengths must match/);
+    expect(sourceMismatch).toThrow(
+      /^masteringApplyPairProcessorStereo: Source left and right channel lengths must match\.$/,
+    );
     const referenceMismatch = () =>
       masteringApplyPairProcessorStereo({
         processor: 'match.abCrossfade',
@@ -153,7 +155,9 @@ describe('stereo mastering design APIs', () => {
         sampleRate: SR,
       });
     expect(referenceMismatch).toThrow(RangeError);
-    expect(referenceMismatch).toThrow(/Reference left and right channel lengths must match/);
+    expect(referenceMismatch).toThrow(
+      /^masteringApplyPairProcessorStereo: Reference left and right channel lengths must match\.$/,
+    );
     expect(() =>
       masteringApplyPairProcessorStereo({
         processor: 'match.abCrossfade',

@@ -2,6 +2,7 @@
  * Reverberation repair, with its detector and the room-driven configuration.
  */
 
+import { refuseType, withEntry } from './internal/entry.js';
 import {
   assertRepairGeometry,
   repairNativeOptions,
@@ -72,13 +73,15 @@ export function masteringRepairDereverbClassical(
   options?: DereverbClassicalOptions,
 ): DereverbResult;
 export function masteringRepairDereverbClassical(...args: unknown[]): DereverbResult {
-  const r = sampleOneShot<MasteringRepairDereverbClassicalRequest>(
-    'masteringRepairDereverbClassical',
-    args,
-  );
-  assertAudioInput('masteringRepairDereverbClassical', r.samples, r.sampleRate, r);
-  assertRepairGeometry('masteringRepairDereverbClassical', r);
-  return addon.masteringRepairDereverbClassical(r.samples, r.sampleRate, repairNativeOptions(r));
+  return withEntry('masteringRepairDereverbClassical', () => {
+    const r = sampleOneShot<MasteringRepairDereverbClassicalRequest>(
+      'masteringRepairDereverbClassical',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    assertRepairGeometry(r);
+    return addon.masteringRepairDereverbClassical(r.samples, r.sampleRate, repairNativeOptions(r));
+  });
 }
 
 /** Request form of `masteringRepairDereverbClassicalStereo`. */
@@ -132,21 +135,23 @@ export function masteringRepairDereverbClassicalStereo(
 export function masteringRepairDereverbClassicalStereo(
   ...args: unknown[]
 ): MasteringRepairDereverbClassicalResult {
-  const r = requestOnly<MasteringRepairDereverbClassicalStereoRequest>(
-    'masteringRepairDereverbClassicalStereo',
-    args,
-  );
-  assertAudioInput('masteringRepairDereverbClassicalStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringRepairDereverbClassicalStereo', r.right, r.sampleRate, r, 'right');
-  assertRepairGeometry('masteringRepairDereverbClassicalStereo', r);
-  return sharedReportResult(
-    addon.masteringRepairDereverbClassicalStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      repairNativeOptions(r),
-    ),
-  );
+  return withEntry('masteringRepairDereverbClassicalStereo', () => {
+    const r = requestOnly<MasteringRepairDereverbClassicalStereoRequest>(
+      'masteringRepairDereverbClassicalStereo',
+      args,
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    assertRepairGeometry(r);
+    return sharedReportResult(
+      addon.masteringRepairDereverbClassicalStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+  });
 }
 
 /** Request form of `masteringRepairDereverbClassicalLinked`. */
@@ -206,15 +211,21 @@ export function masteringRepairDereverbClassicalLinked(
 export function masteringRepairDereverbClassicalLinked(
   ...args: unknown[]
 ): MasteringRepairDereverbClassicalResult {
-  const r = requestOnly<MasteringRepairDereverbClassicalLinkedRequest>(
-    'masteringRepairDereverbClassicalLinked',
-    args,
-  );
-  assertAudioChannels('masteringRepairDereverbClassicalLinked', r.channels, r.sampleRate, r);
-  assertRepairGeometry('masteringRepairDereverbClassicalLinked', r);
-  return sharedReportResult(
-    addon.masteringRepairDereverbClassicalLinked(r.channels, r.sampleRate, repairNativeOptions(r)),
-  );
+  return withEntry('masteringRepairDereverbClassicalLinked', () => {
+    const r = requestOnly<MasteringRepairDereverbClassicalLinkedRequest>(
+      'masteringRepairDereverbClassicalLinked',
+      args,
+    );
+    assertAudioChannels(r.channels, r.sampleRate, r);
+    assertRepairGeometry(r);
+    return sharedReportResult(
+      addon.masteringRepairDereverbClassicalLinked(
+        r.channels,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+  });
 }
 
 /**
@@ -265,16 +276,18 @@ export function masteringRepairDereverbConfigForRoom(
   request: MasteringRepairDereverbConfigForRoomRequest,
 ): DereverbClassicalConfig;
 export function masteringRepairDereverbConfigForRoom(...args: unknown[]): DereverbClassicalConfig {
-  const r = requestOnly<MasteringRepairDereverbConfigForRoomRequest>(
-    'masteringRepairDereverbConfigForRoom',
-    args,
-  );
-  if (typeof r.estimate !== 'object' || r.estimate === null) {
-    throw new TypeError('masteringRepairDereverbConfigForRoom: estimate must be a room estimate');
-  }
-  assertRepairGeometry('masteringRepairDereverbConfigForRoom', r);
-  const { estimate, ...config } = r;
-  return addon.masteringRepairDereverbConfigForRoom(estimate, config);
+  return withEntry('masteringRepairDereverbConfigForRoom', () => {
+    const r = requestOnly<MasteringRepairDereverbConfigForRoomRequest>(
+      'masteringRepairDereverbConfigForRoom',
+      args,
+    );
+    if (typeof r.estimate !== 'object' || r.estimate === null) {
+      throw refuseType('estimate must be a room estimate');
+    }
+    assertRepairGeometry(r);
+    const { estimate, ...config } = r;
+    return addon.masteringRepairDereverbConfigForRoom(estimate, config);
+  });
 }
 
 /** Request form of `masteringRepairDetectReverb`. */
@@ -309,8 +322,13 @@ export function masteringRepairDetectReverb(
   options?: DereverbClassicalOptions,
 ): ReverbDetection;
 export function masteringRepairDetectReverb(...args: unknown[]): ReverbDetection {
-  const r = sampleOneShot<MasteringRepairDetectReverbRequest>('masteringRepairDetectReverb', args);
-  assertAudioInput('masteringRepairDetectReverb', r.samples, r.sampleRate, r);
-  assertRepairGeometry('masteringRepairDetectReverb', r);
-  return addon.masteringRepairDetectReverb(r.samples, r.sampleRate, repairNativeOptions(r));
+  return withEntry('masteringRepairDetectReverb', () => {
+    const r = sampleOneShot<MasteringRepairDetectReverbRequest>(
+      'masteringRepairDetectReverb',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    assertRepairGeometry(r);
+    return addon.masteringRepairDetectReverb(r.samples, r.sampleRate, repairNativeOptions(r));
+  });
 }

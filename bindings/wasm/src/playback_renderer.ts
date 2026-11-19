@@ -1,4 +1,4 @@
-import { entryClass } from './internal/entry.js';
+import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -18,9 +18,9 @@ import {
   requestObject,
 } from './validation.js';
 
-function configJsonText(fnName: string, config: PlaybackRendererConfig): string {
+function configJsonText(config: PlaybackRendererConfig): string {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError(`${fnName}: config must be a configuration object`);
+    throw refuseType(`config must be a configuration object`);
   }
   return JSON.stringify(config);
 }
@@ -28,15 +28,12 @@ function configJsonText(fnName: string, config: PlaybackRendererConfig): string 
 const FLOAT32_MAX = 3.4028234663852886e38;
 
 function assertHeadOrientationAngle(value: unknown, argName: string): asserts value is number {
-  const fnName = 'PlaybackRenderer.setHeadOrientation';
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
-  assertFiniteScalar(fnName, value, argName);
+  assertFiniteScalar(value, argName);
   if (Math.abs(value) > FLOAT32_MAX) {
-    throw new RangeError(
-      `${fnName}: ${argName} must be a finite number within the 32-bit float range`,
-    );
+    throw refuse(`${argName} must be finite and in [-3.4028235e38, 3.4028235e38]`);
   }
 }
 
@@ -45,7 +42,7 @@ function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
     return null;
   }
   if (!(hrtf instanceof HrtfSet)) {
-    throw new TypeError('hrtf must be an HrtfSet');
+    throw refuseType('hrtf must be an HrtfSet');
   }
   const handle = hrtfHandles.get(hrtf);
   assertHandleLive(handle === undefined, 'HrtfSet');
@@ -115,7 +112,7 @@ export class HrtfSet {
  * with 0 and counted rather than refused. The AudioWorklet path is
  * `SonarePlaybackWorkletProcessor` in the worklet bundle.
  */
-@entryClass('PlaybackRenderer', ['processPlanar', 'processInterleaved'])
+@entryClass('PlaybackRenderer', ['processPlanar', 'processInterleaved', 'native'])
 export class PlaybackRenderer {
   private nativeHandle: WasmPlaybackRenderer;
   private released = false;
@@ -128,19 +125,19 @@ export class PlaybackRenderer {
   constructor(options: PlaybackRendererOptions) {
     const fnName = 'PlaybackRenderer';
     requestObject(fnName, options, 'options', true);
-    assertSampleRate(fnName, options.sampleRate);
+    assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
     if (maxBlockSize !== undefined) {
       if (typeof maxBlockSize !== 'number') {
-        throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+        throw refuseType(`maxBlockSize must be a number`);
       }
       if (maxBlockSize === 0) {
-        throw new RangeError(`${fnName}: maxBlockSize must not be 0 (omit it for the default)`);
+        throw refuse(`maxBlockSize must not be 0 (omit it for the default)`);
       }
-      assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
+      assertPositiveInteger(maxBlockSize, 'maxBlockSize');
     }
     this.nativeHandle = getSonareModule().createPlaybackRenderer(
-      configJsonText('PlaybackRenderer', options.config),
+      configJsonText(options.config),
       nativeHrtf(options.hrtf),
       options.sampleRate,
       maxBlockSize,
@@ -177,7 +174,7 @@ export class PlaybackRenderer {
 
   /** Applies a complete configuration document; a changed prepare key throws. */
   setConfig(config: PlaybackRendererConfig): void {
-    this.native.setConfig(configJsonText('PlaybackRenderer.setConfig', config));
+    this.native.setConfig(configJsonText(config));
   }
 
   /** The current complete configuration document. */
@@ -268,7 +265,7 @@ export class PlaybackRenderer {
  * channel weights by channel count: 1, 2, 6 or 8), for measuring
  * `loudness.programLufs` ahead of a {@link PlaybackRenderer}.
  */
-@entryClass('PlaybackLoudnessMeter', ['pushInterleaved'])
+@entryClass('PlaybackLoudnessMeter', ['pushInterleaved', 'native'])
 export class PlaybackLoudnessMeter {
   private nativeHandle: WasmPlaybackLoudnessMeter;
   private released = false;
@@ -319,14 +316,16 @@ export class PlaybackLoudnessMeter {
  * `RangeError`.
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
-  requestObject('renderPlayback', request, 'request', true);
-  assertAudioInput('renderPlayback', request.samples, request.sampleRate, request);
-  const { samples, channels } = getSonareModule().renderPlayback(
-    request.samples,
-    request.numChannels,
-    request.sampleRate,
-    configJsonText('renderPlayback', request.config),
-    nativeHrtf(request.hrtf),
-  );
-  return { samples, numChannels: channels };
+  return withEntry('renderPlayback', () => {
+    requestObject('renderPlayback', request, 'request', true);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const { samples, channels } = getSonareModule().renderPlayback(
+      request.samples,
+      request.numChannels,
+      request.sampleRate,
+      configJsonText(request.config),
+      nativeHrtf(request.hrtf),
+    );
+    return { samples, numChannels: channels };
+  });
 }

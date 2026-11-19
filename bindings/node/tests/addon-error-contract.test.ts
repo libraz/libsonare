@@ -44,6 +44,6 @@ describe('addon error contract', () => {
     }
     expect(isSonareError(caught)).toBe(true);
     expect((caught as { code: number }).code).toBe(ErrorCode.InvalidState);
-    expect((caught as Error).message).toBe('Audio has been destroyed');
+    expect((caught as Error).message).toBe('Audio.rmsDb: Audio has been destroyed');
   });
 });

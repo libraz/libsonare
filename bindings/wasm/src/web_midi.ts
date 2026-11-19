@@ -1,4 +1,5 @@
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode } from './errors.js';
+import { codedError, refuse, withEntry } from './internal/entry.js';
 import { OwnerEpoch } from './owner_epoch.js';
 import type { ProjectMidiCcBinding } from './project_types.js';
 import { assertNibble } from './validation.js';
@@ -199,152 +200,154 @@ export async function bindWebMidi(
   engine: WebMidiEngine,
   options: BindWebMidiOptions = {},
 ): Promise<WebMidiBinding> {
-  const navigatorWithMidi = globalThis.navigator as NavigatorWithMidi | undefined;
-  if (typeof navigatorWithMidi?.requestMIDIAccess !== 'function') {
-    throw new SonareError(ErrorCode.NotSupported, 'Web MIDI is not available in this environment');
-  }
-
-  const group = options.group ?? 0;
-  assertNibble('bindWebMidi', group, 'group');
-  const destinationId = options.destinationId ?? 0;
-  if (options.inputIds !== undefined && options.inputIds.length === 0) {
-    throw new RangeError('bindWebMidi: inputIds must not be empty; omit it to bind every input');
-  }
-  const selectedIds = new Set(options.inputIds ?? []);
-  // Invoke through the navigator so the browser's native method keeps its
-  // required `this` binding (detached calls throw "Illegal invocation").
-  const access = await navigatorWithMidi.requestMIDIAccess({
-    sysex: options.sysex ?? false,
-    software: options.software ?? true,
-  });
-
-  for (const binding of options.ccBindings ?? []) {
-    engine.bindMidiCc(binding);
-  }
-  engine.setMidiInputSource(destinationId);
-  const sourceOwner = midiInputSourceOwner(engine);
-  const sourceToken = sourceOwner.advance();
-
-  const bound = new Map<string, BoundInput>();
-  let closed = false;
-
-  const shouldBind = (input: MidiInputLike) =>
-    input.state !== 'disconnected' && (selectedIds.size === 0 || selectedIds.has(input.id));
-
-  const snapshotInputs = (): WebMidiInputInfo[] =>
-    Array.from(iterInputs(access), ([id, input]) => ({
-      id,
-      name: input.name ?? '',
-      manufacturer: input.manufacturer ?? '',
-      state: input.state ?? 'connected',
-    }));
-
-  const notify = () => options.onInputsChanged?.(snapshotInputs());
-
-  const bindInput = (input: MidiInputLike) => {
-    if (bound.has(input.id) || !shouldBind(input)) {
-      return;
+  return withEntry('bindWebMidi', async () => {
+    const navigatorWithMidi = globalThis.navigator as NavigatorWithMidi | undefined;
+    if (typeof navigatorWithMidi?.requestMIDIAccess !== 'function') {
+      throw codedError(ErrorCode.NotSupported, 'Web MIDI is not available in this environment');
     }
-    const entry: BoundInput = {
-      input,
-      listener: (event: MidiMessageEventLike) => {
-        entry.runningStatus = dispatchMidiMessage(
-          engine,
-          event,
-          group,
-          entry.runningStatus,
-          options.timestampToOffsetInBlockSamples,
-        );
-      },
-      runningStatus: 0,
-    };
-    const listener = entry.listener;
-    if (input.addEventListener) {
-      input.addEventListener('midimessage', listener);
-    } else {
-      input.onmidimessage = listener;
-    }
-    bound.set(input.id, entry);
-  };
 
-  const unbindInput = (input: MidiInputLike) => {
-    const entry = bound.get(input.id);
-    if (!entry) {
-      return;
+    const group = options.group ?? 0;
+    assertNibble(group, 'group');
+    const destinationId = options.destinationId ?? 0;
+    if (options.inputIds !== undefined && options.inputIds.length === 0) {
+      throw refuse('inputIds must not be empty; omit it to bind every input');
     }
-    if (entry.input.removeEventListener) {
-      entry.input.removeEventListener('midimessage', entry.listener);
-    } else if (entry.input.onmidimessage === entry.listener) {
-      entry.input.onmidimessage = null;
-    }
-    bound.delete(input.id);
-  };
+    const selectedIds = new Set(options.inputIds ?? []);
+    // Invoke through the navigator so the browser's native method keeps its
+    // required `this` binding (detached calls throw "Illegal invocation").
+    const access = await navigatorWithMidi.requestMIDIAccess({
+      sysex: options.sysex ?? false,
+      software: options.software ?? true,
+    });
 
-  // Does not call notify() itself: both call sites below (the initial sync
-  // and stateListener's fallback branch) already notify exactly once after
-  // calling this, so notifying here too would fire onInputsChanged twice per
-  // hotplug event that goes through the fallback branch.
-  const refreshInputs = () => {
-    for (const [, entry] of bound) {
-      if (!shouldBind(entry.input)) {
-        unbindInput(entry.input);
+    for (const binding of options.ccBindings ?? []) {
+      engine.bindMidiCc(binding);
+    }
+    engine.setMidiInputSource(destinationId);
+    const sourceOwner = midiInputSourceOwner(engine);
+    const sourceToken = sourceOwner.advance();
+
+    const bound = new Map<string, BoundInput>();
+    let closed = false;
+
+    const shouldBind = (input: MidiInputLike) =>
+      input.state !== 'disconnected' && (selectedIds.size === 0 || selectedIds.has(input.id));
+
+    const snapshotInputs = (): WebMidiInputInfo[] =>
+      Array.from(iterInputs(access), ([id, input]) => ({
+        id,
+        name: input.name ?? '',
+        manufacturer: input.manufacturer ?? '',
+        state: input.state ?? 'connected',
+      }));
+
+    const notify = () => options.onInputsChanged?.(snapshotInputs());
+
+    const bindInput = (input: MidiInputLike) => {
+      if (bound.has(input.id) || !shouldBind(input)) {
+        return;
       }
-    }
-    for (const [, input] of iterInputs(access)) {
-      bindInput(input);
-    }
-  };
-
-  const stateListener = (event: MidiConnectionEventLike) => {
-    if (closed) {
-      return;
-    }
-    if (event.port && 'onmidimessage' in event.port) {
-      const input = event.port as MidiInputLike;
-      if (shouldBind(input)) {
-        bindInput(input);
+      const entry: BoundInput = {
+        input,
+        listener: (event: MidiMessageEventLike) => {
+          entry.runningStatus = dispatchMidiMessage(
+            engine,
+            event,
+            group,
+            entry.runningStatus,
+            options.timestampToOffsetInBlockSamples,
+          );
+        },
+        runningStatus: 0,
+      };
+      const listener = entry.listener;
+      if (input.addEventListener) {
+        input.addEventListener('midimessage', listener);
       } else {
-        unbindInput(input);
+        input.onmidimessage = listener;
       }
-    } else {
-      refreshInputs();
-    }
-    notify();
-  };
+      bound.set(input.id, entry);
+    };
 
-  refreshInputs();
-  notify();
-  if (access.addEventListener) {
-    access.addEventListener('statechange', stateListener);
-  } else {
-    access.onstatechange = stateListener;
-  }
+    const unbindInput = (input: MidiInputLike) => {
+      const entry = bound.get(input.id);
+      if (!entry) {
+        return;
+      }
+      if (entry.input.removeEventListener) {
+        entry.input.removeEventListener('midimessage', entry.listener);
+      } else if (entry.input.onmidimessage === entry.listener) {
+        entry.input.onmidimessage = null;
+      }
+      bound.delete(input.id);
+    };
 
-  const binding: WebMidiBinding = {
-    access,
-    inputs: snapshotInputs,
-    destroy() {
+    // Does not call notify() itself: both call sites below (the initial sync
+    // and stateListener's fallback branch) already notify exactly once after
+    // calling this, so notifying here too would fire onInputsChanged twice per
+    // hotplug event that goes through the fallback branch.
+    const refreshInputs = () => {
+      for (const [, entry] of bound) {
+        if (!shouldBind(entry.input)) {
+          unbindInput(entry.input);
+        }
+      }
+      for (const [, input] of iterInputs(access)) {
+        bindInput(input);
+      }
+    };
+
+    const stateListener = (event: MidiConnectionEventLike) => {
       if (closed) {
         return;
       }
-      closed = true;
-      if (access.removeEventListener) {
-        access.removeEventListener('statechange', stateListener);
-      } else if (access.onstatechange === stateListener) {
-        access.onstatechange = null;
+      if (event.port && 'onmidimessage' in event.port) {
+        const input = event.port as MidiInputLike;
+        if (shouldBind(input)) {
+          bindInput(input);
+        } else {
+          unbindInput(input);
+        }
+      } else {
+        refreshInputs();
       }
-      for (const [, entry] of Array.from(bound)) {
-        unbindInput(entry.input);
-      }
-      if (sourceOwner.isCurrent(sourceToken)) {
-        engine.clearMidiInputSource();
-      }
-    },
-    [Symbol.dispose]() {
-      this.destroy();
-    },
-  };
-  return binding;
+      notify();
+    };
+
+    refreshInputs();
+    notify();
+    if (access.addEventListener) {
+      access.addEventListener('statechange', stateListener);
+    } else {
+      access.onstatechange = stateListener;
+    }
+
+    const binding: WebMidiBinding = {
+      access,
+      inputs: snapshotInputs,
+      destroy() {
+        if (closed) {
+          return;
+        }
+        closed = true;
+        if (access.removeEventListener) {
+          access.removeEventListener('statechange', stateListener);
+        } else if (access.onstatechange === stateListener) {
+          access.onstatechange = null;
+        }
+        for (const [, entry] of Array.from(bound)) {
+          unbindInput(entry.input);
+        }
+        if (sourceOwner.isCurrent(sourceToken)) {
+          engine.clearMidiInputSource();
+        }
+      },
+      [Symbol.dispose]() {
+        this.destroy();
+      },
+    };
+    return binding;
+  });
 }
 
 function dispatchMidiMessage(

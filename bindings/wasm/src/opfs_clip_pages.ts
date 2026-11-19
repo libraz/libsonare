@@ -1,7 +1,7 @@
 import type { ClipPageSampleRequest } from './clip_page_streamer.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode } from './errors.js';
 import { registerOpfsClipPageProviderFactory } from './internal/clip_page_native.js';
-import { withEntry } from './internal/entry.js';
+import { codedError, invalidState, refuse, refuseType, withEntry } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
 
@@ -237,150 +237,154 @@ export function createOpfsClipPageWorker(): Worker {
 export function createOpfsClipPageProvider(
   options: OpfsClipPageProviderOptions,
 ): OpfsClipPageProviderBinding {
-  const provider = withEntry(
-    'createOpfsClipPageProvider',
-    () =>
-      new ClipPageProvider({
-        numChannels: options.numChannels,
-        numSamples: options.numSamples,
-        pageFrames: options.pageFrames,
-      }),
-  );
-  const worker = options.worker ?? createOpfsClipPageWorker();
-  const heldKey = opfsClipPathKey(options.path);
-  heldOpfsClipPaths.set(heldKey, (heldOpfsClipPaths.get(heldKey) ?? 0) + 1);
-  const ownsWorker = options.worker === undefined || options.terminateWorkerOnDestroy === true;
-  let closed = false;
-  let readQueue: Promise<void> = Promise.resolve();
-  const pending = new Map<
-    number,
-    { resolve: (value: boolean) => void; reject: (reason: unknown) => void }
-  >();
+  return withEntry('createOpfsClipPageProvider', () => {
+    const provider = withEntry(
+      'createOpfsClipPageProvider',
+      () =>
+        new ClipPageProvider({
+          numChannels: options.numChannels,
+          numSamples: options.numSamples,
+          pageFrames: options.pageFrames,
+        }),
+    );
+    const worker = options.worker ?? createOpfsClipPageWorker();
+    const heldKey = opfsClipPathKey(options.path);
+    heldOpfsClipPaths.set(heldKey, (heldOpfsClipPaths.get(heldKey) ?? 0) + 1);
+    const ownsWorker = options.worker === undefined || options.terminateWorkerOnDestroy === true;
+    let closed = false;
+    let readQueue: Promise<void> = Promise.resolve();
+    const pending = new Map<
+      number,
+      { resolve: (value: boolean) => void; reject: (reason: unknown) => void }
+    >();
 
-  const onMessage = (event: MessageEvent<PageResponse>) => {
-    const response = event.data;
-    if (response?.type !== 'sonare:clip-page') {
-      return;
-    }
-    const entry = pending.get(response.requestId);
-    if (!entry) {
-      return;
-    }
-    pending.delete(response.requestId);
-    if (!response.ok) {
-      entry.resolve(false);
-      return;
-    }
-    const channels =
-      response.channels ??
-      response.channelBuffers?.map(
-        (buffer) => new Float32Array(buffer, 0, response.frames ?? buffer.byteLength / 4),
-      );
-    if (!channels || channels.length === 0) {
-      entry.resolve(false);
-      return;
-    }
-    try {
-      withEntry('OpfsClipPageProviderBinding.supplyPage', () =>
-        provider.supply(response.pageIndex, channels),
-      );
-      options.onPageSupplied?.(response.pageIndex, channels);
-    } catch {
-      entry.resolve(false);
-      return;
-    }
-    entry.resolve(true);
-  };
-  worker.addEventListener('message', onMessage as EventListener);
-
-  const supplyPage = (pageIndex: number): Promise<boolean> => {
-    if (closed) {
-      return Promise.reject(releasedHandleError('OpfsClipPageProvider', 'is closed'));
-    }
-    const requestId = allocateOpfsWorkerRequestId();
-    const promise = new Promise<boolean>((resolve, reject) => {
-      pending.set(requestId, { resolve, reject });
-    });
-    readQueue = readQueue
-      .catch(() => undefined)
-      .then(() => {
-        if (closed) {
-          const entry = pending.get(requestId);
-          pending.delete(requestId);
-          entry?.reject(releasedHandleError('OpfsClipPageProvider', 'is closed'));
-          return;
-        }
-        try {
-          worker.postMessage({
-            type: 'sonare:read-clip-page',
-            requestId,
-            path: options.path,
-            pageIndex,
-            numChannels: options.numChannels,
-            numSamples: options.numSamples,
-            pageFrames: options.pageFrames,
-            dataOffsetBytes: options.dataOffsetBytes ?? 0,
-          });
-        } catch (error) {
-          // Only a still-pending entry is rolled back; a reply that raced the
-          // throw has already settled it.
-          const entry = pending.get(requestId);
-          if (entry) {
-            pending.delete(requestId);
-            entry.reject(error);
-          }
-          return;
-        }
-        return promise.then(
-          () => undefined,
-          () => undefined,
+    const onMessage = (event: MessageEvent<PageResponse>) => {
+      const response = event.data;
+      if (response?.type !== 'sonare:clip-page') {
+        return;
+      }
+      const entry = pending.get(response.requestId);
+      if (!entry) {
+        return;
+      }
+      pending.delete(response.requestId);
+      if (!response.ok) {
+        entry.resolve(false);
+        return;
+      }
+      const channels =
+        response.channels ??
+        response.channelBuffers?.map(
+          (buffer) => new Float32Array(buffer, 0, response.frames ?? buffer.byteLength / 4),
         );
-      });
-    readQueue.catch(() => {
-      // The per-request promise carries the user-visible failure.
-    });
-    return promise;
-  };
+      if (!channels || channels.length === 0) {
+        entry.resolve(false);
+        return;
+      }
+      try {
+        withEntry('OpfsClipPageProviderBinding.supplyPage', () =>
+          provider.supply(response.pageIndex, channels),
+        );
+        options.onPageSupplied?.(response.pageIndex, channels);
+      } catch {
+        entry.resolve(false);
+        return;
+      }
+      entry.resolve(true);
+    };
+    worker.addEventListener('message', onMessage as EventListener);
 
-  return {
-    provider,
-    supplyPage,
-    supplyRequest(request: ClipPageSampleRequest) {
-      return supplyPage(Math.floor(request.sample / options.pageFrames));
-    },
-    clearPage(pageIndex: number) {
+    const supplyPage = (pageIndex: number): Promise<boolean> => {
       if (closed) {
-        return;
+        return Promise.reject(releasedHandleError('OpfsClipPageProviderBinding'));
       }
-      withEntry('OpfsClipPageProviderBinding.clearPage', () => provider.clear(pageIndex));
-      options.onPageCleared?.(pageIndex);
-    },
-    destroy() {
-      if (closed) {
-        return;
-      }
-      closed = true;
-      const held = (heldOpfsClipPaths.get(heldKey) ?? 1) - 1;
-      if (held > 0) {
-        heldOpfsClipPaths.set(heldKey, held);
-      } else {
-        heldOpfsClipPaths.delete(heldKey);
-      }
-      worker.removeEventListener('message', onMessage as EventListener);
-      for (const entry of pending.values()) {
-        entry.reject(releasedHandleError('OpfsClipPageProvider', 'is closed'));
-      }
-      pending.clear();
-      provider.destroy();
-      options.onClose?.();
-      if (ownsWorker) {
-        worker.terminate();
-      }
-    },
-    [Symbol.dispose]() {
-      this.destroy();
-    },
-  };
+      const requestId = allocateOpfsWorkerRequestId();
+      const promise = new Promise<boolean>((resolve, reject) => {
+        pending.set(requestId, { resolve, reject });
+      });
+      readQueue = readQueue
+        .catch(() => undefined)
+        .then(() => {
+          if (closed) {
+            const entry = pending.get(requestId);
+            pending.delete(requestId);
+            entry?.reject(releasedHandleError('OpfsClipPageProviderBinding'));
+            return;
+          }
+          try {
+            worker.postMessage({
+              type: 'sonare:read-clip-page',
+              requestId,
+              path: options.path,
+              pageIndex,
+              numChannels: options.numChannels,
+              numSamples: options.numSamples,
+              pageFrames: options.pageFrames,
+              dataOffsetBytes: options.dataOffsetBytes ?? 0,
+            });
+          } catch (error) {
+            // Only a still-pending entry is rolled back; a reply that raced the
+            // throw has already settled it.
+            const entry = pending.get(requestId);
+            if (entry) {
+              pending.delete(requestId);
+              entry.reject(error);
+            }
+            return;
+          }
+          return promise.then(
+            () => undefined,
+            () => undefined,
+          );
+        });
+      readQueue.catch(() => {
+        // The per-request promise carries the user-visible failure.
+      });
+      return promise;
+    };
+
+    return {
+      provider,
+      supplyPage,
+      supplyRequest(request: ClipPageSampleRequest) {
+        return supplyPage(Math.floor(request.sample / options.pageFrames));
+      },
+      clearPage(pageIndex: number) {
+        if (closed) {
+          return;
+        }
+        withEntry('OpfsClipPageProviderBinding.clearPage', () => provider.clear(pageIndex));
+        options.onPageCleared?.(pageIndex);
+      },
+      destroy() {
+        withEntry('OpfsClipPageProviderBinding.destroy', () => {
+          if (closed) {
+            return;
+          }
+          closed = true;
+          const held = (heldOpfsClipPaths.get(heldKey) ?? 1) - 1;
+          if (held > 0) {
+            heldOpfsClipPaths.set(heldKey, held);
+          } else {
+            heldOpfsClipPaths.delete(heldKey);
+          }
+          worker.removeEventListener('message', onMessage as EventListener);
+          for (const entry of pending.values()) {
+            entry.reject(releasedHandleError('OpfsClipPageProviderBinding'));
+          }
+          pending.clear();
+          provider.destroy();
+          options.onClose?.();
+          if (ownsWorker) {
+            worker.terminate();
+          }
+        });
+      },
+      [Symbol.dispose]() {
+        this.destroy();
+      },
+    };
+  });
 }
 
 /** Result of {@link writeOpfsClip}. */
@@ -417,17 +421,17 @@ const OPFS_WRITE_CHUNK_BYTES = 4 * 1024 * 1024;
 
 function validateOpfsClipChannels(path: unknown, channels: unknown): Float32Array[] {
   if (typeof path !== 'string' || opfsClipPathKey(path) === '') {
-    throw new TypeError('path must be a non-empty string');
+    throw refuseType('path must be a non-empty string');
   }
   if (!Array.isArray(channels) || !channels.every((c) => c instanceof Float32Array)) {
-    throw new TypeError('channels must be an array of Float32Array');
+    throw refuseType('channels must be an array of Float32Array');
   }
   const list = channels as Float32Array[];
   if (list.length === 0 || list[0].length === 0) {
-    throw new RangeError('channels must be non-empty');
+    throw refuse('channels must be non-empty');
   }
   if (list.some((c) => c.length !== list[0].length)) {
-    throw new RangeError('channels must all have the same length');
+    throw refuse('channels must all have the same length');
   }
   return list;
 }
@@ -453,69 +457,68 @@ export async function writeOpfsClip(
   channels: Float32Array[],
   options: OpfsClipWriteOptions = {},
 ): Promise<OpfsClipWriteResult> {
-  const list = validateOpfsClipChannels(path, channels);
-  const numChannels = list.length;
-  const numSamples = list[0].length;
-  if (heldOpfsClipPaths.has(opfsClipPathKey(path))) {
-    throw new SonareError(
-      ErrorCode.InvalidState,
-      `OPFS path '${path}' is held by an open clip page provider.`,
-    );
-  }
-  const worker = options.worker ?? createOpfsClipPageWorker();
-  const ownsWorker = options.worker === undefined;
-  const chunkFrames = Math.max(1, Math.floor(OPFS_WRITE_CHUNK_BYTES / (numChannels * 4)));
-  try {
-    for (let start = 0; start < numSamples; start += chunkFrames) {
-      const frames = Math.min(chunkFrames, numSamples - start);
-      const out = new Float32Array(frames * numChannels);
-      for (let ch = 0; ch < numChannels; ++ch) {
-        const src = list[ch];
-        for (let i = 0; i < frames; ++i) {
-          out[i * numChannels + ch] = src[start + i];
-        }
-      }
-      const requestId = allocateOpfsWorkerRequestId();
-      const response = await new Promise<WriteResponse>((resolve) => {
-        const onMessage = (event: MessageEvent<WriteResponse>) => {
-          if (
-            event.data?.type !== 'sonare:write-clip-result' ||
-            event.data.requestId !== requestId
-          ) {
-            return;
+  return withEntry('writeOpfsClip', async () => {
+    const list = validateOpfsClipChannels(path, channels);
+    const numChannels = list.length;
+    const numSamples = list[0].length;
+    if (heldOpfsClipPaths.has(opfsClipPathKey(path))) {
+      throw invalidState(`OPFS path '${path}' is held by an open clip page provider.`);
+    }
+    const worker = options.worker ?? createOpfsClipPageWorker();
+    const ownsWorker = options.worker === undefined;
+    const chunkFrames = Math.max(1, Math.floor(OPFS_WRITE_CHUNK_BYTES / (numChannels * 4)));
+    try {
+      for (let start = 0; start < numSamples; start += chunkFrames) {
+        const frames = Math.min(chunkFrames, numSamples - start);
+        const out = new Float32Array(frames * numChannels);
+        for (let ch = 0; ch < numChannels; ++ch) {
+          const src = list[ch];
+          for (let i = 0; i < frames; ++i) {
+            out[i * numChannels + ch] = src[start + i];
           }
-          worker.removeEventListener('message', onMessage as EventListener);
-          resolve(event.data);
-        };
-        worker.addEventListener('message', onMessage as EventListener);
-        worker.postMessage(
-          {
-            type: 'sonare:write-clip',
-            requestId,
-            path,
-            at: start * numChannels * 4,
-            first: start === 0,
-            bytes: out.buffer,
-          },
-          [out.buffer],
-        );
-      });
-      if (!response.ok) {
-        if (response.busy) {
-          throw new SonareError(ErrorCode.InvalidState, `OPFS path '${path}' is held by a reader.`);
         }
-        const reason = response.error ?? 'unknown error';
-        throw new SonareError(ErrorCode.EncodeFailed, `OPFS clip write failed: ${reason}`, {
-          cause: new Error(reason),
+        const requestId = allocateOpfsWorkerRequestId();
+        const response = await new Promise<WriteResponse>((resolve) => {
+          const onMessage = (event: MessageEvent<WriteResponse>) => {
+            if (
+              event.data?.type !== 'sonare:write-clip-result' ||
+              event.data.requestId !== requestId
+            ) {
+              return;
+            }
+            worker.removeEventListener('message', onMessage as EventListener);
+            resolve(event.data);
+          };
+          worker.addEventListener('message', onMessage as EventListener);
+          worker.postMessage(
+            {
+              type: 'sonare:write-clip',
+              requestId,
+              path,
+              at: start * numChannels * 4,
+              first: start === 0,
+              bytes: out.buffer,
+            },
+            [out.buffer],
+          );
         });
+        if (!response.ok) {
+          if (response.busy) {
+            throw invalidState(`OPFS path '${path}' is held by a reader.`);
+          }
+          const reason = response.error ?? 'unknown error';
+          throw codedError(ErrorCode.EncodeFailed, `OPFS clip write failed: ${reason}`, {
+            cause: new Error(reason),
+          });
+        }
+      }
+    } finally {
+      if (ownsWorker) {
+        worker.terminate();
       }
     }
-  } finally {
-    if (ownsWorker) {
-      worker.terminate();
-    }
-  }
-  return { path, numChannels, numSamples };
+    return { path, numChannels, numSamples };
+  });
 }
 
 function audioBufferChannels(buffer: AudioBuffer): Float32Array[] {
@@ -538,33 +541,35 @@ export async function importOpfsClip(
   source: ArrayBuffer | Blob | AudioBuffer,
   options: OpfsClipWriteOptions = {},
 ): Promise<OpfsClipImportResult> {
-  let channels: Float32Array[];
-  let sampleRate: number;
-  if (
-    source !== null &&
-    typeof source === 'object' &&
-    'numberOfChannels' in source &&
-    'getChannelData' in source
-  ) {
-    channels = audioBufferChannels(source);
-    sampleRate = source.sampleRate;
-  } else {
-    let bytes: ArrayBuffer;
-    if (source instanceof ArrayBuffer) {
-      bytes = source;
-    } else if (typeof Blob !== 'undefined' && source instanceof Blob) {
-      bytes = await source.arrayBuffer();
+  return withEntry('importOpfsClip', async () => {
+    let channels: Float32Array[];
+    let sampleRate: number;
+    if (
+      source !== null &&
+      typeof source === 'object' &&
+      'numberOfChannels' in source &&
+      'getChannelData' in source
+    ) {
+      channels = audioBufferChannels(source);
+      sampleRate = source.sampleRate;
     } else {
-      throw new TypeError('source must be an ArrayBuffer, Blob or AudioBuffer');
+      let bytes: ArrayBuffer;
+      if (source instanceof ArrayBuffer) {
+        bytes = source;
+      } else if (typeof Blob !== 'undefined' && source instanceof Blob) {
+        bytes = await source.arrayBuffer();
+      } else {
+        throw refuseType('source must be an ArrayBuffer, Blob or AudioBuffer');
+      }
+      // Loaded on demand so the worklet entry does not carry the decoder.
+      const { decodeChannelsWithBrowserFallback } = await import('./audio.js');
+      const decoded = await decodeChannelsWithBrowserFallback(new Uint8Array(bytes));
+      channels = decoded.channels;
+      sampleRate = decoded.sampleRate;
     }
-    // Loaded on demand so the worklet entry does not carry the decoder.
-    const { decodeChannelsWithBrowserFallback } = await import('./audio.js');
-    const decoded = await decodeChannelsWithBrowserFallback(new Uint8Array(bytes));
-    channels = decoded.channels;
-    sampleRate = decoded.sampleRate;
-  }
-  const written = await writeOpfsClip(path, channels, options);
-  return { ...written, sampleRate };
+    const written = await writeOpfsClip(path, channels, options);
+    return { ...written, sampleRate };
+  });
 }
 
 registerOpfsClipPageProviderFactory(RealtimeEngine, createOpfsClipPageProvider);

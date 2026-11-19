@@ -5,6 +5,7 @@ import type {
 } from '../public_types.js';
 import type { WasmRealtimeVoiceChangerPodConfig } from '../sonare.js';
 import { assertRetuneGrain } from '../validation.js';
+import { refuse, refuseType } from './entry.js';
 import { checkedVoicePresetId, voicePresetOrdinal } from './voice_preset_ids.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -21,7 +22,7 @@ let flatReference: RealtimeVoiceChangerConfig | undefined;
 /** Every required flat-config field with a value of its type; they do not vary by preset. */
 function flatConfigReference(): RealtimeVoiceChangerConfig {
   flatReference ??= getSonareModule().realtimeVoiceChangerPresetConfig(
-    voicePresetOrdinal('flatConfigReference', 'neutralMonitor'),
+    voicePresetOrdinal('neutralMonitor'),
   );
   return flatReference;
 }
@@ -30,14 +31,14 @@ function flatConfigReference(): RealtimeVoiceChangerConfig {
  * Refuses a flat config missing a field or carrying one of the wrong JS type, naming the public
  * field before native sees it.
  */
-function assertFlatConfigFields(fnName: string, config: Record<string, unknown>): void {
+function assertFlatConfigFields(config: Record<string, unknown>): void {
   for (const [key, sample] of Object.entries(flatConfigReference())) {
     const value = config[key];
     if (key === 'retuneGrainSizeSamples') {
       continue;
     }
     if (key !== 'harmonySteps' && typeof value !== typeof sample) {
-      throw new TypeError(`${fnName}: ${key} must be a ${typeof sample}`);
+      throw refuseType(`${key} must be a ${typeof sample}`);
     }
   }
 }
@@ -46,13 +47,13 @@ function assertFlatConfigFields(fnName: string, config: Record<string, unknown>)
  * The one optional flat field: an omitted (`undefined` or `null`) retune grain is the
  * automatic grain and leaves the key out; a given one is a multiple of 4 in [4, 8192].
  */
-function withRetuneGrain(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
+function withRetuneGrain(config: Record<string, unknown>): Record<string, unknown> {
   const grain = config.retuneGrainSizeSamples;
   if (grain === undefined || grain === null) {
     const { retuneGrainSizeSamples: _omitted, ...rest } = config;
     return rest;
   }
-  assertRetuneGrain(fnName, grain, 'retuneGrainSizeSamples');
+  assertRetuneGrain(grain, 'retuneGrainSizeSamples');
   return config;
 }
 
@@ -65,16 +66,15 @@ function withRetuneGrain(fnName: string, config: Record<string, unknown>): Recor
  */
 export function podConfigToNative(
   input: RealtimeVoiceChangerConfig,
-  fnName = 'RealtimeVoiceChanger.setConfig',
 ): WasmRealtimeVoiceChangerPodConfig {
-  const config = withRetuneGrain(fnName, input as unknown as Record<string, unknown>);
-  assertFlatConfigFields(fnName, config);
+  const config = withRetuneGrain(input as unknown as Record<string, unknown>);
+  assertFlatConfigFields(config);
   const steps = config.harmonySteps as unknown;
   if (!Array.isArray(steps)) {
-    throw new TypeError(`${fnName}: harmonySteps must be an array of three numbers`);
+    throw refuseType(`harmonySteps must be an array of three numbers`);
   }
   if (steps.length !== 3) {
-    throw new RangeError(`${fnName}: harmonySteps must hold exactly three numbers`);
+    throw refuse(`harmonySteps must hold exactly three numbers`);
   }
   return config as unknown as WasmRealtimeVoiceChangerPodConfig;
 }
@@ -86,20 +86,19 @@ export function podConfigToNative(
  * @throws TypeError for any other type; RangeError for an unknown preset id.
  */
 export function nativeVoiceConfig(
-  fnName: string,
   config: RealtimeVoiceChangerConfigInput,
 ): Record<string, unknown> | string {
   if (typeof config === 'string') {
-    return checkedVoicePresetId(fnName, config, 'config');
+    return checkedVoicePresetId(config, 'config');
   }
   if (isFlatConfig(config)) {
-    return podConfigToNative(
-      config as unknown as RealtimeVoiceChangerConfig,
-      fnName,
-    ) as unknown as Record<string, unknown>;
+    return podConfigToNative(config as unknown as RealtimeVoiceChangerConfig) as unknown as Record<
+      string,
+      unknown
+    >;
   }
   if (!isRecord(config)) {
-    throw new TypeError(`${fnName}: config must be a preset id or an object`);
+    throw refuseType(`config must be a preset id or an object`);
   }
   return config as unknown as Record<string, unknown>;
 }

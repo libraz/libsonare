@@ -1,4 +1,4 @@
-import { entryClass, withEntry } from './internal/entry.js';
+import { entryClass, nameNativeError, refuse, refuseType, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   RealtimeVoiceChangerConfig,
@@ -31,19 +31,19 @@ const PRESET_IDS: readonly VoicePresetId[] = [
   'megaphone',
   'radioVoice',
 ];
-function presetOrdinal(fnName: string, id: unknown, argName = 'preset'): number {
+function presetOrdinal(id: unknown, argName = 'preset'): number {
   if (typeof id !== 'string') {
-    throw new TypeError(`${fnName}: ${argName} must be a string`);
+    throw refuseType(`${argName} must be a string`);
   }
   const ordinal = PRESET_IDS.indexOf(id as VoicePresetId);
   if (ordinal < 0) {
-    throw new RangeError(`${fnName}: ${argName} must be one of ${PRESET_IDS.join(', ')}`);
+    throw refuse(`${argName} must be one of ${PRESET_IDS.join(', ')}`);
   }
   return ordinal;
 }
 
-function checkedPresetId(fnName: string, id: unknown, argName = 'preset'): VoicePresetId {
-  return PRESET_IDS[presetOrdinal(fnName, id, argName)] as VoicePresetId;
+function checkedPresetId(id: unknown, argName = 'preset'): VoicePresetId {
+  return PRESET_IDS[presetOrdinal(id, argName)] as VoicePresetId;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -67,14 +67,14 @@ function flatConfigReference(): RealtimeVoiceChangerConfig {
  * Refuses a flat config missing a field or carrying one of the wrong JS type, naming the public
  * field before native sees it.
  */
-function assertFlatConfigFields(fnName: string, config: Record<string, unknown>): void {
+function assertFlatConfigFields(config: Record<string, unknown>): void {
   for (const [key, sample] of Object.entries(flatConfigReference())) {
     const value = config[key];
     if (key === 'retuneGrainSizeSamples') {
       continue;
     }
     if (key !== 'harmonySteps' && typeof value !== typeof sample) {
-      throw new TypeError(`${fnName}: ${key} must be a ${typeof sample}`);
+      throw refuseType(`${key} must be a ${typeof sample}`);
     }
   }
 }
@@ -83,13 +83,13 @@ function assertFlatConfigFields(fnName: string, config: Record<string, unknown>)
  * The one optional flat field: an omitted (`undefined` or `null`) retune grain is the
  * automatic grain and leaves the key out; a given one is a multiple of 4 in [4, 8192].
  */
-function withRetuneGrain(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
+function withRetuneGrain(config: Record<string, unknown>): Record<string, unknown> {
   const grain = config.retuneGrainSizeSamples;
   if (grain === undefined || grain === null) {
     const { retuneGrainSizeSamples: _omitted, ...rest } = config;
     return rest;
   }
-  assertRetuneGrain(fnName, grain, 'retuneGrainSizeSamples');
+  assertRetuneGrain(grain, 'retuneGrainSizeSamples');
   return config;
 }
 
@@ -100,15 +100,15 @@ function withRetuneGrain(fnName: string, config: Record<string, unknown>): Recor
  * @throws TypeError for a missing or wrong-typed field; RangeError for a `harmonySteps` of
  *   another length or a retune grain that is not a multiple of 4 in [4, 8192].
  */
-function nativePodConfig(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
-  config = withRetuneGrain(fnName, config);
-  assertFlatConfigFields(fnName, config);
+function nativePodConfig(config: Record<string, unknown>): Record<string, unknown> {
+  config = withRetuneGrain(config);
+  assertFlatConfigFields(config);
   const steps = config.harmonySteps;
   if (!Array.isArray(steps)) {
-    throw new TypeError(`${fnName}: harmonySteps must be an array of three numbers`);
+    throw refuseType(`harmonySteps must be an array of three numbers`);
   }
   if (steps.length !== 3) {
-    throw new RangeError(`${fnName}: harmonySteps must hold exactly three numbers`);
+    throw refuse(`harmonySteps must hold exactly three numbers`);
   }
   return config;
 }
@@ -120,46 +120,45 @@ function nativePodConfig(fnName: string, config: Record<string, unknown>): Recor
  * @throws TypeError for any other type; RangeError for an unknown preset id.
  */
 function nativeVoiceConfig(
-  fnName: string,
   config: RealtimeVoiceChangerConfigInput,
 ): Record<string, unknown> | string {
   if (typeof config === 'string') {
-    return checkedPresetId(fnName, config, 'config');
+    return checkedPresetId(config, 'config');
   }
   if (isFlatConfig(config)) {
-    return nativePodConfig(fnName, config);
+    return nativePodConfig(config);
   }
   if (!isRecord(config)) {
-    throw new TypeError(`${fnName}: config must be a preset id or an object`);
+    throw refuseType(`config must be a preset id or an object`);
   }
   return config;
 }
 
-function assertChannelCount(fnName: string, numChannels: unknown): asserts numChannels is 1 | 2 {
+function assertChannelCount(numChannels: unknown): asserts numChannels is 1 | 2 {
   if (typeof numChannels !== 'number') {
-    throw new TypeError(`${fnName}: numChannels must be 1 or 2`);
+    throw refuseType(`numChannels must be 1 or 2`);
   }
   if (numChannels !== 1 && numChannels !== 2) {
-    throw new RangeError(`${fnName}: numChannels must be 1 or 2`);
+    throw refuse(`numChannels must be 1 or 2`);
   }
 }
 
 /** Checks a planar channel list (1 or 2 equal-length planes) and the optional carrier. */
-function assertPlanes(fnName: string, channels: unknown, carrier?: unknown): Float32Array[] {
+function assertPlanes(channels: unknown, carrier?: unknown): Float32Array[] {
   if (!Array.isArray(channels)) {
-    throw new TypeError(`${fnName}: channels must be an array of Float32Array`);
+    throw refuseType(`channels must be an array of Float32Array`);
   }
-  assertChannelCount(fnName, channels.length);
+  assertChannelCount(channels.length);
   channels.forEach((plane, i) => {
     if (!(plane instanceof Float32Array)) {
-      throw new TypeError(`${fnName}: channels[${i}] must be a Float32Array`);
+      throw refuseType(`channels[${i}] must be a Float32Array`);
     }
     if (plane.length !== channels[0].length) {
-      throw new RangeError(`${fnName}: channels must have equal lengths`);
+      throw refuse(`channels must have equal lengths`);
     }
   });
   if (carrier !== undefined && !(carrier instanceof Float32Array)) {
-    throw new TypeError(`${fnName}: carrier must be a Float32Array`);
+    throw refuseType(`carrier must be a Float32Array`);
   }
   return channels as Float32Array[];
 }
@@ -210,27 +209,26 @@ export class RealtimeVoiceChanger {
    *   `numChannels` or an unknown preset id or token.
    */
   constructor(options: RealtimeVoiceChangerOptions) {
-    const fnName = 'RealtimeVoiceChanger';
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-      throw new TypeError(`${fnName}: options must be an object with a sampleRate`);
+      throw refuseType(`options must be an object with a sampleRate`);
     }
     for (const key of Object.keys(options)) {
       if (!CONSTRUCTOR_KEYS.includes(key)) {
-        throw new TypeError(`${fnName}: unknown option '${key}'`);
+        throw refuseType(`unknown option '${key}'`);
       }
     }
-    assertSampleRate(fnName, options.sampleRate);
+    assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
     if (maxBlockSize !== undefined) {
       if (typeof maxBlockSize !== 'number') {
-        throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+        throw refuseType(`maxBlockSize must be a number`);
       }
-      assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
+      assertPositiveInteger(maxBlockSize, 'maxBlockSize');
     }
     const numChannels = options.numChannels;
-    assertChannelCount(fnName, numChannels);
+    assertChannelCount(numChannels);
     this.native = new addon.RealtimeVoiceChanger(
-      nativeVoiceConfig(fnName, options.config ?? 'neutralMonitor'),
+      nativeVoiceConfig(options.config ?? 'neutralMonitor'),
     );
     try {
       this.native.prepare(options.sampleRate, maxBlockSize, numChannels);
@@ -255,7 +253,7 @@ export class RealtimeVoiceChanger {
    *   a field outside its range (nothing is clamped); the previous configuration stays in effect.
    */
   setConfig(config: RealtimeVoiceChangerConfigInput): void {
-    this.native.setConfig(nativeVoiceConfig('RealtimeVoiceChanger.setConfig', config));
+    this.native.setConfig(nativeVoiceConfig(config));
   }
 
   /**
@@ -346,7 +344,7 @@ export class RealtimeVoiceChanger {
    *   prepared for one.
    */
   processPlanar(channels: Float32Array[]): Float32Array[] {
-    const planes = assertPlanes('RealtimeVoiceChanger.processPlanar', channels);
+    const planes = assertPlanes(channels);
     if (planes.length === 1) {
       return [this.native.processMono(planes[0] as Float32Array)];
     }
@@ -361,7 +359,7 @@ export class RealtimeVoiceChanger {
    * shared by every channel.
    */
   processPlanarWithCarrier(channels: Float32Array[], carrier: Float32Array): Float32Array[] {
-    const planes = assertPlanes('RealtimeVoiceChanger.processPlanarWithCarrier', channels, carrier);
+    const planes = assertPlanes(channels, carrier);
     if (planes.length === 1) {
       return [this.native.processMonoWithCarrier(planes[0] as Float32Array, carrier)];
     }
@@ -378,7 +376,11 @@ export class RealtimeVoiceChanger {
    * @throws RangeError unless `numChannels` is 1 or 2.
    */
   processInterleavedInto(input: Float32Array, numChannels: 1 | 2, output: Float32Array): void {
-    assertChannelCount('RealtimeVoiceChanger.processInterleavedInto', numChannels);
+    try {
+      assertChannelCount(numChannels);
+    } catch (error) {
+      throw nameNativeError(error, 'RealtimeVoiceChanger.processInterleavedInto');
+    }
     this.native.processInterleavedInto(input, numChannels, output);
   }
 
@@ -389,7 +391,11 @@ export class RealtimeVoiceChanger {
     numChannels: 1 | 2,
     output: Float32Array,
   ): void {
-    assertChannelCount('RealtimeVoiceChanger.processInterleavedWithCarrierInto', numChannels);
+    try {
+      assertChannelCount(numChannels);
+    } catch (error) {
+      throw nameNativeError(error, 'RealtimeVoiceChanger.processInterleavedWithCarrierInto');
+    }
     this.native.processInterleavedWithCarrierInto(input, carrier, numChannels, output);
   }
 
@@ -483,15 +489,17 @@ export function voiceChange(
   options?: VoiceChangeOptions,
 ): Float32Array;
 export function voiceChange(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<VoiceChangeRequest>('voiceChange', args);
-  assertAudioInput('voiceChange', request.samples, request.sampleRate, request);
-  return addon.voiceChange(
-    request.samples,
-    request.sampleRate,
-    request.pitchSemitones ?? 0.0,
-    request.formantFactor ?? 1.0,
-    request.formantMode ?? 'relative',
-  );
+  return withEntry('voiceChange', () => {
+    const request = sampleOneShot<VoiceChangeRequest>('voiceChange', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return addon.voiceChange(
+      request.samples,
+      request.sampleRate,
+      request.pitchSemitones ?? 0.0,
+      request.formantFactor ?? 1.0,
+      request.formantMode ?? 'relative',
+    );
+  });
 }
 
 /** Inputs for the one-shot {@link voiceChangeRealtime} facade. */
@@ -513,23 +521,25 @@ export interface VoiceChangeRealtimeRequest {
  *   audio or rate, or an unknown preset id or token.
  */
 export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] {
-  const fnName = 'voiceChangeRealtime';
-  const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
-  if (req.sampleRate === undefined || req.sampleRate === null) {
-    throw new TypeError(`${fnName}: sampleRate must be a number`);
-  }
-  assertAudioChannels(fnName, req.channels, req.sampleRate, req);
-  const planes = assertPlanes(fnName, req.channels);
-  const native = withEntry('voiceChangeRealtime', () =>
-    nativeVoiceConfig(fnName, req.config ?? 'neutralMonitor'),
-  );
-  const out = addon.voiceChangeRealtime(
-    interleavePlanes(planes),
-    req.sampleRate,
-    typeof native === 'string' ? native : JSON.stringify(native),
-    planes.length,
-  );
-  return deinterleavePlanes(out, planes.length);
+  return withEntry('voiceChangeRealtime', () => {
+    const fnName = 'voiceChangeRealtime';
+    const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
+    if (req.sampleRate === undefined || req.sampleRate === null) {
+      throw refuseType(`sampleRate must be a number`);
+    }
+    assertAudioChannels(req.channels, req.sampleRate, req);
+    const planes = assertPlanes(req.channels);
+    const native = withEntry('voiceChangeRealtime', () =>
+      nativeVoiceConfig(req.config ?? 'neutralMonitor'),
+    );
+    const out = addon.voiceChangeRealtime(
+      interleavePlanes(planes),
+      req.sampleRate,
+      typeof native === 'string' ? native : JSON.stringify(native),
+      planes.length,
+    );
+    return deinterleavePlanes(out, planes.length);
+  });
 }
 
 /** The built-in preset ids, in preset-ordinal order. */
@@ -543,9 +553,9 @@ export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
  * @throws TypeError unless `name` is a string; RangeError for an unknown id.
  */
 export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
-  return addon.realtimeVoiceChangerPresetJson(
-    checkedPresetId('realtimeVoiceChangerPresetJson', name, 'name'),
-  );
+  return withEntry('realtimeVoiceChangerPresetJson', () => {
+    return addon.realtimeVoiceChangerPresetJson(checkedPresetId(name, 'name'));
+  });
 }
 
 /** Result of {@link realtimeVoiceChangerValidatePresetJson}. */
@@ -571,15 +581,15 @@ export function realtimeVoiceChangerValidatePresetJson(
  * @throws TypeError unless `ordinal` is a number; RangeError for a non-integer or unknown ordinal.
  */
 export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
-  if (typeof ordinal !== 'number') {
-    throw new TypeError('voiceCharacterPresetId: ordinal must be a number');
-  }
-  if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= PRESET_IDS.length) {
-    throw new RangeError(
-      `voiceCharacterPresetId: ordinal must be an integer in [0, ${PRESET_IDS.length - 1}]`,
-    );
-  }
-  return addon.voiceCharacterPresetId(ordinal) as VoicePresetId;
+  return withEntry('voiceCharacterPresetId', () => {
+    if (typeof ordinal !== 'number') {
+      throw refuseType('ordinal must be a number');
+    }
+    if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= PRESET_IDS.length) {
+      throw refuse(`ordinal must be an integer in [0, ${PRESET_IDS.length - 1}]`);
+    }
+    return addon.voiceCharacterPresetId(ordinal) as VoicePresetId;
+  });
 }
 
 /**
@@ -591,9 +601,11 @@ export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
 export function realtimeVoiceChangerPresetConfig(
   preset: VoicePresetId,
 ): RealtimeVoiceChangerConfig {
-  return addon.realtimeVoiceChangerPresetConfig(
-    presetOrdinal('realtimeVoiceChangerPresetConfig', preset),
-  ) as RealtimeVoiceChangerConfig;
+  return withEntry('realtimeVoiceChangerPresetConfig', () => {
+    return addon.realtimeVoiceChangerPresetConfig(
+      presetOrdinal(preset),
+    ) as RealtimeVoiceChangerConfig;
+  });
 }
 
 /** Live controls for {@link StreamingRetune}. */
@@ -619,15 +631,15 @@ export type StreamingRetuneAppliedConfig = Required<
 
 // The grain is checked here because nothing below refuses a fraction or an out-of-range value;
 // native refuses unknown keys and wrong-typed controls.
-function assertRetuneConfig(fnName: string, config: StreamingRetuneConfig): StreamingRetuneConfig {
+function assertRetuneConfig(config: StreamingRetuneConfig): StreamingRetuneConfig {
   if (!isRecord(config)) {
-    throw new TypeError(`${fnName}: config must be an object`);
+    throw refuseType(`config must be an object`);
   }
   const { grainSizeSamples, ...rest } = config as Record<string, unknown>;
   if (grainSizeSamples === undefined || grainSizeSamples === null) {
     return rest;
   }
-  assertRetuneGrain(fnName, grainSizeSamples, 'grainSizeSamples');
+  assertRetuneGrain(grainSizeSamples, 'grainSizeSamples');
   return config;
 }
 
@@ -647,7 +659,7 @@ export class StreamingRetune {
   private disposed = false;
 
   constructor(config: StreamingRetuneConfig = {}) {
-    this.native = new addon.StreamingRetune(assertRetuneConfig('StreamingRetune', config));
+    this.native = new addon.StreamingRetune(assertRetuneConfig(config));
   }
 
   /** Allocate native state for `sampleRate` and resolve the grain size. */
@@ -669,7 +681,7 @@ export class StreamingRetune {
    *   of 0 or not a multiple of 4 in [4, 8192], or a control outside its domain.
    */
   setConfig(config: StreamingRetuneConfig): void {
-    this.native.setConfig(assertRetuneConfig('StreamingRetune.setConfig', config));
+    this.native.setConfig(assertRetuneConfig(config));
   }
 
   /**

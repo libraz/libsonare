@@ -61,7 +61,7 @@ describe('RealtimeEngine controller bindings', () => {
         axis: 'excitation',
         hi: Number.POSITIVE_INFINITY,
       }),
-    ).toThrow(/hi must be a finite number/);
+    ).toThrow(/hi must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/);
     engine.destroy();
   });
 

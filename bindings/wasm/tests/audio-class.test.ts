@@ -252,7 +252,7 @@ describe('Audio class', () => {
       expect(audio.detectBpm(range)).toBe(detectBpm(samples, SR, range));
       expect(audio.detectBeats(range)).toEqual(detectBeats(samples, SR, range));
       expect(() => audio.detectBpm({ bogus: 1 } as never)).toThrow(
-        new TypeError("detectBpm: unknown request key 'bogus'"),
+        new TypeError("Audio.detectBpm: unknown request key 'bogus'"),
       );
     });
 

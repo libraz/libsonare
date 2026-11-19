@@ -1,3 +1,5 @@
+import { refuseType } from './entry.js';
+
 /**
  * Native handles of compiled timelines, kept out of the public class so the
  * realtime engine can read them without the handle being a property of the
@@ -16,7 +18,7 @@ export function timelineHandle(timeline: unknown): unknown {
   const native =
     typeof timeline === 'object' && timeline !== null ? timelineHandles.get(timeline) : undefined;
   if (native === undefined) {
-    throw new TypeError('applyProjectTimeline: timeline must be a ProjectTimeline');
+    throw refuseType('timeline must be a ProjectTimeline');
   }
   return native;
 }

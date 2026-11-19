@@ -131,7 +131,7 @@ describe('wrong-typed option values are refused by name', () => {
         const vocal = mixer.stripById('vocal');
         expectInvalid(
           () => mixer.setSurroundPan(vocal, 5 as never),
-          /^setSurroundPan: request must be an object$/,
+          /^Mixer.setSurroundPan: request must be an object$/,
         );
         expect(() =>
           mixer.setSurroundPan(vocal, { azimuth: undefined, lfe: null } as never),

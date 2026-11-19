@@ -27,6 +27,7 @@ import type {
   WorkletScopeSnapshot,
   WorkletSpectrumSnapshot,
 } from '../worklet/protocol.js';
+import { refuse } from './entry.js';
 import type { SonareFailurePayload } from './failure_payload.js';
 
 export type {
@@ -198,7 +199,7 @@ export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedM
     (config.clickSec !== undefined &&
       (!Number.isFinite(config.clickSec) || config.clickSec < 0 || config.clickSec > 1))
   ) {
-    throw new RangeError('invalid metronome gains or click length');
+    throw refuse('invalid metronome gains or click length');
   }
   return resolved;
 }

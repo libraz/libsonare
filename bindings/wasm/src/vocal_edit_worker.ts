@@ -1,4 +1,5 @@
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode, type SonareError } from './errors.js';
+import { codedError, invalidState, refuseType, withEntry } from './internal/entry.js';
 import { failurePayload } from './internal/failure_payload.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import {
@@ -186,11 +187,11 @@ function transferables(value: unknown): Transferable[] {
 }
 
 function cancelledError(): SonareError {
-  return new SonareError(ErrorCode.Cancelled, 'Vocal render cancelled');
+  return codedError(ErrorCode.Cancelled, 'Vocal render cancelled');
 }
 
 function staleError(message: string): SonareError {
-  return new SonareError(ErrorCode.StaleResult, message);
+  return codedError(ErrorCode.StaleResult, message);
 }
 
 function isCancelled(active: ActiveCommand): boolean {
@@ -294,7 +295,7 @@ function ensureSameEpoch(
 
 function draftRequired(session: WorkerSession): VocalEditWorkerNativeDraft {
   if (!session.draft) {
-    throw new SonareError(ErrorCode.InvalidState, 'No vocal edit draft is open');
+    throw invalidState('No vocal edit draft is open');
   }
   return session.draft;
 }
@@ -365,7 +366,7 @@ async function execute(
       switch (mutation.kind) {
         case 'beginEdit':
           if (session.draft) {
-            throw new SonareError(ErrorCode.InvalidState, 'A vocal edit draft is already open');
+            throw invalidState('A vocal edit draft is already open');
           }
           session.draft = session.value.beginEdit(mutation.expectedRevision);
           result = session.draft.token;
@@ -386,19 +387,13 @@ async function execute(
           break;
         case 'undo':
           if (session.draft) {
-            throw new SonareError(
-              ErrorCode.InvalidState,
-              'Cancel or commit the vocal draft before undo',
-            );
+            throw invalidState('Cancel or commit the vocal draft before undo');
           }
           result = session.value.undo(mutation.expectedRevision);
           break;
         case 'redo':
           if (session.draft) {
-            throw new SonareError(
-              ErrorCode.InvalidState,
-              'Cancel or commit the vocal draft before redo',
-            );
+            throw invalidState('Cancel or commit the vocal draft before redo');
           }
           result = session.value.redo(mutation.expectedRevision);
           break;
@@ -413,10 +408,7 @@ async function execute(
           break;
         case 'exportState':
           if (session.draft) {
-            throw new SonareError(
-              ErrorCode.InvalidState,
-              'Commit or cancel the vocal draft before export',
-            );
+            throw invalidState('Commit or cancel the vocal draft before export');
           }
           result = session.value.exportState();
           break;
@@ -494,7 +486,7 @@ function queueCommand(
       message.id,
       message.sessionId,
       message.clientIntentSequence,
-      new SonareError(ErrorCode.InvalidState, 'Unknown vocal session'),
+      invalidState('Unknown vocal session'),
     );
     return;
   }
@@ -571,7 +563,7 @@ const mutationKinds = new Set<string>([
 ]);
 
 function malformed(message: string): TypeError {
-  return new TypeError(`malformed vocal Worker message: ${message}`);
+  return refuseType(`malformed vocal Worker message: ${message}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -680,163 +672,165 @@ export function installVocalEditWorkerEndpoint(
   endpoint: VocalEditWorkerEndpoint,
   dependencies: VocalEditWorkerDependencies = {},
 ): void {
-  const sessions = new Map<string, WorkerSession>();
-  const creating = new Map<number, ActiveCommand>();
-  const factory = dependencies.factory ?? productionFactory;
-  const initialize = dependencies.initialize ?? init;
+  withEntry('installVocalEditWorkerEndpoint', () => {
+    const sessions = new Map<string, WorkerSession>();
+    const creating = new Map<number, ActiveCommand>();
+    const factory = dependencies.factory ?? productionFactory;
+    const initialize = dependencies.initialize ?? init;
 
-  const cancel = (message: VocalWorkerRequestMessage): void => {
-    const pendingCreate = creating.get(message.id);
-    if (pendingCreate) {
-      pendingCreate.cancelled = true;
-      return;
-    }
-    const session = sessions.get(message.sessionId);
-    if (!session) {
-      return;
-    }
-    // Mutations are FIFO and never dropped, so a cancel reaches previews only.
-    const running = session.running;
-    if (running?.id === message.id && running.preview) {
-      running.cancelled = true;
-      return;
-    }
-    const queuedIndex = session.queue.findIndex(
-      (command) =>
-        command.message.id === message.id && command.message.type === 'sonare:vocal-preview',
-    );
-    if (queuedIndex >= 0) {
-      const [queued] = session.queue.splice(queuedIndex, 1);
-      postError(
-        endpoint,
-        queued.message.id,
-        queued.message.sessionId,
-        queued.message.clientIntentSequence,
-        cancelledError(),
-        replyTokens(session),
-      );
-    }
-  };
-
-  const create = async (message: VocalWorkerCreateMessage): Promise<void> => {
-    const active: ActiveCommand = {
-      id: message.id,
-      cancelled: false,
-      preview: false,
-      cancelBuffer: message.cancelBuffer,
-    };
-    creating.set(message.id, active);
-    let value: VocalEditWorkerNativeSession | undefined;
-    try {
-      await initialize();
-      if (isCancelled(active)) {
-        throw cancelledError();
-      }
-      if (sessions.has(message.sessionId)) {
-        throw new SonareError(ErrorCode.InvalidState, 'Vocal session id is already in use');
-      }
-      value =
-        message.request.kind === 'create'
-          ? factory.create(message.request.request)
-          : factory.restore(message.request.request);
-      if (isCancelled(active)) {
-        throw cancelledError();
-      }
-      const result: VocalWorkerCreateResult = {
-        sessionId: message.sessionId,
-        token: value.token,
-        notes: value.notes(),
-        analysis: value.analysis(),
-        capabilities: value.capabilities(),
-      };
-      sessions.set(message.sessionId, {
-        value,
-        latestIntent: message.clientIntentSequence,
-        queue: [],
-        running: undefined,
-        draining: false,
-        disposing: false,
-      });
-      value = undefined;
-      postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, result, {
-        token: result.token,
-      });
-    } catch (error) {
-      value?.destroy();
-      postError(endpoint, message.id, message.sessionId, message.clientIntentSequence, error);
-    } finally {
-      creating.delete(message.id);
-    }
-  };
-
-  const dispose = (message: VocalWorkerRequestMessage): void => {
-    const session = sessions.get(message.sessionId);
-    if (!session) {
-      // Nothing to release, but the client still waits for this reply.
-      postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null);
-      return;
-    }
-    if (session.disposing) {
-      // A repeated dispose settles with the first one.
-      void session.released?.then(() =>
-        postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null),
-      );
-      return;
-    }
-    session.disposing = true;
-    const active = session.running;
-    if (active) {
-      active.cancelled = true;
-    }
-    rejectQueuedCommands(endpoint, session, releasedHandleError('Vocal session', 'disposed'));
-    session.released = (async (): Promise<void> => {
-      while (session.draining) {
-        await nextMacrotask();
-      }
-      session.draft?.destroy();
-      session.value.destroy();
-      sessions.delete(message.sessionId);
-    })();
-    void session.released.then(() =>
-      postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null),
-    );
-  };
-
-  endpoint.addEventListener('message', (event) => {
-    const data: unknown = event.data;
-    try {
-      const message = validateRequest(data);
-      switch (message.type) {
-        case 'sonare:vocal-cancel':
-          cancel(message);
-          return;
-        case 'sonare:vocal-create':
-          void create(message);
-          return;
-        case 'sonare:vocal-dispose':
-          dispose(message);
-          return;
-        default:
-          queueCommand(endpoint, sessions, message);
-      }
-    } catch (error) {
-      const id = replyId(data);
-      if (id === undefined) {
+    const cancel = (message: VocalWorkerRequestMessage): void => {
+      const pendingCreate = creating.get(message.id);
+      if (pendingCreate) {
+        pendingCreate.cancelled = true;
         return;
       }
-      const record = data as Record<string, unknown>;
-      try {
+      const session = sessions.get(message.sessionId);
+      if (!session) {
+        return;
+      }
+      // Mutations are FIFO and never dropped, so a cancel reaches previews only.
+      const running = session.running;
+      if (running?.id === message.id && running.preview) {
+        running.cancelled = true;
+        return;
+      }
+      const queuedIndex = session.queue.findIndex(
+        (command) =>
+          command.message.id === message.id && command.message.type === 'sonare:vocal-preview',
+      );
+      if (queuedIndex >= 0) {
+        const [queued] = session.queue.splice(queuedIndex, 1);
         postError(
           endpoint,
-          id,
-          typeof record.sessionId === 'string' ? record.sessionId : '',
-          isDecimalUint64(record.clientIntentSequence) ? record.clientIntentSequence : '0',
-          error,
+          queued.message.id,
+          queued.message.sessionId,
+          queued.message.clientIntentSequence,
+          cancelledError(),
+          replyTokens(session),
         );
-      } catch {
-        // The endpoint itself failed; there is no channel left to report on.
       }
-    }
+    };
+
+    const create = async (message: VocalWorkerCreateMessage): Promise<void> => {
+      const active: ActiveCommand = {
+        id: message.id,
+        cancelled: false,
+        preview: false,
+        cancelBuffer: message.cancelBuffer,
+      };
+      creating.set(message.id, active);
+      let value: VocalEditWorkerNativeSession | undefined;
+      try {
+        await initialize();
+        if (isCancelled(active)) {
+          throw cancelledError();
+        }
+        if (sessions.has(message.sessionId)) {
+          throw invalidState('Vocal session id is already in use');
+        }
+        value =
+          message.request.kind === 'create'
+            ? factory.create(message.request.request)
+            : factory.restore(message.request.request);
+        if (isCancelled(active)) {
+          throw cancelledError();
+        }
+        const result: VocalWorkerCreateResult = {
+          sessionId: message.sessionId,
+          token: value.token,
+          notes: value.notes(),
+          analysis: value.analysis(),
+          capabilities: value.capabilities(),
+        };
+        sessions.set(message.sessionId, {
+          value,
+          latestIntent: message.clientIntentSequence,
+          queue: [],
+          running: undefined,
+          draining: false,
+          disposing: false,
+        });
+        value = undefined;
+        postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, result, {
+          token: result.token,
+        });
+      } catch (error) {
+        value?.destroy();
+        postError(endpoint, message.id, message.sessionId, message.clientIntentSequence, error);
+      } finally {
+        creating.delete(message.id);
+      }
+    };
+
+    const dispose = (message: VocalWorkerRequestMessage): void => {
+      const session = sessions.get(message.sessionId);
+      if (!session) {
+        // Nothing to release, but the client still waits for this reply.
+        postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null);
+        return;
+      }
+      if (session.disposing) {
+        // A repeated dispose settles with the first one.
+        void session.released?.then(() =>
+          postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null),
+        );
+        return;
+      }
+      session.disposing = true;
+      const active = session.running;
+      if (active) {
+        active.cancelled = true;
+      }
+      rejectQueuedCommands(endpoint, session, releasedHandleError('VocalEditWorkerSession'));
+      session.released = (async (): Promise<void> => {
+        while (session.draining) {
+          await nextMacrotask();
+        }
+        session.draft?.destroy();
+        session.value.destroy();
+        sessions.delete(message.sessionId);
+      })();
+      void session.released.then(() =>
+        postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null),
+      );
+    };
+
+    endpoint.addEventListener('message', (event) => {
+      const data: unknown = event.data;
+      try {
+        const message = validateRequest(data);
+        switch (message.type) {
+          case 'sonare:vocal-cancel':
+            cancel(message);
+            return;
+          case 'sonare:vocal-create':
+            void create(message);
+            return;
+          case 'sonare:vocal-dispose':
+            dispose(message);
+            return;
+          default:
+            queueCommand(endpoint, sessions, message);
+        }
+      } catch (error) {
+        const id = replyId(data);
+        if (id === undefined) {
+          return;
+        }
+        const record = data as Record<string, unknown>;
+        try {
+          postError(
+            endpoint,
+            id,
+            typeof record.sessionId === 'string' ? record.sessionId : '',
+            isDecimalUint64(record.clientIntentSequence) ? record.clientIntentSequence : '0',
+            error,
+          );
+        } catch {
+          // The endpoint itself failed; there is no channel left to report on.
+        }
+      }
+    });
   });
 }
 

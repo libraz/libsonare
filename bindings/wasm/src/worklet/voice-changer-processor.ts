@@ -1,5 +1,6 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import { RealtimeVoiceChanger } from '../index.js';
+import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import type { SonareRealtimeVoiceChangerErrorMessage } from '../internal/voice_changer_messages.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
@@ -40,15 +41,8 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   private destroyed = false;
 
   constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions) {
-    assertKnownProcessorOptions(
-      'SonareRealtimeVoiceChangerWorkletProcessor',
-      'voiceChangerProcessor',
-      options,
-    );
-    this.sampleRate = resolveScopeSampleRate(
-      options.sampleRate,
-      'SonareRealtimeVoiceChangerWorkletProcessor',
-    );
+    assertKnownProcessorOptions('voiceChangerProcessor', options);
+    this.sampleRate = resolveScopeSampleRate(options.sampleRate);
     this.maxBlockSize = requireIntegerOption(
       options.maxBlockSize,
       AUDIO_WORKLET_RENDER_QUANTUM,
@@ -58,7 +52,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     const numChannels = options.numChannels;
     if (numChannels !== 1 && numChannels !== 2) {
       const message = 'SonareRealtimeVoiceChangerWorkletProcessor: numChannels must be 1 or 2';
-      throw typeof numChannels === 'number' ? new RangeError(message) : new TypeError(message);
+      throw typeof numChannels === 'number' ? refuse(message) : refuseType(message);
     }
     this.numChannels = numChannels;
     this.changer = new RealtimeVoiceChanger({
@@ -255,106 +249,108 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
 export function registerSonareRealtimeVoiceChangerWorkletProcessor(
   name = 'sonare-realtime-voice-changer-processor',
 ): void {
-  const scope = globalThis as unknown as {
-    AudioWorkletProcessor?: new () => object;
-    registerProcessor?: (processorName: string, processorCtor: unknown) => void;
-  };
-  if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'AudioWorkletProcessor is not available in this context.',
-    );
-  }
-  const Base = scope.AudioWorkletProcessor;
-  class RegisteredSonareRealtimeVoiceChangerWorkletProcessor extends Base {
-    private bridge?: SonareRealtimeVoiceChangerWorkletProcessor;
-    private readonly pendingMessages: unknown[] = [];
-    readonly port?: WorkletPort;
+  withEntry('registerSonareRealtimeVoiceChangerWorkletProcessor', () => {
+    const scope = globalThis as unknown as {
+      AudioWorkletProcessor?: new () => object;
+      registerProcessor?: (processorName: string, processorCtor: unknown) => void;
+    };
+    if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
+      throw codedError(
+        ErrorCode.NotSupported,
+        'AudioWorkletProcessor is not available in this context.',
+      );
+    }
+    const Base = scope.AudioWorkletProcessor;
+    class RegisteredSonareRealtimeVoiceChangerWorkletProcessor extends Base {
+      private bridge?: SonareRealtimeVoiceChangerWorkletProcessor;
+      private readonly pendingMessages: unknown[] = [];
+      readonly port?: WorkletPort;
 
-    constructor(options?: {
-      processorOptions?: SonareRealtimeVoiceChangerWorkletProcessorOptions;
-    }) {
-      super();
-      const port = this.port;
-      const processorOptions: Partial<SonareRealtimeVoiceChangerWorkletProcessorOptions> =
-        options?.processorOptions ?? {};
-      assertKnownProcessorOptions(name, 'voiceChangerProcessor', processorOptions);
-      const reportError = (
-        request: SonareRealtimeVoiceChangerErrorMessage['request'],
-        error: unknown,
-      ) => {
-        port?.postMessage?.({
-          type: 'error',
-          request,
-          message: error instanceof Error ? error.message : String(error),
-          failure: failurePayload(error),
-        } satisfies SonareRealtimeVoiceChangerErrorMessage);
-      };
-      // A refused message leaves the processor as it was and is reported, not dropped.
-      const deliver = (bridge: SonareRealtimeVoiceChangerWorkletProcessor, data: unknown) => {
-        if (!isRealtimeVoiceChangerMessage(data)) {
-          const type = (data as { type?: unknown } | null)?.type;
-          reportError(
-            'invalid',
-            new TypeError(`Unrecognized voice changer message: ${String(type)}`),
+      constructor(options?: {
+        processorOptions?: SonareRealtimeVoiceChangerWorkletProcessorOptions;
+      }) {
+        super();
+        const port = this.port;
+        const processorOptions: Partial<SonareRealtimeVoiceChangerWorkletProcessorOptions> =
+          options?.processorOptions ?? {};
+        assertKnownProcessorOptions('voiceChangerProcessor', processorOptions);
+        const reportError = (
+          request: SonareRealtimeVoiceChangerErrorMessage['request'],
+          error: unknown,
+        ) => {
+          port?.postMessage?.({
+            type: 'error',
+            request,
+            message: error instanceof Error ? error.message : String(error),
+            failure: failurePayload(error),
+          } satisfies SonareRealtimeVoiceChangerErrorMessage);
+        };
+        // A refused message leaves the processor as it was and is reported, not dropped.
+        const deliver = (bridge: SonareRealtimeVoiceChangerWorkletProcessor, data: unknown) => {
+          if (!isRealtimeVoiceChangerMessage(data)) {
+            const type = (data as { type?: unknown } | null)?.type;
+            reportError(
+              'invalid',
+              refuseType(`Unrecognized voice changer message: ${String(type)}`),
+            );
+            return;
+          }
+          try {
+            bridge.receiveMessage(data);
+          } catch (error) {
+            reportError(data.type, error);
+          }
+        };
+        const start = () => {
+          // Options cross from the main thread unchecked; the constructor refuses a missing field.
+          this.bridge = new SonareRealtimeVoiceChangerWorkletProcessor(
+            processorOptions as SonareRealtimeVoiceChangerWorkletProcessorOptions,
           );
-          return;
-        }
-        try {
-          bridge.receiveMessage(data);
-        } catch (error) {
-          reportError(data.type, error);
-        }
-      };
-      const start = () => {
-        // Options cross from the main thread unchecked; the constructor refuses a missing field.
-        this.bridge = new SonareRealtimeVoiceChangerWorkletProcessor(
-          processorOptions as SonareRealtimeVoiceChangerWorkletProcessorOptions,
-        );
-        for (const message of this.pendingMessages.splice(0)) {
-          deliver(this.bridge, message);
-        }
-      };
-      if (isEmbindReady()) {
-        try {
-          start();
-        } catch (error) {
-          reportError('init', error);
-        }
-      } else {
-        // The module is not initialized in this realm: build it the way the
-        // realtime engine processor does, then construct the changer.
-        initializeEmbindInWorklet(processorOptions.wasmBinary)
-          .then(() => {
+          for (const message of this.pendingMessages.splice(0)) {
+            deliver(this.bridge, message);
+          }
+        };
+        if (isEmbindReady()) {
+          try {
             start();
-            port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
-          })
-          .catch((error: unknown) => reportError('init', error));
-      }
-      const onMessage = (event: { data: unknown }) => {
-        if (this.bridge) {
-          deliver(this.bridge, event.data);
-        } else if (this.pendingMessages.length < 1024) {
-          this.pendingMessages.push(event.data);
+          } catch (error) {
+            reportError('init', error);
+          }
+        } else {
+          // The module is not initialized in this realm: build it the way the
+          // realtime engine processor does, then construct the changer.
+          initializeEmbindInWorklet(processorOptions.wasmBinary)
+            .then(() => {
+              start();
+              port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
+            })
+            .catch((error: unknown) => reportError('init', error));
         }
-      };
-      if (port?.addEventListener) {
-        port.addEventListener('message', onMessage);
-        port.start?.();
-      } else if (port) {
-        port.onmessage = onMessage;
+        const onMessage = (event: { data: unknown }) => {
+          if (this.bridge) {
+            deliver(this.bridge, event.data);
+          } else if (this.pendingMessages.length < 1024) {
+            this.pendingMessages.push(event.data);
+          }
+        };
+        if (port?.addEventListener) {
+          port.addEventListener('message', onMessage);
+          port.start?.();
+        } else if (port) {
+          port.onmessage = onMessage;
+        }
       }
-    }
 
-    process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-      if (this.bridge) {
-        return this.bridge.process(inputs, outputs);
+      process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
+        if (this.bridge) {
+          return this.bridge.process(inputs, outputs);
+        }
+        for (const channel of outputs[0] ?? []) {
+          channel.fill(0);
+        }
+        return true;
       }
-      for (const channel of outputs[0] ?? []) {
-        channel.fill(0);
-      }
-      return true;
     }
-  }
-  scope.registerProcessor(name, RegisteredSonareRealtimeVoiceChangerWorkletProcessor);
+    scope.registerProcessor(name, RegisteredSonareRealtimeVoiceChangerWorkletProcessor);
+  });
 }

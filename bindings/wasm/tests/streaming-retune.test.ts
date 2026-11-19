@@ -135,6 +135,15 @@ describe('StreamingRetune grain', () => {
   });
 
   it('refuses a grain of 0 with the automatic-grain hint', () => {
+    // The pitch and mix domains are refused bounds, named by the entry that took them.
+    expect(() => new StreamingRetune({ pitchSemitones: 25 })).toThrow(
+      new RangeError('StreamingRetune: pitchSemitones must be finite and in [-24, 24]'),
+    );
+    withRetune({}, (retune) => {
+      expect(() => retune.setConfig({ mix: 1.5 })).toThrow(
+        new RangeError('StreamingRetune.setConfig: mix must be finite and in [0, 1]'),
+      );
+    });
     expect(() => new StreamingRetune({ grainSizeSamples: 0 })).toThrow(
       new RangeError(
         'StreamingRetune: grainSizeSamples must not be 0; omit it for the automatic grain',

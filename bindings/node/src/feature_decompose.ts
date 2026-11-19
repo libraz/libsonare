@@ -1,4 +1,5 @@
 import type { HpssWithResidualResult } from './effects_separation.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
@@ -21,12 +22,12 @@ export type NmfInit = 'random' | 'nndsvd';
 
 const NMF_INITS: readonly NmfInit[] = ['random', 'nndsvd'];
 
-function resolveHardMaskOption(fnName: string, value: unknown): boolean {
+function resolveHardMaskOption(value: unknown): boolean {
   if (value === undefined) {
     return false;
   }
   if (typeof value !== 'boolean') {
-    throw new TypeError(`${fnName}: hardMask must be a boolean`);
+    throw refuseType(`hardMask must be a boolean`);
   }
   return value;
 }
@@ -216,124 +217,138 @@ function toSegmentMatrix(m: NativeSegmentMatrix): Matrix2D {
   return toMatrix2D(m.values, m.rows, m.cols);
 }
 
-function assertSquareMatrix(fnName: string, matrix: Matrix2D, argName: string): void {
+function assertSquareMatrix(matrix: Matrix2D, argName: string): void {
   if (matrix.rows !== matrix.cols) {
-    throw new RangeError(`${fnName}: ${argName} must be square`);
+    throw refuse(`${argName} must be square`);
   }
 }
 
 /** Column-wise cross-similarity matrix (librosa.segment.cross_similarity). Returns rows = y frames, cols = x frames. */
 export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): Matrix2D;
 export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentCrossSimilarityRequest>('segmentCrossSimilarity', args);
-  assertMatrix2D('segmentCrossSimilarity', r.x, 'x');
-  assertMatrix2D('segmentCrossSimilarity', r.y, 'y');
-  if (r.x.rows !== r.y.rows) {
-    throw new RangeError('segmentCrossSimilarity: x and y must have the same number of rows');
-  }
-  if (r.k !== undefined) {
-    assertPositiveInteger('segmentCrossSimilarity', r.k, 'k');
-  }
-  return toSegmentMatrix(
-    addon.segmentCrossSimilarity(
-      r.x.data,
-      r.x.rows,
-      r.x.cols,
-      r.y.data,
-      r.y.rows,
-      r.y.cols,
-      r.k ?? 0,
-      r.metric ?? 'cosine',
-      r.mode ?? 'connectivity',
-    ),
-  );
+  return withEntry('segmentCrossSimilarity', () => {
+    const r = requestOnly<SegmentCrossSimilarityRequest>('segmentCrossSimilarity', args);
+    assertMatrix2D(r.x, 'x');
+    assertMatrix2D(r.y, 'y');
+    if (r.x.rows !== r.y.rows) {
+      throw refuse('x and y must have the same number of rows');
+    }
+    if (r.k !== undefined) {
+      assertPositiveInteger(r.k, 'k');
+    }
+    return toSegmentMatrix(
+      addon.segmentCrossSimilarity(
+        r.x.data,
+        r.x.rows,
+        r.x.cols,
+        r.y.data,
+        r.y.rows,
+        r.y.cols,
+        r.k ?? 0,
+        r.metric ?? 'cosine',
+        r.mode ?? 'connectivity',
+      ),
+    );
+  });
 }
 
 /** Self-similarity recurrence matrix (librosa.segment.recurrence_matrix). Returns square, rows = cols = frames. */
 export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): Matrix2D;
 export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
-  assertMatrix2D('segmentRecurrenceMatrix', r.data, 'data');
-  if (r.k !== undefined) {
-    assertPositiveInteger('segmentRecurrenceMatrix', r.k, 'k');
-  }
-  return toSegmentMatrix(
-    addon.segmentRecurrenceMatrix(
-      r.data.data,
-      r.data.rows,
-      r.data.cols,
-      r.k ?? 0,
-      r.width ?? 1,
-      r.sym ?? false,
-      r.metric ?? 'euclidean',
-      r.mode ?? 'connectivity',
-    ),
-  );
+  return withEntry('segmentRecurrenceMatrix', () => {
+    const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
+    assertMatrix2D(r.data, 'data');
+    if (r.k !== undefined) {
+      assertPositiveInteger(r.k, 'k');
+    }
+    return toSegmentMatrix(
+      addon.segmentRecurrenceMatrix(
+        r.data.data,
+        r.data.rows,
+        r.data.cols,
+        r.k ?? 0,
+        r.width ?? 1,
+        r.sym ?? false,
+        r.metric ?? 'euclidean',
+        r.mode ?? 'connectivity',
+      ),
+    );
+  });
 }
 
 /** Convert a square recurrence matrix to a lag-by-time matrix, as librosa does. Returns rows = lags, cols = frames. */
 export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): Matrix2D;
 export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
-  assertMatrix2D('segmentRecurrenceToLag', r.recurrence, 'recurrence');
-  assertSquareMatrix('segmentRecurrenceToLag', r.recurrence, 'recurrence');
-  return toSegmentMatrix(
-    addon.segmentRecurrenceToLag(r.recurrence.data, r.recurrence.rows, r.pad ?? true),
-  );
+  return withEntry('segmentRecurrenceToLag', () => {
+    const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
+    assertMatrix2D(r.recurrence, 'recurrence');
+    assertSquareMatrix(r.recurrence, 'recurrence');
+    return toSegmentMatrix(
+      addon.segmentRecurrenceToLag(r.recurrence.data, r.recurrence.rows, r.pad ?? true),
+    );
+  });
 }
 
 /** Convert a lag matrix (lags = frames, or 2 × frames padded) to a recurrence. Returns square, rows = cols = frames. */
 export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): Matrix2D;
 export function segmentLagToRecurrence(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
-  assertMatrix2D('segmentLagToRecurrence', r.lag, 'lag');
-  return toSegmentMatrix(addon.segmentLagToRecurrence(r.lag.data, r.lag.cols, r.lag.rows));
+  return withEntry('segmentLagToRecurrence', () => {
+    const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
+    assertMatrix2D(r.lag, 'lag');
+    return toSegmentMatrix(addon.segmentLagToRecurrence(r.lag.data, r.lag.cols, r.lag.rows));
+  });
 }
 
 /** Refine frame boundaries by clustering within each parent segment. */
 export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array;
 export function segmentSubsegment(...args: unknown[]): Int32Array {
-  const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
-  assertMatrix2D('segmentSubsegment', r.data, 'data');
-  return addon.segmentSubsegment(
-    r.data.data,
-    r.data.rows,
-    r.data.cols,
-    toNativeIndexList('segmentSubsegment', r.boundaries, 'boundaries'),
-    r.nSegments ?? 4,
-  );
+  return withEntry('segmentSubsegment', () => {
+    const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
+    assertMatrix2D(r.data, 'data');
+    return addon.segmentSubsegment(
+      r.data.data,
+      r.data.rows,
+      r.data.cols,
+      toNativeIndexList(r.boundaries, 'boundaries'),
+      r.nSegments ?? 4,
+    );
+  });
 }
 
 /** Cluster feature columns and return one label per column. */
 export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array;
 export function segmentAgglomerative(...args: unknown[]): Int32Array {
-  const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
-  assertMatrix2D('segmentAgglomerative', r.data, 'data');
-  return addon.segmentAgglomerative(
-    r.data.data,
-    r.data.rows,
-    r.data.cols,
-    r.k,
-    r.linkage ?? 'average',
-  );
+  return withEntry('segmentAgglomerative', () => {
+    const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
+    assertMatrix2D(r.data, 'data');
+    return addon.segmentAgglomerative(
+      r.data.data,
+      r.data.rows,
+      r.data.cols,
+      r.k,
+      r.linkage ?? 'average',
+    );
+  });
 }
 
 /** Enhance diagonal paths in a square recurrence matrix. Returns square, rows = cols = frames. */
 export function segmentPathEnhance(request: SegmentPathEnhanceRequest): Matrix2D;
 export function segmentPathEnhance(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
-  assertMatrix2D('segmentPathEnhance', r.recurrence, 'recurrence');
-  assertSquareMatrix('segmentPathEnhance', r.recurrence, 'recurrence');
-  return toSegmentMatrix(
-    addon.segmentPathEnhance(
-      r.recurrence.data,
-      r.recurrence.rows,
-      r.win,
-      r.maxRatio ?? 2,
-      r.minRatio ?? 0,
-      r.nFilters ?? 7,
-    ),
-  );
+  return withEntry('segmentPathEnhance', () => {
+    const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
+    assertMatrix2D(r.recurrence, 'recurrence');
+    assertSquareMatrix(r.recurrence, 'recurrence');
+    return toSegmentMatrix(
+      addon.segmentPathEnhance(
+        r.recurrence.data,
+        r.recurrence.rows,
+        r.win,
+        r.maxRatio ?? 2,
+        r.minRatio ?? 0,
+        r.nFilters ?? 7,
+      ),
+    );
+  });
 }
 
 /**
@@ -347,14 +362,24 @@ export function segmentPathEnhance(...args: unknown[]): Matrix2D {
  */
 export function decompose(request: DecomposeRequest): DecomposeResult;
 export function decompose(...args: unknown[]): DecomposeResult {
-  const r = requestOnly<DecomposeRequest>('decompose', args);
-  assertMatrix2D('decompose', r.s, 's');
-  assertIntegerValue('decompose', r.nComponents, 'nComponents');
-  assertPositiveInteger('decompose', r.nComponents, 'nComponents');
-  if (r.init !== undefined) {
-    assertClosedToken('decompose', r.init, NMF_INITS, 'init');
-  }
-  return addon.decompose(r.s.data, r.s.rows, r.s.cols, r.nComponents, r.nIter, r.beta ?? 2, r.init);
+  return withEntry('decompose', () => {
+    const r = requestOnly<DecomposeRequest>('decompose', args);
+    assertMatrix2D(r.s, 's');
+    assertIntegerValue(r.nComponents, 'nComponents');
+    assertPositiveInteger(r.nComponents, 'nComponents');
+    if (r.init !== undefined) {
+      assertClosedToken(r.init, NMF_INITS, 'init');
+    }
+    return addon.decompose(
+      r.s.data,
+      r.s.rows,
+      r.s.cols,
+      r.nComponents,
+      r.nIter,
+      r.beta ?? 2,
+      r.init,
+    );
+  });
 }
 
 /**
@@ -376,24 +401,26 @@ export function decomposeStems(
   options?: OptionsOf<DecomposeStemsRequest>,
 ): DecomposeStemsResult;
 export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
-  const request = sampleOneShot<DecomposeStemsRequest>('decomposeStems', args);
-  assertAudioInput('decomposeStems', request.samples, request.sampleRate, request);
-  // Each of the four is its own "0 => the documented default" on the C side, and
-  // the addon's narrowing truncates onto that 0.
-  for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
-    const value = request[field];
-    if (value !== undefined) {
-      assertInt32('decomposeStems', value, field);
+  return withEntry('decomposeStems', () => {
+    const request = sampleOneShot<DecomposeStemsRequest>('decomposeStems', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    // Each of the four is its own "0 => the documented default" on the C side, and
+    // the addon's narrowing truncates onto that 0.
+    for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
+      const value = request[field];
+      if (value !== undefined) {
+        assertInt32(value, field);
+      }
     }
-  }
-  return addon.decomposeStems(request.samples, request.sampleRate, {
-    nComponents: request.nComponents,
-    nFft: request.nFft,
-    hopLength: request.hopLength,
-    nIter: request.nIter,
-    beta: request.beta,
-    init: request.init,
-    maskPower: request.maskPower,
+    return addon.decomposeStems(request.samples, request.sampleRate, {
+      nComponents: request.nComponents,
+      nFft: request.nFft,
+      hopLength: request.hopLength,
+      nIter: request.nIter,
+      beta: request.beta,
+      init: request.init,
+      maskPower: request.maskPower,
+    });
   });
 }
 
@@ -447,31 +474,33 @@ export interface DecomposeStemsLinkedResult {
 export function decomposeStemsLinked(
   request: DecomposeStemsLinkedRequest,
 ): DecomposeStemsLinkedResult {
-  requestOnly<DecomposeStemsLinkedRequest>('decomposeStemsLinked', [request]);
-  if (!Array.isArray(request.channels) || request.channels.length === 0) {
-    throw new RangeError('decomposeStemsLinked: channels must be a non-empty array');
-  }
-  assertAudioChannels('decomposeStemsLinked', request.channels, request.sampleRate, request);
-  const [first, ...rest] = request.channels;
-  for (const channel of rest) {
-    if (channel.length !== first.length) {
-      throw new RangeError('decomposeStemsLinked: every channel must have the same length');
+  return withEntry('decomposeStemsLinked', () => {
+    requestOnly<DecomposeStemsLinkedRequest>('decomposeStemsLinked', [request]);
+    if (!Array.isArray(request.channels) || request.channels.length === 0) {
+      throw refuse('channels must be a non-empty array');
     }
-  }
-  for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
-    const value = request[field];
-    if (value !== undefined) {
-      assertInt32('decomposeStemsLinked', value, field);
+    assertAudioChannels(request.channels, request.sampleRate, request);
+    const [first, ...rest] = request.channels;
+    for (const channel of rest) {
+      if (channel.length !== first.length) {
+        throw refuse('every channel must have the same length');
+      }
     }
-  }
-  return addon.decomposeStemsLinked(request.channels, request.sampleRate, {
-    nComponents: request.nComponents,
-    nFft: request.nFft,
-    hopLength: request.hopLength,
-    nIter: request.nIter,
-    beta: request.beta,
-    init: request.init,
-    maskPower: request.maskPower,
+    for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
+      const value = request[field];
+      if (value !== undefined) {
+        assertInt32(value, field);
+      }
+    }
+    return addon.decomposeStemsLinked(request.channels, request.sampleRate, {
+      nComponents: request.nComponents,
+      nFft: request.nFft,
+      hopLength: request.hopLength,
+      nIter: request.nIter,
+      beta: request.beta,
+      init: request.init,
+      maskPower: request.maskPower,
+    });
   });
 }
 
@@ -484,12 +513,14 @@ export function decomposeStemsLinked(
  */
 export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(...args: unknown[]): Matrix2D {
-  const r = requestOnly<NnFilterRequest>('nnFilter', args);
-  assertMatrix2D('nnFilter', r.s, 's');
-  if (r.aggregate !== undefined) {
-    assertClosedToken('nnFilter', r.aggregate, NN_FILTER_AGGREGATES, 'aggregate');
-  }
-  return addon.nnFilter(r.s.data, r.s.rows, r.s.cols, r.aggregate, r.k, r.width);
+  return withEntry('nnFilter', () => {
+    const r = requestOnly<NnFilterRequest>('nnFilter', args);
+    assertMatrix2D(r.s, 's');
+    if (r.aggregate !== undefined) {
+      assertClosedToken(r.aggregate, NN_FILTER_AGGREGATES, 'aggregate');
+    }
+    return addon.nnFilter(r.s.data, r.s.rows, r.s.cols, r.aggregate, r.k, r.width);
+  });
 }
 
 /** Request for {@link remix} and {@link remixAlignedIntervals}. */
@@ -504,12 +535,12 @@ export interface RemixRequest {
   alignZeros?: boolean;
 }
 
-function resolveAlignZeros(fnName: string, value: unknown): boolean {
+function resolveAlignZeros(value: unknown): boolean {
   if (value === undefined) {
     return true;
   }
   if (typeof value !== 'boolean') {
-    throw new TypeError(`${fnName}: alignZeros must be a boolean`);
+    throw refuseType(`alignZeros must be a boolean`);
   }
   return value;
 }
@@ -532,15 +563,17 @@ export function remix(
   options: OptionsOf<RemixRequest>,
 ): Float32Array;
 export function remix(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<RemixRequest>('remix', args);
-  assertAudioInput('remix', request.samples, request.sampleRate, request);
-  const alignZeros = resolveAlignZeros('remix', request.alignZeros);
-  return addon.remix(
-    request.samples,
-    toNativeIndexList('remix', request.intervals, 'intervals'),
-    request.sampleRate,
-    alignZeros,
-  );
+  return withEntry('remix', () => {
+    const request = sampleOneShot<RemixRequest>('remix', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const alignZeros = resolveAlignZeros(request.alignZeros);
+    return addon.remix(
+      request.samples,
+      toNativeIndexList(request.intervals, 'intervals'),
+      request.sampleRate,
+      alignZeros,
+    );
+  });
 }
 
 /**
@@ -563,15 +596,17 @@ export function remixAlignedIntervals(
   options: OptionsOf<RemixRequest>,
 ): Int32Array;
 export function remixAlignedIntervals(...args: unknown[]): Int32Array {
-  const request = sampleOneShot<RemixRequest>('remixAlignedIntervals', args);
-  assertAudioInput('remixAlignedIntervals', request.samples, request.sampleRate, request);
-  const alignZeros = resolveAlignZeros('remixAlignedIntervals', request.alignZeros);
-  return addon.remixAlignedIntervals(
-    request.samples,
-    toNativeIndexList('remixAlignedIntervals', request.intervals, 'intervals'),
-    request.sampleRate,
-    alignZeros,
-  );
+  return withEntry('remixAlignedIntervals', () => {
+    const request = sampleOneShot<RemixRequest>('remixAlignedIntervals', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const alignZeros = resolveAlignZeros(request.alignZeros);
+    return addon.remixAlignedIntervals(
+      request.samples,
+      toNativeIndexList(request.intervals, 'intervals'),
+      request.sampleRate,
+      alignZeros,
+    );
+  });
 }
 
 /**
@@ -599,20 +634,22 @@ export function hpssWithResidual(
   options?: OptionsOf<HpssWithResidualRequest>,
 ): HpssWithResidualResult;
 export function hpssWithResidual(...args: unknown[]): HpssWithResidualResult {
-  const request = sampleOneShot<HpssWithResidualRequest>('hpssWithResidual', args);
-  assertAudioInput('hpssWithResidual', request.samples, request.sampleRate, request);
-  const fftOptions = resolveEffectFftOptions('hpssWithResidual', request.nFft, request.hopLength);
-  const hardMask = resolveHardMaskOption('hpssWithResidual', request.hardMask);
-  const kernelHarmonic = request.kernelHarmonic ?? 31;
-  const kernelPercussive = request.kernelPercussive ?? 31;
-  assertHpssKernels('hpssWithResidual', kernelHarmonic, kernelPercussive);
-  return addon.hpssWithResidual(
-    request.samples,
-    request.sampleRate,
-    kernelHarmonic,
-    kernelPercussive,
-    fftOptions.nFft,
-    fftOptions.hopLength,
-    hardMask,
-  );
+  return withEntry('hpssWithResidual', () => {
+    const request = sampleOneShot<HpssWithResidualRequest>('hpssWithResidual', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const fftOptions = resolveEffectFftOptions(request.nFft, request.hopLength);
+    const hardMask = resolveHardMaskOption(request.hardMask);
+    const kernelHarmonic = request.kernelHarmonic ?? 31;
+    const kernelPercussive = request.kernelPercussive ?? 31;
+    assertHpssKernels(kernelHarmonic, kernelPercussive);
+    return addon.hpssWithResidual(
+      request.samples,
+      request.sampleRate,
+      kernelHarmonic,
+      kernelPercussive,
+      fftOptions.nFft,
+      fftOptions.hopLength,
+      hardMask,
+    );
+  });
 }

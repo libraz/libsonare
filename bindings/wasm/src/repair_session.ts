@@ -2,6 +2,7 @@
  * One repair analysis and one repair application over any number of channels.
  */
 
+import { refuseType, withEntry } from './internal/entry.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type { ProgressCallback } from './public_types.js';
@@ -209,24 +210,26 @@ export function masteringRepairAnalyze(
   request: MasteringRepairAnalyzeRequest,
 ): MasteringRepairAnalysis;
 export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnalysis {
-  const request = requestOnly<MasteringRepairAnalyzeRequest>('masteringRepairAnalyze', args);
-  assertAudioChannels('masteringRepairAnalyze', request.channels, request.sampleRate, request);
-  const options =
-    request.preferStreamingSafe === undefined
-      ? {}
-      : { preferStreamingSafe: request.preferStreamingSafe };
-  const analysis = JSON.parse(
-    requireModule().masteringRepairAnalyze(
-      request.channels,
-      request.sampleRate,
-      JSON.stringify(options),
-    ),
-  ) as MasteringRepairAnalysis;
-  if (analysis.defects !== undefined) {
-    analysis.defects = audioDefectsFromNative(analysis.defects);
-    analysis.channels = analysis.channels?.map(audioDefectsFromNative);
-  }
-  return analysis;
+  return withEntry('masteringRepairAnalyze', () => {
+    const request = requestOnly<MasteringRepairAnalyzeRequest>('masteringRepairAnalyze', args);
+    assertAudioChannels(request.channels, request.sampleRate, request);
+    const options =
+      request.preferStreamingSafe === undefined
+        ? {}
+        : { preferStreamingSafe: request.preferStreamingSafe };
+    const analysis = JSON.parse(
+      requireModule().masteringRepairAnalyze(
+        request.channels,
+        request.sampleRate,
+        JSON.stringify(options),
+      ),
+    ) as MasteringRepairAnalysis;
+    if (analysis.defects !== undefined) {
+      analysis.defects = audioDefectsFromNative(analysis.defects);
+      analysis.channels = analysis.channels?.map(audioDefectsFromNative);
+    }
+    return analysis;
+  });
 }
 
 /**
@@ -252,20 +255,22 @@ export function masteringRepairApply(
   request: MasteringRepairApplyRequest,
 ): MasteringRepairApplyResult;
 export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyResult {
-  const request = requestOnly<MasteringRepairApplyRequest>('masteringRepairApply', args);
-  assertAudioChannels('masteringRepairApply', request.channels, request.sampleRate, request);
-  if (!Array.isArray(request.stages)) {
-    throw new TypeError('masteringRepairApply: stages must be an array');
-  }
-  const result = requireModule().masteringRepairApply(
-    request.channels,
-    request.sampleRate,
-    JSON.stringify(request.stages),
-    request.onProgress ?? null,
-    request.cancel ?? null,
-  );
-  return {
-    channels: result.channels,
-    reports: (JSON.parse(result.reportsJson) as StageReportsJson[]).map(toStageReports),
-  };
+  return withEntry('masteringRepairApply', () => {
+    const request = requestOnly<MasteringRepairApplyRequest>('masteringRepairApply', args);
+    assertAudioChannels(request.channels, request.sampleRate, request);
+    if (!Array.isArray(request.stages)) {
+      throw refuseType('stages must be an array');
+    }
+    const result = requireModule().masteringRepairApply(
+      request.channels,
+      request.sampleRate,
+      JSON.stringify(request.stages),
+      request.onProgress ?? null,
+      request.cancel ?? null,
+    );
+    return {
+      channels: result.channels,
+      reports: (JSON.parse(result.reportsJson) as StageReportsJson[]).map(toStageReports),
+    };
+  });
 }

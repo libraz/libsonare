@@ -122,7 +122,7 @@ describe('RealtimeEngine.setTrackStripSurroundPan (WASM)', () => {
       expect(() => engine.setStripSurroundPan(TRACK, {})).not.toThrow();
       for (const key of ['elevation', 'distance']) {
         expect(() => engine.setStripSurroundPan(TRACK, { [key]: 0 } as never)).toThrow(
-          new TypeError(`setStripSurroundPan: unknown request key '${key}'`),
+          new TypeError(`RealtimeEngine.setStripSurroundPan: unknown request key '${key}'`),
         );
       }
 

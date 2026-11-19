@@ -1,3 +1,4 @@
+import { refuseType, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import { assertAudioSamples, assertInt32, requestOnly } from './validation.js';
 
@@ -35,23 +36,25 @@ export function resample(
   targetSampleRate: number,
 ): Float32Array;
 export function resample(...args: unknown[]): Float32Array {
-  const first = args[0];
-  let request: ResampleRequest;
-  if (first instanceof Float32Array) {
-    if (args.length > 3) {
-      throw new TypeError('resample: expected (samples, sampleRate, targetSampleRate)');
+  return withEntry('resample', () => {
+    const first = args[0];
+    let request: ResampleRequest;
+    if (first instanceof Float32Array) {
+      if (args.length > 3) {
+        throw refuseType('expected (samples, sampleRate, targetSampleRate)');
+      }
+      request = {
+        samples: first,
+        sampleRate: args[1] as number,
+        targetSampleRate: args[2] as number,
+      };
+    } else {
+      request = requestOnly<ResampleRequest>('resample', args);
     }
-    request = {
-      samples: first,
-      sampleRate: args[1] as number,
-      targetSampleRate: args[2] as number,
-    };
-  } else {
-    request = requestOnly<ResampleRequest>('resample', args);
-  }
-  // Type and emptiness only: rate range and non-finite samples are the core's to refuse.
-  assertAudioSamples('resample', request.samples, { scanFinite: false });
-  assertInt32('resample', request.sampleRate, 'sampleRate');
-  assertInt32('resample', request.targetSampleRate, 'targetSampleRate');
-  return requireModule().resample(request.samples, request.sampleRate, request.targetSampleRate);
+    // Type and emptiness only: rate range and non-finite samples are the core's to refuse.
+    assertAudioSamples(request.samples, { scanFinite: false });
+    assertInt32(request.sampleRate, 'sampleRate');
+    assertInt32(request.targetSampleRate, 'targetSampleRate');
+    return requireModule().resample(request.samples, request.sampleRate, request.targetSampleRate);
+  });
 }

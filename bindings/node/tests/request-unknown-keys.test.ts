@@ -309,11 +309,17 @@ describe('a Project request method refuses an unknown key', () => {
     ['setSourceAudio', (p) => p.setSourceAudio({ sourceId: 1, ...extra } as never)],
   ];
 
+  // Nested shapes are refused under the member that took them.
+  const entryOf: Record<string, string> = {
+    ProjectInstrumentBinding: 'bounceWithInstruments',
+    ExternalSeparatedStem: 'importExternalStems',
+  };
+
   it.each(calls)('%s refuses an unknown key, naming it', (name, call) => {
     const project = new sonare.Project();
     try {
       expect(() => call(project)).toThrow(
-        new TypeError(`${name}: unknown request key 'notAField'`),
+        new TypeError(`Project.${entryOf[name] ?? name}: unknown request key 'notAField'`),
       );
     } finally {
       project.destroy();

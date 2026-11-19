@@ -1,5 +1,5 @@
-import { ErrorCode, isSonareError, SonareError } from './errors.js';
-import { entryClass } from './internal/entry.js';
+import { ErrorCode, isSonareError, type SonareError } from './errors.js';
+import { codedError, entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
 import { failureFromPayload } from './internal/failure_payload.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import {
@@ -100,6 +100,8 @@ function resolveRevision(argument: RevisionArgument | undefined, fallback: strin
 interface DraftState {
   token: VocalStateToken;
   open: boolean;
+  /** How the draft ended once `open` is false, completing the refusal a later call receives. */
+  endedAs?: string;
 }
 
 interface SessionState {
@@ -131,7 +133,7 @@ interface CallReply<T> {
 
 function incrementDecimal(value: string): string {
   if (compareUint64(value, '18446744073709551615') >= 0) {
-    throw new RangeError('vocal Worker intent sequence exhausted uint64');
+    throw refuse('vocal Worker intent sequence exhausted uint64');
   }
   const digits = value.split('').map((digit) => digit.charCodeAt(0) - 48);
   let carry = 1;
@@ -211,13 +213,13 @@ function nextSessionId(counter: number): string {
 }
 
 function cancelledError(signal?: AbortSignal): SonareError {
-  return new SonareError(ErrorCode.Cancelled, 'The operation was cancelled', {
+  return codedError(ErrorCode.Cancelled, 'The operation was cancelled', {
     cause: signal?.reason,
   });
 }
 
 function staleError(): SonareError {
-  return new SonareError(ErrorCode.StaleResult, 'A vocal edit Worker result is stale');
+  return codedError(ErrorCode.StaleResult, 'A vocal edit Worker result is stale');
 }
 
 /** The token a preview is compared against: the open draft's, else the committed one. */
@@ -248,7 +250,7 @@ class ClientCore {
       this.worker = options.worker;
     } else {
       if (!options.workerFactory && typeof Worker === 'undefined') {
-        throw new SonareError(
+        throw codedError(
           ErrorCode.NotSupported,
           'VocalEditWorkerClient requires a Worker implementation: pass `worker` or `workerFactory` outside a browser (for example a node:worker_threads Worker)',
         );
@@ -269,7 +271,7 @@ class ClientCore {
       this.worker.on('message', this.onNodeMessage);
       this.worker.on('error', this.onNodeError);
     } else {
-      throw new TypeError('VocalEditWorkerClient requires Worker event listeners');
+      throw refuseType('VocalEditWorkerClient requires Worker event listeners');
     }
   }
 
@@ -378,7 +380,7 @@ class ClientCore {
     }
     for (const [, pending] of pendingEntries) {
       pending.abortListener && pending.signal?.removeEventListener('abort', pending.abortListener);
-      pending.reject(releasedHandleError('VocalEditWorkerClient', 'was disposed'));
+      pending.reject(releasedHandleError('VocalEditWorkerClient'));
     }
     this.pending.clear();
     for (const session of this.sessions) {
@@ -467,7 +469,7 @@ class ClientCore {
     session?: SessionState,
   ): Promise<CallReply<T>> {
     if (this.closed) {
-      throw releasedHandleError('VocalEditWorkerClient', 'was disposed');
+      throw releasedHandleError('VocalEditWorkerClient');
     }
     const id = this.nextId++;
     const transfers: Transferable[] = [];
@@ -616,7 +618,7 @@ class ClientCore {
   };
 
   private readonly onError = (event: ErrorEvent): void => {
-    const error = new SonareError(ErrorCode.Unknown, event.message || 'Vocal edit Worker failed');
+    const error = codedError(ErrorCode.Unknown, event.message || 'Vocal edit Worker failed');
     for (const pending of this.pending.values()) {
       pending.abortListener && pending.signal?.removeEventListener('abort', pending.abortListener);
       pending.reject(error);
@@ -683,7 +685,7 @@ export class VocalEditWorkerClient {
 }
 
 /** An open batch of edits on a {@link VocalEditWorkerSession}. */
-@entryClass('VocalEditWorkerDraft')
+@entryClass('VocalEditWorkerDraft', ['close', 'requireOpen'])
 export class VocalEditWorkerDraft {
   private readonly core: ClientCore;
   private readonly sessionState: SessionState;
@@ -698,7 +700,7 @@ export class VocalEditWorkerDraft {
     draftState: DraftState,
   ) {
     if (guard !== CONSTRUCT) {
-      throw new TypeError('VocalEditWorkerDraft is created by VocalEditWorkerSession.beginEdit');
+      throw refuseType('VocalEditWorkerDraft is created by VocalEditWorkerSession.beginEdit');
     }
     this.core = core;
     this.sessionState = sessionState;
@@ -752,7 +754,7 @@ export class VocalEditWorkerDraft {
       kind: 'commit',
       expectedRevision: resolveRevision(options, this.sessionState.token.revision),
     });
-    this.close();
+    this.close('has been committed');
     return result;
   }
 
@@ -760,7 +762,7 @@ export class VocalEditWorkerDraft {
   async cancel(): Promise<void> {
     this.requireOpen();
     await this.core.mutate<null>(this.sessionState, { kind: 'cancel' });
-    this.close();
+    this.close('has been cancelled');
   }
 
   /** Per-frame pitch of one note including uncommitted edits. */
@@ -822,6 +824,7 @@ export class VocalEditWorkerDraft {
       ? (async () => {
           try {
             await this.cancel();
+            this.draftState.endedAs = 'has been destroyed';
           } catch (error) {
             // A client destroyed meanwhile has already released the draft with its session.
             if (!isSonareError(error) || error.code !== ErrorCode.InvalidState) {
@@ -838,8 +841,9 @@ export class VocalEditWorkerDraft {
     return this.destroy();
   }
 
-  private close(): void {
+  private close(endedAs: string): void {
     this.draftState.open = false;
+    this.draftState.endedAs = endedAs;
     if (this.sessionState.draft === this.draftState) {
       this.sessionState.draft = undefined;
     }
@@ -847,13 +851,13 @@ export class VocalEditWorkerDraft {
 
   private requireOpen(): void {
     if (!this.draftState.open || this.sessionState.disposed) {
-      throw releasedHandleError('vocal Worker draft', 'is no longer open');
+      throw invalidState(`VocalEditWorkerDraft ${this.draftState.endedAs ?? 'has been destroyed'}`);
     }
   }
 }
 
 /** A vocal editing session living in a Worker. */
-@entryClass('VocalEditWorkerSession')
+@entryClass('VocalEditWorkerSession', ['requireAlive'])
 export class VocalEditWorkerSession {
   /** Identifier of the session inside the Worker. */
   readonly sessionId: string;
@@ -871,7 +875,7 @@ export class VocalEditWorkerSession {
     created: VocalEditWorkerCreated,
   ) {
     if (guard !== CONSTRUCT) {
-      throw new TypeError('VocalEditWorkerSession is created by VocalEditWorkerClient');
+      throw refuseType('VocalEditWorkerSession is created by VocalEditWorkerClient');
     }
     this.core = core;
     this.state = state;
@@ -960,7 +964,7 @@ export class VocalEditWorkerSession {
   async beginEdit(options: RevisionArgument = {}): Promise<VocalEditWorkerDraft> {
     this.requireAlive();
     if (this.state.draft?.open) {
-      throw new SonareError(ErrorCode.InvalidState, 'A vocal edit draft is already open');
+      throw invalidState('A vocal edit draft is already open');
     }
     const token = await this.core.mutate<VocalStateToken>(this.state, {
       kind: 'beginEdit',
@@ -1041,7 +1045,7 @@ export class VocalEditWorkerSession {
 
   private requireAlive(): void {
     if (this.state.disposed) {
-      throw releasedHandleError('vocal Worker session', 'has already been disposed');
+      throw releasedHandleError('VocalEditWorkerSession');
     }
   }
 }

@@ -4,6 +4,7 @@
  */
 
 import { resolveEntryTimes, toSamples } from './internal/effects_common.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -18,10 +19,10 @@ import {
 // The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
 function percussiveRequest<
   R extends { samples: Float32Array | readonly number[]; sampleRate: number },
->(fnName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
+>(requestName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
   const first = args[0];
   const widened = Array.isArray(first) ? [Float32Array.from(first), ...args.slice(1)] : args;
-  return sampleOneShot<R & { samples: Float32Array }>(fnName, widened);
+  return sampleOneShot<R & { samples: Float32Array }>(requestName, widened);
 }
 
 /**
@@ -34,7 +35,7 @@ function percussiveRequest<
  * raises it and Python raises `SonareValueError`; the integer past the 32-bit
  * range just gets its own wording.
  */
-function assertPercussiveSeparation(fnName: string, options: PercussiveSeparationOptions): void {
+function assertPercussiveSeparation(options: PercussiveSeparationOptions): void {
   const fields = ['nFft', 'hopLength', 'hpssKernelHarmonic', 'hpssKernelPercussive'] as const;
   for (const field of fields) {
     const value = options[field];
@@ -42,13 +43,11 @@ function assertPercussiveSeparation(fnName: string, options: PercussiveSeparatio
       continue;
     }
     if (Number.isInteger(value) && (value < C_INT_MIN || value > C_INT_MAX)) {
-      throw new RangeError(
-        `${fnName}: ${field} must be a finite number within the 32-bit integer range`,
-      );
+      throw refuse(`${field} must be a finite number within the 32-bit integer range`);
     }
-    assertInt32(fnName, value, field);
+    assertInt32(value, field);
     if (value === 0) {
-      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the library value`);
+      throw refuse(`${field} must not be 0; omit it for the library value`);
     }
   }
 }
@@ -157,13 +156,12 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
 
 /** Refuse an explicit 0 in fields the native config reads 0 as "use the default" for. */
 function refuseZeroDefaults<T extends object>(
-  fnName: string,
   options: T,
   fields: readonly (keyof T & string)[],
 ): void {
   for (const field of fields) {
     if (options[field] === 0) {
-      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the library value`);
+      throw refuse(`${field} must not be 0; omit it for the library value`);
     }
   }
 }
@@ -217,21 +215,23 @@ export function extractPercussiveEvents(
   options?: OptionsOf<ExtractPercussiveEventsRequest>,
 ): PercussiveEvent[];
 export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
-  const request = percussiveRequest<ExtractPercussiveEventsRequest>(
-    'extractPercussiveEvents',
-    args,
-  );
-  const { samples: input, sampleRate, ...options } = request;
-  const samples = Array.isArray(input) ? toSamples(input) : input;
-  assertAudioInput('extractPercussiveEvents', samples, sampleRate);
-  assertPercussiveSeparation('extractPercussiveEvents', options);
-  if (options.onsetWait !== undefined) {
-    // Checked here with its four bag-siblings, and for the same reason: 0 is
-    // this field's default, and the addon's narrowing truncates onto it.
-    assertInt32('extractPercussiveEvents', options.onsetWait, 'onsetWait');
-  }
-  refuseZeroDefaults('extractPercussiveEvents', options, ['onsetWait', 'onsetDelta', 'maxEventMs']);
-  return addon.extractPercussiveEvents(samples, sampleRate, options);
+  return withEntry('extractPercussiveEvents', () => {
+    const request = percussiveRequest<ExtractPercussiveEventsRequest>(
+      'extractPercussiveEvents',
+      args,
+    );
+    const { samples: input, sampleRate, ...options } = request;
+    const samples = Array.isArray(input) ? toSamples(input) : input;
+    assertAudioInput(samples, sampleRate);
+    assertPercussiveSeparation(options);
+    if (options.onsetWait !== undefined) {
+      // Checked here with its four bag-siblings, and for the same reason: 0 is
+      // this field's default, and the addon's narrowing truncates onto it.
+      assertInt32(options.onsetWait, 'onsetWait');
+    }
+    refuseZeroDefaults(options, ['onsetWait', 'onsetDelta', 'maxEventMs']);
+    return addon.extractPercussiveEvents(samples, sampleRate, options);
+  });
 }
 
 /**
@@ -291,21 +291,20 @@ export function renderPercussiveEvents(
   options: OptionsOf<RenderPercussiveEventsRequest>,
 ): Float32Array;
 export function renderPercussiveEvents(...args: unknown[]): Float32Array {
-  const request = percussiveRequest<RenderPercussiveEventsRequest>('renderPercussiveEvents', args);
-  const { samples: input, sampleRate, events, ...options } = request;
-  const samples = Array.isArray(input) ? toSamples(input) : input;
-  assertAudioInput('renderPercussiveEvents', samples, sampleRate);
-  if (!Array.isArray(events)) {
-    throw new TypeError('renderPercussiveEvents: events must be an array');
-  }
-  assertPercussiveSeparation('renderPercussiveEvents', options);
-  refuseZeroDefaults('renderPercussiveEvents', options, ['fadeMs']);
-  const nativeEvents = resolveEntryTimes(
-    'renderPercussiveEvents',
-    events,
-    'events',
-    sampleRate,
-    true,
-  );
-  return addon.renderPercussiveEvents(samples, sampleRate, nativeEvents, options);
+  return withEntry('renderPercussiveEvents', () => {
+    const request = percussiveRequest<RenderPercussiveEventsRequest>(
+      'renderPercussiveEvents',
+      args,
+    );
+    const { samples: input, sampleRate, events, ...options } = request;
+    const samples = Array.isArray(input) ? toSamples(input) : input;
+    assertAudioInput(samples, sampleRate);
+    if (!Array.isArray(events)) {
+      throw refuseType('events must be an array');
+    }
+    assertPercussiveSeparation(options);
+    refuseZeroDefaults(options, ['fadeMs']);
+    const nativeEvents = resolveEntryTimes(events, 'events', sampleRate, true);
+    return addon.renderPercussiveEvents(samples, sampleRate, nativeEvents, options);
+  });
 }

@@ -383,7 +383,7 @@ describe('assignNoteTargets refuses what it cannot act on', () => {
         sampleRate: SR,
         targets: targets(),
       }),
-    ).toThrow(/note.onsetSample is required/);
+    ).toThrow(/^assignNoteTargets: note\.onsetSample must be given$/);
     expect(() =>
       assignNoteTargets({
         notes: notes(),

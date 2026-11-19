@@ -6,33 +6,30 @@
 import type { ClippingReport } from '../metering.js';
 import type { ClipDetection, DeclipReport } from '../types_repair.js';
 import { assertAudioChannels, assertAudioSamples, assertFloatValue } from '../validation.js';
+import { refuse, refuseType } from './entry.js';
 import { interleavePlanar } from './planar.js';
 
 /**
  * An optional numeric field whose addon `0` means "library default": an explicit 0 is refused,
  * absent and `null` pass, and any other value is left to the addon reader's own checks.
  */
-export function refuseZeroSentinel(
-  fnName: string,
-  request: object,
-  fields: readonly string[],
-): void {
+export function refuseZeroSentinel(request: object, fields: readonly string[]): void {
   for (const field of fields) {
     const value = (request as Record<string, unknown>)[field];
     if (value === undefined || value === null) {
       continue;
     }
     if (value === 0) {
-      throw new RangeError(`${fnName}: ${field} must not be 0 (omit it for the default)`);
+      throw refuse(`${field} must not be 0 (omit it for the default)`);
     }
   }
 }
 
 /** A percentile rank: `TypeError` unless a number, `RangeError` outside [0, 1]. */
-export function assertUnitInterval(fnName: string, value: unknown, argName: string): void {
-  assertFloatValue(fnName, value, argName);
+export function assertUnitInterval(value: unknown, argName: string): void {
+  assertFloatValue(value, argName);
   if ((value as number) < 0 || (value as number) > 1) {
-    throw new RangeError(`${fnName}: ${argName} must be in [0, 1]`);
+    throw refuse(`${argName} must be in [0, 1]`);
   }
 }
 
@@ -42,19 +39,18 @@ export function assertUnitInterval(fnName: string, value: unknown, argName: stri
  * samples) only the buffer checks run.
  */
 export function interleaveMeterChannels(
-  fnName: string,
   channels: unknown,
   options: object,
   sampleRate?: unknown,
 ): { data: Float32Array; numChannels: number } {
   if (sampleRate !== undefined) {
-    assertAudioChannels(fnName, channels, sampleRate, options);
+    assertAudioChannels(channels, sampleRate, options);
   } else if (Array.isArray(channels)) {
     channels.forEach((plane, i) => {
-      assertAudioSamples(fnName, plane, options, `channels[${i}]`);
+      assertAudioSamples(plane, options, `channels[${i}]`);
     });
   }
-  return interleavePlanar(fnName, channels);
+  return interleavePlanar(channels);
 }
 
 /** The addon's waveform buckets (channel-major flat arrays plus a count) as one array per channel. */
@@ -111,21 +107,19 @@ type NativeClipDetection = Omit<ClipDetection, 'clippedSamples' | 'clippedRatio'
  * Absent is the native 0, which selects the library's threshold; a level that
  * would reach the detector as 0 is refused, since it would select it silently.
  */
-export function clipThresholdLinear(fnName: string, thresholdDb: unknown): number {
+export function clipThresholdLinear(thresholdDb: unknown): number {
   if (thresholdDb === undefined || thresholdDb === null) {
     return 0;
   }
   if (typeof thresholdDb !== 'number') {
-    throw new TypeError(`${fnName}: thresholdDb must be a number`);
+    throw refuseType(`thresholdDb must be a number`);
   }
   if (Number.isNaN(thresholdDb) || thresholdDb > 0) {
-    throw new RangeError(`${fnName}: thresholdDb must be at most 0 dBFS`);
+    throw refuse(`thresholdDb must be at most 0 dBFS`);
   }
   const linear = Math.fround(10 ** (thresholdDb / 20));
   if (linear === 0) {
-    throw new RangeError(
-      `${fnName}: thresholdDb is below the smallest level the detector can hold`,
-    );
+    throw refuse(`thresholdDb is below the smallest level the detector can hold`);
   }
   return linear;
 }

@@ -6,6 +6,7 @@ import {
   type SynthParamInfo,
   type SynthPatch,
 } from './instrument_types.js';
+import { withEntry } from './internal/entry.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { getSonareModule } from './module_state.js';
 import { type ProjectModule, projectModule } from './project_internal.js';
@@ -17,9 +18,11 @@ import { assertString } from './validation.js';
  * arrangement subsystem; check `capabilities().features` for presence.
  */
 export function projectAbiVersion(): number | undefined {
-  const probe = (getSonareModule() as unknown as Partial<ProjectModule>).projectAbiVersion;
-  const version = typeof probe === 'function' ? probe() : 0;
-  return version > 0 ? version : undefined;
+  return withEntry('projectAbiVersion', () => {
+    const probe = (getSonareModule() as unknown as Partial<ProjectModule>).projectAbiVersion;
+    const version = typeof probe === 'function' ? probe() : 0;
+    return version > 0 ? version : undefined;
+  });
 }
 
 /**
@@ -28,8 +31,10 @@ export function projectAbiVersion(): number | undefined {
  * names instead of hardcoding magic strings.
  */
 export function synthPresetNames(): string[] {
-  // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
-  return Array.from(projectModule().synthPresetNames());
+  return withEntry('synthPresetNames', () => {
+    // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
+    return Array.from(projectModule().synthPresetNames());
+  });
 }
 
 /**
@@ -42,7 +47,9 @@ export function synthPresetNames(): string[] {
  * every set this build voices; a file selecting an older map reaches fewer.
  */
 export function synthGsDrumKitName(program: number): string | null {
-  return projectModule().synthGsDrumKitName(program);
+  return withEntry('synthGsDrumKitName', () => {
+    return projectModule().synthGsDrumKitName(program);
+  });
 }
 
 /**
@@ -65,8 +72,10 @@ export function synthGsDrumKitName(program: number): string | null {
  * ```
  */
 export function synthGsDrumKitIsVoicedApart(program: number): boolean | null {
-  const r = projectModule().synthGsDrumKitIsVoicedApart(program);
-  return r < 0 ? null : r === 1;
+  return withEntry('synthGsDrumKitIsVoicedApart', () => {
+    const r = projectModule().synthGsDrumKitIsVoicedApart(program);
+    return r < 0 ? null : r === 1;
+  });
 }
 
 /**
@@ -84,8 +93,10 @@ export function synthGsDrumKitIsVoicedApart(program: number): boolean | null {
  * both address the same variation.
  */
 export function synthGsVariationIsVoicedApart(bank: number, program: number): boolean | null {
-  const r = projectModule().synthGsVariationIsVoicedApart(bank, program);
-  return r < 0 ? null : r === 1;
+  return withEntry('synthGsVariationIsVoicedApart', () => {
+    const r = projectModule().synthGsVariationIsVoicedApart(bank, program);
+    return r < 0 ? null : r === 1;
+  });
 }
 
 /**
@@ -94,8 +105,10 @@ export function synthGsVariationIsVoicedApart(bank: number, program: number): bo
  * accepts; an unknown one throws rather than resolving to a default.
  */
 export function controllerProfileNames(): string[] {
-  // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
-  return Array.from(projectModule().controllerProfileNames());
+  return withEntry('controllerProfileNames', () => {
+    // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
+    return Array.from(projectModule().controllerProfileNames());
+  });
 }
 
 /**
@@ -105,12 +118,14 @@ export function controllerProfileNames(): string[] {
  * throw.
  */
 export function synthPresetPatch(name: string): SynthPatch {
-  assertString('synthPresetPatch', name, 'name');
-  // embind returns a val::object whose constructor is not this realm's Object, so a
-  // direct return is not structured-cloneable (breaks postMessage to a Worker).
-  // Spreading into a fresh literal re-roots it as a plain Object; modRoutings is
-  // already a plain member array.
-  return { ...projectModule().synthPresetPatch(name) };
+  return withEntry('synthPresetPatch', () => {
+    assertString(name, 'name');
+    // embind returns a val::object whose constructor is not this realm's Object, so a
+    // direct return is not structured-cloneable (breaks postMessage to a Worker).
+    // Spreading into a fresh literal re-roots it as a plain Object; modRoutings is
+    // already a plain member array.
+    return { ...projectModule().synthPresetPatch(name) };
+  });
 }
 
 /** The descriptor entries of the raw module, which return the C ABI's JSON text. */
@@ -129,12 +144,14 @@ function synthInfoModule(): SynthInfoModule {
  * value. `[]` for modes with no section (`'default'`, `'sample'`). Throws for an unknown mode.
  */
 export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInfo[] {
-  const ordinal = resolveEnumOrdinal(
-    engineMode,
-    Object.fromEntries(SYNTH_ENGINE_MODES.map((name, index) => [name, index])),
-    'synth engine mode',
-  );
-  return JSON.parse(synthInfoModule().synthEngineParamInfo(ordinal)) as SynthParamInfo[];
+  return withEntry('synthEngineParamInfo', () => {
+    const ordinal = resolveEnumOrdinal(
+      engineMode,
+      Object.fromEntries(SYNTH_ENGINE_MODES.map((name, index) => [name, index])),
+      'synth engine mode',
+    );
+    return JSON.parse(synthInfoModule().synthEngineParamInfo(ordinal)) as SynthParamInfo[];
+  });
 }
 
 /**
@@ -143,15 +160,21 @@ export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInf
  * mod matrix are not listed.
  */
 export function synthPatchParamInfo(): SynthParamInfo[] {
-  return JSON.parse(synthInfoModule().synthPatchParamInfo()) as SynthParamInfo[];
+  return withEntry('synthPatchParamInfo', () => {
+    return JSON.parse(synthInfoModule().synthPatchParamInfo()) as SynthParamInfo[];
+  });
 }
 
 /** Return the canonical NativeSynth enum tables from the native module. */
 export function synthEnumTables(): SynthEnumTables {
-  return projectModule()._synthEnumTables();
+  return withEntry('synthEnumTables', () => {
+    return projectModule()._synthEnumTables();
+  });
 }
 
 export function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
-  refuseSynthPatchOrdinals('synthPatchRoundTripForTest', patch);
-  return projectModule()._synthPatchRoundTrip(patch);
+  return withEntry('synthPatchRoundTripForTest', () => {
+    refuseSynthPatchOrdinals(patch);
+    return projectModule()._synthPatchRoundTrip(patch);
+  });
 }

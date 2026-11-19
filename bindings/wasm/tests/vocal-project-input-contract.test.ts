@@ -76,16 +76,14 @@ describe('WASM Project vocal input number errors', () => {
     expect(() => apply({ takeId: null })).toThrow(reached);
     expect(() => apply({ takeId: 1 })).toThrow(reached);
     expect(() => apply({ takeId: 0 })).toThrow(
-      new RangeError('applyVocalEdit: takeId must not be 0 (omit it for the base source)'),
+      new RangeError('takeId must not be 0 (omit it for the base source)'),
     );
-    expect(() => apply({ takeId: '1' })).toThrow(
-      new TypeError('applyVocalEdit: takeId must be a number'),
-    );
+    expect(() => apply({ takeId: '1' })).toThrow(new TypeError('takeId must be a number'));
   });
 
   it('refuses the removed renderedStartSample as an unknown key', () => {
     expect(() => apply({ renderedStartSample: 0 })).toThrow(
-      new TypeError("applyProjectVocalEdit: unknown request key 'renderedStartSample'"),
+      new TypeError("unknown request key 'renderedStartSample'"),
     );
   });
 

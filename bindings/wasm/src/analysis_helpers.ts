@@ -1,3 +1,4 @@
+import { refuse, refuseType } from './internal/entry.js';
 import type {
   AnalysisResult,
   ChordAnalysisResult,
@@ -52,7 +53,7 @@ const KEY_MODE_NAMES = [
 export function keyModeName(ordinal: number): KeyMode {
   const name = KEY_MODE_NAMES[ordinal];
   if (name === undefined) {
-    throw new RangeError(`Invalid key mode: ${String(ordinal)}`);
+    throw refuse(`Invalid key mode: ${String(ordinal)}`);
   }
   return name;
 }
@@ -72,11 +73,11 @@ export function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate 
 
 function closedSetOrdinal(value: unknown, tokens: readonly string[], field: string): number {
   if (typeof value !== 'string') {
-    throw new TypeError(`${field} must be one of ${tokens.map((t) => `'${t}'`).join(', ')}`);
+    throw refuseType(`${field} must be one of ${tokens.map((t) => `'${t}'`).join(', ')}`);
   }
   const ordinal = tokens.indexOf(value);
   if (ordinal < 0) {
-    throw new RangeError(
+    throw refuse(
       `${field} must be one of ${tokens.map((t) => `'${t}'`).join(', ')}, got '${value}'`,
     );
   }
@@ -89,12 +90,12 @@ export function keyModeOrdinal(mode: unknown, field = 'key mode'): number {
 }
 
 /** Ordinal of a pitch class 0-11; names and non-integers are refused. */
-export function pitchClassOrdinal(fnName: string, root: unknown, field: string): number {
+export function pitchClassOrdinal(root: unknown, field: string): number {
   if (typeof root !== 'number') {
-    throw new TypeError(`${fnName}: ${field} must be a pitch class number 0-11`);
+    throw refuseType(`${field} must be a pitch class number 0-11`);
   }
   if (!Number.isInteger(root) || root < 0 || root > 11) {
-    throw new RangeError(`${fnName}: ${field} must be an integer in [0, 11]`);
+    throw refuse(`${field} must be an integer in [0, 11]`);
   }
   return root;
 }
@@ -108,7 +109,7 @@ export function chordQualityOrdinal(quality: unknown, field = 'chord quality'): 
 export function chordQualityToken(ordinal: number): ChordQuality {
   const token = CHORD_QUALITIES[ordinal];
   if (token === undefined) {
-    throw new RangeError(`Invalid chord quality ordinal: ${String(ordinal)}`);
+    throw refuse(`Invalid chord quality ordinal: ${String(ordinal)}`);
   }
   return token;
 }
@@ -116,17 +117,14 @@ export function chordQualityToken(ordinal: number): ChordQuality {
 function sectionTypeToken(ordinal: number): Section['type'] {
   const token = SECTION_TYPES[ordinal];
   if (token === undefined) {
-    throw new RangeError(`Invalid section type ordinal: ${String(ordinal)}`);
+    throw refuse(`Invalid section type ordinal: ${String(ordinal)}`);
   }
   return token;
 }
 
 const ALL_MODE_ORDINALS = [0, 1, 2, 3, 4, 5, 6];
 
-export function keyModeValues(
-  fnName: string,
-  modes: KeyDetectionOptions['modes'] | undefined,
-): number[] {
+export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {
   if (modes === undefined || modes === null) {
     return [];
   }
@@ -137,15 +135,15 @@ export function keyModeValues(
     if (modes === 'all' || modes === 'modal') {
       return ALL_MODE_ORDINALS;
     }
-    throw new RangeError(
-      `${fnName}: modes must be an array of mode names, 'majorMinor', 'all' or 'modal', got '${modes}'`,
+    throw refuse(
+      `modes must be an array of mode names, 'majorMinor', 'all' or 'modal', got '${modes}'`,
     );
   }
   if (!Array.isArray(modes)) {
-    throw new TypeError(`${fnName}: modes must be an array or mode-set string`);
+    throw refuseType(`modes must be an array or mode-set string`);
   }
   if (modes.length === 0) {
-    throw new RangeError(`${fnName}: modes must not be empty; omit it for the default mode set`);
+    throw refuse(`modes must not be empty; omit it for the default mode set`);
   }
   return modes.map((mode) => keyModeOrdinal(mode, 'key mode'));
 }

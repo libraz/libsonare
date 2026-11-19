@@ -422,7 +422,7 @@ describe('OfflineWorkerClient', () => {
         (error: unknown) =>
           isSonareError(error) &&
           error.code === ErrorCode.NotSupported &&
-          error.message === 'no ffmpeg',
+          error.message === 'OfflineWorkerClient.detectBpm: no ffmpeg',
       );
       await expect(client.detectBpm(samples(), { copy: true })).rejects.toBeInstanceOf(RangeError);
     } finally {

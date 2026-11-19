@@ -1,5 +1,12 @@
-import { ErrorCode, SonareError } from './errors.js';
-import { entryClass } from './internal/entry.js';
+import { ErrorCode } from './errors.js';
+import {
+  codedError,
+  entryClass,
+  invalidState,
+  refuse,
+  refuseType,
+  withEntry,
+} from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { attachVocalErrorDetail, vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import { getSonareModule } from './module_state.js';
@@ -195,15 +202,9 @@ function module(): VocalWasmModule {
   return wrapped;
 }
 
-function requireHandle(handle: number, subject: string): void {
-  if (!Number.isSafeInteger(handle) || handle <= 0) {
-    throw releasedHandleError(subject, 'has already been disposed');
-  }
-}
-
 function requireFinite(value: number, field: string): number {
   if (!Number.isFinite(value)) {
-    throw new RangeError(`${field} must be finite`);
+    throw refuse(`${field} must be finite`);
   }
   return value;
 }
@@ -211,7 +212,7 @@ function requireFinite(value: number, field: string): number {
 function requireSample(value: number, field: string): number {
   requireFinite(value, field);
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new RangeError(`${field} must be a non-negative safe integer`);
+    throw refuse(`${field} must be a non-negative safe integer`);
   }
   return value;
 }
@@ -219,7 +220,7 @@ function requireSample(value: number, field: string): number {
 function requireUint32(value: number, field: string): number {
   requireSample(value, field);
   if (value > 0xffffffff) {
-    throw new RangeError(`${field} must fit uint32`);
+    throw refuse(`${field} must fit uint32`);
   }
   return value;
 }
@@ -227,10 +228,10 @@ function requireUint32(value: number, field: string): number {
 function requireToken(value: string | undefined, field: string, fallback = '0'): string {
   const token = value ?? fallback;
   if (typeof token !== 'string' || !/^(0|[1-9]\d*)$/.test(token)) {
-    throw new RangeError(`${field} must be a canonical decimal uint64 string`);
+    throw refuse(`${field} must be a canonical decimal uint64 string`);
   }
   if (token.length > 20 || (token.length === 20 && token > '18446744073709551615')) {
-    throw new RangeError(`${field} must fit uint64`);
+    throw refuse(`${field} must fit uint64`);
   }
   return token;
 }
@@ -239,7 +240,7 @@ function requireToken(value: string | undefined, field: string, fallback = '0'):
 function requireCount(value: unknown, field: string): number {
   const count = typeof value === 'string' ? Number(value) : value;
   if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
-    throw new RangeError(`${field} must be a non-negative safe integer`);
+    throw refuse(`${field} must be a non-negative safe integer`);
   }
   return count;
 }
@@ -257,12 +258,10 @@ function resolveRange(
   outputLengthSamples: number,
 ): VocalRange {
   if (!range || typeof range !== 'object') {
-    throw new TypeError('range must be an object');
+    throw refuseType('range must be an object');
   }
-  const fn = 'VocalRenderSnapshot.render';
   const start =
     resolveSampleBound(
-      fn,
       range.startSample,
       range.startSec,
       sampleRate,
@@ -271,7 +270,6 @@ function resolveRange(
     ) ?? 0;
   const end =
     resolveSampleBound(
-      fn,
       range.endSample,
       range.endSec,
       sampleRate,
@@ -281,7 +279,7 @@ function resolveRange(
   const startSample = requireSample(start, 'range.startSample');
   const endSample = requireSample(end, 'range.endSample');
   if (endSample < startSample) {
-    throw new RangeError('range.endSample must be >= startSample');
+    throw refuse('range.endSample must be >= startSample');
   }
   return { startSample, endSample };
 }
@@ -295,8 +293,7 @@ function requiredOperationBound(
   sampleName: string,
   secName: string,
 ): number {
-  const fn = 'VocalEditDraft.apply';
-  return requireSampleBound(fn, sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
+  return requireSampleBound(sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
 }
 
 /**
@@ -462,14 +459,14 @@ function nativeSessionLimits(
     return undefined;
   }
   if (typeof limits !== 'object' || Array.isArray(limits)) {
-    throw new TypeError('limits must be an object');
+    throw refuseType('limits must be an object');
   }
   const native: Record<string, unknown> = { ...limits };
   for (const field of ['maxHistoryBytes', 'maxCacheBytes'] as const) {
     const bytes = limits[field];
     if (bytes !== undefined) {
       if (typeof bytes !== 'number') {
-        throw new TypeError(`limits.${field} must be a number`);
+        throw refuseType(`limits.${field} must be a number`);
       }
       native[field] = String(requireSample(bytes, `limits.${field}`));
     }
@@ -491,39 +488,39 @@ function copyEditResult(value: VocalEditResult): VocalEditResult {
 
 function validateCreate(request: VocalCreateRequest): void {
   if (!request || typeof request !== 'object') {
-    throw new TypeError('request must be an object');
+    throw refuseType('request must be an object');
   }
-  assertAudioInput('createVocalEditSession', request.samples, request.sampleRate, request);
+  assertAudioInput(request.samples, request.sampleRate, request);
   if (request.outputLengthSamples !== undefined) {
     requireSample(request.outputLengthSamples, 'outputLengthSamples');
   }
   if (request.analysis !== undefined && request.analysis !== null) {
     const analysis = request.analysis;
     if (typeof analysis !== 'object' || Array.isArray(analysis)) {
-      throw new TypeError('analysis must be an object');
+      throw refuseType('analysis must be an object');
     }
     if (analysis.algorithmId !== undefined) {
       if (typeof analysis.algorithmId !== 'string') {
-        throw new TypeError('analysis.algorithmId must be a string');
+        throw refuseType('analysis.algorithmId must be a string');
       }
       if (analysis.algorithmId.includes('\0')) {
-        throw new RangeError('analysis.algorithmId must not contain NUL');
+        throw refuse('analysis.algorithmId must not contain NUL');
       }
     }
     requireFinite(analysis.frameOriginSample, 'analysis.frameOriginSample');
     requireFinite(analysis.samplesPerFrame, 'analysis.samplesPerFrame');
     if (analysis.samplesPerFrame <= 0) {
-      throw new RangeError('analysis.samplesPerFrame must be positive');
+      throw refuse('analysis.samplesPerFrame must be positive');
     }
     requireSample(analysis.frameLengthSamples, 'analysis.frameLengthSamples');
     if (analysis.frameLengthSamples === 0) {
-      throw new RangeError('analysis.frameLengthSamples must be positive');
+      throw refuse('analysis.frameLengthSamples must be positive');
     }
     if (!(analysis.f0Hz instanceof Float32Array) || !(analysis.voiced instanceof Uint8Array)) {
-      throw new TypeError('analysis arrays must be Float32Array and Uint8Array');
+      throw refuseType('analysis arrays must be Float32Array and Uint8Array');
     }
     if (analysis.f0Hz.length !== analysis.voiced.length) {
-      throw new RangeError('analysis arrays must have equal lengths');
+      throw refuse('analysis arrays must have equal lengths');
     }
   }
 }
@@ -553,7 +550,7 @@ function renderUntilCancelled(job: VocalRenderJob, cancel: () => boolean): Vocal
   try {
     while (true) {
       if (cancel()) {
-        throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
+        throw codedError(ErrorCode.Cancelled, 'The render was cancelled');
       }
       if (job.next().complete) {
         return job.finalize();
@@ -577,46 +574,52 @@ function vocalEditAvailable(): boolean {
  * the build has no vocal edit; check `capabilities().features` for presence.
  */
 export function vocalEditAbiVersion(): number | undefined {
-  const raw = module();
-  const version = typeof raw.vocalEditAbiVersion === 'function' ? raw.vocalEditAbiVersion() : 0;
-  return version > 0 ? version : undefined;
+  return withEntry('vocalEditAbiVersion', () => {
+    const raw = module();
+    const version = typeof raw.vocalEditAbiVersion === 'function' ? raw.vocalEditAbiVersion() : 0;
+    return version > 0 ? version : undefined;
+  });
 }
 
 /** Analyse mono PCM, or adopt a host analysis, and open an editing session. */
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
-  requestObject('createVocalEditSession', request, 'request', true);
-  validateCreate(request);
-  const limits = nativeSessionLimits(request.limits);
-  if (!vocalEditAvailable()) {
-    throw new SonareError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
-  }
-  const native = limits === undefined ? request : { ...request, limits };
-  return new VocalEditSessionHandle(
-    module().vocalEditSessionCreate(request.samples, request.sampleRate, native),
-    request.sampleRate,
-  );
+  return withEntry('createVocalEditSession', () => {
+    requestObject('createVocalEditSession', request, 'request', true);
+    validateCreate(request);
+    const limits = nativeSessionLimits(request.limits);
+    if (!vocalEditAvailable()) {
+      throw codedError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
+    }
+    const native = limits === undefined ? request : { ...request, limits };
+    return new VocalEditSessionHandle(
+      module().vocalEditSessionCreate(request.samples, request.sampleRate, native),
+      request.sampleRate,
+    );
+  });
 }
 
 /** Open a new session from an exported state blob and the same source PCM. */
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
-  requestObject('restoreVocalEditSession', request, 'request', true);
-  assertAudioInput('restoreVocalEditSession', request.samples, request.sampleRate, request);
-  if (!(request.state instanceof Uint8Array)) {
-    throw new TypeError('state must be a Uint8Array');
-  }
-  const limits = nativeSessionLimits(request.limits);
-  if (!vocalEditAvailable()) {
-    throw new SonareError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
-  }
-  const native = limits === undefined ? request : { ...request, limits };
-  return new VocalEditSessionHandle(
-    module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, native),
-    request.sampleRate,
-  );
+  return withEntry('restoreVocalEditSession', () => {
+    requestObject('restoreVocalEditSession', request, 'request', true);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    if (!(request.state instanceof Uint8Array)) {
+      throw refuseType('state must be a Uint8Array');
+    }
+    const limits = nativeSessionLimits(request.limits);
+    if (!vocalEditAvailable()) {
+      throw codedError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
+    }
+    const native = limits === undefined ? request : { ...request, limits };
+    return new VocalEditSessionHandle(
+      module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, native),
+      request.sampleRate,
+    );
+  });
 }
 
 /** A vocal editing session. Disposing it also disposes every live draft it began. */
-@entryClass('VocalEditSession')
+@entryClass('VocalEditSession', ['native'])
 export class VocalEditSession {
   private handle: number;
   private readonly drafts = new Set<VocalEditDraft>();
@@ -625,7 +628,6 @@ export class VocalEditSession {
 
   /** @internal Instances are created by {@link createVocalEditSession} and {@link restoreVocalEditSession}. */
   protected constructor(handle: number, sampleRate: number) {
-    requireHandle(handle, 'session');
     this.handle = handle;
     this.sampleRate = sampleRate;
   }
@@ -651,9 +653,8 @@ export class VocalEditSession {
 
   private native(): number {
     if (this.disposed) {
-      throw releasedHandleError('session', 'has already been disposed');
+      throw releasedHandleError('VocalEditSession');
     }
-    requireHandle(this.handle, 'session');
     return this.handle;
   }
 
@@ -780,16 +781,17 @@ export class VocalEditSession {
 }
 
 /** An open batch of edits on a {@link VocalEditSession}. Commit it to publish the edits or cancel it to drop them. */
-@entryClass('VocalEditDraft')
+@entryClass('VocalEditDraft', ['native'])
 export class VocalEditDraft {
   private handle: number;
   private disposed = false;
+  /** How the draft ended, completing the refusal a later call receives. */
+  private endedAs = 'has been destroyed';
   private readonly owner: VocalEditSession;
   private readonly sampleRate: number;
 
   /** @internal Instances are created by {@link VocalEditSession.beginEdit}. */
   protected constructor(handle: number, owner: VocalEditSession, sampleRate: number) {
-    requireHandle(handle, 'draft');
     this.handle = handle;
     this.owner = owner;
     this.sampleRate = sampleRate;
@@ -797,9 +799,8 @@ export class VocalEditDraft {
 
   private native(): number {
     if (this.disposed) {
-      throw releasedHandleError('draft', 'has already been disposed');
+      throw invalidState(`VocalEditDraft ${this.endedAs}`);
     }
-    requireHandle(this.handle, 'draft');
     return this.handle;
   }
 
@@ -826,7 +827,7 @@ export class VocalEditDraft {
         ? this.token.generation
         : requireToken(request.expectedGeneration, 'expectedGeneration');
     if (!Array.isArray(request.operations)) {
-      throw new TypeError('operations must be an array');
+      throw refuseType('operations must be an array');
     }
     return copyEditResult(
       module().vocalEditDraftApply(
@@ -843,6 +844,7 @@ export class VocalEditDraft {
       module().vocalEditDraftCommit(this.native(), resolveRevision(options, this.owner.revision)),
     );
     this.destroy();
+    this.endedAs = 'has been committed';
     return result;
   }
 
@@ -853,6 +855,7 @@ export class VocalEditDraft {
     }
     module().vocalEditDraftCancel(this.native());
     this.destroy();
+    this.endedAs = 'has been cancelled';
   }
 
   /** Per-frame pitch of one note including uncommitted edits. */
@@ -912,7 +915,7 @@ export class VocalEditDraft {
 }
 
 /** A frozen copy of session or draft state that can be rendered repeatedly. */
-@entryClass('VocalRenderSnapshot')
+@entryClass('VocalRenderSnapshot', ['native'])
 export class VocalRenderSnapshot {
   private handle: number;
   private disposed = false;
@@ -920,16 +923,14 @@ export class VocalRenderSnapshot {
 
   /** @internal Instances are created by a session or draft. */
   protected constructor(handle: number, sampleRate: number) {
-    requireHandle(handle, 'snapshot');
     this.handle = handle;
     this.sampleRate = sampleRate;
   }
 
   private native(): number {
     if (this.disposed) {
-      throw releasedHandleError('snapshot', 'has already been disposed');
+      throw releasedHandleError('VocalRenderSnapshot');
     }
-    requireHandle(this.handle, 'snapshot');
     return this.handle;
   }
 
@@ -947,7 +948,7 @@ export class VocalRenderSnapshot {
     const cancel = request.cancel;
     if (cancel !== undefined) {
       if (typeof cancel !== 'function') {
-        throw new TypeError('VocalRenderSnapshot.render: cancel must be a function');
+        throw refuseType('cancel must be a function');
       }
       return renderUntilCancelled(this.beginRenderJob(request), cancel);
     }
@@ -986,7 +987,7 @@ export class VocalRenderSnapshot {
     try {
       this.native();
       if (request.signal?.aborted) {
-        throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
+        throw codedError(ErrorCode.Cancelled, 'The render was cancelled');
       }
       job = this.beginRenderJob(request);
     } catch (error) {
@@ -998,7 +999,7 @@ export class VocalRenderSnapshot {
         while (true) {
           if (signal?.aborted) {
             job.abort();
-            throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
+            throw codedError(ErrorCode.Cancelled, 'The render was cancelled');
           }
           if (job.next().complete) {
             return job.finalize();
@@ -1031,22 +1032,22 @@ export class VocalRenderSnapshot {
 }
 
 /** An incremental render started with {@link VocalRenderSnapshot.beginRenderJob}. */
-@entryClass('VocalRenderJob')
+@entryClass('VocalRenderJob', ['native'])
 export class VocalRenderJob {
   private handle: number;
   private disposed = false;
+  /** How the job ended, completing the refusal a later call receives. */
+  private endedAs = 'has been destroyed';
 
   /** @internal Instances are created by {@link VocalRenderSnapshot.beginRenderJob}. */
   protected constructor(handle: number) {
-    requireHandle(handle, 'render job');
     this.handle = handle;
   }
 
   private native(): number {
     if (this.disposed) {
-      throw releasedHandleError('render job', 'has already been disposed');
+      throw invalidState(`VocalRenderJob ${this.endedAs}`);
     }
-    requireHandle(this.handle, 'render job');
     return this.handle;
   }
 
@@ -1059,6 +1060,7 @@ export class VocalRenderJob {
   finalize(): VocalRenderResult {
     const result = copyRender(module().vocalEditRenderJobFinalize(this.native()));
     this.destroy();
+    this.endedAs = 'has been finalized';
     return result;
   }
 

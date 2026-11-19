@@ -1,3 +1,4 @@
+import { refuse, withEntry } from './internal/entry.js';
 import {
   assertUnitInterval,
   clippingReportFromNative,
@@ -31,11 +32,11 @@ const DEFAULT_SPECTRUM_N_FFT = 2048;
  * Check the two spectrum sizes the addon would otherwise truncate: a fractional size
  * must not land on a different one than the caller named.
  */
-function assertSpectrumOptions(fnName: string, options: SpectrumOptions): void {
+function assertSpectrumOptions(options: SpectrumOptions): void {
   for (const field of ['nFft', 'octaveFraction'] as const) {
     const value = options[field];
     if (value !== undefined && value !== null) {
-      assertInt32(fnName, value, field);
+      assertInt32(value, field);
     }
   }
 }
@@ -177,12 +178,12 @@ export interface MeteringDynamicRangeRequest extends MeteringDynamicRangeOptions
 
 /** Reads one mono level: the preflight, then the native call over `(samples, sampleRate)`. */
 function monoMeter(
-  fnName: 'meteringPeakDb' | 'meteringRmsDb' | 'meteringCrestFactorDb' | 'meteringDcOffset',
+  requestName: 'meteringPeakDb' | 'meteringRmsDb' | 'meteringCrestFactorDb' | 'meteringDcOffset',
   args: unknown[],
 ): number {
-  const r = sampleOneShot<MeteringPeakDbRequest>(fnName, args);
-  assertAudioInput(fnName, r.samples, r.sampleRate, r);
-  return addon[fnName](r.samples, r.sampleRate);
+  const r = sampleOneShot<MeteringPeakDbRequest>(requestName, args);
+  assertAudioInput(r.samples, r.sampleRate, r);
+  return addon[requestName](r.samples, r.sampleRate);
 }
 
 /** Peak level in dBFS. */
@@ -193,7 +194,9 @@ export function meteringPeakDb(
   options?: OptionsOf<MeteringPeakDbRequest>,
 ): number;
 export function meteringPeakDb(...args: unknown[]): number {
-  return monoMeter('meteringPeakDb', args);
+  return withEntry('meteringPeakDb', () => {
+    return monoMeter('meteringPeakDb', args);
+  });
 }
 
 /** RMS level in dBFS. */
@@ -204,7 +207,9 @@ export function meteringRmsDb(
   options?: OptionsOf<MeteringRmsDbRequest>,
 ): number;
 export function meteringRmsDb(...args: unknown[]): number {
-  return monoMeter('meteringRmsDb', args);
+  return withEntry('meteringRmsDb', () => {
+    return monoMeter('meteringRmsDb', args);
+  });
 }
 
 /** Fraction of frames below `thresholdDb`. */
@@ -215,15 +220,17 @@ export function meteringSilenceRatio(
   options?: OptionsOf<MeteringSilenceRatioRequest>,
 ): number;
 export function meteringSilenceRatio(...args: unknown[]): number {
-  const r = sampleOneShot<MeteringSilenceRatioRequest>('meteringSilenceRatio', args);
-  assertAudioInput('meteringSilenceRatio', r.samples, r.sampleRate, r);
-  return addon.meteringSilenceRatio(
-    r.samples,
-    r.sampleRate,
-    r.thresholdDb ?? -45,
-    r.frameLength ?? 1024,
-    r.hopLength ?? 256,
-  );
+  return withEntry('meteringSilenceRatio', () => {
+    const r = sampleOneShot<MeteringSilenceRatioRequest>('meteringSilenceRatio', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return addon.meteringSilenceRatio(
+      r.samples,
+      r.sampleRate,
+      r.thresholdDb ?? -45,
+      r.frameLength ?? 1024,
+      r.hopLength ?? 256,
+    );
+  });
 }
 
 /** Crest factor (peak over RMS) in dB. */
@@ -234,7 +241,9 @@ export function meteringCrestFactorDb(
   options?: OptionsOf<MeteringCrestFactorDbRequest>,
 ): number;
 export function meteringCrestFactorDb(...args: unknown[]): number {
-  return monoMeter('meteringCrestFactorDb', args);
+  return withEntry('meteringCrestFactorDb', () => {
+    return monoMeter('meteringCrestFactorDb', args);
+  });
 }
 
 /** Request form of {@link meteringCrestFactorDbStereo}. */
@@ -257,10 +266,12 @@ export interface MeteringCrestFactorDbStereoRequest {
  */
 export function meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number;
 export function meteringCrestFactorDbStereo(...args: unknown[]): number {
-  const r = requestOnly<MeteringCrestFactorDbStereoRequest>('meteringCrestFactorDbStereo', args);
-  assertAudioInput('meteringCrestFactorDbStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('meteringCrestFactorDbStereo', r.right, r.sampleRate, r, 'right');
-  return addon.meteringCrestFactorDbStereo(r.left, r.right, r.sampleRate);
+  return withEntry('meteringCrestFactorDbStereo', () => {
+    const r = requestOnly<MeteringCrestFactorDbStereoRequest>('meteringCrestFactorDbStereo', args);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return addon.meteringCrestFactorDbStereo(r.left, r.right, r.sampleRate);
+  });
 }
 
 /** DC offset of the signal (its mean). */
@@ -271,7 +282,9 @@ export function meteringDcOffset(
   options?: OptionsOf<MeteringDcOffsetRequest>,
 ): number;
 export function meteringDcOffset(...args: unknown[]): number {
-  return monoMeter('meteringDcOffset', args);
+  return withEntry('meteringDcOffset', () => {
+    return monoMeter('meteringDcOffset', args);
+  });
 }
 
 /** Inter-sample (true) peak in dBTP. `oversampleFactor` is a power of two in [1, 16]; omit it for 4. */
@@ -282,14 +295,16 @@ export function meteringTruePeakDbtp(
   options?: OptionsOf<MeteringTruePeakDbtpRequest>,
 ): number;
 export function meteringTruePeakDbtp(...args: unknown[]): number {
-  const r = sampleOneShot<MeteringTruePeakDbtpRequest>('meteringTruePeakDbtp', args);
-  assertAudioInput('meteringTruePeakDbtp', r.samples, r.sampleRate, r);
-  refuseZeroSentinel('meteringTruePeakDbtp', r, ['oversampleFactor']);
-  // An omitted factor is the library's; the power-of-two rule stays the core's, which names the field.
-  if (r.oversampleFactor !== undefined && r.oversampleFactor !== null) {
-    assertNonNegativeSafeInteger('meteringTruePeakDbtp', r.oversampleFactor, 'oversampleFactor');
-  }
-  return addon.meteringTruePeakDb(r.samples, r.sampleRate, r.oversampleFactor);
+  return withEntry('meteringTruePeakDbtp', () => {
+    const r = sampleOneShot<MeteringTruePeakDbtpRequest>('meteringTruePeakDbtp', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    refuseZeroSentinel(r, ['oversampleFactor']);
+    // An omitted factor is the library's; the power-of-two rule stays the core's, which names the field.
+    if (r.oversampleFactor !== undefined && r.oversampleFactor !== null) {
+      assertNonNegativeSafeInteger(r.oversampleFactor, 'oversampleFactor');
+    }
+    return addon.meteringTruePeakDb(r.samples, r.sampleRate, r.oversampleFactor);
+  });
 }
 
 /**
@@ -305,17 +320,19 @@ export function meteringDetectClipping(
   options?: MeteringDetectClippingOptions,
 ): ClippingReport;
 export function meteringDetectClipping(...args: unknown[]): ClippingReport {
-  const r = sampleOneShot<MeteringDetectClippingRequest>('meteringDetectClipping', args);
-  assertAudioInput('meteringDetectClipping', r.samples, r.sampleRate, r);
-  refuseZeroSentinel('meteringDetectClipping', r, ['minRegionSamples']);
-  if (r.minRegionSamples !== undefined && r.minRegionSamples !== null) {
-    assertNonNegativeSafeInteger('meteringDetectClipping', r.minRegionSamples, 'minRegionSamples');
-  }
-  // Native still takes the linear threshold.
-  const threshold = clipThresholdLinear('meteringDetectClipping', r.thresholdDb);
-  return clippingReportFromNative(
-    addon.meteringDetectClipping(r.samples, r.sampleRate, threshold, r.minRegionSamples),
-  );
+  return withEntry('meteringDetectClipping', () => {
+    const r = sampleOneShot<MeteringDetectClippingRequest>('meteringDetectClipping', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    refuseZeroSentinel(r, ['minRegionSamples']);
+    if (r.minRegionSamples !== undefined && r.minRegionSamples !== null) {
+      assertNonNegativeSafeInteger(r.minRegionSamples, 'minRegionSamples');
+    }
+    // Native still takes the linear threshold.
+    const threshold = clipThresholdLinear(r.thresholdDb);
+    return clippingReportFromNative(
+      addon.meteringDetectClipping(r.samples, r.sampleRate, threshold, r.minRegionSamples),
+    );
+  });
 }
 
 /**
@@ -330,36 +347,38 @@ export function meteringDynamicRange(
   options?: MeteringDynamicRangeOptions,
 ): DynamicRangeReport;
 export function meteringDynamicRange(...args: unknown[]): DynamicRangeReport {
-  const r = sampleOneShot<MeteringDynamicRangeRequest>('meteringDynamicRange', args);
-  assertAudioInput('meteringDynamicRange', r.samples, r.sampleRate, r);
-  refuseZeroSentinel('meteringDynamicRange', r, ['windowSec', 'hopSec']);
-  for (const field of ['windowSec', 'hopSec'] as const) {
-    if (r[field] !== undefined && r[field] !== null) {
-      assertPositiveFloatValue('meteringDynamicRange', r[field], field);
+  return withEntry('meteringDynamicRange', () => {
+    const r = sampleOneShot<MeteringDynamicRangeRequest>('meteringDynamicRange', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    refuseZeroSentinel(r, ['windowSec', 'hopSec']);
+    for (const field of ['windowSec', 'hopSec'] as const) {
+      if (r[field] !== undefined && r[field] !== null) {
+        assertPositiveFloatValue(r[field], field);
+      }
     }
-  }
-  for (const field of ['lowPercentile', 'highPercentile'] as const) {
-    if (r[field] !== undefined && r[field] !== null) {
-      assertUnitInterval('meteringDynamicRange', r[field], field);
+    for (const field of ['lowPercentile', 'highPercentile'] as const) {
+      if (r[field] !== undefined && r[field] !== null) {
+        assertUnitInterval(r[field], field);
+      }
     }
-  }
-  if (
-    r.lowPercentile !== undefined &&
-    r.lowPercentile !== null &&
-    r.highPercentile !== undefined &&
-    r.highPercentile !== null &&
-    r.lowPercentile > r.highPercentile
-  ) {
-    throw new RangeError('meteringDynamicRange: lowPercentile must not exceed highPercentile');
-  }
-  return addon.meteringDynamicRange(
-    r.samples,
-    r.sampleRate,
-    r.windowSec ?? 0,
-    r.hopSec ?? 0,
-    resolveOptionalNonNegative('meteringDynamicRange', r.lowPercentile, 'lowPercentile'),
-    resolveOptionalNonNegative('meteringDynamicRange', r.highPercentile, 'highPercentile'),
-  );
+    if (
+      r.lowPercentile !== undefined &&
+      r.lowPercentile !== null &&
+      r.highPercentile !== undefined &&
+      r.highPercentile !== null &&
+      r.lowPercentile > r.highPercentile
+    ) {
+      throw refuse('lowPercentile must not exceed highPercentile');
+    }
+    return addon.meteringDynamicRange(
+      r.samples,
+      r.sampleRate,
+      r.windowSec ?? 0,
+      r.hopSec ?? 0,
+      resolveOptionalNonNegative(r.lowPercentile, 'lowPercentile'),
+      resolveOptionalNonNegative(r.highPercentile, 'highPercentile'),
+    );
+  });
 }
 
 // ============================================================================
@@ -514,17 +533,19 @@ export interface WaveformPeaksReport {
 
 type StereoMeterFn = 'meteringStereoCorrelation' | 'meteringStereoWidth';
 
-function stereoMeter(fnName: StereoMeterFn, args: unknown[]): number {
-  const r = requestOnly<MeteringStereoCorrelationRequest>(fnName, args);
-  assertAudioInput(fnName, r.left, r.sampleRate, r, 'left');
-  assertAudioInput(fnName, r.right, r.sampleRate, r, 'right');
-  return addon[fnName](r.left, r.right, r.sampleRate);
+function stereoMeter(requestName: StereoMeterFn, args: unknown[]): number {
+  const r = requestOnly<MeteringStereoCorrelationRequest>(requestName, args);
+  assertAudioInput(r.left, r.sampleRate, r, 'left');
+  assertAudioInput(r.right, r.sampleRate, r, 'right');
+  return addon[requestName](r.left, r.right, r.sampleRate);
 }
 
 /** Uncentered correlation (cosine similarity) in [-1, 1] between equal-length channels. */
 export function meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number;
 export function meteringStereoCorrelation(...args: unknown[]): number {
-  return stereoMeter('meteringStereoCorrelation', args);
+  return withEntry('meteringStereoCorrelation', () => {
+    return stereoMeter('meteringStereoCorrelation', args);
+  });
 }
 
 /**
@@ -539,20 +560,22 @@ export function meteringStereoCorrelation(...args: unknown[]): number {
  */
 export function meteringStereoWidth(request: MeteringStereoWidthRequest): number;
 export function meteringStereoWidth(...args: unknown[]): number {
-  return stereoMeter('meteringStereoWidth', args);
+  return withEntry('meteringStereoWidth', () => {
+    return stereoMeter('meteringStereoWidth', args);
+  });
 }
 
 /** A scope request after the shared preflight, with `maxPoints` resolved. */
 function scopeRequest(
-  fnName: 'meteringVectorscope' | 'meteringPhaseScope',
+  requestName: 'meteringVectorscope' | 'meteringPhaseScope',
   args: unknown[],
 ): MeteringVectorscopeRequest & { maxPoints: number } {
-  const r = requestOnly<MeteringVectorscopeRequest>(fnName, args);
-  assertAudioInput(fnName, r.left, r.sampleRate, r, 'left');
-  assertAudioInput(fnName, r.right, r.sampleRate, r, 'right');
-  refuseZeroSentinel(fnName, r, ['maxPoints']);
+  const r = requestOnly<MeteringVectorscopeRequest>(requestName, args);
+  assertAudioInput(r.left, r.sampleRate, r, 'left');
+  assertAudioInput(r.right, r.sampleRate, r, 'right');
+  refuseZeroSentinel(r, ['maxPoints']);
   const maxPoints = r.maxPoints ?? 0;
-  assertNonNegativeSafeInteger(fnName, maxPoints, 'maxPoints');
+  assertNonNegativeSafeInteger(maxPoints, 'maxPoints');
   return { ...r, maxPoints };
 }
 
@@ -562,8 +585,10 @@ function scopeRequest(
  */
 export function meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport;
 export function meteringVectorscope(...args: unknown[]): VectorscopeReport {
-  const r = scopeRequest('meteringVectorscope', args);
-  return addon.meteringVectorscope(r.left, r.right, r.sampleRate, r.maxPoints);
+  return withEntry('meteringVectorscope', () => {
+    const r = scopeRequest('meteringVectorscope', args);
+    return addon.meteringVectorscope(r.left, r.right, r.sampleRate, r.maxPoints);
+  });
 }
 
 /**
@@ -573,14 +598,16 @@ export function meteringVectorscope(...args: unknown[]): VectorscopeReport {
  */
 export function meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport;
 export function meteringPhaseScope(...args: unknown[]): PhaseScopeReport {
-  const r = scopeRequest('meteringPhaseScope', args);
-  return addon.meteringPhaseScope(r.left, r.right, r.sampleRate, r.maxPoints);
+  return withEntry('meteringPhaseScope', () => {
+    const r = scopeRequest('meteringPhaseScope', args);
+    return addon.meteringPhaseScope(r.left, r.right, r.sampleRate, r.maxPoints);
+  });
 }
 
 /** The spectrum options the native call reads: only the given ones, `null` read as absent. */
-function nativeSpectrumOptions(fnName: string, r: SpectrumOptions): Record<string, unknown> {
-  refuseZeroSentinel(fnName, r, ['nFft', 'octaveFraction', 'dbRef', 'dbAmin']);
-  assertSpectrumOptions(fnName, r);
+function nativeSpectrumOptions(r: SpectrumOptions): Record<string, unknown> {
+  refuseZeroSentinel(r, ['nFft', 'octaveFraction', 'dbRef', 'dbAmin']);
+  assertSpectrumOptions(r);
   const native: Record<string, unknown> = {};
   for (const key of [
     'nFft',
@@ -609,13 +636,11 @@ export function meteringSpectrum(
   options?: SpectrumOptions,
 ): SpectrumReport;
 export function meteringSpectrum(...args: unknown[]): SpectrumReport {
-  const r = sampleOneShot<MeteringSpectrumRequest>('meteringSpectrum', args);
-  assertAudioInput('meteringSpectrum', r.samples, r.sampleRate, r);
-  return addon.meteringSpectrum(
-    r.samples,
-    r.sampleRate,
-    nativeSpectrumOptions('meteringSpectrum', r),
-  );
+  return withEntry('meteringSpectrum', () => {
+    const r = sampleOneShot<MeteringSpectrumRequest>('meteringSpectrum', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return addon.meteringSpectrum(r.samples, r.sampleRate, nativeSpectrumOptions(r));
+  });
 }
 
 /**
@@ -637,16 +662,18 @@ export function meteringSpectrumFrame(
   options?: OptionsOf<MeteringSpectrumFrameRequest>,
 ): SpectrumReport;
 export function meteringSpectrumFrame(...args: unknown[]): SpectrumReport {
-  const r = sampleOneShot<MeteringSpectrumFrameRequest>('meteringSpectrumFrame', args);
-  // The frame is the only span scanned for non-finite samples (below).
-  assertAudioInput('meteringSpectrumFrame', r.samples, r.sampleRate, { scanFinite: false });
-  const native = nativeSpectrumOptions('meteringSpectrumFrame', r);
-  const startSample = r.startSample ?? 0;
-  assertNonNegativeSafeInteger('meteringSpectrumFrame', startSample, 'startSample');
-  const nFft = (native.nFft as number | undefined) ?? DEFAULT_SPECTRUM_N_FFT;
-  assertSamplesInWindow('meteringSpectrumFrame', r.samples, true, startSample, nFft);
-  // Native takes the start as the positional `frame_offset`.
-  return addon.meteringSpectrumFrame(r.samples, r.sampleRate, startSample, native);
+  return withEntry('meteringSpectrumFrame', () => {
+    const r = sampleOneShot<MeteringSpectrumFrameRequest>('meteringSpectrumFrame', args);
+    // The frame is the only span scanned for non-finite samples (below).
+    assertAudioInput(r.samples, r.sampleRate, { scanFinite: false });
+    const native = nativeSpectrumOptions(r);
+    const startSample = r.startSample ?? 0;
+    assertNonNegativeSafeInteger(startSample, 'startSample');
+    const nFft = (native.nFft as number | undefined) ?? DEFAULT_SPECTRUM_N_FFT;
+    assertSamplesInWindow(r.samples, true, startSample, nFft);
+    // Native takes the start as the positional `frame_offset`.
+    return addon.meteringSpectrumFrame(r.samples, r.sampleRate, startSample, native);
+  });
 }
 
 /**
@@ -659,12 +686,14 @@ export function meteringSpectrumFrame(...args: unknown[]): SpectrumReport {
  */
 export function waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport;
 export function waveformPeaks(...args: unknown[]): WaveformPeaksReport {
-  const r = requestOnly<WaveformPeaksRequest>('waveformPeaks', args);
-  // Native reads one interleaved buffer and a channel count.
-  const { data, numChannels } = interleaveMeterChannels('waveformPeaks', r.channels, r);
-  const samplesPerBucket = r.samplesPerBucket ?? 512;
-  assertPositiveInteger('waveformPeaks', samplesPerBucket, 'samplesPerBucket');
-  return waveformReportFromNative(addon.waveformPeaks(data, numChannels, samplesPerBucket));
+  return withEntry('waveformPeaks', () => {
+    const r = requestOnly<WaveformPeaksRequest>('waveformPeaks', args);
+    // Native reads one interleaved buffer and a channel count.
+    const { data, numChannels } = interleaveMeterChannels(r.channels, r);
+    const samplesPerBucket = r.samplesPerBucket ?? 512;
+    assertPositiveInteger(samplesPerBucket, 'samplesPerBucket');
+    return waveformReportFromNative(addon.waveformPeaks(data, numChannels, samplesPerBucket));
+  });
 }
 
 /**
@@ -675,14 +704,16 @@ export function waveformPeaks(...args: unknown[]): WaveformPeaksReport {
  */
 export function waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[];
 export function waveformPeakPyramid(...args: unknown[]): WaveformPeaksReport[] {
-  const r = requestOnly<WaveformPeakPyramidRequest>('waveformPeakPyramid', args);
-  const { data, numChannels } = interleaveMeterChannels('waveformPeakPyramid', r.channels, r);
-  const levels = r.samplesPerBucketLevels ?? [512, 1024, 2048, 4096];
-  if (levels.length === 0) {
-    throw new RangeError('waveformPeakPyramid: samplesPerBucketLevels must not be empty');
-  }
-  levels.forEach((level, index) => {
-    assertPositiveInteger('waveformPeakPyramid', level, `samplesPerBucketLevels[${index}]`);
+  return withEntry('waveformPeakPyramid', () => {
+    const r = requestOnly<WaveformPeakPyramidRequest>('waveformPeakPyramid', args);
+    const { data, numChannels } = interleaveMeterChannels(r.channels, r);
+    const levels = r.samplesPerBucketLevels ?? [512, 1024, 2048, 4096];
+    if (levels.length === 0) {
+      throw refuse('samplesPerBucketLevels must not be empty');
+    }
+    levels.forEach((level, index) => {
+      assertPositiveInteger(level, `samplesPerBucketLevels[${index}]`);
+    });
+    return addon.waveformPeakPyramid(data, numChannels, levels).map(waveformReportFromNative);
   });
-  return addon.waveformPeakPyramid(data, numChannels, levels).map(waveformReportFromNative);
 }

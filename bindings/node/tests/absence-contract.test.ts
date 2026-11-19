@@ -107,9 +107,11 @@ describe('an empty name is refused by name and an omitted or null one is not giv
   it('names a project marker', () => {
     const project = new Project();
     try {
-      expect(() => project.setMarker({ ppq: 0, name: '' })).toThrow(new RangeError(EMPTY_MARKER));
+      expect(() => project.setMarker({ ppq: 0, name: '' })).toThrow(
+        new RangeError(`Project.setMarker: ${EMPTY_MARKER}`),
+      );
       expect(() => project.setMarker({ ppq: 0, name: 5 as never })).toThrow(
-        new TypeError('setMarker: name must be a string'),
+        new TypeError('Project.setMarker: name must be a string'),
       );
       project.setMarker({ ppq: 0, name: null as never });
       expect(project.markers()[0]).not.toHaveProperty('name');
@@ -123,7 +125,9 @@ describe('an empty name is refused by name and an omitted or null one is not giv
 
   it('names an engine marker', () => {
     withEngine((engine) => {
-      expect(() => engine.setMarkers([{ ppq: 0, name: '' }])).toThrow(new RangeError(EMPTY_MARKER));
+      expect(() => engine.setMarkers([{ ppq: 0, name: '' }])).toThrow(
+        new RangeError(`RealtimeEngine.setMarkers: ${EMPTY_MARKER}`),
+      );
       engine.setMarkers([{ ppq: 0, name: null as never }]);
       expect(engine.markers()[0]).not.toHaveProperty('name');
     });
@@ -132,10 +136,10 @@ describe('an empty name is refused by name and an omitted or null one is not giv
   it('names a track, a warp map, a take and source metadata', () => {
     withProject((project, trackId, clipId) => {
       expect(() => project.addTrack({ name: '' })).toThrow(
-        new RangeError('addTrack: name must not be empty; omit it for no name'),
+        new RangeError('Project.addTrack: name must not be empty; omit it for no name'),
       );
       expect(() => project.addTrack({ name: 5 as never })).toThrow(
-        new TypeError('addTrack: name must be a string'),
+        new TypeError('Project.addTrack: name must be a string'),
       );
       expect(project.addTrack({ name: null as never })).toBeGreaterThan(0);
       const long = 'y'.repeat(200);
@@ -147,19 +151,19 @@ describe('an empty name is refused by name and an omitted or null one is not giv
         { warpSample: 100, sourceSample: 100 },
       ];
       expect(() => project.setWarpMap({ id: 1, name: '', anchors })).toThrow(
-        new RangeError('setWarpMap: name must not be empty; omit it for no name'),
+        new RangeError('Project.setWarpMap: name must not be empty; omit it for no name'),
       );
       project.setWarpMap({ id: 1, name: null as never, anchors });
 
       expect(() => project.setClipTakes(clipId, [{ id: 1, name: '' }])).toThrow(
         new RangeError(
-          'setClipTakes: takes[0].name must not be empty; omit it for an unnamed take',
+          'Project.setClipTakes: takes[0].name must not be empty; omit it for an unnamed take',
         ),
       );
       const sourceId = project.sources()[0].id;
       expect(() => project.setAudioSourceMetadata({ sourceId, contentHash: '' })).toThrow(
         new RangeError(
-          'setAudioSourceMetadata: contentHash must not be empty; omit it to clear it',
+          'Project.setAudioSourceMetadata: contentHash must not be empty; omit it to clear it',
         ),
       );
       expect(trackId).toBeGreaterThan(0);
@@ -172,10 +176,10 @@ describe('a list is required and an empty one is the clear', () => {
     withProject((project, _track, clipId) => {
       for (const absent of [undefined, null]) {
         expect(() => project.setClipTakes(clipId, absent as never)).toThrow(
-          new TypeError('setClipTakes: takes must be an array'),
+          new TypeError('Project.setClipTakes: takes must be an array'),
         );
         expect(() => project.setClipCompSegments(clipId, absent as never)).toThrow(
-          new TypeError('setClipCompSegments: segments must be an array'),
+          new TypeError('Project.setClipCompSegments: segments must be an array'),
         );
       }
       project.setClipTakes(clipId, []);
@@ -188,18 +192,20 @@ describe('a take id is required and 0 is refused by name', () => {
   it('on the take, its source, the active take and a comp segment', () => {
     withProject((project, _track, clipId) => {
       expect(() => project.setClipTakes(clipId, [{} as never])).toThrow(
-        new TypeError('setClipTakes: takes[0].id must be a number'),
+        new TypeError('Project.setClipTakes: takes[0].id must be a number'),
       );
       expect(() => project.setClipTakes(clipId, [{ id: 0 }])).toThrow(
-        new RangeError('setClipTakes: takes[0].id must not be 0'),
+        new RangeError('Project.setClipTakes: takes[0].id must not be 0'),
       );
       expect(() => project.setClipTakes(clipId, [{ id: 1, sourceId: 0 }])).toThrow(
         new RangeError(
-          "setClipTakes: takes[0].sourceId must not be 0 (omit it for the clip's source)",
+          "Project.setClipTakes: takes[0].sourceId must not be 0 (omit it for the clip's source)",
         ),
       );
       expect(() => project.setClipTakes(clipId, [{ id: 1 }], { activeTakeId: 0 })).toThrow(
-        new RangeError('setClipTakes: activeTakeId must not be 0 (omit it for the default)'),
+        new RangeError(
+          'Project.setClipTakes: activeTakeId must not be 0 (omit it for the default)',
+        ),
       );
       project.setClipTakes(clipId, [{ id: 1, sourceId: null as never }], {
         activeTakeId: null as never,
@@ -208,7 +214,7 @@ describe('a take id is required and 0 is refused by name', () => {
         project.setClipCompSegments(clipId, [{ startPpq: 0, endPpq: 1, takeId: 0 }]),
       ).toThrow(
         new RangeError(
-          'setClipCompSegments: segments[0].takeId must not be 0 (omit it for the active take)',
+          'Project.setClipCompSegments: segments[0].takeId must not be 0 (omit it for the active take)',
         ),
       );
       project.setClipCompSegments(clipId, [{ startPpq: 0, endPpq: 1, takeId: null as never }]);
@@ -220,10 +226,10 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
   it('on a clip track and on a clip move', () => {
     withProject((project, trackId, clipId) => {
       expect(() => project.addClip({ trackId: 0, lengthPpq: 1 })).toThrow(
-        new RangeError('addClip: trackId must not be 0; a clip needs an existing track'),
+        new RangeError('Project.addClip: trackId must not be 0; a clip needs an existing track'),
       );
       expect(() => project.moveClip(clipId, 1, { trackId: 0 })).toThrow(
-        new RangeError('moveClip: trackId must not be 0 (omit it to keep the track)'),
+        new RangeError('Project.moveClip: trackId must not be 0 (omit it to keep the track)'),
       );
       project.moveClip(clipId, 1, { trackId: null as never });
       project.moveClip(clipId, 2, { trackId });
@@ -243,17 +249,23 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
         ...patch,
       });
       expect(() => engine.setGraph(graph({}, 0))).toThrow(
-        new RangeError('setGraph: nodes[0].numPorts must not be 0 (omit it for the default)'),
+        new RangeError(
+          'RealtimeEngine.setGraph: nodes[0].numPorts must not be 0 (omit it for the default)',
+        ),
       );
       expect(() => engine.setGraph(graph({}, -1))).toThrow(/numPorts must be a positive integer/);
       expect(() => engine.setGraph(graph({}, 1.5))).toThrow(/numPorts must be a positive integer/);
       expect(() => engine.setGraph(graph({ numChannels: 0 }))).toThrow(
-        new RangeError('setGraph: numChannels must not be 0 (omit it for the default)'),
+        new RangeError(
+          'RealtimeEngine.setGraph: numChannels must not be 0 (omit it for the default)',
+        ),
       );
       engine.setGraph(graph({ numChannels: null }, undefined));
       expect(engine.graphNodeCount).toBe(2);
       expect(() => engine.setBuiltinInstrument(0, { polyphony: 0 })).toThrow(
-        new RangeError('setBuiltinInstrument: polyphony must not be 0 (omit it for the default)'),
+        new RangeError(
+          'RealtimeEngine.setBuiltinInstrument: polyphony must not be 0 (omit it for the default)',
+        ),
       );
     });
   });
@@ -268,18 +280,18 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
         ...patch,
       });
       expect(() => engine.setGraph(graph({ inputNode: '' }) as never)).toThrow(
-        new RangeError('setGraph: inputNode must not be empty'),
+        new RangeError('RealtimeEngine.setGraph: inputNode must not be empty'),
       );
       expect(() => engine.setGraph(graph({ outputNode: '' }) as never)).toThrow(
-        new RangeError('setGraph: outputNode must not be empty'),
+        new RangeError('RealtimeEngine.setGraph: outputNode must not be empty'),
       );
       for (const absent of [undefined, null]) {
         expect(() => engine.setGraph(graph({ inputNode: absent }) as never)).toThrow(
-          new TypeError('setGraph: inputNode must be a string'),
+          new TypeError('RealtimeEngine.setGraph: inputNode must be a string'),
         );
       }
       expect(() => engine.setGraph(graph({ nodes: [{ id: '' }] }) as never)).toThrow(
-        new RangeError('setGraph: nodes[0].id must not be empty'),
+        new RangeError('RealtimeEngine.setGraph: nodes[0].id must not be empty'),
       );
     });
   });
@@ -287,7 +299,9 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
   it('on a freeze clip id', () => {
     withEngine((engine) => {
       expect(() => engine.freezeOffline({ totalFrames: 128, numChannels: 2, clipId: 0 })).toThrow(
-        new RangeError('freezeOffline: clipId must not be 0 (omit it for the default)'),
+        new RangeError(
+          'RealtimeEngine.freezeOffline: clipId must not be 0 (omit it for the default)',
+        ),
       );
       expect(
         engine.freezeOffline({ totalFrames: 128, numChannels: 2, clipId: null as never }).clipId,
@@ -331,14 +345,16 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
       for (const field of ['lengthSamples', 'loopLengthSamples']) {
         expect(() => engine.setMidiClips([clip({ [field]: 0 })] as never)).toThrow(
           new RangeError(
-            `setMidiClips: clips[0].${field} must not be 0 (omit it for ${
+            `RealtimeEngine.setMidiClips: clips[0].${field} must not be 0 (omit it for ${
               field === 'lengthSamples' ? 'open-ended' : 'no loop length'
             })`,
           ),
         );
         for (const bad of [-1, 1.5]) {
           expect(() => engine.setMidiClips([clip({ [field]: bad })] as never)).toThrow(
-            new RangeError(`setMidiClips: clips[0].${field} must be a positive integer`),
+            new RangeError(
+              `RealtimeEngine.setMidiClips: clips[0].${field} must be a positive integer`,
+            ),
           );
         }
         engine.setMidiClips([clip({ [field]: undefined })] as never);
@@ -355,7 +371,7 @@ describe('a required id of the wrong type is a TypeError with the facade text', 
   it('on setClipSource and setSourceAudio', () => {
     withProject((project, _track, clipId) => {
       expect(() => project.setClipSource(clipId, undefined as never)).toThrow(
-        new TypeError('setClipSource: sourceId must be a number'),
+        new TypeError('Project.setClipSource: sourceId must be a number'),
       );
       expect(() =>
         project.setSourceAudio({
@@ -363,12 +379,12 @@ describe('a required id of the wrong type is a TypeError with the facade text', 
           channels: AUDIO,
           sampleRate: 48000,
         }),
-      ).toThrow(new TypeError('setSourceAudio: sourceId must be a number'));
+      ).toThrow(new TypeError('Project.setSourceAudio: sourceId must be a number'));
       expect(() => project.setAudioSourceMetadata({ sourceId: 'x' as never })).toThrow(
-        new TypeError('setAudioSourceMetadata: sourceId must be a number'),
+        new TypeError('Project.setAudioSourceMetadata: sourceId must be a number'),
       );
       expect(() => project.renameTrack(1, undefined as never)).toThrow(
-        new TypeError('renameTrack: name must be a string'),
+        new TypeError('Project.renameTrack: name must be a string'),
       );
     });
   });

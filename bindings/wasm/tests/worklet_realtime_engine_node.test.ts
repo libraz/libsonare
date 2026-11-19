@@ -88,11 +88,17 @@ describe('SonareRealtimeEngineNode', () => {
       await Promise.resolve();
       node.destroy();
       await expect(node.ready).rejects.toMatchObject({ code: 7, codeName: 'InvalidState' });
+      await expect(node.ready).rejects.toThrow(
+        /^SonareRealtimeEngineNode\.ready: SonareRealtimeEngineNode was destroyed before it became ready$/,
+      );
       // A handler the host kept from before destroy cannot revive the node.
       handler?.({ data: { type: 'ready', runtimeTarget: 'embind' } } as MessageEvent<unknown>);
       await expect(node.ready).rejects.toMatchObject({ codeName: 'InvalidState' });
       expect(() => node.sendCommand({ type: SonareEngineCommandType.TransportPlay })).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
+      );
+      expect(() => node.sendCommand({ type: SonareEngineCommandType.TransportPlay })).toThrow(
+        /^SonareRealtimeEngineNode\.sendCommand: SonareRealtimeEngineNode has been destroyed$/,
       );
     });
 
@@ -305,6 +311,13 @@ describe('SonareRealtimeEngineNode', () => {
         expect(() => engine.seekMarker(engine.markers()[0].id)).toThrow(/command queue is full/);
         expect(() => engine.transport.seekPpq(8)).toThrow(/command queue is full/);
         expect(() => engine.transport.seekSec(1)).toThrow(/command queue is full/);
+        // A transport method is a field's member, named one level deeper than the class.
+        expect(() => engine.transport.seekPpq(8)).toThrow(
+          /^SonareEngine\.transport\.seekPpq: the engine command queue is full$/,
+        );
+        expect(() => engine.transport.play()).toThrow(
+          /^SonareEngine\.transport\.play: the engine command queue is full$/,
+        );
         expect(() => engine.armCapture({ armed: true })).toThrow(/command queue is full/);
         expect(() => engine.setMetronome({ enabled: true })).toThrow(/command queue is full/);
         expect(() => engine.resetProcessorState()).toThrow(/command queue is full/);
@@ -3794,6 +3807,9 @@ describe('SonareRealtimeEngineNode', () => {
         for (const seconds of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
           expect(() => engine.transport.seekSec(seconds)).toThrow(RangeError);
         }
+        expect(() => engine.transport.seekSec(-1)).toThrow(
+          new RangeError('SonareEngine.transport.seekSec: timeSec must be non-negative'),
+        );
         expect(offline.transportState().samplePosition).toBe(position);
 
         // A refused bus gain leaves the cached bus, so a later mixer sync does not replay it.

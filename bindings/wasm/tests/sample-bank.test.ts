@@ -267,7 +267,7 @@ describe('Sonare WASM sample bank', () => {
       // rather than left to a pointer that still looks plausible.
       expect(() =>
         bounceSynth(project, { engineMode: 'sample', sampleBank: released }, { totalFrames: 4800 }),
-      ).toThrow(/sampleBank is destroyed/);
+      ).toThrow(/SampleBank has been destroyed$/);
       expect(() =>
         bounceSynth(
           project,

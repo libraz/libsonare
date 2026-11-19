@@ -3,6 +3,7 @@
  * STFT and resynthesized.
  */
 
+import { refuseType, withEntry } from './internal/entry.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './types.js';
@@ -34,7 +35,6 @@ function resolveRegionTimes(
   return {
     ...op,
     startSample: resolveSampleBound(
-      'spectralEdit',
       op.startSample,
       startSec,
       sampleRate,
@@ -42,7 +42,6 @@ function resolveRegionTimes(
       `${at}.startSec`,
     ),
     endSample: resolveSampleBound(
-      'spectralEdit',
       op.endSample,
       endSec,
       sampleRate,
@@ -78,27 +77,29 @@ export function spectralEdit(
   options: SpectralEditOptions,
 ): Float32Array;
 export function spectralEdit(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<SpectralEditRequest>('spectralEdit', args);
-  const { samples: input, sampleRate, ops, ...requestOptions } = request;
-  assertAudioInput('spectralEdit', input, sampleRate);
-  if (ops === undefined || ops === null) {
-    throw new TypeError('spectralEdit: ops must be an array');
-  }
-  if (requestOptions.window !== undefined) {
-    assertClosedToken('spectralEdit', requestOptions.window, WINDOW_TYPES, 'window');
-  }
-  // Each of the three is its own "0 => the documented default" on the C side,
-  // and the addon's narrowing truncates onto that 0.
-  for (const field of ['nFft', 'hopLength', 'healRadiusFrames'] as const) {
-    const value = requestOptions[field];
-    if (value !== undefined) {
-      assertInt32('spectralEdit', value, field);
+  return withEntry('spectralEdit', () => {
+    const request = sampleOneShot<SpectralEditRequest>('spectralEdit', args);
+    const { samples: input, sampleRate, ops, ...requestOptions } = request;
+    assertAudioInput(input, sampleRate);
+    if (ops === undefined || ops === null) {
+      throw refuseType('ops must be an array');
     }
-  }
-  const nativeOps = Array.isArray(ops)
-    ? ops.map((op, index) =>
-        op === null || typeof op !== 'object' ? op : resolveRegionTimes(op, index, sampleRate),
-      )
-    : ops;
-  return addon.spectralEdit(input, sampleRate, nativeOps, requestOptions);
+    if (requestOptions.window !== undefined) {
+      assertClosedToken(requestOptions.window, WINDOW_TYPES, 'window');
+    }
+    // Each of the three is its own "0 => the documented default" on the C side,
+    // and the addon's narrowing truncates onto that 0.
+    for (const field of ['nFft', 'hopLength', 'healRadiusFrames'] as const) {
+      const value = requestOptions[field];
+      if (value !== undefined) {
+        assertInt32(value, field);
+      }
+    }
+    const nativeOps = Array.isArray(ops)
+      ? ops.map((op, index) =>
+          op === null || typeof op !== 'object' ? op : resolveRegionTimes(op, index, sampleRate),
+        )
+      : ops;
+    return addon.spectralEdit(input, sampleRate, nativeOps, requestOptions);
+  });
 }

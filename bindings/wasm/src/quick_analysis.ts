@@ -12,7 +12,7 @@ import {
   pitchClassOrdinal,
 } from './analysis_helpers.js';
 import { ErrorCode, SonareError } from './errors.js';
-import { withEntry } from './internal/entry.js';
+import { codedError, refuse, refuseType, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AcousticOptions,
@@ -80,10 +80,10 @@ function nativeTuning(cents: number | 'auto' | undefined | null): number | 'auto
     return 'auto';
   }
   if (typeof cents === 'string') {
-    throw new RangeError(`tuningCents must be a number of cents or 'auto', got '${cents}'`);
+    throw refuse(`tuningCents must be a number of cents or 'auto', got '${cents}'`);
   }
   if (typeof cents !== 'number') {
-    throw new TypeError("tuningCents must be a number of cents or 'auto'");
+    throw refuseType("tuningCents must be a number of cents or 'auto'");
   }
   return cents;
 }
@@ -106,20 +106,19 @@ const ZERO_IS_DEFAULT_FIELDS = [
 ] as const;
 
 /** Reads the room fields of one call: `undefined` and `null` are absent, a non-number is a `TypeError`. */
-function optionalRoomNumber(fnName: string, options: object, field: string): number | undefined {
+function optionalRoomNumber(options: object, field: string): number | undefined {
   const value = (options as Record<string, unknown>)[field];
   if (value === undefined || value === null) {
     return undefined;
   }
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${field} must be a number`);
+    throw refuseType(`${field} must be a number`);
   }
   return value;
 }
 
 /** A placement the caller gave, checked; absent (`undefined` / `null`) stays `undefined`. */
 function checkedPlacement(
-  fnName: string,
   name: 'source' | 'listener',
   placement: unknown,
 ): RoomPlacement | undefined {
@@ -127,12 +126,12 @@ function checkedPlacement(
     return undefined;
   }
   if (typeof placement !== 'object') {
-    throw new TypeError(`${fnName}: ${name} must be an object with x, y and z`);
+    throw refuseType(`${name} must be an object with x, y and z`);
   }
   const { x, y, z } = placement as Record<string, unknown>;
-  assertFloatValue(fnName, x, `${name}.x`);
-  assertFloatValue(fnName, y, `${name}.y`);
-  assertFloatValue(fnName, z, `${name}.z`);
+  assertFloatValue(x, `${name}.x`);
+  assertFloatValue(y, `${name}.y`);
+  assertFloatValue(z, `${name}.z`);
   return { x, y, z } as RoomPlacement;
 }
 
@@ -142,20 +141,20 @@ function checkedPlacement(
  * `listener` is checked, and an explicit 0 on a zero-means-default field is refused. The names are the core's,
  * read from the module so no second table exists here.
  */
-function nativeRoomOptions<T extends object>(fnName: string, options: T): NamedSelectors<T> {
+function nativeRoomOptions<T extends object>(options: T): NamedSelectors<T> {
   const resolved: Record<string, unknown> = { ...(options as Record<string, unknown>) };
   for (const field of ZERO_IS_DEFAULT_FIELDS) {
-    const value = optionalRoomNumber(fnName, options, field);
+    const value = optionalRoomNumber(options, field);
     if (value === 0) {
-      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the default`);
+      throw refuse(`${field} must not be 0; omit it for the default`);
     }
   }
-  const seed = optionalRoomNumber(fnName, options, 'seed');
+  const seed = optionalRoomNumber(options, 'seed');
   if (seed !== undefined) {
-    assertU32(fnName, seed, 'seed');
+    assertU32(seed, 'seed');
   }
   for (const name of ['source', 'listener'] as const) {
-    const placement = checkedPlacement(fnName, name, (options as Record<string, unknown>)[name]);
+    const placement = checkedPlacement(name, (options as Record<string, unknown>)[name]);
     delete resolved[name];
     if (placement !== undefined) {
       resolved[name] = placement;
@@ -168,11 +167,11 @@ function nativeRoomOptions<T extends object>(fnName: string, options: T): NamedS
       const names = tables[key];
       const valid = names.map((name: string) => `'${name}'`).join(', ');
       if (typeof value !== 'string') {
-        throw new TypeError(`${fnName}: ${key} must be one of ${valid} (a name, not a number)`);
+        throw refuseType(`${key} must be one of ${valid} (a name, not a number)`);
       }
       const index = names.indexOf(value);
       if (index < 0) {
-        throw new RangeError(`${fnName}: ${key} must be one of ${valid}, got '${value}'`);
+        throw refuse(`${key} must be one of ${valid}, got '${value}'`);
       }
       return index;
     };
@@ -187,12 +186,12 @@ function nativeRoomOptions<T extends object>(fnName: string, options: T): NamedS
 }
 
 /** Runs a room call whose refusal of its arguments is a `RangeError`, whatever layer refused. */
-function refusingInvalidGeometry<T>(fnName: string, call: () => T): T {
+function refusingInvalidGeometry<T>(call: () => T): T {
   try {
     return call();
   } catch (error) {
     if (error instanceof SonareError && error.code === ErrorCode.InvalidParameter) {
-      throw new RangeError(`${fnName}: ${error.message}`);
+      throw refuse(`${error.message}`);
     }
     throw error;
   }
@@ -215,11 +214,8 @@ export interface TempoRangeOptions {
 }
 
 /** The search range as given, checked as one pair; an omitted bound is left for the module to fill with the library default. */
-function tempoRange(
-  fnName: string,
-  request: TempoRangeOptions,
-): [number | undefined, number | undefined] {
-  assertFrequencyBounds(fnName, request.bpmMin, request.bpmMax, 'bpmMin', 'bpmMax');
+function tempoRange(request: TempoRangeOptions): [number | undefined, number | undefined] {
+  assertFrequencyBounds(request.bpmMin, request.bpmMax, 'bpmMin', 'bpmMax');
   return [request.bpmMin, request.bpmMax];
 }
 
@@ -363,10 +359,12 @@ export function detectBpm(
   options?: OptionsOf<DetectBpmRequest>,
 ): number;
 export function detectBpm(...args: unknown[]): number {
-  const request = sampleOneShot<DetectBpmRequest>('detectBpm', args);
-  assertAudioInput('detectBpm', request.samples, request.sampleRate, request);
-  const [bpmMin, bpmMax] = tempoRange('detectBpm', request);
-  return requireModule().detectBpm(request.samples, request.sampleRate, bpmMin, bpmMax);
+  return withEntry('detectBpm', () => {
+    const request = sampleOneShot<DetectBpmRequest>('detectBpm', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const [bpmMin, bpmMax] = tempoRange(request);
+    return requireModule().detectBpm(request.samples, request.sampleRate, bpmMin, bpmMax);
+  });
 }
 
 /**
@@ -389,31 +387,33 @@ export function detectKey(
   options?: OptionsOf<DetectKeyRequest>,
 ): KeyDetection;
 export function detectKey(...args: unknown[]): KeyDetection {
-  const request = sampleOneShot<DetectKeyRequest>('detectKey', args);
-  assertAudioInput('detectKey', request.samples, request.sampleRate, request);
-  const chromaHighPassHz = request.chromaHighPassHz ?? 80;
-  assertFloatValue('detectKey', chromaHighPassHz, 'chromaHighPassHz');
-  const result = requireModule()._detectKeyWithOptions(
-    request.samples,
-    request.sampleRate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-    optionalBoolean('detectKey', request.useHpss, 'useHpss', false),
-    optionalBoolean('detectKey', request.loudnessWeighted, 'loudnessWeighted', false),
-    chromaHighPassHz,
-    keyModeValues('detectKey', request.modes),
-    keyProfileValue(request.profile),
-    genreHintValue(request.genreHint),
-    nativeTuning(request.tuningCents),
-  );
-  return {
-    root: result.root as PitchClass,
-    mode: keyModeName(result.mode),
-    confidence: result.confidence,
-    name: result.name,
-    shortName: result.shortName,
-    tuningCents: result.tuningCents,
-  };
+  return withEntry('detectKey', () => {
+    const request = sampleOneShot<DetectKeyRequest>('detectKey', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const chromaHighPassHz = request.chromaHighPassHz ?? 80;
+    assertFloatValue(chromaHighPassHz, 'chromaHighPassHz');
+    const result = requireModule()._detectKeyWithOptions(
+      request.samples,
+      request.sampleRate,
+      request.nFft ?? 2048,
+      request.hopLength ?? 512,
+      optionalBoolean(request.useHpss, 'useHpss', false),
+      optionalBoolean(request.loudnessWeighted, 'loudnessWeighted', false),
+      chromaHighPassHz,
+      keyModeValues(request.modes),
+      keyProfileValue(request.profile),
+      genreHintValue(request.genreHint),
+      nativeTuning(request.tuningCents),
+    );
+    return {
+      root: result.root as PitchClass,
+      mode: keyModeName(result.mode),
+      confidence: result.confidence,
+      name: result.name,
+      shortName: result.shortName,
+      tuningCents: result.tuningCents,
+    };
+  });
 }
 
 /**
@@ -429,29 +429,31 @@ export function detectKeyCandidates(
   options?: OptionsOf<DetectKeyCandidatesRequest>,
 ): KeyCandidate[];
 export function detectKeyCandidates(...args: unknown[]): KeyCandidate[] {
-  const request = sampleOneShot<DetectKeyCandidatesRequest>('detectKeyCandidates', args);
-  assertAudioInput('detectKeyCandidates', request.samples, request.sampleRate, request);
-  const chromaHighPassHz = request.chromaHighPassHz ?? 80;
-  assertFloatValue('detectKeyCandidates', chromaHighPassHz, 'chromaHighPassHz');
-  // The embind value marshalling returns an array whose constructor is not this
-  // realm's Array; chaining .map() onto it propagates that constructor via
-  // Symbol.species, leaving a result that structuredClone (and so postMessage to
-  // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
-  // plain Array before mapping.
-  const candidates = requireModule()._detectKeyCandidates(
-    request.samples,
-    request.sampleRate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-    optionalBoolean('detectKeyCandidates', request.useHpss, 'useHpss', false),
-    optionalBoolean('detectKeyCandidates', request.loudnessWeighted, 'loudnessWeighted', false),
-    chromaHighPassHz,
-    keyModeValues('detectKeyCandidates', request.modes),
-    keyProfileValue(request.profile),
-    genreHintValue(request.genreHint),
-    nativeTuning(request.tuningCents),
-  );
-  return Array.from(candidates, convertKeyCandidate);
+  return withEntry('detectKeyCandidates', () => {
+    const request = sampleOneShot<DetectKeyCandidatesRequest>('detectKeyCandidates', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const chromaHighPassHz = request.chromaHighPassHz ?? 80;
+    assertFloatValue(chromaHighPassHz, 'chromaHighPassHz');
+    // The embind value marshalling returns an array whose constructor is not this
+    // realm's Array; chaining .map() onto it propagates that constructor via
+    // Symbol.species, leaving a result that structuredClone (and so postMessage to
+    // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
+    // plain Array before mapping.
+    const candidates = requireModule()._detectKeyCandidates(
+      request.samples,
+      request.sampleRate,
+      request.nFft ?? 2048,
+      request.hopLength ?? 512,
+      optionalBoolean(request.useHpss, 'useHpss', false),
+      optionalBoolean(request.loudnessWeighted, 'loudnessWeighted', false),
+      chromaHighPassHz,
+      keyModeValues(request.modes),
+      keyProfileValue(request.profile),
+      genreHintValue(request.genreHint),
+      nativeTuning(request.tuningCents),
+    );
+    return Array.from(candidates, convertKeyCandidate);
+  });
 }
 
 /**
@@ -468,9 +470,11 @@ export function detectOnsets(
   options?: OptionsOf<DetectOnsetsRequest>,
 ): Float32Array;
 export function detectOnsets(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<DetectOnsetsRequest>('detectOnsets', args);
-  assertAudioInput('detectOnsets', request.samples, request.sampleRate, request);
-  return requireModule().detectOnsets(request.samples, request.sampleRate, request);
+  return withEntry('detectOnsets', () => {
+    const request = sampleOneShot<DetectOnsetsRequest>('detectOnsets', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return requireModule().detectOnsets(request.samples, request.sampleRate, request);
+  });
 }
 
 /**
@@ -487,10 +491,12 @@ export function detectBeats(
   options?: OptionsOf<DetectBeatsRequest>,
 ): Float32Array;
 export function detectBeats(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<DetectBeatsRequest>('detectBeats', args);
-  assertAudioInput('detectBeats', request.samples, request.sampleRate, request);
-  const [bpmMin, bpmMax] = tempoRange('detectBeats', request);
-  return requireModule().detectBeats(request.samples, request.sampleRate, bpmMin, bpmMax);
+  return withEntry('detectBeats', () => {
+    const request = sampleOneShot<DetectBeatsRequest>('detectBeats', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const [bpmMin, bpmMax] = tempoRange(request);
+    return requireModule().detectBeats(request.samples, request.sampleRate, bpmMin, bpmMax);
+  });
 }
 
 /**
@@ -507,9 +513,11 @@ export function detectDownbeats(
   options?: OptionsOf<DetectDownbeatsRequest>,
 ): Float32Array;
 export function detectDownbeats(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<DetectDownbeatsRequest>('detectDownbeats', args);
-  assertAudioInput('detectDownbeats', request.samples, request.sampleRate, request);
-  return requireModule().detectDownbeats(request.samples, request.sampleRate);
+  return withEntry('detectDownbeats', () => {
+    const request = sampleOneShot<DetectDownbeatsRequest>('detectDownbeats', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return requireModule().detectDownbeats(request.samples, request.sampleRate);
+  });
 }
 
 /**
@@ -529,31 +537,33 @@ export function detectChords(
   options?: OptionsOf<DetectChordsRequest>,
 ): ChordAnalysisResult;
 export function detectChords(...args: unknown[]): ChordAnalysisResult {
-  const request = sampleOneShot<DetectChordsRequest>('detectChords', args);
-  assertAudioInput('detectChords', request.samples, request.sampleRate, request);
-  const minDurationSec = request.minDurationSec ?? 0.3;
-  const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
-  assertFloatFields('detectChords', { minDurationSec, smoothingWindowSec });
-  const result = requireModule().detectChords(
-    request.samples,
-    request.sampleRate,
-    minDurationSec,
-    smoothingWindowSec,
-    request.threshold ?? 0.5,
-    optionalBoolean('detectChords', request.useTriadsOnly, 'useTriadsOnly', true),
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-    optionalBoolean('detectChords', request.useBeatSync, 'useBeatSync', true),
-    optionalBoolean('detectChords', request.useHmm, 'useHmm', true),
-    request.hmmBeamWidth ?? 24,
-    optionalBoolean('detectChords', request.useKeyContext, 'useKeyContext', false),
-    pitchClassOrdinal('detectChords', request.keyRoot ?? 0, 'keyRoot'),
-    keyModeOrdinal(request.keyMode ?? 'major', 'keyMode'),
-    optionalBoolean('detectChords', request.detectInversions, 'detectInversions', false),
-    chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
-    nativeTuning(request.tuningCents),
-  );
-  return convertChordAnalysisResult(result);
+  return withEntry('detectChords', () => {
+    const request = sampleOneShot<DetectChordsRequest>('detectChords', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const minDurationSec = request.minDurationSec ?? 0.3;
+    const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
+    assertFloatFields({ minDurationSec, smoothingWindowSec });
+    const result = requireModule().detectChords(
+      request.samples,
+      request.sampleRate,
+      minDurationSec,
+      smoothingWindowSec,
+      request.threshold ?? 0.5,
+      optionalBoolean(request.useTriadsOnly, 'useTriadsOnly', true),
+      request.nFft ?? 2048,
+      request.hopLength ?? 512,
+      optionalBoolean(request.useBeatSync, 'useBeatSync', true),
+      optionalBoolean(request.useHmm, 'useHmm', true),
+      request.hmmBeamWidth ?? 24,
+      optionalBoolean(request.useKeyContext, 'useKeyContext', false),
+      pitchClassOrdinal(request.keyRoot ?? 0, 'keyRoot'),
+      keyModeOrdinal(request.keyMode ?? 'major', 'keyMode'),
+      optionalBoolean(request.detectInversions, 'detectInversions', false),
+      chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
+      nativeTuning(request.tuningCents),
+    );
+    return convertChordAnalysisResult(result);
+  });
 }
 
 /**
@@ -571,23 +581,25 @@ export function detectChords(...args: unknown[]): ChordAnalysisResult {
 export function chordFunctions<T extends ChordFunctionsInput>(
   request: ChordFunctionsRequest<T>,
 ): FunctionalChord<T>[] {
-  requestObject('chordFunctions', request, 'request', true);
-  const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
-  // The module reads each chord's quality as its native ordinal.
-  const nativeEntries = entries.map((chord) => ({
-    root: chord.root,
-    quality: chordQualityOrdinal(chord.quality, 'quality'),
-  }));
-  const labels = requireModule().chordFunctions(
-    nativeEntries,
-    pitchClassOrdinal('chordFunctions', request.key.root, 'key.root'),
-    keyModeOrdinal(request.key.mode, 'key.mode'),
-  );
-  return entries.map((chord, i) => ({
-    ...chord,
-    romanNumeral: labels.roman[i],
-    function: labels.functions[i] as ChordFunction,
-  }));
+  return withEntry('chordFunctions', () => {
+    requestObject('chordFunctions', request, 'request', true);
+    const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
+    // The module reads each chord's quality as its native ordinal.
+    const nativeEntries = entries.map((chord) => ({
+      root: chord.root,
+      quality: chordQualityOrdinal(chord.quality, 'quality'),
+    }));
+    const labels = requireModule().chordFunctions(
+      nativeEntries,
+      pitchClassOrdinal(request.key.root, 'key.root'),
+      keyModeOrdinal(request.key.mode, 'key.mode'),
+    );
+    return entries.map((chord, i) => ({
+      ...chord,
+      romanNumeral: labels.roman[i],
+      function: labels.functions[i] as ChordFunction,
+    }));
+  });
 }
 
 /**
@@ -608,36 +620,38 @@ export function chordFunctionalAnalysis(
   options: OptionsOf<ChordFunctionalAnalysisRequest>,
 ): FunctionalChord[];
 export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
-  const request = sampleOneShot<ChordFunctionalAnalysisRequest>('chordFunctionalAnalysis', args);
-  assertAudioInput('chordFunctionalAnalysis', request.samples, request.sampleRate, request);
-  const keyRoot = pitchClassOrdinal('chordFunctionalAnalysis', request.keyRoot, 'keyRoot');
-  const minDurationSec = request.minDurationSec ?? 0.3;
-  const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
-  assertFloatFields('chordFunctionalAnalysis', { minDurationSec, smoothingWindowSec });
-  const analysed = requireModule().chordFunctionalAnalysis(
-    request.samples,
-    keyRoot,
-    keyModeOrdinal(request.keyMode ?? 'major', 'keyMode'),
-    request.sampleRate,
-    minDurationSec,
-    smoothingWindowSec,
-    request.threshold ?? 0.5,
-    optionalBoolean('chordFunctionalAnalysis', request.useTriadsOnly, 'useTriadsOnly', true),
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-    optionalBoolean('chordFunctionalAnalysis', request.useBeatSync, 'useBeatSync', true),
-    optionalBoolean('chordFunctionalAnalysis', request.useHmm, 'useHmm', true),
-    request.hmmBeamWidth ?? 24,
-    optionalBoolean('chordFunctionalAnalysis', request.useKeyContext, 'useKeyContext', false),
-    optionalBoolean('chordFunctionalAnalysis', request.detectInversions, 'detectInversions', false),
-    chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
-    nativeTuning(request.tuningCents),
-  );
-  return convertChordAnalysisResult(analysed).chords.map((chord, i) => ({
-    ...chord,
-    romanNumeral: analysed.roman[i],
-    function: analysed.functions[i] as ChordFunction,
-  }));
+  return withEntry('chordFunctionalAnalysis', () => {
+    const request = sampleOneShot<ChordFunctionalAnalysisRequest>('chordFunctionalAnalysis', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const keyRoot = pitchClassOrdinal(request.keyRoot, 'keyRoot');
+    const minDurationSec = request.minDurationSec ?? 0.3;
+    const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
+    assertFloatFields({ minDurationSec, smoothingWindowSec });
+    const analysed = requireModule().chordFunctionalAnalysis(
+      request.samples,
+      keyRoot,
+      keyModeOrdinal(request.keyMode ?? 'major', 'keyMode'),
+      request.sampleRate,
+      minDurationSec,
+      smoothingWindowSec,
+      request.threshold ?? 0.5,
+      optionalBoolean(request.useTriadsOnly, 'useTriadsOnly', true),
+      request.nFft ?? 2048,
+      request.hopLength ?? 512,
+      optionalBoolean(request.useBeatSync, 'useBeatSync', true),
+      optionalBoolean(request.useHmm, 'useHmm', true),
+      request.hmmBeamWidth ?? 24,
+      optionalBoolean(request.useKeyContext, 'useKeyContext', false),
+      optionalBoolean(request.detectInversions, 'detectInversions', false),
+      chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
+      nativeTuning(request.tuningCents),
+    );
+    return convertChordAnalysisResult(analysed).chords.map((chord, i) => ({
+      ...chord,
+      romanNumeral: analysed.roman[i],
+      function: analysed.functions[i] as ChordFunction,
+    }));
+  });
 }
 
 /**
@@ -755,36 +769,38 @@ export function analyze(
   options?: OptionsOf<AnalyzeRequest>,
 ): AnalysisResult;
 export function analyze(...args: unknown[]): AnalysisResult {
-  const request = sampleOneShot<AnalyzeRequest>('analyze', args);
-  assertAudioInput('analyze', request.samples, request.sampleRate, request);
-  const { onProgress, cancel, tuningCents, ...rest } = request;
-  for (const [name, callback] of [
-    ['onProgress', onProgress],
-    ['cancel', cancel],
-  ] as const) {
-    if (callback !== undefined && callback !== null && typeof callback !== 'function') {
-      throw new TypeError(`analyze: ${name} must be a function`);
+  return withEntry('analyze', () => {
+    const request = sampleOneShot<AnalyzeRequest>('analyze', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const { onProgress, cancel, tuningCents, ...rest } = request;
+    for (const [name, callback] of [
+      ['onProgress', onProgress],
+      ['cancel', cancel],
+    ] as const) {
+      if (callback !== undefined && callback !== null && typeof callback !== 'function') {
+        throw refuseType(`${name} must be a function`);
+      }
     }
-  }
-  if (rest.chromaHighPassHz !== undefined && rest.chromaHighPassHz !== null) {
-    assertFloatValue('analyze', rest.chromaHighPassHz, 'chromaHighPassHz');
-  }
-  const nativeOptions: Record<string, unknown> = { ...rest };
-  if (tuningCents !== undefined) {
-    nativeOptions.tuningCents = nativeTuning(tuningCents);
-  }
-  const module = requireModule();
-  const result =
-    onProgress == null && cancel == null
-      ? module.analyze(request.samples, request.sampleRate, nativeOptions)
-      : module.analyzeWithProgress(
-          request.samples,
-          request.sampleRate,
-          nativeOptions,
-          onProgress ?? (() => {}),
-          cancel ?? (() => false),
-        );
-  return convertAnalysisResult(result);
+    if (rest.chromaHighPassHz !== undefined && rest.chromaHighPassHz !== null) {
+      assertFloatValue(rest.chromaHighPassHz, 'chromaHighPassHz');
+    }
+    const nativeOptions: Record<string, unknown> = { ...rest };
+    if (tuningCents !== undefined) {
+      nativeOptions.tuningCents = nativeTuning(tuningCents);
+    }
+    const module = requireModule();
+    const result =
+      onProgress == null && cancel == null
+        ? module.analyze(request.samples, request.sampleRate, nativeOptions)
+        : module.analyzeWithProgress(
+            request.samples,
+            request.sampleRate,
+            nativeOptions,
+            onProgress ?? (() => {}),
+            cancel ?? (() => false),
+          );
+    return convertAnalysisResult(result);
+  });
 }
 
 /**
@@ -876,23 +892,25 @@ export interface EstimateMeterRequest {
  * spans of different lengths are not directly comparable.
  */
 export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
-  requestObject('estimateMeter', request, 'request', true);
-  const { beats, ...options } = request;
-  if (!Array.isArray(beats)) {
-    throw new TypeError('estimateMeter: beats must be an array of { timeSec, strength }');
-  }
-  const times: number[] = [];
-  const strengths: number[] = [];
-  beats.forEach((beat, i) => {
-    if (typeof beat !== 'object' || beat === null) {
-      throw new TypeError(`estimateMeter: beats[${i}] must be an object`);
+  return withEntry('estimateMeter', () => {
+    requestObject('estimateMeter', request, 'request', true);
+    const { beats, ...options } = request;
+    if (!Array.isArray(beats)) {
+      throw refuseType('beats must be an array of { timeSec, strength }');
     }
-    assertNumber('estimateMeter', beat.timeSec, `beats[${i}].timeSec`);
-    assertNumber('estimateMeter', beat.strength, `beats[${i}].strength`);
-    times.push(beat.timeSec);
-    strengths.push(beat.strength);
+    const times: number[] = [];
+    const strengths: number[] = [];
+    beats.forEach((beat, i) => {
+      if (typeof beat !== 'object' || beat === null) {
+        throw refuseType(`beats[${i}] must be an object`);
+      }
+      assertNumber(beat.timeSec, `beats[${i}].timeSec`);
+      assertNumber(beat.strength, `beats[${i}].strength`);
+      times.push(beat.timeSec);
+      strengths.push(beat.strength);
+    });
+    return requireModule().estimateMeter(times, strengths, options);
   });
-  return requireModule().estimateMeter(times, strengths, options);
 }
 
 /**
@@ -908,20 +926,22 @@ export function analyzeImpulseResponse(
   options?: OptionsOf<AnalyzeImpulseResponseRequest>,
 ): AcousticResult;
 export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
-  const request = sampleOneShot<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
-  // Only `undefined` takes the default. `null` falls through to
-  // assertFiniteScalar, which refuses it with the same wording as any other
-  // non-finite value.
-  const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
-  assertFiniteScalar('analyzeImpulseResponse', resolvedMinDecayDb, 'minDecayDb');
-  assertAudioInput('analyzeImpulseResponse', request.samples, request.sampleRate, request);
-  const result: WasmAcousticResult = requireModule().analyzeImpulseResponseEx(
-    request.samples,
-    request.sampleRate,
-    request.nOctaveBands ?? 6,
-    resolvedMinDecayDb,
-  );
-  return result;
+  return withEntry('analyzeImpulseResponse', () => {
+    const request = sampleOneShot<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
+    // Only `undefined` takes the default. `null` falls through to
+    // assertFiniteScalar, which refuses it with the same wording as any other
+    // non-finite value.
+    const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
+    assertFiniteScalar(resolvedMinDecayDb, 'minDecayDb');
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const result: WasmAcousticResult = requireModule().analyzeImpulseResponseEx(
+      request.samples,
+      request.sampleRate,
+      request.nOctaveBands ?? 6,
+      resolvedMinDecayDb,
+    );
+    return result;
+  });
 }
 
 /**
@@ -937,17 +957,19 @@ export function detectAcoustic(
   options?: OptionsOf<DetectAcousticRequest>,
 ): AcousticResult;
 export function detectAcoustic(...args: unknown[]): AcousticResult {
-  const request = sampleOneShot<DetectAcousticRequest>('detectAcoustic', args);
-  assertAudioInput('detectAcoustic', request.samples, request.sampleRate, request);
-  const result: WasmAcousticResult = requireModule().detectAcoustic(
-    request.samples,
-    request.sampleRate,
-    request.nOctaveBands ?? 6,
-    request.nThirdOctaveSubbands ?? 24,
-    request.minDecayDb ?? 30.0,
-    request.noiseFloorMarginDb ?? 10.0,
-  );
-  return result;
+  return withEntry('detectAcoustic', () => {
+    const request = sampleOneShot<DetectAcousticRequest>('detectAcoustic', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const result: WasmAcousticResult = requireModule().detectAcoustic(
+      request.samples,
+      request.sampleRate,
+      request.nOctaveBands ?? 6,
+      request.nThirdOctaveSubbands ?? 24,
+      request.minDecayDb ?? 30.0,
+      request.noiseFloorMarginDb ?? 10.0,
+    );
+    return result;
+  });
 }
 
 /**
@@ -961,18 +983,20 @@ export function detectAcoustic(...args: unknown[]): AcousticResult {
  */
 export function synthesizeRir(request: SynthesizeRirRequest): RirResult;
 export function synthesizeRir(...args: unknown[]): RirResult {
-  const r = requestOnly<SynthesizeRirRequest>('synthesizeRir', args);
-  assertSampleRate('synthesizeRir', r.sampleRate);
-  const module = requireModule();
-  if (typeof module.synthesizeRir !== 'function') {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'libsonare was built without acoustic-simulation support',
-    );
-  }
-  const native = withEntry('synthesizeRir', () => nativeRoomOptions('synthesizeRir', r));
-  const synthesize = module.synthesizeRir;
-  return refusingInvalidGeometry('synthesizeRir', () => synthesize.call(module, native));
+  return withEntry('synthesizeRir', () => {
+    const r = requestOnly<SynthesizeRirRequest>('synthesizeRir', args);
+    assertSampleRate(r.sampleRate);
+    const module = requireModule();
+    if (typeof module.synthesizeRir !== 'function') {
+      throw codedError(
+        ErrorCode.NotSupported,
+        'libsonare was built without acoustic-simulation support',
+      );
+    }
+    const native = withEntry('synthesizeRir', () => nativeRoomOptions(r));
+    const synthesize = module.synthesizeRir;
+    return refusingInvalidGeometry(() => synthesize.call(module, native));
+  });
 }
 
 /**
@@ -990,20 +1014,22 @@ export function estimateRoom(
   options?: RoomEstimateOptions,
 ): RoomEstimateResult;
 export function estimateRoom(...args: unknown[]): RoomEstimateResult {
-  const module = requireModule();
-  if (typeof module.estimateRoom !== 'function') {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'libsonare was built without acoustic-simulation support',
+  return withEntry('estimateRoom', () => {
+    const module = requireModule();
+    if (typeof module.estimateRoom !== 'function') {
+      throw codedError(
+        ErrorCode.NotSupported,
+        'libsonare was built without acoustic-simulation support',
+      );
+    }
+    const r = sampleOneShot<EstimateRoomRequest>('estimateRoom', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return module.estimateRoom(
+      r.samples,
+      r.sampleRate,
+      withEntry('estimateRoom', () => nativeRoomOptions(r)),
     );
-  }
-  const r = sampleOneShot<EstimateRoomRequest>('estimateRoom', args);
-  assertAudioInput('estimateRoom', r.samples, r.sampleRate, r);
-  return module.estimateRoom(
-    r.samples,
-    r.sampleRate,
-    withEntry('estimateRoom', () => nativeRoomOptions('estimateRoom', r)),
-  );
+  });
 }
 
 /**
@@ -1022,31 +1048,35 @@ export function estimateRoom(...args: unknown[]): RoomEstimateResult {
  */
 export function roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry;
 export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometry {
-  const request = requestOnly<RoomGeometryFromEstimateRequest>('roomGeometryFromEstimate', args);
-  const module = requireModule();
-  if (typeof module.roomGeometryFromEstimate !== 'function') {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'libsonare was built without acoustic-simulation support',
-    );
-  }
-  if (typeof request.estimate !== 'object' || request.estimate === null) {
-    throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
-  }
-  const { bandAbsorption, lengthM, widthM, heightM } = request.estimate;
-  const geometry = module.roomGeometryFromEstimate({
-    lengthM,
-    widthM,
-    heightM,
-    ...(bandAbsorption === undefined ? {} : { bandAbsorption: Float32Array.from(bandAbsorption) }),
-  }) as RoomGeometry;
-  for (const name of ['source', 'listener'] as const) {
-    const placement = checkedPlacement('roomGeometryFromEstimate', name, request[name]);
-    if (placement !== undefined) {
-      geometry[name] = placement;
+  return withEntry('roomGeometryFromEstimate', () => {
+    const request = requestOnly<RoomGeometryFromEstimateRequest>('roomGeometryFromEstimate', args);
+    const module = requireModule();
+    if (typeof module.roomGeometryFromEstimate !== 'function') {
+      throw codedError(
+        ErrorCode.NotSupported,
+        'libsonare was built without acoustic-simulation support',
+      );
     }
-  }
-  return geometry;
+    if (typeof request.estimate !== 'object' || request.estimate === null) {
+      throw refuseType('estimate must be an object');
+    }
+    const { bandAbsorption, lengthM, widthM, heightM } = request.estimate;
+    const geometry = module.roomGeometryFromEstimate({
+      lengthM,
+      widthM,
+      heightM,
+      ...(bandAbsorption === undefined
+        ? {}
+        : { bandAbsorption: Float32Array.from(bandAbsorption) }),
+    }) as RoomGeometry;
+    for (const name of ['source', 'listener'] as const) {
+      const placement = checkedPlacement(name, request[name]);
+      if (placement !== undefined) {
+        geometry[name] = placement;
+      }
+    }
+    return geometry;
+  });
 }
 
 /**
@@ -1068,20 +1098,20 @@ export function roomMorph(
   options?: RoomMorphOptions,
 ): RoomMorphResult;
 export function roomMorph(...args: unknown[]): RoomMorphResult {
-  const module = requireModule();
-  if (typeof module.roomMorph !== 'function') {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'libsonare was built without acoustic-simulation support',
-    );
-  }
-  const r = sampleOneShot<RoomMorphRequest>('roomMorph', args);
-  assertAudioInput('roomMorph', r.samples, r.sampleRate, r);
-  const native = withEntry('roomMorph', () => nativeRoomOptions('roomMorph', r));
-  const morph = module.roomMorph;
-  return refusingInvalidGeometry('roomMorph', () =>
-    morph.call(module, r.samples, r.sampleRate, native),
-  );
+  return withEntry('roomMorph', () => {
+    const module = requireModule();
+    if (typeof module.roomMorph !== 'function') {
+      throw codedError(
+        ErrorCode.NotSupported,
+        'libsonare was built without acoustic-simulation support',
+      );
+    }
+    const r = sampleOneShot<RoomMorphRequest>('roomMorph', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const native = withEntry('roomMorph', () => nativeRoomOptions(r));
+    const morph = module.roomMorph;
+    return refusingInvalidGeometry(() => morph.call(module, r.samples, r.sampleRate, native));
+  });
 }
 
 /**
@@ -1098,30 +1128,32 @@ export function roomMorph(...args: unknown[]): RoomMorphResult {
  */
 export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult;
 export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
-  const module = requireModule();
-  if (typeof module.roomMorphStereo !== 'function') {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'libsonare was built without acoustic-simulation support',
+  return withEntry('roomMorphStereo', () => {
+    const module = requireModule();
+    if (typeof module.roomMorphStereo !== 'function') {
+      throw codedError(
+        ErrorCode.NotSupported,
+        'libsonare was built without acoustic-simulation support',
+      );
+    }
+    const request = requestOnly<RoomMorphStereoRequest>('roomMorphStereo', args);
+    assertAudioInput(request.left, request.sampleRate, request, 'left');
+    assertAudioInput(request.right, request.sampleRate, request, 'right');
+    if (request.left.length !== request.right.length) {
+      throw refuse('Stereo channel lengths must match.');
+    }
+    const spacing = request.receiverSpacingM;
+    if (spacing !== undefined && !(Number.isFinite(spacing) && spacing > 0 && spacing <= 4)) {
+      throw refuse(
+        `receiverSpacingM must be a finite number in (0, 4] metres; omitted = 0.5 (got ${spacing})`,
+      );
+    }
+    const native = withEntry('roomMorphStereo', () => nativeRoomOptions(request));
+    const morphStereo = module.roomMorphStereo;
+    return refusingInvalidGeometry(() =>
+      morphStereo.call(module, request.left, request.right, request.sampleRate, native),
     );
-  }
-  const request = requestOnly<RoomMorphStereoRequest>('roomMorphStereo', args);
-  assertAudioInput('roomMorphStereo', request.left, request.sampleRate, request, 'left');
-  assertAudioInput('roomMorphStereo', request.right, request.sampleRate, request, 'right');
-  if (request.left.length !== request.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  const spacing = request.receiverSpacingM;
-  if (spacing !== undefined && !(Number.isFinite(spacing) && spacing > 0 && spacing <= 4)) {
-    throw new RangeError(
-      `receiverSpacingM must be a finite number in (0, 4] metres; omitted = 0.5 (got ${spacing})`,
-    );
-  }
-  const native = withEntry('roomMorphStereo', () => nativeRoomOptions('roomMorphStereo', request));
-  const morphStereo = module.roomMorphStereo;
-  return refusingInvalidGeometry('roomMorphStereo', () =>
-    morphStereo.call(module, request.left, request.right, request.sampleRate, native),
-  );
+  });
 }
 
 /** Result of {@link analyzeBpm}: the chosen tempo with its alternatives and tempo curves. */
@@ -1156,19 +1188,21 @@ export function analyzeBpm(
   options?: OptionsOf<AnalyzeBpmRequest>,
 ): BpmAnalysisResult;
 export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
-  const request = sampleOneShot<AnalyzeBpmRequest>('analyzeBpm', args);
-  assertAudioInput('analyzeBpm', request.samples, request.sampleRate, request);
-  assertNonNegativeInteger('analyzeBpm', request.maxCandidates ?? 5, 'maxCandidates');
-  return requireModule().analyzeBpm(
-    request.samples,
-    request.sampleRate,
-    request.bpmMin,
-    request.bpmMax,
-    request.startBpm,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-    request.maxCandidates ?? 5,
-  );
+  return withEntry('analyzeBpm', () => {
+    const request = sampleOneShot<AnalyzeBpmRequest>('analyzeBpm', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    assertNonNegativeInteger(request.maxCandidates ?? 5, 'maxCandidates');
+    return requireModule().analyzeBpm(
+      request.samples,
+      request.sampleRate,
+      request.bpmMin,
+      request.bpmMax,
+      request.startBpm,
+      request.nFft ?? 2048,
+      request.hopLength ?? 512,
+      request.maxCandidates ?? 5,
+    );
+  });
 }
 
 /**
@@ -1181,18 +1215,20 @@ export function analyzeRhythm(
   options?: OptionsOf<AnalyzeRhythmRequest>,
 ): RhythmResult;
 export function analyzeRhythm(...args: unknown[]): RhythmResult {
-  const request = sampleOneShot<AnalyzeRhythmRequest>('analyzeRhythm', args);
-  assertAudioInput('analyzeRhythm', request.samples, request.sampleRate, request);
-  const result = requireModule().analyzeRhythm(
-    request.samples,
-    request.sampleRate,
-    request.bpmMin,
-    request.bpmMax,
-    request.startBpm,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-  );
-  return { ...result, grooveType: result.grooveType as GrooveType };
+  return withEntry('analyzeRhythm', () => {
+    const request = sampleOneShot<AnalyzeRhythmRequest>('analyzeRhythm', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const result = requireModule().analyzeRhythm(
+      request.samples,
+      request.sampleRate,
+      request.bpmMin,
+      request.bpmMax,
+      request.startBpm,
+      request.nFft ?? 2048,
+      request.hopLength ?? 512,
+    );
+    return { ...result, grooveType: result.grooveType as GrooveType };
+  });
 }
 
 /**
@@ -1205,27 +1241,29 @@ export function analyzeDynamics(
   options?: OptionsOf<AnalyzeDynamicsRequest>,
 ): DynamicsResult;
 export function analyzeDynamics(...args: unknown[]): DynamicsResult {
-  const request = sampleOneShot<AnalyzeDynamicsRequest>('analyzeDynamics', args);
-  assertAudioInput('analyzeDynamics', request.samples, request.sampleRate, request);
-  const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
-  assertNonNegativeFloatValue('analyzeDynamics', compressionThresholdDb, 'compressionThresholdDb');
-  const result = requireModule().analyzeDynamics(
-    request.samples,
-    request.sampleRate,
-    request.windowSec ?? 0.4,
-    request.hopLength ?? 512,
-    compressionThresholdDb,
-  );
-  return {
-    dynamicRangeDb: result.dynamicRangeDb,
-    peakDb: result.peakDb,
-    rmsDb: result.rmsDb,
-    crestFactor: result.crestFactor,
-    loudnessRangeLu: result.loudnessRangeLu,
-    isCompressed: result.isCompressed,
-    loudnessTimesSec: result.loudnessTimesSec,
-    loudnessRmsDb: result.loudnessRmsDb,
-  };
+  return withEntry('analyzeDynamics', () => {
+    const request = sampleOneShot<AnalyzeDynamicsRequest>('analyzeDynamics', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
+    assertNonNegativeFloatValue(compressionThresholdDb, 'compressionThresholdDb');
+    const result = requireModule().analyzeDynamics(
+      request.samples,
+      request.sampleRate,
+      request.windowSec ?? 0.4,
+      request.hopLength ?? 512,
+      compressionThresholdDb,
+    );
+    return {
+      dynamicRangeDb: result.dynamicRangeDb,
+      peakDb: result.peakDb,
+      rmsDb: result.rmsDb,
+      crestFactor: result.crestFactor,
+      loudnessRangeLu: result.loudnessRangeLu,
+      isCompressed: result.isCompressed,
+      loudnessTimesSec: result.loudnessTimesSec,
+      loudnessRmsDb: result.loudnessRmsDb,
+    };
+  });
 }
 
 /**
@@ -1239,15 +1277,17 @@ export function analyzeTimbre(
   options?: OptionsOf<AnalyzeTimbreRequest>,
 ): TimbreResult;
 export function analyzeTimbre(...args: unknown[]): TimbreResult {
-  const request = sampleOneShot<AnalyzeTimbreRequest>('analyzeTimbre', args);
-  assertAudioInput('analyzeTimbre', request.samples, request.sampleRate, request);
-  return requireModule().analyzeTimbre(
-    request.samples,
-    request.sampleRate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-    request.nMels ?? 128,
-    request.nMfcc ?? 13,
-    request.windowSec ?? 0.5,
-  );
+  return withEntry('analyzeTimbre', () => {
+    const request = sampleOneShot<AnalyzeTimbreRequest>('analyzeTimbre', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return requireModule().analyzeTimbre(
+      request.samples,
+      request.sampleRate,
+      request.nFft ?? 2048,
+      request.hopLength ?? 512,
+      request.nMels ?? 128,
+      request.nMfcc ?? 13,
+      request.windowSec ?? 0.5,
+    );
+  });
 }

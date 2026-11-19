@@ -17,15 +17,12 @@ import { assertIntegerValue, assertPositiveInteger } from '../validation.js';
  * reader that names it; `hopLength` is checked `> 0` outright, so positivity is
  * this field's own domain and the `hopLength <= nFft` pairing stays the core's.
  */
-export function assertRepairGeometry(
-  fnName: string,
-  options: { nFft?: number; hopLength?: number },
-): void {
+export function assertRepairGeometry(options: { nFft?: number; hopLength?: number }): void {
   if (options.nFft !== undefined) {
-    assertIntegerValue(fnName, options.nFft, 'nFft');
+    assertIntegerValue(options.nFft, 'nFft');
   }
   if (options.hopLength !== undefined) {
-    assertPositiveInteger(fnName, options.hopLength, 'hopLength');
+    assertPositiveInteger(options.hopLength, 'hopLength');
   }
 }
 

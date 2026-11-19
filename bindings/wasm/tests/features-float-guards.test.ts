@@ -34,7 +34,7 @@ const SR = 8000;
 const N = 4096; // ~0.512s at SR -- short enough for the expensive (CQT/pYIN) entries too.
 
 /** The suffix every one of these refusals ends with, whatever the key is. */
-const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
+const RANGE_MESSAGE = 'must be finite and in [-3.4028235e38, 3.4028235e38]';
 
 /**
  * Values that saturate onto a legal float. These are the ones that matter:
@@ -134,8 +134,6 @@ function N_FRAMES() {
 /** One float field of one entry point, and how to drive it with a value. */
 interface FloatField {
   entry: string;
-  /** The public entry the refusal names, when the raw export differs from it. */
-  refusedAs?: string;
   key: string;
   run: (value: number) => unknown;
 }
@@ -229,8 +227,6 @@ const FLOAT_FIELDS: FloatField[] = [
   },
   {
     entry: 'nnlsChromaEx',
-    // The raw export the facade calls refuses under the public entry's name.
-    refusedAs: 'nnlsChroma',
     key: 'stftBlendWeight',
     run: (v) => m().nnlsChromaEx(threePartials, SR, true, v, 512, 256),
   },
@@ -251,11 +247,11 @@ describe('every converted float parameter refuses a value the float type cannot 
 
   it.each(FLOAT_FIELDS)(
     '$entry names $key rather than accepting an infinity',
-    ({ entry, refusedAs, key, run }) => {
+    ({ entry, key, run }) => {
       for (const value of REFUSED) {
         expectRangeRefusal(
           capture(() => run(value)),
-          refusedAs ?? entry,
+          entry,
           key,
           `${key} = ${value}`,
         );

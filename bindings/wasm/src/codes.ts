@@ -1,3 +1,4 @@
+import { refuse, refuseType } from './internal/entry.js';
 import type {
   AutomationCurve,
   MeterTap,
@@ -20,13 +21,13 @@ export function resolveEnumOrdinal(
   enumName: string,
 ): number {
   if (typeof value !== 'string') {
-    throw new TypeError(`${enumName} must be a name, got ${typeof value}`);
+    throw refuseType(`${enumName} must be a name, got ${typeof value}`);
   }
   // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
   if (Object.prototype.hasOwnProperty.call(values, value)) {
     return values[value];
   }
-  throw new RangeError(`Invalid ${enumName}: ${value}`);
+  throw refuse(`Invalid ${enumName}: ${value}`);
 }
 
 /**
@@ -98,7 +99,7 @@ export function sidechainCheckFromCode(code: number): SidechainCheck {
   }
   const reason = SIDECHAIN_REFUSALS[code - 1];
   if (reason === undefined) {
-    throw new RangeError(`Unknown sidechain refusal: ${code}`);
+    throw refuse(`Unknown sidechain refusal: ${code}`);
   }
   return { ok: false, reason };
 }

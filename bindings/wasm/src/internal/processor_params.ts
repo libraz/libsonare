@@ -1,4 +1,5 @@
 import { getSonareModule } from '../module_state.js';
+import { refuseType } from './entry.js';
 
 /** Params as the caller wrote them: values are checked against the processor's declared types here. */
 type LooseParams = Record<string, number | boolean | string | readonly number[]>;
@@ -23,7 +24,7 @@ export function resolveProcessorParams(
     }
     const number = getSonareModule().masteringEnumValue(processor, key, value);
     if (number === null) {
-      throw new TypeError(`Parameter '${key}' must be a number or boolean (got a string).`);
+      throw refuseType(`Parameter '${key}' must be a number or boolean (got a string).`);
     }
     resolved ??= { ...params } as Record<string, number | boolean>;
     resolved[key] = number;
@@ -41,7 +42,6 @@ export function resolveProcessorParams(
  * left to the core, which refuses it by name.
  */
 export function resolveInsertParams(
-  fnName: string,
   processor: string,
   params: object,
 ): Record<string, number | boolean | string | number[]> {
@@ -56,24 +56,24 @@ export function resolveInsertParams(
     const kind = kinds.get(key);
     if (kind === 'string') {
       if (typeof value !== 'string') {
-        throw new TypeError(`${fnName}: params.${key} must be a string`);
+        throw refuseType(`params.${key} must be a string`);
       }
       out[key] = value;
     } else if (kind === 'array') {
       if (!Array.isArray(value) || value.some((item) => typeof item !== 'number')) {
-        throw new TypeError(`${fnName}: params.${key} must be an array of numbers`);
+        throw refuseType(`params.${key} must be an array of numbers`);
       }
       for (const item of value as number[]) {
-        assertFiniteScalar(fnName, item, `params.${key}[]`);
+        assertFiniteScalar(item, `params.${key}[]`);
       }
       out[key] = [...(value as number[])];
     } else if (typeof value === 'string' || typeof value === 'boolean') {
       scalars[key] = value;
     } else if (typeof value === 'number') {
-      assertFiniteScalar(fnName, value, `params.${key}`);
+      assertFiniteScalar(value, `params.${key}`);
       scalars[key] = value;
     } else {
-      throw new TypeError(`${fnName}: params.${key} must be a number, boolean or enum name`);
+      throw refuseType(`params.${key} must be a number, boolean or enum name`);
     }
   }
   return { ...out, ...resolveProcessorParams(processor, scalars) };

@@ -1,5 +1,5 @@
 import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_config.js';
-import { withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
@@ -296,29 +296,29 @@ export interface MasteringStreamingPreviewRequest {
 }
 
 /** The preview targets in the native spelling: absent is the built-in set, an empty list is refused. */
-function previewPlatforms(fnName: string, platforms: unknown): StreamingPlatform[] {
+function previewPlatforms(platforms: unknown): StreamingPlatform[] {
   if (platforms === undefined || platforms === null) {
     return [];
   }
   if (!Array.isArray(platforms)) {
-    throw new TypeError(`${fnName}: platforms must be an array`);
+    throw refuseType(`platforms must be an array`);
   }
   if (platforms.length === 0) {
-    throw new RangeError(`${fnName}: platforms must not be empty; omit it for the built-in set`);
+    throw refuse(`platforms must not be empty; omit it for the built-in set`);
   }
   platforms.forEach((platform, i) => {
     if (typeof platform !== 'object' || platform === null || Array.isArray(platform)) {
-      throw new TypeError(`${fnName}: platforms[${i}] must be an object`);
+      throw refuseType(`platforms[${i}] must be an object`);
     }
     const { name, targetLufs, ceilingDbtp } = platform as Record<string, unknown>;
     if (typeof name !== 'string') {
-      throw new TypeError(`${fnName}: platforms[${i}].name must be a string`);
+      throw refuseType(`platforms[${i}].name must be a string`);
     }
     if (typeof targetLufs !== 'number') {
-      throw new TypeError(`${fnName}: platforms[${i}].targetLufs must be a number`);
+      throw refuseType(`platforms[${i}].targetLufs must be a number`);
     }
     if (typeof ceilingDbtp !== 'number') {
-      throw new TypeError(`${fnName}: platforms[${i}].ceilingDbtp must be a number`);
+      throw refuseType(`platforms[${i}].ceilingDbtp must be a number`);
     }
   });
   return platforms as StreamingPlatform[];
@@ -358,26 +358,26 @@ export interface MasteringInsertTimingRequest<N extends MasteringInsertName = Ma
 }
 
 // `releaseMs` and `truePeakOversample` read 0 as "library default" natively, so an omitted one is passed as that 0.
-function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest) {
+function nativeLoudnessArgs(r: MasteringNormalizeLoudnessRequest) {
   if (r.targetLufs !== undefined && r.targetLufs !== null) {
-    assertFloatValue(fnName, r.targetLufs, 'targetLufs');
+    assertFloatValue(r.targetLufs, 'targetLufs');
   }
   if (r.ceilingDbtp !== undefined && r.ceilingDbtp !== null) {
-    assertFloatValue(fnName, r.ceilingDbtp, 'ceilingDbtp');
+    assertFloatValue(r.ceilingDbtp, 'ceilingDbtp');
   }
-  refuseZeroSentinel(fnName, r, ['truePeakOversample']);
+  refuseZeroSentinel(r, ['truePeakOversample']);
   if (r.truePeakOversample !== undefined && r.truePeakOversample !== null) {
-    assertIntegerValue(fnName, r.truePeakOversample, 'truePeakOversample');
+    assertIntegerValue(r.truePeakOversample, 'truePeakOversample');
   }
   if (r.releaseMs !== undefined && r.releaseMs !== null) {
-    assertPositiveFloatValue(fnName, r.releaseMs, 'releaseMs');
+    assertPositiveFloatValue(r.releaseMs, 'releaseMs');
   }
   return [
     r.targetLufs ?? -14.0,
     r.ceilingDbtp ?? -1.0,
     r.truePeakOversample ?? 0,
     r.releaseMs ?? 0,
-    optionalBoolean(fnName, r.applyGainAtInputRate, 'applyGainAtInputRate', false),
+    optionalBoolean(r.applyGainAtInputRate, 'applyGainAtInputRate', false),
   ] as const;
 }
 
@@ -401,22 +401,22 @@ export function masteringNormalizeLoudness(
   options?: OptionsOf<MasteringNormalizeLoudnessRequest>,
 ): MasteringNormalizeLoudnessResult;
 export function masteringNormalizeLoudness(...args: unknown[]): MasteringNormalizeLoudnessResult {
-  const r = sampleOneShot<MasteringNormalizeLoudnessRequest>('masteringNormalizeLoudness', args);
-  assertAudioInput('masteringNormalizeLoudness', r.samples, r.sampleRate, r);
-  const result = requireModule().mastering(
-    r.samples,
-    r.sampleRate,
-    ...nativeLoudnessArgs('masteringNormalizeLoudness', r),
-  );
-  return result as MasteringNormalizeLoudnessResult;
+  return withEntry('masteringNormalizeLoudness', () => {
+    const r = sampleOneShot<MasteringNormalizeLoudnessRequest>('masteringNormalizeLoudness', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const result = requireModule().mastering(r.samples, r.sampleRate, ...nativeLoudnessArgs(r));
+    return result as MasteringNormalizeLoudnessResult;
+  });
 }
 
 /** Names of the processors `masteringApplyProcessor` accepts. */
 export function masteringProcessorNames(): SoloProcessor[] {
-  // embind hands back a vector whose constructor is not this realm's Array, so the
-  // result is not structured-cloneable (breaks postMessage to a Worker).
-  // Array.from() re-roots it as a plain Array. Same for the sibling *Names() below.
-  return Array.from(requireModule().masteringProcessorNames()) as SoloProcessor[];
+  return withEntry('masteringProcessorNames', () => {
+    // embind hands back a vector whose constructor is not this realm's Array, so the
+    // result is not structured-cloneable (breaks postMessage to a Worker).
+    // Array.from() re-roots it as a plain Array. Same for the sibling *Names() below.
+    return Array.from(requireModule().masteringProcessorNames()) as SoloProcessor[];
+  });
 }
 
 /**
@@ -425,7 +425,9 @@ export function masteringProcessorNames(): SoloProcessor[] {
  * `sonare_mastering_insert_names` (which joins this list) as an array.
  */
 export function masteringInsertNames(): MasteringInsertName[] {
-  return Array.from(requireModule().masteringInsertNames()) as MasteringInsertName[];
+  return withEntry('masteringInsertNames', () => {
+    return Array.from(requireModule().masteringInsertNames()) as MasteringInsertName[];
+  });
 }
 
 /**
@@ -442,13 +444,15 @@ export function masteringInsertNames(): MasteringInsertName[] {
 export function masteringInsertParamNames<N extends MasteringInsertName>(
   insert: N,
 ): (keyof MasteringProcessorParams<N> & string)[] {
-  assertString('masteringInsertParamNames', insert, 'insert');
-  if (!withEntry('masteringInsertParamNames', () => masteringInsertNames()).includes(insert)) {
-    throw new RangeError(`masteringInsertParamNames: unknown insert '${insert}'`);
-  }
-  return Array.from(
-    requireModule().masteringInsertParamNames(insert),
-  ) as (keyof MasteringProcessorParams<N> & string)[];
+  return withEntry('masteringInsertParamNames', () => {
+    assertString(insert, 'insert');
+    if (!withEntry('masteringInsertParamNames', () => masteringInsertNames()).includes(insert)) {
+      throw refuse(`unknown insert '${insert}'`);
+    }
+    return Array.from(
+      requireModule().masteringInsertParamNames(insert),
+    ) as (keyof MasteringProcessorParams<N> & string)[];
+  });
 }
 
 /**
@@ -474,17 +478,19 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
 export function masteringInsertParamInfo(
   request: MasteringInsertParamInfoRequest,
 ): MasteringInsertParamInfo[] {
-  const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
-  assertString('masteringInsertParamInfo', r.insert, 'insert');
-  const module = requireModule();
-  if (r.sampleRate !== undefined && r.sampleRate !== null) {
-    assertSampleRate('masteringInsertParamInfo', r.sampleRate);
-  }
-  const json =
-    r.sampleRate === undefined || r.sampleRate === null
-      ? module.masteringInsertParamInfo(r.insert)
-      : module.masteringInsertParamInfoAtRate(r.insert, r.sampleRate);
-  return parseRecordJson(json) as MasteringInsertParamInfo[];
+  return withEntry('masteringInsertParamInfo', () => {
+    const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
+    assertString(r.insert, 'insert');
+    const module = requireModule();
+    if (r.sampleRate !== undefined && r.sampleRate !== null) {
+      assertSampleRate(r.sampleRate);
+    }
+    const json =
+      r.sampleRate === undefined || r.sampleRate === null
+        ? module.masteringInsertParamInfo(r.insert)
+        : module.masteringInsertParamInfoAtRate(r.insert, r.sampleRate);
+    return parseRecordJson(json) as MasteringInsertParamInfo[];
+  });
 }
 
 /** One built-in amp-sim rig with its resolved starting configuration. */
@@ -505,8 +511,10 @@ export interface MasteringAmpPresetCatalogEntry {
  * continue to define the canonical DSP configuration.
  */
 export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
-  const json = requireModule().masteringAmpPresetCatalog();
-  return parseRecordJson(json) as MasteringAmpPresetCatalogEntry[];
+  return withEntry('masteringAmpPresetCatalog', () => {
+    const json = requireModule().masteringAmpPresetCatalog();
+    return parseRecordJson(json) as MasteringAmpPresetCatalogEntry[];
+  });
 }
 
 /**
@@ -529,15 +537,15 @@ export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
 export function masteringInsertTiming<N extends MasteringInsertName>(
   request: MasteringInsertTimingRequest<N>,
 ): MasteringInsertTiming {
-  const r = requestOnly<MasteringInsertTimingRequest<N>>('masteringInsertTiming', [request]);
-  assertString('masteringInsertTiming', r.insert, 'insert');
-  assertSampleRate('masteringInsertTiming', r.sampleRate);
-  const json = JSON.stringify(
-    withEntry('masteringInsertTiming', () =>
-      resolveInsertParams('masteringInsertTiming', r.insert, r.params ?? {}),
-    ),
-  );
-  return requireModule().masteringInsertTiming(r.insert, json, r.sampleRate);
+  return withEntry('masteringInsertTiming', () => {
+    const r = requestOnly<MasteringInsertTimingRequest<N>>('masteringInsertTiming', [request]);
+    assertString(r.insert, 'insert');
+    assertSampleRate(r.sampleRate);
+    const json = JSON.stringify(
+      withEntry('masteringInsertTiming', () => resolveInsertParams(r.insert, r.params ?? {})),
+    );
+    return requireModule().masteringInsertTiming(r.insert, json, r.sampleRate);
+  });
 }
 
 /**
@@ -547,23 +555,31 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
  * instead of offering ids the realtime strip would reject.
  */
 export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
-  const json = requireModule().masteringProcessorCatalog();
-  return parseRecordJson(json) as MasteringProcessorCatalogEntry[];
+  return withEntry('masteringProcessorCatalog', () => {
+    const json = requireModule().masteringProcessorCatalog();
+    return parseRecordJson(json) as MasteringProcessorCatalogEntry[];
+  });
 }
 
 /** Names of the pair processors `masteringApplyPairProcessor` accepts. */
 export function masteringPairProcessorNames(): PairProcessor[] {
-  return Array.from(requireModule().masteringPairProcessorNames()) as PairProcessor[];
+  return withEntry('masteringPairProcessorNames', () => {
+    return Array.from(requireModule().masteringPairProcessorNames()) as PairProcessor[];
+  });
 }
 
 /** Names of the pair analyses `masteringAnalyzePair` accepts. */
 export function masteringPairAnalysisNames(): PairAnalysis[] {
-  return Array.from(requireModule().masteringPairAnalysisNames()) as PairAnalysis[];
+  return withEntry('masteringPairAnalysisNames', () => {
+    return Array.from(requireModule().masteringPairAnalysisNames()) as PairAnalysis[];
+  });
 }
 
 /** Names of the stereo analyses `masteringAnalyzeStereo` accepts. */
 export function masteringStereoAnalysisNames(): StereoAnalysis[] {
-  return Array.from(requireModule().masteringStereoAnalysisNames()) as StereoAnalysis[];
+  return withEntry('masteringStereoAnalysisNames', () => {
+    return Array.from(requireModule().masteringStereoAnalysisNames()) as StereoAnalysis[];
+  });
 }
 
 /**
@@ -584,16 +600,20 @@ export function masteringApplyProcessor<P extends SoloProcessor>(
   options: OptionsOf<MasteringApplyProcessorRequest<P>>,
 ): MasteringResult;
 export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
-  const r = sampleOneShot<MasteringApplyProcessorRequest>('masteringApplyProcessor', args);
-  assertString('masteringApplyProcessor', r.processor, 'processor');
-  assertAudioInput('masteringApplyProcessor', r.samples, r.sampleRate, r);
-  const result = requireModule().masteringProcess(
-    r.processor,
-    r.samples,
-    r.sampleRate,
-    withEntry('masteringApplyProcessor', () => resolveProcessorParams(r.processor, r.params ?? {})),
-  );
-  return result as MasteringResult;
+  return withEntry('masteringApplyProcessor', () => {
+    const r = sampleOneShot<MasteringApplyProcessorRequest>('masteringApplyProcessor', args);
+    assertString(r.processor, 'processor');
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const result = requireModule().masteringProcess(
+      r.processor,
+      r.samples,
+      r.sampleRate,
+      withEntry('masteringApplyProcessor', () =>
+        resolveProcessorParams(r.processor, r.params ?? {}),
+      ),
+    );
+    return result as MasteringResult;
+  });
 }
 
 /**
@@ -606,24 +626,26 @@ export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
 export function masteringApplyProcessorStereo<P extends SoloProcessor>(
   request: MasteringApplyProcessorStereoRequest<P>,
 ): MasteringStereoResult {
-  const r = requestOnly<MasteringApplyProcessorStereoRequest>('masteringApplyProcessorStereo', [
-    request,
-  ]);
-  assertString('masteringApplyProcessorStereo', r.processor, 'processor');
-  assertAudioInput('masteringApplyProcessorStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringApplyProcessorStereo', r.right, r.sampleRate, r, 'right');
-  if (r.left.length !== r.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  return requireModule().masteringProcessStereo(
-    r.processor,
-    r.left,
-    r.right,
-    r.sampleRate,
-    withEntry('masteringApplyProcessorStereo', () =>
-      resolveProcessorParams(r.processor, r.params ?? {}),
-    ),
-  );
+  return withEntry('masteringApplyProcessorStereo', () => {
+    const r = requestOnly<MasteringApplyProcessorStereoRequest>('masteringApplyProcessorStereo', [
+      request,
+    ]);
+    assertString(r.processor, 'processor');
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    if (r.left.length !== r.right.length) {
+      throw refuse('Stereo channel lengths must match.');
+    }
+    return requireModule().masteringProcessStereo(
+      r.processor,
+      r.left,
+      r.right,
+      r.sampleRate,
+      withEntry('masteringApplyProcessorStereo', () =>
+        resolveProcessorParams(r.processor, r.params ?? {}),
+      ),
+    );
+  });
 }
 
 /**
@@ -631,7 +653,6 @@ export function masteringApplyProcessorStereo<P extends SoloProcessor>(
  * `source` and `reference` may have independent lengths and rates.
  */
 function assertPairAudio(
-  fnName: string,
   r: {
     sampleRate: number;
     referenceSampleRate?: number;
@@ -639,10 +660,10 @@ function assertPairAudio(
   source: [string, unknown],
   reference: [string, unknown],
 ): number {
-  assertAudioInput(fnName, source[1], r.sampleRate, r, source[0]);
+  assertAudioInput(source[1], r.sampleRate, r, source[0]);
   const referenceRate = r.referenceSampleRate ?? r.sampleRate;
-  assertSampleRate(fnName, referenceRate, 'referenceSampleRate');
-  assertAudioInput(fnName, reference[1], referenceRate, r, reference[0]);
+  assertSampleRate(referenceRate, 'referenceSampleRate');
+  assertAudioInput(reference[1], referenceRate, r, reference[0]);
   return referenceRate;
 }
 
@@ -657,21 +678,22 @@ function assertPairAudio(
 export function masteringApplyPairProcessor<P extends PairProcessor>(
   request: MasteringApplyPairProcessorRequest<P>,
 ): MasteringResult {
-  const r = requestOnly<MasteringApplyPairProcessorRequest>('masteringApplyPairProcessor', [
-    request,
-  ]);
-  const fn = 'masteringApplyPairProcessor';
-  assertString(fn, r.processor, 'processor');
-  const referenceRate = assertPairAudio(fn, r, ['source', r.source], ['reference', r.reference]);
-  const result = requireModule().masteringPairProcess(
-    r.processor,
-    r.source,
-    r.reference,
-    r.sampleRate,
-    referenceRate,
-    r.params ?? {},
-  );
-  return result as MasteringResult;
+  return withEntry('masteringApplyPairProcessor', () => {
+    const r = requestOnly<MasteringApplyPairProcessorRequest>('masteringApplyPairProcessor', [
+      request,
+    ]);
+    assertString(r.processor, 'processor');
+    const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
+    const result = requireModule().masteringPairProcess(
+      r.processor,
+      r.source,
+      r.reference,
+      r.sampleRate,
+      referenceRate,
+      r.params ?? {},
+    );
+    return result as MasteringResult;
+  });
 }
 
 /**
@@ -684,34 +706,35 @@ export function masteringApplyPairProcessor<P extends PairProcessor>(
 export function masteringApplyPairProcessorStereo(
   request: MasteringApplyPairProcessorStereoRequest,
 ): MasteringStereoResult {
-  const r = requestOnly<MasteringApplyPairProcessorStereoRequest>(
-    'masteringApplyPairProcessorStereo',
-    [request],
-  );
-  const fn = 'masteringApplyPairProcessorStereo';
-  assertString(fn, r.processor, 'processor');
-  assertAudioInput(fn, r.sourceLeft, r.sampleRate, r, 'sourceLeft');
-  assertAudioInput(fn, r.sourceRight, r.sampleRate, r, 'sourceRight');
-  const referenceRate = r.referenceSampleRate ?? r.sampleRate;
-  assertSampleRate(fn, referenceRate, 'referenceSampleRate');
-  assertAudioInput(fn, r.referenceLeft, referenceRate, r, 'referenceLeft');
-  assertAudioInput(fn, r.referenceRight, referenceRate, r, 'referenceRight');
-  if (r.sourceLeft.length !== r.sourceRight.length) {
-    throw new RangeError('Source left and right channel lengths must match.');
-  }
-  if (r.referenceLeft.length !== r.referenceRight.length) {
-    throw new RangeError('Reference left and right channel lengths must match.');
-  }
-  return requireModule().masteringPairProcessStereo(
-    r.processor,
-    r.sourceLeft,
-    r.sourceRight,
-    r.referenceLeft,
-    r.referenceRight,
-    r.sampleRate,
-    referenceRate,
-    r.params ?? {},
-  );
+  return withEntry('masteringApplyPairProcessorStereo', () => {
+    const r = requestOnly<MasteringApplyPairProcessorStereoRequest>(
+      'masteringApplyPairProcessorStereo',
+      [request],
+    );
+    assertString(r.processor, 'processor');
+    assertAudioInput(r.sourceLeft, r.sampleRate, r, 'sourceLeft');
+    assertAudioInput(r.sourceRight, r.sampleRate, r, 'sourceRight');
+    const referenceRate = r.referenceSampleRate ?? r.sampleRate;
+    assertSampleRate(referenceRate, 'referenceSampleRate');
+    assertAudioInput(r.referenceLeft, referenceRate, r, 'referenceLeft');
+    assertAudioInput(r.referenceRight, referenceRate, r, 'referenceRight');
+    if (r.sourceLeft.length !== r.sourceRight.length) {
+      throw refuse('Source left and right channel lengths must match.');
+    }
+    if (r.referenceLeft.length !== r.referenceRight.length) {
+      throw refuse('Reference left and right channel lengths must match.');
+    }
+    return requireModule().masteringPairProcessStereo(
+      r.processor,
+      r.sourceLeft,
+      r.sourceRight,
+      r.referenceLeft,
+      r.referenceRight,
+      r.sampleRate,
+      referenceRate,
+      r.params ?? {},
+    );
+  });
 }
 
 /**
@@ -726,20 +749,21 @@ export function masteringApplyPairProcessorStereo(
 export function masteringAnalyzePair<A extends PairAnalysis>(
   request: MasteringAnalyzePairRequest<A>,
 ): PairAnalysisResultMap[A] {
-  const r = requestOnly<MasteringAnalyzePairRequest>('masteringAnalyzePair', [request]);
-  const fn = 'masteringAnalyzePair';
-  assertString(fn, r.analysis, 'analysis');
-  const referenceRate = assertPairAudio(fn, r, ['source', r.source], ['reference', r.reference]);
-  return parseRecordJson(
-    requireModule().masteringPairAnalyze(
-      r.analysis,
-      r.source,
-      r.reference,
-      r.sampleRate,
-      referenceRate,
-      r.params ?? {},
-    ),
-  ) as PairAnalysisResultMap[A];
+  return withEntry('masteringAnalyzePair', () => {
+    const r = requestOnly<MasteringAnalyzePairRequest>('masteringAnalyzePair', [request]);
+    assertString(r.analysis, 'analysis');
+    const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
+    return parseRecordJson(
+      requireModule().masteringPairAnalyze(
+        r.analysis,
+        r.source,
+        r.reference,
+        r.sampleRate,
+        referenceRate,
+        r.params ?? {},
+      ),
+    ) as PairAnalysisResultMap[A];
+  });
 }
 
 /**
@@ -752,20 +776,21 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
 export function masteringAnalyzeStereo<A extends StereoAnalysis>(
   request: MasteringAnalyzeStereoRequest<A>,
 ): StereoAnalysisResultMap[A] {
-  const r = requestOnly<MasteringAnalyzeStereoRequest>('masteringAnalyzeStereo', [request]);
-  const fn = 'masteringAnalyzeStereo';
-  assertString(fn, r.analysis, 'analysis');
-  assertAudioInput(fn, r.left, r.sampleRate, r, 'left');
-  assertAudioInput(fn, r.right, r.sampleRate, r, 'right');
-  return parseRecordJson(
-    requireModule().masteringStereoAnalyze(
-      r.analysis,
-      r.left,
-      r.right,
-      r.sampleRate,
-      r.params ?? {},
-    ),
-  ) as StereoAnalysisResultMap[A];
+  return withEntry('masteringAnalyzeStereo', () => {
+    const r = requestOnly<MasteringAnalyzeStereoRequest>('masteringAnalyzeStereo', [request]);
+    assertString(r.analysis, 'analysis');
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return parseRecordJson(
+      requireModule().masteringStereoAnalyze(
+        r.analysis,
+        r.left,
+        r.right,
+        r.sampleRate,
+        r.params ?? {},
+      ),
+    ) as StereoAnalysisResultMap[A];
+  });
 }
 
 /**
@@ -796,49 +821,47 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
 export function masteringAbMatchLoudness(
   request: MasteringAbMatchLoudnessRequest,
 ): LoudnessMatchResult {
-  const r = requestOnly<MasteringAbMatchLoudnessRequest>('masteringAbMatchLoudness', [request]);
-  const referenceRate = assertPairAudio(
-    'masteringAbMatchLoudness',
-    r,
-    ['source', r.source],
-    ['reference', r.reference],
-  );
-  return requireModule().masteringAbMatchLoudness(
-    r.source,
-    r.reference,
-    r.sampleRate,
-    referenceRate,
-  );
+  return withEntry('masteringAbMatchLoudness', () => {
+    const r = requestOnly<MasteringAbMatchLoudnessRequest>('masteringAbMatchLoudness', [request]);
+    const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
+    return requireModule().masteringAbMatchLoudness(
+      r.source,
+      r.reference,
+      r.sampleRate,
+      referenceRate,
+    );
+  });
 }
 
 /** Gain-match a stereo source to a stereo reference with one shared gain. */
 export function masteringAbMatchLoudnessStereo(
   request: MasteringAbMatchLoudnessStereoRequest,
 ): LoudnessMatchStereoResult {
-  const r = requestOnly<MasteringAbMatchLoudnessStereoRequest>('masteringAbMatchLoudnessStereo', [
-    request,
-  ]);
-  const fn = 'masteringAbMatchLoudnessStereo';
-  assertAudioInput(fn, r.sourceLeft, r.sampleRate, r, 'sourceLeft');
-  assertAudioInput(fn, r.sourceRight, r.sampleRate, r, 'sourceRight');
-  const referenceRate = r.referenceSampleRate ?? r.sampleRate;
-  assertSampleRate(fn, referenceRate, 'referenceSampleRate');
-  assertAudioInput(fn, r.referenceLeft, referenceRate, r, 'referenceLeft');
-  assertAudioInput(fn, r.referenceRight, referenceRate, r, 'referenceRight');
-  if (r.sourceLeft.length !== r.sourceRight.length) {
-    throw new RangeError('Source left and right channel lengths must match.');
-  }
-  if (r.referenceLeft.length !== r.referenceRight.length) {
-    throw new RangeError('Reference left and right channel lengths must match.');
-  }
-  return requireModule().masteringAbMatchLoudnessStereo(
-    r.sourceLeft,
-    r.sourceRight,
-    r.referenceLeft,
-    r.referenceRight,
-    r.sampleRate,
-    referenceRate,
-  );
+  return withEntry('masteringAbMatchLoudnessStereo', () => {
+    const r = requestOnly<MasteringAbMatchLoudnessStereoRequest>('masteringAbMatchLoudnessStereo', [
+      request,
+    ]);
+    assertAudioInput(r.sourceLeft, r.sampleRate, r, 'sourceLeft');
+    assertAudioInput(r.sourceRight, r.sampleRate, r, 'sourceRight');
+    const referenceRate = r.referenceSampleRate ?? r.sampleRate;
+    assertSampleRate(referenceRate, 'referenceSampleRate');
+    assertAudioInput(r.referenceLeft, referenceRate, r, 'referenceLeft');
+    assertAudioInput(r.referenceRight, referenceRate, r, 'referenceRight');
+    if (r.sourceLeft.length !== r.sourceRight.length) {
+      throw refuse('Source left and right channel lengths must match.');
+    }
+    if (r.referenceLeft.length !== r.referenceRight.length) {
+      throw refuse('Reference left and right channel lengths must match.');
+    }
+    return requireModule().masteringAbMatchLoudnessStereo(
+      r.sourceLeft,
+      r.sourceRight,
+      r.referenceLeft,
+      r.referenceRight,
+      r.sampleRate,
+      referenceRate,
+    );
+  });
 }
 
 function assistantResultFromNative(json: string): MasteringAssistantResult {
@@ -869,7 +892,6 @@ function profileFromNative(json: string): MasteringAudioProfile {
 
 /** Native params of an audio-profile request; the profile always runs the defect detectors unless told not to. */
 function profileParams(
-  fnName: string,
   r: Pick<
     MasteringAudioProfileRequest,
     'nFft' | 'hopLength' | 'truePeakOversample' | 'detectDefects'
@@ -879,38 +901,34 @@ function profileParams(
   for (const key of ['nFft', 'hopLength', 'truePeakOversample'] as const) {
     const value = r[key];
     if (value !== undefined && value !== null) {
-      assertPositiveInteger(fnName, value, key);
+      assertPositiveInteger(value, key);
       params[key] = value;
     }
   }
-  params.detectDefects = optionalBoolean(fnName, r.detectDefects, 'detectDefects', true);
+  params.detectDefects = optionalBoolean(r.detectDefects, 'detectDefects', true);
   return params;
 }
 
 /** Native params of an assistant request, with the two name-valued fields checked against the library's tables. */
-function assistantParams(
-  fnName: string,
-  r: MasteringAssistantSettings,
-): Record<string, number | boolean | string> {
+function assistantParams(r: MasteringAssistantSettings): Record<string, number | boolean | string> {
   const params: Record<string, number | boolean | string> = {};
   for (const key of ['targetLufs', 'ceilingDbtp'] as const) {
     if (r[key] !== undefined && r[key] !== null) {
-      assertFloatValue(fnName, r[key], key);
+      assertFloatValue(r[key], key);
       params[key] = r[key];
     }
   }
   if (r.speechMonoAmount !== undefined && r.speechMonoAmount !== null) {
-    assertFloatValue(fnName, r.speechMonoAmount, 'speechMonoAmount');
+    assertFloatValue(r.speechMonoAmount, 'speechMonoAmount');
     params.speechMonoAmount = r.speechMonoAmount;
   }
   for (const key of ['enableRepair', 'preferStreamingSafe'] as const) {
     if (r[key] !== undefined && r[key] !== null) {
-      params[key] = optionalBoolean(fnName, r[key], key, false);
+      params[key] = optionalBoolean(r[key], key, false);
     }
   }
   if (r.targetPlatform !== undefined && r.targetPlatform !== null) {
     params.targetPlatform = requireToken(
-      fnName,
       r.targetPlatform,
       'targetPlatform',
       masteringPlatformNames(),
@@ -918,7 +936,7 @@ function assistantParams(
     );
   }
   if (r.preset !== undefined && r.preset !== null) {
-    params.preset = requireToken(fnName, r.preset, 'preset', masteringPresetNames(), 'streaming');
+    params.preset = requireToken(r.preset, 'preset', masteringPresetNames(), 'streaming');
   }
   return params;
 }
@@ -942,15 +960,17 @@ export function masteringAssistantSuggest(
   options?: OptionsOf<MasteringAssistantSuggestRequest>,
 ): MasteringAssistantResult;
 export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistantResult {
-  const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggest', args);
-  assertAudioInput('masteringAssistantSuggest', r.samples, r.sampleRate, r);
-  return assistantResultFromNative(
-    requireModule().masteringAssistantSuggest(
-      r.samples,
-      r.sampleRate,
-      withEntry('masteringAssistantSuggest', () => assistantParams('masteringAssistantSuggest', r)),
-    ),
-  );
+  return withEntry('masteringAssistantSuggest', () => {
+    const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggest', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return assistantResultFromNative(
+      requireModule().masteringAssistantSuggest(
+        r.samples,
+        r.sampleRate,
+        withEntry('masteringAssistantSuggest', () => assistantParams(r)),
+      ),
+    );
+  });
 }
 
 /**
@@ -970,17 +990,20 @@ export function masteringAssistantSuggestChain(
   options?: OptionsOf<MasteringAssistantSuggestRequest>,
 ): MasteringChainConfig;
 export function masteringAssistantSuggestChain(...args: unknown[]): MasteringChainConfig {
-  const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggestChain', args);
-  assertAudioInput('masteringAssistantSuggestChain', r.samples, r.sampleRate, r);
-  return chainConfigFromJson(
-    requireModule().masteringAssistantSuggestChain(
-      r.samples,
-      r.sampleRate,
-      withEntry('masteringAssistantSuggestChain', () =>
-        assistantParams('masteringAssistantSuggestChain', r),
+  return withEntry('masteringAssistantSuggestChain', () => {
+    const r = sampleOneShot<MasteringAssistantSuggestRequest>(
+      'masteringAssistantSuggestChain',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return chainConfigFromJson(
+      requireModule().masteringAssistantSuggestChain(
+        r.samples,
+        r.sampleRate,
+        withEntry('masteringAssistantSuggestChain', () => assistantParams(r)),
       ),
-    ),
-  );
+    );
+  });
 }
 
 /**
@@ -999,15 +1022,13 @@ export function masteringAudioProfile(
   options?: OptionsOf<MasteringAudioProfileRequest>,
 ): MasteringAudioProfile;
 export function masteringAudioProfile(...args: unknown[]): MasteringAudioProfile {
-  const r = sampleOneShot<MasteringAudioProfileRequest>('masteringAudioProfile', args);
-  assertAudioInput('masteringAudioProfile', r.samples, r.sampleRate, r);
-  return profileFromNative(
-    requireModule().masteringAudioProfile(
-      r.samples,
-      r.sampleRate,
-      profileParams('masteringAudioProfile', r),
-    ),
-  );
+  return withEntry('masteringAudioProfile', () => {
+    const r = sampleOneShot<MasteringAudioProfileRequest>('masteringAudioProfile', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return profileFromNative(
+      requireModule().masteringAudioProfile(r.samples, r.sampleRate, profileParams(r)),
+    );
+  });
 }
 
 /**
@@ -1025,15 +1046,17 @@ export function masteringStreamingPreview(
   options?: OptionsOf<MasteringStreamingPreviewRequest>,
 ): MasteringStreamingPreviewResult;
 export function masteringStreamingPreview(...args: unknown[]): MasteringStreamingPreviewResult {
-  const r = sampleOneShot<MasteringStreamingPreviewRequest>('masteringStreamingPreview', args);
-  assertAudioInput('masteringStreamingPreview', r.samples, r.sampleRate, r);
-  return previewFromNative(
-    requireModule().masteringStreamingPreview(
-      r.samples,
-      r.sampleRate,
-      previewPlatforms('masteringStreamingPreview', r.platforms),
-    ),
-  );
+  return withEntry('masteringStreamingPreview', () => {
+    const r = sampleOneShot<MasteringStreamingPreviewRequest>('masteringStreamingPreview', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return previewFromNative(
+      requireModule().masteringStreamingPreview(
+        r.samples,
+        r.sampleRate,
+        previewPlatforms(r.platforms),
+      ),
+    );
+  });
 }
 
 /**
@@ -1049,21 +1072,22 @@ export function masteringStreamingPreview(...args: unknown[]): MasteringStreamin
 export function masteringAssistantSuggestStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): MasteringAssistantResult {
-  const r = requestOnly<MasteringAssistantSuggestStereoRequest>('masteringAssistantSuggestStereo', [
-    request,
-  ]);
-  assertAudioInput('masteringAssistantSuggestStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringAssistantSuggestStereo', r.right, r.sampleRate, r, 'right');
-  return assistantResultFromNative(
-    requireModule().masteringAssistantSuggestStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      withEntry('masteringAssistantSuggestStereo', () =>
-        assistantParams('masteringAssistantSuggestStereo', r),
+  return withEntry('masteringAssistantSuggestStereo', () => {
+    const r = requestOnly<MasteringAssistantSuggestStereoRequest>(
+      'masteringAssistantSuggestStereo',
+      [request],
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return assistantResultFromNative(
+      requireModule().masteringAssistantSuggestStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        withEntry('masteringAssistantSuggestStereo', () => assistantParams(r)),
       ),
-    ),
-  );
+    );
+  });
 }
 
 /**
@@ -1074,22 +1098,22 @@ export function masteringAssistantSuggestStereo(
 export function masteringAssistantSuggestChainStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): MasteringChainConfig {
-  const r = requestOnly<MasteringAssistantSuggestStereoRequest>(
-    'masteringAssistantSuggestChainStereo',
-    [request],
-  );
-  assertAudioInput('masteringAssistantSuggestChainStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringAssistantSuggestChainStereo', r.right, r.sampleRate, r, 'right');
-  return chainConfigFromJson(
-    requireModule().masteringAssistantSuggestChainStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      withEntry('masteringAssistantSuggestChainStereo', () =>
-        assistantParams('masteringAssistantSuggestChainStereo', r),
+  return withEntry('masteringAssistantSuggestChainStereo', () => {
+    const r = requestOnly<MasteringAssistantSuggestStereoRequest>(
+      'masteringAssistantSuggestChainStereo',
+      [request],
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return chainConfigFromJson(
+      requireModule().masteringAssistantSuggestChainStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        withEntry('masteringAssistantSuggestChainStereo', () => assistantParams(r)),
       ),
-    ),
-  );
+    );
+  });
 }
 
 /**
@@ -1105,19 +1129,16 @@ export function masteringAssistantSuggestChainStereo(
 export function masteringAudioProfileStereo(
   request: MasteringAudioProfileStereoRequest,
 ): MasteringAudioProfile {
-  const r = requestOnly<MasteringAudioProfileStereoRequest>('masteringAudioProfileStereo', [
-    request,
-  ]);
-  assertAudioInput('masteringAudioProfileStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringAudioProfileStereo', r.right, r.sampleRate, r, 'right');
-  return profileFromNative(
-    requireModule().masteringAudioProfileStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      profileParams('masteringAudioProfileStereo', r),
-    ),
-  );
+  return withEntry('masteringAudioProfileStereo', () => {
+    const r = requestOnly<MasteringAudioProfileStereoRequest>('masteringAudioProfileStereo', [
+      request,
+    ]);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return profileFromNative(
+      requireModule().masteringAudioProfileStereo(r.left, r.right, r.sampleRate, profileParams(r)),
+    );
+  });
 }
 
 /**
@@ -1132,17 +1153,20 @@ export function masteringAudioProfileStereo(
 export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
 ): MasteringStreamingPreviewResult {
-  const r = requestOnly<MasteringStreamingPreviewStereoRequest>('masteringStreamingPreviewStereo', [
-    request,
-  ]);
-  assertAudioInput('masteringStreamingPreviewStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringStreamingPreviewStereo', r.right, r.sampleRate, r, 'right');
-  return previewFromNative(
-    requireModule().masteringStreamingPreviewStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      previewPlatforms('masteringStreamingPreviewStereo', r.platforms),
-    ),
-  );
+  return withEntry('masteringStreamingPreviewStereo', () => {
+    const r = requestOnly<MasteringStreamingPreviewStereoRequest>(
+      'masteringStreamingPreviewStereo',
+      [request],
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return previewFromNative(
+      requireModule().masteringStreamingPreviewStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        previewPlatforms(r.platforms),
+      ),
+    );
+  });
 }

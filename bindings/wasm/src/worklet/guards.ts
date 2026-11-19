@@ -1,4 +1,5 @@
 import type { EngineCaptureStatus } from '../index.js';
+import { refuse, refuseType } from '../internal/entry.js';
 import type {
   EngineClipPageRequestMessage,
   SonareEngineCaptureRequestMessage,
@@ -466,11 +467,10 @@ export function isScopeSnapshot(value: unknown): value is WorkletScopeSnapshot {
 export function resolveContextSampleRate(
   requested: number | undefined,
   context: BaseAudioContext,
-  what: string,
 ): number {
   if (requested !== undefined && requested !== context.sampleRate) {
-    throw new RangeError(
-      `${what}: sampleRate ${String(requested)} differs from the AudioContext rate ${context.sampleRate}`,
+    throw refuse(
+      `sampleRate ${String(requested)} differs from the AudioContext rate ${context.sampleRate}`,
     );
   }
   return context.sampleRate;
@@ -483,25 +483,21 @@ export type ProcessorOptionsTable = keyof typeof PROCESSOR_OPTION_KEYS;
  * Refuses a `processorOptions` (or node-factory option) key the table does not
  * declare, and options that are not a plain object. Inside a processor
  * constructor the throw surfaces only as `processorerror`, so the message names
- * `what` and the key on its own. Absent options (`undefined` / `null`) are empty.
+ * the key on its own. Absent options (`undefined` / `null`) are empty.
  *
  * @throws TypeError naming the first undeclared key.
  */
-export function assertKnownProcessorOptions(
-  what: string,
-  table: ProcessorOptionsTable,
-  options: unknown,
-): void {
+export function assertKnownProcessorOptions(table: ProcessorOptionsTable, options: unknown): void {
   if (options === undefined || options === null) {
     return;
   }
   if (typeof options !== 'object' || Array.isArray(options)) {
-    throw new TypeError(`${what}: options must be an object`);
+    throw refuseType(`options must be an object`);
   }
   const keys: readonly string[] = PROCESSOR_OPTION_KEYS[table];
   for (const key of Object.keys(options)) {
     if (!keys.includes(key)) {
-      throw new TypeError(`${what}: unknown option '${key}'`);
+      throw refuseType(`unknown option '${key}'`);
     }
   }
 }
@@ -517,19 +513,19 @@ export function assertKnownProcessorOptions(
  * @throws RangeError when `requested` is given and differs from the scope rate.
  * @throws Error when neither a scope rate nor `requested` exists.
  */
-export function resolveScopeSampleRate(requested: number | undefined, what: string): number {
+export function resolveScopeSampleRate(requested: number | undefined): number {
   const scopeRate = (globalThis as { sampleRate?: unknown }).sampleRate;
   if (typeof scopeRate === 'number' && Number.isFinite(scopeRate) && scopeRate > 0) {
     if (requested !== undefined && requested !== scopeRate) {
-      throw new RangeError(
-        `${what}: sampleRate ${String(requested)} differs from the AudioWorkletGlobalScope rate ${scopeRate}`,
+      throw refuse(
+        `sampleRate ${String(requested)} differs from the AudioWorkletGlobalScope rate ${scopeRate}`,
       );
     }
     return scopeRate;
   }
   if (requested === undefined) {
-    throw new TypeError(
-      `${what}: no sampleRate option and no AudioWorkletGlobalScope sampleRate to default to`,
+    throw refuseType(
+      `no sampleRate option and no AudioWorkletGlobalScope sampleRate to default to`,
     );
   }
   return requested;
@@ -551,7 +547,7 @@ export function requireIntegerOption(
 ): number {
   const resolved = value ?? fallback;
   if (!Number.isSafeInteger(resolved) || resolved < minimum) {
-    throw new RangeError(`${name} must be an integer of at least ${minimum}`);
+    throw refuse(`${name} must be an integer of at least ${minimum}`);
   }
   return resolved;
 }
@@ -563,7 +559,7 @@ export function resolveScopeBandCount(
 ): number {
   const bands = requireIntegerOption(value, fallback, 'scopeBands', 1);
   if (bands > SONARE_SCOPE_MAX_BANDS) {
-    throw new RangeError(`scopeBands must be an integer in [1, ${SONARE_SCOPE_MAX_BANDS}]`);
+    throw refuse(`scopeBands must be an integer in [1, ${SONARE_SCOPE_MAX_BANDS}]`);
   }
   return bands;
 }
@@ -572,19 +568,15 @@ export function resolveScopeBandCount(
 export function requireInteger(value: number | undefined, fallback: number, name: string): number {
   const resolved = value ?? fallback;
   if (!Number.isSafeInteger(resolved)) {
-    throw new RangeError(`${name} must be an integer`);
+    throw refuse(`${name} must be an integer`);
   }
   return resolved;
 }
 
 /** Resolves the channel count every worklet entry point accepts on its options. */
-export function requireChannelCount(
-  channelCount: number | undefined,
-  fn: string,
-  name: string,
-): number {
+export function requireChannelCount(channelCount: number | undefined, name: string): number {
   if (channelCount === undefined) {
-    throw new TypeError(`${fn}: ${name} must be a number`);
+    throw refuseType(`${name} must be a number`);
   }
   return requireIntegerOption(channelCount, channelCount, name, 1);
 }

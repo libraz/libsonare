@@ -1,4 +1,5 @@
 import { convertSection } from './analysis_helpers.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { validatePositiveIntegers } from './internal/feature_validation.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
@@ -181,27 +182,29 @@ export function nnlsChroma(
   options?: OptionsOf<NnlsChromaRequest>,
 ): Matrix2D;
 export function nnlsChroma(...args: unknown[]): Matrix2D {
-  const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
-  assertAudioInput('nnlsChroma', request.samples, request.sampleRate, request);
-  const hopLength = request.hopLength === undefined ? 512 : request.hopLength;
-  assertPositiveInteger('nnlsChroma', hopLength, 'hopLength');
-  if (hopLength > 2 ** 31 - 1) {
-    throw new RangeError('nnlsChroma: hopLength must fit in a signed 32-bit integer');
-  }
-  const result = requireModule().nnlsChromaEx(
-    request.samples,
-    request.sampleRate,
-    optionalBoolean('nnlsChroma', request.enableStftBlend, 'enableStftBlend', true),
-    request.stftBlendWeight ?? 0.55,
-    request.stftBlendNFft ?? 4096,
-    hopLength,
-  );
-  return toMatrix2D(result.data, result.nChroma, result.nFrames);
+  return withEntry('nnlsChroma', () => {
+    const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const hopLength = request.hopLength === undefined ? 512 : request.hopLength;
+    assertPositiveInteger(hopLength, 'hopLength');
+    if (hopLength > 2 ** 31 - 1) {
+      throw refuse('hopLength must fit in a signed 32-bit integer');
+    }
+    const result = requireModule().nnlsChromaEx(
+      request.samples,
+      request.sampleRate,
+      optionalBoolean(request.enableStftBlend, 'enableStftBlend', true),
+      request.stftBlendWeight ?? 0.55,
+      request.stftBlendNFft ?? 4096,
+      hopLength,
+    );
+    return toMatrix2D(result.data, result.nChroma, result.nFrames);
+  });
 }
 
 /** Shared body of the Constant-Q variants; `call` is the native transform. */
 function cqtFamily<R extends CqtRequest>(
-  fnName: 'cqt' | 'pseudoCqt' | 'hybridCqt' | 'vqt',
+  requestName: 'cqt' | 'pseudoCqt' | 'hybridCqt' | 'vqt',
   args: readonly unknown[],
   call: (
     request: R,
@@ -211,14 +214,14 @@ function cqtFamily<R extends CqtRequest>(
     binsPerOctave: number,
   ) => WasmCqtResult,
 ): CqtResult {
-  const request = sampleOneShot<R>(fnName, args);
-  assertAudioInput(fnName, request.samples, request.sampleRate, request);
+  const request = sampleOneShot<R>(requestName, args);
+  assertAudioInput(request.samples, request.sampleRate, request);
   const hopLength = request.hopLength ?? 512;
   const nBins = request.nBins ?? 84;
   const binsPerOctave = request.binsPerOctave ?? 12;
-  validatePositiveIntegers(fnName, { hopLength, nBins, binsPerOctave });
+  validatePositiveIntegers({ hopLength, nBins, binsPerOctave });
   const fminHz = request.fminHz ?? 32.70319566257483;
-  assertPositiveFloatValue(fnName, fminHz, 'fminHz');
+  assertPositiveFloatValue(fminHz, 'fminHz');
   const native = call(request, hopLength, fminHz, nBins, binsPerOctave);
   return {
     hopLength: native.hopLength,
@@ -243,9 +246,11 @@ export function cqt(
   options?: OptionsOf<CqtRequest>,
 ): CqtResult;
 export function cqt(...args: unknown[]): CqtResult {
-  return cqtFamily<CqtRequest>('cqt', args, (r, hop, fmin, nBins, bpo) =>
-    requireModule().cqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
-  );
+  return withEntry('cqt', () => {
+    return cqtFamily<CqtRequest>('cqt', args, (r, hop, fmin, nBins, bpo) =>
+      requireModule().cqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+    );
+  });
 }
 
 /**
@@ -259,9 +264,11 @@ export function pseudoCqt(
   options?: OptionsOf<PseudoCqtRequest>,
 ): CqtResult;
 export function pseudoCqt(...args: unknown[]): CqtResult {
-  return cqtFamily<PseudoCqtRequest>('pseudoCqt', args, (r, hop, fmin, nBins, bpo) =>
-    requireModule().pseudoCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
-  );
+  return withEntry('pseudoCqt', () => {
+    return cqtFamily<PseudoCqtRequest>('pseudoCqt', args, (r, hop, fmin, nBins, bpo) =>
+      requireModule().pseudoCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+    );
+  });
 }
 
 /**
@@ -275,9 +282,11 @@ export function hybridCqt(
   options?: OptionsOf<HybridCqtRequest>,
 ): CqtResult;
 export function hybridCqt(...args: unknown[]): CqtResult {
-  return cqtFamily<HybridCqtRequest>('hybridCqt', args, (r, hop, fmin, nBins, bpo) =>
-    requireModule().hybridCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
-  );
+  return withEntry('hybridCqt', () => {
+    return cqtFamily<HybridCqtRequest>('hybridCqt', args, (r, hop, fmin, nBins, bpo) =>
+      requireModule().hybridCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+    );
+  });
 }
 
 /**
@@ -295,36 +304,35 @@ export function vqt(
   options?: OptionsOf<VqtRequest>,
 ): CqtResult;
 export function vqt(...args: unknown[]): CqtResult {
-  return cqtFamily<VqtRequest>('vqt', args, (r, hop, fmin, nBins, bpo) =>
-    requireModule().vqt(
-      r.samples,
-      r.sampleRate,
-      hop,
-      fmin,
-      nBins,
-      bpo,
-      resolveOptionalNonNegative('vqt', r.gamma, 'gamma'),
-    ),
-  );
+  return withEntry('vqt', () => {
+    return cqtFamily<VqtRequest>('vqt', args, (r, hop, fmin, nBins, bpo) =>
+      requireModule().vqt(
+        r.samples,
+        r.sampleRate,
+        hop,
+        fmin,
+        nBins,
+        bpo,
+        resolveOptionalNonNegative(r.gamma, 'gamma'),
+      ),
+    );
+  });
 }
 
 /** Reads and checks the shared fields of a CQT/VQT inverse request. */
-function cqtInverseInput(
-  fnName: 'cqtToAudio' | 'vqtToAudio',
-  request: CqtToAudioRequest | VqtToAudioRequest,
-) {
-  assertMatrix2D(fnName, request.magnitude, 'magnitude');
+function cqtInverseInput(request: CqtToAudioRequest | VqtToAudioRequest) {
+  assertMatrix2D(request.magnitude, 'magnitude');
   const sampleRate = request.sampleRate;
   const hopLength = request.hopLength ?? 512;
   const binsPerOctave = request.binsPerOctave ?? 12;
   const nIter = request.nIter ?? 32;
-  assertSampleRate(fnName, sampleRate);
-  validatePositiveIntegers(fnName, { hopLength, binsPerOctave, nIter });
+  assertSampleRate(sampleRate);
+  validatePositiveIntegers({ hopLength, binsPerOctave, nIter });
   if (nIter > 256) {
-    throw new RangeError(`${fnName}: nIter must be at most 256`);
+    throw refuse(`nIter must be at most 256`);
   }
   const fminHz = request.fminHz ?? 32.70319566257483;
-  assertPositiveFloatValue(fnName, fminHz, 'fminHz');
+  assertPositiveFloatValue(fminHz, 'fminHz');
   return { sampleRate, hopLength, binsPerOctave, nIter, fminHz };
 }
 
@@ -335,18 +343,20 @@ function cqtInverseInput(
  * @throws {RangeError} when the matrix data length is not `rows * cols`, or a setting is out of domain
  */
 export function cqtToAudio(request: CqtToAudioRequest): Float32Array {
-  const r = requestOnly<CqtToAudioRequest>('cqtToAudio', [request]);
-  const c = cqtInverseInput('cqtToAudio', r);
-  return requireModule().cqtToAudio(
-    r.magnitude.data,
-    r.magnitude.rows,
-    r.magnitude.cols,
-    c.sampleRate,
-    c.hopLength,
-    c.fminHz,
-    c.binsPerOctave,
-    c.nIter,
-  );
+  return withEntry('cqtToAudio', () => {
+    const r = requestOnly<CqtToAudioRequest>('cqtToAudio', [request]);
+    const c = cqtInverseInput(r);
+    return requireModule().cqtToAudio(
+      r.magnitude.data,
+      r.magnitude.rows,
+      r.magnitude.cols,
+      c.sampleRate,
+      c.hopLength,
+      c.fminHz,
+      c.binsPerOctave,
+      c.nIter,
+    );
+  });
 }
 
 /**
@@ -356,19 +366,21 @@ export function cqtToAudio(request: CqtToAudioRequest): Float32Array {
  * @throws {RangeError} when the matrix data length is not `rows * cols`, or a setting is out of domain
  */
 export function vqtToAudio(request: VqtToAudioRequest): Float32Array {
-  const r = requestOnly<VqtToAudioRequest>('vqtToAudio', [request]);
-  const c = cqtInverseInput('vqtToAudio', r);
-  return requireModule().vqtToAudio(
-    r.magnitude.data,
-    r.magnitude.rows,
-    r.magnitude.cols,
-    c.sampleRate,
-    c.hopLength,
-    c.fminHz,
-    c.binsPerOctave,
-    resolveOptionalNonNegative('vqtToAudio', r.gamma, 'gamma'),
-    c.nIter,
-  );
+  return withEntry('vqtToAudio', () => {
+    const r = requestOnly<VqtToAudioRequest>('vqtToAudio', [request]);
+    const c = cqtInverseInput(r);
+    return requireModule().vqtToAudio(
+      r.magnitude.data,
+      r.magnitude.rows,
+      r.magnitude.cols,
+      c.sampleRate,
+      c.hopLength,
+      c.fminHz,
+      c.binsPerOctave,
+      resolveOptionalNonNegative(r.gamma, 'gamma'),
+      c.nIter,
+    );
+  });
 }
 
 /**
@@ -386,30 +398,32 @@ export function analyzeSections(
   options?: OptionsOf<AnalyzeSectionsRequest>,
 ): Section[];
 export function analyzeSections(...args: unknown[]): Section[] {
-  const request = sampleOneShot<AnalyzeSectionsRequest>('analyzeSections', args);
-  assertAudioInput('analyzeSections', request.samples, request.sampleRate, request);
-  validatePositiveIntegers('analyzeSections', {
-    nFft: request.nFft ?? 2048,
-    hopLength: request.hopLength ?? 512,
+  return withEntry('analyzeSections', () => {
+    const request = sampleOneShot<AnalyzeSectionsRequest>('analyzeSections', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    validatePositiveIntegers({
+      nFft: request.nFft ?? 2048,
+      hopLength: request.hopLength ?? 512,
+    });
+    assertFiniteScalar(request.minSectionSec ?? 4.0, 'minSectionSec');
+    if ((request.minSectionSec ?? 4.0) < 0) {
+      throw refuse('minSectionSec must be non-negative');
+    }
+    // The embind value marshalling returns an array whose constructor is not this
+    // realm's Array; chaining .map() onto it propagates that constructor via
+    // Symbol.species, leaving a result that structuredClone (and so postMessage to
+    // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
+    // plain Array before mapping.
+    const sections = requireModule().analyzeSections(
+      request.samples,
+      request.sampleRate,
+      request.nFft ?? 2048,
+      request.hopLength ?? 512,
+      request.minSectionSec ?? 4.0,
+      request.threshold,
+    );
+    return Array.from(sections, convertSection);
   });
-  assertFiniteScalar('analyzeSections', request.minSectionSec ?? 4.0, 'minSectionSec');
-  if ((request.minSectionSec ?? 4.0) < 0) {
-    throw new RangeError('analyzeSections: minSectionSec must be non-negative');
-  }
-  // The embind value marshalling returns an array whose constructor is not this
-  // realm's Array; chaining .map() onto it propagates that constructor via
-  // Symbol.species, leaving a result that structuredClone (and so postMessage to
-  // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
-  // plain Array before mapping.
-  const sections = requireModule().analyzeSections(
-    request.samples,
-    request.sampleRate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-    request.minSectionSec ?? 4.0,
-    request.threshold,
-  );
-  return Array.from(sections, convertSection);
 }
 
 /**
@@ -445,65 +459,67 @@ export function detectBoundaries(
   options?: OptionsOf<DetectBoundariesRequest>,
 ): BoundaryResult;
 export function detectBoundaries(...args: unknown[]): BoundaryResult {
-  const request = sampleOneShot<DetectBoundariesRequest>('detectBoundaries', args);
-  const { samples, sampleRate } = request;
-  assertAudioInput('detectBoundaries', samples, sampleRate, request);
-  // Only the fields the caller set reach the embind wrapper, so an omitted one
-  // takes BoundaryConfig's own default; restating the defaults here would make
-  // them the effective ones on npm and leave the core's unreachable.
-  const sizes: Record<string, number> = {};
-  for (const name of ['nFft', 'hopLength', 'kernelSize', 'nMfcc', 'nChroma'] as const) {
-    const value = request[name];
-    if (value != null) {
-      sizes[name] = value;
+  return withEntry('detectBoundaries', () => {
+    const request = sampleOneShot<DetectBoundariesRequest>('detectBoundaries', args);
+    const { samples, sampleRate } = request;
+    assertAudioInput(samples, sampleRate, request);
+    // Only the fields the caller set reach the embind wrapper, so an omitted one
+    // takes BoundaryConfig's own default; restating the defaults here would make
+    // them the effective ones on npm and leave the core's unreachable.
+    const sizes: Record<string, number> = {};
+    for (const name of ['nFft', 'hopLength', 'kernelSize', 'nMfcc', 'nChroma'] as const) {
+      const value = request[name];
+      if (value != null) {
+        sizes[name] = value;
+      }
     }
-  }
-  validatePositiveIntegers('detectBoundaries', sizes);
-  for (const name of [
-    'threshold',
-    'absoluteThreshold',
-    'peakDistanceSec',
-    'referenceWindowSec',
-  ] as const) {
-    const value = request[name];
-    if (value == null) {
-      continue;
+    validatePositiveIntegers(sizes);
+    for (const name of [
+      'threshold',
+      'absoluteThreshold',
+      'peakDistanceSec',
+      'referenceWindowSec',
+    ] as const) {
+      const value = request[name];
+      if (value == null) {
+        continue;
+      }
+      assertFiniteScalar(value, name);
+      if (value < 0) {
+        throw refuse(`${name} must be non-negative`);
+      }
     }
-    assertFiniteScalar('detectBoundaries', value, name);
-    if (value < 0) {
-      throw new RangeError(`detectBoundaries: ${name} must be non-negative`);
+    // Only an explicit pair of falses; either one omitted leaves the other stream
+    // on, so there is still something to combine.
+    if (request.useMfcc === false && request.useChroma === false) {
+      throw refuse('require useMfcc or useChroma');
     }
-  }
-  // Only an explicit pair of falses; either one omitted leaves the other stream
-  // on, so there is still something to combine.
-  if (request.useMfcc === false && request.useChroma === false) {
-    throw new RangeError('detectBoundaries: require useMfcc or useChroma');
-  }
-  const { peakDistanceSec, referenceWindowSec, ...rest } = request;
-  // Native keeps the unsuffixed spellings of the two durations.
-  const nativeOptions: Record<string, unknown> = { ...rest };
-  if (peakDistanceSec != null) {
-    nativeOptions.peakDistance = peakDistanceSec;
-  }
-  if (referenceWindowSec != null) {
-    nativeOptions.referenceWindow = referenceWindowSec;
-  }
-  const result = requireModule().detectBoundaries(samples, sampleRate, nativeOptions);
-  // Re-root the embind array as a plain Array, for the reason analyzeSections
-  // spells out: chaining onto it propagates a constructor structuredClone
-  // rejects, so a result posted from a Worker would fail to clone.
-  return {
-    boundaries: Array.from(result.boundaries, (b) => ({
-      timeSec: b.time,
-      frame: b.frame,
-      strength: b.strength,
-    })),
-    noveltyCurve: result.noveltyCurve,
-    noveltyPeak: result.noveltyPeak,
-    sampleRate: result.sampleRate,
-    hopLength: result.hopLength,
-    frameStride: result.frameStride,
-  };
+    const { peakDistanceSec, referenceWindowSec, ...rest } = request;
+    // Native keeps the unsuffixed spellings of the two durations.
+    const nativeOptions: Record<string, unknown> = { ...rest };
+    if (peakDistanceSec != null) {
+      nativeOptions.peakDistance = peakDistanceSec;
+    }
+    if (referenceWindowSec != null) {
+      nativeOptions.referenceWindow = referenceWindowSec;
+    }
+    const result = requireModule().detectBoundaries(samples, sampleRate, nativeOptions);
+    // Re-root the embind array as a plain Array, for the reason analyzeSections
+    // spells out: chaining onto it propagates a constructor structuredClone
+    // rejects, so a result posted from a Worker would fail to clone.
+    return {
+      boundaries: Array.from(result.boundaries, (b) => ({
+        timeSec: b.time,
+        frame: b.frame,
+        strength: b.strength,
+      })),
+      noveltyCurve: result.noveltyCurve,
+      noveltyPeak: result.noveltyPeak,
+      sampleRate: result.sampleRate,
+      hopLength: result.hopLength,
+      frameStride: result.frameStride,
+    };
+  });
 }
 
 /** Options for {@link analyzeMelody}. All fields are optional. */
@@ -546,40 +562,42 @@ export function analyzeMelody(
   options?: OptionsOf<AnalyzeMelodyRequest>,
 ): MelodyResult;
 export function analyzeMelody(...args: unknown[]): MelodyResult {
-  const request = sampleOneShot<AnalyzeMelodyRequest>('analyzeMelody', args);
-  assertAudioInput('analyzeMelody', request.samples, request.sampleRate, request);
-  validatePositiveIntegers('analyzeMelody', {
-    frameLength: request.frameLength ?? 2048,
-    hopLength: request.hopLength ?? 256,
+  return withEntry('analyzeMelody', () => {
+    const request = sampleOneShot<AnalyzeMelodyRequest>('analyzeMelody', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    validatePositiveIntegers({
+      frameLength: request.frameLength ?? 2048,
+      hopLength: request.hopLength ?? 256,
+    });
+    const threshold = request.threshold ?? 0.1;
+    assertFiniteScalar(threshold, 'threshold');
+    const f0MinHz = request.f0MinHz ?? 65.0;
+    const f0MaxHz = request.f0MaxHz ?? 2093.0;
+    assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
+    const result = requireModule().analyzeMelody(
+      request.samples,
+      request.sampleRate,
+      f0MinHz,
+      f0MaxHz,
+      request.frameLength ?? 2048,
+      request.hopLength ?? 256,
+      threshold,
+      optionalBoolean(request.usePyin, 'usePyin', false),
+      optionalBoolean(request.center, 'center', true),
+    );
+    return {
+      // Native reports an unvoiced frame as frequency 0; here it is absent.
+      points: Array.from(result.points, (p) =>
+        p.frequency > 0
+          ? { timeSec: p.time, frequencyHz: p.frequency, confidence: p.confidence }
+          : { timeSec: p.time, confidence: p.confidence },
+      ),
+      pitchRangeOctaves: result.pitchRangeOctaves,
+      pitchStability: result.pitchStability,
+      meanFrequencyHz: result.meanFrequency,
+      vibratoRateHz: result.vibratoRate,
+    };
   });
-  const threshold = request.threshold ?? 0.1;
-  assertFiniteScalar('analyzeMelody', threshold, 'threshold');
-  const f0MinHz = request.f0MinHz ?? 65.0;
-  const f0MaxHz = request.f0MaxHz ?? 2093.0;
-  assertFrequencyBounds('analyzeMelody', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-  const result = requireModule().analyzeMelody(
-    request.samples,
-    request.sampleRate,
-    f0MinHz,
-    f0MaxHz,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 256,
-    threshold,
-    optionalBoolean('analyzeMelody', request.usePyin, 'usePyin', false),
-    optionalBoolean('analyzeMelody', request.center, 'center', true),
-  );
-  return {
-    // Native reports an unvoiced frame as frequency 0; here it is absent.
-    points: Array.from(result.points, (p) =>
-      p.frequency > 0
-        ? { timeSec: p.time, frequencyHz: p.frequency, confidence: p.confidence }
-        : { timeSec: p.time, confidence: p.confidence },
-    ),
-    pitchRangeOctaves: result.pitchRangeOctaves,
-    pitchStability: result.pitchStability,
-    meanFrequencyHz: result.meanFrequency,
-    vibratoRateHz: result.vibratoRate,
-  };
 }
 
 /**
@@ -597,18 +615,20 @@ export function onsetStrength(
   options?: OptionsOf<OnsetStrengthRequest>,
 ): Float32Array;
 export function onsetStrength(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<OnsetStrengthRequest>('onsetStrength', args);
-  assertAudioInput('onsetStrength', request.samples, request.sampleRate, request);
-  const fft = resolveFftOptions('onsetStrength', request.nFft ?? 2048, request.hopLength ?? 512);
-  const nMels = request.nMels ?? 128;
-  validatePositiveIntegers('onsetStrength', { nMels });
-  return requireModule().onsetEnvelope(
-    request.samples,
-    request.sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    nMels,
-  );
+  return withEntry('onsetStrength', () => {
+    const request = sampleOneShot<OnsetStrengthRequest>('onsetStrength', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
+    const nMels = request.nMels ?? 128;
+    validatePositiveIntegers({ nMels });
+    return requireModule().onsetEnvelope(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      nMels,
+    );
+  });
 }
 
 /**
@@ -626,25 +646,23 @@ export function onsetStrengthMulti(
   options?: OptionsOf<OnsetStrengthMultiRequest>,
 ): Matrix2D;
 export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
-  const request = sampleOneShot<OnsetStrengthMultiRequest>('onsetStrengthMulti', args);
-  assertAudioInput('onsetStrengthMulti', request.samples, request.sampleRate, request);
-  const fft = resolveFftOptions(
-    'onsetStrengthMulti',
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-  );
-  const nMels = request.nMels ?? 128;
-  const nBands = request.nBands ?? 3;
-  validatePositiveIntegers('onsetStrengthMulti', { nMels, nBands });
-  const result = requireModule().onsetStrengthMulti(
-    request.samples,
-    request.sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    nMels,
-    nBands,
-  );
-  return toMatrix2D(result.data, result.nBands, result.nFrames);
+  return withEntry('onsetStrengthMulti', () => {
+    const request = sampleOneShot<OnsetStrengthMultiRequest>('onsetStrengthMulti', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
+    const nMels = request.nMels ?? 128;
+    const nBands = request.nBands ?? 3;
+    validatePositiveIntegers({ nMels, nBands });
+    const result = requireModule().onsetStrengthMulti(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      nMels,
+      nBands,
+    );
+    return toMatrix2D(result.data, result.nBands, result.nFrames);
+  });
 }
 
 /**
@@ -654,26 +672,28 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
  * @throws {TypeError} when the request is not an object or `onsetEnvelope` is not a `Float32Array`
  */
 export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
-  const r = requestOnly<FourierTempogramRequest>('fourierTempogram', [request]);
-  const sampleRate = r.sampleRate ?? 22050;
-  const hopLength = r.hopLength ?? 512;
-  const winLength = r.winLength ?? 384;
-  if (!(r.onsetEnvelope instanceof Float32Array)) {
-    throw new TypeError('fourierTempogram: onsetEnvelope must be a Float32Array');
-  }
-  assertSampleRate('fourierTempogram', sampleRate);
-  assertSamples('fourierTempogram', r.onsetEnvelope, true, 'onsetEnvelope');
-  validatePositiveIntegers('fourierTempogram', { hopLength, winLength });
-  // Native takes a `norm` flag; the normalised form is the only one exposed.
-  const result = requireModule().fourierTempogram(
-    r.onsetEnvelope,
-    sampleRate,
-    hopLength,
-    winLength,
-    optionalBoolean('fourierTempogram', r.center, 'center', true),
-    true,
-  );
-  return toMatrix2DByRows(result.data, result.nBins);
+  return withEntry('fourierTempogram', () => {
+    const r = requestOnly<FourierTempogramRequest>('fourierTempogram', [request]);
+    const sampleRate = r.sampleRate ?? 22050;
+    const hopLength = r.hopLength ?? 512;
+    const winLength = r.winLength ?? 384;
+    if (!(r.onsetEnvelope instanceof Float32Array)) {
+      throw refuseType('onsetEnvelope must be a Float32Array');
+    }
+    assertSampleRate(sampleRate);
+    assertSamples(r.onsetEnvelope, true, 'onsetEnvelope');
+    validatePositiveIntegers({ hopLength, winLength });
+    // Native takes a `norm` flag; the normalised form is the only one exposed.
+    const result = requireModule().fourierTempogram(
+      r.onsetEnvelope,
+      sampleRate,
+      hopLength,
+      winLength,
+      optionalBoolean(r.center, 'center', true),
+      true,
+    );
+    return toMatrix2DByRows(result.data, result.nBins);
+  });
 }
 
 /**
@@ -684,19 +704,21 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
  * @throws {RangeError} when the matrix data length is not `rows * cols`
  */
 export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
-  const r = requestOnly<TempogramRatioRequest>('tempogramRatio', [request]);
-  const tempogram = assertMatrix2D('tempogramRatio', r.tempogram, 'tempogram');
-  const sampleRate = r.sampleRate ?? 22050;
-  const hopLength = r.hopLength ?? 512;
-  assertSampleRate('tempogramRatio', sampleRate);
-  validatePositiveIntegers('tempogramRatio', { hopLength });
-  return requireModule().tempogramRatio(
-    tempogram.data,
-    tempogram.rows,
-    sampleRate,
-    hopLength,
-    r.factors,
-  );
+  return withEntry('tempogramRatio', () => {
+    const r = requestOnly<TempogramRatioRequest>('tempogramRatio', [request]);
+    const tempogram = assertMatrix2D(r.tempogram, 'tempogram');
+    const sampleRate = r.sampleRate ?? 22050;
+    const hopLength = r.hopLength ?? 512;
+    assertSampleRate(sampleRate);
+    validatePositiveIntegers({ hopLength });
+    return requireModule().tempogramRatio(
+      tempogram.data,
+      tempogram.rows,
+      sampleRate,
+      hopLength,
+      r.factors,
+    );
+  });
 }
 
 /**
@@ -714,17 +736,19 @@ export function lufs(
   options?: OptionsOf<LufsRequest>,
 ): LufsResult;
 export function lufs(...args: unknown[]): LufsResult {
-  const request = sampleOneShot<LufsRequest>('lufs', args);
-  assertAudioInput('lufs', request.samples, request.sampleRate, request);
-  const native = requireModule().lufs(request.samples, request.sampleRate);
-  return {
-    integratedLufs: native.integratedLufs,
-    momentaryLufs: native.momentaryLufs,
-    shortTermLufs: native.shortTermLufs,
-    maxMomentaryLufs: native.maxMomentaryLufs,
-    maxShortTermLufs: native.maxShortTermLufs,
-    loudnessRangeLu: native.loudnessRangeLu,
-  };
+  return withEntry('lufs', () => {
+    const request = sampleOneShot<LufsRequest>('lufs', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const native = requireModule().lufs(request.samples, request.sampleRate);
+    return {
+      integratedLufs: native.integratedLufs,
+      momentaryLufs: native.momentaryLufs,
+      shortTermLufs: native.shortTermLufs,
+      maxMomentaryLufs: native.maxMomentaryLufs,
+      maxShortTermLufs: native.maxShortTermLufs,
+      loudnessRangeLu: native.loudnessRangeLu,
+    };
+  });
 }
 
 /**
@@ -742,9 +766,11 @@ export function momentaryLufs(
   options?: OptionsOf<MomentaryLufsRequest>,
 ): Float32Array;
 export function momentaryLufs(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
-  assertAudioInput('momentaryLufs', request.samples, request.sampleRate, request);
-  return requireModule().momentaryLufs(request.samples, request.sampleRate);
+  return withEntry('momentaryLufs', () => {
+    const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return requireModule().momentaryLufs(request.samples, request.sampleRate);
+  });
 }
 
 /**
@@ -762,7 +788,9 @@ export function shortTermLufs(
   options?: OptionsOf<ShortTermLufsRequest>,
 ): Float32Array;
 export function shortTermLufs(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);
-  assertAudioInput('shortTermLufs', request.samples, request.sampleRate, request);
-  return requireModule().shortTermLufs(request.samples, request.sampleRate);
+  return withEntry('shortTermLufs', () => {
+    const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return requireModule().shortTermLufs(request.samples, request.sampleRate);
+  });
 }

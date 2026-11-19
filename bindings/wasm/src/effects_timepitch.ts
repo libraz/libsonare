@@ -5,6 +5,7 @@
 
 import { keyModeName, keyModeOrdinal, pitchClassOrdinal } from './analysis_helpers.js';
 import { assertPitchTrackLengths, toVoicedFloat32 } from './internal/effects_common.js';
+import { refuseType, withEntry } from './internal/entry.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { AutoTuneOptions, AutoTuneResult, PitchCorrectOptions } from './public_types.js';
@@ -103,17 +104,19 @@ export function timeStretch(
   options: OptionsOf<TimeStretchRequest>,
 ): Float32Array;
 export function timeStretch(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<TimeStretchRequest>('timeStretch', args);
-  assertAudioInput('timeStretch', r.samples, r.sampleRate, r);
-  assertPositiveFloatValue('timeStretch', r.speedRatio, 'speedRatio');
-  const fftOptions = resolveEffectFftOptions('timeStretch', r.nFft, r.hopLength);
-  return requireModule().timeStretchEx(
-    r.samples,
-    r.sampleRate,
-    r.speedRatio,
-    fftOptions.nFft,
-    fftOptions.hopLength,
-  );
+  return withEntry('timeStretch', () => {
+    const r = sampleOneShot<TimeStretchRequest>('timeStretch', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    assertPositiveFloatValue(r.speedRatio, 'speedRatio');
+    const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
+    return requireModule().timeStretchEx(
+      r.samples,
+      r.sampleRate,
+      r.speedRatio,
+      fftOptions.nFft,
+      fftOptions.hopLength,
+    );
+  });
 }
 
 /**
@@ -136,17 +139,19 @@ export function pitchShift(
   options: OptionsOf<PitchShiftRequest>,
 ): Float32Array;
 export function pitchShift(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<PitchShiftRequest>('pitchShift', args);
-  assertAudioInput('pitchShift', r.samples, r.sampleRate, r);
-  assertFloatValue('pitchShift', r.pitchSemitones, 'pitchSemitones');
-  const fftOptions = resolveEffectFftOptions('pitchShift', r.nFft, r.hopLength);
-  return requireModule().pitchShiftEx(
-    r.samples,
-    r.sampleRate,
-    r.pitchSemitones,
-    fftOptions.nFft,
-    fftOptions.hopLength,
-  );
+  return withEntry('pitchShift', () => {
+    const r = sampleOneShot<PitchShiftRequest>('pitchShift', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    assertFloatValue(r.pitchSemitones, 'pitchSemitones');
+    const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
+    return requireModule().pitchShiftEx(
+      r.samples,
+      r.sampleRate,
+      r.pitchSemitones,
+      fftOptions.nFft,
+      fftOptions.hopLength,
+    );
+  });
 }
 
 /**
@@ -171,11 +176,13 @@ export function pitchCorrectToMidi(
   options: OptionsOf<PitchCorrectToMidiRequest>,
 ): Float32Array;
 export function pitchCorrectToMidi(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<PitchCorrectToMidiRequest>('pitchCorrectToMidi', args);
-  assertAudioInput('pitchCorrectToMidi', r.samples, r.sampleRate, r);
-  assertFloatValue('pitchCorrectToMidi', r.currentMidi, 'currentMidi');
-  assertFloatValue('pitchCorrectToMidi', r.targetMidi, 'targetMidi');
-  return requireModule().pitchCorrectToMidi(r.samples, r.sampleRate, r.currentMidi, r.targetMidi);
+  return withEntry('pitchCorrectToMidi', () => {
+    const r = sampleOneShot<PitchCorrectToMidiRequest>('pitchCorrectToMidi', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    assertFloatValue(r.currentMidi, 'currentMidi');
+    assertFloatValue(r.targetMidi, 'targetMidi');
+    return requireModule().pitchCorrectToMidi(r.samples, r.sampleRate, r.currentMidi, r.targetMidi);
+  });
 }
 
 /**
@@ -207,35 +214,36 @@ export function pitchCorrectTimevarying(
   options: PitchCorrectOptions,
 ): Float32Array;
 export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<PitchCorrectTimevaryingRequest>('pitchCorrectTimevarying', args);
-  assertAudioInput('pitchCorrectTimevarying', r.samples, r.sampleRate, r);
-  if (!(r.f0Hz instanceof Float32Array)) {
-    throw new TypeError('pitchCorrectTimevarying: f0Hz must be a Float32Array');
-  }
-  const voicedF32 =
-    r.voiced == null ? undefined : toVoicedFloat32('pitchCorrectTimevarying', r.voiced);
-  assertPitchTrackLengths('pitchCorrectTimevarying', r.f0Hz, r.voiced, r.voicedProb);
-  const {
-    samples: _samples,
-    sampleRate: _sampleRate,
-    f0Hz: _f0Hz,
-    hopLength,
-    voiced: _voiced,
-    voicedProb,
-    ...rest
-  } = r;
-  const nativeOptions = {
-    ...rest,
-    voiced: voicedF32,
-    voicedProb: r.voiced == null ? (voicedProb ?? undefined) : undefined,
-  };
-  return requireModule().pitchCorrectTimevarying(
-    r.samples,
-    r.sampleRate,
-    r.f0Hz,
-    hopLength ?? 512,
-    nativeOptions,
-  );
+  return withEntry('pitchCorrectTimevarying', () => {
+    const r = sampleOneShot<PitchCorrectTimevaryingRequest>('pitchCorrectTimevarying', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    if (!(r.f0Hz instanceof Float32Array)) {
+      throw refuseType('f0Hz must be a Float32Array');
+    }
+    const voicedF32 = r.voiced == null ? undefined : toVoicedFloat32(r.voiced);
+    assertPitchTrackLengths(r.f0Hz, r.voiced, r.voicedProb);
+    const {
+      samples: _samples,
+      sampleRate: _sampleRate,
+      f0Hz: _f0Hz,
+      hopLength,
+      voiced: _voiced,
+      voicedProb,
+      ...rest
+    } = r;
+    const nativeOptions = {
+      ...rest,
+      voiced: voicedF32,
+      voicedProb: r.voiced == null ? (voicedProb ?? undefined) : undefined,
+    };
+    return requireModule().pitchCorrectTimevarying(
+      r.samples,
+      r.sampleRate,
+      r.f0Hz,
+      hopLength ?? 512,
+      nativeOptions,
+    );
+  });
 }
 
 /**
@@ -268,25 +276,27 @@ export function autoTune(
   options?: AutoTuneOptions,
 ): AutoTuneResult;
 export function autoTune(...args: unknown[]): AutoTuneResult {
-  const r = sampleOneShot<AutoTuneRequest>('autoTune', args);
-  assertAudioInput('autoTune', r.samples, r.sampleRate, r);
-  const { samples, sampleRate, key, ...options } = r;
-  const keyOrDetect = key ?? 'detect';
-  if (keyOrDetect !== 'detect' && typeof keyOrDetect !== 'object') {
-    throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
-  }
-  let nativeKey: { root: number; mode: string } | null = null;
-  if (keyOrDetect !== 'detect') {
-    // Checked for the refusal only; native reads the pitch class and mode token as given.
-    pitchClassOrdinal('autoTune', keyOrDetect.root, 'key.root');
-    keyModeOrdinal(keyOrDetect.mode, 'key.mode');
-    nativeKey = { root: keyOrDetect.root, mode: keyOrDetect.mode };
-  }
-  const result = requireModule().autoTune(samples, sampleRate, nativeKey, options) as Omit<
-    AutoTuneResult,
-    'key'
-  > & {
-    key: Omit<AutoTuneResult['key'], 'mode'> & { mode: number };
-  };
-  return { ...result, key: { ...result.key, mode: keyModeName(result.key.mode) } };
+  return withEntry('autoTune', () => {
+    const r = sampleOneShot<AutoTuneRequest>('autoTune', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const { samples, sampleRate, key, ...options } = r;
+    const keyOrDetect = key ?? 'detect';
+    if (keyOrDetect !== 'detect' && typeof keyOrDetect !== 'object') {
+      throw refuseType("key must be 'detect' or { root, mode }");
+    }
+    let nativeKey: { root: number; mode: string } | null = null;
+    if (keyOrDetect !== 'detect') {
+      // Checked for the refusal only; native reads the pitch class and mode token as given.
+      pitchClassOrdinal(keyOrDetect.root, 'key.root');
+      keyModeOrdinal(keyOrDetect.mode, 'key.mode');
+      nativeKey = { root: keyOrDetect.root, mode: keyOrDetect.mode };
+    }
+    const result = requireModule().autoTune(samples, sampleRate, nativeKey, options) as Omit<
+      AutoTuneResult,
+      'key'
+    > & {
+      key: Omit<AutoTuneResult['key'], 'mode'> & { mode: number };
+    };
+    return { ...result, key: { ...result.key, mode: keyModeName(result.key.mode) } };
+  });
 }

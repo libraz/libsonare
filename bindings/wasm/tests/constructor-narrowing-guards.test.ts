@@ -419,8 +419,8 @@ describe('the untouched neighbours of the narrowed positions are unchanged', () 
     ['2**32 + 5', 'must be greater than fmin'],
     ['2**32', 'must be greater than fmin'],
     ['2**53 + 1', 'must be greater than fmin'],
-    ['NaN', 'fmin must be a finite number'],
-    ['Infinity', 'fmin must be a finite number'],
+    ['NaN', 'fmin must be finite and in [-3.4028235e38, 3.4028235e38]'],
+    ['Infinity', 'fmin must be finite and in [-3.4028235e38, 3.4028235e38]'],
     ['1.5', 'constructs'],
     ['-1', 'StreamConfig: fmin/fmax must be finite and non-negative'],
   ];

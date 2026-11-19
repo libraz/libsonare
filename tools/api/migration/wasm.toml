@@ -10187,22 +10187,6 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::refuses a missing sa
 
 [[entry]]
 kind = "field"
-old = "DetectKeyRequest.modes"
-changed = "an empty modes list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit it for the default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/empty-list-refusals.test.ts::refuses an empty modes list on the request and positional forms"
-
-[[entry]]
-kind = "field"
-old = "DetectKeyCandidatesRequest.modes"
-changed = "an empty modes list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit it for the default"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/empty-list-refusals.test.ts::refuses an empty modes list on the request and positional forms"
-
-[[entry]]
-kind = "field"
 old = "MasteringStreamingPreviewRequest.platforms"
 changed = "an empty platforms list is refused with RangeError 'platforms must not be empty' (was read as the built-in set); an entry missing a typed name, targetLufs or ceilingDbtp is a TypeError naming the field; omit the list for the built-in set"
 domain = "mastering"
@@ -12673,7 +12657,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "DetectKeyCandidatesRequest.modes"
-changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only; an empty list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit modes for the default"
 domain = "analysis"
 rule = "token-case"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
@@ -12681,7 +12665,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::closed sets refuse n
 [[entry]]
 kind = "field"
 old = "DetectKeyCandidatesRequest.modes"
-changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only; an empty list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit modes for the default"
 domain = "analysis"
 rule = "token-case"
 entry = "./analysis"
@@ -12756,7 +12740,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "DetectKeyRequest.modes"
-changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only; an empty list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit modes for the default"
 domain = "analysis"
 rule = "token-case"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
@@ -12764,7 +12748,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::closed sets refuse n
 [[entry]]
 kind = "field"
 old = "DetectKeyRequest.modes"
-changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only; an empty list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit modes for the default"
 domain = "analysis"
 rule = "token-case"
 entry = "./analysis"
@@ -12967,7 +12951,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "KeyDetectionOptions.modes"
-changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only; an empty list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit modes for the default"
 domain = "analysis"
 rule = "token-case"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
@@ -12975,7 +12959,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::closed sets refuse n
 [[entry]]
 kind = "field"
 old = "KeyDetectionOptions.modes"
-changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only; an empty list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit modes for the default"
 domain = "analysis"
 rule = "token-case"
 entry = "./analysis"
@@ -29931,166 +29915,23 @@ removed = "removed; no call takes a validate option, and every call scans its in
 domain = "core"
 rule = "input-always-scanned"
 [[entry]]
-kind = "class"
-old = "Audio"
-changed = "a refusal raised inside a member, by the facade or by the native layer, opens with 'Audio.<member>: ' (the constructor with 'Audio: ') rather than with the name of the function the member delegates to"
-domain = "core"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "class"
-old = "PolyphonicAnalysis"
-changed = "a refusal raised inside a member, by the facade or by the native layer, opens with 'PolyphonicAnalysis.<member>: ' (the constructor with 'PolyphonicAnalysis: ') rather than with the name of the function the member delegates to"
-domain = "analysis"
-rule = "entry-named-refusals"
-test = "bindings/wasm/tests/polyphonic-editing.test.ts::rejects a config value the chain refuses"
-
-[[entry]]
-kind = "class"
-old = "StreamingMasteringChain"
-changed = "a refusal raised inside a member, by the facade or by the native layer, opens with 'StreamingMasteringChain.<member>: ' (the constructor with 'StreamingMasteringChain: ') rather than with the name of the function the member delegates to; the per-block processMono and processStereo are not wrapped and keep the native wrapper's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "class"
-old = "StreamAnalyzer"
-changed = "a refusal raised inside a member, by the facade or by the native layer, opens with 'StreamAnalyzer.<member>: ' (the constructor with 'StreamAnalyzer: ') rather than with the name of the function the member delegates to; the per-block process and processWithOffset are not wrapped and keep the native wrapper's name"
-domain = "analysis"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "class"
-old = "StreamingEqualizer"
-changed = "a refusal raised inside a member, by the facade or by the native layer, opens with 'StreamingEqualizer.<member>: ' (the constructor with 'StreamingEqualizer: ') rather than with the name of the function the member delegates to; the per-block processMono, processStereo, setSidechainMono and setSidechainStereo are not wrapped and keep the native wrapper's name"
-domain = "effects"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "class"
-old = "StreamingRetune"
-changed = "a refusal raised inside a member, by the facade or by the native layer, opens with 'StreamingRetune.<member>: ' (the constructor with 'StreamingRetune: ') rather than with the name of the function the member delegates to; the per-block processMono are not wrapped and keep the native wrapper's name"
-domain = "effects"
-rule = "entry-named-refusals"
-test = "bindings/wasm/tests/streaming-retune.test.ts"
-
-[[entry]]
-kind = "function"
-old = "masteringAssistantSuggest"
-changed = "a refusal raised by the public call it forwards to opens with 'masteringAssistantSuggest: ' rather than with the inner call's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "masteringAssistantSuggestChain"
-changed = "a refusal raised by the public call it forwards to opens with 'masteringAssistantSuggestChain: ' rather than with the inner call's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "masteringAssistantSuggestStereo"
-changed = "a refusal raised by the public call it forwards to opens with 'masteringAssistantSuggestStereo: ' rather than with the inner call's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "masteringAssistantSuggestChainStereo"
-changed = "a refusal raised by the public call it forwards to opens with 'masteringAssistantSuggestChainStereo: ' rather than with the inner call's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "masteringApplyProcessor"
-changed = "a refusal raised by the public call it forwards to opens with 'masteringApplyProcessor: ' rather than with the inner call's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "masteringApplyProcessorStereo"
-changed = "a refusal raised by the public call it forwards to opens with 'masteringApplyProcessorStereo: ' rather than with the inner call's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "masteringInsertTiming"
-changed = "a refusal raised by the public call it forwards to opens with 'masteringInsertTiming: ' rather than with the inner call's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "masteringInsertParamNames"
-changed = "a refusal raised by the public call it forwards to opens with 'masteringInsertParamNames: ' rather than with the inner call's name"
-domain = "mastering"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "analyzePolyphonic"
-changed = "a refusal raised by the public call it forwards to opens with 'analyzePolyphonic: ' rather than with the inner call's name"
-domain = "analysis"
-rule = "entry-named-refusals"
-test = "bindings/wasm/tests/polyphonic-editing.test.ts::rejects a config value the chain refuses"
-
-[[entry]]
-kind = "function"
-old = "synthesizeRir"
-changed = "a refusal raised by the public call it forwards to opens with 'synthesizeRir: ' rather than with the inner call's name"
-domain = "analysis"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "estimateRoom"
-changed = "a refusal raised by the public call it forwards to opens with 'estimateRoom: ' rather than with the inner call's name"
-domain = "analysis"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "roomMorph"
-changed = "a refusal raised by the public call it forwards to opens with 'roomMorph: ' rather than with the inner call's name"
-domain = "analysis"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "roomMorphStereo"
-changed = "a refusal raised by the public call it forwards to opens with 'roomMorphStereo: ' rather than with the inner call's name"
-domain = "analysis"
-rule = "entry-named-refusals"
-
-[[entry]]
-kind = "function"
-old = "decodeChannelsWithBrowserFallback"
-changed = "a refusal raised by the public call it forwards to opens with 'decodeChannelsWithBrowserFallback: ' rather than with the inner call's name"
-domain = "core"
-rule = "entry-named-refusals"
-
-[[entry]]
 kind = "field"
 old = "SurroundPan.distance"
-removed = "the pan law reads azimuth, width and LFE only; the two settings never changed the output"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SurroundPan.elevation"
-removed = "the pan law reads azimuth, width and LFE only; the two settings never changed the output"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SurroundPan.distance"
-removed = "the pan law reads azimuth, width and LFE only; the two settings never changed the output"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
 domain = "mastering"
 rule = "individual"
 entry = "./analysis"
@@ -30098,7 +29939,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "SurroundPan.elevation"
-removed = "the pan law reads azimuth, width and LFE only; the two settings never changed the output"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
 domain = "mastering"
 rule = "individual"
 entry = "./analysis"

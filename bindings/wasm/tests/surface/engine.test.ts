@@ -766,11 +766,13 @@ describe('capture', () => {
       expect(() => punch({ startPpq: 2, endPpq: 4 })).not.toThrow();
       expect(() => punch({ startPpq: 1, startSample: 1, endSample: 2 })).toThrow(
         new RangeError(
-          'configureCapture: give punch.startPpq, punch.startSample or punch.startSec, not more than one',
+          'RealtimeEngine.configureCapture: give punch.startPpq, punch.startSample or punch.startSec, not more than one',
         ),
       );
       expect(() => punch({ startSample: 1 })).toThrow(
-        new TypeError('configureCapture: give punch.endPpq, punch.endSample or punch.endSec'),
+        new TypeError(
+          'RealtimeEngine.configureCapture: give punch.endPpq, punch.endSample or punch.endSec',
+        ),
       );
       expect(() => punch({ startSample: -1, endSample: 2 })).toThrow(RangeError);
       expect(() => punch({ startSample: 1, endSample: 2, enabled: 1 })).toThrow(TypeError);
@@ -805,7 +807,7 @@ describe('offline render and process', () => {
       expect(error).toBeInstanceOf(RangeError);
       expect((error as Error).message).toContain('index 3');
       expect(() => engine.renderOffline({ channels: [plane()], validate: false } as never)).toThrow(
-        new TypeError("renderOffline: unknown request key 'validate'"),
+        new TypeError("RealtimeEngine.renderOffline: unknown request key 'validate'"),
       );
     });
   });

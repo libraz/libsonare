@@ -1,7 +1,7 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import type { StreamFrames, StreamStats } from '../index.js';
 import { init, isInitialized, StreamAnalyzer } from '../index.js';
-import { entryClass } from '../internal/entry.js';
+import { codedError, entryClass, withEntry } from '../internal/entry.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
 import type {
   SonareStreamAnalyzerNodeOptions,
@@ -37,7 +37,7 @@ import { resolveStreamAnalyzerChunkFrames } from './stream-analyzer-processor.js
  * const stop = analyzer.onFrames((frames) => draw(frames.mel, frames.nFrames));
  * ```
  */
-@entryClass('SonareStreamAnalyzerNode')
+@entryClass('SonareStreamAnalyzerNode', ['shutdown', 'consume'])
 export class SonareStreamAnalyzerNode {
   /** AudioWorkletNode that receives the audio; connect a source to it. */
   readonly node: AudioWorkletNode;
@@ -56,10 +56,15 @@ export class SonareStreamAnalyzerNode {
   private constructor(node: AudioWorkletNode, analyzer: StreamAnalyzer) {
     this.node = node;
     this.analyzer = analyzer;
-    this.ready = new Promise((resolve, reject) => {
-      this.resolveReady = resolve;
-      this.rejectReady = reject;
-    });
+    // The consumer awaits the field, so a startup failure is named by it.
+    this.ready = withEntry(
+      'SonareStreamAnalyzerNode.ready',
+      () =>
+        new Promise<void>((resolve, reject) => {
+          this.resolveReady = resolve;
+          this.rejectReady = reject;
+        }),
+    );
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
       if (this.destroyed) {
         return;
@@ -70,7 +75,7 @@ export class SonareStreamAnalyzerNode {
         this.resolveReady();
       } else if (isRecord(event.data) && event.data.type === 'error') {
         this.rejectReady(
-          new SonareError(ErrorCode.Unknown, String(event.data.message ?? 'AudioWorklet error')),
+          codedError(ErrorCode.Unknown, String(event.data.message ?? 'AudioWorklet error')),
         );
       }
     };
@@ -84,7 +89,7 @@ export class SonareStreamAnalyzerNode {
     context: BaseAudioContext,
     options: SonareStreamAnalyzerNodeOptions = {},
   ): Promise<SonareStreamAnalyzerNode> {
-    assertKnownProcessorOptions('SonareStreamAnalyzerNode.create', 'streamAnalyzerNode', options);
+    assertKnownProcessorOptions('streamAnalyzerNode', options);
     const chunkFrames = resolveStreamAnalyzerChunkFrames(options.chunkFrames);
     const processorName = options.processorName ?? 'sonare-stream-analyzer-processor';
     if (options.moduleUrl && context.audioWorklet?.addModule) {
@@ -97,11 +102,7 @@ export class SonareStreamAnalyzerNode {
     // Built before the node so an invalid configuration leaves nothing behind.
     const analyzer = new StreamAnalyzer({
       ...options.config,
-      sampleRate: resolveContextSampleRate(
-        options.config?.sampleRate,
-        context,
-        'SonareStreamAnalyzerNode.create',
-      ),
+      sampleRate: resolveContextSampleRate(options.config?.sampleRate, context),
     });
     const processorOptions: SonareStreamAnalyzerWorkletProcessorOptions = { chunkFrames };
     const factory =

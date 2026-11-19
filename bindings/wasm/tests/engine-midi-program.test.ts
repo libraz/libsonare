@@ -191,10 +191,10 @@ describe('SonareEngine.pushMidiProgram (worklet facade)', () => {
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 5)).not.toThrow();
       expect(() => engine.pushMidiProgram(DEST, 0, 16, 0)).toThrow(RangeError);
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 128, lsb: 0 })).toThrow(
-        new RangeError('pushMidiProgram: bank_msb must be in [0, 127]'),
+        new RangeError('SonareEngine.pushMidiProgram: bank_msb must be in [0, 127]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 16, 0, 0)).toThrow(
-        new RangeError('pushMidiProgram: group must be in [0, 15]'),
+        new RangeError('SonareEngine.pushMidiProgram: group must be in [0, 15]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 1.5)).toThrow(TypeError);
     } finally {

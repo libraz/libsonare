@@ -1,4 +1,5 @@
 import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index.js';
+import { refuseType } from '../internal/entry.js';
 import { requireOneOf } from '../internal/one_of.js';
 import type {
   SonareEngineSyncedClip,
@@ -45,10 +46,9 @@ export function addClip(
   request: Omit<EngineClip, 'trackId'>,
 ): number {
   if (typeof request !== 'object' || request === null) {
-    throw new TypeError('addClip: clip must be an object');
+    throw refuseType('clip must be an object');
   }
   requireOneOf(
-    'addClip',
     ['clip.channels', 'clip.pageProvider'],
     [request.channels !== undefined, request.pageProvider !== undefined],
   );
@@ -129,9 +129,7 @@ function commitClips(
 ): void {
   for (const clip of upserts) {
     if (!clip.channels && clip.pageProvider !== undefined && !ctx.workletClipStream(clip)) {
-      throw new TypeError(
-        'A pageProvider on SonareEngine must be created by attachOpfsClipStream().',
-      );
+      throw refuseType('A pageProvider on SonareEngine must be created by attachOpfsClipStream().');
     }
   }
   commitStore(ctx, ctx.clips, staged, applyOffline, () => postClipsDelta(ctx, upserts, removeIds));

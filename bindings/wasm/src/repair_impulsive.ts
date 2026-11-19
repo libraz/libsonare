@@ -2,6 +2,7 @@
  * Impulsive-defect repair: declick, declip and decrackle, with their detectors.
  */
 
+import { withEntry } from './internal/entry.js';
 import { clipDetectionFromNative, declipReportFromNative } from './internal/metering_native.js';
 import { pairedResult, repairNativeOptions } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
@@ -69,17 +70,22 @@ export function masteringRepairDeclickStereo(
   request: MasteringRepairDeclickStereoRequest,
 ): MasteringRepairDeclickResult;
 export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepairDeclickResult {
-  const r = requestOnly<MasteringRepairDeclickStereoRequest>('masteringRepairDeclickStereo', args);
-  assertAudioInput('masteringRepairDeclickStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringRepairDeclickStereo', r.right, r.sampleRate, r, 'right');
-  return pairedResult(
-    requireModule().masteringRepairDeclickStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      repairNativeOptions(r),
-    ),
-  );
+  return withEntry('masteringRepairDeclickStereo', () => {
+    const r = requestOnly<MasteringRepairDeclickStereoRequest>(
+      'masteringRepairDeclickStereo',
+      args,
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return pairedResult(
+      requireModule().masteringRepairDeclickStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+  });
 }
 
 /** Offline LPC-based declicker. */
@@ -90,9 +96,11 @@ export function masteringRepairDeclick(
   options?: DeclickOptions,
 ): DeclickResult;
 export function masteringRepairDeclick(...args: unknown[]): DeclickResult {
-  const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
-  assertAudioInput('masteringRepairDeclick', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDeclick(r.samples, r.sampleRate, repairNativeOptions(r));
+  return withEntry('masteringRepairDeclick', () => {
+    const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringRepairDeclick(r.samples, r.sampleRate, repairNativeOptions(r));
+  });
 }
 
 /** Options for `masteringRepairDeclip`. */
@@ -174,14 +182,16 @@ export function masteringRepairDeclip(
   options?: DeclipOptions,
 ): DeclipResult;
 export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
-  const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
-  assertAudioInput('masteringRepairDeclip', r.samples, r.sampleRate, r);
-  const native = requireModule().masteringRepairDeclip(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions(r),
-  );
-  return { samples: native.samples, report: declipReportFromNative(native.report) };
+  return withEntry('masteringRepairDeclip', () => {
+    const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const native = requireModule().masteringRepairDeclip(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
+    return { samples: native.samples, report: declipReportFromNative(native.report) };
+  });
 }
 
 /**
@@ -199,18 +209,20 @@ export function masteringRepairDeclipStereo(
   request: MasteringRepairDeclipStereoRequest,
 ): MasteringRepairDeclipResult;
 export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepairDeclipResult {
-  const r = requestOnly<MasteringRepairDeclipStereoRequest>('masteringRepairDeclipStereo', args);
-  assertAudioInput('masteringRepairDeclipStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringRepairDeclipStereo', r.right, r.sampleRate, r, 'right');
-  const paired = pairedResult(
-    requireModule().masteringRepairDeclipStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      repairNativeOptions(r),
-    ),
-  );
-  return { channels: paired.channels, reports: paired.reports.map(declipReportFromNative) };
+  return withEntry('masteringRepairDeclipStereo', () => {
+    const r = requestOnly<MasteringRepairDeclipStereoRequest>('masteringRepairDeclipStereo', args);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    const paired = pairedResult(
+      requireModule().masteringRepairDeclipStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+    return { channels: paired.channels, reports: paired.reports.map(declipReportFromNative) };
+  });
 }
 
 /** Offline crackle suppressor (median or wavelet-shrinkage). */
@@ -221,9 +233,15 @@ export function masteringRepairDecrackle(
   options?: DecrackleOptions,
 ): DecrackleResult;
 export function masteringRepairDecrackle(...args: unknown[]): DecrackleResult {
-  const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
-  assertAudioInput('masteringRepairDecrackle', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDecrackle(r.samples, r.sampleRate, repairNativeOptions(r));
+  return withEntry('masteringRepairDecrackle', () => {
+    const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringRepairDecrackle(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
+  });
 }
 
 /**
@@ -239,20 +257,22 @@ export function masteringRepairDecrackleStereo(
   request: MasteringRepairDecrackleStereoRequest,
 ): MasteringRepairDecrackleResult;
 export function masteringRepairDecrackleStereo(...args: unknown[]): MasteringRepairDecrackleResult {
-  const r = requestOnly<MasteringRepairDecrackleStereoRequest>(
-    'masteringRepairDecrackleStereo',
-    args,
-  );
-  assertAudioInput('masteringRepairDecrackleStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringRepairDecrackleStereo', r.right, r.sampleRate, r, 'right');
-  return pairedResult(
-    requireModule().masteringRepairDecrackleStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      repairNativeOptions(r),
-    ),
-  );
+  return withEntry('masteringRepairDecrackleStereo', () => {
+    const r = requestOnly<MasteringRepairDecrackleStereoRequest>(
+      'masteringRepairDecrackleStereo',
+      args,
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return pairedResult(
+      requireModule().masteringRepairDecrackleStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+  });
 }
 
 /** Request form of `masteringRepairDetectClicks`. */
@@ -303,13 +323,18 @@ export function masteringRepairDetectClicks(
   options?: DeclickOptions,
 ): ClickDetection;
 export function masteringRepairDetectClicks(...args: unknown[]): ClickDetection {
-  const r = sampleOneShot<MasteringRepairDetectClicksRequest>('masteringRepairDetectClicks', args);
-  assertAudioInput('masteringRepairDetectClicks', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDetectClicks(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions(r),
-  );
+  return withEntry('masteringRepairDetectClicks', () => {
+    const r = sampleOneShot<MasteringRepairDetectClicksRequest>(
+      'masteringRepairDetectClicks',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringRepairDetectClicks(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
+  });
 }
 
 /**
@@ -351,14 +376,20 @@ export function masteringRepairDetectClipping(
   options?: DeclipOptions,
 ): ClipDetection;
 export function masteringRepairDetectClipping(...args: unknown[]): ClipDetection {
-  const r = sampleOneShot<MasteringRepairDetectClippingRequest>(
-    'masteringRepairDetectClipping',
-    args,
-  );
-  assertAudioInput('masteringRepairDetectClipping', r.samples, r.sampleRate, r);
-  return clipDetectionFromNative(
-    requireModule().masteringRepairDetectClipping(r.samples, r.sampleRate, repairNativeOptions(r)),
-  );
+  return withEntry('masteringRepairDetectClipping', () => {
+    const r = sampleOneShot<MasteringRepairDetectClippingRequest>(
+      'masteringRepairDetectClipping',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return clipDetectionFromNative(
+      requireModule().masteringRepairDetectClipping(
+        r.samples,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+  });
 }
 
 /**
@@ -378,14 +409,16 @@ export function masteringRepairDetectCrackle(
   options?: DecrackleOptions,
 ): CrackleDetection;
 export function masteringRepairDetectCrackle(...args: unknown[]): CrackleDetection {
-  const r = sampleOneShot<MasteringRepairDetectCrackleRequest>(
-    'masteringRepairDetectCrackle',
-    args,
-  );
-  assertAudioInput('masteringRepairDetectCrackle', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDetectCrackle(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions(r),
-  );
+  return withEntry('masteringRepairDetectCrackle', () => {
+    const r = sampleOneShot<MasteringRepairDetectCrackleRequest>(
+      'masteringRepairDetectCrackle',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringRepairDetectCrackle(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
+  });
 }

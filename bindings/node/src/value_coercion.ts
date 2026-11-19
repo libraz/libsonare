@@ -1,3 +1,4 @@
+import { refuse, refuseType } from './internal/entry.js';
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { SampleBank } from './sample_bank.js';
@@ -46,12 +47,12 @@ export function resolveEnumOrdinal(
   enumName: string,
 ): number {
   if (typeof value !== 'string') {
-    throw new TypeError(`${enumName} must be a name, got ${typeof value}`);
+    throw refuseType(`${enumName} must be a name, got ${typeof value}`);
   }
   if (Object.hasOwn(values, value)) {
     return values[value] as number;
   }
-  throw new RangeError(`Invalid ${enumName}: ${value}`);
+  throw refuse(`Invalid ${enumName}: ${value}`);
 }
 
 /**
@@ -88,17 +89,13 @@ export function projectAutomationPointFromNative(native: {
 const AUTOMATION_POINT_KEYS: ReadonlySet<string> = new Set(['ppq', 'value', 'curveToNext']);
 
 /** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
-export function projectAutomationPointValue(
-  point: ProjectAutomationPoint,
-  fnName: string,
-): NativeAutomationPoint {
+export function projectAutomationPointValue(point: ProjectAutomationPoint): NativeAutomationPoint {
   for (const key of Object.keys(point)) {
     if (!AUTOMATION_POINT_KEYS.has(key)) {
-      throw new TypeError(`${fnName}: unknown option '${key}' in 'points'`);
+      throw refuseType(`unknown option '${key}' in 'points'`);
     }
   }
   const curveToNext = tokenOrdinal(
-    fnName,
     point.curveToNext ?? 'linear',
     AUTOMATION_CURVE_VALUES,
     'curveToNext',
@@ -113,14 +110,13 @@ export type NativeAutomationLaneDesc = Omit<ProjectAutomationLaneDesc, 'targetKi
 
 export function projectAutomationLaneValue(
   desc: Omit<ProjectAutomationLaneDesc, 'targetKind'> & { targetKind?: 0 | 1 | 2 },
-  fnName: string,
 ): NativeAutomationLaneDesc {
   if (desc.targetParamId === 0) {
-    throw new RangeError('project automation lane targetParamId must be non-zero');
+    throw refuse('project automation lane targetParamId must be non-zero');
   }
   return {
     ...desc,
-    points: desc.points.map((point) => projectAutomationPointValue(point, fnName)),
+    points: desc.points.map((point) => projectAutomationPointValue(point)),
   };
 }
 
@@ -175,13 +171,11 @@ export function sendTimingValue(timing: SendTiming): number {
  * the offline bounce and the realtime engine, so `sampleBank` means the same
  * thing on both.
  */
-export function normalizeSynthInstrument(fnName: string, patch: SynthPatch): SynthPatch {
+export function normalizeSynthInstrument(patch: SynthPatch): SynthPatch {
   if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
-    throw new TypeError(
-      `${fnName}: patch must be a SynthPatch object; a preset is named by its preset field`,
-    );
+    throw refuseType(`patch must be a SynthPatch object; a preset is named by its preset field`);
   }
-  refuseSynthPatchOrdinals(fnName, patch);
+  refuseSynthPatchOrdinals(patch);
   if (!(patch.sampleBank instanceof SampleBank)) {
     // An omitted bank passes through for the native layer to read as "no bank",
     // and a value that is not a bank at all for it to reject as a TypeError.
@@ -204,22 +198,22 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
     return undefined;
   }
   if (!Array.isArray(inserts)) {
-    throw new TypeError('inserts must be an array');
+    throw refuseType('inserts must be an array');
   }
   return JSON.stringify(
     inserts.map((insert, index) => {
       if (typeof insert !== 'object' || insert === null) {
-        throw new TypeError(`inserts[${index}] must be an object`);
+        throw refuseType(`inserts[${index}] must be an object`);
       }
       if (typeof insert.processor !== 'string') {
-        throw new TypeError(`inserts[${index}].processor must be a string`);
+        throw refuseType(`inserts[${index}].processor must be a string`);
       }
       const { params } = insert;
       if (params === undefined) {
         return { processor: insert.processor, params: {} };
       }
       if (typeof params !== 'object' || params === null || Array.isArray(params)) {
-        throw new TypeError(`inserts[${index}].params must be an object`);
+        throw refuseType(`inserts[${index}].params must be an object`);
       }
       return { processor: insert.processor, params };
     }),
@@ -241,7 +235,6 @@ export interface NormalizedPartRig {
  * further arguments.
  */
 export function normalizePartRig(
-  method: string,
   requestOrDestinationId: PartRigRequest | PartRigKey | number,
   part?: number,
   mode?: PartRigMode,
@@ -249,7 +242,7 @@ export function normalizePartRig(
 ): NormalizedPartRig {
   if (typeof requestOrDestinationId === 'object' && requestOrDestinationId !== null) {
     if (part !== undefined || mode !== undefined || inserts !== undefined) {
-      throw new TypeError(`${method}: a request object takes no further arguments`);
+      throw refuseType(`a request object takes no further arguments`);
     }
     const request = requestOrDestinationId as Partial<PartRigRequest>;
     return {

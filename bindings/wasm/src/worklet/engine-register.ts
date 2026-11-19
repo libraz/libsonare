@@ -1,4 +1,5 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
+import { codedError, invalidState, withEntry } from '../internal/entry.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type { SonareRealtimeEngineWorkletProcessorOptions } from '../public_types_worklet.js';
@@ -25,137 +26,140 @@ import { isRecord } from './protocol.js';
 export function registerSonareRealtimeEngineWorkletProcessor(
   name = 'sonare-realtime-engine-processor',
 ): void {
-  const scope = globalThis as unknown as {
-    AudioWorkletProcessor?: new () => object;
-    registerProcessor?: (processorName: string, processorCtor: unknown) => void;
-  };
-  if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'AudioWorkletProcessor is not available in this context.',
-    );
-  }
-  const Base = scope.AudioWorkletProcessor;
-  class RegisteredSonareRealtimeEngineWorkletProcessor extends Base {
-    private bridge?: SonareRealtimeEngineWorkletProcessor;
-    private readonly pendingMessages: unknown[] = [];
-    private pendingMessagesOverflowed = false;
-    readonly port?: WorkletPort;
+  withEntry('registerSonareRealtimeEngineWorkletProcessor', () => {
+    const scope = globalThis as unknown as {
+      AudioWorkletProcessor?: new () => object;
+      registerProcessor?: (processorName: string, processorCtor: unknown) => void;
+    };
+    if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
+      throw codedError(
+        ErrorCode.NotSupported,
+        'AudioWorkletProcessor is not available in this context.',
+      );
+    }
+    const Base = scope.AudioWorkletProcessor;
+    class RegisteredSonareRealtimeEngineWorkletProcessor extends Base {
+      private bridge?: SonareRealtimeEngineWorkletProcessor;
+      private readonly pendingMessages: unknown[] = [];
+      private pendingMessagesOverflowed = false;
+      readonly port?: WorkletPort;
 
-    constructor(options?: { processorOptions?: SonareRealtimeEngineWorkletProcessorOptions }) {
-      super();
-      const port = this.port;
-      // A missing processorOptions reaches the processor, which refuses the absent numChannels.
-      const processorOptions =
-        options?.processorOptions ?? ({} as SonareRealtimeEngineWorkletProcessorOptions);
-      assertKnownProcessorOptions(name, 'engineProcessor', processorOptions);
-      void this.initializeEmbind(processorOptions, port);
-      const onMessage = (event: { data: unknown }) => {
-        if (!this.bridge) {
-          if (this.pendingMessages.length < 1024) {
-            this.pendingMessages.push(event.data);
-          } else {
-            // A long sync before embind initialization must fail visibly rather
-            // than drop a provider/page/commit message and leave silent audio.
-            this.pendingMessagesOverflowed = true;
+      constructor(options?: { processorOptions?: SonareRealtimeEngineWorkletProcessorOptions }) {
+        super();
+        const port = this.port;
+        // A missing processorOptions reaches the processor, which refuses the absent numChannels.
+        const processorOptions =
+          options?.processorOptions ?? ({} as SonareRealtimeEngineWorkletProcessorOptions);
+        assertKnownProcessorOptions('engineProcessor', processorOptions);
+        void this.initializeEmbind(processorOptions, port);
+        const onMessage = (event: { data: unknown }) => {
+          if (!this.bridge) {
+            if (this.pendingMessages.length < 1024) {
+              this.pendingMessages.push(event.data);
+            } else {
+              // A long sync before embind initialization must fail visibly rather
+              // than drop a provider/page/commit message and leave silent audio.
+              this.pendingMessagesOverflowed = true;
+            }
+            return;
           }
+          this.routeMessage(event.data);
+        };
+        if (port?.addEventListener) {
+          port.addEventListener('message', onMessage);
+          port.start?.();
+        } else if (port) {
+          port.onmessage = onMessage;
+        }
+      }
+
+      process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
+        if (this.bridge) {
+          return this.bridge.process(inputs, outputs);
+        }
+        const output = outputs[0];
+        for (const channel of output ?? []) {
+          channel.fill(0);
+        }
+        return true;
+      }
+
+      /**
+       * Single dispatch point for the port, shared with the buffered replay so
+       * the two cannot recognize different message sets.
+       */
+      private routeMessage(data: unknown): void {
+        const bridge = this.bridge;
+        if (!bridge) {
           return;
         }
-        this.routeMessage(event.data);
-      };
-      if (port?.addEventListener) {
-        port.addEventListener('message', onMessage);
-        port.start?.();
-      } else if (port) {
-        port.onmessage = onMessage;
-      }
-    }
-
-    process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-      if (this.bridge) {
-        return this.bridge.process(inputs, outputs);
-      }
-      const output = outputs[0];
-      for (const channel of output ?? []) {
-        channel.fill(0);
-      }
-      return true;
-    }
-
-    /**
-     * Single dispatch point for the port, shared with the buffered replay so
-     * the two cannot recognize different message sets.
-     */
-    private routeMessage(data: unknown): void {
-      const bridge = this.bridge;
-      if (!bridge) {
-        return;
-      }
-      if (isEngineCommandRecord(data)) {
-        bridge.receiveCommand(data);
-      } else if (isEngineSyncMessage(data)) {
-        bridge.receiveSync(data);
-      } else if (isEngineCaptureRequestMessage(data)) {
-        bridge.receiveCaptureRequest(data);
-      } else if (isEngineTransportRequestMessage(data)) {
-        bridge.receiveTransportRequest(data);
-      } else if (isEngineInsertGainReductionRequestMessage(data)) {
-        bridge.receiveInsertGainReductionRequest(data);
-      } else if (isRecord(data) && typeof data.type === 'string' && data.type.startsWith('sync')) {
-        // A sync the guard does not accept would otherwise vanish, leaving the
-        // live engine out of step with the offline mirror and nothing to see.
-        // Report it through the same channel as a sync the engine rejected.
-        this.port?.postMessage?.({
-          type: 'syncError',
-          syncType: data.type,
-          message: `Unrecognized worklet sync message: ${data.type}`,
-        });
-        bridge.noteSyncSequence(data.syncSequence);
-      }
-    }
-
-    private replayPendingMessages(): void {
-      const messages = this.pendingMessages.splice(0);
-      for (const data of messages) {
-        this.routeMessage(data);
-      }
-    }
-
-    private async initializeEmbind(
-      options: SonareRealtimeEngineWorkletProcessorOptions,
-      port?: WorkletPort,
-    ): Promise<void> {
-      try {
-        await initializeEmbindInWorklet(options.wasmBinary);
-        if (this.pendingMessagesOverflowed) {
-          throw new SonareError(
-            ErrorCode.InvalidState,
-            'AudioWorklet initialization message buffer overflowed.',
-          );
+        if (isEngineCommandRecord(data)) {
+          bridge.receiveCommand(data);
+        } else if (isEngineSyncMessage(data)) {
+          bridge.receiveSync(data);
+        } else if (isEngineCaptureRequestMessage(data)) {
+          bridge.receiveCaptureRequest(data);
+        } else if (isEngineTransportRequestMessage(data)) {
+          bridge.receiveTransportRequest(data);
+        } else if (isEngineInsertGainReductionRequestMessage(data)) {
+          bridge.receiveInsertGainReductionRequest(data);
+        } else if (
+          isRecord(data) &&
+          typeof data.type === 'string' &&
+          data.type.startsWith('sync')
+        ) {
+          // A sync the guard does not accept would otherwise vanish, leaving the
+          // live engine out of step with the offline mirror and nothing to see.
+          // Report it through the same channel as a sync the engine rejected.
+          this.port?.postMessage?.({
+            type: 'syncError',
+            syncType: data.type,
+            message: `Unrecognized worklet sync message: ${data.type}`,
+          });
+          bridge.noteSyncSequence(data.syncSequence);
         }
-        this.bridge = new SonareRealtimeEngineWorkletProcessor({
-          ...options,
-          transport: {
-            postMessage: (message, transfer) => port?.postMessage?.(message, transfer),
-            onMeter: (meter) => port?.postMessage?.(meter),
-          },
-        });
-        for (const message of options.initialSyncMessages ?? []) {
-          this.bridge.receiveSync(message);
+      }
+
+      private replayPendingMessages(): void {
+        const messages = this.pendingMessages.splice(0);
+        for (const data of messages) {
+          this.routeMessage(data);
         }
-        for (const command of options.initialCommands ?? []) {
-          this.bridge.receiveCommand(command);
+      }
+
+      private async initializeEmbind(
+        options: SonareRealtimeEngineWorkletProcessorOptions,
+        port?: WorkletPort,
+      ): Promise<void> {
+        try {
+          await initializeEmbindInWorklet(options.wasmBinary);
+          if (this.pendingMessagesOverflowed) {
+            throw invalidState('AudioWorklet initialization message buffer overflowed.');
+          }
+          this.bridge = new SonareRealtimeEngineWorkletProcessor({
+            ...options,
+            transport: {
+              postMessage: (message, transfer) => port?.postMessage?.(message, transfer),
+              onMeter: (meter) => port?.postMessage?.(meter),
+            },
+          });
+          for (const message of options.initialSyncMessages ?? []) {
+            this.bridge.receiveSync(message);
+          }
+          for (const command of options.initialCommands ?? []) {
+            this.bridge.receiveCommand(command);
+          }
+          this.replayPendingMessages();
+          port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
+        } catch (error) {
+          port?.postMessage?.({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+            failure: failurePayload(error),
+          });
         }
-        this.replayPendingMessages();
-        port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
-      } catch (error) {
-        port?.postMessage?.({
-          type: 'error',
-          message: error instanceof Error ? error.message : String(error),
-          failure: failurePayload(error),
-        });
       }
     }
-  }
-  scope.registerProcessor(name, RegisteredSonareRealtimeEngineWorkletProcessor);
+    scope.registerProcessor(name, RegisteredSonareRealtimeEngineWorkletProcessor);
+  });
 }

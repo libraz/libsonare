@@ -751,7 +751,7 @@ describe('masterAudio refuses a call giving neither a preset nor overrides', () 
     ],
     ['masterAudio', () => masterAudio(samples, sampleRate, { onProgress: () => {} })],
     [
-      'masterAudio',
+      'Audio.masterAudio',
       () => {
         using audio = Audio.fromBuffer(samples, sampleRate);
         return audio.masterAudio({});

@@ -1,6 +1,6 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
-import { entryClass } from '../internal/entry.js';
+import { codedError, entryClass, invalidState, refuse, withEntry } from '../internal/entry.js';
 import { externalMidiEvent } from '../internal/external_midi.js';
 import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
@@ -139,13 +139,13 @@ function workletFailure(
   if (isFailurePayload(data.failure)) {
     return failureFromPayload(data.failure);
   }
-  return new SonareError(ErrorCode.Unknown, String(data[messageKey] ?? fallback));
+  return codedError(ErrorCode.Unknown, String(data[messageKey] ?? fallback));
 }
 
 function workletBlockSize(maxBlockSize: number | undefined): number {
   const resolved = maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
   if (!Number.isSafeInteger(resolved) || resolved < AUDIO_WORKLET_RENDER_QUANTUM) {
-    throw new RangeError(
+    throw refuse(
       `maxBlockSize must be an integer of at least ${AUDIO_WORKLET_RENDER_QUANTUM} frames`,
     );
   }
@@ -160,7 +160,19 @@ function workletBlockSize(maxBlockSize: number | undefined): number {
  * {@link SonareRealtimeEngineNode.create}; release it with {@link destroy}. After `destroy`, command
  * methods throw `SonareError` with `ErrorCode.InvalidState`.
  */
-@entryClass('SonareRealtimeEngineNode')
+@entryClass('SonareRealtimeEngineNode', [
+  'assertOpen',
+  'shutdown',
+  'emitTelemetry',
+  'startRingPolling',
+  'stopRingPollingIfUnused',
+  'emitMeter',
+  'emitMidiOut',
+  'emitClipPageRequests',
+  'emitScope',
+  'sendCaptureRequest',
+  'sendTransportRequest',
+])
 export class SonareRealtimeEngineNode {
   /** The underlying AudioWorkletNode; connect it into the audio graph. */
   readonly node: AudioWorkletNode;
@@ -222,7 +234,7 @@ export class SonareRealtimeEngineNode {
   >();
   private resolveReady!: () => void;
   private rejectReady!: (reason?: unknown) => void;
-  private readonly epoch = new OwnerEpoch('Realtime engine node');
+  private readonly epoch = new OwnerEpoch('SonareRealtimeEngineNode');
   private destroying: Promise<void> | undefined;
   /** Sequence number of the last sync posted; SAB ring commands carry it. */
   private syncSequence = 0;
@@ -245,10 +257,15 @@ export class SonareRealtimeEngineNode {
     this.scopeRing = scopeRing;
     this.clipPageRequestRing = clipPageRequestRing;
     this.externalMidiRing = externalMidiRing;
-    this.ready = new Promise((resolve, reject) => {
-      this.resolveReady = resolve;
-      this.rejectReady = reject;
-    });
+    // The consumer awaits the field, so a startup failure is named by it.
+    this.ready = withEntry(
+      'SonareRealtimeEngineNode.ready',
+      () =>
+        new Promise<void>((resolve, reject) => {
+          this.resolveReady = resolve;
+          this.rejectReady = reject;
+        }),
+    );
     if (!capabilities.readyMessage) {
       this.resolveReady();
     }
@@ -257,7 +274,7 @@ export class SonareRealtimeEngineNode {
     this.ready.catch(() => undefined);
     this.epoch.onClose(() =>
       this.rejectReady(
-        releasedHandleError('Realtime engine node', 'was destroyed before it became ready.'),
+        invalidState('SonareRealtimeEngineNode was destroyed before it became ready'),
       ),
     );
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
@@ -273,10 +290,10 @@ export class SonareRealtimeEngineNode {
         if (pending) {
           this.captureRequests.delete(captureRequestId);
           if (!isEngineCaptureResponseMessage(event.data)) {
-            pending.reject(new SonareError(ErrorCode.InvalidFormat, 'Malformed capture response.'));
+            pending.reject(codedError(ErrorCode.InvalidFormat, 'Malformed capture response.'));
           } else if (!isEngineCaptureResponseForOperation(event.data, pending.op)) {
             pending.reject(
-              new SonareError(
+              codedError(
                 ErrorCode.InvalidFormat,
                 'Capture response does not match request operation.',
               ),
@@ -362,13 +379,9 @@ export class SonareRealtimeEngineNode {
     context: BaseAudioContext,
     options: SonareRealtimeEngineNodeOptions,
   ): Promise<SonareRealtimeEngineNode> {
-    assertKnownProcessorOptions('SonareRealtimeEngineNode.create', 'engineNode', options);
+    assertKnownProcessorOptions('engineNode', options);
     const maxBlockSize = workletBlockSize(options.maxBlockSize);
-    const sampleRate = resolveContextSampleRate(
-      options.sampleRate,
-      context,
-      'SonareRealtimeEngineNode.create',
-    );
+    const sampleRate = resolveContextSampleRate(options.sampleRate, context);
     const processorName = options.processorName ?? 'sonare-realtime-engine-processor';
     const moduleUrl = options.moduleUrl;
     if (moduleUrl && context.audioWorklet?.addModule) {
@@ -385,7 +398,7 @@ export class SonareRealtimeEngineNode {
           }
         : engineCapabilities();
     if (options.requireAbiCompatible !== false && detectedCapabilities?.abiCompatible === false) {
-      throw new SonareError(
+      throw codedError(
         ErrorCode.AbiMismatch,
         `Engine ABI mismatch: wasm=${detectedCapabilities.engineAbiVersion}, expected=${detectedCapabilities.expectedEngineAbiVersion}`,
       );
@@ -400,7 +413,7 @@ export class SonareRealtimeEngineNode {
     const mode =
       options.mode === 'postMessage' || !sharedArrayBuffer || !atomics ? 'postMessage' : 'sab';
     if (options.mode === 'sab' && mode !== 'sab') {
-      throw new SonareError(
+      throw codedError(
         ErrorCode.NotSupported,
         'SharedArrayBuffer mode requested but SharedArrayBuffer/Atomics are unavailable.',
       );
@@ -422,7 +435,7 @@ export class SonareRealtimeEngineNode {
       1,
     );
     if (commandRingCapacity > 65536) {
-      throw new RangeError('commandRingCapacity must be at most 65536');
+      throw refuse('commandRingCapacity must be at most 65536');
     }
     const telemetryRingCapacity = requireIntegerOption(
       options.telemetryRingCapacity,
@@ -493,11 +506,7 @@ export class SonareRealtimeEngineNode {
       mode === 'sab'
         ? createExternalMidiRingBuffer({ capacity: externalMidiRingCapacity })
         : undefined;
-    const channelCount = requireChannelCount(
-      options.numChannels,
-      'SonareRealtimeEngineNode.create',
-      'numChannels',
-    );
+    const channelCount = requireChannelCount(options.numChannels, 'numChannels');
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate,
@@ -574,7 +583,7 @@ export class SonareRealtimeEngineNode {
   play(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportPlay,
-      renderFrame: resolveRenderFrame('play', renderFrame),
+      renderFrame: resolveRenderFrame(renderFrame),
     });
   }
 
@@ -582,7 +591,7 @@ export class SonareRealtimeEngineNode {
   resetMasterLoudnessMeter(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.ResetMasterLoudnessMeter,
-      renderFrame: resolveRenderFrame('resetMasterLoudnessMeter', renderFrame),
+      renderFrame: resolveRenderFrame(renderFrame),
     });
   }
 
@@ -590,7 +599,7 @@ export class SonareRealtimeEngineNode {
   resetProcessorState(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.ResetProcessorState,
-      renderFrame: resolveRenderFrame('resetProcessorState', renderFrame),
+      renderFrame: resolveRenderFrame(renderFrame),
     });
   }
 
@@ -604,7 +613,7 @@ export class SonareRealtimeEngineNode {
   stop(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportStop,
-      renderFrame: resolveRenderFrame('stop', renderFrame),
+      renderFrame: resolveRenderFrame(renderFrame),
     });
   }
 
@@ -618,7 +627,7 @@ export class SonareRealtimeEngineNode {
   seekSample(timelineSample: number, renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportSeekSample,
-      renderFrame: resolveRenderFrame('seekSample', renderFrame),
+      renderFrame: resolveRenderFrame(renderFrame),
       argInt: timelineSample,
     });
   }
@@ -631,7 +640,7 @@ export class SonareRealtimeEngineNode {
    * @throws SonareError `InvalidState` once the node is destroyed.
    */
   seekPpq(ppq: number, renderFrame?: number): boolean {
-    const frame = resolveRenderFrame('seekPpq', renderFrame);
+    const frame = resolveRenderFrame(renderFrame);
     if (!isPublicPpq(ppq) || !Number.isSafeInteger(frame)) {
       this.assertOpen();
       return false;
@@ -701,7 +710,7 @@ export class SonareRealtimeEngineNode {
   }
 
   private assertOpen(): void {
-    assertHandleLive(this.epoch.closed, 'Realtime engine node');
+    assertHandleLive(this.epoch.closed, 'SonareRealtimeEngineNode');
   }
 
   /**
@@ -712,10 +721,7 @@ export class SonareRealtimeEngineNode {
   requestCaptureStatus(): Promise<EngineCaptureStatus> {
     return this.sendCaptureRequest('status').then((response) => {
       if (!response.ok || !('status' in response)) {
-        throw new SonareError(
-          ErrorCode.InvalidFormat,
-          'Capture status response is missing status.',
-        );
+        throw codedError(ErrorCode.InvalidFormat, 'Capture status response is missing status.');
       }
       return response.status;
     });
@@ -729,10 +735,7 @@ export class SonareRealtimeEngineNode {
   requestCapturedAudio(): Promise<Float32Array[]> {
     return this.sendCaptureRequest('read').then((response) => {
       if (!response.ok || !('channels' in response)) {
-        throw new SonareError(
-          ErrorCode.InvalidFormat,
-          'Capture read response is missing channels.',
-        );
+        throw codedError(ErrorCode.InvalidFormat, 'Capture read response is missing channels.');
       }
       return response.channels;
     });
@@ -755,10 +758,7 @@ export class SonareRealtimeEngineNode {
   requestTransportState(): Promise<EngineTransportState> {
     return this.sendTransportRequest().then((response) => {
       if (!response.state) {
-        throw new SonareError(
-          ErrorCode.InvalidFormat,
-          'Transport state response is missing state.',
-        );
+        throw codedError(ErrorCode.InvalidFormat, 'Transport state response is missing state.');
       }
       return response.state;
     });
@@ -969,15 +969,15 @@ export class SonareRealtimeEngineNode {
     }
     this.node.disconnect();
     for (const pending of this.captureRequests.values()) {
-      pending.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
+      pending.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
     this.captureRequests.clear();
     for (const pending of this.transportRequests.values()) {
-      pending.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
+      pending.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
     this.transportRequests.clear();
     for (const pending of this.insertGainReductionRequests.values()) {
-      pending.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
+      pending.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
     this.insertGainReductionRequests.clear();
     this.telemetryListeners.clear();
@@ -1060,7 +1060,7 @@ export class SonareRealtimeEngineNode {
    */
   pollInsertGainReduction(targetId: number): Promise<number[]> {
     if (this.epoch.closed) {
-      return Promise.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
+      return Promise.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
     const requestId = this.insertGainReductionRequestId++;
     let rejectRequest!: (reason?: unknown) => void;
@@ -1087,7 +1087,7 @@ export class SonareRealtimeEngineNode {
     op: SonareEngineCaptureRequestMessage['op'],
   ): Promise<SonareEngineCaptureResponseMessageInternal> {
     if (this.epoch.closed) {
-      return Promise.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
+      return Promise.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
     const requestId = this.captureRequestId++;
     let rejectRequest!: (reason?: unknown) => void;
@@ -1106,7 +1106,7 @@ export class SonareRealtimeEngineNode {
 
   private sendTransportRequest(): Promise<SonareEngineTransportResponseMessage> {
     if (this.epoch.closed) {
-      return Promise.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
+      return Promise.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
     const requestId = this.transportRequestId++;
     const promise = new Promise<SonareEngineTransportResponseMessage>((resolve, reject) => {

@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type { AlignTakeToReferenceRequest, AlignTakeToReferenceResult } from './types.js';
 import { assertAudioInput, assertSampleRate, requestObject } from './validation.js';
@@ -59,23 +60,25 @@ import { assertAudioInput, assertSampleRate, requestObject } from './validation.
 export function alignTakeToReference(
   request: AlignTakeToReferenceRequest,
 ): AlignTakeToReferenceResult {
-  requestObject('alignTakeToReference', request, 'request', true);
-  assertAudioInput('alignTakeToReference', request.reference, request.sampleRate, {}, 'reference');
-  // Resolved before any reader runs, so the addon always receives two rates.
-  const takeSampleRate = request.takeSampleRate ?? request.sampleRate;
-  assertSampleRate('alignTakeToReference', takeSampleRate, 'takeSampleRate');
-  assertAudioInput('alignTakeToReference', request.take, takeSampleRate, {}, 'take');
-  // The config keys are forwarded unvalidated on purpose: both default at 0,
-  // which the library reads as "keep the default", so the addon's property
-  // readers are the layer that refuses a wrong type by name.
-  return addon.alignTakeToReference(
-    request.reference,
-    request.take,
-    request.sampleRate,
-    takeSampleRate,
-    {
-      hopLength: request.hopLength,
-      binsPerOctave: request.binsPerOctave,
-    },
-  );
+  return withEntry('alignTakeToReference', () => {
+    requestObject('alignTakeToReference', request, 'request', true);
+    assertAudioInput(request.reference, request.sampleRate, {}, 'reference');
+    // Resolved before any reader runs, so the addon always receives two rates.
+    const takeSampleRate = request.takeSampleRate ?? request.sampleRate;
+    assertSampleRate(takeSampleRate, 'takeSampleRate');
+    assertAudioInput(request.take, takeSampleRate, {}, 'take');
+    // The config keys are forwarded unvalidated on purpose: both default at 0,
+    // which the library reads as "keep the default", so the addon's property
+    // readers are the layer that refuses a wrong type by name.
+    return addon.alignTakeToReference(
+      request.reference,
+      request.take,
+      request.sampleRate,
+      takeSampleRate,
+      {
+        hopLength: request.hopLength,
+        binsPerOctave: request.binsPerOctave,
+      },
+    );
+  });
 }

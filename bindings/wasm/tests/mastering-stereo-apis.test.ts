@@ -27,7 +27,7 @@ describe('WASM stereo mastering design APIs', () => {
     });
     chain.destroy();
     expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(
-      /StreamingMasteringChain has been released/,
+      /^StreamingMasteringChain\.setParameter: StreamingMasteringChain has been destroyed$/,
     );
   });
 
@@ -70,8 +70,18 @@ describe('WASM stereo mastering design APIs', () => {
     const reference = tone(32, 0.4);
     const short = tone(31, 0.2);
     const cases: Array<[StereoPairProcessor, Float32Array, Float32Array, RegExp]> = [
-      ['match.abCrossfade', source, short, /Source left and right channel lengths must match/],
-      ['match.abCrossfade', short, source, /Source left and right channel lengths must match/],
+      [
+        'match.abCrossfade',
+        source,
+        short,
+        /^masteringApplyPairProcessorStereo: Source left and right channel lengths must match\.$/,
+      ],
+      [
+        'match.abCrossfade',
+        short,
+        source,
+        /^masteringApplyPairProcessorStereo: Source left and right channel lengths must match\.$/,
+      ],
       ['match.abSwitch' as StereoPairProcessor, source, source, /abSwitch/],
     ];
     for (const [processor, sourceLeft, sourceRight, message] of cases) {
@@ -95,7 +105,9 @@ describe('WASM stereo mastering design APIs', () => {
         referenceRight: short,
         sampleRate: SAMPLE_RATE,
       }),
-    ).toThrow(/Reference left and right channel lengths must match/);
+    ).toThrow(
+      /^masteringApplyPairProcessorStereo: Reference left and right channel lengths must match\.$/,
+    );
   });
 
   it('shares one gain across stereo loudness matching', () => {

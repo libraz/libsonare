@@ -6,6 +6,7 @@ import type {
   EngineTrackLane,
   EngineTrackSend,
 } from '../index.js';
+import { refuse } from '../internal/entry.js';
 import type { SonareEngineSyncTempoMessage } from '../internal/worklet_messages.js';
 
 /**
@@ -74,7 +75,7 @@ export function resolveTargetId(target: string | number): number {
   const value =
     typeof target === 'number' ? target : target.trim() === '' ? Number.NaN : Number(target);
   if (!Number.isInteger(value)) {
-    throw new RangeError(`target id must be an integer, got ${JSON.stringify(target)}`);
+    throw refuse(`target id must be an integer, got ${JSON.stringify(target)}`);
   }
   return value;
 }
@@ -92,5 +93,5 @@ export function resolveParamId(
   if (byName) {
     return byName.id;
   }
-  throw new RangeError(`Unknown engine parameter ${JSON.stringify(param)} for node ${nodeId}`);
+  throw refuse(`Unknown engine parameter ${JSON.stringify(param)} for node ${nodeId}`);
 }

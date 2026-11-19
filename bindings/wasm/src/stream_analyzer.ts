@@ -1,5 +1,5 @@
 import { chordQualityToken } from './analysis_helpers.js';
-import { entryClass } from './internal/entry.js';
+import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { WINDOW_TYPES, windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
@@ -197,17 +197,17 @@ function estimateOf(e: WasmAnalyzerStats['estimate']): StreamProgressiveEstimate
 }
 
 /** Refuses an A4 reference outside what native accepts, as a RangeError. */
-function assertReferenceHz(fnName: string, referenceHz: unknown): asserts referenceHz is number {
+function assertReferenceHz(referenceHz: unknown): asserts referenceHz is number {
   if (typeof referenceHz !== 'number') {
-    throw new TypeError(`${fnName}: referenceHz must be a number`);
+    throw refuseType(`referenceHz must be a number`);
   }
   if (
     !Number.isFinite(referenceHz) ||
     referenceHz < REFERENCE_HZ_RANGE[0] ||
     referenceHz > REFERENCE_HZ_RANGE[1]
   ) {
-    throw new RangeError(
-      `${fnName}: referenceHz must be within ${REFERENCE_HZ_RANGE[0]}..${REFERENCE_HZ_RANGE[1]} Hz`,
+    throw refuse(
+      `referenceHz must be within ${REFERENCE_HZ_RANGE[0]}..${REFERENCE_HZ_RANGE[1]} Hz`,
     );
   }
 }
@@ -217,26 +217,28 @@ function assertReferenceHz(fnName: string, referenceHz: unknown): asserts refere
  * analyzer reads an absent upper edge as.
  */
 export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
-  const d = getSonareModule().streamAnalyzerConfigDefault();
-  return {
-    sampleRate: d.sampleRate,
-    nFft: d.nFft,
-    hopLength: d.hopLength,
-    nMels: d.nMels,
-    fminHz: d.fmin,
-    fmaxHz: d.fmax > 0 ? d.fmax : d.sampleRate / 2,
-    referenceHz: d.referenceHz,
-    computeMel: d.computeMel,
-    computeChroma: d.computeChroma,
-    computeOnset: d.computeOnset,
-    computeSpectral: d.computeSpectral,
-    emitEveryNFrames: d.emitEveryNFrames,
-    maxPendingFrames: d.maxPendingFrames,
-    maxProgressionEntries: d.maxProgressionEntries,
-    keyUpdateIntervalSec: d.keyUpdateIntervalSec,
-    bpmUpdateIntervalSec: d.bpmUpdateIntervalSec,
-    window: WINDOW_TYPES[d.window],
-  };
+  return withEntry('streamAnalyzerConfigDefault', () => {
+    const d = getSonareModule().streamAnalyzerConfigDefault();
+    return {
+      sampleRate: d.sampleRate,
+      nFft: d.nFft,
+      hopLength: d.hopLength,
+      nMels: d.nMels,
+      fminHz: d.fmin,
+      fmaxHz: d.fmax > 0 ? d.fmax : d.sampleRate / 2,
+      referenceHz: d.referenceHz,
+      computeMel: d.computeMel,
+      computeChroma: d.computeChroma,
+      computeOnset: d.computeOnset,
+      computeSpectral: d.computeSpectral,
+      emitEveryNFrames: d.emitEveryNFrames,
+      maxPendingFrames: d.maxPendingFrames,
+      maxProgressionEntries: d.maxProgressionEntries,
+      keyUpdateIntervalSec: d.keyUpdateIntervalSec,
+      bpmUpdateIntervalSec: d.bpmUpdateIntervalSec,
+      window: WINDOW_TYPES[d.window],
+    };
+  });
 }
 
 /**
@@ -270,7 +272,7 @@ export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
  * browser builds remain single-threaded unless the host explicitly provisions
  * shared-memory worker support.
  */
-@entryClass('StreamAnalyzer', ['process', 'processWithOffset'])
+@entryClass('StreamAnalyzer', ['process', 'processWithOffset', 'analyzer'])
 export class StreamAnalyzer {
   private analyzerHandle: WasmStreamAnalyzer;
   private released = false;
@@ -289,28 +291,28 @@ export class StreamAnalyzer {
    */
   constructor(config: StreamConfig) {
     if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-      throw new TypeError('StreamAnalyzer: config must be an object with a sampleRate');
+      throw refuseType('config must be an object with a sampleRate');
     }
     for (const key of Object.keys(config)) {
       if (!CONFIG_KEYS.has(key)) {
-        throw new TypeError(`StreamAnalyzer: unknown config key '${key}'`);
+        throw refuseType(`unknown config key '${key}'`);
       }
     }
-    assertSampleRate('StreamAnalyzer', config.sampleRate);
+    assertSampleRate(config.sampleRate);
     if (config.window !== undefined) {
-      windowOrdinal('StreamAnalyzer', config.window);
+      windowOrdinal(config.window);
     }
     if (config.fminHz !== undefined) {
-      assertFloatValue('StreamAnalyzer', config.fminHz, 'fminHz');
+      assertFloatValue(config.fminHz, 'fminHz');
     }
     if (config.fmaxHz !== undefined) {
-      assertFloatValue('StreamAnalyzer', config.fmaxHz, 'fmaxHz');
+      assertFloatValue(config.fmaxHz, 'fmaxHz');
       if (!(config.fmaxHz > 0)) {
-        throw new RangeError('StreamAnalyzer: fmaxHz must be positive (omit it for Nyquist)');
+        throw refuse('fmaxHz must be positive (omit it for Nyquist)');
       }
     }
     if (config.referenceHz !== undefined) {
-      assertReferenceHz('StreamAnalyzer', config.referenceHz);
+      assertReferenceHz(config.referenceHz);
     }
     for (const key of [
       'nFft',
@@ -321,7 +323,7 @@ export class StreamAnalyzer {
       'maxProgressionEntries',
     ] as const) {
       if (config[key] !== undefined) {
-        assertIntegerValue('StreamAnalyzer', config[key], key);
+        assertIntegerValue(config[key], key);
       }
     }
     const module = getSonareModule();
@@ -344,9 +346,7 @@ export class StreamAnalyzer {
       config.maxProgressionEntries ?? defaults.maxProgressionEntries,
       config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,
       config.bpmUpdateIntervalSec ?? defaults.bpmUpdateIntervalSec,
-      config.window === undefined
-        ? defaults.window
-        : windowOrdinal('StreamAnalyzer', config.window),
+      config.window === undefined ? defaults.window : windowOrdinal(config.window),
       defaults.outputFormat,
     );
   }
@@ -540,7 +540,7 @@ export class StreamAnalyzer {
    * analyzer.setReferenceHz(466.16);
    */
   setReferenceHz(referenceHz: number): void {
-    assertReferenceHz('StreamAnalyzer.setReferenceHz', referenceHz);
+    assertReferenceHz(referenceHz);
     this.analyzer.setReferenceHz(referenceHz);
   }
 

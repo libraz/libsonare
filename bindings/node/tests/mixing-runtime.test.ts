@@ -119,7 +119,7 @@ describe('Mixer runtime methods', () => {
   it('refuses elevation and distance as unknown surround pan keys', () => {
     for (const key of ['elevation', 'distance']) {
       expect(() => mixer.setSurroundPan('host', { [key]: 0 } as never)).toThrow(
-        new TypeError(`setSurroundPan: unknown request key '${key}'`),
+        new TypeError(`Mixer.setSurroundPan: unknown request key '${key}'`),
       );
     }
   });

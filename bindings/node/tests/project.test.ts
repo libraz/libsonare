@@ -1138,7 +1138,7 @@ describe('Project native binding', () => {
             instrument: { waveform: waveform as unknown as 'sine' },
           },
         ]),
-      ).toThrow(new TypeError('bounceWithBuiltinInstruments: waveform must be a name'));
+      ).toThrow(new TypeError('Project.bounceWithBuiltinInstruments: waveform must be a name'));
       project.destroy();
     }
   });

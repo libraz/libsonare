@@ -1,3 +1,4 @@
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import {
   midi2Byte,
   midi2Event,
@@ -52,33 +53,33 @@ import { projectAutomationPointFromNative } from './value_coercion.js';
 const isAbsent = (value: unknown): value is undefined | null =>
   value === undefined || value === null;
 
-function requireNumber(fnName: string, value: unknown, argName: string): number {
+function requireNumber(value: unknown, argName: string): number {
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   return value;
 }
 
 /** A lookup index: `TypeError` unless a number, `RangeError` unless an integer in `[0, max]`. */
-function lookupIndex(fnName: string, value: unknown, argName: string, max: number): number {
-  const n = requireNumber(fnName, value, argName);
-  assertBoundedInteger(fnName, n, argName, 0, max);
+function lookupIndex(value: unknown, argName: string, max: number): number {
+  const n = requireNumber(value, argName);
+  assertBoundedInteger(n, argName, 0, max);
   return n;
 }
 
-function requireString(fnName: string, value: unknown, argName: string): string {
+function requireString(value: unknown, argName: string): string {
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: ${argName} must be a string`);
+    throw refuseType(`${argName} must be a string`);
   }
   return value;
 }
 
-function optionalFlag(fnName: string, value: unknown, argName: string): boolean {
+function optionalFlag(value: unknown, argName: string): boolean {
   if (isAbsent(value)) {
     return false;
   }
   if (typeof value !== 'boolean') {
-    throw new TypeError(`${fnName}: ${argName} must be a boolean`);
+    throw refuseType(`${argName} must be a boolean`);
   }
   return value;
 }
@@ -88,26 +89,26 @@ function readRequest<
   T extends { ppq: number; group: number; channel: number },
   N extends RequestFn,
 >(
-  fnName: N,
+  requestName: N,
   request: T & Parameters<typeof requestObject<T, N>>[1],
 ): { record: T; ppq: number; group: number; channel: number } {
-  const record = requestObject<T, N>(fnName, request, 'request', true);
+  const record = requestObject<T, N>(requestName, request, 'request', true);
   return {
     record,
-    ppq: requireNumber(fnName, record.ppq, 'ppq'),
-    group: requireNumber(fnName, record.group, 'group'),
-    channel: requireNumber(fnName, record.channel, 'channel'),
+    ppq: requireNumber(record.ppq, 'ppq'),
+    group: requireNumber(record.group, 'group'),
+    channel: requireNumber(record.channel, 'channel'),
   };
 }
 
-function readBank(fnName: string, bank: unknown): { msb: number; lsb: number } {
+function readBank(bank: unknown): { msb: number; lsb: number } {
   if (typeof bank !== 'object' || bank === null) {
-    throw new TypeError(`${fnName}: bank must be an object`);
+    throw refuseType(`bank must be an object`);
   }
   const { msb, lsb } = bank as ProjectProgramBank;
   return {
-    msb: requireNumber(fnName, msb, 'bank.msb'),
-    lsb: requireNumber(fnName, lsb, 'bank.lsb'),
+    msb: requireNumber(msb, 'bank.msb'),
+    lsb: requireNumber(lsb, 'bank.lsb'),
   };
 }
 
@@ -119,11 +120,13 @@ function readBank(fnName: string, bank: unknown): { msb: number; lsb: number } {
  * @throws RangeError for an out-of-range value
  */
 export function midiNoteOn(request: MidiNoteOnRequest): ProjectMidiEvent {
-  const fn = 'midiNoteOn';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = requireNumber(fn, record.note, 'note');
-  const velocity = requireNumber(fn, record.velocity, 'velocity');
-  return midi1Event(fn, ppq, group, 0x9, channel, note, velocity);
+  return withEntry('midiNoteOn', () => {
+    const fn = 'midiNoteOn';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const note = requireNumber(record.note, 'note');
+    const velocity = requireNumber(record.velocity, 'velocity');
+    return midi1Event(ppq, group, 0x9, channel, note, velocity);
+  });
 }
 
 /**
@@ -134,11 +137,13 @@ export function midiNoteOn(request: MidiNoteOnRequest): ProjectMidiEvent {
  * @throws RangeError for an out-of-range value
  */
 export function midiNoteOff(request: MidiNoteOffRequest): ProjectMidiEvent {
-  const fn = 'midiNoteOff';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = requireNumber(fn, record.note, 'note');
-  const velocity = isAbsent(record.velocity) ? 0 : requireNumber(fn, record.velocity, 'velocity');
-  return midi1Event(fn, ppq, group, 0x8, channel, note, velocity);
+  return withEntry('midiNoteOff', () => {
+    const fn = 'midiNoteOff';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const note = requireNumber(record.note, 'note');
+    const velocity = isAbsent(record.velocity) ? 0 : requireNumber(record.velocity, 'velocity');
+    return midi1Event(ppq, group, 0x8, channel, note, velocity);
+  });
 }
 
 /**
@@ -149,11 +154,13 @@ export function midiNoteOff(request: MidiNoteOffRequest): ProjectMidiEvent {
  * @throws RangeError for an out-of-range value
  */
 export function midiCc(request: MidiCcRequest): ProjectMidiEvent {
-  const fn = 'midiCc';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const controller = requireNumber(fn, record.controller, 'controller');
-  const value = requireNumber(fn, record.value, 'value');
-  return midi1Event(fn, ppq, group, 0xb, channel, controller, value);
+  return withEntry('midiCc', () => {
+    const fn = 'midiCc';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const controller = requireNumber(record.controller, 'controller');
+    const value = requireNumber(record.value, 'value');
+    return midi1Event(ppq, group, 0xb, channel, controller, value);
+  });
 }
 
 /**
@@ -164,11 +171,13 @@ export function midiCc(request: MidiCcRequest): ProjectMidiEvent {
  * @throws RangeError for an out-of-range value
  */
 export function midiPolyPressure(request: MidiPolyPressureRequest): ProjectMidiEvent {
-  const fn = 'midiPolyPressure';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = requireNumber(fn, record.note, 'note');
-  const pressure = requireNumber(fn, record.pressure, 'pressure');
-  return midi1Event(fn, ppq, group, 0xa, channel, note, pressure);
+  return withEntry('midiPolyPressure', () => {
+    const fn = 'midiPolyPressure';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const note = requireNumber(record.note, 'note');
+    const pressure = requireNumber(record.pressure, 'pressure');
+    return midi1Event(ppq, group, 0xa, channel, note, pressure);
+  });
 }
 
 /**
@@ -179,10 +188,12 @@ export function midiPolyPressure(request: MidiPolyPressureRequest): ProjectMidiE
  * @throws RangeError for an out-of-range value
  */
 export function midiProgram(request: MidiProgramRequest): ProjectMidiEvent {
-  const fn = 'midiProgram';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const program = requireNumber(fn, record.program, 'program');
-  return midi1Event(fn, ppq, group, 0xc, channel, program, 0);
+  return withEntry('midiProgram', () => {
+    const fn = 'midiProgram';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const program = requireNumber(record.program, 'program');
+    return midi1Event(ppq, group, 0xc, channel, program, 0);
+  });
 }
 
 /**
@@ -193,10 +204,12 @@ export function midiProgram(request: MidiProgramRequest): ProjectMidiEvent {
  * @throws RangeError for an out-of-range value
  */
 export function midiChannelPressure(request: MidiChannelPressureRequest): ProjectMidiEvent {
-  const fn = 'midiChannelPressure';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const pressure = requireNumber(fn, record.pressure, 'pressure');
-  return midi1Event(fn, ppq, group, 0xd, channel, pressure, 0);
+  return withEntry('midiChannelPressure', () => {
+    const fn = 'midiChannelPressure';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const pressure = requireNumber(record.pressure, 'pressure');
+    return midi1Event(ppq, group, 0xd, channel, pressure, 0);
+  });
 }
 
 /**
@@ -207,11 +220,13 @@ export function midiChannelPressure(request: MidiChannelPressureRequest): Projec
  * @throws RangeError for an out-of-range value
  */
 export function midiPitchBend(request: MidiPitchBendRequest): ProjectMidiEvent {
-  const fn = 'midiPitchBend';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const bend = requireNumber(fn, record.bend, 'bend');
-  assertBoundedInteger(fn, bend, 'bend', 0, 0x3fff);
-  return midi1Event(fn, ppq, group, 0xe, channel, bend & 0x7f, bend >> 7);
+  return withEntry('midiPitchBend', () => {
+    const fn = 'midiPitchBend';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const bend = requireNumber(record.bend, 'bend');
+    assertBoundedInteger(bend, 'bend', 0, 0x3fff);
+    return midi1Event(ppq, group, 0xe, channel, bend & 0x7f, bend >> 7);
+  });
 }
 
 /**
@@ -222,17 +237,19 @@ export function midiPitchBend(request: MidiPitchBendRequest): ProjectMidiEvent {
  * @throws RangeError for an out-of-range value
  */
 export function midi2NoteOn(request: Midi2NoteOnRequest): ProjectMidiEvent {
-  const fn = 'midi2NoteOn';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = assertU7(fn, requireNumber(fn, record.note, 'note'), 'note');
-  const vel = midi2U16(fn, requireNumber(fn, record.velocity16, 'velocity16'), 'velocity16');
-  const type = isAbsent(record.attributeType)
-    ? 0
-    : midi2Byte(fn, requireNumber(fn, record.attributeType, 'attributeType'), 'attributeType');
-  const data = isAbsent(record.attributeData)
-    ? 0
-    : midi2U16(fn, requireNumber(fn, record.attributeData, 'attributeData'), 'attributeData');
-  return midi2Event(fn, ppq, group, 0x9, channel, note, type, ((vel << 16) | data) >>> 0);
+  return withEntry('midi2NoteOn', () => {
+    const fn = 'midi2NoteOn';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const note = assertU7(requireNumber(record.note, 'note'), 'note');
+    const vel = midi2U16(requireNumber(record.velocity16, 'velocity16'), 'velocity16');
+    const type = isAbsent(record.attributeType)
+      ? 0
+      : midi2Byte(requireNumber(record.attributeType, 'attributeType'), 'attributeType');
+    const data = isAbsent(record.attributeData)
+      ? 0
+      : midi2U16(requireNumber(record.attributeData, 'attributeData'), 'attributeData');
+    return midi2Event(ppq, group, 0x9, channel, note, type, ((vel << 16) | data) >>> 0);
+  });
 }
 
 /**
@@ -243,13 +260,15 @@ export function midi2NoteOn(request: Midi2NoteOnRequest): ProjectMidiEvent {
  * @throws RangeError for an out-of-range value
  */
 export function midi2NoteOff(request: Midi2NoteOffRequest): ProjectMidiEvent {
-  const fn = 'midi2NoteOff';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = assertU7(fn, requireNumber(fn, record.note, 'note'), 'note');
-  const vel = isAbsent(record.velocity16)
-    ? 0
-    : midi2U16(fn, requireNumber(fn, record.velocity16, 'velocity16'), 'velocity16');
-  return midi2Event(fn, ppq, group, 0x8, channel, note, 0, (vel << 16) >>> 0);
+  return withEntry('midi2NoteOff', () => {
+    const fn = 'midi2NoteOff';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const note = assertU7(requireNumber(record.note, 'note'), 'note');
+    const vel = isAbsent(record.velocity16)
+      ? 0
+      : midi2U16(requireNumber(record.velocity16, 'velocity16'), 'velocity16');
+    return midi2Event(ppq, group, 0x8, channel, note, 0, (vel << 16) >>> 0);
+  });
 }
 
 /**
@@ -260,11 +279,13 @@ export function midi2NoteOff(request: Midi2NoteOffRequest): ProjectMidiEvent {
  * @throws RangeError for an out-of-range value
  */
 export function midi2Cc(request: Midi2CcRequest): ProjectMidiEvent {
-  const fn = 'midi2Cc';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const controller = assertU7(fn, requireNumber(fn, record.controller, 'controller'), 'controller');
-  const value = midi2U32(fn, requireNumber(fn, record.value32, 'value32'), 'value32');
-  return midi2Event(fn, ppq, group, 0xb, channel, controller, 0, value);
+  return withEntry('midi2Cc', () => {
+    const fn = 'midi2Cc';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const controller = assertU7(requireNumber(record.controller, 'controller'), 'controller');
+    const value = midi2U32(requireNumber(record.value32, 'value32'), 'value32');
+    return midi2Event(ppq, group, 0xb, channel, controller, 0, value);
+  });
 }
 
 /**
@@ -275,11 +296,13 @@ export function midi2Cc(request: Midi2CcRequest): ProjectMidiEvent {
  * @throws RangeError for an out-of-range value
  */
 export function midi2PolyPressure(request: Midi2PolyPressureRequest): ProjectMidiEvent {
-  const fn = 'midi2PolyPressure';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = assertU7(fn, requireNumber(fn, record.note, 'note'), 'note');
-  const pressure = midi2U32(fn, requireNumber(fn, record.pressure32, 'pressure32'), 'pressure32');
-  return midi2Event(fn, ppq, group, 0xa, channel, note, 0, pressure);
+  return withEntry('midi2PolyPressure', () => {
+    const fn = 'midi2PolyPressure';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const note = assertU7(requireNumber(record.note, 'note'), 'note');
+    const pressure = midi2U32(requireNumber(record.pressure32, 'pressure32'), 'pressure32');
+    return midi2Event(ppq, group, 0xa, channel, note, 0, pressure);
+  });
 }
 
 /**
@@ -290,10 +313,12 @@ export function midi2PolyPressure(request: Midi2PolyPressureRequest): ProjectMid
  * @throws RangeError for an out-of-range value
  */
 export function midi2ChannelPressure(request: Midi2ChannelPressureRequest): ProjectMidiEvent {
-  const fn = 'midi2ChannelPressure';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const pressure = midi2U32(fn, requireNumber(fn, record.pressure32, 'pressure32'), 'pressure32');
-  return midi2Event(fn, ppq, group, 0xd, channel, 0, 0, pressure);
+  return withEntry('midi2ChannelPressure', () => {
+    const fn = 'midi2ChannelPressure';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const pressure = midi2U32(requireNumber(record.pressure32, 'pressure32'), 'pressure32');
+    return midi2Event(ppq, group, 0xd, channel, 0, 0, pressure);
+  });
 }
 
 /**
@@ -304,10 +329,12 @@ export function midi2ChannelPressure(request: Midi2ChannelPressureRequest): Proj
  * @throws RangeError for an out-of-range value
  */
 export function midi2PitchBend(request: Midi2PitchBendRequest): ProjectMidiEvent {
-  const fn = 'midi2PitchBend';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const bend = midi2U32(fn, requireNumber(fn, record.bend32, 'bend32'), 'bend32');
-  return midi2Event(fn, ppq, group, 0xe, channel, 0, 0, bend);
+  return withEntry('midi2PitchBend', () => {
+    const fn = 'midi2PitchBend';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const bend = midi2U32(requireNumber(record.bend32, 'bend32'), 'bend32');
+    return midi2Event(ppq, group, 0xe, channel, 0, 0, bend);
+  });
 }
 
 /**
@@ -319,32 +346,34 @@ export function midi2PitchBend(request: Midi2PitchBendRequest): ProjectMidiEvent
  * @throws RangeError for an out-of-range value
  */
 export function midi2Program(request: Midi2ProgramRequest): ProjectMidiEvent {
-  const fn = 'midi2Program';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  programArg(fn, group, 'group', 15);
-  programArg(fn, channel, 'channel', 15);
-  const program = programArg(fn, requireNumber(fn, record.program, 'program'), 'program', 127);
-  let msb = 0;
-  let lsb = 0;
-  if (!isAbsent(record.bank)) {
-    const bank = readBank(fn, record.bank);
-    msb = programArg(fn, bank.msb, 'bank.msb', 127);
-    lsb = programArg(fn, bank.lsb, 'bank.lsb', 127);
-  }
-  const word1 = ((program << 24) | (msb << 8) | lsb) >>> 0;
-  return midi2Event(fn, ppq, group, 0xc, channel, 0, isAbsent(record.bank) ? 0 : 1, word1);
+  return withEntry('midi2Program', () => {
+    const fn = 'midi2Program';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    programArg(group, 'group', 15);
+    programArg(channel, 'channel', 15);
+    const program = programArg(requireNumber(record.program, 'program'), 'program', 127);
+    let msb = 0;
+    let lsb = 0;
+    if (!isAbsent(record.bank)) {
+      const bank = readBank(record.bank);
+      msb = programArg(bank.msb, 'bank.msb', 127);
+      lsb = programArg(bank.lsb, 'bank.lsb', 127);
+    }
+    const word1 = ((program << 24) | (msb << 8) | lsb) >>> 0;
+    return midi2Event(ppq, group, 0xc, channel, 0, isAbsent(record.bank) ? 0 : 1, word1);
+  });
 }
 
 function midi2Controller(
-  fn: 'midi2RegisteredController' | 'midi2AssignableController',
+  requestName: 'midi2RegisteredController' | 'midi2AssignableController',
   request: Midi2RegisteredControllerRequest,
   opcode: number,
 ): ProjectMidiEvent {
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const bank = assertU7(fn, requireNumber(fn, record.bank, 'bank'), 'bank');
-  const index = assertU7(fn, requireNumber(fn, record.index, 'index'), 'index');
-  const value = midi2U32(fn, requireNumber(fn, record.value32, 'value32'), 'value32');
-  return midi2Event(fn, ppq, group, opcode, channel, bank, index, value);
+  const { record, ppq, group, channel } = readRequest(requestName, request);
+  const bank = assertU7(requireNumber(record.bank, 'bank'), 'bank');
+  const index = assertU7(requireNumber(record.index, 'index'), 'index');
+  const value = midi2U32(requireNumber(record.value32, 'value32'), 'value32');
+  return midi2Event(ppq, group, opcode, channel, bank, index, value);
 }
 
 /**
@@ -357,7 +386,9 @@ function midi2Controller(
 export function midi2RegisteredController(
   request: Midi2RegisteredControllerRequest,
 ): ProjectMidiEvent {
-  return midi2Controller('midi2RegisteredController', request, 0x2);
+  return withEntry('midi2RegisteredController', () => {
+    return midi2Controller('midi2RegisteredController', request, 0x2);
+  });
 }
 
 /**
@@ -370,19 +401,21 @@ export function midi2RegisteredController(
 export function midi2AssignableController(
   request: Midi2AssignableControllerRequest,
 ): ProjectMidiEvent {
-  return midi2Controller('midi2AssignableController', request, 0x3);
+  return withEntry('midi2AssignableController', () => {
+    return midi2Controller('midi2AssignableController', request, 0x3);
+  });
 }
 
 function midi2RelativeController(
-  fn: 'midi2RelativeRegisteredController' | 'midi2RelativeAssignableController',
+  requestName: 'midi2RelativeRegisteredController' | 'midi2RelativeAssignableController',
   request: Midi2RelativeRegisteredControllerRequest,
   opcode: number,
 ): ProjectMidiEvent {
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const bank = assertU7(fn, requireNumber(fn, record.bank, 'bank'), 'bank');
-  const index = assertU7(fn, requireNumber(fn, record.index, 'index'), 'index');
-  const delta = midi2I32(fn, requireNumber(fn, record.delta32, 'delta32'), 'delta32');
-  return midi2Event(fn, ppq, group, opcode, channel, bank, index, delta);
+  const { record, ppq, group, channel } = readRequest(requestName, request);
+  const bank = assertU7(requireNumber(record.bank, 'bank'), 'bank');
+  const index = assertU7(requireNumber(record.index, 'index'), 'index');
+  const delta = midi2I32(requireNumber(record.delta32, 'delta32'), 'delta32');
+  return midi2Event(ppq, group, opcode, channel, bank, index, delta);
 }
 
 /**
@@ -395,7 +428,9 @@ function midi2RelativeController(
 export function midi2RelativeRegisteredController(
   request: Midi2RelativeRegisteredControllerRequest,
 ): ProjectMidiEvent {
-  return midi2RelativeController('midi2RelativeRegisteredController', request, 0x4);
+  return withEntry('midi2RelativeRegisteredController', () => {
+    return midi2RelativeController('midi2RelativeRegisteredController', request, 0x4);
+  });
 }
 
 /**
@@ -408,19 +443,21 @@ export function midi2RelativeRegisteredController(
 export function midi2RelativeAssignableController(
   request: Midi2RelativeAssignableControllerRequest,
 ): ProjectMidiEvent {
-  return midi2RelativeController('midi2RelativeAssignableController', request, 0x5);
+  return withEntry('midi2RelativeAssignableController', () => {
+    return midi2RelativeController('midi2RelativeAssignableController', request, 0x5);
+  });
 }
 
 function midi2PerNoteController(
-  fn: 'midi2RegisteredPerNoteController' | 'midi2AssignablePerNoteController',
+  requestName: 'midi2RegisteredPerNoteController' | 'midi2AssignablePerNoteController',
   request: Midi2RegisteredPerNoteControllerRequest,
   opcode: number,
 ): ProjectMidiEvent {
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = assertU7(fn, requireNumber(fn, record.note, 'note'), 'note');
-  const index = midi2Byte(fn, requireNumber(fn, record.index, 'index'), 'index');
-  const value = midi2U32(fn, requireNumber(fn, record.value32, 'value32'), 'value32');
-  return midi2Event(fn, ppq, group, opcode, channel, note, index, value);
+  const { record, ppq, group, channel } = readRequest(requestName, request);
+  const note = assertU7(requireNumber(record.note, 'note'), 'note');
+  const index = midi2Byte(requireNumber(record.index, 'index'), 'index');
+  const value = midi2U32(requireNumber(record.value32, 'value32'), 'value32');
+  return midi2Event(ppq, group, opcode, channel, note, index, value);
 }
 
 /**
@@ -433,7 +470,9 @@ function midi2PerNoteController(
 export function midi2RegisteredPerNoteController(
   request: Midi2RegisteredPerNoteControllerRequest,
 ): ProjectMidiEvent {
-  return midi2PerNoteController('midi2RegisteredPerNoteController', request, 0x0);
+  return withEntry('midi2RegisteredPerNoteController', () => {
+    return midi2PerNoteController('midi2RegisteredPerNoteController', request, 0x0);
+  });
 }
 
 /**
@@ -446,7 +485,9 @@ export function midi2RegisteredPerNoteController(
 export function midi2AssignablePerNoteController(
   request: Midi2AssignablePerNoteControllerRequest,
 ): ProjectMidiEvent {
-  return midi2PerNoteController('midi2AssignablePerNoteController', request, 0x1);
+  return withEntry('midi2AssignablePerNoteController', () => {
+    return midi2PerNoteController('midi2AssignablePerNoteController', request, 0x1);
+  });
 }
 
 /**
@@ -457,11 +498,13 @@ export function midi2AssignablePerNoteController(
  * @throws RangeError for an out-of-range value
  */
 export function midi2PerNotePitchBend(request: Midi2PerNotePitchBendRequest): ProjectMidiEvent {
-  const fn = 'midi2PerNotePitchBend';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = assertU7(fn, requireNumber(fn, record.note, 'note'), 'note');
-  const bend = midi2U32(fn, requireNumber(fn, record.bend32, 'bend32'), 'bend32');
-  return midi2Event(fn, ppq, group, 0x6, channel, note, 0, bend);
+  return withEntry('midi2PerNotePitchBend', () => {
+    const fn = 'midi2PerNotePitchBend';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const note = assertU7(requireNumber(record.note, 'note'), 'note');
+    const bend = midi2U32(requireNumber(record.bend32, 'bend32'), 'bend32');
+    return midi2Event(ppq, group, 0x6, channel, note, 0, bend);
+  });
 }
 
 /**
@@ -474,13 +517,15 @@ export function midi2PerNotePitchBend(request: Midi2PerNotePitchBendRequest): Pr
  * @throws RangeError for an out-of-range value
  */
 export function midi2PerNoteManagement(request: Midi2PerNoteManagementRequest): ProjectMidiEvent {
-  const fn = 'midi2PerNoteManagement';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const note = assertU7(fn, requireNumber(fn, record.note, 'note'), 'note');
-  const detach = optionalFlag(fn, record.detach, 'detach');
-  const reset = optionalFlag(fn, record.reset, 'reset');
-  const flags = (detach ? 0x02 : 0) | (reset ? 0x01 : 0);
-  return midi2Event(fn, ppq, group, 0xf, channel, note, flags, 0);
+  return withEntry('midi2PerNoteManagement', () => {
+    const fn = 'midi2PerNoteManagement';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const note = assertU7(requireNumber(record.note, 'note'), 'note');
+    const detach = optionalFlag(record.detach, 'detach');
+    const reset = optionalFlag(record.reset, 'reset');
+    const flags = (detach ? 0x02 : 0) | (reset ? 0x01 : 0);
+    return midi2Event(ppq, group, 0xf, channel, note, flags, 0);
+  });
 }
 
 /**
@@ -491,11 +536,13 @@ export function midi2PerNoteManagement(request: Midi2PerNoteManagementRequest): 
  * @throws RangeError for an out-of-range value
  */
 export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEvent[] {
-  const fn = 'midiBankProgram';
-  const { record, ppq, group, channel } = readRequest(fn, request);
-  const program = requireNumber(fn, record.program, 'program');
-  const bank = readBank(fn, record.bank);
-  return addon.midiBankProgram(ppq, group, channel, bank.msb, bank.lsb, program);
+  return withEntry('midiBankProgram', () => {
+    const fn = 'midiBankProgram';
+    const { record, ppq, group, channel } = readRequest(fn, request);
+    const program = requireNumber(record.program, 'program');
+    const bank = readBank(record.bank);
+    return addon.midiBankProgram(ppq, group, channel, bank.msb, bank.lsb, program);
+  });
 }
 
 /**
@@ -507,27 +554,29 @@ export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEve
  * @throws RangeError for an out-of-range value
  */
 export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent | null {
-  const fn = 'midiParamToCc';
-  const record = requestObject(fn, request, 'request', true);
-  return addon.midiParamToCc(
-    record.bindings,
-    requireNumber(fn, record.paramId, 'paramId'),
-    requireNumber(fn, record.unitValue, 'unitValue'),
-    requireNumber(fn, record.group, 'group'),
-    isAbsent(record.ppq) ? 0 : requireNumber(fn, record.ppq, 'ppq'),
-  );
+  return withEntry('midiParamToCc', () => {
+    const fn = 'midiParamToCc';
+    const record = requestObject(fn, request, 'request', true);
+    return addon.midiParamToCc(
+      record.bindings,
+      requireNumber(record.paramId, 'paramId'),
+      requireNumber(record.unitValue, 'unitValue'),
+      requireNumber(record.group, 'group'),
+      isAbsent(record.ppq) ? 0 : requireNumber(record.ppq, 'ppq'),
+    );
+  });
 }
 
-function found(fn: string, value: string | null, what: string): string {
+function found(value: string | null, what: string): string {
   if (value === null) {
-    throw new RangeError(`${fn}: ${what}`);
+    throw refuse(`${what}`);
   }
   return value;
 }
 
-function foundIndex(fn: string, value: number, what: string): number {
+function foundIndex(value: number, what: string): number {
   if (value < 0) {
-    throw new RangeError(`${fn}: ${what}`);
+    throw refuse(`${what}`);
   }
   return value;
 }
@@ -540,12 +589,10 @@ function foundIndex(fn: string, value: number, what: string): number {
  * @throws RangeError when `program` is out of range
  */
 export function gmInstrumentName(program: number): string {
-  lookupIndex('gmInstrumentName', program, 'program', 127);
-  return found(
-    'gmInstrumentName',
-    addon.midiGmInstrumentName(program),
-    `program ${program} is out of range`,
-  );
+  return withEntry('gmInstrumentName', () => {
+    lookupIndex(program, 'program', 127);
+    return found(addon.midiGmInstrumentName(program), `program ${program} is out of range`);
+  });
 }
 
 /**
@@ -556,12 +603,10 @@ export function gmInstrumentName(program: number): string {
  * @throws RangeError when the name is unknown
  */
 export function gmProgramForName(name: string): number {
-  requireString('gmProgramForName', name, 'name');
-  return foundIndex(
-    'gmProgramForName',
-    addon.midiGmProgramForName(name),
-    `unknown instrument name '${name}'`,
-  );
+  return withEntry('gmProgramForName', () => {
+    requireString(name, 'name');
+    return foundIndex(addon.midiGmProgramForName(name), `unknown instrument name '${name}'`);
+  });
 }
 
 /**
@@ -572,8 +617,10 @@ export function gmProgramForName(name: string): number {
  * @throws RangeError when `family` is out of range
  */
 export function gmFamilyName(family: number): string {
-  lookupIndex('gmFamilyName', family, 'family', 15);
-  return found('gmFamilyName', addon.midiGmFamilyName(family), `family ${family} is out of range`);
+  return withEntry('gmFamilyName', () => {
+    lookupIndex(family, 'family', 15);
+    return found(addon.midiGmFamilyName(family), `family ${family} is out of range`);
+  });
 }
 
 /**
@@ -584,12 +631,10 @@ export function gmFamilyName(family: number): string {
  * @throws RangeError when `family` is out of range
  */
 export function gmFamilyFirstProgram(family: number): number {
-  lookupIndex('gmFamilyFirstProgram', family, 'family', 15);
-  return foundIndex(
-    'gmFamilyFirstProgram',
-    addon.midiGmFamilyFirstProgram(family),
-    `family ${family} is out of range`,
-  );
+  return withEntry('gmFamilyFirstProgram', () => {
+    lookupIndex(family, 'family', 15);
+    return foundIndex(addon.midiGmFamilyFirstProgram(family), `family ${family} is out of range`);
+  });
 }
 
 /**
@@ -600,15 +645,16 @@ export function gmFamilyFirstProgram(family: number): number {
  * @throws RangeError when the bank/program pair names no instrument
  */
 export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string {
-  const fn = 'gm2InstrumentName';
-  const record = requestObject(fn, request, 'request', true);
-  const bankLsb = lookupIndex(fn, record.bankLsb, 'bankLsb', 127);
-  const program = lookupIndex(fn, record.program, 'program', 127);
-  return found(
-    fn,
-    addon.midiGm2InstrumentName(bankLsb, program),
-    `no instrument for bankLsb ${bankLsb}, program ${program}`,
-  );
+  return withEntry('gm2InstrumentName', () => {
+    const fn = 'gm2InstrumentName';
+    const record = requestObject(fn, request, 'request', true);
+    const bankLsb = lookupIndex(record.bankLsb, 'bankLsb', 127);
+    const program = lookupIndex(record.program, 'program', 127);
+    return found(
+      addon.midiGm2InstrumentName(bankLsb, program),
+      `no instrument for bankLsb ${bankLsb}, program ${program}`,
+    );
+  });
 }
 
 /**
@@ -619,8 +665,10 @@ export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string {
  * @throws RangeError when `note` names no drum
  */
 export function gmDrumName(note: number): string {
-  lookupIndex('gmDrumName', note, 'note', 127);
-  return found('gmDrumName', addon.midiGmDrumName(note), `note ${note} is out of range`);
+  return withEntry('gmDrumName', () => {
+    lookupIndex(note, 'note', 127);
+    return found(addon.midiGmDrumName(note), `note ${note} is out of range`);
+  });
 }
 
 /**
@@ -631,12 +679,10 @@ export function gmDrumName(note: number): string {
  * @throws RangeError when the name is unknown
  */
 export function gmDrumNoteForName(name: string): number {
-  requireString('gmDrumNoteForName', name, 'name');
-  return foundIndex(
-    'gmDrumNoteForName',
-    addon.midiGmDrumNoteForName(name),
-    `unknown drum name '${name}'`,
-  );
+  return withEntry('gmDrumNoteForName', () => {
+    requireString(name, 'name');
+    return foundIndex(addon.midiGmDrumNoteForName(name), `unknown drum name '${name}'`);
+  });
 }
 
 /**
@@ -647,12 +693,10 @@ export function gmDrumNoteForName(name: string): number {
  * @throws RangeError when no drum set uses that bank
  */
 export function gm2DrumSetName(bankLsb: number): string {
-  lookupIndex('gm2DrumSetName', bankLsb, 'bankLsb', 127);
-  return found(
-    'gm2DrumSetName',
-    addon.midiGm2DrumSetName(bankLsb),
-    `bankLsb ${bankLsb} names no drum set`,
-  );
+  return withEntry('gm2DrumSetName', () => {
+    lookupIndex(bankLsb, 'bankLsb', 127);
+    return found(addon.midiGm2DrumSetName(bankLsb), `bankLsb ${bankLsb} names no drum set`);
+  });
 }
 
 /**
@@ -663,15 +707,16 @@ export function gm2DrumSetName(bankLsb: number): string {
  * @throws RangeError when the bank/note pair names no drum
  */
 export function gm2DrumName(request: Gm2DrumNameRequest): string {
-  const fn = 'gm2DrumName';
-  const record = requestObject(fn, request, 'request', true);
-  const bankLsb = lookupIndex(fn, record.bankLsb, 'bankLsb', 127);
-  const note = lookupIndex(fn, record.note, 'note', 127);
-  return found(
-    fn,
-    addon.midiGm2DrumName(bankLsb, note),
-    `no drum for bankLsb ${bankLsb}, note ${note}`,
-  );
+  return withEntry('gm2DrumName', () => {
+    const fn = 'gm2DrumName';
+    const record = requestObject(fn, request, 'request', true);
+    const bankLsb = lookupIndex(record.bankLsb, 'bankLsb', 127);
+    const note = lookupIndex(record.note, 'note', 127);
+    return found(
+      addon.midiGm2DrumName(bankLsb, note),
+      `no drum for bankLsb ${bankLsb}, note ${note}`,
+    );
+  });
 }
 
 /**
@@ -682,12 +727,10 @@ export function gm2DrumName(request: Gm2DrumNameRequest): string {
  * @throws RangeError when `controller` is out of range
  */
 export function midiCcName(controller: number): string {
-  lookupIndex('midiCcName', controller, 'controller', 127);
-  return found(
-    'midiCcName',
-    addon.midiCcName(controller),
-    `controller ${controller} is out of range`,
-  );
+  return withEntry('midiCcName', () => {
+    lookupIndex(controller, 'controller', 127);
+    return found(addon.midiCcName(controller), `controller ${controller} is out of range`);
+  });
 }
 
 /**
@@ -698,12 +741,10 @@ export function midiCcName(controller: number): string {
  * @throws RangeError when the name is unknown
  */
 export function midiCcIndexForName(name: string): number {
-  requireString('midiCcIndexForName', name, 'name');
-  return foundIndex(
-    'midiCcIndexForName',
-    addon.midiCcIndexForName(name),
-    `unknown controller name '${name}'`,
-  );
+  return withEntry('midiCcIndexForName', () => {
+    requireString(name, 'name');
+    return foundIndex(addon.midiCcIndexForName(name), `unknown controller name '${name}'`);
+  });
 }
 
 /**
@@ -714,12 +755,13 @@ export function midiCcIndexForName(name: string): number {
  * @throws RangeError when `index` names no per-note controller
  */
 export function perNoteControllerName(index: number): string {
-  lookupIndex('perNoteControllerName', index, 'index', 255);
-  return found(
-    'perNoteControllerName',
-    addon.midiPerNoteControllerName(index),
-    `index ${index} names no per-note controller`,
-  );
+  return withEntry('perNoteControllerName', () => {
+    lookupIndex(index, 'index', 255);
+    return found(
+      addon.midiPerNoteControllerName(index),
+      `index ${index} names no per-note controller`,
+    );
+  });
 }
 
 /**
@@ -730,8 +772,10 @@ export function perNoteControllerName(index: number): string {
  * @throws TypeError for a non-object request or an unknown field
  */
 export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRouteResult {
-  const { events, ...config } = requestObject('midiRouteEvents', request, 'request', true);
-  return addon.midiRouteEvents(events, config);
+  return withEntry('midiRouteEvents', () => {
+    const { events, ...config } = requestObject('midiRouteEvents', request, 'request', true);
+    return addon.midiRouteEvents(events, config);
+  });
 }
 
 /**
@@ -743,14 +787,16 @@ export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRou
  * @throws TypeError for a non-object request or an unknown field
  */
 export function midiCcLearn(request: MidiCcLearnRequest): ProjectMidiCcBinding | null {
-  const r = requestObject('midiCcLearn', request, 'request', true);
-  return addon.midiCcLearn(
-    r.events,
-    r.paramId,
-    r.minValue ?? 0,
-    r.maxValue ?? 1,
-    r.minMovement ?? 0,
-  );
+  return withEntry('midiCcLearn', () => {
+    const r = requestObject('midiCcLearn', request, 'request', true);
+    return addon.midiCcLearn(
+      r.events,
+      r.paramId,
+      r.minValue ?? 0,
+      r.maxValue ?? 1,
+      r.minMovement ?? 0,
+    );
+  });
 }
 
 /**
@@ -763,11 +809,13 @@ export function midiCcLearn(request: MidiCcLearnRequest): ProjectMidiCcBinding |
 export function midiCcToBreakpoint(
   request: MidiCcToBreakpointRequest,
 ): ProjectAutomationPoint | null {
-  const r = requestObject('midiCcToBreakpoint', request, 'request', true);
-  const native = addon.midiCcToBreakpoint(r.bindings, r.event) as {
-    ppq: number;
-    value: number;
-    curveToNext: number;
-  } | null;
-  return native === null ? null : projectAutomationPointFromNative(native);
+  return withEntry('midiCcToBreakpoint', () => {
+    const r = requestObject('midiCcToBreakpoint', request, 'request', true);
+    const native = addon.midiCcToBreakpoint(r.bindings, r.event) as {
+      ppq: number;
+      value: number;
+      curveToNext: number;
+    } | null;
+    return native === null ? null : projectAutomationPointFromNative(native);
+  });
 }

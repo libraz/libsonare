@@ -3,6 +3,7 @@
  * frame, and the zero-crossing counts beside them.
  */
 
+import { withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -169,14 +170,16 @@ export function spectralCentroid(
   options?: OptionsOf<SpectralCentroidRequest>,
 ): Float32Array;
 export function spectralCentroid(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<SpectralCentroidRequest>('spectralCentroid', args);
-  assertAudioInput('spectralCentroid', r.samples, r.sampleRate, r);
-  return requireModule().spectralCentroid(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-  );
+  return withEntry('spectralCentroid', () => {
+    const r = sampleOneShot<SpectralCentroidRequest>('spectralCentroid', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().spectralCentroid(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+    );
+  });
 }
 
 /**
@@ -199,19 +202,21 @@ export function spectralContrast(
   options?: OptionsOf<SpectralContrastRequest>,
 ): Matrix2D;
 export function spectralContrast(...args: unknown[]): Matrix2D {
-  const r = sampleOneShot<SpectralContrastRequest>('spectralContrast', args);
-  assertAudioInput('spectralContrast', r.samples, r.sampleRate, r);
-  const fminHz = r.fminHz ?? 200.0;
-  assertPositiveFloatValue('spectralContrast', fminHz, 'fminHz');
-  return requireModule().spectralContrast(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-    r.nBands ?? 6,
-    fminHz,
-    r.quantile ?? 0.02,
-  );
+  return withEntry('spectralContrast', () => {
+    const r = sampleOneShot<SpectralContrastRequest>('spectralContrast', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const fminHz = r.fminHz ?? 200.0;
+    assertPositiveFloatValue(fminHz, 'fminHz');
+    return requireModule().spectralContrast(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+      r.nBands ?? 6,
+      fminHz,
+      r.quantile ?? 0.02,
+    );
+  });
 }
 
 /**
@@ -226,15 +231,17 @@ export function polyFeatures(
   options?: OptionsOf<PolyFeaturesRequest>,
 ): Matrix2D;
 export function polyFeatures(...args: unknown[]): Matrix2D {
-  const r = sampleOneShot<PolyFeaturesRequest>('polyFeatures', args);
-  assertAudioInput('polyFeatures', r.samples, r.sampleRate, r);
-  return requireModule().polyFeatures(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-    r.order ?? 1,
-  );
+  return withEntry('polyFeatures', () => {
+    const r = sampleOneShot<PolyFeaturesRequest>('polyFeatures', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().polyFeatures(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+      r.order ?? 1,
+    );
+  });
 }
 
 /**
@@ -247,15 +254,17 @@ export function zeroCrossings(
   options?: OptionsOf<ZeroCrossingsRequest>,
 ): Int32Array;
 export function zeroCrossings(...args: unknown[]): Int32Array {
-  const r = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
-  assertAudioInput('zeroCrossings', r.samples, r.sampleRate, r);
-  return requireModule().zeroCrossings(
-    r.samples,
-    r.threshold ?? 1e-10,
-    requireBoolean('zeroCrossings', r.refMagnitude ?? false, 'refMagnitude'),
-    requireBoolean('zeroCrossings', r.pad ?? true, 'pad'),
-    requireBoolean('zeroCrossings', r.zeroPos ?? true, 'zeroPos'),
-  );
+  return withEntry('zeroCrossings', () => {
+    const r = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().zeroCrossings(
+      r.samples,
+      r.threshold ?? 1e-10,
+      requireBoolean(r.refMagnitude ?? false, 'refMagnitude'),
+      requireBoolean(r.pad ?? true, 'pad'),
+      requireBoolean(r.zeroPos ?? true, 'zeroPos'),
+    );
+  });
 }
 
 /**
@@ -268,15 +277,17 @@ export function spectralBandwidth(
   options?: OptionsOf<SpectralBandwidthRequest>,
 ): Float32Array;
 export function spectralBandwidth(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<SpectralBandwidthRequest>('spectralBandwidth', args);
-  assertAudioInput('spectralBandwidth', r.samples, r.sampleRate, r);
-  return requireModule().spectralBandwidth(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-    r.p ?? 2,
-  );
+  return withEntry('spectralBandwidth', () => {
+    const r = sampleOneShot<SpectralBandwidthRequest>('spectralBandwidth', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().spectralBandwidth(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+      r.p ?? 2,
+    );
+  });
 }
 
 /**
@@ -289,15 +300,17 @@ export function spectralRolloff(
   options?: OptionsOf<SpectralRolloffRequest>,
 ): Float32Array;
 export function spectralRolloff(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<SpectralRolloffRequest>('spectralRolloff', args);
-  assertAudioInput('spectralRolloff', r.samples, r.sampleRate, r);
-  return requireModule().spectralRolloff(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-    r.rollPercent ?? 0.85,
-  );
+  return withEntry('spectralRolloff', () => {
+    const r = sampleOneShot<SpectralRolloffRequest>('spectralRolloff', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().spectralRolloff(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+      r.rollPercent ?? 0.85,
+    );
+  });
 }
 
 /**
@@ -310,14 +323,16 @@ export function spectralFlatness(
   options?: OptionsOf<SpectralFlatnessRequest>,
 ): Float32Array;
 export function spectralFlatness(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<SpectralFlatnessRequest>('spectralFlatness', args);
-  assertAudioInput('spectralFlatness', r.samples, r.sampleRate, r);
-  return requireModule().spectralFlatness(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-  );
+  return withEntry('spectralFlatness', () => {
+    const r = sampleOneShot<SpectralFlatnessRequest>('spectralFlatness', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().spectralFlatness(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+    );
+  });
 }
 
 /**
@@ -330,15 +345,17 @@ export function spectralFlux(
   options?: OptionsOf<SpectralFluxRequest>,
 ): Float32Array;
 export function spectralFlux(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<SpectralFluxRequest>('spectralFlux', args);
-  assertAudioInput('spectralFlux', r.samples, r.sampleRate, r);
-  return requireModule().spectralFlux(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-    r.lag ?? 1,
-  );
+  return withEntry('spectralFlux', () => {
+    const r = sampleOneShot<SpectralFluxRequest>('spectralFlux', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().spectralFlux(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+      r.lag ?? 1,
+    );
+  });
 }
 
 /**
@@ -351,14 +368,16 @@ export function zeroCrossingRate(
   options?: OptionsOf<ZeroCrossingRateRequest>,
 ): Float32Array;
 export function zeroCrossingRate(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<ZeroCrossingRateRequest>('zeroCrossingRate', args);
-  assertAudioInput('zeroCrossingRate', r.samples, r.sampleRate, r);
-  return requireModule().zeroCrossingRate(
-    r.samples,
-    r.sampleRate,
-    r.frameLength ?? 2048,
-    r.hopLength ?? 512,
-  );
+  return withEntry('zeroCrossingRate', () => {
+    const r = sampleOneShot<ZeroCrossingRateRequest>('zeroCrossingRate', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().zeroCrossingRate(
+      r.samples,
+      r.sampleRate,
+      r.frameLength ?? 2048,
+      r.hopLength ?? 512,
+    );
+  });
 }
 
 /**
@@ -371,12 +390,14 @@ export function rmsEnergy(
   options?: OptionsOf<RmsEnergyRequest>,
 ): Float32Array;
 export function rmsEnergy(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<RmsEnergyRequest>('rmsEnergy', args);
-  assertAudioInput('rmsEnergy', r.samples, r.sampleRate, r);
-  return requireModule().rmsEnergy(
-    r.samples,
-    r.sampleRate,
-    r.frameLength ?? 2048,
-    r.hopLength ?? 512,
-  );
+  return withEntry('rmsEnergy', () => {
+    const r = sampleOneShot<RmsEnergyRequest>('rmsEnergy', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().rmsEnergy(
+      r.samples,
+      r.sampleRate,
+      r.frameLength ?? 2048,
+      r.hopLength ?? 512,
+    );
+  });
 }

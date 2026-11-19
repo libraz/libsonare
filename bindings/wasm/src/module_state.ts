@@ -1,6 +1,13 @@
 import { EXPECTED_ABI_VERSION } from './abi.js';
-import { ErrorCode, SonareError } from './errors.js';
-import { nameNativeError, passForeign } from './internal/entry.js';
+import { ErrorCode, type SonareError } from './errors.js';
+import {
+  codedError,
+  invalidState,
+  nameNativeError,
+  passForeign,
+  refuse,
+  refuseType,
+} from './internal/entry.js';
 import { NATIVE_ENTRIES } from './internal/native_entries.js';
 import type { SonareModule } from './sonare.js';
 
@@ -86,12 +93,12 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
     }
   }
   if (kind === 'TypeError') {
-    return new TypeError(message);
+    return refuseType(message);
   }
   if (kind === 'RangeError') {
-    return new RangeError(message);
+    return refuse(message);
   }
-  return new SonareError(code as ErrorCode, message);
+  return codedError(code as ErrorCode, message);
 }
 
 /**
@@ -112,7 +119,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
     }
     // embind's use-after-delete is a plain BindingError; report it as object state.
     if (error instanceof Error && EMBIND_DELETED_PATTERN.test(error.message)) {
-      return new SonareError(ErrorCode.InvalidState, error.message);
+      return invalidState(error.message);
     }
     return error;
   };
@@ -247,7 +254,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
 
 /** Error thrown when a facade function runs before `init()` resolved. */
 export function notInitializedError(): SonareError {
-  return new SonareError(ErrorCode.InvalidState, 'Module not initialized. Call init() first.');
+  return invalidState('Module not initialized. Call init() first.');
 }
 
 /** Format a packed ABI version as `0x` plus eight hex digits. */
@@ -268,7 +275,7 @@ export function assertAbiCompatible(created: SonareModule): void {
   if (actual === EXPECTED_ABI_VERSION) {
     return;
   }
-  throw new SonareError(
+  throw codedError(
     ErrorCode.AbiMismatch,
     `libsonare ABI mismatch: wasm module reports ${
       actual === undefined ? 'no ABI version' : hexAbi(actual)
@@ -291,8 +298,7 @@ export function assertSameInitOptions(first: object | undefined, next: object | 
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   for (const key of keys) {
     if (a[key] !== b[key]) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
+      throw invalidState(
         `init() options differ from the first call (${key}); options apply on the first call only.`,
       );
     }

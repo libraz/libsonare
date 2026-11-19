@@ -1,4 +1,4 @@
-import { withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import { getSonareModule } from './module_state.js';
 import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
@@ -63,17 +63,19 @@ export function voiceChange(
   options?: VoiceChangeOptions,
 ): Float32Array;
 export function voiceChange(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<VoiceChangeRequest>('voiceChange', args);
-  assertAudioInput('voiceChange', request.samples, request.sampleRate, request);
-  const formantMode = request.formantMode ?? 'relative';
-  assertString('voiceChange', formantMode, 'formantMode');
-  return requireModule().voiceChange(
-    request.samples,
-    request.sampleRate,
-    request.pitchSemitones ?? 0.0,
-    request.formantFactor ?? 1.0,
-    formantMode,
-  );
+  return withEntry('voiceChange', () => {
+    const request = sampleOneShot<VoiceChangeRequest>('voiceChange', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const formantMode = request.formantMode ?? 'relative';
+    assertString(formantMode, 'formantMode');
+    return requireModule().voiceChange(
+      request.samples,
+      request.sampleRate,
+      request.pitchSemitones ?? 0.0,
+      request.formantFactor ?? 1.0,
+      formantMode,
+    );
+  });
 }
 
 /** Canonical request form for offline realtime voice changing. */
@@ -98,28 +100,30 @@ export interface VoiceChangeRealtimeRequest {
  *   audio or rate, or an unknown preset id or token.
  */
 export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] {
-  const fnName = 'voiceChangeRealtime';
-  const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
-  if (req.sampleRate === undefined || req.sampleRate === null) {
-    throw new TypeError(`${fnName}: sampleRate must be a number`);
-  }
-  assertAudioChannels(fnName, req.channels, req.sampleRate, req);
-  const planes = req.channels;
-  if (planes.length > 2) {
-    throw new RangeError(`${fnName}: channels must hold 1 or 2 planes`);
-  }
-  const frames = (planes[0] as Float32Array).length;
-  if (planes.some((plane) => plane.length !== frames)) {
-    throw new RangeError(`${fnName}: channels must have equal lengths`);
-  }
-  const native = withEntry('voiceChangeRealtime', () =>
-    nativeVoiceConfig(fnName, req.config ?? 'neutralMonitor'),
-  );
-  const out = requireModule().voiceChangeRealtime(
-    interleavePlanes(planes),
-    req.sampleRate,
-    typeof native === 'string' ? native : JSON.stringify(native),
-    planes.length,
-  );
-  return deinterleavePlanes(out, planes.length);
+  return withEntry('voiceChangeRealtime', () => {
+    const fnName = 'voiceChangeRealtime';
+    const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
+    if (req.sampleRate === undefined || req.sampleRate === null) {
+      throw refuseType(`sampleRate must be a number`);
+    }
+    assertAudioChannels(req.channels, req.sampleRate, req);
+    const planes = req.channels;
+    if (planes.length > 2) {
+      throw refuse(`channels must hold 1 or 2 planes`);
+    }
+    const frames = (planes[0] as Float32Array).length;
+    if (planes.some((plane) => plane.length !== frames)) {
+      throw refuse(`channels must have equal lengths`);
+    }
+    const native = withEntry('voiceChangeRealtime', () =>
+      nativeVoiceConfig(req.config ?? 'neutralMonitor'),
+    );
+    const out = requireModule().voiceChangeRealtime(
+      interleavePlanes(planes),
+      req.sampleRate,
+      typeof native === 'string' ? native : JSON.stringify(native),
+      planes.length,
+    );
+    return deinterleavePlanes(out, planes.length);
+  });
 }

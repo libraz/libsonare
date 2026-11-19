@@ -85,8 +85,12 @@ export function invalidState(text: string): SonareError {
 }
 
 /** A coded failure that is not an argument refusal; the entry prefixes its name. */
-export function codedError(code: ErrorCode, text: string): SonareError {
-  return mark(new SonareError(code, text), text);
+export function codedError(
+  code: ErrorCode,
+  text: string,
+  options?: { cause?: unknown },
+): SonareError {
+  return mark(new SonareError(code, text, options), text);
 }
 
 /** The bare text of a refusal, before any entry named itself on it; undefined for an unmarked error. */

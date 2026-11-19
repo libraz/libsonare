@@ -218,12 +218,12 @@ describe('embedded NUL refusal, by handoff kind', () => {
     expect(synthPatchRoundTripForTest({ preset: 'piano' }).preset).toBe('piano');
     expectNulRefusal(
       () => synthPatchRoundTripForTest({ preset: `piano${NUL}x` }),
-      '_synthPatchRoundTrip',
+      'synthPatchRoundTripForTest',
       'preset',
     );
     expectNulRefusal(
       () => synthPatchRoundTripForTest(`piano${NUL}x` as unknown as { preset: string }),
-      '_synthPatchRoundTrip',
+      'synthPatchRoundTripForTest',
       'preset',
     );
   });
@@ -309,7 +309,11 @@ describe('embedded NUL refusal, std::string entry points', () => {
     // The facade resolves the closed preset set first; the native reader is driven directly.
     const presetJson = (name: string): string => getSonareModule().mixingScenePresetJson(name);
     expect(presetJson('vocalReverbSend').length).toBeGreaterThan(0);
-    expectNulRefusal(() => presetJson(`vocalReverbSend${NUL}junk`), 'mixingScenePreset', 'preset');
+    expectNulRefusal(
+      () => presetJson(`vocalReverbSend${NUL}junk`),
+      'mixingScenePresetJson',
+      'preset',
+    );
     expect(refusal(() => mixingScenePreset(`vocalReverbSend${NUL}junk` as never))).toBeInstanceOf(
       RangeError,
     );

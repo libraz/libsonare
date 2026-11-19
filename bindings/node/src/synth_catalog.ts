@@ -1,3 +1,4 @@
+import { refuseType, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type { SynthEngineMode, SynthEnumTables, SynthParamInfo, SynthPatch } from './types.js';
 
@@ -97,12 +98,12 @@ export function synthEnumTables(): SynthEnumTables {
  * `RangeError` and anything that is not a name a `TypeError`.
  */
 export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInfo[] {
-  if (typeof engineMode !== 'string') {
-    throw new TypeError(
-      `synthEngineParamInfo: engineMode must be a name, got ${typeof engineMode}`,
-    );
-  }
-  return JSON.parse(addon.synthEngineParamInfo(engineMode)) as SynthParamInfo[];
+  return withEntry('synthEngineParamInfo', () => {
+    if (typeof engineMode !== 'string') {
+      throw refuseType(`engineMode must be a name, got ${typeof engineMode}`);
+    }
+    return JSON.parse(addon.synthEngineParamInfo(engineMode)) as SynthParamInfo[];
+  });
 }
 
 /** Describe every numeric {@link SynthPatch} wrapper field: range, default and unit. */

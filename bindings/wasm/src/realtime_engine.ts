@@ -9,14 +9,14 @@ import {
   sidechainSourceKindCode,
   trackMonitorModeCode,
 } from './codes.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode } from './errors.js';
 import { capturePunchBound } from './internal/capture_punch.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import {
   bindNativeClipPageProvider,
   nativeClipPageProviderOf,
 } from './internal/clip_page_native.js';
-import { entryClass } from './internal/entry.js';
+import { codedError, entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
@@ -159,11 +159,8 @@ export type {
 } from './public_types_engine.js';
 
 /** The native layer takes an absent frame as `undefined`; the shared resolver spells it -1. */
-function resolveRenderFrame(
-  fnName: string,
-  renderFrame: number | null | undefined,
-): number | undefined {
-  const frame = resolveWireRenderFrame(fnName, renderFrame);
+function resolveRenderFrame(renderFrame: number | null | undefined): number | undefined {
+  const frame = resolveWireRenderFrame(renderFrame);
   return frame < 0 ? undefined : frame;
 }
 
@@ -178,12 +175,12 @@ const UMP_WORD_MAX = 0xffffffff;
 
 // A word may be spelled `(0x4 << 28) | …`, which is a signed int once bit 31 is
 // set, so the signed 32-bit range is accepted alongside the unsigned one.
-function assertUmpWords(fnName: string, words: UmpWords): UmpWords {
+function assertUmpWords(words: UmpWords): UmpWords {
   if (!(words instanceof Uint32Array) && !Array.isArray(words)) {
-    throw new TypeError(`${fnName}: words must be a Uint32Array or a number array`);
+    throw refuseType(`words must be a Uint32Array or a number array`);
   }
   if (words.length < 1 || words.length > 4) {
-    throw new RangeError(`${fnName}: words must hold 1 to 4 words`);
+    throw refuse(`words must hold 1 to 4 words`);
   }
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
@@ -193,7 +190,7 @@ function assertUmpWords(fnName: string, words: UmpWords): UmpWords {
       word < UMP_WORD_MIN ||
       word > UMP_WORD_MAX
     ) {
-      throw new RangeError(`${fnName}: words[${i}] must be an integer 32-bit word`);
+      throw refuse(`words[${i}] must be an integer 32-bit word`);
     }
   }
   return words;
@@ -234,7 +231,6 @@ const TELEMETRY_ERRORS: readonly EngineTelemetryError[] = [
 
 /** Resolves a closed-set string token; an ordinal is a `TypeError` and an unknown spelling a `RangeError`. */
 function tokenCode(
-  fnName: string,
   argName: string,
   value: unknown,
   table: Readonly<Record<string, number>>,
@@ -243,11 +239,11 @@ function tokenCode(
     .map((key) => `'${key}'`)
     .join(', ');
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: ${argName} must be one of ${accepted}`);
+    throw refuseType(`${argName} must be one of ${accepted}`);
   }
   // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
   if (!Object.prototype.hasOwnProperty.call(table, value)) {
-    throw new RangeError(`${fnName}: ${argName} must be one of ${accepted} (got '${value}')`);
+    throw refuse(`${argName} must be one of ${accepted} (got '${value}')`);
   }
   return table[value];
 }
@@ -255,34 +251,34 @@ function tokenCode(
 function tokenName<T extends string>(table: Readonly<Record<T, number>>, ordinal: number): T {
   const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
   if (name === undefined) {
-    throw new RangeError(`unknown ordinal ${ordinal}`);
+    throw refuse(`unknown ordinal ${ordinal}`);
   }
   return name;
 }
 
 /** Runs an existing token resolver after refusing an ordinal, which is never a public spelling. */
-function noOrdinal(fnName: string, argName: string, value: unknown): void {
+function noOrdinal(argName: string, value: unknown): void {
   if (typeof value === 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a string token, not an ordinal`);
+    throw refuseType(`${argName} must be a string token, not an ordinal`);
   }
 }
 
 /** An optional positive integer count: absent stays `undefined`, and an explicit `0` is refused. */
-function optionalCount(fnName: string, argName: string, value: unknown): number | undefined {
+function optionalCount(argName: string, value: unknown): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (!Number.isFinite(value)) {
-    throw new RangeError(`${fnName}: ${argName} must be a finite number`);
+    throw refuse(`${argName} must be a finite number`);
   }
   if (value === 0) {
-    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
+    throw refuse(`${argName} must not be 0 (omit it for the default)`);
   }
   if (value < 0 || !Number.isInteger(value)) {
-    throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+    throw refuse(`${argName} must be a positive integer`);
   }
   return value;
 }
@@ -290,32 +286,30 @@ function optionalCount(fnName: string, argName: string, value: unknown): number 
 /** A graph node name: a string, and never empty. */
 function graphName(path: string, value: unknown): void {
   if (typeof value !== 'string') {
-    throw new TypeError(`setGraph: ${path} must be a string`);
+    throw refuseType(`${path} must be a string`);
   }
   if (value === '') {
-    throw new RangeError(`setGraph: ${path} must not be empty`);
+    throw refuse(`${path} must not be empty`);
   }
 }
 
 /** An optional id that names a bus: absent routes to the master mix, so an explicit `0` is refused. */
-function optionalBusId(fnName: string, argName: string, value: unknown): number {
+function optionalBusId(argName: string, value: unknown): number {
   if (value === undefined || value === null) {
     return 0;
   }
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (value === 0) {
-    throw new RangeError(
-      `${fnName}: ${argName} must not be 0 (omit it to route to the master mix)`,
-    );
+    throw refuse(`${argName} must not be 0 (omit it to route to the master mix)`);
   }
   return value;
 }
 
-function requireObject(fnName: string, argName: string, value: unknown): void {
+function requireObject(argName: string, value: unknown): void {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new TypeError(`${fnName}: ${argName} must be an object`);
+    throw refuseType(`${argName} must be an object`);
   }
 }
 
@@ -329,23 +323,23 @@ interface ResolvedEngineConfig {
 }
 
 function normalizeEngineConfig(
-  fnName: 'RealtimeEngine' | 'prepare',
+  requestName: 'RealtimeEngine' | 'prepare',
   config: unknown,
 ): ResolvedEngineConfig {
-  const request = requestObject(fnName, config as RealtimeEngineConfig, 'config', true);
+  const request = requestObject(requestName, config as RealtimeEngineConfig, 'config', true);
   const sampleRate = request.sampleRate;
   if (typeof sampleRate !== 'number') {
-    throw new TypeError(`${fnName}: sampleRate must be a number`);
+    throw refuseType(`sampleRate must be a number`);
   }
   if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
-    throw new RangeError(`${fnName}: sampleRate must be a positive finite number`);
+    throw refuse(`sampleRate must be a positive finite number`);
   }
   return {
     sampleRate,
-    maxBlockSize: optionalCount(fnName, 'maxBlockSize', request.maxBlockSize) ?? 0,
-    commandCapacity: optionalCount(fnName, 'commandCapacity', request.commandCapacity) ?? 0,
-    telemetryCapacity: optionalCount(fnName, 'telemetryCapacity', request.telemetryCapacity) ?? 0,
-    maxChannels: optionalCount(fnName, 'maxChannels', request.maxChannels) ?? 0,
+    maxBlockSize: optionalCount('maxBlockSize', request.maxBlockSize) ?? 0,
+    commandCapacity: optionalCount('commandCapacity', request.commandCapacity) ?? 0,
+    telemetryCapacity: optionalCount('telemetryCapacity', request.telemetryCapacity) ?? 0,
+    maxChannels: optionalCount('maxChannels', request.maxChannels) ?? 0,
   };
 }
 
@@ -358,16 +352,14 @@ function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
   for (const [plane, channel] of (request.channels ?? []).entries()) {
     for (let i = 0; i < (channel?.length ?? 0); i++) {
       if (!Number.isFinite(channel[i])) {
-        throw new RangeError(
-          `renderOffline: channels[${plane}] contains a non-finite sample at index ${i}`,
-        );
+        throw refuse(`channels[${plane}] contains a non-finite sample at index ${i}`);
       }
     }
   }
   return {
     channels: request.channels,
-    blockSize: optionalCount('renderOffline', 'blockSize', request.blockSize),
-    finalize: optionalBoolean('renderOffline', request.finalize, 'finalize', true),
+    blockSize: optionalCount('blockSize', request.blockSize),
+    finalize: optionalBoolean(request.finalize, 'finalize', true),
   };
 }
 
@@ -398,7 +390,7 @@ function nativeClip(clip: EngineClip): WasmEngineClip {
     ...rest,
     ...(warpMode === undefined
       ? {}
-      : { warpMode: tokenCode('setClips', 'warpMode', warpMode, WARP_MODES) as 0 | 1 | 2 | 3 }),
+      : { warpMode: tokenCode('warpMode', warpMode, WARP_MODES) as 0 | 1 | 2 | 3 }),
     ...(pageProvider === undefined
       ? {}
       : { pageProvider: nativeClipPageProviderOf(pageProvider) as WasmEngineClip['pageProvider'] }),
@@ -418,15 +410,15 @@ function scheduleSampleCount(
   if (value === undefined || value === null) {
     return undefined;
   }
-  const where = `setMidiClips: clips[${index}].${field}`;
+  const where = `clips[${index}].${field}`;
   if (typeof value !== 'number') {
-    throw new TypeError(`${where} must be a number`);
+    throw refuseType(`${where} must be a number`);
   }
   if (value === 0) {
-    throw new RangeError(`${where} must not be 0 (omit it for ${meaning})`);
+    throw refuse(`${where} must not be 0 (omit it for ${meaning})`);
   }
   if (!Number.isInteger(value) || value < 0) {
-    throw new RangeError(`${where} must be a positive integer`);
+    throw refuse(`${where} must be a positive integer`);
   }
   return value;
 }
@@ -459,12 +451,10 @@ function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknow
 function nativeMarker(marker: EngineMarker): Record<string, unknown> {
   const { kind, name, ...rest } = marker;
   if (name === '') {
-    throw new RangeError('marker name must not be empty; omit it for an unnamed marker');
+    throw refuse('marker name must not be empty; omit it for an unnamed marker');
   }
   const named = name === undefined || name === null ? rest : { ...rest, name };
-  return kind === undefined
-    ? named
-    : { ...named, kind: tokenCode('setMarkers', 'kind', kind, MARKER_KINDS) };
+  return kind === undefined ? named : { ...named, kind: tokenCode('kind', kind, MARKER_KINDS) };
 }
 
 function markerFromNative(marker: {
@@ -486,13 +476,13 @@ function markerFromNative(marker: {
 function curveFromNative(ordinal: number): NonNullable<EngineAutomationPoint['curveToNext']> {
   const entry = Object.entries(AUTOMATION_CURVE_VALUES).find(([, value]) => value === ordinal);
   if (entry === undefined) {
-    throw new RangeError(`unknown automation curve ordinal ${ordinal}`);
+    throw refuse(`unknown automation curve ordinal ${ordinal}`);
   }
   return entry[0] as NonNullable<EngineAutomationPoint['curveToNext']>;
 }
 
-function nativeAutomationPoint(fnName: string, point: EngineAutomationPoint) {
-  noOrdinal(fnName, 'curveToNext', point.curveToNext);
+function nativeAutomationPoint(point: EngineAutomationPoint) {
+  noOrdinal('curveToNext', point.curveToNext);
   const { curveToNext, ...rest } = point;
   return curveToNext === undefined
     ? rest
@@ -524,7 +514,7 @@ function telemetryFromNative(record: {
   const type = TELEMETRY_TYPES[record.type];
   const error = TELEMETRY_ERRORS[record.error];
   if (type === undefined || error === undefined) {
-    throw new RangeError(`unknown telemetry ordinal (type ${record.type}, error ${record.error})`);
+    throw refuse(`unknown telemetry ordinal (type ${record.type}, error ${record.error})`);
   }
   return {
     type,
@@ -562,55 +552,59 @@ function meterTelemetryWideFromNative(
 /** A strip address resolved against the engine: a track id or the master strip. */
 type StripTarget = { master: false; trackId: number } | { master: true };
 
-function stripTarget(fnName: string, ref: StripRef): StripTarget {
+function stripTarget(ref: StripRef): StripTarget {
   if (typeof ref === 'number') {
     return { master: false, trackId: ref };
   }
   if (typeof ref !== 'string') {
-    throw new TypeError(`${fnName}: ref must be a track id or 'master'`);
+    throw refuseType(`ref must be a track id or 'master'`);
   }
   if (ref === 'master') {
     return { master: true };
   }
-  throw new RangeError(`${fnName}: ref must be a track id or 'master' (got '${ref}')`);
+  throw refuse(`ref must be a track id or 'master' (got '${ref}')`);
 }
 
-function trackOnly(fnName: string, ref: StripRef): number {
-  const target = stripTarget(fnName, ref);
+function trackOnly(ref: StripRef): number {
+  const target = stripTarget(ref);
   if (target.master) {
-    throw new RangeError(`${fnName}: the master strip has no ${fnName.replace(/^set/, '')}`);
+    throw refuse('the master strip has no such setter');
   }
   return target.trackId;
 }
 
 function sidechainSourceArg(
-  fnName: 'setStripSidechain' | 'setBusSidechain' | 'canSetStripSidechain' | 'canSetBusSidechain',
+  requestName:
+    | 'setStripSidechain'
+    | 'setBusSidechain'
+    | 'canSetStripSidechain'
+    | 'canSetBusSidechain',
   source: SidechainSource,
 ): { kind: number; id: number } {
-  requestObject(fnName, source, 'source', true);
-  noOrdinal(fnName, 'kind', source.kind);
+  requestObject(requestName, source, 'source', true);
+  noOrdinal('kind', source.kind);
   if (typeof source.id !== 'number') {
-    throw new TypeError(`${fnName}: source.id must be a number`);
+    throw refuseType(`source.id must be a number`);
   }
   if (source.id === 0) {
-    throw new RangeError(`${fnName}: source.id must not be 0 (pass null to remove the binding)`);
+    throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
   }
   return { kind: sidechainSourceKindCode(source.kind), id: source.id };
 }
 
 function bypassState(
-  fnName: 'setStripInsertBypassed' | 'setBusInsertBypassed',
+  requestName: 'setStripInsertBypassed' | 'setBusInsertBypassed',
   state: { bypassed: boolean; resetOnBypass?: boolean },
 ): { bypassed: boolean; resetOnBypass: boolean } {
-  requestObject(fnName, state, 'state', true);
+  requestObject(requestName, state, 'state', true);
   return {
-    bypassed: requireBoolean(fnName, state.bypassed, 'bypassed'),
-    resetOnBypass: optionalBoolean(fnName, state.resetOnBypass, 'resetOnBypass', false),
+    bypassed: requireBoolean(state.bypassed, 'bypassed'),
+    resetOnBypass: optionalBoolean(state.resetOnBypass, 'resetOnBypass', false),
   };
 }
 
 function insertParam(
-  fnName:
+  requestName:
     | 'setStripInsertParam'
     | 'setBusInsertParam'
     | 'applyStripInsertParamNow'
@@ -619,37 +613,37 @@ function insertParam(
     | 'restoreBusInsertParam',
   param: { name: string; value: number },
 ): { name: string; value: number } {
-  requestObject(fnName, param, 'param', true);
+  requestObject(requestName, param, 'param', true);
   if (typeof param.name !== 'string') {
-    throw new TypeError(`${fnName}: param.name must be a string`);
+    throw refuseType(`param.name must be a string`);
   }
   if (typeof param.value !== 'number') {
-    throw new TypeError(`${fnName}: param.value must be a number`);
+    throw refuseType(`param.value must be a number`);
   }
   return param;
 }
 
 function programBank(
-  fnName: 'pushMidiProgram' | 'pushMidiInputProgram',
+  requestName: 'pushMidiProgram' | 'pushMidiInputProgram',
   bank: { msb: number; lsb: number } | null | undefined,
 ): { bankValid: boolean; bankMsb: number; bankLsb: number } {
   if (bank === undefined || bank === null) {
     return { bankValid: false, bankMsb: 0, bankLsb: 0 };
   }
-  requestObject(fnName, bank, 'bank', true);
+  requestObject(requestName, bank, 'bank', true);
   return { bankValid: true, bankMsb: bank.msb, bankLsb: bank.lsb };
 }
 
-function sceneStripJson(fnName: string, strip: MixSceneStripInput): string {
-  return JSON.stringify({ strips: [mixSceneStripToNative(fnName, strip)] });
+function sceneStripJson(strip: MixSceneStripInput): string {
+  return JSON.stringify({ strips: [mixSceneStripToNative(strip)] });
 }
 
-function sceneBusJson(fnName: string, bus: MixSceneBusInput): string {
-  return JSON.stringify({ buses: [mixSceneBusToNative(fnName, bus)] });
+function sceneBusJson(bus: MixSceneBusInput): string {
+  return JSON.stringify({ buses: [mixSceneBusToNative(bus)] });
 }
 
-function bandJson(fnName: string, band: unknown): string {
-  requireObject(fnName, 'band', band);
+function bandJson(band: unknown): string {
+  requireObject('band', band);
   return eqBandJson(band as object);
 }
 
@@ -679,6 +673,9 @@ function bandJson(fnName: string, band: unknown): string {
   'processPrepared',
   'processPreparedWithMonitor',
   'processWithMonitor',
+  'native',
+  'laneIndexOf',
+  'normalizeSends',
 ])
 export class RealtimeEngine {
   private nativeHandle: WasmRealtimeEngine;
@@ -705,7 +702,7 @@ export class RealtimeEngine {
     const module = getSonareModule();
     const capabilities = engineCapabilities();
     if (!capabilities.abiCompatible) {
-      throw new SonareError(
+      throw codedError(
         ErrorCode.AbiMismatch,
         `Engine ABI mismatch: wasm=${capabilities.engineAbiVersion}, expected=${capabilities.expectedEngineAbiVersion}`,
       );
@@ -749,16 +746,12 @@ export class RealtimeEngine {
    * {@link resolveBusAutomationId} and {@link resolveStripInsertAutomationId}.
    */
   setParameter(paramId: number, value: number, renderFrame?: number): void {
-    this.native.setParameter(paramId, value, resolveRenderFrame('setParameter', renderFrame));
+    this.native.setParameter(paramId, value, resolveRenderFrame(renderFrame));
   }
 
   /** Queue a smoothed parameter change (engine kSetParamSmoothed). */
   setParameterSmoothed(paramId: number, value: number, renderFrame?: number): void {
-    this.native.setParameterSmoothed(
-      paramId,
-      value,
-      resolveRenderFrame('setParameterSmoothed', renderFrame),
-    );
+    this.native.setParameterSmoothed(paramId, value, resolveRenderFrame(renderFrame));
   }
 
   /**
@@ -775,19 +768,18 @@ export class RealtimeEngine {
   }
 
   /** Lane index of a declared track; the native setters still address lanes by position. */
-  private laneIndexOf(fnName: string, trackId: number): number {
+  private laneIndexOf(trackId: number): number {
     if (typeof trackId !== 'number') {
-      throw new TypeError(`${fnName}: trackId must be a number`);
+      throw refuseType(`trackId must be a number`);
     }
     if (this.laneOrder === undefined) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        `${fnName}: the lane order is unknown after a project timeline was applied; declare the lanes with setTrackLanes first`,
+      throw invalidState(
+        `the lane order is unknown after a project timeline was applied; declare the lanes with setTrackLanes first`,
       );
     }
     const index = this.laneOrder.indexOf(trackId);
     if (index < 0) {
-      throw new RangeError(`${fnName}: trackId ${trackId} has no lane`);
+      throw refuse(`trackId ${trackId} has no lane`);
     }
     return index;
   }
@@ -808,10 +800,10 @@ export class RealtimeEngine {
   ): void {
     requestObject('setTrackSoloMute', state, 'state', true);
     this.native.setSoloMute(
-      this.laneIndexOf('setTrackSoloMute', trackId),
-      requireBoolean('setTrackSoloMute', state.solo, 'solo'),
-      requireBoolean('setTrackSoloMute', state.mute, 'mute'),
-      resolveRenderFrame('setTrackSoloMute', renderFrame),
+      this.laneIndexOf(trackId),
+      requireBoolean(state.solo, 'solo'),
+      requireBoolean(state.mute, 'mute'),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -825,11 +817,11 @@ export class RealtimeEngine {
    * Offline renders, bounces and freezes never include the cue.
    */
   setTrackMonitorMode(trackId: number, mode: EngineTrackMonitorMode, renderFrame?: number): void {
-    noOrdinal('setTrackMonitorMode', 'mode', mode);
+    noOrdinal('mode', mode);
     this.native.setTrackMonitorMode(
-      this.laneIndexOf('setTrackMonitorMode', trackId),
+      this.laneIndexOf(trackId),
       trackMonitorModeCode(mode),
-      resolveRenderFrame('setTrackMonitorMode', renderFrame),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -846,12 +838,10 @@ export class RealtimeEngine {
     config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
     if (typeof config === 'object' && config !== null && 'destinationId' in config) {
-      throw new TypeError(
-        "setBuiltinInstrument: unknown config key 'destinationId' (pass it as the first argument)",
-      );
+      throw refuseType("unknown config key 'destinationId' (pass it as the first argument)");
     }
-    refuseBuiltinSynthOrdinals('setBuiltinInstrument', config);
-    refuseBuiltinPolyphonyZero('setBuiltinInstrument', config);
+    refuseBuiltinSynthOrdinals(config);
+    refuseBuiltinPolyphonyZero(config);
     this.native.setBuiltinInstrument(destinationId ?? 0, config);
   }
 
@@ -874,10 +864,7 @@ export class RealtimeEngine {
    * current position's state resends it with {@link pushMidiUmp} after this call.
    */
   setSynthInstrument(destinationId?: number | null, patch: SynthPatch = {}): void {
-    this.native.setSynthInstrument(
-      destinationId ?? 0,
-      normalizeSynthInstrument('setSynthInstrument', patch),
-    );
+    this.native.setSynthInstrument(destinationId ?? 0, normalizeSynthInstrument(patch));
   }
 
   /**
@@ -910,9 +897,7 @@ export class RealtimeEngine {
     config: Omit<Sf2InstrumentConfig, 'destinationId'> = {},
   ): void {
     if (typeof config === 'object' && config !== null && 'destinationId' in config) {
-      throw new TypeError(
-        "setSf2Instrument: unknown config key 'destinationId' (pass it as the first argument)",
-      );
+      throw refuseType("unknown config key 'destinationId' (pass it as the first argument)");
     }
     this.native.setSf2Instrument(destinationId ?? 0, config);
   }
@@ -963,8 +948,8 @@ export class RealtimeEngine {
 
   /** Add one {@link ControllerBinding} on top of the destination's current profile; `input` and `axis` are strings. */
   bindController(destinationId: number, binding: ControllerBinding): void {
-    noOrdinal('bindController', 'input', binding?.input);
-    noOrdinal('bindController', 'axis', binding?.axis);
+    noOrdinal('input', binding?.input);
+    noOrdinal('axis', binding?.axis);
     this.native.bindController(destinationId, binding);
   }
 
@@ -996,11 +981,7 @@ export class RealtimeEngine {
   ): void {
     this.native.setControllerVelocityMeaningful(
       destinationId,
-      requireBoolean(
-        'setControllerVelocityMeaningful',
-        controllerVelocityMeaningful,
-        'controllerVelocityMeaningful',
-      ),
+      requireBoolean(controllerVelocityMeaningful, 'controllerVelocityMeaningful'),
     );
   }
 
@@ -1034,14 +1015,14 @@ export class RealtimeEngine {
     dimension: MpeDimension,
     tracking: NoteTracking,
   ): void {
-    noOrdinal('setControllerNoteTracking', 'dimension', dimension);
-    noOrdinal('setControllerNoteTracking', 'tracking', tracking);
+    noOrdinal('dimension', dimension);
+    noOrdinal('tracking', tracking);
     this.native.setControllerNoteTracking(destinationId, dimension, tracking);
   }
 
   /** Read back {@link setControllerNoteTracking} for one dimension. */
   controllerNoteTracking(destinationId: number, dimension: MpeDimension): NoteTracking {
-    noOrdinal('controllerNoteTracking', 'dimension', dimension);
+    noOrdinal('dimension', dimension);
     return this.native.controllerNoteTracking(destinationId, dimension) as NoteTracking;
   }
 
@@ -1062,7 +1043,7 @@ export class RealtimeEngine {
    * of its own. An ordinal is a `TypeError`.
    */
   setArticulation(destinationId: number, channel: number, articulation: Articulation): void {
-    noOrdinal('setArticulation', 'articulation', articulation);
+    noOrdinal('articulation', articulation);
     this.native.setArticulation(destinationId, channel, articulation);
   }
 
@@ -1076,9 +1057,9 @@ export class RealtimeEngine {
    */
   setPartRig(request: PartRigRequest): void {
     requestObject('setPartRig', request, 'request', true);
-    noOrdinal('setPartRig', 'mode', request.mode);
+    noOrdinal('mode', request.mode);
     // Absent part addresses the destination's default rig (the C ABI's 0xff).
-    const rig = normalizePartRig('setPartRig', { ...request, part: request.part ?? 0xff });
+    const rig = normalizePartRig({ ...request, part: request.part ?? 0xff });
     this.native.setPartRig(rig.destinationId, rig.part, rig.mode as never, rig.insertsJson);
   }
 
@@ -1107,7 +1088,7 @@ export class RealtimeEngine {
 
   /** Install/replace a live non-destructive MIDI-FX insert for one destination. */
   setMidiFx(destinationId: number, config: MidiFxConfig): void {
-    this.native.setMidiFx(destinationId, midiFxConfigJson(config, 'setMidiFx'));
+    this.native.setMidiFx(destinationId, midiFxConfigJson(config));
   }
 
   /** Removes the live MIDI-FX insert of `destinationId` (default 0). */
@@ -1141,11 +1122,7 @@ export class RealtimeEngine {
   setMidiDestinationExternal(destinationId: number, midiDestinationExternal: boolean): void {
     this.native.setMidiDestinationExternal(
       destinationId,
-      requireBoolean(
-        'setMidiDestinationExternal',
-        midiDestinationExternal,
-        'midiDestinationExternal',
-      ),
+      requireBoolean(midiDestinationExternal, 'midiDestinationExternal'),
     );
   }
 
@@ -1155,11 +1132,7 @@ export class RealtimeEngine {
    */
   setExternalMidiClockEnabled(externalMidiClockEnabled: boolean): void {
     this.native.setExternalMidiClockEnabled(
-      requireBoolean(
-        'setExternalMidiClockEnabled',
-        externalMidiClockEnabled,
-        'externalMidiClockEnabled',
-      ),
+      requireBoolean(externalMidiClockEnabled, 'externalMidiClockEnabled'),
     );
   }
 
@@ -1318,7 +1291,7 @@ export class RealtimeEngine {
       channel,
       note,
       velocity,
-      resolveRenderFrame('pushMidiNoteOn', renderFrame),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -1346,7 +1319,7 @@ export class RealtimeEngine {
       channel,
       note,
       velocity,
-      resolveRenderFrame('pushMidiNoteOff', renderFrame),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -1370,7 +1343,7 @@ export class RealtimeEngine {
       channel,
       controller,
       value,
-      resolveRenderFrame('pushMidiCc', renderFrame),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -1392,7 +1365,7 @@ export class RealtimeEngine {
       group,
       channel,
       bend14,
-      resolveRenderFrame('pushMidiPitchBend', renderFrame),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -1413,7 +1386,7 @@ export class RealtimeEngine {
       group,
       channel,
       pressure,
-      resolveRenderFrame('pushMidiChannelPressure', renderFrame),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -1437,7 +1410,7 @@ export class RealtimeEngine {
       channel,
       note,
       pressure,
-      resolveRenderFrame('pushMidiPolyPressure', renderFrame),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -1451,11 +1424,7 @@ export class RealtimeEngine {
    * apply (omit for immediate).
    */
   pushMidiUmp(destinationId: number, words: UmpWords, renderFrame?: number): void {
-    this.native.pushMidiUmp(
-      destinationId,
-      assertUmpWords('pushMidiUmp', words),
-      resolveRenderFrame('pushMidiUmp', renderFrame),
-    );
+    this.native.pushMidiUmp(destinationId, assertUmpWords(words), resolveRenderFrame(renderFrame));
   }
 
   /**
@@ -1491,7 +1460,7 @@ export class RealtimeEngine {
       bankValid,
       bankMsb,
       bankLsb,
-      resolveRenderFrame('pushMidiProgram', renderFrame),
+      resolveRenderFrame(renderFrame),
     );
   }
 
@@ -1527,7 +1496,7 @@ export class RealtimeEngine {
    * an absolute clock position.
    */
   pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
-    this.native.pushMidiInputUmp(assertUmpWords('pushMidiInputUmp', words), offsetInBlockSamples);
+    this.native.pushMidiInputUmp(assertUmpWords(words), offsetInBlockSamples);
   }
 
   /**
@@ -1540,11 +1509,7 @@ export class RealtimeEngine {
    * Mirrors the Node/Python/C-ABI `pushMidiSysex`.
    */
   pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame?: number): void {
-    this.native.pushMidiSysex(
-      destinationId,
-      data,
-      resolveRenderFrame('pushMidiSysex', renderFrame),
-    );
+    this.native.pushMidiSysex(destinationId, data, resolveRenderFrame(renderFrame));
   }
 
   /**
@@ -1552,7 +1517,7 @@ export class RealtimeEngine {
    * `renderFrame` (omitted = immediate). Mirrors the C-ABI `pushMidiPanic`.
    */
   pushMidiPanic(renderFrame?: number): void {
-    this.native.pushMidiPanic(resolveRenderFrame('pushMidiPanic', renderFrame));
+    this.native.pushMidiPanic(resolveRenderFrame(renderFrame));
   }
 
   /**
@@ -1587,9 +1552,7 @@ export class RealtimeEngine {
 
   /** Queues an integrated-loudness reset; short-term and momentary windows are retained. */
   resetMasterLoudnessMeter(renderFrame?: number): void {
-    this.native.resetMasterLoudnessMeter(
-      resolveRenderFrame('resetMasterLoudnessMeter', renderFrame),
-    );
+    this.native.resetMasterLoudnessMeter(resolveRenderFrame(renderFrame));
   }
 
   /** Reads the immutable factory value for a resolved insert parameter id. */
@@ -1599,7 +1562,7 @@ export class RealtimeEngine {
 
   /** Starts transport playback, at `renderFrame` when given. */
   play(renderFrame?: number): void {
-    this.native.play(resolveRenderFrame('play', renderFrame));
+    this.native.play(resolveRenderFrame(renderFrame));
   }
 
   /**
@@ -1612,12 +1575,12 @@ export class RealtimeEngine {
    * loop pass and each seek starts from the state continuous playback reaches.
    */
   stop(renderFrame?: number): void {
-    this.native.stop(resolveRenderFrame('stop', renderFrame));
+    this.native.stop(resolveRenderFrame(renderFrame));
   }
 
   /** Moves the transport to `timelineSample`, a position in timeline samples. */
   seekSample(timelineSample: number, renderFrame?: number): void {
-    this.native.seekSample(timelineSample, resolveRenderFrame('seekSample', renderFrame));
+    this.native.seekSample(timelineSample, resolveRenderFrame(renderFrame));
   }
 
   /**
@@ -1648,10 +1611,7 @@ export class RealtimeEngine {
    *   channel count, or the engine was never prepared
    */
   primeOfflineParameters(numChannels: number, blockSize?: number): void {
-    this.native.primeOfflineParameters(
-      numChannels,
-      optionalCount('primeOfflineParameters', 'blockSize', blockSize),
-    );
+    this.native.primeOfflineParameters(numChannels, optionalCount('blockSize', blockSize));
   }
 
   /**
@@ -1669,7 +1629,7 @@ export class RealtimeEngine {
    * @throws If the command queue is full
    */
   resetProcessorState(renderFrame?: number): void {
-    this.native.resetProcessorState(resolveRenderFrame('resetProcessorState', renderFrame));
+    this.native.resetProcessorState(resolveRenderFrame(renderFrame));
   }
 
   /**
@@ -1713,7 +1673,7 @@ export class RealtimeEngine {
 
   /** Moves the transport to `ppq`, a position in quarter notes. */
   seekPpq(ppq: number, renderFrame?: number): void {
-    this.native.seekPpq(ppq, resolveRenderFrame('seekPpq', renderFrame));
+    this.native.seekPpq(ppq, resolveRenderFrame(renderFrame));
   }
 
   /** Set a finite tempo in the range (0, 100000] BPM. */
@@ -1758,11 +1718,7 @@ export class RealtimeEngine {
   /** Sets the loop region between two quarter-note positions and enables or disables it. */
   setLoop(loop: EngineLoop): void {
     requestObject('setLoop', loop, 'loop', true);
-    this.native.setLoop(
-      loop.startPpq,
-      loop.endPpq,
-      optionalBoolean('setLoop', loop.enabled, 'enabled', true),
-    );
+    this.native.setLoop(loop.startPpq, loop.endPpq, optionalBoolean(loop.enabled, 'enabled', true));
   }
 
   /**
@@ -1771,7 +1727,7 @@ export class RealtimeEngine {
    * Control thread only; do not call concurrently with {@link process}.
    */
   addParameter(info: EngineParameterInfo): void {
-    noOrdinal('addParameter', 'defaultCurve', info?.defaultCurve);
+    noOrdinal('defaultCurve', info?.defaultCurve);
     const { defaultCurve, ...rest } = info;
     this.native.addParameter(
       defaultCurve === undefined
@@ -1805,9 +1761,7 @@ export class RealtimeEngine {
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
     this.native.setAutomationLane(
       paramId,
-      Array.isArray(points)
-        ? points.map((point) => nativeAutomationPoint('setAutomationLane', point) as never)
-        : points,
+      Array.isArray(points) ? points.map((point) => nativeAutomationPoint(point) as never) : points,
     );
   }
 
@@ -1858,7 +1812,7 @@ export class RealtimeEngine {
    * `renderFrame` is the render-frame time to apply; omit it for immediate (a negative value is refused).
    */
   seekMarker(markerId: number, renderFrame?: number): void {
-    this.native.seekMarker(markerId, resolveRenderFrame('seekMarker', renderFrame));
+    this.native.seekMarker(markerId, resolveRenderFrame(renderFrame));
   }
 
   /**
@@ -1884,11 +1838,11 @@ export class RealtimeEngine {
       ['clickSec', clickSec],
     ] as const) {
       if (value === 0) {
-        throw new RangeError(`setMetronome: ${name} must not be 0 (omit it for the default)`);
+        throw refuse(`${name} must not be 0 (omit it for the default)`);
       }
     }
     if (hasSamples && hasSec) {
-      throw new RangeError('setMetronome: give clickSamples or clickSec, not both');
+      throw refuse('give clickSamples or clickSec, not both');
     }
     this.native.setMetronome({
       ...rest,
@@ -1918,11 +1872,11 @@ export class RealtimeEngine {
    * `TypeError` / `RangeError`. Control thread only; do not call concurrently with {@link process}.
    */
   setGraph(spec: EngineGraphSpec): void {
-    requireObject('setGraph', 'spec', spec);
+    requireObject('spec', spec);
     graphName('inputNode', spec.inputNode);
     graphName('outputNode', spec.outputNode);
     const { numChannels: requestedChannels, ...base } = spec;
-    const numChannels = optionalCount('setGraph', 'numChannels', requestedChannels);
+    const numChannels = optionalCount('numChannels', requestedChannels);
     this.native.setGraph({
       ...base,
       ...(numChannels === undefined ? {} : { numChannels }),
@@ -1933,12 +1887,12 @@ export class RealtimeEngine {
             }
             graphName(`nodes[${i}].id`, entry.id);
             const { type, numPorts, ...node } = entry;
-            const ports = optionalCount('setGraph', `nodes[${i}].numPorts`, numPorts);
+            const ports = optionalCount(`nodes[${i}].numPorts`, numPorts);
             return {
               ...node,
               ...(type === undefined || type === null
                 ? {}
-                : { type: tokenCode('setGraph', 'node type', type, GRAPH_NODE_TYPES) }),
+                : { type: tokenCode('node type', type, GRAPH_NODE_TYPES) }),
               ...(ports === undefined ? {} : { numPorts: ports }),
             };
           })
@@ -1955,7 +1909,7 @@ export class RealtimeEngine {
               ...connection,
               ...(mix === undefined || mix === null
                 ? {}
-                : { mix: tokenCode('setGraph', 'mix', mix, GRAPH_MIXES) }),
+                : { mix: tokenCode('mix', mix, GRAPH_MIXES) }),
             };
           })
         : spec.connections,
@@ -2018,9 +1972,9 @@ export class RealtimeEngine {
    * reads; an omitted one stays absent, and embind fills in the default.
    * Shared by track lanes and buses, which carry the same send shape.
    */
-  private static normalizeSends(fnName: string, sends: EngineTrackSend[]): WasmEngineTrackSend[] {
+  private static normalizeSends(sends: EngineTrackSend[]): WasmEngineTrackSend[] {
     return sends.map((send) => {
-      noOrdinal(fnName, 'sendTiming', send.sendTiming);
+      noOrdinal('sendTiming', send.sendTiming);
       const { sendTiming, ...rest } = send;
       return sendTiming === undefined ? rest : { ...rest, sendTiming: sendTimingCode(sendTiming) };
     });
@@ -2036,13 +1990,12 @@ export class RealtimeEngine {
       const { sourceChannelLayout, outputBusId, ...rest } = lane;
       return {
         ...rest,
-        sends: lane.sends ? RealtimeEngine.normalizeSends('setTrackLanes', lane.sends) : undefined,
-        outputBusId: optionalBusId('setTrackLanes', 'outputBusId', outputBusId),
+        sends: lane.sends ? RealtimeEngine.normalizeSends(lane.sends) : undefined,
+        outputBusId: optionalBusId('outputBusId', outputBusId),
         ...(sourceChannelLayout === undefined
           ? {}
           : {
               sourceChannelLayout: tokenCode(
-                'setTrackLanes',
                 'sourceChannelLayout',
                 sourceChannelLayout,
                 CHANNEL_LAYOUT_VALUES,
@@ -2063,7 +2016,7 @@ export class RealtimeEngine {
    * declared through {@link setTrackLanes}.
    */
   setTrackSends(trackId: number, sends: EngineTrackSend[]): void {
-    this.native.setTrackSends(trackId, RealtimeEngine.normalizeSends('setTrackSends', sends));
+    this.native.setTrackSends(trackId, RealtimeEngine.normalizeSends(sends));
   }
 
   /**
@@ -2073,7 +2026,7 @@ export class RealtimeEngine {
    * be declared through {@link setTrackLanes}.
    */
   setTrackOutputBus(trackId: number, busId: number | null): void {
-    this.native.setTrackOutputBus(trackId, optionalBusId('setTrackOutputBus', 'busId', busId));
+    this.native.setTrackOutputBus(trackId, optionalBusId('busId', busId));
   }
 
   /**
@@ -2088,7 +2041,7 @@ export class RealtimeEngine {
    * processed.
    */
   setStripSidechain(ref: StripRef, insertIndex: number, source: SidechainSource | null): void {
-    const target = stripTarget('setStripSidechain', ref);
+    const target = stripTarget(ref);
     const key =
       source === null ? { kind: 0, id: 0 } : sidechainSourceArg('setStripSidechain', source);
     if (target.master) {
@@ -2096,7 +2049,7 @@ export class RealtimeEngine {
       return;
     }
     if (key.kind !== 0) {
-      throw new RangeError("setStripSidechain: a track strip accepts only a 'track' source");
+      throw refuse("a track strip accepts only a 'track' source");
     }
     this.native.setLaneSidechain(target.trackId, insertIndex, key.id);
   }
@@ -2123,7 +2076,7 @@ export class RealtimeEngine {
     // facade boundary and the realtime bundle needs no value class import.
     const timelineId = projectTimelineNativeId(timeline);
     if (timelineId === undefined) {
-      throw new TypeError('timeline must be a ProjectTimeline instance');
+      throw refuseType('timeline must be a ProjectTimeline instance');
     }
     this.native.applyProjectTimeline(timelineId);
     this.laneOrder = undefined;
@@ -2144,19 +2097,12 @@ export class RealtimeEngine {
             const { channelLayout, outputBusId, ...rest } = bus;
             return {
               ...rest,
-              sends: bus.sends
-                ? RealtimeEngine.normalizeSends('setTrackBuses', bus.sends)
-                : undefined,
-              outputBusId: optionalBusId('setTrackBuses', 'outputBusId', outputBusId),
+              sends: bus.sends ? RealtimeEngine.normalizeSends(bus.sends) : undefined,
+              outputBusId: optionalBusId('outputBusId', outputBusId),
               ...(channelLayout === undefined
                 ? {}
                 : {
-                    channelLayout: tokenCode(
-                      'setTrackBuses',
-                      'channelLayout',
-                      channelLayout,
-                      CHANNEL_LAYOUT_VALUES,
-                    ),
+                    channelLayout: tokenCode('channelLayout', channelLayout, CHANNEL_LAYOUT_VALUES),
                   }),
             };
           })
@@ -2184,7 +2130,7 @@ export class RealtimeEngine {
     insertIndex: number,
     source: SidechainSource,
   ): SidechainCheck {
-    const target = stripTarget('canSetStripSidechain', ref);
+    const target = stripTarget(ref);
     const key = sidechainSourceArg('canSetStripSidechain', source);
     if (target.master) {
       return sidechainCheckFromCode(
@@ -2192,7 +2138,7 @@ export class RealtimeEngine {
       );
     }
     if (key.kind !== 0) {
-      throw new RangeError("canSetStripSidechain: a track strip accepts only a 'track' source");
+      throw refuse("a track strip accepts only a 'track' source");
     }
     return sidechainCheckFromCode(
       this.native.canSetLaneSidechain(target.trackId, insertIndex, key.id),
@@ -2209,7 +2155,7 @@ export class RealtimeEngine {
 
   /** Replaces a bus strip with `settings`; the document is sent as `{ buses: [settings] }`. */
   setBusStrip(busId: number, settings: MixSceneBusInput): void {
-    this.native.setBusStripJson(busId, sceneBusJson('setBusStrip', settings));
+    this.native.setBusStripJson(busId, sceneBusJson(settings));
   }
 
   /**
@@ -2217,8 +2163,8 @@ export class RealtimeEngine {
    * is sent as `{ strips: [settings] }`.
    */
   setStrip(ref: StripRef, settings: MixSceneStripInput): void {
-    const target = stripTarget('setStrip', ref);
-    const json = sceneStripJson('setStrip', settings);
+    const target = stripTarget(ref);
+    const json = sceneStripJson(settings);
     if (target.master) {
       this.native.setMasterStripJson(json);
     } else {
@@ -2228,8 +2174,8 @@ export class RealtimeEngine {
 
   /** Sets one EQ band of a strip (a track's, or the master). */
   setStripEqBand(ref: StripRef, bandIndex: number, band: EqBandInput): void {
-    const target = stripTarget('setStripEqBand', ref);
-    const json = bandJson('setStripEqBand', band);
+    const target = stripTarget(ref);
+    const json = bandJson(band);
     if (target.master) {
       this.native.setMasterStripEqBandJson(bandIndex, json);
     } else {
@@ -2239,7 +2185,7 @@ export class RealtimeEngine {
 
   /** Sets one EQ band of a bus strip. */
   setBusEqBand(busId: number, bandIndex: number, band: EqBandInput): void {
-    this.native.setBusStripEqBandJson(busId, bandIndex, bandJson('setBusEqBand', band));
+    this.native.setBusStripEqBandJson(busId, bandIndex, bandJson(band));
   }
 
   /** Bypasses or re-enables one insert of a strip; `resetOnBypass` defaults to `false`. */
@@ -2248,7 +2194,7 @@ export class RealtimeEngine {
     insertIndex: number,
     state: { bypassed: boolean; resetOnBypass?: boolean },
   ): void {
-    const target = stripTarget('setStripInsertBypassed', ref);
+    const target = stripTarget(ref);
     const { bypassed, resetOnBypass } = bypassState('setStripInsertBypassed', state);
     if (target.master) {
       this.native.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
@@ -2281,7 +2227,7 @@ export class RealtimeEngine {
     insertIndex: number,
     param: { name: string; value: number },
   ): void {
-    const target = stripTarget('setStripInsertParam', ref);
+    const target = stripTarget(ref);
     const { name, value } = insertParam('setStripInsertParam', param);
     if (target.master) {
       this.native.setMasterStripInsertParamByName(insertIndex, name, value);
@@ -2299,7 +2245,7 @@ export class RealtimeEngine {
     insertIndex: number,
     param: { name: string; value: number },
   ): boolean {
-    const target = stripTarget('applyStripInsertParamNow', ref);
+    const target = stripTarget(ref);
     const { name, value } = insertParam('applyStripInsertParamNow', param);
     return target.master
       ? this.native.applyMasterStripInsertParamByNameNow(insertIndex, name, value)
@@ -2312,7 +2258,7 @@ export class RealtimeEngine {
     insertIndex: number,
     param: { name: string; value: number },
   ): void {
-    const target = stripTarget('restoreStripInsertParam', ref);
+    const target = stripTarget(ref);
     const { name, value } = insertParam('restoreStripInsertParam', param);
     if (target.master) {
       this.native.restoreMasterStripInsertParamByName(insertIndex, name, value);
@@ -2358,7 +2304,7 @@ export class RealtimeEngine {
    * itself, since a queued edit may already target the new chain.
    */
   clearStripInsertParameterBases(ref: StripRef): void {
-    const target = stripTarget('clearStripInsertParameterBases', ref);
+    const target = stripTarget(ref);
     if (target.master) {
       this.native.clearMasterInsertParameterBases();
     } else {
@@ -2403,7 +2349,7 @@ export class RealtimeEngine {
    * past its 8192 insert-id entries is refused.
    */
   resolveStripInsertAutomationId(ref: StripRef, insertIndex: number, paramName: string): number {
-    const target = stripTarget('resolveStripInsertAutomationId', ref);
+    const target = stripTarget(ref);
     return target.master
       ? this.native.resolveMasterInsertAutomationId(insertIndex, paramName)
       : this.native.resolveTrackInsertAutomationId(target.trackId, insertIndex, paramName);
@@ -2424,12 +2370,12 @@ export class RealtimeEngine {
    * `RangeError` when the track has no lane or the name is none of the three.
    */
   resolveStripAutomationId(ref: StripRef, kind: 'faderDb' | 'pan' | 'width'): number {
-    const target = stripTarget('resolveStripAutomationId', ref);
+    const target = stripTarget(ref);
     if (target.master) {
       return this.native.resolveMasterAutomationId(kind);
     }
     if (kind === 'width') {
-      throw new RangeError("resolveStripAutomationId: a track strip has no 'width' parameter");
+      throw refuse("a track strip has no 'width' parameter");
     }
     return this.native.resolveTrackLaneAutomationId(target.trackId, kind);
   }
@@ -2495,26 +2441,26 @@ export class RealtimeEngine {
 
   /** Sets a track strip's pan position in realtime (glitch-free). The master strip has no setter: drive `resolveStripAutomationId('master', 'pan')`. */
   setStripPan(ref: StripRef, pan: number): void {
-    this.native.setTrackStripPan(trackOnly('setStripPan', ref), pan);
+    this.native.setTrackStripPan(trackOnly(ref), pan);
   }
 
   /** Sets a track strip's pan law in realtime; an ordinal is a `TypeError`. */
   setStripPanLaw(ref: StripRef, panLaw: PanLaw): void {
-    const trackId = trackOnly('setStripPanLaw', ref);
-    noOrdinal('setStripPanLaw', 'panLaw', panLaw);
+    const trackId = trackOnly(ref);
+    noOrdinal('panLaw', panLaw);
     this.native.setTrackStripPanLaw(trackId, panLawCode(panLaw));
   }
 
   /** Sets a track strip's pan mode in realtime; an ordinal is a `TypeError`. */
   setStripPanMode(ref: StripRef, panMode: PanMode): void {
-    const trackId = trackOnly('setStripPanMode', ref);
-    noOrdinal('setStripPanMode', 'panMode', panMode);
+    const trackId = trackOnly(ref);
+    noOrdinal('panMode', panMode);
     this.native.setTrackStripPanMode(trackId, panModeCode(panMode));
   }
 
   /** Sets a track strip's dual-pan left/right positions in realtime. */
   setStripDualPan(ref: StripRef, leftPan: number, rightPan: number): void {
-    this.native.setTrackStripDualPan(trackOnly('setStripDualPan', ref), leftPan, rightPan);
+    this.native.setTrackStripDualPan(trackOnly(ref), leftPan, rightPan);
   }
 
   /**
@@ -2526,9 +2472,9 @@ export class RealtimeEngine {
    * a TypeError for a key outside those three.
    */
   setStripSurroundPan(ref: StripRef, pan: SurroundPan): void {
-    const trackId = trackOnly('setStripSurroundPan', ref);
+    const trackId = trackOnly(ref);
     requestObject('setStripSurroundPan', pan, 'pan', true);
-    assertSurroundPan('setStripSurroundPan', pan);
+    assertSurroundPan(pan);
     this.native.setTrackStripSurroundPan(trackId, pan);
   }
 
@@ -2538,10 +2484,7 @@ export class RealtimeEngine {
    * compensate it and the reported graph latency is unchanged.
    */
   setStripChannelDelaySamples(ref: StripRef, delaySamples: number): void {
-    this.native.setTrackStripChannelDelaySamples(
-      trackOnly('setStripChannelDelaySamples', ref),
-      delaySamples,
-    );
+    this.native.setTrackStripChannelDelaySamples(trackOnly(ref), delaySamples);
   }
 
   /**
@@ -2554,13 +2497,13 @@ export class RealtimeEngine {
 
   /** Sets a bus strip's pan law in realtime; an ordinal is a `TypeError`. */
   setBusPanLaw(busId: number, panLaw: PanLaw): void {
-    noOrdinal('setBusPanLaw', 'panLaw', panLaw);
+    noOrdinal('panLaw', panLaw);
     this.native.setBusStripPanLaw(busId, panLawCode(panLaw));
   }
 
   /** Sets a bus strip's pan mode in realtime; an ordinal is a `TypeError`. */
   setBusPanMode(busId: number, panMode: PanMode): void {
-    noOrdinal('setBusPanMode', 'panMode', panMode);
+    noOrdinal('panMode', panMode);
     this.native.setBusStripPanMode(busId, panModeCode(panMode));
   }
 
@@ -2641,36 +2584,27 @@ export class RealtimeEngine {
   configureCapture(options: CaptureOptions): void {
     requestObject('configureCapture', options, 'options', true);
     if (typeof options.capacityFrames !== 'number') {
-      throw new TypeError('configureCapture: capacityFrames must be a number');
+      throw refuseType('capacityFrames must be a number');
     }
-    const numChannels = optionalCount('configureCapture', 'numChannels', options.numChannels) ?? 2;
-    const source = tokenCode(
-      'configureCapture',
-      'source',
-      options.source ?? 'output',
-      CAPTURE_SOURCES,
-    );
+    const numChannels = optionalCount('numChannels', options.numChannels) ?? 2;
+    const source = tokenCode('source', options.source ?? 'output', CAPTURE_SOURCES);
     const offset = options.recordOffsetSamples ?? 0;
     if (typeof offset !== 'number') {
-      throw new TypeError('configureCapture: recordOffsetSamples must be a number');
+      throw refuseType('recordOffsetSamples must be a number');
     }
     let monitor = { enabled: true, gain: 1 };
     if (options.inputMonitor !== undefined && options.inputMonitor !== null) {
-      requireObject('configureCapture', 'inputMonitor', options.inputMonitor);
+      requireObject('inputMonitor', options.inputMonitor);
       const gain = options.inputMonitor.gain ?? 1;
-      assertFloatValue('configureCapture', gain, 'inputMonitor.gain');
+      assertFloatValue(gain, 'inputMonitor.gain');
       monitor = {
-        enabled: requireBoolean(
-          'configureCapture',
-          options.inputMonitor.enabled,
-          'inputMonitor.enabled',
-        ),
+        enabled: requireBoolean(options.inputMonitor.enabled, 'inputMonitor.enabled'),
         gain,
       };
     }
     let punch: { start: number; end: number } | undefined;
     if (options.punch !== undefined && options.punch !== null) {
-      requireObject('configureCapture', 'punch', options.punch);
+      requireObject('punch', options.punch);
       punch = {
         start: capturePunchBound(
           options.punch.startPpq,
@@ -2704,10 +2638,7 @@ export class RealtimeEngine {
       current.capacityFrames !== options.capacityFrames
     ) {
       if (current !== undefined && native.captureStatus().armed) {
-        throw new SonareError(
-          ErrorCode.InvalidState,
-          'configureCapture: the capture buffer cannot change while capture is armed',
-        );
+        throw invalidState('the capture buffer cannot change while capture is armed');
       }
       native.setCaptureBuffer(numChannels, options.capacityFrames);
       this.captureBuffer = { numChannels, capacityFrames: options.capacityFrames };
@@ -2720,7 +2651,7 @@ export class RealtimeEngine {
   /** Arms or disarms capture. */
   armCapture(state: { armed: boolean }): void {
     requestObject('armCapture', state, 'state', true);
-    this.native.armCapture(requireBoolean('armCapture', state.armed, 'armed'));
+    this.native.armCapture(requireBoolean(state.armed, 'armed'));
   }
 
   /** Clears the capture frame counter. Call while capture is not running. */
@@ -2860,7 +2791,7 @@ export class RealtimeEngine {
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     requestObject('bounceOffline', options, 'options', true);
-    noOrdinal('bounceOffline', 'dither', options.dither);
+    noOrdinal('dither', options.dither);
     for (const name of [
       'blockSize',
       'targetSampleRate',
@@ -2872,10 +2803,10 @@ export class RealtimeEngine {
         continue;
       }
       if (typeof value === 'number' && value === 0) {
-        throw new RangeError(`bounceOffline: ${name} must not be 0 (omit it for the default)`);
+        throw refuse(`${name} must not be 0 (omit it for the default)`);
       }
       if (typeof value === 'number' && !Number.isFinite(value)) {
-        throw new RangeError(`bounceOffline: ${name} must be a finite number`);
+        throw refuse(`${name} must be a finite number`);
       }
     }
     const { dither, ...rest } = options;
@@ -2883,7 +2814,7 @@ export class RealtimeEngine {
       ...rest,
       ...(dither === undefined
         ? {}
-        : { dither: tokenCode('bounceOffline', 'dither', dither, DITHERS) as 1 | 2 | 3 }),
+        : { dither: tokenCode('dither', dither, DITHERS) as 1 | 2 | 3 }),
     });
     return {
       channels: deinterleavePlanes(result.interleaved, result.numChannels),
@@ -2905,8 +2836,8 @@ export class RealtimeEngine {
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     requestObject('freezeOffline', options, 'options', true);
     const { blockSize, clipId, ...rest } = options;
-    const block = optionalCount('freezeOffline', 'blockSize', blockSize);
-    const clip = optionalCount('freezeOffline', 'clipId', clipId);
+    const block = optionalCount('blockSize', blockSize);
+    const clip = optionalCount('clipId', clipId);
     return this.native.freezeOffline({
       ...rest,
       ...(block === undefined ? {} : { blockSize: block }),
@@ -2986,7 +2917,7 @@ export class RealtimeEngine {
 }
 
 /** A paged clip source, independent of any engine; pages are supplied on demand. */
-@entryClass('ClipPageProvider')
+@entryClass('ClipPageProvider', ['native'])
 export class ClipPageProvider {
   private nativeHandle: WasmClipPageProvider;
   private disposed = false;
@@ -3008,7 +2939,7 @@ export class ClipPageProvider {
 
   private get native(): WasmClipPageProvider {
     if (this.disposed) {
-      throw releasedHandleError('ClipPageProvider', 'is destroyed');
+      throw releasedHandleError('ClipPageProvider');
     }
     return this.nativeHandle;
   }

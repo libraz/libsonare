@@ -1,5 +1,6 @@
 import type { Matrix2D } from '../types_analysis.js';
 import { assertFiniteValues, assertPositiveInteger } from '../validation.js';
+import { refuse, refuseType } from './entry.js';
 
 /**
  * Matrix helpers shared by the `feature_*` modules.
@@ -20,34 +21,32 @@ export function toMatrix2D(data: Float32Array, rows: number, cols: number): Matr
  * `validate` is `false`.
  */
 export function assertMatrix2D(
-  fnName: string,
   value: unknown,
   argName: string,
   validate: boolean | null | undefined = true,
 ): asserts value is Matrix2D {
   if (typeof value !== 'object' || value === null) {
-    throw new TypeError(`${fnName}: ${argName} must be a Matrix2D`);
+    throw refuseType(`${argName} must be a Matrix2D`);
   }
   const { data, rows, cols } = value as Record<string, unknown>;
   if (!(data instanceof Float32Array)) {
-    throw new TypeError(`${fnName}: ${argName}.data must be a Float32Array`);
+    throw refuseType(`${argName}.data must be a Float32Array`);
   }
   if (typeof rows !== 'number' || typeof cols !== 'number') {
-    throw new TypeError(`${fnName}: ${argName}.rows and ${argName}.cols must be numbers`);
+    throw refuseType(`${argName}.rows and ${argName}.cols must be numbers`);
   }
-  assertPositiveInteger(fnName, rows, `${argName}.rows`);
-  assertPositiveInteger(fnName, cols, `${argName}.cols`);
+  assertPositiveInteger(rows, `${argName}.rows`);
+  assertPositiveInteger(cols, `${argName}.cols`);
   if (data.length !== rows * cols) {
-    throw new RangeError(`${fnName}: ${argName}.data length must equal rows * cols`);
+    throw refuse(`${argName}.data length must equal rows * cols`);
   }
   if (validate !== false) {
-    assertFiniteValues(fnName, data, `${argName}.data`);
+    assertFiniteValues(data, `${argName}.data`);
   }
 }
 
 /** The index list shapes the addon reads (`Int32Array` or a plain array); other array-likes are copied. */
 export function toNativeIndexList(
-  fnName: string,
   values: Int32Array | ArrayLike<number>,
   argName: string,
 ): Int32Array | number[] {
@@ -55,7 +54,7 @@ export function toNativeIndexList(
     return values;
   }
   if (typeof values !== 'object' || values === null || typeof values.length !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be an Int32Array or an array of numbers`);
+    throw refuseType(`${argName} must be an Int32Array or an array of numbers`);
   }
   return Array.from(values);
 }

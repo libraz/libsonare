@@ -367,7 +367,7 @@ describe('vocal edit Worker protocol', () => {
     const queued = endpoint.takeFinal(10);
     expect(queued?.type).toBe('sonare:vocal-error');
     if (queued?.type === 'sonare:vocal-error') {
-      expect(queued.error.message).toContain('session disposed');
+      expect(queued.error.message).toBe('VocalEditWorkerSession has been destroyed');
     }
     expect(endpoint.takeFinal(9)?.type).toBe('sonare:vocal-error');
     expect(endpoint.takeFinal(11)?.type).toBe('sonare:vocal-result');

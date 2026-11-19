@@ -1,3 +1,4 @@
+import { refuseType, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import { assertAudioSamples, assertInt32, requestObject } from './validation.js';
 
@@ -25,22 +26,24 @@ export function resample(
   targetSampleRate: number,
 ): Float32Array;
 export function resample(...args: unknown[]): Float32Array {
-  const [first, sampleRate, targetSampleRate] = args;
-  let request: ResampleRequest;
-  if (first instanceof Float32Array) {
-    if (args.length > 3) {
-      throw new TypeError('resample: expected (samples, sampleRate, targetSampleRate)');
+  return withEntry('resample', () => {
+    const [first, sampleRate, targetSampleRate] = args;
+    let request: ResampleRequest;
+    if (first instanceof Float32Array) {
+      if (args.length > 3) {
+        throw refuseType('expected (samples, sampleRate, targetSampleRate)');
+      }
+      request = { samples: first, sampleRate, targetSampleRate } as ResampleRequest;
+    } else {
+      if (args.length > 1) {
+        throw refuseType('unexpected argument after the request object');
+      }
+      request = requestObject('resample', first as ResampleRequest);
     }
-    request = { samples: first, sampleRate, targetSampleRate } as ResampleRequest;
-  } else {
-    if (args.length > 1) {
-      throw new TypeError('resample: unexpected argument after the request object');
-    }
-    request = requestObject('resample', first as ResampleRequest);
-  }
-  // Type and emptiness only: rate range and non-finite samples are the core's to refuse.
-  assertAudioSamples('resample', request.samples, { scanFinite: false });
-  assertInt32('resample', request.sampleRate, 'sampleRate');
-  assertInt32('resample', request.targetSampleRate, 'targetSampleRate');
-  return addon.resample(request.samples, request.sampleRate, request.targetSampleRate);
+    // Type and emptiness only: rate range and non-finite samples are the core's to refuse.
+    assertAudioSamples(request.samples, { scanFinite: false });
+    assertInt32(request.sampleRate, 'sampleRate');
+    assertInt32(request.targetSampleRate, 'targetSampleRate');
+    return addon.resample(request.samples, request.sampleRate, request.targetSampleRate);
+  });
 }

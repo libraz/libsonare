@@ -189,6 +189,10 @@ describe('Node vocal edit facade', () => {
         ],
       });
       draft.commit();
+      // A later call names the act that ended the draft, not a destroy().
+      expect(() => draft.notes()).toThrow(
+        /^VocalEditDraft\.notes: VocalEditDraft has been committed$/,
+      );
       const result = session.notes().notes.find((candidate) => candidate.id === note.id);
       expect(result).toBeDefined();
       expect(Array.isArray(result?.edit.amplitudeEnvelope)).toBe(true);
@@ -452,6 +456,7 @@ describe('Node vocal edit facade', () => {
       }
       expect(complete).toBe(true);
       const result = job.finalize();
+      expect(() => job.next()).toThrow(/^VocalRenderJob\.next: VocalRenderJob has been finalized$/);
       expect(result.samples).toBeInstanceOf(Float32Array);
       expect(result.samples.length).toBe(256);
     } finally {
@@ -522,13 +527,15 @@ describe('Node vocal edit facade', () => {
     const note = session.notes().notes[0];
     const draft = session.beginEdit();
     session.destroy();
-    expect(() => draft.notes()).toThrow(/disposed/);
+    expect(() => draft.notes()).toThrow(
+      /^VocalEditDraft\.notes: VocalEditDraft has been destroyed$/,
+    );
     expect(() =>
       draft.apply({
         expectedGeneration: '1',
         operations: [{ kind: 'reset', noteIds: [note.id] }],
       }),
-    ).toThrow(/disposed/);
+    ).toThrow(/^VocalEditDraft\.apply: VocalEditDraft has been destroyed$/);
     draft.cancel();
     draft.destroy();
   });

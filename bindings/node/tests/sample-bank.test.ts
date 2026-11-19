@@ -123,7 +123,7 @@ describe('SampleBank', () => {
       for (const sf2Mode of [0, 1, 3]) {
         expect(() =>
           bank.addSample(pcm, { loopMode: sf2Mode as never, loopStart: 0, loopEnd: 512 }),
-        ).toThrow(new TypeError('addSample: loopMode must be a name'));
+        ).toThrow(new TypeError('SampleBank.addSample: loopMode must be a name'));
       }
       expect(bank.sampleCount).toBe(3);
     });

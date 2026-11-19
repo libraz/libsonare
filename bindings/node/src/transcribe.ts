@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import { addon } from './native.js';
 import type { TranscribeRequest, TranscribeResult } from './types.js';
@@ -45,11 +46,13 @@ export function transcribe(
   options?: OptionsOf<TranscribeRequest>,
 ): TranscribeResult;
 export function transcribe(...args: unknown[]): TranscribeResult {
-  const request = sampleOneShot<TranscribeRequest>('transcribe', args);
-  assertAudioInput('transcribe', request.samples, request.sampleRate, request);
-  const { ...rest } = request;
-  if (rest.tempoBpm !== undefined && rest.tempoBpm !== null) {
-    assertPositiveFloatValue('transcribe', rest.tempoBpm, 'tempoBpm');
-  }
-  return addon.transcribe(nativeTranscribeRequest('transcribe', rest));
+  return withEntry('transcribe', () => {
+    const request = sampleOneShot<TranscribeRequest>('transcribe', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const { ...rest } = request;
+    if (rest.tempoBpm !== undefined && rest.tempoBpm !== null) {
+      assertPositiveFloatValue(rest.tempoBpm, 'tempoBpm');
+    }
+    return addon.transcribe(nativeTranscribeRequest(rest));
+  });
 }

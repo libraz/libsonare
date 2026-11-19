@@ -1,4 +1,5 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
+import { codedError, refuse, withEntry } from '../internal/entry.js';
 import { decodeFrame } from './engine-rings.js';
 import {
   attachProtocolVersion,
@@ -105,11 +106,10 @@ export interface ScopeRingOptions {
 }
 
 function resolveScopeRingOptions(
-  fn: string,
   options: unknown,
   defaultCapacity: number | undefined,
 ): { capacity: number; bands: number; maxPoints: number } {
-  const resolved = resolveRingOptions(fn, options, {
+  const resolved = resolveRingOptions(options, {
     capacity: defaultCapacity,
     bands: SONARE_SCOPE_DEFAULT_BANDS,
     maxPoints: SONARE_SCOPE_DEFAULT_MAX_POINTS,
@@ -125,59 +125,59 @@ function resolveScopeRingOptions(
 export function scopeRingBufferByteLength(
   options: ScopeRingOptions & { capacity: number },
 ): number {
-  const { capacity, bands, maxPoints } = resolveScopeRingOptions(
-    'scopeRingBufferByteLength',
-    options,
-    undefined,
-  );
-  return overwriteRingByteLength(
-    SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
-    sonareScopeRingRecordFloats(bands, maxPoints) * Float32Array.BYTES_PER_ELEMENT,
-    capacity,
-  );
+  return withEntry('scopeRingBufferByteLength', () => {
+    const { capacity, bands, maxPoints } = resolveScopeRingOptions(options, undefined);
+    return overwriteRingByteLength(
+      SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+      sonareScopeRingRecordFloats(bands, maxPoints) * Float32Array.BYTES_PER_ELEMENT,
+      capacity,
+    );
+  });
 }
 
 /** Creates a shared scope ring. RangeError outside the domain, TypeError for an unknown key. */
 export function createScopeRingBuffer(options?: ScopeRingOptions): ScopeRingBuffer {
-  const {
-    capacity: clampedCapacity,
-    bands: clampedBands,
-    maxPoints: clampedPoints,
-  } = resolveScopeRingOptions('createScopeRingBuffer', options, 64);
-  const sharedBuffer = new SharedArrayBuffer(
-    scopeRingBufferByteLength({
+  return withEntry('createScopeRingBuffer', () => {
+    const {
       capacity: clampedCapacity,
       bands: clampedBands,
       maxPoints: clampedPoints,
-    }),
-  );
-  const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const recordFloats = sonareScopeRingRecordFloats(clampedBands, clampedPoints);
-  const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
-  const header = new Int32Array(sharedBuffer, 0, SONARE_SCOPE_RING_HEADER_INTS);
-  const records = new Float32Array(sharedBuffer, headerBytes, clampedCapacity * recordFloats);
-  const slotStates = makeOverwriteSlotStates(
-    sharedBuffer,
-    headerBytes,
-    recordBytes,
-    clampedCapacity,
-  );
-  Atomics.store(header, 0, 0);
-  Atomics.store(header, 1, clampedCapacity);
-  Atomics.store(header, 2, recordFloats);
-  Atomics.store(header, 3, clampedBands);
-  Atomics.store(header, 4, clampedPoints);
-  Atomics.store(header, 5, 0);
-  slotStates.fill(0);
-  return {
-    sharedBuffer,
-    header,
-    records,
-    slotStates,
-    capacity: clampedCapacity,
-    bands: clampedBands,
-    maxPoints: clampedPoints,
-  };
+    } = resolveScopeRingOptions(options, 64);
+    const sharedBuffer = new SharedArrayBuffer(
+      scopeRingBufferByteLength({
+        capacity: clampedCapacity,
+        bands: clampedBands,
+        maxPoints: clampedPoints,
+      }),
+    );
+    const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+    const recordFloats = sonareScopeRingRecordFloats(clampedBands, clampedPoints);
+    const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
+    const header = new Int32Array(sharedBuffer, 0, SONARE_SCOPE_RING_HEADER_INTS);
+    const records = new Float32Array(sharedBuffer, headerBytes, clampedCapacity * recordFloats);
+    const slotStates = makeOverwriteSlotStates(
+      sharedBuffer,
+      headerBytes,
+      recordBytes,
+      clampedCapacity,
+    );
+    Atomics.store(header, 0, 0);
+    Atomics.store(header, 1, clampedCapacity);
+    Atomics.store(header, 2, recordFloats);
+    Atomics.store(header, 3, clampedBands);
+    Atomics.store(header, 4, clampedPoints);
+    Atomics.store(header, 5, 0);
+    slotStates.fill(0);
+    return {
+      sharedBuffer,
+      header,
+      records,
+      slotStates,
+      capacity: clampedCapacity,
+      bands: clampedBands,
+      maxPoints: clampedPoints,
+    };
+  });
 }
 
 /**
@@ -188,81 +188,83 @@ export function createScopeRingBuffer(options?: ScopeRingOptions): ScopeRingBuff
  *   `AbiMismatch` when the writer published a different protocol version.
  */
 export function readScopeRingBuffer(ring: ScopeRingBuffer, readIndex = 0): ScopeRingReadResult {
-  const { sharedBuffer, header, records, slotStates, capacity, bands, maxPoints } = ring;
-  const recordFloats = sonareScopeRingRecordFloats(bands, maxPoints);
-  const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
-  validateOverwriteViews(
-    sharedBuffer,
-    header,
-    records,
-    slotStates,
-    headerBytes,
-    recordBytes,
-    capacity,
-    'scope ring',
-  );
-  if (
-    Atomics.load(header, 1) !== capacity ||
-    Atomics.load(header, 2) !== recordFloats ||
-    Atomics.load(header, 3) !== bands ||
-    Atomics.load(header, 4) !== maxPoints
-  ) {
-    throw new SonareError(ErrorCode.InvalidFormat, 'scope ring has invalid descriptors.');
-  }
-  const writeIndex = loadSonareRingCursor(header, 0, capacity);
-  const version = Atomics.load(header, 5);
-  if (version === 0 && writeIndex === 0) {
-    return { nextReadIndex: writeIndex, scopes: [] };
-  }
-  if (version !== SONARE_SCOPE_RING_PROTOCOL_VERSION) {
-    throw new SonareError(
-      ErrorCode.AbiMismatch,
-      `scope ring protocol version ${version} is incompatible; expected ${SONARE_SCOPE_RING_PROTOCOL_VERSION}.`,
+  return withEntry('readScopeRingBuffer', () => {
+    const { sharedBuffer, header, records, slotStates, capacity, bands, maxPoints } = ring;
+    const recordFloats = sonareScopeRingRecordFloats(bands, maxPoints);
+    const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+    const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
+    validateOverwriteViews(
+      sharedBuffer,
+      header,
+      records,
+      slotStates,
+      headerBytes,
+      recordBytes,
+      capacity,
+      'scope ring',
     );
-  }
-  const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
-  const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
-  const scopes: WorkletScopeSnapshot[] = [];
-  let nextReadIndex = writeIndex;
-  for (let i = 0; i < count; i++) {
-    const cursor = (firstReadable + i) % ringCursorSpan(capacity);
-    if (!tryAcquireOverwriteRead(slotStates, capacity, cursor)) {
-      // A writer is still publishing this record; resume here on the next read.
-      nextReadIndex = cursor;
-      break;
+    if (
+      Atomics.load(header, 1) !== capacity ||
+      Atomics.load(header, 2) !== recordFloats ||
+      Atomics.load(header, 3) !== bands ||
+      Atomics.load(header, 4) !== maxPoints
+    ) {
+      throw codedError(ErrorCode.InvalidFormat, 'scope ring has invalid descriptors.');
     }
-    try {
-      const currentWriteIndex = loadSonareRingCursor(header, 0, capacity);
-      const age = sonareRingCursorDistance(cursor, currentWriteIndex, capacity);
-      if (age < 1 || age > capacity) {
-        continue;
-      }
-      const offset = sonareRingCursorSlot(cursor, capacity) * recordFloats;
-      const bandCount = Math.min(bands, Math.max(0, records[offset + 3]));
-      const pointCount = Math.min(maxPoints, Math.max(0, records[offset + 4]));
-      const bandsView = new Float32Array(bandCount);
-      bandsView.set(
-        records.subarray(
-          offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS,
-          offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bandCount,
-        ),
+    const writeIndex = loadSonareRingCursor(header, 0, capacity);
+    const version = Atomics.load(header, 5);
+    if (version === 0 && writeIndex === 0) {
+      return { nextReadIndex: writeIndex, scopes: [] };
+    }
+    if (version !== SONARE_SCOPE_RING_PROTOCOL_VERSION) {
+      throw codedError(
+        ErrorCode.AbiMismatch,
+        `scope ring protocol version ${version} is incompatible; expected ${SONARE_SCOPE_RING_PROTOCOL_VERSION}.`,
       );
-      const pointsBase = offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bands;
-      const pointsView = new Float32Array(pointCount * 2);
-      pointsView.set(records.subarray(pointsBase, pointsBase + pointCount * 2));
-      scopes.push({
-        type: 'scope',
-        frame: decodeFrame(records[offset], records[offset + 1]),
-        targetId: records[offset + 2],
-        bands: bandsView,
-        points: pointsView,
-      });
-    } finally {
-      releaseOverwriteRead(slotStates, capacity, cursor);
     }
-  }
-  return { nextReadIndex, scopes };
+    const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
+    const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
+    const scopes: WorkletScopeSnapshot[] = [];
+    let nextReadIndex = writeIndex;
+    for (let i = 0; i < count; i++) {
+      const cursor = (firstReadable + i) % ringCursorSpan(capacity);
+      if (!tryAcquireOverwriteRead(slotStates, capacity, cursor)) {
+        // A writer is still publishing this record; resume here on the next read.
+        nextReadIndex = cursor;
+        break;
+      }
+      try {
+        const currentWriteIndex = loadSonareRingCursor(header, 0, capacity);
+        const age = sonareRingCursorDistance(cursor, currentWriteIndex, capacity);
+        if (age < 1 || age > capacity) {
+          continue;
+        }
+        const offset = sonareRingCursorSlot(cursor, capacity) * recordFloats;
+        const bandCount = Math.min(bands, Math.max(0, records[offset + 3]));
+        const pointCount = Math.min(maxPoints, Math.max(0, records[offset + 4]));
+        const bandsView = new Float32Array(bandCount);
+        bandsView.set(
+          records.subarray(
+            offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS,
+            offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bandCount,
+          ),
+        );
+        const pointsBase = offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bands;
+        const pointsView = new Float32Array(pointCount * 2);
+        pointsView.set(records.subarray(pointsBase, pointsBase + pointCount * 2));
+        scopes.push({
+          type: 'scope',
+          frame: decodeFrame(records[offset], records[offset + 1]),
+          targetId: records[offset + 2],
+          bands: bandsView,
+          points: pointsView,
+        });
+      } finally {
+        releaseOverwriteRead(slotStates, capacity, cursor);
+      }
+    }
+    return { nextReadIndex, scopes };
+  });
 }
 
 export function scopeRingFromSharedBuffer(
@@ -273,7 +275,7 @@ export function scopeRingFromSharedBuffer(
 ): SharedScopeRingWriter {
   const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
-    throw new RangeError('scopeSharedBuffer is too small for the ring header.');
+    throw refuse('scopeSharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_SCOPE_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 1);
@@ -286,16 +288,16 @@ export function scopeRingFromSharedBuffer(
     ? existingMaxPoints
     : (fallbackMaxPoints ?? SONARE_SCOPE_DEFAULT_MAX_POINTS);
   if (!Number.isSafeInteger(bands) || bands < 1) {
-    throw new RangeError('scopeBands must be a positive integer');
+    throw refuse('scopeBands must be a positive integer');
   }
   if (!Number.isSafeInteger(maxPoints) || maxPoints < 0) {
-    throw new RangeError('scopeMaxPoints must be a non-negative integer');
+    throw refuse('scopeMaxPoints must be a non-negative integer');
   }
   if (fallbackBands !== undefined && bands !== fallbackBands) {
-    throw new RangeError('scopeBands does not match the shared-buffer descriptor');
+    throw refuse('scopeBands does not match the shared-buffer descriptor');
   }
   if (fallbackMaxPoints !== undefined && maxPoints !== fallbackMaxPoints) {
-    throw new RangeError('scopeMaxPoints does not match the shared-buffer descriptor');
+    throw refuse('scopeMaxPoints does not match the shared-buffer descriptor');
   }
   const recordFloats = sonareScopeRingRecordFloats(bands, maxPoints);
   const recordBytes = recordFloats * Float32Array.BYTES_PER_ELEMENT;
@@ -316,7 +318,7 @@ export function scopeRingFromSharedBuffer(
     Atomics.load(header, 3) !== bands ||
     Atomics.load(header, 4) !== maxPoints
   ) {
-    throw new SonareError(ErrorCode.InvalidFormat, 'scope ring has invalid descriptors.');
+    throw codedError(ErrorCode.InvalidFormat, 'scope ring has invalid descriptors.');
   }
   requireProtocolVersion(header, 5, SONARE_SCOPE_RING_PROTOCOL_VERSION, 'scope ring');
   requireNoUnpublishedRecords(header, 5, capacity, 'scope ring');

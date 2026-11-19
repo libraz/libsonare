@@ -3,12 +3,13 @@
  * rendering an edited set back, and the split/merge operations over it.
  */
 
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode } from './errors.js';
 import {
   assertPitchTrackLengths,
   resolveEntryTimes,
   toVoicedFloat32,
 } from './internal/effects_common.js';
+import { codedError, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -43,20 +44,17 @@ function requireModule() {
 // returning the voicing flags in the Float32Array form the embind layer reads. A
 // companion array of the wrong length is a RangeError here because the native
 // side can only report it as a flat refusal without the argument's name.
-function assertNoteTrack(
-  fnName: string,
-  request: ExtractNotesRequest | NoteSetRequest,
-): Float32Array | undefined {
-  assertAudioInput(fnName, request.samples, request.sampleRate, request);
+function assertNoteTrack(request: ExtractNotesRequest | NoteSetRequest): Float32Array | undefined {
+  assertAudioInput(request.samples, request.sampleRate, request);
   if (!(request.f0Hz instanceof Float32Array)) {
-    throw new TypeError(`${fnName}: f0Hz must be a Float32Array`);
+    throw refuseType(`f0Hz must be a Float32Array`);
   }
-  assertFiniteScalar(fnName, request.frameRate, 'frameRate');
+  assertFiniteScalar(request.frameRate, 'frameRate');
   if (request.voiced == null && request.voicedProb == null) {
-    throw new TypeError(`${fnName}: give voiced or voicedProb`);
+    throw refuseType(`give voiced or voicedProb`);
   }
-  const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(fnName, request.voiced);
-  assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
+  const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(request.voiced);
+  assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
   return voicedF32;
 }
 
@@ -267,31 +265,26 @@ export function noteStretch(
   options: NoteStretchOptions,
 ): Float32Array;
 export function noteStretch(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<NoteStretchRequest>('noteStretch', args);
-  assertAudioInput('noteStretch', request.samples, request.sampleRate, request);
-  assertFloatValue('noteStretch', request.stretchRatio, 'stretchRatio');
-  const rate = request.sampleRate;
-  return requireModule().noteStretch(
-    request.samples,
-    rate,
-    resolveSampleBound(
-      'noteStretch',
-      request.onsetSample,
-      request.onsetSec,
+  return withEntry('noteStretch', () => {
+    const request = sampleOneShot<NoteStretchRequest>('noteStretch', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    assertFloatValue(request.stretchRatio, 'stretchRatio');
+    const rate = request.sampleRate;
+    return requireModule().noteStretch(
+      request.samples,
       rate,
-      'onsetSample',
-      'onsetSec',
-    ) ?? 0,
-    resolveSampleBound(
-      'noteStretch',
-      request.offsetSample,
-      request.offsetSec,
-      rate,
-      'offsetSample',
-      'offsetSec',
-    ) ?? request.samples.length,
-    request.stretchRatio,
-  );
+      resolveSampleBound(request.onsetSample, request.onsetSec, rate, 'onsetSample', 'onsetSec') ??
+        0,
+      resolveSampleBound(
+        request.offsetSample,
+        request.offsetSec,
+        rate,
+        'offsetSample',
+        'offsetSec',
+      ) ?? request.samples.length,
+      request.stretchRatio,
+    );
+  });
 }
 
 /**
@@ -311,38 +304,32 @@ export function noteMove(
   options: NoteMoveOptions,
 ): Float32Array;
 export function noteMove(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<NoteMoveRequest>('noteMove', args);
-  assertAudioInput('noteMove', request.samples, request.sampleRate, request);
-  const rate = request.sampleRate;
-  const target = requireSampleBound(
-    'noteMove',
-    request.targetOnsetSample,
-    request.targetOnsetSec,
-    rate,
-    'targetOnsetSample',
-    'targetOnsetSec',
-  );
-  return requireModule().noteMove(
-    request.samples,
-    rate,
-    resolveSampleBound(
-      'noteMove',
-      request.onsetSample,
-      request.onsetSec,
+  return withEntry('noteMove', () => {
+    const request = sampleOneShot<NoteMoveRequest>('noteMove', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const rate = request.sampleRate;
+    const target = requireSampleBound(
+      request.targetOnsetSample,
+      request.targetOnsetSec,
       rate,
-      'onsetSample',
-      'onsetSec',
-    ) ?? 0,
-    resolveSampleBound(
-      'noteMove',
-      request.offsetSample,
-      request.offsetSec,
+      'targetOnsetSample',
+      'targetOnsetSec',
+    );
+    return requireModule().noteMove(
+      request.samples,
       rate,
-      'offsetSample',
-      'offsetSec',
-    ) ?? request.samples.length,
-    target,
-  );
+      resolveSampleBound(request.onsetSample, request.onsetSec, rate, 'onsetSample', 'onsetSec') ??
+        0,
+      resolveSampleBound(
+        request.offsetSample,
+        request.offsetSec,
+        rate,
+        'offsetSample',
+        'offsetSec',
+      ) ?? request.samples.length,
+      target,
+    );
+  });
 }
 
 /**
@@ -406,17 +393,19 @@ export function extractNotes(
   options: OptionsOf<ExtractNotesRequest>,
 ): NoteObject[];
 export function extractNotes(...args: unknown[]): NoteObject[] {
-  const request = sampleOneShot<ExtractNotesRequest>('extractNotes', args);
-  const voicedF32 = assertNoteTrack('extractNotes', request);
-  return requireModule().extractNotes(
-    request.samples,
-    request.sampleRate,
-    request.f0Hz,
-    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-    voicedF32,
-    request.frameRate,
-    request,
-  );
+  return withEntry('extractNotes', () => {
+    const request = sampleOneShot<ExtractNotesRequest>('extractNotes', args);
+    const voicedF32 = assertNoteTrack(request);
+    return requireModule().extractNotes(
+      request.samples,
+      request.sampleRate,
+      request.f0Hz,
+      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+      voicedF32,
+      request.frameRate,
+      request,
+    );
+  });
 }
 
 /**
@@ -484,29 +473,31 @@ export function renderNotes(
   options: OptionsOf<RenderNotesRequest>,
 ): Float32Array;
 export function renderNotes(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<RenderNotesRequest>('renderNotes', args);
-  assertAudioInput('renderNotes', request.samples, request.sampleRate, request);
-  if (!Array.isArray(request.notes)) {
-    throw new TypeError('renderNotes: notes must be an array');
-  }
-  const f0Hz = request.f0Hz;
-  if (f0Hz !== undefined && !(f0Hz instanceof Float32Array)) {
-    throw new TypeError('renderNotes: f0Hz must be a Float32Array');
-  }
-  if (f0Hz !== undefined) {
-    assertFiniteScalar('renderNotes', request.frameRate as number, 'frameRate');
-  }
-  const { voiced: publicVoiced, ...withoutVoiced } = request;
-  const voiced = publicVoiced == null ? undefined : toVoicedFloat32('renderNotes', publicVoiced);
-  if (publicVoiced != null && f0Hz === undefined) {
-    throw new RangeError('renderNotes: voiced requires f0Hz');
-  }
-  if (f0Hz !== undefined) {
-    assertPitchTrackLengths('renderNotes', f0Hz, publicVoiced);
-  }
-  const options = { ...withoutVoiced, voiced };
-  const notes = resolveEntryTimes('renderNotes', request.notes, 'notes', request.sampleRate, true);
-  return requireModule().renderNotes(request.samples, request.sampleRate, notes, options);
+  return withEntry('renderNotes', () => {
+    const request = sampleOneShot<RenderNotesRequest>('renderNotes', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    if (!Array.isArray(request.notes)) {
+      throw refuseType('notes must be an array');
+    }
+    const f0Hz = request.f0Hz;
+    if (f0Hz !== undefined && !(f0Hz instanceof Float32Array)) {
+      throw refuseType('f0Hz must be a Float32Array');
+    }
+    if (f0Hz !== undefined) {
+      assertFiniteScalar(request.frameRate as number, 'frameRate');
+    }
+    const { voiced: publicVoiced, ...withoutVoiced } = request;
+    const voiced = publicVoiced == null ? undefined : toVoicedFloat32(publicVoiced);
+    if (publicVoiced != null && f0Hz === undefined) {
+      throw refuse('voiced requires f0Hz');
+    }
+    if (f0Hz !== undefined) {
+      assertPitchTrackLengths(f0Hz, publicVoiced);
+    }
+    const options = { ...withoutVoiced, voiced };
+    const notes = resolveEntryTimes(request.notes, 'notes', request.sampleRate, true);
+    return requireModule().renderNotes(request.samples, request.sampleRate, notes, options);
+  });
 }
 
 /**
@@ -549,21 +540,22 @@ export function renderNotes(...args: unknown[]): Float32Array {
  * ```
  */
 export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDecompositionResult {
-  requestObject('decomposeNotePitch', request, 'request', true);
-  if (!(request.f0Hz instanceof Float32Array)) {
-    throw new TypeError('decomposeNotePitch: f0Hz must be a Float32Array');
-  }
-  assertFiniteScalar('decomposeNotePitch', request.frameRate, 'frameRate');
-  const voiced =
-    request.voiced == null ? undefined : toVoicedFloat32('decomposeNotePitch', request.voiced);
-  assertPitchTrackLengths('decomposeNotePitch', request.f0Hz, request.voiced);
-  return requireModule().decomposeNotePitch(
-    request.f0Hz,
-    voiced,
-    request.frameRate,
-    request.medianHz,
-    request.vibratoCutoffHz ?? 0,
-  );
+  return withEntry('decomposeNotePitch', () => {
+    requestObject('decomposeNotePitch', request, 'request', true);
+    if (!(request.f0Hz instanceof Float32Array)) {
+      throw refuseType('f0Hz must be a Float32Array');
+    }
+    assertFiniteScalar(request.frameRate, 'frameRate');
+    const voiced = request.voiced == null ? undefined : toVoicedFloat32(request.voiced);
+    assertPitchTrackLengths(request.f0Hz, request.voiced);
+    return requireModule().decomposeNotePitch(
+      request.f0Hz,
+      voiced,
+      request.frameRate,
+      request.medianHz,
+      request.vibratoCutoffHz ?? 0,
+    );
+  });
 }
 
 /**
@@ -622,36 +614,34 @@ export function splitNote(
   options: OptionsOf<SplitNoteRequest>,
 ): NoteObject[];
 export function splitNote(...args: unknown[]): NoteObject[] {
-  const request = sampleOneShot<SplitNoteRequest>('splitNote', args);
-  const voicedF32 = assertNoteTrack('splitNote', request);
-  const hasFrame = request.frame !== undefined && request.frame !== null;
-  const hasFrameSec = request.frameSec !== undefined && request.frameSec !== null;
-  requireOneOf('splitNote', ['frame', 'frameSec'], [hasFrame, hasFrameSec]);
-  assertFloatValue(
-    'splitNote',
-    hasFrame ? request.frame : request.frameSec,
-    hasFrame ? 'frame' : 'frameSec',
-  );
-  const frame = hasFrame
-    ? (request.frame as number)
-    : Math.round((request.frameSec as number) * request.frameRate);
-  assertFloatValue('splitNote', request.index, 'index');
-  if (!Array.isArray(request.notes)) {
-    throw new TypeError('splitNote: notes must be an array');
-  }
-  const notes = resolveEntryTimes('splitNote', request.notes, 'notes', request.sampleRate, false);
-  return requireModule().splitNote(
-    request.samples,
-    request.sampleRate,
-    request.f0Hz,
-    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-    voicedF32,
-    request.frameRate,
-    notes,
-    request.index,
-    frame,
-    request,
-  );
+  return withEntry('splitNote', () => {
+    const request = sampleOneShot<SplitNoteRequest>('splitNote', args);
+    const voicedF32 = assertNoteTrack(request);
+    const hasFrame = request.frame !== undefined && request.frame !== null;
+    const hasFrameSec = request.frameSec !== undefined && request.frameSec !== null;
+    requireOneOf(['frame', 'frameSec'], [hasFrame, hasFrameSec]);
+    assertFloatValue(hasFrame ? request.frame : request.frameSec, hasFrame ? 'frame' : 'frameSec');
+    const frame = hasFrame
+      ? (request.frame as number)
+      : Math.round((request.frameSec as number) * request.frameRate);
+    assertFloatValue(request.index, 'index');
+    if (!Array.isArray(request.notes)) {
+      throw refuseType('notes must be an array');
+    }
+    const notes = resolveEntryTimes(request.notes, 'notes', request.sampleRate, false);
+    return requireModule().splitNote(
+      request.samples,
+      request.sampleRate,
+      request.f0Hz,
+      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+      voicedF32,
+      request.frameRate,
+      notes,
+      request.index,
+      frame,
+      request,
+    );
+  });
 }
 
 /**
@@ -701,26 +691,28 @@ export function mergeNotes(
   options: OptionsOf<MergeNotesRequest>,
 ): NoteObject[];
 export function mergeNotes(...args: unknown[]): NoteObject[] {
-  const request = sampleOneShot<MergeNotesRequest>('mergeNotes', args);
-  const voicedF32 = assertNoteTrack('mergeNotes', request);
-  assertFloatValue('mergeNotes', request.first, 'first');
-  assertFloatValue('mergeNotes', request.last, 'last');
-  if (!Array.isArray(request.notes)) {
-    throw new TypeError('mergeNotes: notes must be an array');
-  }
-  const notes = resolveEntryTimes('mergeNotes', request.notes, 'notes', request.sampleRate, false);
-  return requireModule().mergeNotes(
-    request.samples,
-    request.sampleRate,
-    request.f0Hz,
-    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-    voicedF32,
-    request.frameRate,
-    notes,
-    request.first,
-    request.last,
-    request,
-  );
+  return withEntry('mergeNotes', () => {
+    const request = sampleOneShot<MergeNotesRequest>('mergeNotes', args);
+    const voicedF32 = assertNoteTrack(request);
+    assertFloatValue(request.first, 'first');
+    assertFloatValue(request.last, 'last');
+    if (!Array.isArray(request.notes)) {
+      throw refuseType('notes must be an array');
+    }
+    const notes = resolveEntryTimes(request.notes, 'notes', request.sampleRate, false);
+    return requireModule().mergeNotes(
+      request.samples,
+      request.sampleRate,
+      request.f0Hz,
+      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+      voicedF32,
+      request.frameRate,
+      notes,
+      request.first,
+      request.last,
+      request,
+    );
+  });
 }
 
 /**
@@ -753,15 +745,14 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
  * ```
  */
 export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarget[] {
-  requestObject('noteTargetsFromSmf', request, 'request', true);
-  const module = requireModule();
-  if (typeof module.noteTargetsFromSmf !== 'function') {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'libsonare was built without arrangement support',
-    );
-  }
-  return module.noteTargetsFromSmf(request.data, request.trackIndex ?? 0);
+  return withEntry('noteTargetsFromSmf', () => {
+    requestObject('noteTargetsFromSmf', request, 'request', true);
+    const module = requireModule();
+    if (typeof module.noteTargetsFromSmf !== 'function') {
+      throw codedError(ErrorCode.NotSupported, 'libsonare was built without arrangement support');
+    }
+    return module.noteTargetsFromSmf(request.data, request.trackIndex ?? 0);
+  });
 }
 
 /**
@@ -811,11 +802,13 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  * ```
  */
 export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNoteTargetsResult {
-  requestObject('assignNoteTargets', request, 'request', true);
-  return requireModule().assignNoteTargets(
-    request.notes,
-    request.sampleRate,
-    request.targets,
-    request,
-  );
+  return withEntry('assignNoteTargets', () => {
+    requestObject('assignNoteTargets', request, 'request', true);
+    return requireModule().assignNoteTargets(
+      request.notes,
+      request.sampleRate,
+      request.targets,
+      request,
+    );
+  });
 }

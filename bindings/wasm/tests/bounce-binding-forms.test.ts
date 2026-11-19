@@ -82,7 +82,7 @@ describe.each(FAMILIES)('$method', (family) => {
     withProject((project) => {
       const pair = { destinationId: 0, instrument: family.instrument };
       const arrayError = new TypeError(
-        `${family.method}: instruments must be an array of { destinationId?, instrument } pairs`,
+        `Project.${family.method}: instruments must be an array of { destinationId?, instrument } pairs`,
       );
       expect(() => family.run(project, pair)).toThrow(arrayError);
       expect(() => family.run(project, { instrument: family.instrument })).toThrow(arrayError);
@@ -109,11 +109,11 @@ describe.each(FAMILIES)('$method', (family) => {
       const pair = { instrument: family.instrument };
       const expected = '{ destinationId?, instrument } pair';
       expect(() => family.run(project, [pair, [pair]])).toThrow(
-        new TypeError(`${family.method}: instruments[1] must be a ${expected}`),
+        new TypeError(`Project.${family.method}: instruments[1] must be a ${expected}`),
       );
       expect(() => family.run(project, 42)).toThrow(
         new TypeError(
-          `${family.method}: instruments must be an array of { destinationId?, instrument } pairs`,
+          `Project.${family.method}: instruments must be an array of { destinationId?, instrument } pairs`,
         ),
       );
       // A bare config, or a name, must be wrapped as a pair.
@@ -121,7 +121,7 @@ describe.each(FAMILIES)('$method', (family) => {
         /instruments\[0\](: unknown request key| needs an 'instrument' key)/,
       );
       expect(() => family.run(project, ['piano'])).toThrow(
-        new TypeError(`${family.method}: instruments[0] must be a ${expected}`),
+        new TypeError(`Project.${family.method}: instruments[0] must be a ${expected}`),
       );
     });
   });

@@ -436,17 +436,17 @@ describe('renderNotes', () => {
     // for an unrelated reason is indistinguishable from this one on the code
     // alone -- and the defect this replaced returned success, not another error.
     const malformed: ReadonlyArray<readonly [Record<string, unknown>, string]> = [
-      [{ offsetSample: 5000, edit: { gainDb: -6 } }, 'note.onsetSample is required'],
-      [{ onsetSample: 0, edit: { gainDb: -6 } }, 'note.offsetSample is required'],
+      [{ offsetSample: 5000, edit: { gainDb: -6 } }, 'note.onsetSample must be given'],
+      [{ onsetSample: 0, edit: { gainDb: -6 } }, 'note.offsetSample must be given'],
       // Present-but-undefined and present-but-null both read as absent, so the
       // three spellings of "not given" land on one answer instead of three.
       [
         { onsetSample: 0, offsetSample: undefined, edit: { gainDb: -6 } },
-        'note.offsetSample is required',
+        'note.offsetSample must be given',
       ],
       [
         { onsetSample: 0, offsetSample: null, edit: { gainDb: -6 } },
-        'note.offsetSample is required',
+        'note.offsetSample must be given',
       ],
       [{ onsetSample: '0', offsetSample: 5000 }, 'note.onsetSample must be a number'],
     ];

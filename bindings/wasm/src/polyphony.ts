@@ -1,4 +1,4 @@
-import { entryClass, withEntry } from './internal/entry.js';
+import { entryClass, refuse, withEntry } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -41,16 +41,14 @@ function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<strin
   const config = rest;
   for (const [key, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (config[key] === 0) {
-      throw new RangeError(`analyzePolyphonic: ${key} must not be 0 (omit it for ${meaning})`);
+      throw refuse(`${key} must not be 0 (omit it for ${meaning})`);
     }
   }
   const reattack = config.reattackRatio;
   if (reattack !== undefined && reattack !== null) {
-    assertFloatValue('analyzePolyphonic', reattack, 'reattackRatio');
+    assertFloatValue(reattack, 'reattackRatio');
     if ((reattack as number) <= 1) {
-      throw new RangeError(
-        'analyzePolyphonic: reattackRatio must be greater than 1 (omit it for no split)',
-      );
+      throw refuse('reattackRatio must be greater than 1 (omit it for no split)');
     }
   }
   return config;
@@ -75,7 +73,7 @@ function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<strin
  * Using the analysis after it has been released throws `InvalidState` rather than
  * reaching a freed native object.
  */
-@entryClass('PolyphonicAnalysis')
+@entryClass('PolyphonicAnalysis', ['handle'])
 export class PolyphonicAnalysis {
   private native: WasmPolyphonicAnalysis | null;
   private readonly sampleRate: number;
@@ -83,7 +81,7 @@ export class PolyphonicAnalysis {
   /** Analyses the request's audio. {@link analyzePolyphonic} is the same call. */
   constructor(request: AnalyzePolyphonicRequest) {
     requestObject('analyzePolyphonic', request, 'request', true);
-    assertAudioInput('analyzePolyphonic', request.samples, request.sampleRate, request);
+    assertAudioInput(request.samples, request.sampleRate, request);
     this.sampleRate = request.sampleRate;
     const module = getSonareModule();
     this.native = module.createPolyphonicAnalysis(
@@ -151,7 +149,6 @@ export class PolyphonicAnalysis {
       nativeEdit = {
         ...rest,
         timeOffsetSamples: resolveSampleBound(
-          'setNoteEdit',
           rest.timeOffsetSamples,
           timeOffsetSec,
           this.sampleRate,

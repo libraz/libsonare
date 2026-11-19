@@ -2,6 +2,7 @@
  * Broadband and tonal noise repair: denoise and dehum, with their detectors.
  */
 
+import { refuseType, withEntry } from './internal/entry.js';
 import { pairedResult, repairNativeOptions, sharedReportResult } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -92,16 +93,18 @@ export function masteringRepairDenoiseClassical(
   options?: DenoiseClassicalOptions,
 ): DenoiseResult;
 export function masteringRepairDenoiseClassical(...args: unknown[]): DenoiseResult {
-  const r = sampleOneShot<MasteringRepairDenoiseClassicalRequest>(
-    'masteringRepairDenoiseClassical',
-    args,
-  );
-  assertAudioInput('masteringRepairDenoiseClassical', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDenoiseClassical(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions(r),
-  );
+  return withEntry('masteringRepairDenoiseClassical', () => {
+    const r = sampleOneShot<MasteringRepairDenoiseClassicalRequest>(
+      'masteringRepairDenoiseClassical',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringRepairDenoiseClassical(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
+  });
 }
 
 /**
@@ -143,20 +146,22 @@ export function masteringRepairDenoiseClassicalStereo(
 export function masteringRepairDenoiseClassicalStereo(
   ...args: unknown[]
 ): MasteringRepairDenoiseClassicalResult {
-  const r = requestOnly<MasteringRepairDenoiseClassicalStereoRequest>(
-    'masteringRepairDenoiseClassicalStereo',
-    args,
-  );
-  assertAudioInput('masteringRepairDenoiseClassicalStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringRepairDenoiseClassicalStereo', r.right, r.sampleRate, r, 'right');
-  return sharedReportResult(
-    requireModule().masteringRepairDenoiseClassicalStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      repairNativeOptions(r),
-    ),
-  );
+  return withEntry('masteringRepairDenoiseClassicalStereo', () => {
+    const r = requestOnly<MasteringRepairDenoiseClassicalStereoRequest>(
+      'masteringRepairDenoiseClassicalStereo',
+      args,
+    );
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return sharedReportResult(
+      requireModule().masteringRepairDenoiseClassicalStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+  });
 }
 
 /**
@@ -198,18 +203,20 @@ export function masteringRepairDenoiseClassicalLinked(
 export function masteringRepairDenoiseClassicalLinked(
   ...args: unknown[]
 ): MasteringRepairDenoiseClassicalResult {
-  const r = requestOnly<MasteringRepairDenoiseClassicalLinkedRequest>(
-    'masteringRepairDenoiseClassicalLinked',
-    args,
-  );
-  assertAudioChannels('masteringRepairDenoiseClassicalLinked', r.channels, r.sampleRate, r);
-  return sharedReportResult(
-    requireModule().masteringRepairDenoiseClassicalLinked(
-      r.channels,
-      r.sampleRate,
-      repairNativeOptions(r),
-    ),
-  );
+  return withEntry('masteringRepairDenoiseClassicalLinked', () => {
+    const r = requestOnly<MasteringRepairDenoiseClassicalLinkedRequest>(
+      'masteringRepairDenoiseClassicalLinked',
+      args,
+    );
+    assertAudioChannels(r.channels, r.sampleRate, r);
+    return sharedReportResult(
+      requireModule().masteringRepairDenoiseClassicalLinked(
+        r.channels,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+  });
 }
 
 /**
@@ -270,9 +277,11 @@ export function masteringRepairDehum(
   options?: DehumOptions,
 ): DehumResult;
 export function masteringRepairDehum(...args: unknown[]): DehumResult {
-  const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
-  assertAudioInput('masteringRepairDehum', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r));
+  return withEntry('masteringRepairDehum', () => {
+    const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r));
+  });
 }
 
 /**
@@ -290,17 +299,19 @@ export function masteringRepairDehumStereo(
   request: MasteringRepairDehumStereoRequest,
 ): MasteringRepairDehumResult;
 export function masteringRepairDehumStereo(...args: unknown[]): MasteringRepairDehumResult {
-  const r = requestOnly<MasteringRepairDehumStereoRequest>('masteringRepairDehumStereo', args);
-  assertAudioInput('masteringRepairDehumStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringRepairDehumStereo', r.right, r.sampleRate, r, 'right');
-  return pairedResult(
-    requireModule().masteringRepairDehumStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      repairNativeOptions(r),
-    ),
-  );
+  return withEntry('masteringRepairDehumStereo', () => {
+    const r = requestOnly<MasteringRepairDehumStereoRequest>('masteringRepairDehumStereo', args);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return pairedResult(
+      requireModule().masteringRepairDehumStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
+    );
+  });
 }
 
 /** Request form of `masteringRepairDetectNoiseFloor`. */
@@ -349,16 +360,18 @@ export function masteringRepairDetectNoiseFloor(
   options?: DenoiseClassicalOptions,
 ): NoiseDetection;
 export function masteringRepairDetectNoiseFloor(...args: unknown[]): NoiseDetection {
-  const r = sampleOneShot<MasteringRepairDetectNoiseFloorRequest>(
-    'masteringRepairDetectNoiseFloor',
-    args,
-  );
-  assertAudioInput('masteringRepairDetectNoiseFloor', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDetectNoiseFloor(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions(r),
-  );
+  return withEntry('masteringRepairDetectNoiseFloor', () => {
+    const r = sampleOneShot<MasteringRepairDetectNoiseFloorRequest>(
+      'masteringRepairDetectNoiseFloor',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringRepairDetectNoiseFloor(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
+  });
 }
 
 /**
@@ -398,13 +411,18 @@ export function masteringRepairNoiseBandBins(
   request: MasteringRepairNoiseBandBinsRequest,
 ): Int32Array;
 export function masteringRepairNoiseBandBins(...args: unknown[]): Int32Array {
-  const r = requestOnly<MasteringRepairNoiseBandBinsRequest>('masteringRepairNoiseBandBins', args);
-  // Geometry only: the core needs a positive rate, not the audio-analysis range.
-  if (typeof r.sampleRate !== 'number') {
-    throw new TypeError('masteringRepairNoiseBandBins: sampleRate must be a number');
-  }
-  assertPositiveInteger('masteringRepairNoiseBandBins', r.sampleRate, 'sampleRate');
-  return requireModule().masteringRepairNoiseBandBins(r.nFft ?? 1024, r.sampleRate);
+  return withEntry('masteringRepairNoiseBandBins', () => {
+    const r = requestOnly<MasteringRepairNoiseBandBinsRequest>(
+      'masteringRepairNoiseBandBins',
+      args,
+    );
+    // Geometry only: the core needs a positive rate, not the audio-analysis range.
+    if (typeof r.sampleRate !== 'number') {
+      throw refuseType('sampleRate must be a number');
+    }
+    assertPositiveInteger(r.sampleRate, 'sampleRate');
+    return requireModule().masteringRepairNoiseBandBins(r.nFft ?? 1024, r.sampleRate);
+  });
 }
 
 /**
@@ -426,7 +444,13 @@ export function masteringRepairDetectHum(
   options?: DehumOptions,
 ): HumDetection;
 export function masteringRepairDetectHum(...args: unknown[]): HumDetection {
-  const r = sampleOneShot<MasteringRepairDetectHumRequest>('masteringRepairDetectHum', args);
-  assertAudioInput('masteringRepairDetectHum', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDetectHum(r.samples, r.sampleRate, repairNativeOptions(r));
+  return withEntry('masteringRepairDetectHum', () => {
+    const r = sampleOneShot<MasteringRepairDetectHumRequest>('masteringRepairDetectHum', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringRepairDetectHum(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions(r),
+    );
+  });
 }

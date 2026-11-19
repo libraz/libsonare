@@ -557,7 +557,7 @@ describe('Node Project vocal edit helpers', () => {
           reason: 'none',
         },
       ]);
-      expect(() => restored?.vocalEditDependencies()).toThrow(/disposed/);
+      expect(() => restored?.vocalEditDependencies()).toThrow(/Project has been destroyed$/);
 
       // Any truthy cancel return cancels, not only boolean true.
       const cancelled = Project.fromJson(project.toJson());

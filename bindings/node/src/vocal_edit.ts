@@ -1,5 +1,12 @@
-import { ErrorCode, isSonareError, SonareError } from './errors.js';
-import { entryClass } from './internal/entry.js';
+import { ErrorCode, isSonareError, type SonareError } from './errors.js';
+import {
+  codedError,
+  entryClass,
+  invalidState,
+  refuse,
+  refuseType,
+  withEntry,
+} from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   VocalAnalysis,
@@ -201,10 +208,10 @@ function nativeLimits(limits: VocalSessionLimits): object {
       continue;
     }
     if (typeof value !== 'number') {
-      throw new TypeError(`limits.${key} must be a number`);
+      throw refuseType(`limits.${key} must be a number`);
     }
     if (!Number.isSafeInteger(value) || value < 0) {
-      throw new RangeError(`limits.${key} must be a non-negative safe integer`);
+      throw refuse(`limits.${key} must be a non-negative safe integer`);
     }
     out[key] = String(value);
   }
@@ -240,7 +247,7 @@ const disposedSessions = new WeakSet<VocalEditSession>();
  *
  * Disposing a session also disposes every live draft it began.
  */
-@entryClass('VocalEditSession')
+@entryClass('VocalEditSession', ['requireAlive'])
 export class VocalEditSession implements Disposable {
   private disposed = false;
 
@@ -360,15 +367,17 @@ export class VocalEditSession implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new SonareError(ErrorCode.InvalidState, 'VocalEditSession has been disposed');
+      throw invalidState('VocalEditSession has been destroyed');
     }
   }
 }
 
 /** A draft that can be edited and rendered before it is committed. */
-@entryClass('VocalEditDraft')
+@entryClass('VocalEditDraft', ['requireAlive'])
 export class VocalEditDraft implements Disposable {
   private disposed = false;
+  /** How the draft ended, completing the refusal a later call receives. */
+  private endedAs = 'has been destroyed';
 
   protected constructor(
     private readonly native: NativeDraft,
@@ -403,6 +412,7 @@ export class VocalEditDraft implements Disposable {
     this.requireAlive();
     const result = this.native.commit(options.expectedRevision);
     this.disposed = true;
+    this.endedAs = 'has been committed';
     return result;
   }
 
@@ -413,6 +423,7 @@ export class VocalEditDraft implements Disposable {
     }
     this.native.cancel();
     this.disposed = true;
+    this.endedAs = 'has been cancelled';
   }
 
   /** Per-sample pitch curves of one note. */
@@ -454,14 +465,17 @@ export class VocalEditDraft implements Disposable {
   }
 
   private requireAlive(): void {
-    if (this.disposed || disposedSessions.has(this.owner)) {
-      throw new SonareError(ErrorCode.InvalidState, 'VocalEditDraft has been disposed');
+    if (this.disposed) {
+      throw invalidState(`VocalEditDraft ${this.endedAs}`);
+    }
+    if (disposedSessions.has(this.owner)) {
+      throw invalidState('VocalEditDraft has been destroyed');
     }
   }
 }
 
 function cancelledError(): SonareError {
-  return new SonareError(ErrorCode.Cancelled, 'The render was aborted');
+  return codedError(ErrorCode.Cancelled, 'The render was aborted');
 }
 
 /** Refuses a render whose signal is already aborted, as a `Cancelled` error. */
@@ -491,7 +505,7 @@ function renderUntilCancelled(job: VocalRenderJob, cancel: () => boolean): Vocal
 }
 
 /** An immutable render view whose lifetime is independent of its session. */
-@entryClass('VocalRenderSnapshot')
+@entryClass('VocalRenderSnapshot', ['requireAlive', 'resolveRange'])
 export class VocalRenderSnapshot implements Disposable {
   private disposed = false;
 
@@ -517,7 +531,7 @@ export class VocalRenderSnapshot implements Disposable {
       return convertRenderResult(this.native.render(this.resolveRange(request), request.requestId));
     }
     if (typeof cancel !== 'function') {
-      throw new TypeError('VocalRenderSnapshot.render: cancel must be a function');
+      throw refuseType('cancel must be a function');
     }
     return renderUntilCancelled(this.beginRenderJob(request), cancel);
   }
@@ -569,14 +583,13 @@ export class VocalRenderSnapshot implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new SonareError(ErrorCode.InvalidState, 'VocalRenderSnapshot has been disposed');
+      throw invalidState('VocalRenderSnapshot has been destroyed');
     }
   }
 
   private resolveRange(request: VocalRenderJobRequest): VocalRange {
     const range: VocalRangeInput = request.range ?? {};
     const start = resolveSampleBound(
-      'VocalRenderSnapshot.render',
       range.startSample,
       range.startSec,
       this.sampleRate,
@@ -584,7 +597,6 @@ export class VocalRenderSnapshot implements Disposable {
       'range.startSec',
     );
     const end = resolveSampleBound(
-      'VocalRenderSnapshot.render',
       range.endSample,
       range.endSec,
       this.sampleRate,
@@ -599,9 +611,11 @@ export class VocalRenderSnapshot implements Disposable {
 }
 
 /** Incremental render job. Each next() call advances one native work unit. */
-@entryClass('VocalRenderJob')
+@entryClass('VocalRenderJob', ['requireAlive'])
 export class VocalRenderJob implements Disposable {
   private disposed = false;
+  /** How the job ended, completing the refusal a later call receives. */
+  private endedAs = 'has been destroyed';
 
   protected constructor(private readonly native: NativeJob) {}
 
@@ -616,6 +630,7 @@ export class VocalRenderJob implements Disposable {
     this.requireAlive();
     const result = convertRenderResult(this.native.finalize());
     this.destroy();
+    this.endedAs = 'has been finalized';
     return result;
   }
 
@@ -642,7 +657,7 @@ export class VocalRenderJob implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new SonareError(ErrorCode.InvalidState, 'VocalRenderJob has been disposed');
+      throw invalidState(`VocalRenderJob ${this.endedAs}`);
     }
   }
 }
@@ -704,8 +719,7 @@ function requiredOperationBound(
   sampleName: string,
   secName: string,
 ): number {
-  const fn = 'VocalEditDraft.apply';
-  return requireSampleBound(fn, sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
+  return requireSampleBound(sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
 }
 
 /**
@@ -789,12 +803,14 @@ export function vocalEditAbiVersion(): number | undefined {
  * Analyses `request.samples` and opens an editing session over them.
  */
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
-  requestObject('createVocalEditSession', request, 'request', true);
-  assertAudioInput('createVocalEditSession', request?.samples, request?.sampleRate, request);
-  return wrapVocalEditSession(
-    guardNative(vocalAddon).createVocalEditSession(nativeRequest(request)),
-    request.sampleRate,
-  );
+  return withEntry('createVocalEditSession', () => {
+    requestObject('createVocalEditSession', request, 'request', true);
+    assertAudioInput(request?.samples, request?.sampleRate, request);
+    return wrapVocalEditSession(
+      guardNative(vocalAddon).createVocalEditSession(nativeRequest(request)),
+      request.sampleRate,
+    );
+  });
 }
 
 /**
@@ -802,12 +818,14 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
  * samples they were exported from.
  */
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
-  requestObject('restoreVocalEditSession', request, 'request', true);
-  assertAudioInput('restoreVocalEditSession', request?.samples, request?.sampleRate, request);
-  return wrapVocalEditSession(
-    guardNative(vocalAddon).restoreVocalEditSession(nativeRequest(request)),
-    request.sampleRate,
-  );
+  return withEntry('restoreVocalEditSession', () => {
+    requestObject('restoreVocalEditSession', request, 'request', true);
+    assertAudioInput(request?.samples, request?.sampleRate, request);
+    return wrapVocalEditSession(
+      guardNative(vocalAddon).restoreVocalEditSession(nativeRequest(request)),
+      request.sampleRate,
+    );
+  });
 }
 
 function clonePitchEvaluation(value: VocalPitchEvaluation): VocalPitchEvaluation {

@@ -43,9 +43,17 @@ function maxAbsDiff(a: Float32Array, b: Float32Array): number {
 const NON_SENTINEL_REFUSED: [string, number, RegExp][] = [
   ['zero', 0, /releaseMs must be positive/],
   ['a negative value', -5, /releaseMs must be positive/],
-  ['NaN', Number.NaN, /releaseMs must be a finite number/],
-  ['positive infinity', Number.POSITIVE_INFINITY, /releaseMs must be a finite number/],
-  ['negative infinity', Number.NEGATIVE_INFINITY, /releaseMs must be a finite number/],
+  ['NaN', Number.NaN, /releaseMs must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/],
+  [
+    'positive infinity',
+    Number.POSITIVE_INFINITY,
+    /releaseMs must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+  ],
+  [
+    'negative infinity',
+    Number.NEGATIVE_INFINITY,
+    /releaseMs must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+  ],
 ];
 
 describe('masteringNormalizeLoudness releaseMs', () => {
@@ -165,7 +173,9 @@ describe('setSf2Instrument gain', () => {
     ['positive infinity', Number.POSITIVE_INFINITY],
     ['negative infinity', Number.NEGATIVE_INFINITY],
   ])('refuses %s instead of using the player default', (_label, value) => {
-    expect(() => render({ gain: value })).toThrow(/gain must be a finite number/);
+    expect(() => render({ gain: value })).toThrow(
+      /gain must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+    );
   });
 
   it('treats 0 as the player default rather than a gain of zero', () => {

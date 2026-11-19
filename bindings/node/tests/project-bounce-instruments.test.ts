@@ -113,7 +113,7 @@ describe('bounceWithInstruments', () => {
       project.bounceWithInstruments({ instrument: new ConstantInstrument(0.1) } as never, OPTIONS),
     ).toThrow(
       new TypeError(
-        'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+        'Project.bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
       ),
     );
     expect(
@@ -331,24 +331,24 @@ describe('bounceWithInstruments', () => {
       using project = midiProject();
       expect(() => project.bounceWithInstruments(7 as never, OPTIONS)).toThrow(
         new TypeError(
-          'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+          'Project.bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
         ),
       );
       expect(() =>
         project.bounceWithInstruments({ instrument: { render() {} } } as never, OPTIONS),
       ).toThrow(
         new TypeError(
-          'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+          'Project.bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
         ),
       );
       expect(() => project.bounceWithInstruments([[{ render() {} }]] as never, OPTIONS)).toThrow(
-        new TypeError('ProjectInstrumentBinding: request must be an object'),
+        new TypeError('Project.bounceWithInstruments: request must be an object'),
       );
       expect(() => project.bounceWithInstruments([{ destinationId: 0 }] as never, OPTIONS)).toThrow(
-        new TypeError('bounceWithInstruments: binding.instrument must be an object'),
+        new TypeError('Project.bounceWithInstruments: binding.instrument must be an object'),
       );
       expect(() => bounceOne(project, [{ render() {} }])).toThrow(
-        new TypeError('bounceWithInstruments: binding.instrument must be an object'),
+        new TypeError('Project.bounceWithInstruments: binding.instrument must be an object'),
       );
     });
   });

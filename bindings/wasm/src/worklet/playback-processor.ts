@@ -1,5 +1,6 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import { HrtfSet, PlaybackRenderer } from '../index.js';
+import { codedError, withEntry } from '../internal/entry.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
@@ -56,11 +57,7 @@ export class SonarePlaybackWorkletProcessor {
   private destroyed = false;
 
   constructor(options: SonarePlaybackWorkletProcessorConstructorOptions = {}) {
-    assertKnownProcessorOptions(
-      'SonarePlaybackWorkletProcessor',
-      'playbackProcessorConstructor',
-      options,
-    );
+    assertKnownProcessorOptions('playbackProcessorConstructor', options);
     this.port = options.port;
     this.maxBlockSize = requireIntegerOption(
       options.maxBlockSize,
@@ -68,7 +65,7 @@ export class SonarePlaybackWorkletProcessor {
       'maxBlockSize',
       1,
     );
-    const sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonarePlaybackWorkletProcessor');
+    const sampleRate = resolveScopeSampleRate(options.sampleRate);
     const hrtf = options.hrtf ? HrtfSet.fromBytes(new Uint8Array(options.hrtf)) : undefined;
     try {
       this.renderer = new PlaybackRenderer({
@@ -246,79 +243,81 @@ export class SonarePlaybackWorkletProcessor {
  * @throws SonareError `NotSupported` outside an AudioWorkletGlobalScope.
  */
 export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-processor'): void {
-  const scope = globalThis as unknown as {
-    AudioWorkletProcessor?: new () => object;
-    registerProcessor?: (processorName: string, processorCtor: unknown) => void;
-  };
-  if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'AudioWorkletProcessor is not available in this context.',
-    );
-  }
-  const Base = scope.AudioWorkletProcessor;
-  class RegisteredSonarePlaybackWorkletProcessor extends Base {
-    private bridge?: SonarePlaybackWorkletProcessor;
-    private readonly pendingMessages: SonarePlaybackMessage[] = [];
-    readonly port?: WorkletPort;
+  withEntry('registerSonarePlaybackWorkletProcessor', () => {
+    const scope = globalThis as unknown as {
+      AudioWorkletProcessor?: new () => object;
+      registerProcessor?: (processorName: string, processorCtor: unknown) => void;
+    };
+    if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
+      throw codedError(
+        ErrorCode.NotSupported,
+        'AudioWorkletProcessor is not available in this context.',
+      );
+    }
+    const Base = scope.AudioWorkletProcessor;
+    class RegisteredSonarePlaybackWorkletProcessor extends Base {
+      private bridge?: SonarePlaybackWorkletProcessor;
+      private readonly pendingMessages: SonarePlaybackMessage[] = [];
+      readonly port?: WorkletPort;
 
-    constructor(options?: { processorOptions?: SonarePlaybackWorkletProcessorOptions }) {
-      super();
-      const port = this.port;
-      const processorOptions = options?.processorOptions ?? {};
-      assertKnownProcessorOptions(name, 'playbackProcessor', processorOptions);
-      const start = () => {
-        this.bridge = new SonarePlaybackWorkletProcessor({ ...processorOptions, port });
-        for (const message of this.pendingMessages.splice(0)) {
-          this.bridge.receiveMessage(message);
+      constructor(options?: { processorOptions?: SonarePlaybackWorkletProcessorOptions }) {
+        super();
+        const port = this.port;
+        const processorOptions = options?.processorOptions ?? {};
+        assertKnownProcessorOptions('playbackProcessor', processorOptions);
+        const start = () => {
+          this.bridge = new SonarePlaybackWorkletProcessor({ ...processorOptions, port });
+          for (const message of this.pendingMessages.splice(0)) {
+            this.bridge.receiveMessage(message);
+          }
+        };
+        if (isEmbindReady()) {
+          start();
+          port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
+        } else {
+          // The module is not initialized in this realm: build it the way the
+          // realtime engine processor does, then construct the renderer.
+          initializeEmbindInWorklet(processorOptions.wasmBinary)
+            .then(() => {
+              start();
+              port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
+            })
+            .catch((error: unknown) => {
+              port?.postMessage?.({
+                type: 'error',
+                request: 'init',
+                message: error instanceof Error ? error.message : String(error),
+              } satisfies SonarePlaybackErrorMessage);
+            });
         }
-      };
-      if (isEmbindReady()) {
-        start();
-        port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
-      } else {
-        // The module is not initialized in this realm: build it the way the
-        // realtime engine processor does, then construct the renderer.
-        initializeEmbindInWorklet(processorOptions.wasmBinary)
-          .then(() => {
-            start();
-            port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
-          })
-          .catch((error: unknown) => {
-            port?.postMessage?.({
-              type: 'error',
-              request: 'init',
-              message: error instanceof Error ? error.message : String(error),
-            } satisfies SonarePlaybackErrorMessage);
-          });
+        const onMessage = (event: { data: unknown }) => {
+          if (!isPlaybackMessage(event.data)) {
+            return;
+          }
+          if (this.bridge) {
+            this.bridge.receiveMessage(event.data);
+          } else if (this.pendingMessages.length < 1024) {
+            this.pendingMessages.push(event.data);
+          }
+        };
+        if (port?.addEventListener) {
+          port.addEventListener('message', onMessage);
+          port.start?.();
+        } else if (port) {
+          port.onmessage = onMessage;
+        }
       }
-      const onMessage = (event: { data: unknown }) => {
-        if (!isPlaybackMessage(event.data)) {
-          return;
-        }
+
+      process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
         if (this.bridge) {
-          this.bridge.receiveMessage(event.data);
-        } else if (this.pendingMessages.length < 1024) {
-          this.pendingMessages.push(event.data);
+          return this.bridge.process(inputs, outputs);
         }
-      };
-      if (port?.addEventListener) {
-        port.addEventListener('message', onMessage);
-        port.start?.();
-      } else if (port) {
-        port.onmessage = onMessage;
+        for (const channel of outputs[0] ?? []) {
+          channel.fill(0);
+        }
+        return true;
       }
     }
-
-    process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-      if (this.bridge) {
-        return this.bridge.process(inputs, outputs);
-      }
-      for (const channel of outputs[0] ?? []) {
-        channel.fill(0);
-      }
-      return true;
-    }
-  }
-  scope.registerProcessor(name, RegisteredSonarePlaybackWorkletProcessor);
+    scope.registerProcessor(name, RegisteredSonarePlaybackWorkletProcessor);
+  });
 }

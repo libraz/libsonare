@@ -3,6 +3,7 @@ import {
   assertIntegerValue,
   assertPositiveInteger,
 } from '../validation.js';
+import { refuse } from './entry.js';
 
 /**
  * The facade's single FFT-size/hop domain.
@@ -25,11 +26,10 @@ import {
  * One implementation, so the two cannot disagree again.
  */
 export function resolveFftOptions(
-  fnName: string,
   nFft: unknown,
   hopLength: unknown,
 ): { nFft: number; hopLength: number } {
-  return resolveWithMinimum(fnName, nFft, hopLength, 2);
+  return resolveWithMinimum(nFft, hopLength, 2);
 }
 
 /** The largest even C `int`, the top of a resynthesizing effect's `nFft` domain. */
@@ -41,42 +41,40 @@ const MAX_EFFECT_N_FFT = 2147483646;
  * omitted hop reaches native as 0, which the core runs as a quarter of `nFft`.
  */
 export function resolveEffectFftOptions(
-  fnName: string,
   nFft: unknown,
   hopLength: unknown,
 ): { nFft: number; hopLength: number } {
   const size = nFft === undefined ? 2048 : nFft;
-  assertIntegerValue(fnName, size, 'nFft');
+  assertIntegerValue(size, 'nFft');
   if (size < 4 || size > MAX_EFFECT_N_FFT || size % 2 !== 0) {
-    throw new RangeError(`${fnName}: nFft must be an even integer in [4, ${MAX_EFFECT_N_FFT}]`);
+    throw refuse(`nFft must be an even integer in [4, ${MAX_EFFECT_N_FFT}]`);
   }
-  return { nFft: size, hopLength: resolveResynthesisHop(fnName, hopLength) };
+  return { nFft: size, hopLength: resolveResynthesisHop(hopLength) };
 }
 
 /**
  * The hop of a resynthesizing call as native reads it: omitted is 0, which the
  * core runs as a quarter of `nFft`; a given hop is a positive integer.
  */
-export function resolveResynthesisHop(fnName: string, hopLength: unknown): number {
+export function resolveResynthesisHop(hopLength: unknown): number {
   if (hopLength === undefined) {
     return 0;
   }
-  assertIntegerValue(fnName, hopLength, 'hopLength');
-  assertPositiveInteger(fnName, hopLength, 'hopLength');
+  assertIntegerValue(hopLength, 'hopLength');
+  assertPositiveInteger(hopLength, 'hopLength');
   return hopLength;
 }
 
 function resolveWithMinimum(
-  fnName: string,
   nFft: unknown,
   hopLength: unknown,
   minNFft: number,
 ): { nFft: number; hopLength: number } {
   const resolvedNFft = nFft === undefined ? 2048 : nFft;
   const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  assertIntegerValue(fnName, resolvedNFft, 'nFft');
-  assertEvenIntegerAtLeast(fnName, resolvedNFft, 'nFft', minNFft, 2 ** 30);
-  assertIntegerValue(fnName, resolvedHopLength, 'hopLength');
-  assertPositiveInteger(fnName, resolvedHopLength, 'hopLength');
+  assertIntegerValue(resolvedNFft, 'nFft');
+  assertEvenIntegerAtLeast(resolvedNFft, 'nFft', minNFft, 2 ** 30);
+  assertIntegerValue(resolvedHopLength, 'hopLength');
+  assertPositiveInteger(resolvedHopLength, 'hopLength');
   return { nFft: resolvedNFft, hopLength: resolvedHopLength };
 }

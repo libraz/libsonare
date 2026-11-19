@@ -1,4 +1,4 @@
-import { withEntry } from './internal/entry.js';
+import { refuse, withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
@@ -180,19 +180,19 @@ export interface MasteringAnalyzeStereoRequest<A extends StereoAnalysis = Stereo
 }
 
 // `releaseMs` and `truePeakOversample` read 0 as "library default" natively, so an omitted one is passed as that 0.
-function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest) {
+function nativeLoudnessArgs(r: MasteringNormalizeLoudnessRequest) {
   if (r.targetLufs !== undefined && r.targetLufs !== null) {
-    assertFloatValue(fnName, r.targetLufs, 'targetLufs');
+    assertFloatValue(r.targetLufs, 'targetLufs');
   }
   if (r.ceilingDbtp !== undefined && r.ceilingDbtp !== null) {
-    assertFloatValue(fnName, r.ceilingDbtp, 'ceilingDbtp');
+    assertFloatValue(r.ceilingDbtp, 'ceilingDbtp');
   }
-  refuseZeroSentinel(fnName, r, ['truePeakOversample']);
+  refuseZeroSentinel(r, ['truePeakOversample']);
   if (r.truePeakOversample !== undefined && r.truePeakOversample !== null) {
-    assertIntegerValue(fnName, r.truePeakOversample, 'truePeakOversample');
+    assertIntegerValue(r.truePeakOversample, 'truePeakOversample');
   }
   if (r.releaseMs !== undefined && r.releaseMs !== null) {
-    assertPositiveFloatValue(fnName, r.releaseMs, 'releaseMs');
+    assertPositiveFloatValue(r.releaseMs, 'releaseMs');
   }
   return [
     r.targetLufs ?? -14.0,
@@ -223,17 +223,15 @@ export function masteringNormalizeLoudness(
   options?: OptionsOf<MasteringNormalizeLoudnessRequest>,
 ): MasteringNormalizeLoudnessResult;
 export function masteringNormalizeLoudness(...args: unknown[]): MasteringNormalizeLoudnessResult {
-  const r = sampleOneShot<MasteringNormalizeLoudnessRequest>('masteringNormalizeLoudness', args);
-  assertAudioInput('masteringNormalizeLoudness', r.samples, r.sampleRate, r);
-  const result = addon.mastering(
-    r.samples,
-    r.sampleRate,
-    ...nativeLoudnessArgs('masteringNormalizeLoudness', r),
-  );
-  return {
-    ...result,
-    latencySamples: result.latencySamples ?? 0,
-  } as MasteringNormalizeLoudnessResult;
+  return withEntry('masteringNormalizeLoudness', () => {
+    const r = sampleOneShot<MasteringNormalizeLoudnessRequest>('masteringNormalizeLoudness', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const result = addon.mastering(r.samples, r.sampleRate, ...nativeLoudnessArgs(r));
+    return {
+      ...result,
+      latencySamples: result.latencySamples ?? 0,
+    } as MasteringNormalizeLoudnessResult;
+  });
 }
 
 /**
@@ -254,16 +252,20 @@ export function masteringApplyProcessor<P extends SoloProcessor>(
   options: OptionsOf<MasteringApplyProcessorRequest<P>>,
 ): MasteringResult;
 export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
-  const r = sampleOneShot<MasteringApplyProcessorRequest>('masteringApplyProcessor', args);
-  assertString('masteringApplyProcessor', r.processor, 'processor');
-  assertAudioInput('masteringApplyProcessor', r.samples, r.sampleRate, r);
-  const result = addon.masteringProcess(
-    r.processor,
-    r.samples,
-    r.sampleRate,
-    withEntry('masteringApplyProcessor', () => resolveProcessorParams(r.processor, r.params ?? {})),
-  );
-  return { ...result, latencySamples: result.latencySamples ?? 0 } as MasteringResult;
+  return withEntry('masteringApplyProcessor', () => {
+    const r = sampleOneShot<MasteringApplyProcessorRequest>('masteringApplyProcessor', args);
+    assertString(r.processor, 'processor');
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const result = addon.masteringProcess(
+      r.processor,
+      r.samples,
+      r.sampleRate,
+      withEntry('masteringApplyProcessor', () =>
+        resolveProcessorParams(r.processor, r.params ?? {}),
+      ),
+    );
+    return { ...result, latencySamples: result.latencySamples ?? 0 } as MasteringResult;
+  });
 }
 
 /**
@@ -276,24 +278,26 @@ export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
 export function masteringApplyProcessorStereo<P extends SoloProcessor>(
   request: MasteringApplyProcessorStereoRequest<P>,
 ): MasteringStereoResult {
-  const r = requestOnly<MasteringApplyProcessorStereoRequest>('masteringApplyProcessorStereo', [
-    request,
-  ]);
-  assertString('masteringApplyProcessorStereo', r.processor, 'processor');
-  assertAudioInput('masteringApplyProcessorStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masteringApplyProcessorStereo', r.right, r.sampleRate, r, 'right');
-  if (r.left.length !== r.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  return addon.masteringProcessStereo(
-    r.processor,
-    r.left,
-    r.right,
-    r.sampleRate,
-    withEntry('masteringApplyProcessorStereo', () =>
-      resolveProcessorParams(r.processor, r.params ?? {}),
-    ),
-  );
+  return withEntry('masteringApplyProcessorStereo', () => {
+    const r = requestOnly<MasteringApplyProcessorStereoRequest>('masteringApplyProcessorStereo', [
+      request,
+    ]);
+    assertString(r.processor, 'processor');
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    if (r.left.length !== r.right.length) {
+      throw refuse('Stereo channel lengths must match.');
+    }
+    return addon.masteringProcessStereo(
+      r.processor,
+      r.left,
+      r.right,
+      r.sampleRate,
+      withEntry('masteringApplyProcessorStereo', () =>
+        resolveProcessorParams(r.processor, r.params ?? {}),
+      ),
+    );
+  });
 }
 
 /**
@@ -301,7 +305,6 @@ export function masteringApplyProcessorStereo<P extends SoloProcessor>(
  * `source` and `reference` may have independent lengths and rates.
  */
 function assertPairAudio(
-  fnName: string,
   r: {
     sampleRate: number;
     referenceSampleRate?: number;
@@ -309,10 +312,10 @@ function assertPairAudio(
   source: [string, unknown],
   reference: [string, unknown],
 ): number {
-  assertAudioInput(fnName, source[1], r.sampleRate, r, source[0]);
+  assertAudioInput(source[1], r.sampleRate, r, source[0]);
   const referenceRate = r.referenceSampleRate ?? r.sampleRate;
-  assertSampleRate(fnName, referenceRate, 'referenceSampleRate');
-  assertAudioInput(fnName, reference[1], referenceRate, r, reference[0]);
+  assertSampleRate(referenceRate, 'referenceSampleRate');
+  assertAudioInput(reference[1], referenceRate, r, reference[0]);
   return referenceRate;
 }
 
@@ -327,21 +330,22 @@ function assertPairAudio(
 export function masteringApplyPairProcessor<P extends PairProcessor>(
   request: MasteringApplyPairProcessorRequest<P>,
 ): MasteringResult {
-  const r = requestOnly<MasteringApplyPairProcessorRequest>('masteringApplyPairProcessor', [
-    request,
-  ]);
-  const fn = 'masteringApplyPairProcessor';
-  assertString(fn, r.processor, 'processor');
-  const referenceRate = assertPairAudio(fn, r, ['source', r.source], ['reference', r.reference]);
-  const result = addon.masteringPairProcess(
-    r.processor,
-    r.source,
-    r.reference,
-    r.sampleRate,
-    referenceRate,
-    r.params ?? {},
-  );
-  return { ...result, latencySamples: result.latencySamples ?? 0 } as MasteringResult;
+  return withEntry('masteringApplyPairProcessor', () => {
+    const r = requestOnly<MasteringApplyPairProcessorRequest>('masteringApplyPairProcessor', [
+      request,
+    ]);
+    assertString(r.processor, 'processor');
+    const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
+    const result = addon.masteringPairProcess(
+      r.processor,
+      r.source,
+      r.reference,
+      r.sampleRate,
+      referenceRate,
+      r.params ?? {},
+    );
+    return { ...result, latencySamples: result.latencySamples ?? 0 } as MasteringResult;
+  });
 }
 
 /**
@@ -354,34 +358,35 @@ export function masteringApplyPairProcessor<P extends PairProcessor>(
 export function masteringApplyPairProcessorStereo(
   request: MasteringApplyPairProcessorStereoRequest,
 ): MasteringStereoResult {
-  const r = requestOnly<MasteringApplyPairProcessorStereoRequest>(
-    'masteringApplyPairProcessorStereo',
-    [request],
-  );
-  const fn = 'masteringApplyPairProcessorStereo';
-  assertString(fn, r.processor, 'processor');
-  assertAudioInput(fn, r.sourceLeft, r.sampleRate, r, 'sourceLeft');
-  assertAudioInput(fn, r.sourceRight, r.sampleRate, r, 'sourceRight');
-  const referenceRate = r.referenceSampleRate ?? r.sampleRate;
-  assertSampleRate(fn, referenceRate, 'referenceSampleRate');
-  assertAudioInput(fn, r.referenceLeft, referenceRate, r, 'referenceLeft');
-  assertAudioInput(fn, r.referenceRight, referenceRate, r, 'referenceRight');
-  if (r.sourceLeft.length !== r.sourceRight.length) {
-    throw new RangeError('Source left and right channel lengths must match.');
-  }
-  if (r.referenceLeft.length !== r.referenceRight.length) {
-    throw new RangeError('Reference left and right channel lengths must match.');
-  }
-  return addon.masteringPairProcessStereo(
-    r.processor,
-    r.sourceLeft,
-    r.sourceRight,
-    r.referenceLeft,
-    r.referenceRight,
-    r.sampleRate,
-    referenceRate,
-    r.params ?? {},
-  );
+  return withEntry('masteringApplyPairProcessorStereo', () => {
+    const r = requestOnly<MasteringApplyPairProcessorStereoRequest>(
+      'masteringApplyPairProcessorStereo',
+      [request],
+    );
+    assertString(r.processor, 'processor');
+    assertAudioInput(r.sourceLeft, r.sampleRate, r, 'sourceLeft');
+    assertAudioInput(r.sourceRight, r.sampleRate, r, 'sourceRight');
+    const referenceRate = r.referenceSampleRate ?? r.sampleRate;
+    assertSampleRate(referenceRate, 'referenceSampleRate');
+    assertAudioInput(r.referenceLeft, referenceRate, r, 'referenceLeft');
+    assertAudioInput(r.referenceRight, referenceRate, r, 'referenceRight');
+    if (r.sourceLeft.length !== r.sourceRight.length) {
+      throw refuse('Source left and right channel lengths must match.');
+    }
+    if (r.referenceLeft.length !== r.referenceRight.length) {
+      throw refuse('Reference left and right channel lengths must match.');
+    }
+    return addon.masteringPairProcessStereo(
+      r.processor,
+      r.sourceLeft,
+      r.sourceRight,
+      r.referenceLeft,
+      r.referenceRight,
+      r.sampleRate,
+      referenceRate,
+      r.params ?? {},
+    );
+  });
 }
 
 /**
@@ -396,20 +401,21 @@ export function masteringApplyPairProcessorStereo(
 export function masteringAnalyzePair<A extends PairAnalysis>(
   request: MasteringAnalyzePairRequest<A>,
 ): PairAnalysisResultMap[A] {
-  const r = requestOnly<MasteringAnalyzePairRequest>('masteringAnalyzePair', [request]);
-  const fn = 'masteringAnalyzePair';
-  assertString(fn, r.analysis, 'analysis');
-  const referenceRate = assertPairAudio(fn, r, ['source', r.source], ['reference', r.reference]);
-  return parseRecordJson(
-    addon.masteringPairAnalyze(
-      r.analysis,
-      r.source,
-      r.reference,
-      r.sampleRate,
-      referenceRate,
-      r.params ?? {},
-    ),
-  ) as PairAnalysisResultMap[A];
+  return withEntry('masteringAnalyzePair', () => {
+    const r = requestOnly<MasteringAnalyzePairRequest>('masteringAnalyzePair', [request]);
+    assertString(r.analysis, 'analysis');
+    const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
+    return parseRecordJson(
+      addon.masteringPairAnalyze(
+        r.analysis,
+        r.source,
+        r.reference,
+        r.sampleRate,
+        referenceRate,
+        r.params ?? {},
+      ),
+    ) as PairAnalysisResultMap[A];
+  });
 }
 
 /**
@@ -422,14 +428,15 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
 export function masteringAnalyzeStereo<A extends StereoAnalysis>(
   request: MasteringAnalyzeStereoRequest<A>,
 ): StereoAnalysisResultMap[A] {
-  const r = requestOnly<MasteringAnalyzeStereoRequest>('masteringAnalyzeStereo', [request]);
-  const fn = 'masteringAnalyzeStereo';
-  assertString(fn, r.analysis, 'analysis');
-  assertAudioInput(fn, r.left, r.sampleRate, r, 'left');
-  assertAudioInput(fn, r.right, r.sampleRate, r, 'right');
-  return parseRecordJson(
-    addon.masteringStereoAnalyze(r.analysis, r.left, r.right, r.sampleRate, r.params ?? {}),
-  ) as StereoAnalysisResultMap[A];
+  return withEntry('masteringAnalyzeStereo', () => {
+    const r = requestOnly<MasteringAnalyzeStereoRequest>('masteringAnalyzeStereo', [request]);
+    assertString(r.analysis, 'analysis');
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    return parseRecordJson(
+      addon.masteringStereoAnalyze(r.analysis, r.left, r.right, r.sampleRate, r.params ?? {}),
+    ) as StereoAnalysisResultMap[A];
+  });
 }
 
 /**
@@ -460,42 +467,40 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
 export function masteringAbMatchLoudness(
   request: MasteringAbMatchLoudnessRequest,
 ): LoudnessMatchResult {
-  const r = requestOnly<MasteringAbMatchLoudnessRequest>('masteringAbMatchLoudness', [request]);
-  const referenceRate = assertPairAudio(
-    'masteringAbMatchLoudness',
-    r,
-    ['source', r.source],
-    ['reference', r.reference],
-  );
-  return addon.masteringAbMatchLoudness(r.source, r.reference, r.sampleRate, referenceRate);
+  return withEntry('masteringAbMatchLoudness', () => {
+    const r = requestOnly<MasteringAbMatchLoudnessRequest>('masteringAbMatchLoudness', [request]);
+    const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
+    return addon.masteringAbMatchLoudness(r.source, r.reference, r.sampleRate, referenceRate);
+  });
 }
 
 /** Gain-match a stereo source to a stereo reference with one shared gain. */
 export function masteringAbMatchLoudnessStereo(
   request: MasteringAbMatchLoudnessStereoRequest,
 ): LoudnessMatchStereoResult {
-  const r = requestOnly<MasteringAbMatchLoudnessStereoRequest>('masteringAbMatchLoudnessStereo', [
-    request,
-  ]);
-  const fn = 'masteringAbMatchLoudnessStereo';
-  assertAudioInput(fn, r.sourceLeft, r.sampleRate, r, 'sourceLeft');
-  assertAudioInput(fn, r.sourceRight, r.sampleRate, r, 'sourceRight');
-  const referenceRate = r.referenceSampleRate ?? r.sampleRate;
-  assertSampleRate(fn, referenceRate, 'referenceSampleRate');
-  assertAudioInput(fn, r.referenceLeft, referenceRate, r, 'referenceLeft');
-  assertAudioInput(fn, r.referenceRight, referenceRate, r, 'referenceRight');
-  if (r.sourceLeft.length !== r.sourceRight.length) {
-    throw new RangeError('Source left and right channel lengths must match.');
-  }
-  if (r.referenceLeft.length !== r.referenceRight.length) {
-    throw new RangeError('Reference left and right channel lengths must match.');
-  }
-  return addon.masteringAbMatchLoudnessStereo(
-    r.sourceLeft,
-    r.sourceRight,
-    r.referenceLeft,
-    r.referenceRight,
-    r.sampleRate,
-    referenceRate,
-  );
+  return withEntry('masteringAbMatchLoudnessStereo', () => {
+    const r = requestOnly<MasteringAbMatchLoudnessStereoRequest>('masteringAbMatchLoudnessStereo', [
+      request,
+    ]);
+    assertAudioInput(r.sourceLeft, r.sampleRate, r, 'sourceLeft');
+    assertAudioInput(r.sourceRight, r.sampleRate, r, 'sourceRight');
+    const referenceRate = r.referenceSampleRate ?? r.sampleRate;
+    assertSampleRate(referenceRate, 'referenceSampleRate');
+    assertAudioInput(r.referenceLeft, referenceRate, r, 'referenceLeft');
+    assertAudioInput(r.referenceRight, referenceRate, r, 'referenceRight');
+    if (r.sourceLeft.length !== r.sourceRight.length) {
+      throw refuse('Source left and right channel lengths must match.');
+    }
+    if (r.referenceLeft.length !== r.referenceRight.length) {
+      throw refuse('Reference left and right channel lengths must match.');
+    }
+    return addon.masteringAbMatchLoudnessStereo(
+      r.sourceLeft,
+      r.sourceRight,
+      r.referenceLeft,
+      r.referenceRight,
+      r.sampleRate,
+      referenceRate,
+    );
+  });
 }

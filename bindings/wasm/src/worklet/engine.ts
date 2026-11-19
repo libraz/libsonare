@@ -4,7 +4,6 @@ import {
   ClipPageStreamer,
   type OpfsClipStreamOptions,
 } from '../clip_page_streamer.js';
-import { ErrorCode, SonareError } from '../errors.js';
 import type {
   BuiltinSynthConfig,
   EngineAutomationPoint,
@@ -39,7 +38,7 @@ import type {
 } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { opfsClipPageProviderFactoryFor } from '../internal/clip_page_native.js';
-import { entryClass } from '../internal/entry.js';
+import { entryClass, invalidState, refuse } from '../internal/entry.js';
 import { releasedHandleError } from '../internal/handle_guard.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from '../internal/mix_scene.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
@@ -134,7 +133,39 @@ function transferableAudioBuffers(channels: readonly Float32Array[]): Transferab
  * answered synchronously from the offline mirror, which holds the same state.
  * Argument refusals are `TypeError` / `RangeError`, as on {@link RealtimeEngine}.
  */
-@entryClass('SonareEngine')
+@entryClass('SonareEngine', [
+  'mirrorMidiInput',
+  'ensureWorkletClipStreamer',
+  'startWorkletClipPagePolling',
+  'pumpWorkletClipPages',
+  'enqueueWorkletClipPageRequest',
+  'popWorkletClipPageRequest',
+  'workletClipStream',
+  'mixerLanes',
+  'syncMixer',
+  'insertAutomationTargetKey',
+  'rememberInsertAutomationId',
+  'clearInsertAutomationLanes',
+  'postSync',
+  'flushOfflineMirror',
+  'sendMirroredCommand',
+  'mixerContext',
+  'stripContext',
+  'automationContext',
+  'captureContext',
+  'parameterContext',
+  'tempoContext',
+  'exportContext',
+  'clipContext',
+  'markerContext',
+  'sendSmoothedParam',
+  'commitContext',
+  'resolveParamId',
+  'syncParameters',
+  'resolveTargetId',
+  'ensureTrackLane',
+  'ensureBus',
+])
 export class SonareEngine {
   /** The underlying AudioWorkletNode; connect it into the audio graph. */
   readonly node: AudioWorkletNode;
@@ -250,7 +281,7 @@ export class SonareEngine {
     context: BaseAudioContext,
     options: SonareEngineOptions,
   ): Promise<SonareEngine> {
-    const sampleRate = resolveContextSampleRate(options.sampleRate, context, 'SonareEngine.create');
+    const sampleRate = resolveContextSampleRate(options.sampleRate, context);
     const {
       offlineEngine: offlineEngineOption,
       offlineBlockSize,
@@ -260,7 +291,6 @@ export class SonareEngine {
     const blockSize = offlineBlockSize ?? options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
     const numChannels = requireChannelCount(
       offlineNumChannels ?? options.numChannels,
-      'SonareEngine.create',
       offlineNumChannels === undefined ? 'numChannels' : 'offlineNumChannels',
     );
     const realtimeNode = await SonareRealtimeEngineNode.create(context, nodeOptions);
@@ -551,7 +581,7 @@ export class SonareEngine {
 
   /** Resets the master's integrated loudness accumulator in both engine mirrors. */
   resetMasterLoudnessMeter(renderFrame?: number): void {
-    const frame = resolveRenderFrame('resetMasterLoudnessMeter', renderFrame);
+    const frame = resolveRenderFrame(renderFrame);
     commitCommand(
       this.commitContext,
       { type: SonareEngineCommandType.ResetMasterLoudnessMeter, renderFrame: frame },
@@ -568,7 +598,7 @@ export class SonareEngine {
    * running insert tails and delay lines mid-sound, like a seek.
    */
   resetProcessorState(renderFrame?: number): void {
-    const frame = resolveRenderFrame('resetProcessorState', renderFrame);
+    const frame = resolveRenderFrame(renderFrame);
     commitCommand(
       this.commitContext,
       { type: SonareEngineCommandType.ResetProcessorState, renderFrame: frame },
@@ -693,7 +723,7 @@ export class SonareEngine {
    * no lane yet.
    */
   setStrip(target: string | number, settings: MixSceneStripInput): void {
-    const sceneJson = JSON.stringify({ strips: [mixSceneStripToNative('setStrip', settings)] });
+    const sceneJson = JSON.stringify({ strips: [mixSceneStripToNative(settings)] });
     if (target === 'master') {
       mixer.setMasterStripJson(this.mixerContext, sceneJson);
       return;
@@ -714,7 +744,7 @@ export class SonareEngine {
 
   /** Replaces a bus strip with `settings`; the document is sent as `{ buses: [settings] }`. */
   setBusStrip(busId: number, settings: MixSceneBusInput): void {
-    const sceneJson = JSON.stringify({ buses: [mixSceneBusToNative('setBusStrip', settings)] });
+    const sceneJson = JSON.stringify({ buses: [mixSceneBusToNative(settings)] });
     mixer.setBusStripJson(this.mixerContext, busId, sceneJson);
   }
 
@@ -837,14 +867,11 @@ export class SonareEngine {
     options: OpfsClipStreamOptions,
   ): Promise<{ binding: OpfsClipPageProviderBinding; provider: ClipPageProvider }> {
     if (this.epoch.closed) {
-      throw releasedHandleError('SonareEngine', 'is destroyed.');
+      throw releasedHandleError('SonareEngine');
     }
     const { clipId, primePages = 1, ...providerOptions } = options;
     if ([...this.workletPageProviderClipIds.values()].some((entry) => entry.clipId === clipId)) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        `An OPFS stream is already attached for clip ${clipId}.`,
-      );
+      throw invalidState(`An OPFS stream is already attached for clip ${clipId}.`);
     }
     const streamer = this.ensureWorkletClipStreamer();
     // Allocate the worklet-owned provider before priming: port message order
@@ -946,10 +973,10 @@ export class SonareEngine {
    */
   setClipPagePrefetchFrames(frames: number): void {
     if (this.epoch.closed) {
-      throw releasedHandleError('SonareEngine', 'is destroyed.');
+      throw releasedHandleError('SonareEngine');
     }
     if (!Number.isFinite(frames) || frames < 0) {
-      throw new RangeError('clip page prefetch frames must be a finite value >= 0.');
+      throw refuse('clip page prefetch frames must be a finite value >= 0.');
     }
     commitSync(
       this.commitContext,
@@ -969,7 +996,7 @@ export class SonareEngine {
    */
   setWarpVoiceCapacity(voices: number): void {
     if (this.epoch.closed) {
-      throw releasedHandleError('SonareEngine', 'is destroyed.');
+      throw releasedHandleError('SonareEngine');
     }
     commitSync(
       this.commitContext,
@@ -1452,7 +1479,7 @@ export class SonareEngine {
 
   /** Queues a MIDI panic (all-notes-off) releasing every sounding note on both engines. `renderFrame` is the absolute render frame to fire at; omitted: immediate. */
   pushMidiPanic(renderFrame?: number): void {
-    const frame = resolveRenderFrame('pushMidiPanic', renderFrame);
+    const frame = resolveRenderFrame(renderFrame);
     this.offlineEngine.pushMidiPanic(renderFrame);
     this.postSync({ type: 'syncMidiPanic', renderFrame: frame });
   }
@@ -1751,7 +1778,7 @@ export class SonareEngine {
     }
     const stream = this.workletPageProviderClipIds.get(clip.pageProvider);
     if (stream !== undefined && clip.id !== stream.clipId) {
-      throw new RangeError(
+      throw refuse(
         `OPFS stream clipId ${stream.clipId} must match addClip(..., { id: ${stream.clipId} }).`,
       );
     }
@@ -2067,7 +2094,7 @@ export class SonareEngine {
     // Tested on the raw id: truncating first leaves the integrality check
     // unreachable, and registers a bus under an id the caller never named.
     if (!Number.isInteger(busId) || busId <= 0) {
-      throw new RangeError(`Invalid bus id for mixer bus: ${String(busId)}`);
+      throw refuse(`Invalid bus id for mixer bus: ${String(busId)}`);
     }
     const existing = this.buses.findIndex((bus) => bus.busId === busId);
     if (existing >= 0) {

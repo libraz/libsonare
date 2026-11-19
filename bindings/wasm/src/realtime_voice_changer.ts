@@ -1,4 +1,4 @@
-import { entryClass } from './internal/entry.js';
+import { entryClass, nameNativeError, refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import {
@@ -95,31 +95,31 @@ export interface RealtimeVoiceChangerPlanarBuffer {
   processWithCarrier: () => void;
 }
 
-function assertChannelCount(fnName: string, numChannels: unknown): asserts numChannels is 1 | 2 {
+function assertChannelCount(numChannels: unknown): asserts numChannels is 1 | 2 {
   if (typeof numChannels !== 'number') {
-    throw new TypeError(`${fnName}: numChannels must be 1 or 2`);
+    throw refuseType(`numChannels must be 1 or 2`);
   }
   if (numChannels !== 1 && numChannels !== 2) {
-    throw new RangeError(`${fnName}: numChannels must be 1 or 2`);
+    throw refuse(`numChannels must be 1 or 2`);
   }
 }
 
 /** Checks a planar channel list (1 or 2 equal-length planes) and the optional carrier. */
-function assertPlanes(fnName: string, channels: unknown, carrier?: unknown): Float32Array[] {
+function assertPlanes(channels: unknown, carrier?: unknown): Float32Array[] {
   if (!Array.isArray(channels)) {
-    throw new TypeError(`${fnName}: channels must be an array of Float32Array`);
+    throw refuseType(`channels must be an array of Float32Array`);
   }
-  assertChannelCount(fnName, channels.length);
+  assertChannelCount(channels.length);
   channels.forEach((plane, i) => {
     if (!(plane instanceof Float32Array)) {
-      throw new TypeError(`${fnName}: channels[${i}] must be a Float32Array`);
+      throw refuseType(`channels[${i}] must be a Float32Array`);
     }
     if (plane.length !== channels[0].length) {
-      throw new RangeError(`${fnName}: channels must have equal lengths`);
+      throw refuse(`channels must have equal lengths`);
     }
   });
   if (carrier !== undefined && !(carrier instanceof Float32Array)) {
-    throw new TypeError(`${fnName}: carrier must be a Float32Array`);
+    throw refuseType(`carrier must be a Float32Array`);
   }
   return channels as Float32Array[];
 }
@@ -136,6 +136,7 @@ function assertPlanes(fnName: string, channels: unknown, carrier?: unknown): Flo
   'processMonoInto',
   'processMonoWithCarrier',
   'processMonoWithCarrierInto',
+  'changer',
 ])
 export class RealtimeVoiceChanger {
   private changerHandle: import('./sonare.js').WasmRealtimeVoiceChanger;
@@ -154,26 +155,25 @@ export class RealtimeVoiceChanger {
    *   `numChannels` or an unknown preset id or token.
    */
   constructor(options: RealtimeVoiceChangerOptions) {
-    const fnName = 'RealtimeVoiceChanger';
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-      throw new TypeError(`${fnName}: options must be an object with a sampleRate`);
+      throw refuseType(`options must be an object with a sampleRate`);
     }
     for (const key of Object.keys(options)) {
       if (!CONSTRUCTOR_KEYS.includes(key)) {
-        throw new TypeError(`${fnName}: unknown option '${key}'`);
+        throw refuseType(`unknown option '${key}'`);
       }
     }
-    assertSampleRate(fnName, options.sampleRate);
+    assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
     if (maxBlockSize !== undefined) {
       if (typeof maxBlockSize !== 'number') {
-        throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+        throw refuseType(`maxBlockSize must be a number`);
       }
-      assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
+      assertPositiveInteger(maxBlockSize, 'maxBlockSize');
     }
     const numChannels = options.numChannels;
-    assertChannelCount(fnName, numChannels);
-    const nativeConfig = nativeVoiceConfig(fnName, options.config ?? 'neutralMonitor');
+    assertChannelCount(numChannels);
+    const nativeConfig = nativeVoiceConfig(options.config ?? 'neutralMonitor');
     this.changerHandle = getSonareModule().createRealtimeVoiceChanger(nativeConfig);
     // The handle is already allocated; a throwing constructor leaves `this` unreachable and
     // embind has no GC finalizer, so release it here.
@@ -200,7 +200,7 @@ export class RealtimeVoiceChanger {
    *   a field outside its range (nothing is clamped); the previous configuration stays in effect.
    */
   setConfig(config: RealtimeVoiceChangerConfigInput): void {
-    this.changer.setConfig(nativeVoiceConfig('RealtimeVoiceChanger.setConfig', config));
+    this.changer.setConfig(nativeVoiceConfig(config));
   }
 
   /**
@@ -291,7 +291,7 @@ export class RealtimeVoiceChanger {
    *   was prepared for.
    */
   processPlanar(channels: Float32Array[]): Float32Array[] {
-    const planes = assertPlanes('RealtimeVoiceChanger.processPlanar', channels);
+    const planes = assertPlanes(channels);
     if (planes.length === 1) {
       return [this.changer.processMono(planes[0] as Float32Array)];
     }
@@ -303,7 +303,7 @@ export class RealtimeVoiceChanger {
    * shared by every channel.
    */
   processPlanarWithCarrier(channels: Float32Array[], carrier: Float32Array): Float32Array[] {
-    const planes = assertPlanes('RealtimeVoiceChanger.processPlanarWithCarrier', channels, carrier);
+    const planes = assertPlanes(channels, carrier);
     if (planes.length === 1) {
       return [this.changer.processMonoWithCarrier(planes[0] as Float32Array, carrier)];
     }
@@ -320,7 +320,11 @@ export class RealtimeVoiceChanger {
    * @throws RangeError unless `numChannels` is 1 or 2.
    */
   processInterleavedInto(input: Float32Array, numChannels: 1 | 2, output: Float32Array): void {
-    assertChannelCount('RealtimeVoiceChanger.processInterleavedInto', numChannels);
+    try {
+      assertChannelCount(numChannels);
+    } catch (error) {
+      throw nameNativeError(error, 'RealtimeVoiceChanger.processInterleavedInto');
+    }
     this.changer.processInterleavedInto(input, numChannels, output);
   }
 
@@ -331,7 +335,11 @@ export class RealtimeVoiceChanger {
     numChannels: 1 | 2,
     output: Float32Array,
   ): void {
-    assertChannelCount('RealtimeVoiceChanger.processInterleavedWithCarrierInto', numChannels);
+    try {
+      assertChannelCount(numChannels);
+    } catch (error) {
+      throw nameNativeError(error, 'RealtimeVoiceChanger.processInterleavedWithCarrierInto');
+    }
     this.changer.processInterleavedWithCarrierInto(input, carrier, numChannels, output);
   }
 
@@ -415,7 +423,7 @@ export class RealtimeVoiceChanger {
     numFrames: number,
     numChannels: 1 | 2,
   ): RealtimeVoiceChangerInterleavedBuffer {
-    assertChannelCount('RealtimeVoiceChanger.createRealtimeInterleavedBuffer', numChannels);
+    assertChannelCount(numChannels);
     let input: Float32Array;
     let output: Float32Array;
     let carrier: Float32Array;
@@ -471,7 +479,7 @@ export class RealtimeVoiceChanger {
     numFrames: number,
     numChannels: 1 | 2,
   ): RealtimeVoiceChangerPlanarBuffer {
-    assertChannelCount('RealtimeVoiceChanger.createRealtimePlanarBuffer', numChannels);
+    assertChannelCount(numChannels);
     let channels: Float32Array[] = [];
     let carrier: Float32Array;
     let generation = -1;
@@ -533,8 +541,10 @@ const CONSTRUCTOR_KEYS: readonly string[] = ['sampleRate', 'maxBlockSize', 'numC
 
 /** The built-in preset ids, in preset-ordinal order. */
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
-  // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
-  return Array.from(getSonareModule().realtimeVoiceChangerPresetNames() as VoicePresetId[]);
+  return withEntry('realtimeVoiceChangerPresetNames', () => {
+    // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
+    return Array.from(getSonareModule().realtimeVoiceChangerPresetNames() as VoicePresetId[]);
+  });
 }
 
 /**
@@ -543,9 +553,9 @@ export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
  * @throws TypeError unless `name` is a string; RangeError for an unknown id.
  */
 export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
-  return getSonareModule().realtimeVoiceChangerPresetJson(
-    checkedVoicePresetId('realtimeVoiceChangerPresetJson', name, 'name'),
-  );
+  return withEntry('realtimeVoiceChangerPresetJson', () => {
+    return getSonareModule().realtimeVoiceChangerPresetJson(checkedVoicePresetId(name, 'name'));
+  });
 }
 
 /**
@@ -556,8 +566,10 @@ export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
 export function realtimeVoiceChangerValidatePresetJson(
   json: string,
 ): RealtimeVoiceChangerValidatePresetJsonResult {
-  assertString('realtimeVoiceChangerValidatePresetJson', json, 'json');
-  return getSonareModule().validateRealtimeVoiceChangerPresetJson(json);
+  return withEntry('realtimeVoiceChangerValidatePresetJson', () => {
+    assertString(json, 'json');
+    return getSonareModule().validateRealtimeVoiceChangerPresetJson(json);
+  });
 }
 
 /**
@@ -566,15 +578,15 @@ export function realtimeVoiceChangerValidatePresetJson(
  * @throws TypeError unless `ordinal` is a number; RangeError for a non-integer or unknown ordinal.
  */
 export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
-  if (typeof ordinal !== 'number') {
-    throw new TypeError('voiceCharacterPresetId: ordinal must be a number');
-  }
-  if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= VOICE_PRESET_IDS.length) {
-    throw new RangeError(
-      `voiceCharacterPresetId: ordinal must be an integer in [0, ${VOICE_PRESET_IDS.length - 1}]`,
-    );
-  }
-  return getSonareModule().voiceCharacterPresetId(ordinal) as VoicePresetId;
+  return withEntry('voiceCharacterPresetId', () => {
+    if (typeof ordinal !== 'number') {
+      throw refuseType('ordinal must be a number');
+    }
+    if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= VOICE_PRESET_IDS.length) {
+      throw refuse(`ordinal must be an integer in [0, ${VOICE_PRESET_IDS.length - 1}]`);
+    }
+    return getSonareModule().voiceCharacterPresetId(ordinal) as VoicePresetId;
+  });
 }
 
 /**
@@ -586,7 +598,7 @@ export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
 export function realtimeVoiceChangerPresetConfig(
   preset: VoicePresetId,
 ): RealtimeVoiceChangerConfig {
-  return getSonareModule().realtimeVoiceChangerPresetConfig(
-    voicePresetOrdinal('realtimeVoiceChangerPresetConfig', preset),
-  );
+  return withEntry('realtimeVoiceChangerPresetConfig', () => {
+    return getSonareModule().realtimeVoiceChangerPresetConfig(voicePresetOrdinal(preset));
+  });
 }

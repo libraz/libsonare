@@ -3,6 +3,7 @@
  * STFT and resynthesized.
  */
 
+import { refuseType, withEntry } from './internal/entry.js';
 import { windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './public_types.js';
@@ -29,7 +30,6 @@ function resolveRegionTimes(
   return {
     ...op,
     startSample: resolveSampleBound(
-      'spectralEdit',
       op.startSample,
       startSec,
       sampleRate,
@@ -37,7 +37,6 @@ function resolveRegionTimes(
       `${at}.startSec`,
     ),
     endSample: resolveSampleBound(
-      'spectralEdit',
       op.endSample,
       endSec,
       sampleRate,
@@ -70,28 +69,30 @@ export function spectralEdit(
   options: SpectralEditOptions,
 ): Float32Array;
 export function spectralEdit(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<SpectralEditRequest>('spectralEdit', args);
-  assertAudioInput('spectralEdit', request.samples, request.sampleRate, request);
-  const requestOps = request.ops;
-  if (requestOps === null || typeof requestOps !== 'object') {
-    throw new TypeError('spectralEdit: ops must be an array');
-  }
-  if (request.window !== undefined) {
-    windowOrdinal('spectralEdit', request.window);
-  }
-  // A non-Array array-like goes to the native reader, which bounds its length.
-  const nativeOps = Array.isArray(requestOps)
-    ? requestOps.map((op, index) => {
-        if (op === null || typeof op !== 'object') {
-          throw new TypeError(`spectralEdit: ops[${index}] must be an object`);
-        }
-        return resolveRegionTimes(op, index, request.sampleRate);
-      })
-    : (requestOps as SpectralRegionOp[]);
-  return requireModule().spectralEdit(
-    request.samples,
-    request.sampleRate,
-    nativeOps,
-    request as unknown as Record<string, unknown>,
-  );
+  return withEntry('spectralEdit', () => {
+    const request = sampleOneShot<SpectralEditRequest>('spectralEdit', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const requestOps = request.ops;
+    if (requestOps === null || typeof requestOps !== 'object') {
+      throw refuseType('ops must be an array');
+    }
+    if (request.window !== undefined) {
+      windowOrdinal(request.window);
+    }
+    // A non-Array array-like goes to the native reader, which bounds its length.
+    const nativeOps = Array.isArray(requestOps)
+      ? requestOps.map((op, index) => {
+          if (op === null || typeof op !== 'object') {
+            throw refuseType(`ops[${index}] must be an object`);
+          }
+          return resolveRegionTimes(op, index, request.sampleRate);
+        })
+      : (requestOps as SpectralRegionOp[]);
+    return requireModule().spectralEdit(
+      request.samples,
+      request.sampleRate,
+      nativeOps,
+      request as unknown as Record<string, unknown>,
+    );
+  });
 }

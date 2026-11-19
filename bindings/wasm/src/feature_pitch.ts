@@ -1,4 +1,5 @@
 import { toVoicedFloat32 } from './internal/effects_common.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type { NoteSegment, PiptrackResult, PitchResult } from './public_types.js';
 import type { VoicedFlags } from './public_types_spectral.js';
@@ -89,24 +90,26 @@ export function piptrack(
   options?: OptionsOf<PiptrackRequest>,
 ): PiptrackResult;
 export function piptrack(...args: unknown[]): PiptrackResult {
-  const r = sampleOneShot<PiptrackRequest>('piptrack', args);
-  assertAudioInput('piptrack', r.samples, r.sampleRate, r);
-  const fminHz = r.fminHz ?? 150;
-  const fmaxHz = r.fmaxHz ?? 4000;
-  assertFrequencyBounds('piptrack', fminHz, fmaxHz, 'fminHz', 'fmaxHz');
-  const native = requireModule().piptrack(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-    fminHz,
-    fmaxHz,
-    r.threshold ?? 0.1,
-  );
-  return {
-    pitches: toMatrix2D(native.pitches, native.nBins, native.nFrames),
-    magnitudes: toMatrix2D(native.magnitudes, native.nBins, native.nFrames),
-  };
+  return withEntry('piptrack', () => {
+    const r = sampleOneShot<PiptrackRequest>('piptrack', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const fminHz = r.fminHz ?? 150;
+    const fmaxHz = r.fmaxHz ?? 4000;
+    assertFrequencyBounds(fminHz, fmaxHz, 'fminHz', 'fmaxHz');
+    const native = requireModule().piptrack(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+      fminHz,
+      fmaxHz,
+      r.threshold ?? 0.1,
+    );
+    return {
+      pitches: toMatrix2D(native.pitches, native.nBins, native.nFrames),
+      magnitudes: toMatrix2D(native.magnitudes, native.nBins, native.nFrames),
+    };
+  });
 }
 
 // The frame count is the length of every per-frame array; the result does not repeat it.
@@ -123,22 +126,24 @@ export function pitchYin(
   options?: OptionsOf<PitchYinRequest>,
 ): PitchResult;
 export function pitchYin(...args: unknown[]): PitchResult {
-  const r = sampleOneShot<PitchYinRequest>('pitchYin', args);
-  assertAudioInput('pitchYin', r.samples, r.sampleRate, r);
-  const f0MinHz = r.f0MinHz ?? 65.0;
-  const f0MaxHz = r.f0MaxHz ?? 2093.0;
-  assertFrequencyBounds('pitchYin', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-  return toPitchResult(
-    requireModule().pitchYin(
-      r.samples,
-      r.sampleRate,
-      r.frameLength ?? 2048,
-      r.hopLength ?? 512,
-      f0MinHz,
-      f0MaxHz,
-      r.threshold ?? 0.1,
-    ),
-  );
+  return withEntry('pitchYin', () => {
+    const r = sampleOneShot<PitchYinRequest>('pitchYin', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const f0MinHz = r.f0MinHz ?? 65.0;
+    const f0MaxHz = r.f0MaxHz ?? 2093.0;
+    assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
+    return toPitchResult(
+      requireModule().pitchYin(
+        r.samples,
+        r.sampleRate,
+        r.frameLength ?? 2048,
+        r.hopLength ?? 512,
+        f0MinHz,
+        f0MaxHz,
+        r.threshold ?? 0.1,
+      ),
+    );
+  });
 }
 
 /** Detect pitch using pYIN (probabilistic YIN with HMM smoothing). */
@@ -149,23 +154,25 @@ export function pitchPyin(
   options?: OptionsOf<PitchPyinRequest>,
 ): PitchResult;
 export function pitchPyin(...args: unknown[]): PitchResult {
-  const r = sampleOneShot<PitchPyinRequest>('pitchPyin', args);
-  assertAudioInput('pitchPyin', r.samples, r.sampleRate, r);
-  const f0MinHz = r.f0MinHz ?? 65.0;
-  const f0MaxHz = r.f0MaxHz ?? 2093.0;
-  assertFrequencyBounds('pitchPyin', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-  return toPitchResult(
-    requireModule().pitchPyin(
-      r.samples,
-      r.sampleRate,
-      r.frameLength ?? 2048,
-      r.hopLength ?? 512,
-      f0MinHz,
-      f0MaxHz,
-      r.threshold ?? 0.1,
-      r.fillNa ?? false,
-    ),
-  );
+  return withEntry('pitchPyin', () => {
+    const r = sampleOneShot<PitchPyinRequest>('pitchPyin', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const f0MinHz = r.f0MinHz ?? 65.0;
+    const f0MaxHz = r.f0MaxHz ?? 2093.0;
+    assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
+    return toPitchResult(
+      requireModule().pitchPyin(
+        r.samples,
+        r.sampleRate,
+        r.frameLength ?? 2048,
+        r.hopLength ?? 512,
+        f0MinHz,
+        f0MaxHz,
+        r.threshold ?? 0.1,
+        r.fillNa ?? false,
+      ),
+    );
+  });
 }
 
 /**
@@ -212,28 +219,27 @@ export interface NoteSegmentsRequest {
  */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[];
 export function noteSegments(...args: unknown[]): NoteSegment[] {
-  const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
-  if (r.voiced == null && r.voicedProb == null) {
-    throw new TypeError('noteSegments: give voiced or voicedProb');
-  }
-  // The embind reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
-  const flags =
-    r.voiced != null ? Uint8Array.from(toVoicedFloat32('noteSegments', r.voiced)) : null;
-  const prob = flags === null ? r.voicedProb : null;
-  if (prob != null && !(prob instanceof Float32Array)) {
-    throw new TypeError('noteSegments: voicedProb must be a Float32Array');
-  }
-  const voicing = (flags ?? prob) as Float32Array | Uint8Array;
-  if (r.f0Hz?.length !== voicing.length) {
-    throw new RangeError(
-      `noteSegments: ${flags ? 'voiced' : 'voicedProb'} must have the same length as f0Hz`,
-    );
-  }
-  return requireModule().noteSegments(r.f0Hz, prob ?? null, flags, r.frameRate, {
-    segmentationThresholdCents: r.segmentationThresholdCents,
-    minNoteMs: r.minNoteMs,
-    referenceHz: r.referenceHz,
-    voicedThreshold: r.voicedThreshold,
+  return withEntry('noteSegments', () => {
+    const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
+    if (r.voiced == null && r.voicedProb == null) {
+      throw refuseType('give voiced or voicedProb');
+    }
+    // The embind reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
+    const flags = r.voiced != null ? Uint8Array.from(toVoicedFloat32(r.voiced)) : null;
+    const prob = flags === null ? r.voicedProb : null;
+    if (prob != null && !(prob instanceof Float32Array)) {
+      throw refuseType('voicedProb must be a Float32Array');
+    }
+    const voicing = (flags ?? prob) as Float32Array | Uint8Array;
+    if (r.f0Hz?.length !== voicing.length) {
+      throw refuse(`${flags ? 'voiced' : 'voicedProb'} must have the same length as f0Hz`);
+    }
+    return requireModule().noteSegments(r.f0Hz, prob ?? null, flags, r.frameRate, {
+      segmentationThresholdCents: r.segmentationThresholdCents,
+      minNoteMs: r.minNoteMs,
+      referenceHz: r.referenceHz,
+      voicedThreshold: r.voicedThreshold,
+    });
   });
 }
 
@@ -275,11 +281,13 @@ export interface EstimateTuningRequest {
  */
 export function pitchTuning(request: PitchTuningRequest): number;
 export function pitchTuning(...args: unknown[]): number {
-  const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
-  assertFloat32Array('pitchTuning', r.frequencies, 'frequencies');
-  const binsPerOctave = r.binsPerOctave ?? 12;
-  const bins = requireModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave);
-  return tuningCentsFromNative((bins * 12) / binsPerOctave);
+  return withEntry('pitchTuning', () => {
+    const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
+    assertFloat32Array(r.frequencies, 'frequencies');
+    const binsPerOctave = r.binsPerOctave ?? 12;
+    const bins = requireModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave);
+    return tuningCentsFromNative((bins * 12) / binsPerOctave);
+  });
 }
 
 /**
@@ -292,7 +300,9 @@ export function pitchTuning(...args: unknown[]): number {
  * @throws `RangeError` for a non-finite `tuningCents`, `SonareError` for a non-positive `a4Hz`.
  */
 export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
-  return requireModule().tuningToReferenceHz(tuningCents, a4Hz);
+  return withEntry('tuningToReferenceHz', () => {
+    return requireModule().tuningToReferenceHz(tuningCents, a4Hz);
+  });
 }
 
 /**
@@ -304,7 +314,9 @@ export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
  * @throws `RangeError` for a non-finite `referenceHz` or `a4Hz`, `SonareError` for a non-positive one.
  */
 export function referenceHzToTuning(referenceHz: number, a4Hz = 440): number {
-  return requireModule().referenceHzToTuning(referenceHz, a4Hz);
+  return withEntry('referenceHzToTuning', () => {
+    return requireModule().referenceHzToTuning(referenceHz, a4Hz);
+  });
 }
 
 /**
@@ -321,16 +333,18 @@ export function estimateTuning(
   options?: OptionsOf<EstimateTuningRequest>,
 ): number;
 export function estimateTuning(...args: unknown[]): number {
-  const r = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
-  assertAudioInput('estimateTuning', r.samples, r.sampleRate, r);
-  const binsPerOctave = r.binsPerOctave ?? 12;
-  const bins = requireModule().estimateTuning(
-    r.samples,
-    r.sampleRate,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-    r.resolution ?? 0.01,
-    binsPerOctave,
-  );
-  return tuningCentsFromNative((bins * 12) / binsPerOctave);
+  return withEntry('estimateTuning', () => {
+    const r = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const binsPerOctave = r.binsPerOctave ?? 12;
+    const bins = requireModule().estimateTuning(
+      r.samples,
+      r.sampleRate,
+      r.nFft ?? 2048,
+      r.hopLength ?? 512,
+      r.resolution ?? 0.01,
+      binsPerOctave,
+    );
+    return tuningCentsFromNative((bins * 12) / binsPerOctave);
+  });
 }

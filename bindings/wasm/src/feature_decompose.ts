@@ -3,6 +3,7 @@
  * the masks built over it, and the recurrence structure of a track.
  */
 
+import { refuse, withEntry } from './internal/entry.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
@@ -149,9 +150,9 @@ export interface SegmentPathEnhanceRequest {
   nFilters?: number;
 }
 
-function assertSquare(fnName: string, matrix: Matrix2D, argName: string): void {
+function assertSquare(matrix: Matrix2D, argName: string): void {
   if (matrix.rows !== matrix.cols) {
-    throw new RangeError(`${fnName}: ${argName} must be square`);
+    throw refuse(`${argName} must be square`);
   }
 }
 
@@ -212,25 +213,27 @@ export interface HpssWithResidualResult {
  */
 export function decompose(request: DecomposeRequest): DecomposeResult;
 export function decompose(...args: unknown[]): DecomposeResult {
-  const r = requestOnly<DecomposeRequest>('decompose', args);
-  const s = assertMatrix2D('decompose', r.s, 's');
-  assertIntegerValue('decompose', r.nComponents, 'nComponents');
-  assertPositiveInteger('decompose', r.nComponents, 'nComponents');
-  // An empty token is the embind reader's spelling of the library's initialiser.
-  const init = optionalToken('decompose', r.init, 'init', NMF_INITS) ?? '';
-  const native = requireModule().decomposeWithInit(
-    s.data,
-    s.rows,
-    s.cols,
-    r.nComponents,
-    r.nIter,
-    r.beta ?? 2.0,
-    init,
-  );
-  return {
-    w: toMatrix2D(native.w, s.rows, r.nComponents),
-    h: toMatrix2D(native.h, r.nComponents, s.cols),
-  };
+  return withEntry('decompose', () => {
+    const r = requestOnly<DecomposeRequest>('decompose', args);
+    const s = assertMatrix2D(r.s, 's');
+    assertIntegerValue(r.nComponents, 'nComponents');
+    assertPositiveInteger(r.nComponents, 'nComponents');
+    // An empty token is the embind reader's spelling of the library's initialiser.
+    const init = optionalToken(r.init, 'init', NMF_INITS) ?? '';
+    const native = requireModule().decomposeWithInit(
+      s.data,
+      s.rows,
+      s.cols,
+      r.nComponents,
+      r.nIter,
+      r.beta ?? 2.0,
+      init,
+    );
+    return {
+      w: toMatrix2D(native.w, s.rows, r.nComponents),
+      h: toMatrix2D(native.h, r.nComponents, s.cols),
+    };
+  });
 }
 
 /** Options for {@link decomposeStems}. */
@@ -290,16 +293,18 @@ export function decomposeStems(
   options?: OptionsOf<DecomposeStemsRequest>,
 ): DecomposeStemsResult;
 export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
-  const r = sampleOneShot<DecomposeStemsRequest>('decomposeStems', args);
-  assertAudioInput('decomposeStems', r.samples, r.sampleRate, r);
-  return requireModule().decomposeStems(r.samples, r.sampleRate, {
-    nComponents: r.nComponents,
-    nFft: r.nFft,
-    hopLength: r.hopLength,
-    nIter: r.nIter,
-    beta: r.beta,
-    init: r.init,
-    maskPower: r.maskPower,
+  return withEntry('decomposeStems', () => {
+    const r = sampleOneShot<DecomposeStemsRequest>('decomposeStems', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().decomposeStems(r.samples, r.sampleRate, {
+      nComponents: r.nComponents,
+      nFft: r.nFft,
+      hopLength: r.hopLength,
+      nIter: r.nIter,
+      beta: r.beta,
+      init: r.init,
+      maskPower: r.maskPower,
+    });
   });
 }
 
@@ -353,16 +358,18 @@ export interface DecomposeStemsLinkedResult {
 export function decomposeStemsLinked(
   request: DecomposeStemsLinkedRequest,
 ): DecomposeStemsLinkedResult {
-  const r = requestOnly<DecomposeStemsLinkedRequest>('decomposeStemsLinked', [request]);
-  assertAudioChannels('decomposeStemsLinked', r.channels, r.sampleRate, r);
-  return requireModule().decomposeStemsLinked(r.channels, r.sampleRate, {
-    nComponents: r.nComponents,
-    nFft: r.nFft,
-    hopLength: r.hopLength,
-    nIter: r.nIter,
-    beta: r.beta,
-    init: r.init,
-    maskPower: r.maskPower,
+  return withEntry('decomposeStemsLinked', () => {
+    const r = requestOnly<DecomposeStemsLinkedRequest>('decomposeStemsLinked', [request]);
+    assertAudioChannels(r.channels, r.sampleRate, r);
+    return requireModule().decomposeStemsLinked(r.channels, r.sampleRate, {
+      nComponents: r.nComponents,
+      nFft: r.nFft,
+      hopLength: r.hopLength,
+      nIter: r.nIter,
+      beta: r.beta,
+      init: r.init,
+      maskPower: r.maskPower,
+    });
   });
 }
 
@@ -375,11 +382,13 @@ export function decomposeStemsLinked(
  */
 export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(...args: unknown[]): Matrix2D {
-  const r = requestOnly<NnFilterRequest>('nnFilter', args);
-  const s = assertMatrix2D('nnFilter', r.s, 's');
-  // An empty token is the embind reader's spelling of the library's aggregate.
-  const aggregate = optionalToken('nnFilter', r.aggregate, 'aggregate', NN_FILTER_AGGREGATES) ?? '';
-  return requireModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k, r.width);
+  return withEntry('nnFilter', () => {
+    const r = requestOnly<NnFilterRequest>('nnFilter', args);
+    const s = assertMatrix2D(r.s, 's');
+    // An empty token is the embind reader's spelling of the library's aggregate.
+    const aggregate = optionalToken(r.aggregate, 'aggregate', NN_FILTER_AGGREGATES) ?? '';
+    return requireModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k, r.width);
+  });
 }
 
 /**
@@ -400,14 +409,16 @@ export function remix(
   options: OptionsOf<RemixRequest>,
 ): Float32Array;
 export function remix(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<RemixRequest>('remix', args);
-  assertAudioInput('remix', r.samples, r.sampleRate, r);
-  const alignZeros = optionalBoolean('remix', r.alignZeros, 'alignZeros', true);
-  // Sample indices must reach the native side as exact 32-bit integers, and a
-  // boundary the conversion changed would cut the slice somewhere the caller
-  // never named.
-  const intervals = toInt32Array('remix', r.intervals, 'intervals');
-  return requireModule().remix(r.samples, intervals, r.sampleRate, alignZeros);
+  return withEntry('remix', () => {
+    const r = sampleOneShot<RemixRequest>('remix', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const alignZeros = optionalBoolean(r.alignZeros, 'alignZeros', true);
+    // Sample indices must reach the native side as exact 32-bit integers, and a
+    // boundary the conversion changed would cut the slice somewhere the caller
+    // never named.
+    const intervals = toInt32Array(r.intervals, 'intervals');
+    return requireModule().remix(r.samples, intervals, r.sampleRate, alignZeros);
+  });
 }
 
 /**
@@ -433,11 +444,13 @@ export function remixAlignedIntervals(
   options: OptionsOf<RemixRequest>,
 ): Int32Array;
 export function remixAlignedIntervals(...args: unknown[]): Int32Array {
-  const r = sampleOneShot<RemixRequest>('remixAlignedIntervals', args);
-  assertAudioInput('remixAlignedIntervals', r.samples, r.sampleRate, r);
-  const alignZeros = optionalBoolean('remixAlignedIntervals', r.alignZeros, 'alignZeros', true);
-  const intervals = toInt32Array('remixAlignedIntervals', r.intervals, 'intervals');
-  return requireModule().remixAlignedIntervals(r.samples, intervals, r.sampleRate, alignZeros);
+  return withEntry('remixAlignedIntervals', () => {
+    const r = sampleOneShot<RemixRequest>('remixAlignedIntervals', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const alignZeros = optionalBoolean(r.alignZeros, 'alignZeros', true);
+    const intervals = toInt32Array(r.intervals, 'intervals');
+    return requireModule().remixAlignedIntervals(r.samples, intervals, r.sampleRate, alignZeros);
+  });
 }
 
 /**
@@ -469,22 +482,24 @@ export function hpssWithResidual(
   options?: OptionsOf<HpssWithResidualRequest>,
 ): HpssWithResidualResult;
 export function hpssWithResidual(...args: unknown[]): HpssWithResidualResult {
-  const r = sampleOneShot<HpssWithResidualRequest>('hpssWithResidual', args);
-  assertAudioInput('hpssWithResidual', r.samples, r.sampleRate, r);
-  const fftOptions = resolveEffectFftOptions('hpssWithResidual', r.nFft, r.hopLength);
-  const hardMask = optionalBoolean('hpssWithResidual', r.hardMask, 'hardMask', false);
-  const kernelHarmonic = r.kernelHarmonic ?? 31;
-  const kernelPercussive = r.kernelPercussive ?? 31;
-  assertHpssKernels('hpssWithResidual', kernelHarmonic, kernelPercussive);
-  return requireModule().hpssWithResidualEx(
-    r.samples,
-    r.sampleRate,
-    kernelHarmonic,
-    kernelPercussive,
-    fftOptions.nFft,
-    fftOptions.hopLength,
-    hardMask,
-  );
+  return withEntry('hpssWithResidual', () => {
+    const r = sampleOneShot<HpssWithResidualRequest>('hpssWithResidual', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
+    const hardMask = optionalBoolean(r.hardMask, 'hardMask', false);
+    const kernelHarmonic = r.kernelHarmonic ?? 31;
+    const kernelPercussive = r.kernelPercussive ?? 31;
+    assertHpssKernels(kernelHarmonic, kernelPercussive);
+    return requireModule().hpssWithResidualEx(
+      r.samples,
+      r.sampleRate,
+      kernelHarmonic,
+      kernelPercussive,
+      fftOptions.nFft,
+      fftOptions.hopLength,
+      hardMask,
+    );
+  });
 }
 
 /**
@@ -494,27 +509,29 @@ export function hpssWithResidual(...args: unknown[]): HpssWithResidualResult {
  */
 export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): Matrix2D;
 export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentCrossSimilarityRequest>('segmentCrossSimilarity', args);
-  const x = assertMatrix2D('segmentCrossSimilarity', r.x, 'x');
-  const y = assertMatrix2D('segmentCrossSimilarity', r.y, 'y');
-  if (x.rows !== y.rows) {
-    throw new RangeError('segmentCrossSimilarity: feature dimensions must match');
-  }
-  if (r.k !== undefined) {
-    assertPositiveInteger('segmentCrossSimilarity', r.k, 'k');
-  }
-  const native = requireModule().segmentCrossSimilarity(
-    x.data,
-    x.rows,
-    x.cols,
-    y.data,
-    y.rows,
-    y.cols,
-    r.k ?? 0,
-    r.metric ?? 'cosine',
-    r.mode ?? 'connectivity',
-  );
-  return toMatrix2D(native.values, native.rows, native.cols);
+  return withEntry('segmentCrossSimilarity', () => {
+    const r = requestOnly<SegmentCrossSimilarityRequest>('segmentCrossSimilarity', args);
+    const x = assertMatrix2D(r.x, 'x');
+    const y = assertMatrix2D(r.y, 'y');
+    if (x.rows !== y.rows) {
+      throw refuse('feature dimensions must match');
+    }
+    if (r.k !== undefined) {
+      assertPositiveInteger(r.k, 'k');
+    }
+    const native = requireModule().segmentCrossSimilarity(
+      x.data,
+      x.rows,
+      x.cols,
+      y.data,
+      y.rows,
+      y.cols,
+      r.k ?? 0,
+      r.metric ?? 'cosine',
+      r.mode ?? 'connectivity',
+    );
+    return toMatrix2D(native.values, native.rows, native.cols);
+  });
 }
 
 /**
@@ -524,23 +541,25 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
  */
 export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): Matrix2D;
 export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
-  const data = assertMatrix2D('segmentRecurrenceMatrix', r.data, 'data');
-  if (r.k !== undefined) {
-    assertPositiveInteger('segmentRecurrenceMatrix', r.k, 'k');
-  }
-  assertNonNegativeInteger('segmentRecurrenceMatrix', r.width ?? 1, 'width');
-  const native = requireModule().segmentRecurrenceMatrix(
-    data.data,
-    data.rows,
-    data.cols,
-    r.k ?? 0,
-    r.width ?? 1,
-    optionalBoolean('segmentRecurrenceMatrix', r.sym, 'sym', false),
-    r.metric ?? 'euclidean',
-    r.mode ?? 'connectivity',
-  );
-  return toMatrix2D(native.values, native.rows, native.cols);
+  return withEntry('segmentRecurrenceMatrix', () => {
+    const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
+    const data = assertMatrix2D(r.data, 'data');
+    if (r.k !== undefined) {
+      assertPositiveInteger(r.k, 'k');
+    }
+    assertNonNegativeInteger(r.width ?? 1, 'width');
+    const native = requireModule().segmentRecurrenceMatrix(
+      data.data,
+      data.rows,
+      data.cols,
+      r.k ?? 0,
+      r.width ?? 1,
+      optionalBoolean(r.sym, 'sym', false),
+      r.metric ?? 'euclidean',
+      r.mode ?? 'connectivity',
+    );
+    return toMatrix2D(native.values, native.rows, native.cols);
+  });
 }
 
 /**
@@ -550,15 +569,17 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
  */
 export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): Matrix2D;
 export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
-  const recurrence = assertMatrix2D('segmentRecurrenceToLag', r.recurrence, 'recurrence');
-  assertSquare('segmentRecurrenceToLag', recurrence, 'recurrence');
-  const native = requireModule().segmentRecurrenceToLag(
-    recurrence.data,
-    recurrence.rows,
-    optionalBoolean('segmentRecurrenceToLag', r.pad, 'pad', true),
-  );
-  return toMatrix2D(native.values, native.rows, native.cols);
+  return withEntry('segmentRecurrenceToLag', () => {
+    const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
+    const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
+    assertSquare(recurrence, 'recurrence');
+    const native = requireModule().segmentRecurrenceToLag(
+      recurrence.data,
+      recurrence.rows,
+      optionalBoolean(r.pad, 'pad', true),
+    );
+    return toMatrix2D(native.values, native.rows, native.cols);
+  });
 }
 
 /**
@@ -568,40 +589,46 @@ export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
  */
 export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): Matrix2D;
 export function segmentLagToRecurrence(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
-  const lag = assertMatrix2D('segmentLagToRecurrence', r.lag, 'lag');
-  const native = requireModule().segmentLagToRecurrence(lag.data, lag.cols, lag.rows);
-  return toMatrix2D(native.values, native.rows, native.cols);
+  return withEntry('segmentLagToRecurrence', () => {
+    const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
+    const lag = assertMatrix2D(r.lag, 'lag');
+    const native = requireModule().segmentLagToRecurrence(lag.data, lag.cols, lag.rows);
+    return toMatrix2D(native.values, native.rows, native.cols);
+  });
 }
 
 /** Refine frame boundaries by clustering within each parent segment. */
 export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array;
 export function segmentSubsegment(...args: unknown[]): Int32Array {
-  const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
-  const data = assertMatrix2D('segmentSubsegment', r.data, 'data');
-  assertPositiveInteger('segmentSubsegment', r.nSegments ?? 4, 'nSegments');
-  return requireModule().segmentSubsegment(
-    data.data,
-    data.rows,
-    data.cols,
-    toInt32Array('segmentSubsegment', r.boundaries, 'boundaries'),
-    r.nSegments ?? 4,
-  );
+  return withEntry('segmentSubsegment', () => {
+    const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
+    const data = assertMatrix2D(r.data, 'data');
+    assertPositiveInteger(r.nSegments ?? 4, 'nSegments');
+    return requireModule().segmentSubsegment(
+      data.data,
+      data.rows,
+      data.cols,
+      toInt32Array(r.boundaries, 'boundaries'),
+      r.nSegments ?? 4,
+    );
+  });
 }
 
 /** Cluster feature columns and return one label per column. */
 export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array;
 export function segmentAgglomerative(...args: unknown[]): Int32Array {
-  const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
-  const data = assertMatrix2D('segmentAgglomerative', r.data, 'data');
-  assertPositiveInteger('segmentAgglomerative', r.k, 'k');
-  return requireModule().segmentAgglomerative(
-    data.data,
-    data.rows,
-    data.cols,
-    r.k,
-    r.linkage ?? 'average',
-  );
+  return withEntry('segmentAgglomerative', () => {
+    const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
+    const data = assertMatrix2D(r.data, 'data');
+    assertPositiveInteger(r.k, 'k');
+    return requireModule().segmentAgglomerative(
+      data.data,
+      data.rows,
+      data.cols,
+      r.k,
+      r.linkage ?? 'average',
+    );
+  });
 }
 
 /**
@@ -611,20 +638,22 @@ export function segmentAgglomerative(...args: unknown[]): Int32Array {
  */
 export function segmentPathEnhance(request: SegmentPathEnhanceRequest): Matrix2D;
 export function segmentPathEnhance(...args: unknown[]): Matrix2D {
-  const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
-  const recurrence = assertMatrix2D('segmentPathEnhance', r.recurrence, 'recurrence');
-  assertSquare('segmentPathEnhance', recurrence, 'recurrence');
-  assertPositiveInteger('segmentPathEnhance', r.win, 'win');
-  assertPositiveInteger('segmentPathEnhance', r.maxRatio ?? 2, 'maxRatio');
-  assertNonNegativeInteger('segmentPathEnhance', r.minRatio ?? 0, 'minRatio');
-  assertPositiveInteger('segmentPathEnhance', r.nFilters ?? 7, 'nFilters');
-  const native = requireModule().segmentPathEnhance(
-    recurrence.data,
-    recurrence.rows,
-    r.win,
-    r.maxRatio ?? 2,
-    r.minRatio ?? 0,
-    r.nFilters ?? 7,
-  );
-  return toMatrix2D(native.values, native.rows, native.cols);
+  return withEntry('segmentPathEnhance', () => {
+    const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
+    const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
+    assertSquare(recurrence, 'recurrence');
+    assertPositiveInteger(r.win, 'win');
+    assertPositiveInteger(r.maxRatio ?? 2, 'maxRatio');
+    assertNonNegativeInteger(r.minRatio ?? 0, 'minRatio');
+    assertPositiveInteger(r.nFilters ?? 7, 'nFilters');
+    const native = requireModule().segmentPathEnhance(
+      recurrence.data,
+      recurrence.rows,
+      r.win,
+      r.maxRatio ?? 2,
+      r.minRatio ?? 0,
+      r.nFilters ?? 7,
+    );
+    return toMatrix2D(native.values, native.rows, native.cols);
+  });
 }

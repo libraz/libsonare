@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
 import { assertFloat32Array, assertPositiveInteger, requestOnly } from './validation.js';
@@ -113,15 +114,12 @@ export function noteToHz(note: string): number {
  * @throws `RangeError` for a hop that is not a positive integer.
  */
 export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512): number {
-  // The conversion requires a positive hop, so positivity is the domain; a
-  // fraction has to be refused here because the addon narrowing truncates it.
-  const resolvedHopLength = resolvePositiveIntegerOption(
-    'framesToTime',
-    'hopLength',
-    hopLength,
-    512,
-  );
-  return addon.framesToTime(frames, sampleRate, resolvedHopLength);
+  return withEntry('framesToTime', () => {
+    // The conversion requires a positive hop, so positivity is the domain; a
+    // fraction has to be refused here because the addon narrowing truncates it.
+    const resolvedHopLength = resolvePositiveIntegerOption('hopLength', hopLength, 512);
+    return addon.framesToTime(frames, sampleRate, resolvedHopLength);
+  });
 }
 
 /**
@@ -132,23 +130,20 @@ export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512
  * tell from a real one.
  */
 export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 512): number {
-  // Positive hop, as framesToTime: the same conversion in the other direction.
-  const resolvedHopLength = resolvePositiveIntegerOption(
-    'timeToFrames',
-    'hopLength',
-    hopLength,
-    512,
-  );
-  return addon.timeToFrames(timeSec, sampleRate, resolvedHopLength);
+  return withEntry('timeToFrames', () => {
+    // Positive hop, as framesToTime: the same conversion in the other direction.
+    const resolvedHopLength = resolvePositiveIntegerOption('hopLength', hopLength, 512);
+    return addon.timeToFrames(timeSec, sampleRate, resolvedHopLength);
+  });
 }
 
 /** Absent `nFft` leaves out the centring offset; the offset must otherwise be a positive integer. */
-function resolveCentringNFft(fnName: string, nFft: number | null | undefined): number {
+function resolveCentringNFft(nFft: number | null | undefined): number {
   if (nFft === undefined || nFft === null) {
     return 0;
   }
-  const resolved = resolveIntegerOption(fnName, 'nFft', nFft, 0);
-  assertPositiveInteger(fnName, resolved, 'nFft');
+  const resolved = resolveIntegerOption('nFft', nFft, 0);
+  assertPositiveInteger(resolved, 'nFft');
   return resolved;
 }
 
@@ -160,13 +155,11 @@ function resolveCentringNFft(fnName: string, nFft: number | null | undefined): n
  * @throws `RangeError` for an explicit `nFft` that is not a positive integer.
  */
 export function framesToSamples(frames: number, hopLength = 512, nFft?: number): number {
-  // Integrality only for the hop: this conversion saturates rather than refusing.
-  const resolvedHopLength = resolveIntegerOption('framesToSamples', 'hopLength', hopLength, 512);
-  return addon.framesToSamples(
-    frames,
-    resolvedHopLength,
-    resolveCentringNFft('framesToSamples', nFft),
-  );
+  return withEntry('framesToSamples', () => {
+    // Integrality only for the hop: this conversion saturates rather than refusing.
+    const resolvedHopLength = resolveIntegerOption('hopLength', hopLength, 512);
+    return addon.framesToSamples(frames, resolvedHopLength, resolveCentringNFft(nFft));
+  });
 }
 
 /**
@@ -177,41 +170,47 @@ export function framesToSamples(frames: number, hopLength = 512, nFft?: number):
  * @throws `RangeError` for an explicit `nFft` that is not a positive integer.
  */
 export function samplesToFrames(samples: number, hopLength = 512, nFft?: number): number {
-  // Integrality only for the hop: a non-positive hop answers 0 frames rather than failing.
-  const resolvedHopLength = resolveIntegerOption('samplesToFrames', 'hopLength', hopLength, 512);
-  return addon.samplesToFrames(
-    samples,
-    resolvedHopLength,
-    resolveCentringNFft('samplesToFrames', nFft),
-  );
+  return withEntry('samplesToFrames', () => {
+    // Integrality only for the hop: a non-positive hop answers 0 frames rather than failing.
+    const resolvedHopLength = resolveIntegerOption('hopLength', hopLength, 512);
+    return addon.samplesToFrames(samples, resolvedHopLength, resolveCentringNFft(nFft));
+  });
 }
 
 /** Power to dB. Request-only; `values` is a power spectrogram or series. */
 export function powerToDb(request: PowerToDbRequest): Float32Array;
 export function powerToDb(...args: unknown[]): Float32Array {
-  const r = requestOnly<PowerToDbRequest>('powerToDb', args);
-  assertFloat32Array('powerToDb', r.values, 'values');
-  return addon.powerToDb(r.values, r.ref ?? 1, r.amin ?? 1e-10, r.topDb ?? 80);
+  return withEntry('powerToDb', () => {
+    const r = requestOnly<PowerToDbRequest>('powerToDb', args);
+    assertFloat32Array(r.values, 'values');
+    return addon.powerToDb(r.values, r.ref ?? 1, r.amin ?? 1e-10, r.topDb ?? 80);
+  });
 }
 
 /** Amplitude to dB. Request-only; `values` is a magnitude spectrogram or series. */
 export function amplitudeToDb(request: AmplitudeToDbRequest): Float32Array;
 export function amplitudeToDb(...args: unknown[]): Float32Array {
-  const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
-  assertFloat32Array('amplitudeToDb', r.values, 'values');
-  return addon.amplitudeToDb(r.values, r.ref ?? 1, r.amin ?? 1e-5, r.topDb ?? 80);
+  return withEntry('amplitudeToDb', () => {
+    const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
+    assertFloat32Array(r.values, 'values');
+    return addon.amplitudeToDb(r.values, r.ref ?? 1, r.amin ?? 1e-5, r.topDb ?? 80);
+  });
 }
 
 /** dB to power. Request-only. */
 export function dbToPower(request: DbToPowerRequest): Float32Array;
 export function dbToPower(...args: unknown[]): Float32Array {
-  const r = requestOnly<DbToPowerRequest>('dbToPower', args);
-  return addon.dbToPower(r.values, r.ref ?? 1);
+  return withEntry('dbToPower', () => {
+    const r = requestOnly<DbToPowerRequest>('dbToPower', args);
+    return addon.dbToPower(r.values, r.ref ?? 1);
+  });
 }
 
 /** dB to amplitude. Request-only. */
 export function dbToAmplitude(request: DbToAmplitudeRequest): Float32Array;
 export function dbToAmplitude(...args: unknown[]): Float32Array {
-  const r = requestOnly<DbToAmplitudeRequest>('dbToAmplitude', args);
-  return addon.dbToAmplitude(r.values, r.ref ?? 1);
+  return withEntry('dbToAmplitude', () => {
+    const r = requestOnly<DbToAmplitudeRequest>('dbToAmplitude', args);
+    return addon.dbToAmplitude(r.values, r.ref ?? 1);
+  });
 }

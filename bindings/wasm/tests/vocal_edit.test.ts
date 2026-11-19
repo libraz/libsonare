@@ -81,7 +81,9 @@ describe('WASM vocal edit facade', () => {
     for (const analysis of [0, '', false, 1, 'frames', []]) {
       const request = { samples: tone(256), sampleRate: SAMPLE_RATE, analysis } as never;
       expect(() => createVocalEditSession(request)).toThrow(TypeError);
-      expect(() => createVocalEditSession(request)).toThrow(/^analysis must be an object$/);
+      expect(() => createVocalEditSession(request)).toThrow(
+        /^createVocalEditSession: analysis must be an object$/,
+      );
     }
   });
 
@@ -207,7 +209,9 @@ describe('WASM vocal edit facade', () => {
       await expect(pending).rejects.toMatchObject({ code: ErrorCode.Cancelled });
 
       snapshot.destroy();
-      await expect(snapshot.renderAsync({})).rejects.toThrow(/disposed/);
+      await expect(snapshot.renderAsync({})).rejects.toThrow(
+        /VocalRenderSnapshot has been destroyed$/,
+      );
     } finally {
       snapshot.destroy();
       session.destroy();
@@ -219,12 +223,19 @@ describe('WASM vocal edit facade', () => {
     const draft = session.beginEdit();
     draft.cancel();
     expect(() => draft.cancel()).not.toThrow();
+    // A later call names the act that ended the draft, not a destroy().
+    expect(() => draft.token).toThrow(/^VocalEditDraft\.token: VocalEditDraft has been cancelled$/);
     draft.destroy();
+    expect(() => draft.token).toThrow(/^VocalEditDraft\.token: VocalEditDraft has been cancelled$/);
     const snapshot = session.captureRenderSnapshot();
     snapshot.destroy();
-    expect(() => snapshot.outputLengthSamples).toThrow(/disposed/);
+    expect(() => snapshot.outputLengthSamples).toThrow(
+      /^VocalRenderSnapshot\.outputLengthSamples: VocalRenderSnapshot has been destroyed$/,
+    );
     session.destroy();
-    expect(() => session.token).toThrow(/disposed/);
+    expect(() => session.token).toThrow(
+      /^VocalEditSession\.token: VocalEditSession has been destroyed$/,
+    );
     expect(() => session.destroy()).not.toThrow();
   });
 
@@ -364,8 +375,10 @@ describe('WASM vocal edit facade', () => {
     const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
     const draft = session.beginEdit();
     session.destroy();
-    expect(() => draft.token).toThrow(/disposed/);
-    expect(() => draft.apply({ expectedGeneration: '0', operations: [] })).toThrow(/disposed/);
+    expect(() => draft.token).toThrow(/^VocalEditDraft\.token: VocalEditDraft has been destroyed$/);
+    expect(() => draft.apply({ expectedGeneration: '0', operations: [] })).toThrow(
+      /^VocalEditDraft\.apply: VocalEditDraft has been destroyed$/,
+    );
     expect(() => draft.cancel()).not.toThrow();
   });
 

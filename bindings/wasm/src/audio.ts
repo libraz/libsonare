@@ -17,7 +17,7 @@ import type {
   PitchShiftRequest,
   TimeStretchRequest,
 } from './effects_timepitch.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode } from './errors.js';
 import type { NnlsChromaRequest, OnsetStrengthRequest } from './feature_music.js';
 import type { PitchPyinRequest, PitchYinRequest } from './feature_pitch.js';
 import type {
@@ -60,7 +60,7 @@ import {
   zeroCrossingRate,
 } from './features.js';
 import { CHANNEL_LAYOUT_VALUES, CHANNEL_LAYOUTS } from './internal/channel_layout.js';
-import { entryClass, withEntry } from './internal/entry.js';
+import { codedError, entryClass, invalidState, refuseType, withEntry } from './internal/entry.js';
 import type { MasterAudioRequest, NormalizeRequest } from './mastering_chain.js';
 import { masterAudio } from './mastering_chain.js';
 import type {
@@ -261,7 +261,9 @@ export interface DownmixOptions {
  * ```
  */
 export function decodeChannels(bytes: Uint8Array): DecodedChannels {
-  return getSonareModule().decodeChannels(bytes);
+  return withEntry('decodeChannels', () => {
+    return getSonareModule().decodeChannels(bytes);
+  });
 }
 
 /**
@@ -297,11 +299,13 @@ export function downmix(
   targetLayout: ChannelLayout,
   options: DownmixOptions = {},
 ): Float32Array[] {
-  if (typeof targetLayout !== 'string') {
-    throw new TypeError(`downmix: targetLayout must be one of ${CHANNEL_LAYOUTS.join(', ')}`);
-  }
-  const layout = requireToken('downmix', targetLayout, 'targetLayout', CHANNEL_LAYOUTS, 'mono');
-  return getSonareModule().downmix(channels, CHANNEL_LAYOUT_VALUES[layout], options);
+  return withEntry('downmix', () => {
+    if (typeof targetLayout !== 'string') {
+      throw refuseType(`targetLayout must be one of ${CHANNEL_LAYOUTS.join(', ')}`);
+    }
+    const layout = requireToken(targetLayout, 'targetLayout', CHANNEL_LAYOUTS, 'mono');
+    return getSonareModule().downmix(channels, CHANNEL_LAYOUT_VALUES[layout], options);
+  });
 }
 
 /**
@@ -337,7 +341,7 @@ async function decodeWithBrowserCodec(
     );
 
   if (!context) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.NotSupported,
       `${caller} failed and browser decodeAudioData is unavailable: ${
         nativeError instanceof Error ? nativeError.message : String(nativeError)
@@ -354,7 +358,7 @@ async function decodeWithBrowserCodec(
       channels: audioBufferChannels(decoded),
     };
   } catch (fallbackError) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.DecodeFailed,
       `${caller} failed and browser decodeAudioData fallback failed: ${
         fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
@@ -380,11 +384,11 @@ function audioRequest<R>(
 ): R {
   const bag = options ?? {};
   if (typeof bag !== 'object' || Array.isArray(bag) || ArrayBuffer.isView(bag)) {
-    throw new TypeError(`Audio.${methodName}: options must be an object`);
+    throw refuseType(`Audio.${methodName}: options must be an object`);
   }
   for (const key of ['samples', 'sampleRate']) {
     if (key in bag) {
-      throw new TypeError(`Audio.${methodName}: options must not carry '${key}'`);
+      throw refuseType(`Audio.${methodName}: options must not carry '${key}'`);
     }
   }
   return { ...bag, samples, sampleRate } as R;
@@ -415,15 +419,15 @@ const AUDIO_FACTORY_KEY = Symbol('Audio factory');
  * const mel = audio.melSpectrogram();
  * ```
  */
-@entryClass('Audio')
+@entryClass('Audio', ['requireAlive', 'samples'])
 export class Audio {
   private _samples: Float32Array | null;
   private readonly _sampleRate: number;
 
   private constructor(key: symbol, samples: Float32Array, sampleRate: number) {
     if (key !== AUDIO_FACTORY_KEY) {
-      throw new TypeError(
-        'Audio: construct it with Audio.fromBuffer, Audio.fromMemory or Audio.fromMemoryWithBrowserFallback',
+      throw refuseType(
+        'construct it with Audio.fromBuffer, Audio.fromMemory or Audio.fromMemoryWithBrowserFallback',
       );
     }
     this._samples = samples;
@@ -433,7 +437,7 @@ export class Audio {
   /** The held samples; refuses once {@link destroy} released them. */
   private requireAlive(): Float32Array {
     if (this._samples === null) {
-      throw new SonareError(ErrorCode.InvalidState, 'Audio has been destroyed');
+      throw invalidState('Audio has been destroyed');
     }
     return this._samples;
   }

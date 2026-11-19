@@ -5,7 +5,7 @@ import {
   panModeCode,
   sendTimingCode,
 } from './codes.js';
-import { entryClass } from './internal/entry.js';
+import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { assertStripMetering, mixSceneJsonToNative } from './internal/mix_scene.js';
 import { getSonareModule } from './module_state.js';
@@ -166,19 +166,18 @@ function isAbsent(value: unknown): value is undefined | null {
 }
 
 /** A required finite number field of an object argument. */
-function requiredNumber(fnName: string, value: unknown, name: string): number {
-  assertFloatValue(fnName, value, name);
+function requiredNumber(value: unknown, name: string): number {
+  assertFloatValue(value, name);
   return value as number;
 }
 
 /** An optional finite number field; absent takes `fallback`. */
-function optionalNumber(fnName: string, value: unknown, name: string, fallback: number): number {
-  return isAbsent(value) ? fallback : requiredNumber(fnName, value, name);
+function optionalNumber(value: unknown, name: string, fallback: number): number {
+  return isAbsent(value) ? fallback : requiredNumber(value, name);
 }
 
 /** A closed token: a non-string is a `TypeError` (a number never selects an ordinal), an unknown string a `RangeError`. */
 function tokenArg(
-  fnName: string,
   value: unknown,
   name: string,
   resolve: (token: string) => number,
@@ -186,26 +185,26 @@ function tokenArg(
 ): number {
   if (isAbsent(value)) {
     if (fallback === undefined) {
-      throw new TypeError(`${fnName}: ${name} must be a string`);
+      throw refuseType(`${name} must be a string`);
     }
     return resolve(fallback);
   }
-  assertString(fnName, value, name);
+  assertString(value, name);
   return resolve(value as string);
 }
 
 const curveToken = (token: string): number => automationCurveCode(token as AutomationCurve);
 
-function maxBlockSizeOf(fnName: string, value: unknown): number | undefined {
+function maxBlockSizeOf(value: unknown): number | undefined {
   if (isAbsent(value)) {
     return undefined;
   }
-  assertIntegerValue(fnName, value, 'maxBlockSize');
+  assertIntegerValue(value, 'maxBlockSize');
   if (value === 0) {
-    throw new RangeError(`${fnName}: maxBlockSize must not be 0 (omit it for the default)`);
+    throw refuse(`maxBlockSize must not be 0 (omit it for the default)`);
   }
   if (value < 0) {
-    throw new RangeError(`${fnName}: maxBlockSize must be a positive integer`);
+    throw refuse(`maxBlockSize must be a positive integer`);
   }
   return value;
 }
@@ -257,7 +256,7 @@ export interface MixerRealtimeBuffer {
  * }
  * ```
  */
-@entryClass('Mixer', ['processStereo', 'processStereoInto'])
+@entryClass('Mixer', ['processStereo', 'processStereoInto', 'mixer', 'stripIndex'])
 export class Mixer {
   private mixerHandle: import('./sonare.js').WasmMixer;
   private released = false;
@@ -284,16 +283,16 @@ export class Mixer {
     const json = adoptedSceneJson;
     adoptedSceneJson = undefined;
     const bag = requestObject('Mixer', config, 'config', true);
-    assertSampleRate('Mixer', bag.sampleRate);
-    const maxBlockSize = maxBlockSizeOf('Mixer', bag.maxBlockSize);
+    assertSampleRate(bag.sampleRate);
+    const maxBlockSize = maxBlockSizeOf(bag.maxBlockSize);
     let sceneJson = json;
     if (sceneJson === undefined) {
       if (!isAbsent(bag.scene) && !isObject(bag.scene)) {
-        throw new TypeError('Mixer: scene must be an object');
+        throw refuseType('scene must be an object');
       }
       sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
     }
-    sceneJson = mixSceneJsonToNative('Mixer', sceneJson);
+    sceneJson = mixSceneJsonToNative(sceneJson);
     const module = getSonareModule();
     this.mixerHandle = module.createMixerFromSceneJson(
       sceneJson,
@@ -311,7 +310,7 @@ export class Mixer {
    *   RangeError for a sample rate outside `[8000, 384000]` or a `maxBlockSize` of `0` or below.
    */
   static fromJson(json: string, options: MixerJsonOptions): Mixer {
-    assertString('Mixer.fromJson', json, 'json');
+    assertString(json, 'json');
     const bag = requestObject('Mixer.fromJson', options, 'options', true);
     adoptedSceneJson = json;
     try {
@@ -325,15 +324,15 @@ export class Mixer {
   }
 
   /** Resolve a strip reference to its index; an unknown id is a `RangeError`. */
-  private stripIndex(fnName: string, strip: StripRef): number {
+  private stripIndex(strip: StripRef): number {
     if (typeof strip === 'string') {
       const index = this.mixer.stripById(strip);
       if (index < 0) {
-        throw new RangeError(`${fnName}: no strip with id '${strip}'`);
+        throw refuse(`no strip with id '${strip}'`);
       }
       return index;
     }
-    assertIntegerValue(fnName, strip, 'strip');
+    assertIntegerValue(strip, 'strip');
     return strip;
   }
 
@@ -366,8 +365,12 @@ export class Mixer {
    * @returns Mixed stereo master (`left`, `right`, `sampleRate`)
    */
   processStereo(leftInputs: Float32Array[], rightInputs: Float32Array[]): MixerProcessResult {
-    if (leftInputs.length !== rightInputs.length) {
-      throw new RangeError('leftInputs and rightInputs must have the same length.');
+    try {
+      if (leftInputs.length !== rightInputs.length) {
+        throw refuse('leftInputs and rightInputs must have the same length.');
+      }
+    } catch (error) {
+      throw nameNativeError(error, 'Mixer.processStereo');
     }
     return this.mixer.processStereo(leftInputs, rightInputs);
   }
@@ -386,11 +389,15 @@ export class Mixer {
     outLeft: Float32Array,
     outRight: Float32Array,
   ): void {
-    if (leftInputs.length !== rightInputs.length) {
-      throw new RangeError('leftInputs and rightInputs must have the same length.');
-    }
-    if (outLeft.length !== outRight.length) {
-      throw new RangeError('outLeft and outRight must have the same length.');
+    try {
+      if (leftInputs.length !== rightInputs.length) {
+        throw refuse('leftInputs and rightInputs must have the same length.');
+      }
+      if (outLeft.length !== outRight.length) {
+        throw refuse('outLeft and outRight must have the same length.');
+      }
+    } catch (error) {
+      throw nameNativeError(error, 'Mixer.processStereoInto');
     }
     this.mixer.processStereoInto(leftInputs, rightInputs, outLeft, outRight);
   }
@@ -490,7 +497,7 @@ export class Mixer {
   configureMeter(options: MixerMeterOptions): void {
     const bag = requestObject('configureMeter', options, 'options', true);
     this.mixer.configureMeter(
-      requireBoolean('configureMeter', bag.enabled, 'enabled'),
+      requireBoolean(bag.enabled, 'enabled'),
       bag.truePeakOversample as number | undefined,
       bag.measureLufs as boolean | undefined,
       bag.measureTruePeak as boolean | undefined,
@@ -528,11 +535,9 @@ export class Mixer {
    * @throws TypeError for a non-number; RangeError for a value outside `[0, 6]`.
    */
   meterScratchValue(field: MeterScratchField): number {
-    assertIntegerValue('meterScratchValue', field, 'field');
+    assertIntegerValue(field, 'field');
     if (field < 0 || field >= METER_SCRATCH_FIELD_COUNT) {
-      throw new RangeError(
-        `meterScratchValue: field must be in [0, ${METER_SCRATCH_FIELD_COUNT - 1}]`,
-      );
+      throw refuse(`field must be in [0, ${METER_SCRATCH_FIELD_COUNT - 1}]`);
     }
     return this.mixer.meterScratchValue(field);
   }
@@ -564,12 +569,12 @@ export class Mixer {
     const fn = 'scheduleInsertAutomation';
     const bag = requestObject(fn, point, 'point', true);
     this.mixer.scheduleInsertAutomation(
-      this.stripIndex(fn, strip),
+      this.stripIndex(strip),
       insertIndex,
-      requiredNumber(fn, bag.paramId, 'paramId'),
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.value, 'value'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      requiredNumber(bag.paramId, 'paramId'),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.value, 'value'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -579,10 +584,10 @@ export class Mixer {
    * @throws RangeError when no strip has that id
    */
   stripById(id: string): number {
-    assertString('stripById', id, 'id');
+    assertString(id, 'id');
     const index = this.mixer.stripById(id);
     if (index < 0) {
-      throw new RangeError(`stripById: no strip with id '${id}'`);
+      throw refuse(`no strip with id '${id}'`);
     }
     return index;
   }
@@ -597,7 +602,7 @@ export class Mixer {
    * @throws If the id is already taken; RangeError if `truePeakOversample` is not 4 or 8 (omit for the default)
    */
   addStrip(id: string, metering: StripMeteringOptions = {}): number {
-    assertStripMetering('addStrip', metering);
+    assertStripMetering(metering);
     this.mixer.addStrip(id, metering);
     return this.mixer.stripById(id);
   }
@@ -608,7 +613,7 @@ export class Mixer {
    * dirty; call {@link compile} (or {@link processStereo}) to rebuild.
    */
   addBus(id: string, role?: MixBusRole): void {
-    this.mixer.addBus(id, requireToken('addBus', role, 'role', MIX_BUS_ROLES, 'aux'));
+    this.mixer.addBus(id, requireToken(role, 'role', MIX_BUS_ROLES, 'aux'));
   }
 
   /** Remove a bus by id. Marks the routing graph dirty. */
@@ -667,12 +672,12 @@ export class Mixer {
 
   /** Set the strip's input trim in dB. */
   setInputTrimDb(strip: StripRef, db: number): void {
-    this.mixer.setInputTrimDb(this.stripIndex('setInputTrimDb', strip), db);
+    this.mixer.setInputTrimDb(this.stripIndex(strip), db);
   }
 
   /** Set the strip's fader level in dB. */
   setFaderDb(strip: StripRef, db: number): void {
-    this.mixer.setFaderDb(this.stripIndex('setFaderDb', strip), db);
+    this.mixer.setFaderDb(this.stripIndex(strip), db);
   }
 
   /**
@@ -689,7 +694,7 @@ export class Mixer {
   setPan(strip: StripRef, pan: number, panMode?: PanMode): void {
     // SONARE_PAN_MODE_KEEP (-1) = keep the strip's current pan mode.
     const mode = panMode === undefined ? -1 : panModeCode(panMode);
-    this.mixer.setPan(this.stripIndex('setPan', strip), pan, mode);
+    this.mixer.setPan(this.stripIndex(strip), pan, mode);
   }
 
   /**
@@ -698,7 +703,7 @@ export class Mixer {
    * @throws {RangeError} when `width` is outside `[0, 2]` or non-finite.
    */
   setWidth(strip: StripRef, width: number): void {
-    this.mixer.setWidth(this.stripIndex('setWidth', strip), width);
+    this.mixer.setWidth(this.stripIndex(strip), width);
   }
 
   /**
@@ -723,15 +728,12 @@ export class Mixer {
    * ```
    */
   settle(strip: StripRef): void {
-    this.mixer.settle(this.stripIndex('settle', strip));
+    this.mixer.settle(this.stripIndex(strip));
   }
 
   /** Set the strip's mute state. */
   setMuted(strip: StripRef, muted: boolean): void {
-    this.mixer.setMuted(
-      this.stripIndex('setMuted', strip),
-      requireBoolean('setMuted', muted, 'muted'),
-    );
+    this.mixer.setMuted(this.stripIndex(strip), requireBoolean(muted, 'muted'));
   }
 
   /**
@@ -739,10 +741,7 @@ export class Mixer {
    * graph recompile.
    */
   setSoloed(strip: StripRef, soloed: boolean): void {
-    this.mixer.setSoloed(
-      this.stripIndex('setSoloed', strip),
-      requireBoolean('setSoloed', soloed, 'soloed'),
-    );
+    this.mixer.setSoloed(this.stripIndex(strip), requireBoolean(soloed, 'soloed'));
   }
 
   /**
@@ -750,10 +749,7 @@ export class Mixer {
    * solo. Takes effect on the next process without a graph recompile.
    */
   setSoloSafe(strip: StripRef, soloSafe: boolean): void {
-    this.mixer.setSoloSafe(
-      this.stripIndex('setSoloSafe', strip),
-      requireBoolean('setSoloSafe', soloSafe, 'soloSafe'),
-    );
+    this.mixer.setSoloSafe(this.stripIndex(strip), requireBoolean(soloSafe, 'soloSafe'));
   }
 
   /**
@@ -764,9 +760,9 @@ export class Mixer {
   setPolarityInvert(strip: StripRef, invert: PolarityInvert): void {
     const bag = requestObject('setPolarityInvert', invert, 'invert', true);
     this.mixer.setPolarityInvert(
-      this.stripIndex('setPolarityInvert', strip),
-      requireBoolean('setPolarityInvert', bag.left, 'left'),
-      requireBoolean('setPolarityInvert', bag.right, 'right'),
+      this.stripIndex(strip),
+      requireBoolean(bag.left, 'left'),
+      requireBoolean(bag.right, 'right'),
     );
   }
 
@@ -777,8 +773,8 @@ export class Mixer {
    */
   setPanLaw(strip: StripRef, panLaw: PanLaw): void {
     this.mixer.setPanLaw(
-      this.stripIndex('setPanLaw', strip),
-      tokenArg('setPanLaw', panLaw, 'panLaw', (token) => panLawCode(token as PanLaw)),
+      this.stripIndex(strip),
+      tokenArg(panLaw, 'panLaw', (token) => panLawCode(token as PanLaw)),
     );
   }
 
@@ -787,20 +783,17 @@ export class Mixer {
    * the others. It is not latency: latency compensation does not undo it.
    */
   setChannelDelaySamples(strip: StripRef, delaySamples: number): void {
-    this.mixer.setChannelDelaySamples(
-      this.stripIndex('setChannelDelaySamples', strip),
-      delaySamples,
-    );
+    this.mixer.setChannelDelaySamples(this.stripIndex(strip), delaySamples);
   }
 
   /** Set the strip's direct VCA trim in dB (persisted as the scene's `vcaOffsetDb`). */
   setVcaOffsetDb(strip: StripRef, offsetDb: number): void {
-    this.mixer.setVcaOffsetDb(this.stripIndex('setVcaOffsetDb', strip), offsetDb);
+    this.mixer.setVcaOffsetDb(this.stripIndex(strip), offsetDb);
   }
 
   /** Set independent left/right pan positions (dual-pan mode). */
   setDualPan(strip: StripRef, leftPan: number, rightPan: number): void {
-    this.mixer.setDualPan(this.stripIndex('setDualPan', strip), leftPan, rightPan);
+    this.mixer.setDualPan(this.stripIndex(strip), leftPan, rightPan);
   }
 
   /**
@@ -813,8 +806,8 @@ export class Mixer {
    */
   setSurroundPan(strip: StripRef, pan: SurroundPan): void {
     requestObject('setSurroundPan', pan, 'pan', true);
-    assertSurroundPan('setSurroundPan', pan);
-    this.mixer.setSurroundPan(this.stripIndex('setSurroundPan', strip), pan);
+    assertSurroundPan(pan);
+    this.mixer.setSurroundPan(this.stripIndex(strip), pan);
   }
 
   /**
@@ -829,26 +822,20 @@ export class Mixer {
   addSend(strip: StripRef, send: MixerSend): number {
     const fn = 'addSend';
     const bag = requestObject(fn, send, 'send', true);
-    assertString(fn, bag.id, 'id');
-    assertString(fn, bag.destinationBusId, 'destinationBusId');
+    assertString(bag.id, 'id');
+    assertString(bag.destinationBusId, 'destinationBusId');
     return this.mixer.addSend(
-      this.stripIndex(fn, strip),
+      this.stripIndex(strip),
       bag.id as string,
       bag.destinationBusId as string,
-      optionalNumber(fn, bag.sendDb, 'sendDb', 0),
-      tokenArg(
-        fn,
-        bag.timing,
-        'timing',
-        (token) => sendTimingCode(token as SendTiming),
-        'postFader',
-      ),
+      optionalNumber(bag.sendDb, 'sendDb', 0),
+      tokenArg(bag.timing, 'timing', (token) => sendTimingCode(token as SendTiming), 'postFader'),
     );
   }
 
   /** Set the send level (in dB) for an existing send by index. */
   setSendDb(strip: StripRef, sendIndex: number, sendDb: number): void {
-    this.mixer.setSendDb(this.stripIndex('setSendDb', strip), sendIndex, sendDb);
+    this.mixer.setSendDb(this.stripIndex(strip), sendIndex, sendDb);
   }
 
   /**
@@ -862,7 +849,7 @@ export class Mixer {
    * @param sendIndex - Send index in add order
    */
   removeSend(strip: StripRef, sendIndex: number): void {
-    this.mixer.removeSend(this.stripIndex('removeSend', strip), sendIndex);
+    this.mixer.removeSend(this.stripIndex(strip), sendIndex);
   }
 
   /**
@@ -875,13 +862,13 @@ export class Mixer {
    * @param tap - `'preFader'` or `'postFader'`; a number is refused with a `TypeError`
    */
   stripMeter(strip: StripRef, tap?: MeterTap): MixMeterSnapshot {
-    const index = this.stripIndex('stripMeter', strip);
+    const index = this.stripIndex(strip);
     if (isAbsent(tap)) {
       return this.mixer.stripMeter(index);
     }
     return this.mixer.meterTap(
       index,
-      tokenArg('stripMeter', tap, 'tap', (token) => meterTapCode(token as MeterTap)),
+      tokenArg(tap, 'tap', (token) => meterTapCode(token as MeterTap)),
     );
   }
 
@@ -922,9 +909,7 @@ export class Mixer {
    * @param strip - Strip index or id
    */
   stripNonFiniteDiscardCount(strip: StripRef): number {
-    return this.mixer.stripNonFiniteDiscardCount(
-      this.stripIndex('stripNonFiniteDiscardCount', strip),
-    );
+    return this.mixer.stripNonFiniteDiscardCount(this.stripIndex(strip));
   }
 
   /**
@@ -959,10 +944,10 @@ export class Mixer {
     const fn = 'scheduleFaderAutomation';
     const bag = requestObject(fn, point, 'point', true);
     this.mixer.scheduleFaderAutomation(
-      this.stripIndex(fn, strip),
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.faderDb, 'faderDb'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      this.stripIndex(strip),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.faderDb, 'faderDb'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -978,10 +963,10 @@ export class Mixer {
     const fn = 'schedulePanAutomation';
     const bag = requestObject(fn, point, 'point', true);
     this.mixer.schedulePanAutomation(
-      this.stripIndex(fn, strip),
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.pan, 'pan'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      this.stripIndex(strip),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.pan, 'pan'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -997,10 +982,10 @@ export class Mixer {
     const fn = 'scheduleWidthAutomation';
     const bag = requestObject(fn, point, 'point', true);
     this.mixer.scheduleWidthAutomation(
-      this.stripIndex(fn, strip),
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.width, 'width'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      this.stripIndex(strip),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.width, 'width'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -1017,11 +1002,11 @@ export class Mixer {
     const fn = 'scheduleSendAutomation';
     const bag = requestObject(fn, point, 'point', true);
     this.mixer.scheduleSendAutomation(
-      this.stripIndex(fn, strip),
+      this.stripIndex(strip),
       sendIndex,
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.sendDb, 'sendDb'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.sendDb, 'sendDb'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -1035,10 +1020,7 @@ export class Mixer {
    * ring holds.
    */
   readGoniometerLatest(strip: StripRef, maxPoints: number): GoniometerPoint[] {
-    return this.mixer.readGoniometerLatest(
-      this.stripIndex('readGoniometerLatest', strip),
-      maxPoints,
-    );
+    return this.mixer.readGoniometerLatest(this.stripIndex(strip), maxPoints);
   }
 
   /** Serialize the current scene (strips, buses, sends, connections) to JSON. */

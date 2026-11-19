@@ -1,4 +1,5 @@
 import { chainConfigJson } from './internal/chain_config.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   MasteringChainConfig,
@@ -14,11 +15,11 @@ import { assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 type NativeResult = Record<string, unknown>;
 
 /** Throws `TypeError` unless `onProgress` and `cancel` are each absent or a function. */
-function assertChainCallbacks(fnName: string, request: object): void {
+function assertChainCallbacks(request: object): void {
   for (const name of ['onProgress', 'cancel'] as const) {
     const callback = (request as Record<string, unknown>)[name];
     if (callback !== undefined && callback !== null && typeof callback !== 'function') {
-      throw new TypeError(`${fnName}: ${name} must be a function`);
+      throw refuseType(`${name} must be a function`);
     }
   }
 }
@@ -82,37 +83,41 @@ export function streamingLoudnessGain(
   options?: OptionsOf<StreamingLoudnessGainRequest>,
 ): StreamingLoudnessGainResult;
 export function streamingLoudnessGain(...args: unknown[]): StreamingLoudnessGainResult {
-  const r = sampleOneShot<StreamingLoudnessGainRequest>('streamingLoudnessGain', args);
-  assertAudioInput('streamingLoudnessGain', r.samples, r.sampleRate, r);
-  return streamingGainFromNative(
-    addon.masteringStreamingLoudnessGain(
-      r.samples,
-      r.sampleRate,
-      chainConfigJson('streamingLoudnessGain', 'config', r.config),
-    ),
-  );
+  return withEntry('streamingLoudnessGain', () => {
+    const r = sampleOneShot<StreamingLoudnessGainRequest>('streamingLoudnessGain', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return streamingGainFromNative(
+      addon.masteringStreamingLoudnessGain(
+        r.samples,
+        r.sampleRate,
+        chainConfigJson('config', r.config),
+      ),
+    );
+  });
 }
 
 /** Stereo counterpart of {@link streamingLoudnessGain}, with BS.1770 channel summing. */
 export function streamingLoudnessGainStereo(
   request: StreamingLoudnessGainStereoRequest,
 ): StreamingLoudnessGainResult {
-  const r = requestOnly<StreamingLoudnessGainStereoRequest>('streamingLoudnessGainStereo', [
-    request,
-  ]);
-  assertAudioInput('streamingLoudnessGainStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('streamingLoudnessGainStereo', r.right, r.sampleRate, r, 'right');
-  if (r.left.length !== r.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  return streamingGainFromNative(
-    addon.masteringStreamingLoudnessGainStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      chainConfigJson('streamingLoudnessGainStereo', 'config', r.config),
-    ),
-  );
+  return withEntry('streamingLoudnessGainStereo', () => {
+    const r = requestOnly<StreamingLoudnessGainStereoRequest>('streamingLoudnessGainStereo', [
+      request,
+    ]);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    if (r.left.length !== r.right.length) {
+      throw refuse('Stereo channel lengths must match.');
+    }
+    return streamingGainFromNative(
+      addon.masteringStreamingLoudnessGainStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        chainConfigJson('config', r.config),
+      ),
+    );
+  });
 }
 
 /** Request form of {@link masterAudio}. */
@@ -181,31 +186,33 @@ export function masterAudio(
   options?: OptionsOf<MasterAudioRequest>,
 ): MasteringChainResult;
 export function masterAudio(...args: unknown[]): MasteringChainResult {
-  const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
-  assertChainCallbacks('masterAudio', r);
-  assertAudioInput('masterAudio', r.samples, r.sampleRate, r);
-  if (
-    (r.preset === undefined || r.preset === null) &&
-    (r.overrides === undefined || r.overrides === null)
-  ) {
-    throw new TypeError('masterAudio: give preset or overrides');
-  }
-  const overrides = chainConfigJson('masterAudio', 'overrides', r.overrides);
-  const preset = r.preset ?? null;
-  const progress = r.onProgress ?? undefined;
-  const cancel = r.cancel ?? undefined;
-  return (
-    progress || cancel
-      ? addon.masterAudioWithProgress(
-          preset,
-          r.samples,
-          r.sampleRate,
-          overrides,
-          progress ?? (() => {}),
-          cancel ?? (() => false),
-        )
-      : addon.masterAudio(preset, r.samples, r.sampleRate, overrides)
-  ) as MasteringChainResult;
+  return withEntry('masterAudio', () => {
+    const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
+    assertChainCallbacks(r);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    if (
+      (r.preset === undefined || r.preset === null) &&
+      (r.overrides === undefined || r.overrides === null)
+    ) {
+      throw refuseType('give preset or overrides');
+    }
+    const overrides = chainConfigJson('overrides', r.overrides);
+    const preset = r.preset ?? null;
+    const progress = r.onProgress ?? undefined;
+    const cancel = r.cancel ?? undefined;
+    return (
+      progress || cancel
+        ? addon.masterAudioWithProgress(
+            preset,
+            r.samples,
+            r.sampleRate,
+            overrides,
+            progress ?? (() => {}),
+            cancel ?? (() => false),
+          )
+        : addon.masterAudio(preset, r.samples, r.sampleRate, overrides)
+    ) as MasteringChainResult;
+  });
 }
 
 /**
@@ -218,36 +225,38 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
  *   or an invalid override
  */
 export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult {
-  const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
-  assertChainCallbacks('masterAudioStereo', r);
-  assertAudioInput('masterAudioStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masterAudioStereo', r.right, r.sampleRate, r, 'right');
-  if (r.left.length !== r.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  if (
-    (r.preset === undefined || r.preset === null) &&
-    (r.overrides === undefined || r.overrides === null)
-  ) {
-    throw new TypeError('masterAudioStereo: give preset or overrides');
-  }
-  const overrides = chainConfigJson('masterAudioStereo', 'overrides', r.overrides);
-  const preset = r.preset ?? null;
-  const progress = r.onProgress ?? undefined;
-  const cancel = r.cancel ?? undefined;
-  return (
-    progress || cancel
-      ? addon.masterAudioStereoWithProgress(
-          preset,
-          r.left,
-          r.right,
-          r.sampleRate,
-          overrides,
-          progress ?? (() => {}),
-          cancel ?? (() => false),
-        )
-      : addon.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides)
-  ) as MasteringChainStereoResult;
+  return withEntry('masterAudioStereo', () => {
+    const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
+    assertChainCallbacks(r);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    if (r.left.length !== r.right.length) {
+      throw refuse('Stereo channel lengths must match.');
+    }
+    if (
+      (r.preset === undefined || r.preset === null) &&
+      (r.overrides === undefined || r.overrides === null)
+    ) {
+      throw refuseType('give preset or overrides');
+    }
+    const overrides = chainConfigJson('overrides', r.overrides);
+    const preset = r.preset ?? null;
+    const progress = r.onProgress ?? undefined;
+    const cancel = r.cancel ?? undefined;
+    return (
+      progress || cancel
+        ? addon.masterAudioStereoWithProgress(
+            preset,
+            r.left,
+            r.right,
+            r.sampleRate,
+            overrides,
+            progress ?? (() => {}),
+            cancel ?? (() => false),
+          )
+        : addon.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides)
+    ) as MasteringChainStereoResult;
+  });
 }
 
 /** Request form of {@link masterAudioAsync}. */
@@ -305,55 +314,59 @@ export function masterAudioAsync(
   options: OptionsOf<MasterAudioAsyncRequest>,
 ): Promise<MasteringChainResult>;
 export function masterAudioAsync(...args: unknown[]): Promise<MasteringChainResult> {
-  try {
-    const r = sampleOneShot<MasterAudioAsyncRequest>('masterAudioAsync', args);
-    assertAudioInput('masterAudioAsync', r.samples, r.sampleRate, r);
-    if (
-      (r.preset === undefined || r.preset === null) &&
-      (r.overrides === undefined || r.overrides === null)
-    ) {
-      throw new TypeError('masterAudioAsync: give preset or overrides');
+  return withEntry('masterAudioAsync', () => {
+    try {
+      const r = sampleOneShot<MasterAudioAsyncRequest>('masterAudioAsync', args);
+      assertAudioInput(r.samples, r.sampleRate, r);
+      if (
+        (r.preset === undefined || r.preset === null) &&
+        (r.overrides === undefined || r.overrides === null)
+      ) {
+        throw refuseType('give preset or overrides');
+      }
+      return addon
+        .masterAudioAsync(
+          r.preset ?? null,
+          r.samples,
+          r.sampleRate,
+          chainConfigJson('overrides', r.overrides),
+        )
+        .then((result: object) => result as MasteringChainResult);
+    } catch (error) {
+      return Promise.reject(error);
     }
-    return addon
-      .masterAudioAsync(
-        r.preset ?? null,
-        r.samples,
-        r.sampleRate,
-        chainConfigJson('masterAudioAsync', 'overrides', r.overrides),
-      )
-      .then((result: object) => result as MasteringChainResult);
-  } catch (error) {
-    return Promise.reject(error);
-  }
+  });
 }
 
 /** Asynchronous variant of {@link masterAudioStereo}; takes a request object only. */
 export function masterAudioStereoAsync(
   request: MasterAudioStereoAsyncRequest,
 ): Promise<MasteringChainStereoResult> {
-  try {
-    const r = requestOnly<MasterAudioStereoAsyncRequest>('masterAudioStereoAsync', [request]);
-    assertAudioInput('masterAudioStereoAsync', r.left, r.sampleRate, r, 'left');
-    assertAudioInput('masterAudioStereoAsync', r.right, r.sampleRate, r, 'right');
-    if (r.left.length !== r.right.length) {
-      throw new RangeError('Stereo channel lengths must match.');
+  return withEntry('masterAudioStereoAsync', () => {
+    try {
+      const r = requestOnly<MasterAudioStereoAsyncRequest>('masterAudioStereoAsync', [request]);
+      assertAudioInput(r.left, r.sampleRate, r, 'left');
+      assertAudioInput(r.right, r.sampleRate, r, 'right');
+      if (r.left.length !== r.right.length) {
+        throw refuse('Stereo channel lengths must match.');
+      }
+      if (
+        (r.preset === undefined || r.preset === null) &&
+        (r.overrides === undefined || r.overrides === null)
+      ) {
+        throw refuseType('give preset or overrides');
+      }
+      return addon
+        .masterAudioStereoAsync(
+          r.preset ?? null,
+          r.left,
+          r.right,
+          r.sampleRate,
+          chainConfigJson('overrides', r.overrides),
+        )
+        .then((result: object) => result as MasteringChainStereoResult);
+    } catch (error) {
+      return Promise.reject(error);
     }
-    if (
-      (r.preset === undefined || r.preset === null) &&
-      (r.overrides === undefined || r.overrides === null)
-    ) {
-      throw new TypeError('masterAudioStereoAsync: give preset or overrides');
-    }
-    return addon
-      .masterAudioStereoAsync(
-        r.preset ?? null,
-        r.left,
-        r.right,
-        r.sampleRate,
-        chainConfigJson('masterAudioStereoAsync', 'overrides', r.overrides),
-      )
-      .then((result: object) => result as MasteringChainStereoResult);
-  } catch (error) {
-    return Promise.reject(error);
-  }
+  });
 }

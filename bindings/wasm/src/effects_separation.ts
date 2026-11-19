@@ -3,6 +3,7 @@
  * that return a single component.
  */
 
+import { withEntry } from './internal/entry.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
@@ -72,22 +73,24 @@ export function hpss(
   options?: OptionsOf<HpssRequest>,
 ): HpssResult;
 export function hpss(...args: unknown[]): HpssResult {
-  const r = sampleOneShot<HpssRequest>('hpss', args);
-  assertAudioInput('hpss', r.samples, r.sampleRate, r);
-  const fftOptions = resolveEffectFftOptions('hpss', r.nFft, r.hopLength);
-  const hardMask = optionalBoolean('hpss', r.hardMask, 'hardMask', false);
-  const kernelHarmonic = r.kernelHarmonic ?? 31;
-  const kernelPercussive = r.kernelPercussive ?? 31;
-  assertHpssKernels('hpss', kernelHarmonic, kernelPercussive);
-  return requireModule().hpssEx(
-    r.samples,
-    r.sampleRate,
-    kernelHarmonic,
-    kernelPercussive,
-    fftOptions.nFft,
-    fftOptions.hopLength,
-    hardMask,
-  );
+  return withEntry('hpss', () => {
+    const r = sampleOneShot<HpssRequest>('hpss', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
+    const hardMask = optionalBoolean(r.hardMask, 'hardMask', false);
+    const kernelHarmonic = r.kernelHarmonic ?? 31;
+    const kernelPercussive = r.kernelPercussive ?? 31;
+    assertHpssKernels(kernelHarmonic, kernelPercussive);
+    return requireModule().hpssEx(
+      r.samples,
+      r.sampleRate,
+      kernelHarmonic,
+      kernelPercussive,
+      fftOptions.nFft,
+      fftOptions.hopLength,
+      hardMask,
+    );
+  });
 }
 
 /**
@@ -103,9 +106,11 @@ export function harmonic(
   options?: OptionsOf<HarmonicRequest>,
 ): Float32Array;
 export function harmonic(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<HarmonicRequest>('harmonic', args);
-  assertAudioInput('harmonic', r.samples, r.sampleRate, r);
-  return requireModule().harmonic(r.samples, r.sampleRate);
+  return withEntry('harmonic', () => {
+    const r = sampleOneShot<HarmonicRequest>('harmonic', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().harmonic(r.samples, r.sampleRate);
+  });
 }
 
 /**
@@ -121,7 +126,9 @@ export function percussive(
   options?: OptionsOf<PercussiveRequest>,
 ): Float32Array;
 export function percussive(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<PercussiveRequest>('percussive', args);
-  assertAudioInput('percussive', r.samples, r.sampleRate, r);
-  return requireModule().percussive(r.samples, r.sampleRate);
+  return withEntry('percussive', () => {
+    const r = sampleOneShot<PercussiveRequest>('percussive', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().percussive(r.samples, r.sampleRate);
+  });
 }

@@ -1,4 +1,4 @@
-import { entryClass, withEntry } from './internal/entry.js';
+import { entryClass, refuse, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   NoteEditInput,
@@ -35,23 +35,18 @@ const NAMED_ZERO_FIELDS = {
 } as const;
 
 /** The analysis tuning in the addon's spelling. */
-function nativePolyphonicOptions(
-  fnName: string,
-  options: PolyphonicAnalysisOptions,
-): Record<string, unknown> {
+function nativePolyphonicOptions(options: PolyphonicAnalysisOptions): Record<string, unknown> {
   const out: Record<string, unknown> = { ...options };
   for (const [field, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (options[field as keyof typeof NAMED_ZERO_FIELDS] === 0) {
-      throw new RangeError(`${fnName}: ${field} must not be 0 (omit it for ${meaning})`);
+      throw refuse(`${field} must not be 0 (omit it for ${meaning})`);
     }
   }
   const { reattackRatio } = options;
   if (reattackRatio !== undefined && reattackRatio !== null) {
-    assertFloatValue(fnName, reattackRatio, 'reattackRatio');
+    assertFloatValue(reattackRatio, 'reattackRatio');
     if (reattackRatio <= 1) {
-      throw new RangeError(
-        `${fnName}: reattackRatio must be greater than 1 (omit it for no split)`,
-      );
+      throw refuse(`reattackRatio must be greater than 1 (omit it for no split)`);
     }
   }
   return out;
@@ -77,11 +72,11 @@ const INT_FIELDS = [
   'windowFrames',
 ] as const;
 
-function assertPolyphonicOptions(fnName: string, options: PolyphonicAnalysisOptions): void {
+function assertPolyphonicOptions(options: PolyphonicAnalysisOptions): void {
   for (const field of INT_FIELDS) {
     const value = options[field];
     if (value !== undefined) {
-      assertInt32(fnName, value, field);
+      assertInt32(value, field);
     }
   }
 }
@@ -123,13 +118,13 @@ export class PolyphonicAnalysis {
   constructor(request: AnalyzePolyphonicRequest) {
     const resolved = sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', [request]);
     const { samples, sampleRate, ...options } = resolved;
-    assertAudioInput('analyzePolyphonic', samples, sampleRate);
-    assertPolyphonicOptions('analyzePolyphonic', options);
+    assertAudioInput(samples, sampleRate);
+    assertPolyphonicOptions(options);
     this.sampleRate = sampleRate;
     this.native = new addon.PolyphonicAnalysis(
       samples,
       sampleRate,
-      nativePolyphonicOptions('analyzePolyphonic', options),
+      nativePolyphonicOptions(options),
     );
   }
 
@@ -187,7 +182,6 @@ export class PolyphonicAnalysis {
     // sub-sample shift would render unmoved.
     const { timeOffsetSec, ...rest } = edit;
     const offset = resolveSampleBound(
-      'setNoteEdit',
       rest.timeOffsetSamples,
       timeOffsetSec,
       this.sampleRate,
@@ -196,7 +190,7 @@ export class PolyphonicAnalysis {
       'signed',
     );
     if (offset !== undefined) {
-      assertInt64('setNoteEdit', offset, 'edit.timeOffsetSamples');
+      assertInt64(offset, 'edit.timeOffsetSamples');
     }
     this.native.setNoteEdit(note, { ...rest, timeOffsetSamples: offset });
   }

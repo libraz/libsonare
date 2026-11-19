@@ -1,5 +1,5 @@
 import { chainConfigJson } from './internal/chain_config.js';
-import { entryClass } from './internal/entry.js';
+import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -33,17 +33,15 @@ const EQ_PLACEMENT_ORDINALS: Record<EqStereoPlacement, number> = {
 };
 
 /** Absent or null takes `'stereo'`; a non-string is a `TypeError`, an unknown token a `RangeError`. */
-function eqPlacementOrdinal(fnName: string, value: unknown): number {
+function eqPlacementOrdinal(value: unknown): number {
   if (value === undefined || value === null) {
     return EQ_PLACEMENT_ORDINALS.stereo;
   }
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: placement must be a string`);
+    throw refuseType(`placement must be a string`);
   }
   if (!Object.keys(EQ_PLACEMENT_ORDINALS).includes(value)) {
-    throw new RangeError(
-      `${fnName}: placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`,
-    );
+    throw refuse(`placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`);
   }
   return EQ_PLACEMENT_ORDINALS[value as EqStereoPlacement];
 }
@@ -64,19 +62,19 @@ const EQ_PHASE_MODE_ORDINALS: Record<EqPhaseMode, number> = {
 };
 const EQ_PHASE_MODES = Object.keys(EQ_PHASE_MODE_ORDINALS) as EqPhaseMode[];
 
-function assertConfigObject(fnName: string, config: unknown): asserts config is object {
+function assertConfigObject(config: unknown): asserts config is object {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError(`${fnName}: config must be an object`);
+    throw refuseType(`config must be an object`);
   }
 }
 
 /** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
-function optionalIntegerBlockSize(fnName: string, value: unknown): number | undefined {
+function optionalIntegerBlockSize(value: unknown): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
-  assertIntegerValue(fnName, value, 'maxBlockSize');
-  assertInt32(fnName, value, 'maxBlockSize');
+  assertIntegerValue(value, 'maxBlockSize');
+  assertInt32(value, 'maxBlockSize');
   return value;
 }
 
@@ -151,7 +149,7 @@ function optionalIntegerBlockSize(fnName: string, value: unknown): number | unde
  * }
  * ```
  */
-@entryClass('StreamingMasteringChain', ['processMono', 'processStereo'])
+@entryClass('StreamingMasteringChain', ['processMono', 'processStereo', 'chain'])
 export class StreamingMasteringChain {
   private chainHandle: import('./sonare.js').WasmStreamingMasteringChain;
   private released = false;
@@ -171,8 +169,7 @@ export class StreamingMasteringChain {
    *   `sampleRate`; RangeError for an out-of-domain rate, block size or channel count.
    */
   constructor(config: StreamingMasteringChainConfig) {
-    const fn = 'StreamingMasteringChain';
-    assertConfigObject(fn, config);
+    assertConfigObject(config);
     const {
       sampleRate,
       maxBlockSize,
@@ -181,11 +178,11 @@ export class StreamingMasteringChain {
       loudnessStaticGainPeakDb,
       ...chainConfig
     } = config;
-    assertIntegerValue(fn, sampleRate, 'sampleRate');
-    const blockSize = optionalIntegerBlockSize(fn, maxBlockSize);
-    assertIntegerValue(fn, numChannels, 'numChannels');
+    assertIntegerValue(sampleRate, 'sampleRate');
+    const blockSize = optionalIntegerBlockSize(maxBlockSize);
+    assertIntegerValue(numChannels, 'numChannels');
     if (numChannels !== 1 && numChannels !== 2) {
-      throw new RangeError(`${fn}: numChannels must be 1 or 2`);
+      throw refuse(`numChannels must be 1 or 2`);
     }
     const options: Record<string, number> = {};
     if (loudnessStaticGainDb !== undefined) {
@@ -196,7 +193,7 @@ export class StreamingMasteringChain {
     }
     const module = getSonareModule();
     this.chainHandle = module.createStreamingMasteringChain(
-      chainConfigJson(fn, 'config', chainConfig),
+      chainConfigJson('config', chainConfig),
       options,
     );
     try {
@@ -218,8 +215,12 @@ export class StreamingMasteringChain {
    * Process one stereo block, returning the processed channels.
    */
   processStereo(left: Float32Array, right: Float32Array): StereoBlock {
-    if (left.length !== right.length) {
-      throw new RangeError('Stereo channel lengths must match.');
+    try {
+      if (left.length !== right.length) {
+        throw refuse('Stereo channel lengths must match.');
+      }
+    } catch (error) {
+      throw nameNativeError(error, 'StreamingMasteringChain.processStereo');
     }
     return this.chain.processStereo(left, right);
   }
@@ -374,6 +375,7 @@ export class StreamingMasteringChain {
   'processStereo',
   'setSidechainMono',
   'setSidechainStereo',
+  'eq',
 ])
 export class StreamingEqualizer {
   private eqHandle: import('./sonare.js').WasmStreamingEqualizer;
@@ -390,11 +392,10 @@ export class StreamingEqualizer {
    *   `sampleRate`; RangeError for an out-of-domain rate or block size.
    */
   constructor(config: StreamingEqualizerConfig) {
-    const fn = 'StreamingEqualizer';
-    assertConfigObject(fn, config);
+    assertConfigObject(config);
     const { sampleRate, maxBlockSize } = config;
-    assertIntegerValue(fn, sampleRate, 'sampleRate');
-    const blockSize = optionalIntegerBlockSize(fn, maxBlockSize);
+    assertIntegerValue(sampleRate, 'sampleRate');
+    const blockSize = optionalIntegerBlockSize(maxBlockSize);
     const module = getSonareModule();
     this.eqHandle = module.createEqualizer(
       blockSize === undefined ? { sampleRate } : { sampleRate, maxBlockSize: blockSize },
@@ -406,7 +407,7 @@ export class StreamingEqualizer {
    */
   setBand(index: number, band: EqBandInput): void {
     if (band.placement !== undefined) {
-      eqPlacementOrdinal('StreamingEqualizer.setBand', band.placement);
+      eqPlacementOrdinal(band.placement);
     }
     this.eq.setBand(index, { ...band });
   }
@@ -422,15 +423,9 @@ export class StreamingEqualizer {
    */
   setPhaseMode(mode: EqPhaseMode): void {
     if (mode === undefined || mode === null) {
-      throw new TypeError('StreamingEqualizer.setPhaseMode: mode must be a string');
+      throw refuseType('mode must be a string');
     }
-    const token = requireToken(
-      'StreamingEqualizer.setPhaseMode',
-      mode,
-      'mode',
-      EQ_PHASE_MODES,
-      'zero',
-    );
+    const token = requireToken(mode, 'mode', EQ_PHASE_MODES, 'zero');
     this.eq.setPhaseMode(EQ_PHASE_MODE_ORDINALS[token]);
   }
 
@@ -441,11 +436,9 @@ export class StreamingEqualizer {
    */
   setAutoGain(options: { enabled: boolean }): void {
     if (typeof options !== 'object' || options === null) {
-      throw new TypeError('StreamingEqualizer.setAutoGain: options must be an object');
+      throw refuseType('options must be an object');
     }
-    this.eq.setAutoGain(
-      requireBoolean('StreamingEqualizer.setAutoGain', options.enabled, 'enabled'),
-    );
+    this.eq.setAutoGain(requireBoolean(options.enabled, 'enabled'));
   }
 
   /** Set all-band EQ gain scale as a 0.0..2.0 multiplier. */
@@ -475,8 +468,12 @@ export class StreamingEqualizer {
    * Provide a stereo external sidechain key. Both channels must match length.
    */
   setSidechainStereo(left: Float32Array, right: Float32Array): void {
-    if (left.length !== right.length) {
-      throw new RangeError('Sidechain channel lengths must match.');
+    try {
+      if (left.length !== right.length) {
+        throw refuse('Sidechain channel lengths must match.');
+      }
+    } catch (error) {
+      throw nameNativeError(error, 'StreamingEqualizer.setSidechainStereo');
     }
     this.eq.setSidechainStereo(left, right);
   }
@@ -539,8 +536,12 @@ export class StreamingEqualizer {
    * Process one stereo block, returning the equalized channels.
    */
   processStereo(left: Float32Array, right: Float32Array): StereoBlock {
-    if (left.length !== right.length) {
-      throw new RangeError('Stereo channel lengths must match.');
+    try {
+      if (left.length !== right.length) {
+        throw refuse('Stereo channel lengths must match.');
+      }
+    } catch (error) {
+      throw nameNativeError(error, 'StreamingEqualizer.processStereo');
     }
     return this.eq.processStereo(left, right);
   }
@@ -572,7 +573,7 @@ export class StreamingEqualizer {
     frequenciesHz: Float32Array,
     placement: EqStereoPlacement = 'stereo',
   ): Float32Array {
-    const ordinal = eqPlacementOrdinal('StreamingEqualizer.magnitudeResponse', placement);
+    const ordinal = eqPlacementOrdinal(placement);
     return this.eq.magnitudeResponse(ordinal, frequenciesHz);
   }
 
@@ -618,18 +619,15 @@ export class StreamingEqualizer {
 
 // The grain is checked here because native rounds a fraction and reads a negative as automatic;
 // native refuses unknown keys and wrong-typed controls.
-function assertRetuneConfig(
-  fnName: string,
-  config: StreamingRetuneConfig,
-): Record<string, unknown> {
+function assertRetuneConfig(config: StreamingRetuneConfig): Record<string, unknown> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError(`${fnName}: config must be an object`);
+    throw refuseType(`config must be an object`);
   }
   const { grainSizeSamples, ...rest } = config as Record<string, unknown>;
   if (grainSizeSamples === undefined || grainSizeSamples === null) {
     return rest;
   }
-  assertRetuneGrain(fnName, grainSizeSamples, 'grainSizeSamples');
+  assertRetuneGrain(grainSizeSamples, 'grainSizeSamples');
   return config as Record<string, unknown>;
 }
 
@@ -640,7 +638,7 @@ function assertRetuneConfig(
  * before processing, and call {@link destroy} (or use `try/finally`) to release
  * the underlying WASM object.
  */
-@entryClass('StreamingRetune', ['processMono'])
+@entryClass('StreamingRetune', ['processMono', 'retune'])
 export class StreamingRetune {
   private retuneHandle: import('./sonare.js').WasmStreamingRetune;
   private released = false;
@@ -652,7 +650,7 @@ export class StreamingRetune {
 
   constructor(config: StreamingRetuneConfig = {}) {
     const module = getSonareModule();
-    this.retuneHandle = module.createStreamingRetune(assertRetuneConfig('StreamingRetune', config));
+    this.retuneHandle = module.createStreamingRetune(assertRetuneConfig(config));
   }
 
   /**
@@ -678,7 +676,7 @@ export class StreamingRetune {
    *   of 0 or not a multiple of 4 in [4, 8192], or a control outside its domain.
    */
   setConfig(config: StreamingRetuneConfig): void {
-    this.retune.setConfig(assertRetuneConfig('StreamingRetune.setConfig', config));
+    this.retune.setConfig(assertRetuneConfig(config));
   }
 
   /**

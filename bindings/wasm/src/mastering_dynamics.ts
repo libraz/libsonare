@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import {
   assertAudioInput,
@@ -160,20 +161,19 @@ export function masteringDynamicsCompressor(
   options?: CompressorOptions,
 ): DynamicsProcessorResult;
 export function masteringDynamicsCompressor(...args: unknown[]): DynamicsProcessorResult {
-  const r = sampleOneShot<MasteringDynamicsCompressorRequest>('masteringDynamicsCompressor', args);
-  assertAudioInput('masteringDynamicsCompressor', r.samples, r.sampleRate, r);
-  const opts = nativeOptions(r);
-  if (r.detector !== undefined && r.detector !== null) {
-    const token = requireToken(
+  return withEntry('masteringDynamicsCompressor', () => {
+    const r = sampleOneShot<MasteringDynamicsCompressorRequest>(
       'masteringDynamicsCompressor',
-      r.detector,
-      'detector',
-      COMPRESSOR_DETECTOR_TOKENS,
-      'peak',
+      args,
     );
-    opts.detector = COMPRESSOR_DETECTOR_ORDINAL[token];
-  }
-  return requireModule().masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const opts = nativeOptions(r);
+    if (r.detector !== undefined && r.detector !== null) {
+      const token = requireToken(r.detector, 'detector', COMPRESSOR_DETECTOR_TOKENS, 'peak');
+      opts.detector = COMPRESSOR_DETECTOR_ORDINAL[token];
+    }
+    return requireModule().masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
+  });
 }
 
 /** Offline noise gate (hysteresis, hold, optional key high-pass). */
@@ -186,16 +186,18 @@ export function masteringDynamicsGate(
   options?: GateOptions,
 ): DynamicsProcessorResult;
 export function masteringDynamicsGate(...args: unknown[]): DynamicsProcessorResult {
-  const r = sampleOneShot<MasteringDynamicsGateRequest>('masteringDynamicsGate', args);
-  assertAudioInput('masteringDynamicsGate', r.samples, r.sampleRate, r);
-  const opts = nativeOptions(r);
-  // Native still spells the key high-pass `keyHpfHz`.
-  delete opts.keyHighPassHz;
-  if (r.keyHighPassHz !== undefined && r.keyHighPassHz !== null) {
-    assertNonNegativeFloatValue('masteringDynamicsGate', r.keyHighPassHz, 'keyHighPassHz');
-    opts.keyHpfHz = r.keyHighPassHz;
-  }
-  return requireModule().masteringDynamicsGate(r.samples, r.sampleRate, opts);
+  return withEntry('masteringDynamicsGate', () => {
+    const r = sampleOneShot<MasteringDynamicsGateRequest>('masteringDynamicsGate', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const opts = nativeOptions(r);
+    // Native still spells the key high-pass `keyHpfHz`.
+    delete opts.keyHighPassHz;
+    if (r.keyHighPassHz !== undefined && r.keyHighPassHz !== null) {
+      assertNonNegativeFloatValue(r.keyHighPassHz, 'keyHighPassHz');
+      opts.keyHpfHz = r.keyHighPassHz;
+    }
+    return requireModule().masteringDynamicsGate(r.samples, r.sampleRate, opts);
+  });
 }
 
 /** Offline transient shaper (envelope-difference attack/sustain control). */
@@ -208,10 +210,12 @@ export function masteringDynamicsTransientShaper(
   options?: TransientShaperOptions,
 ): DynamicsProcessorResult;
 export function masteringDynamicsTransientShaper(...args: unknown[]): DynamicsProcessorResult {
-  const r = sampleOneShot<MasteringDynamicsTransientShaperRequest>(
-    'masteringDynamicsTransientShaper',
-    args,
-  );
-  assertAudioInput('masteringDynamicsTransientShaper', r.samples, r.sampleRate, r);
-  return requireModule().masteringDynamicsTransientShaper(r.samples, r.sampleRate, r);
+  return withEntry('masteringDynamicsTransientShaper', () => {
+    const r = sampleOneShot<MasteringDynamicsTransientShaperRequest>(
+      'masteringDynamicsTransientShaper',
+      args,
+    );
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().masteringDynamicsTransientShaper(r.samples, r.sampleRate, r);
+  });
 }

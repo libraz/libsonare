@@ -1,3 +1,4 @@
+import { refuse, refuseType } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
 import type { Matrix2D } from './public_types.js';
 import { REQUEST_SHAPES, type RequestFn, type RequestShape } from './request_keys.js';
@@ -14,18 +15,13 @@ export type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
 export const MIN_AUDIO_SAMPLE_RATE = 8000;
 export const MAX_AUDIO_SAMPLE_RATE = 384000;
 
-function assertNonEmptySamples(
-  fnName: string,
-  samples: ArrayLike<number>,
-  argName = 'samples',
-): void {
+function assertNonEmptySamples(samples: ArrayLike<number>, argName = 'samples'): void {
   if (samples.length === 0) {
-    throw new RangeError(`${fnName}: ${argName} must not be empty`);
+    throw refuse(`${argName} must not be empty`);
   }
 }
 
 function assertFiniteSamples(
-  fnName: string,
   samples: ArrayLike<number>,
   validate: boolean,
   argName = 'samples',
@@ -36,32 +32,27 @@ function assertFiniteSamples(
   for (let i = 0; i < samples.length; i++) {
     const v = samples[i] as number;
     if (!Number.isFinite(v)) {
-      throw new RangeError(`${fnName}: ${argName} contains a non-finite sample at index ${i}`);
+      throw refuse(`${argName} contains a non-finite sample at index ${i}`);
     }
   }
 }
 
 /** A non-audio array (a feature matrix's data): each element finite, the first offender named by index. */
-export function assertFiniteValues(
-  fnName: string,
-  values: ArrayLike<number>,
-  argName: string,
-): void {
+export function assertFiniteValues(values: ArrayLike<number>, argName: string): void {
   for (let i = 0; i < values.length; i++) {
     if (!Number.isFinite(values[i] as number)) {
-      throw new RangeError(`${fnName}: ${argName} contains a non-finite value at index ${i}`);
+      throw refuse(`${argName} contains a non-finite value at index ${i}`);
     }
   }
 }
 
 export function assertSamples(
-  fnName: string,
   samples: ArrayLike<number>,
   validate: boolean,
   argName = 'samples',
 ): void {
-  assertNonEmptySamples(fnName, samples, argName);
-  assertFiniteSamples(fnName, samples, validate, argName);
+  assertNonEmptySamples(samples, argName);
+  assertFiniteSamples(samples, validate, argName);
 }
 
 /**
@@ -75,14 +66,13 @@ export function assertSamples(
  * the frame, not by the length of the buffer being polled.
  */
 export function assertSamplesInWindow(
-  fnName: string,
   samples: ArrayLike<number>,
   validate: boolean,
   windowStart: number,
   windowLength: number,
   argName = 'samples',
 ): void {
-  assertNonEmptySamples(fnName, samples, argName);
+  assertNonEmptySamples(samples, argName);
   if (!validate) {
     return;
   }
@@ -94,67 +84,64 @@ export function assertSamplesInWindow(
   for (let i = start; i < stop; i++) {
     const v = samples[i] as number;
     if (!Number.isFinite(v)) {
-      throw new RangeError(`${fnName}: ${argName} contains a non-finite sample at index ${i}`);
+      throw refuse(`${argName} contains a non-finite sample at index ${i}`);
     }
   }
 }
 
-export function assertFiniteScalar(fnName: string, value: number, argName: string): void {
+export function assertFiniteScalar(value: number, argName: string): void {
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (!Number.isFinite(value)) {
-    throw new RangeError(`${fnName}: ${argName} must be a finite number`);
+    throw refuse(`${argName} must be a finite number`);
   }
 }
 
 /** A scalar the native layer reads as a float; only the type is checked, so NaN and infinities pass through. */
-export function assertNumber(fnName: string, value: unknown, argName: string): void {
+export function assertNumber(value: unknown, argName: string): void {
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
 }
 
 const FLOAT32_MAX = 3.4028234663852886e38;
 
 /** A scalar native reads as a float: `TypeError` unless a number, `RangeError` unless finite and within the 32-bit float range. */
-export function assertFloatValue(fnName: string, value: unknown, argName: string): void {
+export function assertFloatValue(value: unknown, argName: string): void {
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (!Number.isFinite(value) || Math.abs(value) > FLOAT32_MAX) {
-    throw new RangeError(
-      `${fnName}: ${argName} must be a finite number within the 32-bit float range`,
-    );
+    throw refuse(`${argName} must be finite and in [-3.4028235e38, 3.4028235e38]`);
   }
 }
 
 /** {@link assertFloatValue} plus a floor: strictly positive. */
-export function assertPositiveFloatValue(fnName: string, value: unknown, argName: string): void {
-  assertFloatValue(fnName, value, argName);
+export function assertPositiveFloatValue(value: unknown, argName: string): void {
+  assertFloatValue(value, argName);
   if ((value as number) <= 0) {
-    throw new RangeError(`${fnName}: ${argName} must be positive`);
+    throw refuse(`${argName} must be positive`);
   }
 }
 
 /** {@link assertFloatValue} plus a floor of zero. */
-export function assertNonNegativeFloatValue(fnName: string, value: unknown, argName: string): void {
-  assertFloatValue(fnName, value, argName);
+export function assertNonNegativeFloatValue(value: unknown, argName: string): void {
+  assertFloatValue(value, argName);
   if ((value as number) < 0) {
-    throw new RangeError(`${fnName}: ${argName} must be non-negative`);
+    throw refuse(`${argName} must be non-negative`);
   }
 }
 
 /** {@link assertFloatValue} over every entry of `fields`, each named by its key. */
-export function assertFloatFields(fnName: string, fields: Record<string, unknown>): void {
+export function assertFloatFields(fields: Record<string, unknown>): void {
   for (const [name, value] of Object.entries(fields)) {
-    assertFloatValue(fnName, value, name);
+    assertFloatValue(value, name);
   }
 }
 
 /** A frequency band: each given bound is a positive float, and a given pair is strictly ordered. Absent (`undefined` / `null`) is skipped. */
 export function assertFrequencyBounds(
-  fnName: string,
   min: unknown,
   max: unknown,
   minName: string,
@@ -163,13 +150,13 @@ export function assertFrequencyBounds(
   const hasMin = min !== undefined && min !== null;
   const hasMax = max !== undefined && max !== null;
   if (hasMin) {
-    assertPositiveFloatValue(fnName, min, minName);
+    assertPositiveFloatValue(min, minName);
   }
   if (hasMax) {
-    assertPositiveFloatValue(fnName, max, maxName);
+    assertPositiveFloatValue(max, maxName);
   }
   if (hasMin && hasMax && !((max as number) > (min as number))) {
-    throw new RangeError(`${fnName}: ${maxName} must be above ${minName}`);
+    throw refuse(`${maxName} must be above ${minName}`);
   }
 }
 
@@ -178,24 +165,20 @@ export function assertFrequencyBounds(
  * inside the supported range (NaN, infinities, fractions, zero and negatives
  * included).
  */
-export function assertSampleRate(
-  fnName: string,
-  sampleRate: unknown,
-  argName = 'sampleRate',
-): void {
+export function assertSampleRate(sampleRate: unknown, argName = 'sampleRate'): void {
   if (typeof sampleRate !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   // Two refusals, not one: 22050.7 sits inside the range, so reporting it as
   // out of range names an argument that is not the one at fault. `argName` is
   // the same point for a rate the caller spelled something else, such as a
   // resampler's source and target.
   if (!Number.isInteger(sampleRate)) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+    throw refuse(`${argName} must be an integer`);
   }
   if (sampleRate < MIN_AUDIO_SAMPLE_RATE || sampleRate > MAX_AUDIO_SAMPLE_RATE) {
-    throw new RangeError(
-      `${fnName}: ${argName} out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,
+    throw refuse(
+      `${argName} out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,
     );
   }
 }
@@ -209,111 +192,84 @@ export function assertSampleRate(
  * paired entry point calls this once per buffer, naming each through `argName`.
  */
 export function assertAudioInput(
-  fnName: string,
   samples: unknown,
   sampleRate: unknown,
   options: object = {},
   argName = 'samples',
 ): void {
-  assertFloat32Array(fnName, samples, argName);
-  assertSampleRate(fnName, sampleRate as number);
-  assertSamples(
-    fnName,
-    samples,
-    (options as { scanFinite?: boolean }).scanFinite !== false,
-    argName,
-  );
+  assertFloat32Array(samples, argName);
+  assertSampleRate(sampleRate as number);
+  assertSamples(samples, (options as { scanFinite?: boolean }).scanFinite !== false, argName);
 }
 
 /** {@link assertAudioInput} for an entry point that takes no sample rate. */
 export function assertAudioSamples(
-  fnName: string,
   samples: unknown,
   options: object = {},
   argName = 'samples',
 ): void {
-  assertFloat32Array(fnName, samples, argName);
-  assertSamples(
-    fnName,
-    samples,
-    (options as { scanFinite?: boolean }).scanFinite !== false,
-    argName,
-  );
+  assertFloat32Array(samples, argName);
+  assertSamples(samples, (options as { scanFinite?: boolean }).scanFinite !== false, argName);
 }
 
 /** A `Float32Array` argument; anything else is a `TypeError` naming the field. */
-export function assertFloat32Array(
-  fnName: string,
-  value: unknown,
-  argName: string,
-): asserts value is Float32Array {
+export function assertFloat32Array(value: unknown, argName: string): asserts value is Float32Array {
   if (!(value instanceof Float32Array)) {
-    throw new TypeError(`${fnName}: ${argName} must be a Float32Array`);
+    throw refuseType(`${argName} must be a Float32Array`);
   }
 }
 
 /** {@link assertAudioInput} over a list of equal-rate channel planes. */
 export function assertAudioChannels(
-  fnName: string,
   channels: unknown,
   sampleRate: unknown,
   options: object = {},
   argName = 'channels',
 ): void {
   if (!Array.isArray(channels)) {
-    throw new TypeError(`${fnName}: ${argName} must be an array of Float32Array`);
+    throw refuseType(`${argName} must be an array of Float32Array`);
   }
   if (channels.length === 0) {
-    throw new RangeError(`${fnName}: ${argName} must not be empty`);
+    throw refuse(`${argName} must not be empty`);
   }
   channels.forEach((channel, i) => {
-    assertAudioInput(fnName, channel, sampleRate, options, `${argName}[${i}]`);
+    assertAudioInput(channel, sampleRate, options, `${argName}[${i}]`);
   });
 }
 
 /** A boolean argument the native layer reads positionally; anything else is a `TypeError`, never a truthy coercion. */
-export function requireBoolean(fnName: string, value: unknown, argName: string): boolean {
+export function requireBoolean(value: unknown, argName: string): boolean {
   if (typeof value !== 'boolean') {
-    throw new TypeError(`${fnName}: ${argName} must be a boolean`);
+    throw refuseType(`${argName} must be a boolean`);
   }
   return value;
 }
 
 /** An optional boolean: `undefined` and `null` take the fallback, any other non-boolean is a `TypeError`. */
-export function optionalBoolean(
-  fnName: string,
-  value: unknown,
-  argName: string,
-  fallback: boolean,
-): boolean {
-  return value === undefined || value === null ? fallback : requireBoolean(fnName, value, argName);
+export function optionalBoolean(value: unknown, argName: string, fallback: boolean): boolean {
+  return value === undefined || value === null ? fallback : requireBoolean(value, argName);
 }
 
 /** A string argument the native layer reads through embind; anything else is a `TypeError`, never a raw `BindingError`. */
-export function assertString(fnName: string, value: unknown, argName: string): void {
+export function assertString(value: unknown, argName: string): void {
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: ${argName} must be a string`);
+    throw refuseType(`${argName} must be a string`);
   }
 }
 
 /** An optional string: `undefined` and `null` take the fallback, any other non-string is a `TypeError`. */
-export function optionalString(
-  fnName: string,
-  value: unknown,
-  argName: string,
-  fallback: string,
-): string {
+export function optionalString(value: unknown, argName: string, fallback: string): string {
   if (value === undefined || value === null) {
     return fallback;
   }
-  assertString(fnName, value, argName);
+  assertString(value, argName);
   return value as string;
 }
 
 /** Validate and retain the public Audio.fromBuffer construction contract. */
 export function validateAudioBuffer(samples: Float32Array, sampleRate: number): void {
-  assertSamples('Audio.fromBuffer', samples, true);
-  assertSampleRate('Audio.fromBuffer', sampleRate);
+  assertSamples(samples, true);
+  assertSampleRate(sampleRate);
 }
 
 /** Bounds of the native `int` every embind argument below is narrowed into. */
@@ -334,12 +290,12 @@ export const C_INT_MAX = 2147483647;
  * native refusal the caller would have received had the narrowing not wrapped the
  * value into the accepted domain first.
  */
-export function assertInt32(fnName: string, value: number, argName: string): void {
+export function assertInt32(value: number, argName: string): void {
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (!Number.isInteger(value) || value < C_INT_MIN || value > C_INT_MAX) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer within the signed 32-bit range`);
+    throw refuse(`${argName} must be an integer within the signed 32-bit range`);
   }
 }
 
@@ -355,18 +311,14 @@ export function assertInt32(fnName: string, value: number, argName: string): voi
  * {@link assertPercussiveSeparation}, which duplicates a reader check to improve
  * a message; here there is no reader to duplicate.
  */
-export function assertHpssKernels(
-  fnName: string,
-  kernelHarmonic: number,
-  kernelPercussive: number,
-): void {
-  assertInt32(fnName, kernelHarmonic, 'kernelHarmonic');
-  assertInt32(fnName, kernelPercussive, 'kernelPercussive');
+export function assertHpssKernels(kernelHarmonic: number, kernelPercussive: number): void {
+  assertInt32(kernelHarmonic, 'kernelHarmonic');
+  assertInt32(kernelPercussive, 'kernelPercussive');
 }
 
-function assertIntegralField(fnName: string, value: number, argName: string): void {
+function assertIntegralField(value: number, argName: string): void {
   if (!Number.isInteger(value)) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+    throw refuse(`${argName} must be an integer`);
   }
 }
 
@@ -394,39 +346,36 @@ export interface PercussiveSeparationFields {
  * The fields are iterated rather than named at each call site so a new one is
  * visible here. Absence means the default, so an omitted field is not resolved.
  */
-export function assertPercussiveSeparation(
-  fnName: string,
-  options: PercussiveSeparationFields,
-): void {
+export function assertPercussiveSeparation(options: PercussiveSeparationFields): void {
   const fields = ['nFft', 'hopLength', 'hpssKernelHarmonic', 'hpssKernelPercussive'] as const;
   for (const field of fields) {
     const value = options[field];
     if (value !== undefined) {
-      assertIntegralField(fnName, value, field);
+      assertIntegralField(value, field);
       // 0 is the native default, so an explicit 0 would separate on it while reporting success.
       if (value === 0) {
-        throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the library value`);
+        throw refuse(`${field} must not be 0; omit it for the library value`);
       }
     }
   }
 }
 
-export function assertNonNegativeInteger(fnName: string, value: number, argName: string): void {
+export function assertNonNegativeInteger(value: number, argName: string): void {
   if (!Number.isInteger(value) || value < 0) {
-    throw new RangeError(`${fnName}: ${argName} must be a non-negative integer`);
+    throw refuse(`${argName} must be a non-negative integer`);
   }
 }
 
 /** Integer strictly greater than zero, up to the native `int` ceiling. */
-export function assertPositiveInteger(fnName: string, value: number, argName: string): void {
+export function assertPositiveInteger(value: number, argName: string): void {
   // Two refusals, not one: 512.7 is positive, so reporting it as non-positive
   // names a property it has. The ceiling travels with the sign rather than with
   // integrality, because both describe a value the native `int` can carry.
   if (!Number.isInteger(value)) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+    throw refuse(`${argName} must be an integer`);
   }
   if (value <= 0 || value > C_INT_MAX) {
-    throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+    throw refuse(`${argName} must be a positive integer`);
   }
 }
 
@@ -441,22 +390,17 @@ export function assertPositiveInteger(fnName: string, value: number, argName: st
  * so a sibling argument in the same call must not report a fraction differently
  * from this one.
  */
-export function assertIntegerValue(
-  fnName: string,
-  value: unknown,
-  argName: string,
-): asserts value is number {
+export function assertIntegerValue(value: unknown, argName: string): asserts value is number {
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be an integer`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (!Number.isInteger(value)) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+    throw refuse(`${argName} must be an integer`);
   }
 }
 
 /** Even integer in `[min, max]`, for an FFT-style size where only parity matters. */
 export function assertEvenIntegerAtLeast(
-  fnName: string,
   value: number,
   argName: string,
   min: number,
@@ -465,23 +409,22 @@ export function assertEvenIntegerAtLeast(
   // Range and parity are separate refusals: 2 ** 31 is already even, so telling
   // its caller the value must be even names a property it has.
   if (!Number.isInteger(value) || value < min || value > max) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer in [${min}, ${max}]`);
+    throw refuse(`${argName} must be an integer in [${min}, ${max}]`);
   }
   if (value % 2 !== 0) {
-    throw new RangeError(`${fnName}: ${argName} must be an even integer >= ${min}`);
+    throw refuse(`${argName} must be an even integer >= ${min}`);
   }
 }
 
 /** General integer-in-`[min, max]` check, for a bound {@link assertU7}/{@link assertNibble} don't cover. */
 export function assertBoundedInteger(
-  fnName: string,
   value: number,
   argName: string,
   min: number,
   max: number,
 ): void {
   if (!Number.isInteger(value) || value < min || value > max) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer in [${min}, ${max}]`);
+    throw refuse(`${argName} must be an integer in [${min}, ${max}]`);
   }
 }
 
@@ -492,12 +435,12 @@ const MAX_RETUNE_GRAIN_SAMPLES = 8192;
  * A given retune grain: `TypeError` unless a number; `RangeError` for 0, since absence is the
  * automatic grain, and for anything but a multiple of 4 in `[4, 8192]` (the hop is a quarter).
  */
-export function assertRetuneGrain(fnName: string, value: unknown, argName: string): void {
+export function assertRetuneGrain(value: unknown, argName: string): void {
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (value === 0) {
-    throw new RangeError(`${fnName}: ${argName} must not be 0; omit it for the automatic grain`);
+    throw refuse(`${argName} must not be 0; omit it for the automatic grain`);
   }
   if (
     !Number.isInteger(value) ||
@@ -505,41 +448,39 @@ export function assertRetuneGrain(fnName: string, value: unknown, argName: strin
     value < 4 ||
     value > MAX_RETUNE_GRAIN_SAMPLES
   ) {
-    throw new RangeError(
-      `${fnName}: ${argName} must be a multiple of 4 in [4, ${MAX_RETUNE_GRAIN_SAMPLES}]`,
-    );
+    throw refuse(`${argName} must be a multiple of 4 in [4, ${MAX_RETUNE_GRAIN_SAMPLES}]`);
   }
 }
 
-export function assertU7(fnName: string, value: number, argName: string): number {
+export function assertU7(value: number, argName: string): number {
   if (!Number.isInteger(value) || value < 0 || value > 127) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 127]`);
+    throw refuse(`${argName} must be an integer in [0, 127]`);
   }
   return value;
 }
 
-export function assertNibble(fnName: string, value: number, argName: string): number {
+export function assertNibble(value: number, argName: string): number {
   if (!Number.isInteger(value) || value < 0 || value > 15) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 15]`);
+    throw refuse(`${argName} must be an integer in [0, 15]`);
   }
   return value;
 }
 
 /** A count that may be zero: `TypeError` unless a number, `RangeError` unless a non-negative safe integer. */
-export function assertNonNegativeSafeInteger(fnName: string, value: number, argName: string): void {
+export function assertNonNegativeSafeInteger(value: number, argName: string): void {
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be an integer`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new RangeError(
-      `${fnName}: ${argName} must be a non-negative integer no greater than Number.MAX_SAFE_INTEGER`,
+    throw refuse(
+      `${argName} must be a non-negative integer no greater than Number.MAX_SAFE_INTEGER`,
     );
   }
 }
 
-export function assertU32(fnName: string, value: number, argName: string): void {
+export function assertU32(value: number, argName: string): void {
   if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 4294967295]`);
+    throw refuse(`${argName} must be an integer in [0, 4294967295]`);
   }
 }
 
@@ -552,11 +493,7 @@ export function assertU32(fnName: string, value: number, argName: string): void 
  * arrive as values nothing downstream can separate from ones the caller chose.
  * An `Int32Array` is returned as-is: its elements are already exact.
  */
-export function toInt32Array(
-  fnName: string,
-  values: Int32Array | ArrayLike<number>,
-  argName: string,
-): Int32Array {
+export function toInt32Array(values: Int32Array | ArrayLike<number>, argName: string): Int32Array {
   if (values instanceof Int32Array) {
     return values;
   }
@@ -566,7 +503,7 @@ export function toInt32Array(
     !Number.isInteger((values as ArrayLike<number>).length) ||
     (values as ArrayLike<number>).length < 0
   ) {
-    throw new TypeError(`${fnName}: ${argName} must be an Int32Array or an array of numbers`);
+    throw refuseType(`${argName} must be an Int32Array or an array of numbers`);
   }
   const out = new Int32Array(values.length);
   for (let i = 0; i < values.length; i++) {
@@ -575,15 +512,13 @@ export function toInt32Array(
     // class says whether the entry was the wrong type or the wrong domain, and a
     // sibling element in the same array must not report a fraction differently.
     if (typeof element !== 'number') {
-      throw new TypeError(`${fnName}: ${argName}[${i}] must be an integer`);
+      throw refuseType(`${argName}[${i}] must be an integer`);
     }
     if (!Number.isInteger(element)) {
-      throw new RangeError(`${fnName}: ${argName}[${i}] must be an integer`);
+      throw refuse(`${argName}[${i}] must be an integer`);
     }
     if (element < C_INT_MIN || element > C_INT_MAX) {
-      throw new RangeError(
-        `${fnName}: ${argName}[${i}] must be an integer in [${C_INT_MIN}, ${C_INT_MAX}]`,
-      );
+      throw refuse(`${argName}[${i}] must be an integer in [${C_INT_MIN}, ${C_INT_MAX}]`);
     }
     out[i] = element;
   }
@@ -591,15 +526,14 @@ export function toInt32Array(
 }
 
 export function assertInterleavedSamples(
-  fnName: string,
   samples: ArrayLike<number>,
   channels: number,
   validate: boolean,
 ): void {
-  assertAudioSamples(fnName, samples, { scanFinite: validate });
-  assertPositiveInteger(fnName, channels, 'channels');
+  assertAudioSamples(samples, { scanFinite: validate });
+  assertPositiveInteger(channels, 'channels');
   if (samples.length % channels !== 0) {
-    throw new RangeError(`${fnName}: samples length must be a multiple of channels`);
+    throw refuse(`samples length must be a multiple of channels`);
   }
 }
 
@@ -609,19 +543,14 @@ export function assertInterleavedSamples(
  * Refuses a non-finite time, and one too large for the result to stay an exact
  * JS integer.
  */
-export function secondsToSampleCount(
-  fnName: string,
-  seconds: number,
-  sampleRate: number,
-  argName: string,
-): number {
+export function secondsToSampleCount(seconds: number, sampleRate: number, argName: string): number {
   if (typeof seconds !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
-  assertFiniteScalar(fnName, seconds, argName);
+  assertFiniteScalar(seconds, argName);
   const samples = Math.round(seconds * sampleRate);
   if (!Number.isSafeInteger(samples)) {
-    throw new RangeError(`${fnName}: ${argName} is out of range at ${sampleRate} Hz`);
+    throw refuse(`${argName} is out of range at ${sampleRate} Hz`);
   }
   return samples;
 }
@@ -631,7 +560,6 @@ export type SampleBoundSign = 'non-negative' | 'signed';
 
 /** {@link resolveSampleBound} for a bound the call cannot do without: neither spelling is a `TypeError`. */
 export function requireSampleBound(
-  fnName: string,
   sampleValue: number | null | undefined,
   secValue: number | null | undefined,
   sampleRate: number,
@@ -640,22 +568,13 @@ export function requireSampleBound(
   sign: SampleBoundSign = 'non-negative',
 ): number {
   requireOneOf(
-    fnName,
     [sampleName, secName],
     [
       sampleValue !== undefined && sampleValue !== null,
       secValue !== undefined && secValue !== null,
     ],
   );
-  return resolveSampleBound(
-    fnName,
-    sampleValue,
-    secValue,
-    sampleRate,
-    sampleName,
-    secName,
-    sign,
-  ) as number;
+  return resolveSampleBound(sampleValue, secValue, sampleRate, sampleName, secName, sign) as number;
 }
 
 /**
@@ -668,7 +587,6 @@ export function requireSampleBound(
  * earlier) is `'signed'`. A negative value is refused, never read as "absent".
  */
 export function resolveSampleBound(
-  fnName: string,
   sampleValue: number | null | undefined,
   secValue: number | null | undefined,
   sampleRate: number,
@@ -681,9 +599,9 @@ export function resolveSampleBound(
   if (!hasSample && !hasSec) {
     return undefined;
   }
-  requireOneOf(fnName, [sampleName, secName], [hasSample, hasSec]);
+  requireOneOf([sampleName, secName], [hasSample, hasSec]);
   const value = hasSec
-    ? secondsToSampleCount(fnName, secValue as number, sampleRate, secName)
+    ? secondsToSampleCount(secValue as number, sampleRate, secName)
     : (sampleValue as number);
   const name = hasSec ? secName : sampleName;
   // A non-number or non-finite sample value is left for the native layer to refuse by name.
@@ -691,7 +609,7 @@ export function resolveSampleBound(
     return value;
   }
   if (sign === 'non-negative' && value < 0) {
-    throw new RangeError(`${fnName}: ${name} must be non-negative`);
+    throw refuse(`${name} must be non-negative`);
   }
   return value === 0 ? 0 : value;
 }
@@ -705,7 +623,6 @@ const C_ABSENT = -1;
  * non-finite value is refused rather than read as the same thing.
  */
 export function resolveOptionalNonNegative(
-  fnName: string,
   value: number | null | undefined,
   argName: string,
 ): number {
@@ -713,11 +630,11 @@ export function resolveOptionalNonNegative(
     return C_ABSENT;
   }
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
-  assertFiniteScalar(fnName, value, argName);
+  assertFiniteScalar(value, argName);
   if (value < 0) {
-    throw new RangeError(`${fnName}: ${argName} must not be negative (omit it for the default)`);
+    throw refuse(`${argName} must not be negative (omit it for the default)`);
   }
   return value;
 }
@@ -726,18 +643,16 @@ export function resolveOptionalNonNegative(
  * Map an optional engine `renderFrame` onto the C value: absence is "immediate"
  * (-1), and a negative frame is refused rather than read as the same thing.
  */
-export function resolveRenderFrame(fnName: string, renderFrame: number | null | undefined): number {
+export function resolveRenderFrame(renderFrame: number | null | undefined): number {
   if (renderFrame === undefined || renderFrame === null) {
     return C_ABSENT;
   }
   if (typeof renderFrame !== 'number') {
-    throw new TypeError(`${fnName}: renderFrame must be a number`);
+    throw refuseType(`renderFrame must be a number`);
   }
-  assertFiniteScalar(fnName, renderFrame, 'renderFrame');
+  assertFiniteScalar(renderFrame, 'renderFrame');
   if (renderFrame < 0) {
-    throw new RangeError(
-      `${fnName}: renderFrame must not be negative (omit it to apply immediately)`,
-    );
+    throw refuse(`renderFrame must not be negative (omit it to apply immediately)`);
   }
   return renderFrame;
 }
@@ -748,8 +663,8 @@ export function resolveRenderFrame(fnName: string, renderFrame: number | null | 
  * declared key whose value is `undefined` is absent, as everywhere else. A key
  * that belongs to a nested object is pointed at its field.
  */
-export function assertKnownRequestKeys(fnName: RequestFn, request: object): void {
-  const shape: RequestShape = REQUEST_SHAPES[fnName];
+export function assertKnownRequestKeys(requestName: RequestFn, request: object): void {
+  const shape: RequestShape = REQUEST_SHAPES[requestName];
   for (const key of Object.keys(request)) {
     if (shape.keys.includes(key)) {
       continue;
@@ -758,7 +673,7 @@ export function assertKnownRequestKeys(fnName: RequestFn, request: object): void
       keys.includes(key),
     );
     const hint = owner === undefined ? '' : ` ('${key}' belongs under '${owner[0]}')`;
-    throw new TypeError(`${fnName}: unknown request key '${key}'${hint}`);
+    throw refuseType(`unknown request key '${key}'${hint}`);
   }
   for (const [field, keys] of Object.entries(shape.nested ?? {})) {
     const value = (request as Record<string, unknown>)[field];
@@ -767,7 +682,7 @@ export function assertKnownRequestKeys(fnName: RequestFn, request: object): void
     }
     for (const key of Object.keys(value)) {
       if (!keys.includes(key)) {
-        throw new TypeError(`${fnName}: unknown option '${key}' in '${field}'`);
+        throw refuseType(`unknown option '${key}' in '${field}'`);
       }
     }
   }
@@ -778,11 +693,11 @@ export function assertKnownRequestKeys(fnName: RequestFn, request: object): void
  * the entry point reads: it declares the same keys as the request form, and a
  * key outside them is refused by name rather than dropped.
  */
-export function optionsBag<T extends object>(fnName: RequestFn, options: T): T {
-  const shape: RequestShape = REQUEST_SHAPES[fnName];
+export function optionsBag<T extends object>(requestName: RequestFn, options: T): T {
+  const shape: RequestShape = REQUEST_SHAPES[requestName];
   for (const key of Object.keys(options ?? {})) {
     if (!shape.keys.includes(key)) {
-      throw new TypeError(`${fnName}: unknown option '${key}'`);
+      throw refuseType(`unknown option '${key}'`);
     }
   }
   return options;
@@ -797,7 +712,7 @@ export function optionsBag<T extends object>(fnName: RequestFn, options: T): T {
  * request carrying a key the entry point does not declare is refused by name.
  */
 export function requestObject<T>(
-  fnName: RequestFn,
+  requestName: RequestFn,
   value: T,
   argName = 'samples',
   requestOnly = false,
@@ -809,12 +724,12 @@ export function requestObject<T>(
     ArrayBuffer.isView(value)
   ) {
     if (requestOnly) {
-      throw new TypeError(`${fnName}: request must be an object`);
+      throw refuseType(`request must be an object`);
     }
-    assertAudioSamples(fnName, value, {}, argName);
+    assertAudioSamples(value, {}, argName);
     return value;
   }
-  assertKnownRequestKeys(fnName, value);
+  assertKnownRequestKeys(requestName, value);
   return value;
 }
 
@@ -834,29 +749,24 @@ export function toMatrix2DByRows(data: Float32Array, rows: number): Matrix2D {
  * non-positive dimension, a `data` length other than `rows * cols`, or (unless
  * `validate` is `false`) a NaN or infinity.
  */
-export function assertMatrix2D(
-  fnName: string,
-  value: unknown,
-  argName: string,
-  validate = true,
-): Matrix2D {
+export function assertMatrix2D(value: unknown, argName: string, validate = true): Matrix2D {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new TypeError(`${fnName}: ${argName} must be a Matrix2D`);
+    throw refuseType(`${argName} must be a Matrix2D`);
   }
   const m = value as Partial<Matrix2D>;
   if (!(m.data instanceof Float32Array)) {
-    throw new TypeError(`${fnName}: ${argName}.data must be a Float32Array`);
+    throw refuseType(`${argName}.data must be a Float32Array`);
   }
-  assertIntegerValue(fnName, m.rows as number, `${argName}.rows`);
-  assertIntegerValue(fnName, m.cols as number, `${argName}.cols`);
-  assertPositiveInteger(fnName, m.rows as number, `${argName}.rows`);
-  assertPositiveInteger(fnName, m.cols as number, `${argName}.cols`);
+  assertIntegerValue(m.rows as number, `${argName}.rows`);
+  assertIntegerValue(m.cols as number, `${argName}.cols`);
+  assertPositiveInteger(m.rows as number, `${argName}.rows`);
+  assertPositiveInteger(m.cols as number, `${argName}.cols`);
   const expected = (m.rows as number) * (m.cols as number);
   if (!Number.isSafeInteger(expected) || m.data.length !== expected) {
-    throw new RangeError(`${fnName}: ${argName}.data length must equal rows * cols`);
+    throw refuse(`${argName}.data length must equal rows * cols`);
   }
   if (validate) {
-    assertFiniteValues(fnName, m.data, `${argName}.data`);
+    assertFiniteValues(m.data, `${argName}.data`);
   }
   return m as Matrix2D;
 }
@@ -866,18 +776,16 @@ export function assertMatrix2D(
  * outside `tokens`. Absent (`undefined` / `null`) takes `fallback`.
  */
 export function requireToken<T extends string>(
-  fnName: string,
   value: unknown,
   argName: string,
   tokens: readonly T[],
   fallback: T,
 ): T {
-  return optionalToken(fnName, value, argName, tokens) ?? fallback;
+  return optionalToken(value, argName, tokens) ?? fallback;
 }
 
 /** {@link requireToken} for a field whose default the library owns: absent stays `undefined`. */
 export function optionalToken<T extends string>(
-  fnName: string,
   value: unknown,
   argName: string,
   tokens: readonly T[],
@@ -885,9 +793,9 @@ export function optionalToken<T extends string>(
   if (value === undefined || value === null) {
     return undefined;
   }
-  assertString(fnName, value, argName);
+  assertString(value, argName);
   if (!(tokens as readonly string[]).includes(value as string)) {
-    throw new RangeError(`${fnName}: ${argName} must be one of ${tokens.join(', ')}`);
+    throw refuse(`${argName} must be one of ${tokens.join(', ')}`);
   }
   return value as T;
 }
@@ -912,10 +820,10 @@ function plainObject(value: unknown): value is Record<string, unknown> {
   );
 }
 
-function assertNoExtraArguments(fnName: string, args: readonly unknown[], from: number): void {
+function assertNoExtraArguments(args: readonly unknown[], from: number): void {
   for (let i = from; i < args.length; i++) {
     if (args[i] !== undefined) {
-      throw new TypeError(`${fnName}: unexpected argument after the request object`);
+      throw refuseType(`unexpected argument after the request object`);
     }
   }
 }
@@ -930,67 +838,68 @@ function assertNoExtraArguments(fnName: string, args: readonly unknown[], from: 
  * sample rate or audio. The caller states the request type it expects.
  */
 export function sampleOneShot<R extends SampleRequest>(
-  fnName: RequestFn,
+  requestName: RequestFn,
   args: readonly unknown[],
 ): R {
   const first = args[0];
   if (first instanceof Float32Array) {
     if (args.length > 3) {
-      throw new TypeError(`${fnName}: expected (samples, sampleRate, options?)`);
+      throw refuseType(`expected (samples, sampleRate, options?)`);
     }
     const sampleRate = args[1];
-    assertSampleRate(fnName, sampleRate);
+    assertSampleRate(sampleRate);
     const options = args[2] ?? {};
     if (!plainObject(options)) {
-      throw new TypeError(`${fnName}: options must be an object`);
+      throw refuseType(`options must be an object`);
     }
     for (const key of ['samples', 'sampleRate']) {
       if (Object.keys(options).includes(key)) {
-        throw new TypeError(`${fnName}: unknown option '${key}'`);
+        throw refuseType(`unknown option '${key}'`);
       }
     }
-    optionsBag(fnName, options);
+    optionsBag(requestName, options);
     return { ...options, samples: first, sampleRate } as unknown as R;
   }
   if (plainObject(first)) {
-    assertNoExtraArguments(fnName, args, 1);
-    assertKnownRequestKeys(fnName, first);
-    assertSampleRate(fnName, first.sampleRate);
+    assertNoExtraArguments(args, 1);
+    assertKnownRequestKeys(requestName, first);
+    assertSampleRate(first.sampleRate);
     return first as unknown as R;
   }
-  assertAudioSamples(fnName, first, {}, 'samples');
-  throw new TypeError(`${fnName}: expected a request object or a Float32Array`);
+  assertAudioSamples(first, {}, 'samples');
+  throw refuseType(`expected a request object or a Float32Array`);
 }
 
 /**
  * Normalises a one-shot that takes no audio: exactly one request object. Throws
  * `TypeError` for any other first argument, an extra argument, or an unknown key.
  */
-export function requestOnly<R extends object>(fnName: RequestFn, args: readonly unknown[]): R {
+export function requestOnly<R extends object>(requestName: RequestFn, args: readonly unknown[]): R {
   const request = args[0];
   if (!plainObject(request)) {
-    throw new TypeError(`${fnName}: request must be an object`);
+    throw refuseType(`request must be an object`);
   }
-  assertNoExtraArguments(fnName, args, 1);
-  assertKnownRequestKeys(fnName, request);
+  assertNoExtraArguments(args, 1);
+  assertKnownRequestKeys(requestName, request);
   return request as R;
 }
 
 /** Refuse a surround pan field outside its range; the engine and mixer never clamp it. */
-export function assertSurroundPan(
-  fnName: string,
-  pan: { azimuth?: number; divergence?: number; lfe?: number },
-): void {
+export function assertSurroundPan(pan: {
+  azimuth?: number;
+  divergence?: number;
+  lfe?: number;
+}): void {
   const check = (name: 'azimuth' | 'divergence' | 'lfe', min: number, max: number): void => {
     const value = pan[name];
     if (value === undefined || value === null) {
       return;
     }
     if (typeof value !== 'number') {
-      throw new TypeError(`${fnName}: ${name} must be a number`);
+      throw refuseType(`${name} must be a number`);
     }
     if (!(value >= min && value <= max)) {
-      throw new RangeError(`${fnName}: ${name} must be in [${min}, ${max}]`);
+      throw refuse(`${name} must be in [${min}, ${max}]`);
     }
   };
   check('azimuth', -180, 180);

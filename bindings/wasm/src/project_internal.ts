@@ -1,5 +1,5 @@
 import { AUTOMATION_CURVE_VALUES } from './codes.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode } from './errors.js';
 import type {
   BuiltinSynthConfig,
   ExternalInstrument,
@@ -16,6 +16,7 @@ import type {
   SynthEnumTables,
   SynthPatch,
 } from './instrument_types.js';
+import { codedError, refuse, refuseType } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
@@ -233,13 +234,11 @@ export type NativeInstrumentBinding<T> = T & { destinationId: number };
  * private is a compile-time rule, so reading it once here beats widening the
  * class with a method the parity tool would then read as a facade op.
  */
-export function normalizeSynthInstrument(fnName: string, patch: unknown): NativeSynthBinding {
+export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding {
   if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
-    throw new TypeError(
-      `${fnName}: patch must be a SynthPatch object; a preset is named by its preset field`,
-    );
+    throw refuseType(`patch must be a SynthPatch object; a preset is named by its preset field`);
   }
-  refuseSynthPatchOrdinals(fnName, patch);
+  refuseSynthPatchOrdinals(patch);
   const { sampleBank, ...rest } = patch as SynthPatch;
   if (!sampleBank) {
     // Omitted, and at runtime an explicit null: both mean no bank, which a
@@ -247,12 +246,12 @@ export function normalizeSynthInstrument(fnName: string, patch: unknown): Native
     return rest;
   }
   if (!(sampleBank instanceof SampleBank)) {
-    throw new TypeError('sampleBank must be a SampleBank instance');
+    throw refuseType('sampleBank must be a SampleBank instance');
   }
   if ((sampleBank as unknown as { released: boolean }).released) {
     // The id outlives the handle, so without this the native registry would be
     // the only thing that notices — and with a different error class than Node.
-    throw releasedHandleError('sampleBank', 'is destroyed');
+    throw releasedHandleError('SampleBank');
   }
   return { ...rest, sampleBankId: sampleBank.nativeId };
 }
@@ -267,7 +266,6 @@ export function normalizeSynthInstrument(fnName: string, patch: unknown): Native
  * destination is merged in beside it, defaulting to `0`.
  */
 export function normalizeInstrumentBindings<E, R extends object>(
-  method: string,
   value: ReadonlyArray<ProjectInstrumentBinding<E>> | null | undefined,
   entry: (instrument: E) => R,
 ): NativeInstrumentBinding<R>[] {
@@ -275,36 +273,34 @@ export function normalizeInstrumentBindings<E, R extends object>(
     return [];
   }
   if (!Array.isArray(value)) {
-    throw new TypeError(
-      `${method}: instruments must be an array of { destinationId?, instrument } pairs`,
-    );
+    throw refuseType(`instruments must be an array of { destinationId?, instrument } pairs`);
   }
   return value.map((pair: unknown, index: number) => {
     const label = `instruments[${index}]`;
     if (typeof pair !== 'object' || pair === null || Array.isArray(pair)) {
-      throw new TypeError(`${method}: ${label} must be a { destinationId?, instrument } pair`);
+      throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
     }
     const record = pair as Record<string, unknown>;
     for (const key of Object.keys(record)) {
       if (key !== 'destinationId' && key !== 'instrument') {
         const hint =
           'instrument' in record ? '' : ` (a bare config must be wrapped as { instrument })`;
-        throw new TypeError(`${method}: ${label}: unknown request key '${key}'${hint}`);
+        throw refuseType(`${label}: unknown request key '${key}'${hint}`);
       }
     }
     if (!('instrument' in record)) {
-      throw new TypeError(`${method}: ${label} needs an 'instrument' key`);
+      throw refuseType(`${label} needs an 'instrument' key`);
     }
     const instrument = record.instrument;
     if (typeof instrument !== 'object' || instrument === null || Array.isArray(instrument)) {
-      throw new TypeError(`${method}: ${label}.instrument must be an object`);
+      throw refuseType(`${label}.instrument must be an object`);
     }
     if ('destinationId' in instrument) {
-      throw new TypeError(
-        `${method}: ${label}.instrument: unknown request key 'destinationId' ('destinationId' belongs on the pair)`,
+      throw refuseType(
+        `${label}.instrument: unknown request key 'destinationId' ('destinationId' belongs on the pair)`,
       );
     }
-    const destinationId = optionalId(method, `${label}.destinationId`, record.destinationId, true);
+    const destinationId = optionalId(`${label}.destinationId`, record.destinationId, true);
     return { ...entry(instrument as E), destinationId: destinationId ?? 0 };
   });
 }
@@ -318,22 +314,22 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
     return undefined;
   }
   if (!Array.isArray(inserts)) {
-    throw new TypeError('inserts must be an array');
+    throw refuseType('inserts must be an array');
   }
   return JSON.stringify(
     inserts.map((insert, index) => {
       if (typeof insert !== 'object' || insert === null) {
-        throw new TypeError(`inserts[${index}] must be an object`);
+        throw refuseType(`inserts[${index}] must be an object`);
       }
       if (typeof insert.processor !== 'string') {
-        throw new TypeError(`inserts[${index}].processor must be a string`);
+        throw refuseType(`inserts[${index}].processor must be a string`);
       }
       const { params } = insert;
       if (params === undefined) {
         return { processor: insert.processor, params: {} };
       }
       if (typeof params !== 'object' || params === null || Array.isArray(params)) {
-        throw new TypeError(`inserts[${index}].params must be an object`);
+        throw refuseType(`inserts[${index}].params must be an object`);
       }
       return { processor: insert.processor, params };
     }),
@@ -355,7 +351,6 @@ export interface NormalizedPartRig {
  * further arguments.
  */
 export function normalizePartRig(
-  method: string,
   requestOrDestinationId: PartRigRequest | PartRigKey | number,
   part?: number,
   mode?: PartRigMode,
@@ -363,7 +358,7 @@ export function normalizePartRig(
 ): NormalizedPartRig {
   if (typeof requestOrDestinationId === 'object' && requestOrDestinationId !== null) {
     if (part !== undefined || mode !== undefined || inserts !== undefined) {
-      throw new TypeError(`${method}: a request object takes no further arguments`);
+      throw refuseType(`a request object takes no further arguments`);
     }
     const request = requestOrDestinationId as Partial<PartRigRequest>;
     return {
@@ -678,7 +673,7 @@ export interface ProjectModule {
 export function projectModule(): ProjectModule {
   const candidate = getSonareModule() as unknown as Partial<ProjectModule>;
   if (typeof candidate.projectAbiVersion !== 'function' || candidate.Project === undefined) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.NotSupported,
       'libsonare was built without arrangement (headless DAW) support',
     );
@@ -687,7 +682,6 @@ export function projectModule(): ProjectModule {
 }
 
 export function projectMidi1Event(
-  fnName: string,
   ppq: number,
   group: number,
   status: number,
@@ -695,11 +689,11 @@ export function projectMidi1Event(
   data1: number,
   data2 = 0,
 ): ProjectMidiEvent {
-  assertEventPpq(fnName, ppq);
-  const g = assertNibble(fnName, group, 'group');
-  const ch = assertNibble(fnName, channel, 'channel');
-  const d1 = assertU7(fnName, data1, 'data1');
-  const d2 = assertU7(fnName, data2, 'data2');
+  assertEventPpq(ppq);
+  const g = assertNibble(group, 'group');
+  const ch = assertNibble(channel, 'channel');
+  const d1 = assertU7(data1, 'data1');
+  const d2 = assertU7(data2, 'data2');
   // UMP MIDI-1.0 channel-voice word (message type 0x2). Canonical layout is
   // sonare::midi::make_midi1_* (C-ABI sonare_midi_*, which Python delegates to);
   // this hand-written copy is locked against those words by the golden vectors
@@ -708,33 +702,30 @@ export function projectMidi1Event(
   return { ppq, word0: word, word1: 0 };
 }
 
-export function assertProjectMidiEvents(
-  fnName: string,
-  events: ReadonlyArray<ProjectMidiEvent>,
-): void {
+export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>): void {
   if (!Array.isArray(events)) {
-    throw new TypeError(`${fnName}: events must be an array`);
+    throw refuseType(`events must be an array`);
   }
   events.forEach((event: unknown, index) => {
     const prefix = `events[${index}]`;
     if (event === null || typeof event !== 'object' || Array.isArray(event)) {
-      throw new TypeError(`${fnName}: ${prefix} must be a { ppq, word0, word1? } object`);
+      throw refuseType(`${prefix} must be a { ppq, word0, word1? } object`);
     }
     const record = event as ProjectMidiEvent;
     for (const key of ['ppq', 'word0'] as const) {
       if (typeof record[key] !== 'number') {
-        throw new TypeError(`${fnName}: ${prefix}.${key} must be a number`);
+        throw refuseType(`${prefix}.${key} must be a number`);
       }
     }
     if (record.word1 !== undefined && typeof record.word1 !== 'number') {
-      throw new TypeError(`${fnName}: ${prefix}.word1 must be a number`);
+      throw refuseType(`${prefix}.word1 must be a number`);
     }
     if (!Number.isFinite(record.ppq) || record.ppq < 0) {
-      throw new RangeError(`${fnName}: ${prefix}.ppq must be a non-negative finite number`);
+      throw refuse(`${prefix}.ppq must be a non-negative finite number`);
     }
-    assertU32(fnName, record.word0, `${prefix}.word0`);
+    assertU32(record.word0, `${prefix}.word0`);
     if (record.word1 !== undefined) {
-      assertU32(fnName, record.word1, `${prefix}.word1`);
+      assertU32(record.word1, `${prefix}.word1`);
     }
   });
 }
@@ -775,7 +766,6 @@ const CHORD_QUALITY_CODES = {
  * value takes `fallback` when one is given.
  */
 function tokenCode(
-  fnName: string,
   argName: string,
   value: unknown,
   table: Readonly<Record<string, number>>,
@@ -786,11 +776,11 @@ function tokenCode(
     .map((key) => `'${key}'`)
     .join(', ');
   if (typeof token !== 'string') {
-    throw new TypeError(`${fnName}: ${argName} must be one of ${accepted}`);
+    throw refuseType(`${argName} must be one of ${accepted}`);
   }
   // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
   if (!Object.prototype.hasOwnProperty.call(table, token)) {
-    throw new RangeError(`${fnName}: ${argName} must be one of ${accepted} (got '${token}')`);
+    throw refuse(`${argName} must be one of ${accepted} (got '${token}')`);
   }
   return table[token];
 }
@@ -803,7 +793,7 @@ function tokenName<T extends string>(
 ): T {
   const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
   if (name === undefined) {
-    throw new RangeError(`unknown native ${what} ordinal ${String(ordinal)}`);
+    throw refuse(`unknown native ${what} ordinal ${String(ordinal)}`);
   }
   return name;
 }
@@ -815,7 +805,6 @@ function tokenName<T extends string>(
  * real destination.
  */
 export function optionalId(
-  fnName: string,
   argName: string,
   value: unknown,
   allowZero = false,
@@ -825,13 +814,13 @@ export function optionalId(
     return undefined;
   }
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (value === 0 && !allowZero) {
-    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it ${hint})`);
+    throw refuse(`${argName} must not be 0 (omit it ${hint})`);
   }
   if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
-    throw new RangeError(`${fnName}: ${argName} must be an unsigned 32-bit integer`);
+    throw refuse(`${argName} must be an unsigned 32-bit integer`);
   }
   return value;
 }
@@ -840,50 +829,39 @@ export function optionalId(
  * An optional string field whose empty form would read as "not given": absent stays absent and
  * `""` is refused by name. `hint` finishes "omit it ...".
  */
-export function optionalName(
-  fnName: string,
-  argName: string,
-  value: unknown,
-  hint: string,
-): string | undefined {
+export function optionalName(argName: string, value: unknown, hint: string): string | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: ${argName} must be a string`);
+    throw refuseType(`${argName} must be a string`);
   }
   if (value === '') {
-    throw new RangeError(`${fnName}: ${argName} must not be empty; omit it ${hint}`);
+    throw refuse(`${argName} must not be empty; omit it ${hint}`);
   }
   return value;
 }
 
 /** The take list as the native layer reads it, each take checked by name; absent fields are missing keys. */
-export function takesToNative(fnName: string, takes: unknown): Array<Record<string, unknown>> {
+export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(takes)) {
-    throw new TypeError(`${fnName}: takes must be an array`);
+    throw refuseType(`takes must be an array`);
   }
   return takes.map((entry: unknown, index) => {
     const where = `takes[${index}]`;
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-      throw new TypeError(`${fnName}: ${where} must be an object`);
+      throw refuseType(`${where} must be an object`);
     }
     const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
     if (typeof id !== 'number') {
-      throw new TypeError(`${fnName}: ${where}.id must be a number`);
+      throw refuseType(`${where}.id must be a number`);
     }
     if (id === 0) {
-      throw new RangeError(`${fnName}: ${where}.id must not be 0`);
+      throw refuse(`${where}.id must not be 0`);
     }
-    const takeId = optionalId(fnName, `${where}.id`, id);
-    const source = optionalId(
-      fnName,
-      `${where}.sourceId`,
-      sourceId,
-      false,
-      "for the clip's source",
-    );
-    const label = optionalName(fnName, `${where}.name`, name, 'for an unnamed take');
+    const takeId = optionalId(`${where}.id`, id);
+    const source = optionalId(`${where}.sourceId`, sourceId, false, "for the clip's source");
+    const label = optionalName(`${where}.name`, name, 'for an unnamed take');
     return {
       ...rest,
       id: takeId,
@@ -894,52 +872,39 @@ export function takesToNative(fnName: string, takes: unknown): Array<Record<stri
 }
 
 /** The comp segments as the native layer reads them; an absent `takeId` is a missing key. */
-export function compSegmentsToNative(
-  fnName: string,
-  segments: unknown,
-): Array<Record<string, unknown>> {
+export function compSegmentsToNative(segments: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(segments)) {
-    throw new TypeError(`${fnName}: segments must be an array`);
+    throw refuseType(`segments must be an array`);
   }
   return segments.map((entry: unknown, index) => {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-      throw new TypeError(`${fnName}: segments[${index}] must be an object`);
+      throw refuseType(`segments[${index}] must be an object`);
     }
     const { takeId, ...rest } = entry as Record<string, unknown>;
-    const take = optionalId(
-      fnName,
-      `segments[${index}].takeId`,
-      takeId,
-      false,
-      'for the active take',
-    );
+    const take = optionalId(`segments[${index}].takeId`, takeId, false, 'for the active take');
     return { ...rest, ...(take === undefined ? {} : { takeId: take }) };
   });
 }
 
 /** An optional strictly positive integer count: absent is `undefined`, an explicit `0` is refused. */
-export function optionalPositiveInt(
-  fnName: string,
-  argName: string,
-  value: unknown,
-): number | undefined {
+export function optionalPositiveInt(argName: string, value: unknown): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
   if (typeof value !== 'number') {
-    throw new TypeError(`${fnName}: ${argName} must be a number`);
+    throw refuseType(`${argName} must be a number`);
   }
   if (value === 0) {
-    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
+    throw refuse(`${argName} must not be 0 (omit it for the default)`);
   }
   if (!Number.isInteger(value) || value < 0) {
-    throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+    throw refuse(`${argName} must be a positive integer`);
   }
   return value;
 }
 
-export function projectTrackKindValue(kind: ProjectTrackKind, fnName: string): number {
-  return tokenCode(fnName, 'kind', kind, TRACK_KINDS);
+export function projectTrackKindValue(kind: ProjectTrackKind): number {
+  return tokenCode('kind', kind, TRACK_KINDS);
 }
 
 export function projectTrackKindName(ordinal: number): ProjectTrackKind {
@@ -951,7 +916,7 @@ export function projectSourceKindName(ordinal: number): ProjectSourceKind {
 }
 
 export function projectOverlapPolicyValue(policy: ProjectOverlapPolicy): number {
-  return tokenCode('setOverlapPolicy', 'policy', policy, OVERLAP_POLICIES);
+  return tokenCode('policy', policy, OVERLAP_POLICIES);
 }
 
 export function projectOverlapPolicyName(ordinal: number): ProjectOverlapPolicy {
@@ -970,7 +935,7 @@ export function projectKeySegmentsToNative(
   return keys.map((key) =>
     key.mode === undefined
       ? (key as NativeKeySegment)
-      : { ...key, mode: tokenCode('annotateKeys', 'mode', key.mode, KEY_MODES) },
+      : { ...key, mode: tokenCode('mode', key.mode, KEY_MODES) },
   );
 }
 
@@ -982,7 +947,7 @@ export function projectChordSymbolsToNative(
       ? (chord as NativeChordSymbol)
       : {
           ...chord,
-          quality: tokenCode('annotateChords', 'quality', chord.quality, CHORD_QUALITY_CODES),
+          quality: tokenCode('quality', chord.quality, CHORD_QUALITY_CODES),
         },
   );
 }
@@ -996,26 +961,22 @@ export function projectChordQualityName(ordinal: number): ProjectChordQuality {
 }
 
 export function projectFadeCurveValue(
-  fnName: string,
   argName: string,
   curve: ProjectFadeCurve | undefined,
 ): number {
-  return tokenCode(fnName, argName, curve, FADE_CURVES, 'linear');
+  return tokenCode(argName, curve, FADE_CURVES, 'linear');
 }
 
-export function projectMarkerKindValue(
-  fnName: string,
-  kind: ProjectMarkerKind | undefined,
-): number {
-  return tokenCode(fnName, 'kind', kind, MARKER_KINDS, 'marker');
+export function projectMarkerKindValue(kind: ProjectMarkerKind | undefined): number {
+  return tokenCode('kind', kind, MARKER_KINDS, 'marker');
 }
 
 export function projectMarkerKindName(ordinal: number): ProjectMarkerKind {
   return tokenName(MARKER_KINDS, ordinal, 'marker kind');
 }
 
-export function projectStemLayoutValue(fnName: string, layout: unknown): number {
-  return tokenCode(fnName, 'stems[].layout', layout, STEM_LAYOUTS);
+export function projectStemLayoutValue(layout: unknown): number {
+  return tokenCode('stems[].layout', layout, STEM_LAYOUTS);
 }
 
 /** One native diagnostic as the typed record, with no target when `0`. */
@@ -1040,15 +1001,14 @@ export function projectCompileResultFromNative(
  * sample rate, and returns the interleaved buffer plus the channel count.
  */
 export function interleaveChannels(
-  fnName: string,
   channels: unknown,
   sampleRate: unknown,
 ): { audio: Float32Array; numChannels: number } {
-  assertAudioChannels(fnName, channels, sampleRate);
+  assertAudioChannels(channels, sampleRate);
   const planes = channels as Float32Array[];
   const frames = planes[0].length;
   if (planes.some((plane) => plane.length !== frames)) {
-    throw new RangeError(`${fnName}: channels must all have the same length`);
+    throw refuse(`channels must all have the same length`);
   }
   return { audio: interleavePlanes(planes), numChannels: planes.length };
 }
@@ -1107,17 +1067,13 @@ export function projectAutomationPointFromNative(native: {
 const AUTOMATION_POINT_KEYS: ReadonlySet<string> = new Set(['ppq', 'value', 'curveToNext']);
 
 /** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
-export function projectAutomationPointValue(
-  point: ProjectAutomationPoint,
-  fnName: string,
-): NativeAutomationPoint {
+export function projectAutomationPointValue(point: ProjectAutomationPoint): NativeAutomationPoint {
   for (const key of Object.keys(point)) {
     if (!AUTOMATION_POINT_KEYS.has(key)) {
-      throw new TypeError(`${fnName}: unknown option '${key}' in 'points'`);
+      throw refuseType(`unknown option '${key}' in 'points'`);
     }
   }
   const curveToNext = tokenCode(
-    fnName,
     'curveToNext',
     point.curveToNext,
     AUTOMATION_CURVE_VALUES,
@@ -1129,34 +1085,30 @@ export function projectAutomationPointValue(
 /** Resolve an automation lane's tokens to the ordinals embind reads. */
 export function projectAutomationLaneValue(
   desc: ProjectAutomationLaneDesc,
-  fnName: string,
 ): NativeAutomationLaneDesc {
   if (desc.targetParamId === 0) {
-    throw new RangeError('project automation lane targetParamId must be non-zero');
+    throw refuse('project automation lane targetParamId must be non-zero');
   }
   const { targetKind, points, ...rest } = desc;
   return {
     ...rest,
     ...(targetKind === undefined
       ? {}
-      : { targetKind: projectAutomationTargetKindValue(targetKind, fnName) }),
-    points: points.map((point) => projectAutomationPointValue(point, fnName)),
+      : { targetKind: projectAutomationTargetKindValue(targetKind) }),
+    points: points.map((point) => projectAutomationPointValue(point)),
   };
 }
 
-export function projectAutomationTargetKindValue(
-  kind: ProjectAutomationTargetKind,
-  fnName: string,
-): number {
-  return tokenCode(fnName, 'targetKind', kind, AUTOMATION_TARGET_KINDS);
+export function projectAutomationTargetKindValue(kind: ProjectAutomationTargetKind): number {
+  return tokenCode('targetKind', kind, AUTOMATION_TARGET_KINDS);
 }
 
 export function projectWarpModeValue(mode: ProjectWarpMode): number {
-  return tokenCode('setClipWarpMode', 'mode', mode, WARP_MODES);
+  return tokenCode('mode', mode, WARP_MODES);
 }
 
 export function projectLoopModeValue(mode: ProjectLoopMode): number {
-  return tokenCode('setClipLoop', 'loopMode', mode, LOOP_MODES);
+  return tokenCode('loopMode', mode, LOOP_MODES);
 }
 
 export function projectLoopModeName(ordinal: number): ProjectLoopMode {

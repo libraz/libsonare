@@ -1,3 +1,4 @@
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions, resolveResynthesisHop } from './internal/fft_options.js';
@@ -172,198 +173,210 @@ const DEFAULT_CQT_FMIN_HZ = 32.70319566257483;
 /** Reconstruct mono audio from a CQT magnitude via Griffin-Lim. */
 export function cqtToAudio(request: CqtToAudioRequest): Float32Array;
 export function cqtToAudio(...args: unknown[]): Float32Array {
-  const r = requestOnly<CqtToAudioRequest>('cqtToAudio', args);
-  assertMatrix2D('cqtToAudio', r.magnitude, 'magnitude');
-  const sampleRate = r.sampleRate;
-  assertSampleRate('cqtToAudio', sampleRate);
-  // Positivity only: the core takes any positive hop and any positive iteration
-  // count, and names the Griffin-Lim ceiling itself when one exceeds it.
-  const hopLength = resolvePositiveIntegerOption('cqtToAudio', 'hopLength', r.hopLength, 512);
-  const nIter = resolvePositiveIntegerOption('cqtToAudio', 'nIter', r.nIter, 32);
-  const fminHz = r.fminHz ?? DEFAULT_CQT_FMIN_HZ;
-  assertPositiveFloatValue('cqtToAudio', fminHz, 'fminHz');
-  return addon.cqtToAudio(
-    r.magnitude.data,
-    r.magnitude.rows,
-    r.magnitude.cols,
-    sampleRate,
-    hopLength,
-    fminHz,
-    r.binsPerOctave ?? 12,
-    nIter,
-  );
+  return withEntry('cqtToAudio', () => {
+    const r = requestOnly<CqtToAudioRequest>('cqtToAudio', args);
+    assertMatrix2D(r.magnitude, 'magnitude');
+    const sampleRate = r.sampleRate;
+    assertSampleRate(sampleRate);
+    // Positivity only: the core takes any positive hop and any positive iteration
+    // count, and names the Griffin-Lim ceiling itself when one exceeds it.
+    const hopLength = resolvePositiveIntegerOption('hopLength', r.hopLength, 512);
+    const nIter = resolvePositiveIntegerOption('nIter', r.nIter, 32);
+    const fminHz = r.fminHz ?? DEFAULT_CQT_FMIN_HZ;
+    assertPositiveFloatValue(fminHz, 'fminHz');
+    return addon.cqtToAudio(
+      r.magnitude.data,
+      r.magnitude.rows,
+      r.magnitude.cols,
+      sampleRate,
+      hopLength,
+      fminHz,
+      r.binsPerOctave ?? 12,
+      nIter,
+    );
+  });
 }
 
 /** Reconstruct mono audio from a VQT magnitude via Griffin-Lim. */
 export function vqtToAudio(request: VqtToAudioRequest): Float32Array;
 export function vqtToAudio(...args: unknown[]): Float32Array {
-  const r = requestOnly<VqtToAudioRequest>('vqtToAudio', args);
-  assertMatrix2D('vqtToAudio', r.magnitude, 'magnitude');
-  const sampleRate = r.sampleRate;
-  assertSampleRate('vqtToAudio', sampleRate);
-  const hopLength = resolvePositiveIntegerOption('vqtToAudio', 'hopLength', r.hopLength, 512);
-  const nIter = resolvePositiveIntegerOption('vqtToAudio', 'nIter', r.nIter, 32);
-  const fminHz = r.fminHz ?? DEFAULT_CQT_FMIN_HZ;
-  assertPositiveFloatValue('vqtToAudio', fminHz, 'fminHz');
-  return addon.vqtToAudio(
-    r.magnitude.data,
-    r.magnitude.rows,
-    r.magnitude.cols,
-    sampleRate,
-    hopLength,
-    fminHz,
-    r.binsPerOctave ?? 12,
-    resolveOptionalNonNegative('vqtToAudio', r.gamma, 'gamma'),
-    nIter,
-  );
+  return withEntry('vqtToAudio', () => {
+    const r = requestOnly<VqtToAudioRequest>('vqtToAudio', args);
+    assertMatrix2D(r.magnitude, 'magnitude');
+    const sampleRate = r.sampleRate;
+    assertSampleRate(sampleRate);
+    const hopLength = resolvePositiveIntegerOption('hopLength', r.hopLength, 512);
+    const nIter = resolvePositiveIntegerOption('nIter', r.nIter, 32);
+    const fminHz = r.fminHz ?? DEFAULT_CQT_FMIN_HZ;
+    assertPositiveFloatValue(fminHz, 'fminHz');
+    return addon.vqtToAudio(
+      r.magnitude.data,
+      r.magnitude.rows,
+      r.magnitude.cols,
+      sampleRate,
+      hopLength,
+      fminHz,
+      r.binsPerOctave ?? 12,
+      resolveOptionalNonNegative(r.gamma, 'gamma'),
+      nIter,
+    );
+  });
 }
 
 /** Reconstruct STFT magnitude from a mel spectrogram. Returns rows = `nFft / 2 + 1` bins, cols = frames. */
 export function melToStft(request: MelToStftRequest): Matrix2D;
 export function melToStft(...args: unknown[]): Matrix2D {
-  const r = requestOnly<MelToStftRequest>('melToStft', args);
-  assertMatrix2D('melToStft', r.power, 'power');
-  const sampleRate = r.sampleRate ?? 22050;
-  // No range bound here: the core only requires sample_rate > 0 for this
-  // reconstruction, unlike the [8000, 384000] audio-analysis bound.
-  assertPositiveInteger('melToStft', sampleRate, 'sampleRate');
-  // Positivity only: the filterbank inverse takes any positive size, so the
-  // even-size rule the STFT entries carry would refuse sizes this one answers.
-  const nFft = resolvePositiveIntegerOption('melToStft', 'nFft', r.nFft, 2048);
-  const fminHz = r.fminHz ?? 0;
-  const fmaxHz = r.fmaxHz ?? 0;
-  assertFloatFields('melToStft', { fminHz, fmaxHz });
-  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-  if (r.fmaxHz !== undefined) {
-    assertPositiveFloatValue('melToStft', fmaxHz, 'fmaxHz');
-  }
-  const out = addon.melToStft(
-    r.power.data,
-    r.power.rows,
-    r.power.cols,
-    sampleRate,
-    nFft,
-    fminHz,
-    fmaxHz,
-    r.htk ?? false,
-  );
-  return toMatrix2D(out.magnitude, out.nBins, out.nFrames);
+  return withEntry('melToStft', () => {
+    const r = requestOnly<MelToStftRequest>('melToStft', args);
+    assertMatrix2D(r.power, 'power');
+    const sampleRate = r.sampleRate ?? 22050;
+    // No range bound here: the core only requires sample_rate > 0 for this
+    // reconstruction, unlike the [8000, 384000] audio-analysis bound.
+    assertPositiveInteger(sampleRate, 'sampleRate');
+    // Positivity only: the filterbank inverse takes any positive size, so the
+    // even-size rule the STFT entries carry would refuse sizes this one answers.
+    const nFft = resolvePositiveIntegerOption('nFft', r.nFft, 2048);
+    const fminHz = r.fminHz ?? 0;
+    const fmaxHz = r.fmaxHz ?? 0;
+    assertFloatFields({ fminHz, fmaxHz });
+    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+    if (r.fmaxHz !== undefined) {
+      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
+    }
+    const out = addon.melToStft(
+      r.power.data,
+      r.power.rows,
+      r.power.cols,
+      sampleRate,
+      nFft,
+      fminHz,
+      fmaxHz,
+      r.htk ?? false,
+    );
+    return toMatrix2D(out.magnitude, out.nBins, out.nFrames);
+  });
 }
 
 /** Reconstruct audio from a mel spectrogram via Griffin-Lim. */
 export function melToAudio(request: MelToAudioRequest): Float32Array;
 export function melToAudio(...args: unknown[]): Float32Array {
-  const r = requestOnly<MelToAudioRequest>('melToAudio', args);
-  assertMatrix2D('melToAudio', r.power, 'power');
-  const sampleRate = r.sampleRate ?? 22050;
-  assertPositiveInteger('melToAudio', sampleRate, 'sampleRate');
-  // Positivity only, as melToStft: the geometry rule this reconstruction carries
-  // is that all three are positive.
-  const nFft = resolvePositiveIntegerOption('melToAudio', 'nFft', r.nFft, 2048);
-  const hopLength = resolveResynthesisHop('melToAudio', r.hopLength);
-  const nIter = resolveIntegerOption('melToAudio', 'nIter', r.nIter, 32);
-  const fminHz = r.fminHz ?? 0;
-  const fmaxHz = r.fmaxHz ?? 0;
-  assertFloatFields('melToAudio', { fminHz, fmaxHz });
-  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-  if (r.fmaxHz !== undefined) {
-    assertPositiveFloatValue('melToAudio', fmaxHz, 'fmaxHz');
-  }
-  return addon.melToAudio(
-    r.power.data,
-    r.power.rows,
-    r.power.cols,
-    sampleRate,
-    nFft,
-    hopLength,
-    fminHz,
-    fmaxHz,
-    nIter,
-    r.htk ?? false,
-  );
+  return withEntry('melToAudio', () => {
+    const r = requestOnly<MelToAudioRequest>('melToAudio', args);
+    assertMatrix2D(r.power, 'power');
+    const sampleRate = r.sampleRate ?? 22050;
+    assertPositiveInteger(sampleRate, 'sampleRate');
+    // Positivity only, as melToStft: the geometry rule this reconstruction carries
+    // is that all three are positive.
+    const nFft = resolvePositiveIntegerOption('nFft', r.nFft, 2048);
+    const hopLength = resolveResynthesisHop(r.hopLength);
+    const nIter = resolveIntegerOption('nIter', r.nIter, 32);
+    const fminHz = r.fminHz ?? 0;
+    const fmaxHz = r.fmaxHz ?? 0;
+    assertFloatFields({ fminHz, fmaxHz });
+    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+    if (r.fmaxHz !== undefined) {
+      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
+    }
+    return addon.melToAudio(
+      r.power.data,
+      r.power.rows,
+      r.power.cols,
+      sampleRate,
+      nFft,
+      hopLength,
+      fminHz,
+      fmaxHz,
+      nIter,
+      r.htk ?? false,
+    );
+  });
 }
 
 /** A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them. */
 function assertGriffinLimFftSize(nBins: number, nFft: number): void {
   if (nFft !== (nBins - 1) * 2) {
-    throw new RangeError(
-      `griffinLim: nFft must equal (nBins - 1) * 2 (got ${nFft} for ${nBins} bins)`,
-    );
+    throw refuse(`nFft must equal (nBins - 1) * 2 (got ${nFft} for ${nBins} bins)`);
   }
 }
 
 /** Reconstruct audio from an STFT magnitude matrix via Griffin-Lim. */
 export function griffinLim(request: GriffinLimRequest): Float32Array;
 export function griffinLim(...args: unknown[]): Float32Array {
-  const r = requestOnly<GriffinLimRequest>('griffinLim', args);
-  assertMatrix2D('griffinLim', r.magnitude, 'magnitude');
-  const sampleRate = r.sampleRate;
-  assertSampleRate('griffinLim', sampleRate);
-  const nBins = r.magnitude.rows;
-  const nFft = resolvePositiveIntegerOption('griffinLim', 'nFft', r.nFft, (nBins - 1) * 2);
-  assertGriffinLimFftSize(nBins, nFft);
-  const hopLength = resolveResynthesisHop('griffinLim', r.hopLength);
-  const nIter = resolvePositiveIntegerOption('griffinLim', 'nIter', r.nIter, 32);
-  return addon.griffinLim(
-    r.magnitude.data,
-    r.magnitude.rows,
-    r.magnitude.cols,
-    sampleRate,
-    nFft,
-    hopLength,
-    nIter,
-    r.momentum ?? 0.99,
-  );
+  return withEntry('griffinLim', () => {
+    const r = requestOnly<GriffinLimRequest>('griffinLim', args);
+    assertMatrix2D(r.magnitude, 'magnitude');
+    const sampleRate = r.sampleRate;
+    assertSampleRate(sampleRate);
+    const nBins = r.magnitude.rows;
+    const nFft = resolvePositiveIntegerOption('nFft', r.nFft, (nBins - 1) * 2);
+    assertGriffinLimFftSize(nBins, nFft);
+    const hopLength = resolveResynthesisHop(r.hopLength);
+    const nIter = resolvePositiveIntegerOption('nIter', r.nIter, 32);
+    return addon.griffinLim(
+      r.magnitude.data,
+      r.magnitude.rows,
+      r.magnitude.cols,
+      sampleRate,
+      nFft,
+      hopLength,
+      nIter,
+      r.momentum ?? 0.99,
+    );
+  });
 }
 
 /** Reconstruct a mel power spectrogram from MFCCs. Returns rows = mel bands, cols = frames. */
 export function mfccToMel(request: MfccToMelRequest): Matrix2D;
 export function mfccToMel(...args: unknown[]): Matrix2D {
-  const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
-  assertMatrix2D('mfccToMel', r.coefficients, 'coefficients');
-  const out = addon.mfccToMel(
-    r.coefficients.data,
-    r.coefficients.rows,
-    r.coefficients.cols,
-    r.nMels ?? 128,
-    r.lifter ?? 0,
-  );
-  return toMatrix2D(out.power, out.nMels, out.nFrames);
+  return withEntry('mfccToMel', () => {
+    const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
+    assertMatrix2D(r.coefficients, 'coefficients');
+    const out = addon.mfccToMel(
+      r.coefficients.data,
+      r.coefficients.rows,
+      r.coefficients.cols,
+      r.nMels ?? 128,
+      r.lifter ?? 0,
+    );
+    return toMatrix2D(out.power, out.nMels, out.nFrames);
+  });
 }
 
 /** Reconstruct audio from MFCCs via Griffin-Lim. */
 export function mfccToAudio(request: MfccToAudioRequest): Float32Array;
 export function mfccToAudio(...args: unknown[]): Float32Array {
-  const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
-  assertMatrix2D('mfccToAudio', r.coefficients, 'coefficients');
-  const sampleRate = r.sampleRate ?? 22050;
-  assertPositiveInteger('mfccToAudio', sampleRate, 'sampleRate');
-  // Positivity only, as melToAudio: the same reconstruction behind one more
-  // inverse transform, under the same geometry rule.
-  const nFft = resolvePositiveIntegerOption('mfccToAudio', 'nFft', r.nFft, 2048);
-  const hopLength = resolveResynthesisHop('mfccToAudio', r.hopLength);
-  const nIter = resolveIntegerOption('mfccToAudio', 'nIter', r.nIter, 32);
-  const fminHz = r.fminHz ?? 0;
-  const fmaxHz = r.fmaxHz ?? 0;
-  assertFloatFields('mfccToAudio', { fminHz, fmaxHz });
-  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-  if (r.fmaxHz !== undefined) {
-    assertPositiveFloatValue('mfccToAudio', fmaxHz, 'fmaxHz');
-  }
-  return addon.mfccToAudio(
-    r.coefficients.data,
-    r.coefficients.rows,
-    r.coefficients.cols,
-    r.nMels ?? 128,
-    sampleRate,
-    nFft,
-    hopLength,
-    fminHz,
-    fmaxHz,
-    nIter,
-    r.htk ?? false,
-    r.lifter ?? 0,
-  );
+  return withEntry('mfccToAudio', () => {
+    const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
+    assertMatrix2D(r.coefficients, 'coefficients');
+    const sampleRate = r.sampleRate ?? 22050;
+    assertPositiveInteger(sampleRate, 'sampleRate');
+    // Positivity only, as melToAudio: the same reconstruction behind one more
+    // inverse transform, under the same geometry rule.
+    const nFft = resolvePositiveIntegerOption('nFft', r.nFft, 2048);
+    const hopLength = resolveResynthesisHop(r.hopLength);
+    const nIter = resolveIntegerOption('nIter', r.nIter, 32);
+    const fminHz = r.fminHz ?? 0;
+    const fmaxHz = r.fmaxHz ?? 0;
+    assertFloatFields({ fminHz, fmaxHz });
+    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+    if (r.fmaxHz !== undefined) {
+      assertPositiveFloatValue(fmaxHz, 'fmaxHz');
+    }
+    return addon.mfccToAudio(
+      r.coefficients.data,
+      r.coefficients.rows,
+      r.coefficients.cols,
+      r.nMels ?? 128,
+      sampleRate,
+      nFft,
+      hopLength,
+      fminHz,
+      fmaxHz,
+      nIter,
+      r.htk ?? false,
+      r.lifter ?? 0,
+    );
+  });
 }
 
 /**
@@ -380,74 +393,78 @@ export function phaseVocoder(
   options: OptionsOf<PhaseVocoderRequest>,
 ): Float32Array;
 export function phaseVocoder(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<PhaseVocoderRequest>('phaseVocoder', args);
-  if (typeof request.speedRatio !== 'number') {
-    throw new TypeError('phaseVocoder: speedRatio must be a number');
-  }
-  assertFiniteScalar('phaseVocoder', request.speedRatio, 'speedRatio');
-  assertPositiveFloatValue('phaseVocoder', request.speedRatio, 'speedRatio');
-  assertAudioInput('phaseVocoder', request.samples, request.sampleRate, request);
-  const { nFft, hopLength } = resolveEffectFftOptions(
-    'phaseVocoder',
-    request.nFft,
-    request.hopLength,
-  );
-  return addon.phaseVocoder(
-    request.samples,
-    request.sampleRate,
-    request.speedRatio,
-    nFft,
-    hopLength,
-  );
+  return withEntry('phaseVocoder', () => {
+    const request = sampleOneShot<PhaseVocoderRequest>('phaseVocoder', args);
+    if (typeof request.speedRatio !== 'number') {
+      throw refuseType('speedRatio must be a number');
+    }
+    assertFiniteScalar(request.speedRatio, 'speedRatio');
+    assertPositiveFloatValue(request.speedRatio, 'speedRatio');
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const { nFft, hopLength } = resolveEffectFftOptions(request.nFft, request.hopLength);
+    return addon.phaseVocoder(
+      request.samples,
+      request.sampleRate,
+      request.speedRatio,
+      nFft,
+      hopLength,
+    );
+  });
 }
 
 /** Generate a sine tone. */
 export function tone(request: ToneRequest): Float32Array;
 export function tone(...args: unknown[]): Float32Array {
-  const r = requestOnly<ToneRequest>('tone', args);
-  // Integrality only: a generator's rate has no domain in the core, so the
-  // audio-analysis bound would refuse rates it renders correctly today.
-  const sampleRate = r.sampleRate ?? 22050;
-  assertIntegralSampleRate('tone', sampleRate);
-  const frequencyHz = r.frequencyHz ?? 440;
-  const durationSec = r.durationSec ?? 1;
-  assertFloatFields('tone', { frequencyHz, durationSec });
-  return addon.tone(frequencyHz, sampleRate, durationSec, r.phase ?? 0, r.amplitude ?? 1);
+  return withEntry('tone', () => {
+    const r = requestOnly<ToneRequest>('tone', args);
+    // Integrality only: a generator's rate has no domain in the core, so the
+    // audio-analysis bound would refuse rates it renders correctly today.
+    const sampleRate = r.sampleRate ?? 22050;
+    assertIntegralSampleRate(sampleRate);
+    const frequencyHz = r.frequencyHz ?? 440;
+    const durationSec = r.durationSec ?? 1;
+    assertFloatFields({ frequencyHz, durationSec });
+    return addon.tone(frequencyHz, sampleRate, durationSec, r.phase ?? 0, r.amplitude ?? 1);
+  });
 }
 
 /** Generate an exponential (default) or linear chirp. */
 export function chirp(request: ChirpRequest): Float32Array;
 export function chirp(...args: unknown[]): Float32Array {
-  const r = requestOnly<ChirpRequest>('chirp', args);
-  // Integrality only, as `tone`: a generator's rate has no domain in the core.
-  const sampleRate = r.sampleRate ?? 22050;
-  assertIntegralSampleRate('chirp', sampleRate);
-  const fminHz = r.fminHz ?? 440;
-  const fmaxHz = r.fmaxHz ?? 880;
-  const durationSec = r.durationSec ?? 1;
-  assertFloatFields('chirp', { fminHz, fmaxHz, durationSec });
-  return addon.chirp(fminHz, fmaxHz, sampleRate, durationSec, r.linear ?? false);
+  return withEntry('chirp', () => {
+    const r = requestOnly<ChirpRequest>('chirp', args);
+    // Integrality only, as `tone`: a generator's rate has no domain in the core.
+    const sampleRate = r.sampleRate ?? 22050;
+    assertIntegralSampleRate(sampleRate);
+    const fminHz = r.fminHz ?? 440;
+    const fmaxHz = r.fmaxHz ?? 880;
+    const durationSec = r.durationSec ?? 1;
+    assertFloatFields({ fminHz, fmaxHz, durationSec });
+    return addon.chirp(fminHz, fmaxHz, sampleRate, durationSec, r.linear ?? false);
+  });
 }
 
 /** Generate a decaying sine click track at times in seconds. */
 export function clicks(request: ClicksRequest): Float32Array;
 export function clicks(...args: unknown[]): Float32Array {
-  const r = requestOnly<ClicksRequest>('clicks', args);
-  assertFloat32Array('clicks', r.times, 'times');
-  // Integrality only, as `tone`: a generator's rate has no domain in the core.
-  const sampleRate = r.sampleRate ?? 22050;
-  assertIntegralSampleRate('clicks', sampleRate);
-  // The native 0 means "derive from the last click"; the facade spells that as absence.
-  let length = 0;
-  if (r.length !== undefined && r.length !== null) {
-    if (typeof r.length !== 'number') {
-      throw new TypeError('clicks: length must be a number');
+  return withEntry('clicks', () => {
+    const r = requestOnly<ClicksRequest>('clicks', args);
+    assertFloat32Array(r.times, 'times');
+    // Integrality only, as `tone`: a generator's rate has no domain in the core.
+    const sampleRate = r.sampleRate ?? 22050;
+    assertIntegralSampleRate(sampleRate);
+    // The native 0 means "derive from the last click"; the facade spells that as absence.
+    let length = 0;
+    if (r.length !== undefined && r.length !== null) {
+      if (typeof r.length !== 'number') {
+        throw refuseType('length must be a number');
+      }
+      assertPositiveInteger(r.length, 'length');
+      length = r.length;
     }
-    assertPositiveInteger('clicks', r.length, 'length');
-    length = r.length;
-  }
-  const frequencyHz = r.frequencyHz ?? 1000;
-  const clickDurationSec = r.clickDurationSec ?? 0.1;
-  assertFloatFields('clicks', { frequencyHz, clickDurationSec });
-  return addon.clicks(r.times, sampleRate, length, frequencyHz, clickDurationSec);
+    const frequencyHz = r.frequencyHz ?? 1000;
+    const clickDurationSec = r.clickDurationSec ?? 0.1;
+    assertFloatFields({ frequencyHz, clickDurationSec });
+    return addon.clicks(r.times, sampleRate, length, frequencyHz, clickDurationSec);
+  });
 }

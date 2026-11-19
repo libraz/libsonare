@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type { ChannelLayout } from './types_engine.js';
 import { assertClosedToken } from './validation.js';
@@ -81,7 +82,9 @@ export function downmix(
   targetLayout: ChannelLayout,
   options?: DownmixOptions,
 ): Float32Array[] {
-  const layouts = Object.keys(CHANNEL_LAYOUT_VALUES) as ChannelLayout[];
-  assertClosedToken('downmix', targetLayout, layouts, 'targetLayout');
-  return addon.downmix(channels, CHANNEL_LAYOUT_VALUES[targetLayout], options);
+  return withEntry('downmix', () => {
+    const layouts = Object.keys(CHANNEL_LAYOUT_VALUES) as ChannelLayout[];
+    assertClosedToken(targetLayout, layouts, 'targetLayout');
+    return addon.downmix(channels, CHANNEL_LAYOUT_VALUES[targetLayout], options);
+  });
 }

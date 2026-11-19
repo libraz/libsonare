@@ -1,3 +1,4 @@
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
 import { tempoRange } from './internal/tempo_range.js';
@@ -89,7 +90,6 @@ const ACOUSTIC_MODES = ['auto', 'blind', 'impulseResponse'] as const;
 
 /** A placement the caller gave, checked; absent (`undefined` / `null`) stays `undefined`. */
 function checkedPlacement(
-  fnName: string,
   name: 'source' | 'listener',
   placement: unknown,
 ): RoomPlacement | undefined {
@@ -97,12 +97,12 @@ function checkedPlacement(
     return undefined;
   }
   if (typeof placement !== 'object') {
-    throw new TypeError(`${fnName}: ${name} must be an object with x, y and z`);
+    throw refuseType(`${name} must be an object with x, y and z`);
   }
   const { x, y, z } = placement as Record<string, unknown>;
-  assertFloatValue(fnName, x, `${name}.x`);
-  assertFloatValue(fnName, y, `${name}.y`);
-  assertFloatValue(fnName, z, `${name}.z`);
+  assertFloatValue(x, `${name}.x`);
+  assertFloatValue(y, `${name}.y`);
+  assertFloatValue(z, `${name}.z`);
   return { x, y, z } as RoomPlacement;
 }
 
@@ -112,7 +112,7 @@ function checkedPlacement(
  * field is refused. Fractional `seed` / `nOctaveBands` are refused before the addon
  * narrows them onto that zero.
  */
-function nativeRoomOptions(fnName: string, options: object): Record<string, unknown> {
+function nativeRoomOptions(options: object): Record<string, unknown> {
   const given = options as Record<string, unknown>;
   const resolved: Record<string, unknown> = { ...given };
   const read = (field: string): number | undefined => {
@@ -121,32 +121,32 @@ function nativeRoomOptions(fnName: string, options: object): Record<string, unkn
       return undefined;
     }
     if (typeof value !== 'number') {
-      throw new TypeError(`${fnName}: ${field} must be a number`);
+      throw refuseType(`${field} must be a number`);
     }
     return value;
   };
   for (const field of ZERO_IS_DEFAULT_FIELDS) {
     if (read(field) === 0) {
-      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the default`);
+      throw refuse(`${field} must not be 0; omit it for the default`);
     }
   }
   const seed = read('seed');
   if (seed !== undefined) {
-    assertInt64(fnName, seed, 'seed');
+    assertInt64(seed, 'seed');
   }
   const nOctaveBands = read('nOctaveBands');
   if (nOctaveBands !== undefined) {
-    assertInt32(fnName, nOctaveBands, 'nOctaveBands');
+    assertInt32(nOctaveBands, 'nOctaveBands');
   }
   for (const name of ['source', 'listener'] as const) {
-    const placement = checkedPlacement(fnName, name, given[name]);
+    const placement = checkedPlacement(name, given[name]);
     delete resolved[name];
     if (placement !== undefined) {
       resolved[name] = placement;
     }
   }
   if (given.mode !== undefined) {
-    assertClosedToken(fnName, given.mode, ACOUSTIC_MODES, 'mode');
+    assertClosedToken(given.mode, ACOUSTIC_MODES, 'mode');
   }
   return resolved;
 }
@@ -199,7 +199,7 @@ const SECTION_TYPES: readonly SectionType[] = [
 ];
 
 /** The tuning argument the addon reads: cents, `'auto'`, or absent. */
-function nativeTuning(fnName: string, tuningCents: unknown): number | 'auto' | undefined {
+function nativeTuning(tuningCents: unknown): number | 'auto' | undefined {
   if (tuningCents === undefined || tuningCents === null) {
     return undefined;
   }
@@ -207,7 +207,7 @@ function nativeTuning(fnName: string, tuningCents: unknown): number | 'auto' | u
     return 'auto';
   }
   if (typeof tuningCents !== 'number') {
-    throw new TypeError(`${fnName}: tuningCents must be a number or 'auto'`);
+    throw refuseType(`tuningCents must be a number or 'auto'`);
   }
   return tuningCents;
 }
@@ -623,38 +623,38 @@ export interface ChordFunctionalAnalysisRequest
 
 /** Normalises either call form of a one-shot over audio and preflights the audio. */
 function audioCall<R extends { samples: Float32Array; sampleRate: number }>(
-  fnName: RequestFn,
+  requestName: RequestFn,
   args: readonly unknown[],
 ): R {
-  const request = sampleOneShot<R>(fnName, args);
-  assertAudioInput(fnName, request.samples, request.sampleRate, request);
+  const request = sampleOneShot<R>(requestName, args);
+  assertAudioInput(request.samples, request.sampleRate, request);
   return request;
 }
 
 /** The key-detection fields in the addon's spelling. */
-function nativeKeyOptions(fnName: string, request: KeyDetectionOptions): Record<string, unknown> {
+function nativeKeyOptions(request: KeyDetectionOptions): Record<string, unknown> {
   const { profile, genreHint, modes } = request;
   if (profile !== undefined && profile !== null) {
-    assertClosedToken(fnName, profile, Object.keys(KEY_PROFILE_NATIVE) as KeyProfile[], 'profile');
+    assertClosedToken(profile, Object.keys(KEY_PROFILE_NATIVE) as KeyProfile[], 'profile');
   }
   if (genreHint !== undefined && genreHint !== null) {
-    assertClosedToken(fnName, genreHint, GENRE_HINTS, 'genreHint');
+    assertClosedToken(genreHint, GENRE_HINTS, 'genreHint');
   }
   let nativeModes: unknown = modes;
   if (modes === 'majorMinor') {
     nativeModes = 'major-minor';
   } else if (Array.isArray(modes)) {
     if (modes.length === 0) {
-      throw new RangeError(`${fnName}: modes must not be empty; omit it for the default mode set`);
+      throw refuse(`modes must not be empty; omit it for the default mode set`);
     }
     modes.forEach((mode, i) => {
-      assertClosedToken(fnName, mode, KEY_MODES, `modes[${i}]`);
+      assertClosedToken(mode, KEY_MODES, `modes[${i}]`);
     });
   } else if (modes !== undefined && modes !== null) {
-    assertClosedToken(fnName, modes, ['all', 'modal'] as const, 'modes');
+    assertClosedToken(modes, ['all', 'modal'] as const, 'modes');
   }
   if (request.chromaHighPassHz !== undefined && request.chromaHighPassHz !== null) {
-    assertFloatValue(fnName, request.chromaHighPassHz, 'chromaHighPassHz');
+    assertFloatValue(request.chromaHighPassHz, 'chromaHighPassHz');
   }
   return compact({
     nFft: request.nFft,
@@ -665,18 +665,18 @@ function nativeKeyOptions(fnName: string, request: KeyDetectionOptions): Record<
     modes: nativeModes,
     profile: profile === undefined || profile === null ? undefined : KEY_PROFILE_NATIVE[profile],
     genreHint,
-    tuningCents: nativeTuning(fnName, request.tuningCents),
+    tuningCents: nativeTuning(request.tuningCents),
   });
 }
 
 /** The music-analysis settings in the addon's spelling. */
-function nativeAnalyzeOptions(fnName: string, request: AnalyzeRequest): Record<string, unknown> {
+function nativeAnalyzeOptions(request: AnalyzeRequest): Record<string, unknown> {
   if (request.chromaHighPassHz !== undefined && request.chromaHighPassHz !== null) {
-    assertFloatValue(fnName, request.chromaHighPassHz, 'chromaHighPassHz');
+    assertFloatValue(request.chromaHighPassHz, 'chromaHighPassHz');
   }
   return compact({
     ...without(request, 'samples', 'sampleRate', 'onProgress', 'cancel', 'tuningCents'),
-    tuningCents: nativeTuning(fnName, request.tuningCents),
+    tuningCents: nativeTuning(request.tuningCents),
   });
 }
 
@@ -693,9 +693,11 @@ export function detectBpm(
   options?: OptionsOf<DetectBpmRequest>,
 ): number;
 export function detectBpm(...args: unknown[]): number {
-  const request = audioCall<DetectBpmRequest>('detectBpm', args);
-  const [bpmMin, bpmMax] = tempoRange('detectBpm', request);
-  return addon.detectBpm(request.samples, request.sampleRate, bpmMin, bpmMax);
+  return withEntry('detectBpm', () => {
+    const request = audioCall<DetectBpmRequest>('detectBpm', args);
+    const [bpmMin, bpmMax] = tempoRange(request);
+    return addon.detectBpm(request.samples, request.sampleRate, bpmMin, bpmMax);
+  });
 }
 
 /**
@@ -710,10 +712,12 @@ export function detectKey(
   options?: OptionsOf<DetectKeyRequest>,
 ): KeyDetection;
 export function detectKey(...args: unknown[]): KeyDetection {
-  const request = audioCall<DetectKeyRequest>('detectKey', args);
-  return keyDetectionFromNative(
-    addon.detectKey(request.samples, request.sampleRate, nativeKeyOptions('detectKey', request)),
-  );
+  return withEntry('detectKey', () => {
+    const request = audioCall<DetectKeyRequest>('detectKey', args);
+    return keyDetectionFromNative(
+      addon.detectKey(request.samples, request.sampleRate, nativeKeyOptions(request)),
+    );
+  });
 }
 
 /** The ranked key candidates; the options are {@link detectKey}'s. */
@@ -724,13 +728,15 @@ export function detectKeyCandidates(
   options?: OptionsOf<DetectKeyCandidatesRequest>,
 ): KeyCandidate[];
 export function detectKeyCandidates(...args: unknown[]): KeyCandidate[] {
-  const request = audioCall<DetectKeyCandidatesRequest>('detectKeyCandidates', args);
-  const candidates: Native[] = addon.detectKeyCandidates(
-    request.samples,
-    request.sampleRate,
-    nativeKeyOptions('detectKeyCandidates', request),
-  );
-  return candidates.map((c) => ({ key: keyFromNative(c.key), correlation: c.correlation }));
+  return withEntry('detectKeyCandidates', () => {
+    const request = audioCall<DetectKeyCandidatesRequest>('detectKeyCandidates', args);
+    const candidates: Native[] = addon.detectKeyCandidates(
+      request.samples,
+      request.sampleRate,
+      nativeKeyOptions(request),
+    );
+    return candidates.map((c) => ({ key: keyFromNative(c.key), correlation: c.correlation }));
+  });
 }
 
 /** Beat times in seconds. */
@@ -741,9 +747,11 @@ export function detectBeats(
   options?: OptionsOf<DetectBeatsRequest>,
 ): Float32Array;
 export function detectBeats(...args: unknown[]): Float32Array {
-  const request = audioCall<DetectBeatsRequest>('detectBeats', args);
-  const [bpmMin, bpmMax] = tempoRange('detectBeats', request);
-  return addon.detectBeats(request.samples, request.sampleRate, bpmMin, bpmMax);
+  return withEntry('detectBeats', () => {
+    const request = audioCall<DetectBeatsRequest>('detectBeats', args);
+    const [bpmMin, bpmMax] = tempoRange(request);
+    return addon.detectBeats(request.samples, request.sampleRate, bpmMin, bpmMax);
+  });
 }
 
 /** Downbeat times in seconds. */
@@ -754,8 +762,10 @@ export function detectDownbeats(
   options?: OptionsOf<DetectDownbeatsRequest>,
 ): Float32Array;
 export function detectDownbeats(...args: unknown[]): Float32Array {
-  const request = audioCall<DetectDownbeatsRequest>('detectDownbeats', args);
-  return addon.detectDownbeats(request.samples, request.sampleRate);
+  return withEntry('detectDownbeats', () => {
+    const request = audioCall<DetectDownbeatsRequest>('detectDownbeats', args);
+    return addon.detectDownbeats(request.samples, request.sampleRate);
+  });
 }
 
 /** Onset times in seconds. */
@@ -766,15 +776,17 @@ export function detectOnsets(
   options?: OptionsOf<DetectOnsetsRequest>,
 ): Float32Array;
 export function detectOnsets(...args: unknown[]): Float32Array {
-  const request = audioCall<DetectOnsetsRequest>('detectOnsets', args);
-  return addon.detectOnsets(request.samples, request.sampleRate, request);
+  return withEntry('detectOnsets', () => {
+    const request = audioCall<DetectOnsetsRequest>('detectOnsets', args);
+    return addon.detectOnsets(request.samples, request.sampleRate, request);
+  });
 }
 
-function assertProgressCallbacks(fnName: string, request: AnalyzeRequest): void {
+function assertProgressCallbacks(request: AnalyzeRequest): void {
   for (const field of ['onProgress', 'cancel'] as const) {
     const value = request[field];
     if (value !== undefined && value !== null && typeof value !== 'function') {
-      throw new TypeError(`${fnName}: ${field} must be a function`);
+      throw refuseType(`${field} must be a function`);
     }
   }
 }
@@ -790,22 +802,24 @@ export function analyze(
   options?: OptionsOf<AnalyzeRequest>,
 ): AnalysisResult;
 export function analyze(...args: unknown[]): AnalysisResult {
-  const request = audioCall<AnalyzeRequest>('analyze', args);
-  assertProgressCallbacks('analyze', request);
-  const options = nativeAnalyzeOptions('analyze', request);
-  const { onProgress, cancel } = request;
-  if (onProgress == null && cancel == null) {
-    return analysisFromNative(addon.analyze(request.samples, request.sampleRate, options));
-  }
-  return analysisFromNative(
-    addon.analyzeWithProgress(
-      request.samples,
-      request.sampleRate,
-      onProgress ?? (() => {}),
-      cancel ?? (() => false),
-      options,
-    ),
-  );
+  return withEntry('analyze', () => {
+    const request = audioCall<AnalyzeRequest>('analyze', args);
+    assertProgressCallbacks(request);
+    const options = nativeAnalyzeOptions(request);
+    const { onProgress, cancel } = request;
+    if (onProgress == null && cancel == null) {
+      return analysisFromNative(addon.analyze(request.samples, request.sampleRate, options));
+    }
+    return analysisFromNative(
+      addon.analyzeWithProgress(
+        request.samples,
+        request.sampleRate,
+        onProgress ?? (() => {}),
+        cancel ?? (() => false),
+        options,
+      ),
+    );
+  });
 }
 
 const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
@@ -829,27 +843,29 @@ const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
  * `[3, 2, 2]` or `[2, 2, 3]` rather than as a bare seven.
  */
 export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
-  const { beats } = requestOnly<EstimateMeterRequest>('estimateMeter', [request]);
-  if (!Array.isArray(beats)) {
-    throw new TypeError('estimateMeter: beats must be an array of beats');
-  }
-  const times: number[] = [];
-  const strengths: number[] = [];
-  beats.forEach((beat: Beat, i: number) => {
-    if (typeof beat !== 'object' || beat === null) {
-      throw new TypeError(`estimateMeter: beats[${i}] must be an object`);
+  return withEntry('estimateMeter', () => {
+    const { beats } = requestOnly<EstimateMeterRequest>('estimateMeter', [request]);
+    if (!Array.isArray(beats)) {
+      throw refuseType('beats must be an array of beats');
     }
-    if (typeof beat.timeSec !== 'number' || typeof beat.strength !== 'number') {
-      throw new TypeError(`estimateMeter: beats[${i}] must carry numeric timeSec and strength`);
-    }
-    times.push(beat.timeSec);
-    strengths.push(beat.strength);
+    const times: number[] = [];
+    const strengths: number[] = [];
+    beats.forEach((beat: Beat, i: number) => {
+      if (typeof beat !== 'object' || beat === null) {
+        throw refuseType(`beats[${i}] must be an object`);
+      }
+      if (typeof beat.timeSec !== 'number' || typeof beat.strength !== 'number') {
+        throw refuseType(`beats[${i}] must carry numeric timeSec and strength`);
+      }
+      times.push(beat.timeSec);
+      strengths.push(beat.strength);
+    });
+    return addon.estimateMeter(
+      asFloat32Array(times),
+      asFloat32Array(strengths),
+      without(request, 'beats'),
+    );
   });
-  return addon.estimateMeter(
-    asFloat32Array(times),
-    asFloat32Array(strengths),
-    without(request, 'beats'),
-  );
 }
 
 /**
@@ -863,9 +879,11 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
  */
 export function synthesizeRir(request: SynthesizeRirRequest): RirResult;
 export function synthesizeRir(...args: unknown[]): RirResult {
-  const r = requestOnly<SynthesizeRirRequest>('synthesizeRir', args);
-  assertSampleRate('synthesizeRir', r.sampleRate);
-  return addon.synthesizeRir(nativeRoomOptions('synthesizeRir', r));
+  return withEntry('synthesizeRir', () => {
+    const r = requestOnly<SynthesizeRirRequest>('synthesizeRir', args);
+    assertSampleRate(r.sampleRate);
+    return addon.synthesizeRir(nativeRoomOptions(r));
+  });
 }
 
 /**
@@ -884,10 +902,12 @@ export function estimateRoom(
   options?: RoomEstimateOptions,
 ): RoomEstimateResult;
 export function estimateRoom(...args: unknown[]): RoomEstimateResult {
-  const r = sampleOneShot<EstimateRoomRequest>('estimateRoom', args);
-  const native = nativeRoomOptions('estimateRoom', r);
-  assertAudioInput('estimateRoom', r.samples, r.sampleRate, r);
-  return addon.estimateRoom(r.samples, r.sampleRate, native);
+  return withEntry('estimateRoom', () => {
+    const r = sampleOneShot<EstimateRoomRequest>('estimateRoom', args);
+    const native = nativeRoomOptions(r);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return addon.estimateRoom(r.samples, r.sampleRate, native);
+  });
 }
 
 /**
@@ -906,18 +926,20 @@ export function estimateRoom(...args: unknown[]): RoomEstimateResult {
  */
 export function roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry;
 export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometry {
-  const request = requestOnly<RoomGeometryFromEstimateRequest>('roomGeometryFromEstimate', args);
-  if (typeof request.estimate !== 'object' || request.estimate === null) {
-    throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
-  }
-  const geometry = addon.roomGeometryFromEstimate(request.estimate) as RoomGeometry;
-  for (const name of ['source', 'listener'] as const) {
-    const placement = checkedPlacement('roomGeometryFromEstimate', name, request[name]);
-    if (placement !== undefined) {
-      geometry[name] = placement;
+  return withEntry('roomGeometryFromEstimate', () => {
+    const request = requestOnly<RoomGeometryFromEstimateRequest>('roomGeometryFromEstimate', args);
+    if (typeof request.estimate !== 'object' || request.estimate === null) {
+      throw refuseType('estimate must be an object');
     }
-  }
-  return geometry;
+    const geometry = addon.roomGeometryFromEstimate(request.estimate) as RoomGeometry;
+    for (const name of ['source', 'listener'] as const) {
+      const placement = checkedPlacement(name, request[name]);
+      if (placement !== undefined) {
+        geometry[name] = placement;
+      }
+    }
+    return geometry;
+  });
 }
 
 /**
@@ -939,10 +961,12 @@ export function roomMorph(
   options?: RoomMorphOptions,
 ): RoomMorphResult;
 export function roomMorph(...args: unknown[]): RoomMorphResult {
-  const r = sampleOneShot<RoomMorphRequest>('roomMorph', args);
-  const native = nativeRoomOptions('roomMorph', r);
-  assertAudioInput('roomMorph', r.samples, r.sampleRate, r);
-  return addon.roomMorph(r.samples, r.sampleRate, native);
+  return withEntry('roomMorph', () => {
+    const r = sampleOneShot<RoomMorphRequest>('roomMorph', args);
+    const native = nativeRoomOptions(r);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return addon.roomMorph(r.samples, r.sampleRate, native);
+  });
 }
 
 /**
@@ -959,23 +983,25 @@ export function roomMorph(...args: unknown[]): RoomMorphResult {
  *   unusable room geometry, or an explicit 0 where omission selects the default
  */
 export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult {
-  const req = requestObject('roomMorphStereo', request, 'left', true);
-  const native = nativeRoomOptions('roomMorphStereo', req);
-  assertAudioInput('roomMorphStereo', req.left, req.sampleRate, req, 'left');
-  assertAudioInput('roomMorphStereo', req.right, req.sampleRate, req, 'right');
-  if (req.left.length !== req.right.length) {
-    throw new RangeError('roomMorphStereo: left and right must have the same length');
-  }
-  const spacing = req.receiverSpacingM;
-  if (spacing !== undefined) {
-    if (typeof spacing !== 'number') {
-      throw new TypeError('roomMorphStereo: receiverSpacingM must be a number');
+  return withEntry('roomMorphStereo', () => {
+    const req = requestObject('roomMorphStereo', request, 'left', true);
+    const native = nativeRoomOptions(req);
+    assertAudioInput(req.left, req.sampleRate, req, 'left');
+    assertAudioInput(req.right, req.sampleRate, req, 'right');
+    if (req.left.length !== req.right.length) {
+      throw refuse('left and right must have the same length');
     }
-    if (!Number.isFinite(spacing) || spacing <= 0 || spacing > 4) {
-      throw new RangeError('roomMorphStereo: receiverSpacingM must be finite and in (0, 4]');
+    const spacing = req.receiverSpacingM;
+    if (spacing !== undefined) {
+      if (typeof spacing !== 'number') {
+        throw refuseType('receiverSpacingM must be a number');
+      }
+      if (!Number.isFinite(spacing) || spacing <= 0 || spacing > 4) {
+        throw refuse('receiverSpacingM must be finite and in (0, 4]');
+      }
     }
-  }
-  return addon.roomMorphStereo(req.left, req.right, req.sampleRate, native);
+    return addon.roomMorphStereo(req.left, req.right, req.sampleRate, native);
+  });
 }
 
 /**
@@ -991,15 +1017,17 @@ export function analyzeAsync(
   options?: OptionsOf<AnalyzeAsyncRequest>,
 ): Promise<AnalysisResult>;
 export function analyzeAsync(...args: unknown[]): Promise<AnalysisResult> {
-  try {
-    const request = audioCall<AnalyzeAsyncRequest>('analyzeAsync', args);
-    const options = nativeAnalyzeOptions('analyzeAsync', request as AnalyzeRequest);
-    return addon
-      .analyzeAsync(request.samples, request.sampleRate, options)
-      .then(analysisFromNative);
-  } catch (error) {
-    return Promise.reject(error);
-  }
+  return withEntry('analyzeAsync', () => {
+    try {
+      const request = audioCall<AnalyzeAsyncRequest>('analyzeAsync', args);
+      const options = nativeAnalyzeOptions(request as AnalyzeRequest);
+      return addon
+        .analyzeAsync(request.samples, request.sampleRate, options)
+        .then(analysisFromNative);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  });
 }
 
 /** Detect song-structure sections (intro/verse/chorus/...). */
@@ -1010,17 +1038,19 @@ export function analyzeSections(
   options?: OptionsOf<AnalyzeSectionsRequest>,
 ): Section[];
 export function analyzeSections(...args: unknown[]): Section[] {
-  const request = audioCall<AnalyzeSectionsRequest>('analyzeSections', args);
-  const fft = resolveFftOptions('analyzeSections', request.nFft, request.hopLength);
-  const sections: Native[] = addon.analyzeSections(
-    request.samples,
-    request.sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.minSectionSec ?? 4.0,
-    request.threshold,
-  );
-  return sections.map(sectionFromNative);
+  return withEntry('analyzeSections', () => {
+    const request = audioCall<AnalyzeSectionsRequest>('analyzeSections', args);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    const sections: Native[] = addon.analyzeSections(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      request.minSectionSec ?? 4.0,
+      request.threshold,
+    );
+    return sections.map(sectionFromNative);
+  });
 }
 
 /**
@@ -1059,29 +1089,31 @@ export function detectBoundaries(
   options?: OptionsOf<DetectBoundariesRequest>,
 ): BoundaryResult;
 export function detectBoundaries(...args: unknown[]): BoundaryResult {
-  const request = audioCall<DetectBoundariesRequest>('detectBoundaries', args);
-  // Validation only: the addon seeds every default from the C ABI, so the
-  // resolved pair is deliberately not passed on.
-  resolveFftOptions('detectBoundaries', request.nFft, request.hopLength);
-  const raw: Native = addon.detectBoundaries(
-    request.samples,
-    request.sampleRate,
-    compact({
-      ...without(request, 'samples', 'sampleRate', 'peakDistanceSec', 'referenceWindowSec'),
-      peakDistance: request.peakDistanceSec,
-      referenceWindow: request.referenceWindowSec,
-    }),
-  );
-  // The frame count is the novelty curve's length; the result does not repeat it.
-  const { nFrames: _nFrames, ...rest } = raw;
-  return {
-    ...rest,
-    boundaries: raw.boundaries.map((b: Native) => ({
-      timeSec: b.time,
-      frame: b.frame,
-      strength: b.strength,
-    })),
-  };
+  return withEntry('detectBoundaries', () => {
+    const request = audioCall<DetectBoundariesRequest>('detectBoundaries', args);
+    // Validation only: the addon seeds every default from the C ABI, so the
+    // resolved pair is deliberately not passed on.
+    resolveFftOptions(request.nFft, request.hopLength);
+    const raw: Native = addon.detectBoundaries(
+      request.samples,
+      request.sampleRate,
+      compact({
+        ...without(request, 'samples', 'sampleRate', 'peakDistanceSec', 'referenceWindowSec'),
+        peakDistance: request.peakDistanceSec,
+        referenceWindow: request.referenceWindowSec,
+      }),
+    );
+    // The frame count is the novelty curve's length; the result does not repeat it.
+    const { nFrames: _nFrames, ...rest } = raw;
+    return {
+      ...rest,
+      boundaries: raw.boundaries.map((b: Native) => ({
+        timeSec: b.time,
+        frame: b.frame,
+        strength: b.strength,
+      })),
+    };
+  });
 }
 
 /**
@@ -1100,31 +1132,33 @@ export function analyzeMelody(
   options?: OptionsOf<AnalyzeMelodyRequest>,
 ): MelodyResult;
 export function analyzeMelody(...args: unknown[]): MelodyResult {
-  const request = audioCall<AnalyzeMelodyRequest>('analyzeMelody', args);
-  // frameLength is a framing window, not a transform size, so it carries no evenness rule.
-  assertPositiveInteger('analyzeMelody', request.frameLength ?? 2048, 'frameLength');
-  assertPositiveInteger('analyzeMelody', request.hopLength ?? 256, 'hopLength');
-  const f0MinHz = request.f0MinHz ?? 65.0;
-  const f0MaxHz = request.f0MaxHz ?? 2093.0;
-  assertFrequencyBounds('analyzeMelody', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-  const raw: Native = addon.analyzeMelody(
-    request.samples,
-    request.sampleRate,
-    f0MinHz,
-    f0MaxHz,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 256,
-    request.threshold ?? 0.1,
-    request.usePyin ?? false,
-    request.center ?? true,
-  );
-  return {
-    points: raw.points.map(melodyPointFromNative),
-    pitchRangeOctaves: raw.pitchRangeOctaves,
-    pitchStability: raw.pitchStability,
-    meanFrequencyHz: raw.meanFrequency,
-    vibratoRateHz: raw.vibratoRate,
-  };
+  return withEntry('analyzeMelody', () => {
+    const request = audioCall<AnalyzeMelodyRequest>('analyzeMelody', args);
+    // frameLength is a framing window, not a transform size, so it carries no evenness rule.
+    assertPositiveInteger(request.frameLength ?? 2048, 'frameLength');
+    assertPositiveInteger(request.hopLength ?? 256, 'hopLength');
+    const f0MinHz = request.f0MinHz ?? 65.0;
+    const f0MaxHz = request.f0MaxHz ?? 2093.0;
+    assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
+    const raw: Native = addon.analyzeMelody(
+      request.samples,
+      request.sampleRate,
+      f0MinHz,
+      f0MaxHz,
+      request.frameLength ?? 2048,
+      request.hopLength ?? 256,
+      request.threshold ?? 0.1,
+      request.usePyin ?? false,
+      request.center ?? true,
+    );
+    return {
+      points: raw.points.map(melodyPointFromNative),
+      pitchRangeOctaves: raw.pitchRangeOctaves,
+      pitchStability: raw.pitchStability,
+      meanFrequencyHz: raw.meanFrequency,
+      vibratoRateHz: raw.vibratoRate,
+    };
+  });
 }
 
 /** Tempo estimate with candidates; searches 60-200 BPM unless `bpmMin` / `bpmMax` say otherwise. */
@@ -1135,20 +1169,22 @@ export function analyzeBpm(
   options?: OptionsOf<AnalyzeBpmRequest>,
 ): BpmAnalysisResult;
 export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
-  const request = audioCall<AnalyzeBpmRequest>('analyzeBpm', args);
-  const fft = resolveFftOptions('analyzeBpm', request.nFft, request.hopLength);
-  // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
-  assertInt32('analyzeBpm', request.maxCandidates ?? 5, 'maxCandidates');
-  return addon.analyzeBpm(
-    request.samples,
-    request.sampleRate,
-    request.bpmMin,
-    request.bpmMax,
-    request.startBpm,
-    fft.nFft,
-    fft.hopLength,
-    request.maxCandidates ?? 5,
-  );
+  return withEntry('analyzeBpm', () => {
+    const request = audioCall<AnalyzeBpmRequest>('analyzeBpm', args);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
+    assertInt32(request.maxCandidates ?? 5, 'maxCandidates');
+    return addon.analyzeBpm(
+      request.samples,
+      request.sampleRate,
+      request.bpmMin,
+      request.bpmMax,
+      request.startBpm,
+      fft.nFft,
+      fft.hopLength,
+      request.maxCandidates ?? 5,
+    );
+  });
 }
 
 /** Detailed rhythm analysis (time signature, groove, syncopation, beat intervals). */
@@ -1159,17 +1195,19 @@ export function analyzeRhythm(
   options?: OptionsOf<AnalyzeRhythmRequest>,
 ): RhythmResult;
 export function analyzeRhythm(...args: unknown[]): RhythmResult {
-  const request = audioCall<AnalyzeRhythmRequest>('analyzeRhythm', args);
-  const fft = resolveFftOptions('analyzeRhythm', request.nFft, request.hopLength);
-  return addon.analyzeRhythm(
-    request.samples,
-    request.sampleRate,
-    request.bpmMin,
-    request.bpmMax,
-    request.startBpm,
-    fft.nFft,
-    fft.hopLength,
-  );
+  return withEntry('analyzeRhythm', () => {
+    const request = audioCall<AnalyzeRhythmRequest>('analyzeRhythm', args);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    return addon.analyzeRhythm(
+      request.samples,
+      request.sampleRate,
+      request.bpmMin,
+      request.bpmMax,
+      request.startBpm,
+      fft.nFft,
+      fft.hopLength,
+    );
+  });
 }
 
 /** Dynamics analysis (RMS, peak, crest factor, LRA, loudness curve). */
@@ -1180,18 +1218,20 @@ export function analyzeDynamics(
   options?: OptionsOf<AnalyzeDynamicsRequest>,
 ): DynamicsResult;
 export function analyzeDynamics(...args: unknown[]): DynamicsResult {
-  const request = audioCall<AnalyzeDynamicsRequest>('analyzeDynamics', args);
-  assertPositiveInteger('analyzeDynamics', request.hopLength ?? 512, 'hopLength');
-  const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
-  assertNonNegativeFloatValue('analyzeDynamics', compressionThresholdDb, 'compressionThresholdDb');
-  const { loudnessRangeDb, ...raw }: Native = addon.analyzeDynamics(
-    request.samples,
-    request.sampleRate,
-    request.windowSec ?? 0.4,
-    request.hopLength ?? 512,
-    compressionThresholdDb,
-  );
-  return { ...raw, loudnessRangeLu: loudnessRangeDb };
+  return withEntry('analyzeDynamics', () => {
+    const request = audioCall<AnalyzeDynamicsRequest>('analyzeDynamics', args);
+    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+    const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
+    assertNonNegativeFloatValue(compressionThresholdDb, 'compressionThresholdDb');
+    const { loudnessRangeDb, ...raw }: Native = addon.analyzeDynamics(
+      request.samples,
+      request.sampleRate,
+      request.windowSec ?? 0.4,
+      request.hopLength ?? 512,
+      compressionThresholdDb,
+    );
+    return { ...raw, loudnessRangeLu: loudnessRangeDb };
+  });
 }
 
 /** Measure room acoustics from an impulse response. */
@@ -1202,21 +1242,23 @@ export function analyzeImpulseResponse(
   options?: OptionsOf<AnalyzeImpulseResponseRequest>,
 ): AcousticResult;
 export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
-  const request = audioCall<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
-  const minDecayDb = request.minDecayDb ?? 30.0;
-  assertFiniteScalar('analyzeImpulseResponse', minDecayDb, 'minDecayDb');
-  if (minDecayDb <= 0) {
-    throw new RangeError('analyzeImpulseResponse: minDecayDb must be greater than zero');
-  }
-  // Zero is degenerate but legal: the C ABI refuses only a negative count, so
-  // refusing it here would narrow the domain the other surfaces accept.
-  assertNonNegativeSafeInteger('analyzeImpulseResponse', request.nOctaveBands ?? 6, 'nOctaveBands');
-  return addon.analyzeImpulseResponse(
-    request.samples,
-    request.sampleRate,
-    request.nOctaveBands ?? 6,
-    minDecayDb,
-  );
+  return withEntry('analyzeImpulseResponse', () => {
+    const request = audioCall<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
+    const minDecayDb = request.minDecayDb ?? 30.0;
+    assertFiniteScalar(minDecayDb, 'minDecayDb');
+    if (minDecayDb <= 0) {
+      throw refuse('minDecayDb must be greater than zero');
+    }
+    // Zero is degenerate but legal: the C ABI refuses only a negative count, so
+    // refusing it here would narrow the domain the other surfaces accept.
+    assertNonNegativeSafeInteger(request.nOctaveBands ?? 6, 'nOctaveBands');
+    return addon.analyzeImpulseResponse(
+      request.samples,
+      request.sampleRate,
+      request.nOctaveBands ?? 6,
+      minDecayDb,
+    );
+  });
 }
 
 /** Detect room acoustic parameters from a recording. */
@@ -1227,21 +1269,19 @@ export function detectAcoustic(
   options?: OptionsOf<DetectAcousticRequest>,
 ): AcousticResult;
 export function detectAcoustic(...args: unknown[]): AcousticResult {
-  const request = audioCall<DetectAcousticRequest>('detectAcoustic', args);
-  assertNonNegativeSafeInteger('detectAcoustic', request.nOctaveBands ?? 6, 'nOctaveBands');
-  assertNonNegativeSafeInteger(
-    'detectAcoustic',
-    request.nThirdOctaveSubbands ?? 24,
-    'nThirdOctaveSubbands',
-  );
-  return addon.detectAcoustic(
-    request.samples,
-    request.sampleRate,
-    request.nOctaveBands ?? 6,
-    request.nThirdOctaveSubbands ?? 24,
-    request.minDecayDb ?? 30.0,
-    request.noiseFloorMarginDb ?? 10.0,
-  );
+  return withEntry('detectAcoustic', () => {
+    const request = audioCall<DetectAcousticRequest>('detectAcoustic', args);
+    assertNonNegativeSafeInteger(request.nOctaveBands ?? 6, 'nOctaveBands');
+    assertNonNegativeSafeInteger(request.nThirdOctaveSubbands ?? 24, 'nThirdOctaveSubbands');
+    return addon.detectAcoustic(
+      request.samples,
+      request.sampleRate,
+      request.nOctaveBands ?? 6,
+      request.nThirdOctaveSubbands ?? 24,
+      request.minDecayDb ?? 30.0,
+      request.noiseFloorMarginDb ?? 10.0,
+    );
+  });
 }
 
 /** Timbre analysis (brightness, warmth, density, roughness and related descriptors). */
@@ -1252,26 +1292,25 @@ export function analyzeTimbre(
   options?: OptionsOf<AnalyzeTimbreRequest>,
 ): TimbreResult;
 export function analyzeTimbre(...args: unknown[]): TimbreResult {
-  const request = audioCall<AnalyzeTimbreRequest>('analyzeTimbre', args);
-  const fft = resolveFftOptions('analyzeTimbre', request.nFft, request.hopLength);
-  assertPositiveInteger('analyzeTimbre', request.nMels ?? 128, 'nMels');
-  assertPositiveInteger('analyzeTimbre', request.nMfcc ?? 13, 'nMfcc');
-  return addon.analyzeTimbre(
-    request.samples,
-    request.sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.nMels ?? 128,
-    request.nMfcc ?? 13,
-    request.windowSec ?? 0.5,
-  );
+  return withEntry('analyzeTimbre', () => {
+    const request = audioCall<AnalyzeTimbreRequest>('analyzeTimbre', args);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    assertPositiveInteger(request.nMels ?? 128, 'nMels');
+    assertPositiveInteger(request.nMfcc ?? 13, 'nMfcc');
+    return addon.analyzeTimbre(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      request.nMels ?? 128,
+      request.nMfcc ?? 13,
+      request.windowSec ?? 0.5,
+    );
+  });
 }
 
 /** The chord parameters in the addon's positional order, defaults applied and validated. */
-function resolveChordParams(
-  fnName: string,
-  request: ChordDetectionOptions,
-): {
+function resolveChordParams(request: ChordDetectionOptions): {
   minDuration: number;
   smoothingWindow: number;
   threshold: number;
@@ -1289,20 +1328,20 @@ function resolveChordParams(
   tuningCents: number;
   tuningAuto: boolean;
 } {
-  const fft = resolveFftOptions(fnName, request.nFft ?? 2048, request.hopLength ?? 512);
+  const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
   // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
   const hmmBeamWidth = request.hmmBeamWidth ?? 24;
-  assertInt32(fnName, hmmBeamWidth, 'hmmBeamWidth');
+  assertInt32(hmmBeamWidth, 'hmmBeamWidth');
   const keyRoot = request.keyRoot ?? 0;
-  assertPitchClass(fnName, keyRoot, 'keyRoot');
+  assertPitchClass(keyRoot, 'keyRoot');
   const keyMode = request.keyMode ?? 'major';
-  assertClosedToken(fnName, keyMode, KEY_MODES, 'keyMode');
+  assertClosedToken(keyMode, KEY_MODES, 'keyMode');
   const chromaMethod = request.chromaMethod ?? 'cqt';
-  assertClosedToken(fnName, chromaMethod, CHORD_CHROMA_METHODS, 'chromaMethod');
-  const tuning = nativeTuning(fnName, request.tuningCents);
+  assertClosedToken(chromaMethod, CHORD_CHROMA_METHODS, 'chromaMethod');
+  const tuning = nativeTuning(request.tuningCents);
   const minDurationSec = request.minDurationSec ?? 0.3;
   const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
-  assertFloatFields(fnName, { minDurationSec, smoothingWindowSec });
+  assertFloatFields({ minDurationSec, smoothingWindowSec });
   return {
     minDuration: minDurationSec,
     smoothingWindow: smoothingWindowSec,
@@ -1336,30 +1375,32 @@ export function detectChords(
   options?: OptionsOf<DetectChordsRequest>,
 ): ChordAnalysisResult;
 export function detectChords(...args: unknown[]): ChordAnalysisResult {
-  const request = audioCall<DetectChordsRequest>('detectChords', args);
-  const p = resolveChordParams('detectChords', request);
-  return chordAnalysisFromNative(
-    addon.detectChords(
-      request.samples,
-      request.sampleRate,
-      p.minDuration,
-      p.smoothingWindow,
-      p.threshold,
-      p.useTriadsOnly,
-      p.nFft,
-      p.hopLength,
-      p.useBeatSync,
-      p.useHmm,
-      p.hmmBeamWidth,
-      p.useKeyContext,
-      p.keyRoot,
-      p.keyMode,
-      p.detectInversions,
-      p.chromaMethod,
-      p.tuningCents,
-      p.tuningAuto,
-    ),
-  );
+  return withEntry('detectChords', () => {
+    const request = audioCall<DetectChordsRequest>('detectChords', args);
+    const p = resolveChordParams(request);
+    return chordAnalysisFromNative(
+      addon.detectChords(
+        request.samples,
+        request.sampleRate,
+        p.minDuration,
+        p.smoothingWindow,
+        p.threshold,
+        p.useTriadsOnly,
+        p.nFft,
+        p.hopLength,
+        p.useBeatSync,
+        p.useHmm,
+        p.hmmBeamWidth,
+        p.useKeyContext,
+        p.keyRoot,
+        p.keyMode,
+        p.detectInversions,
+        p.chromaMethod,
+        p.tuningCents,
+        p.tuningAuto,
+      ),
+    );
+  });
 }
 
 /**
@@ -1377,35 +1418,37 @@ export function chordFunctionalAnalysis(
   options: OptionsOf<ChordFunctionalAnalysisRequest>,
 ): FunctionalChord[];
 export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
-  const request = audioCall<ChordFunctionalAnalysisRequest>('chordFunctionalAnalysis', args);
-  assertPitchClass('chordFunctionalAnalysis', request.keyRoot, 'keyRoot');
-  const p = resolveChordParams('chordFunctionalAnalysis', request);
-  const analysed: { chords: Native[]; roman: string[]; functions: ChordFunction[] } =
-    addon.chordFunctionalAnalysis(
-      request.samples,
-      p.keyRoot,
-      p.keyMode,
-      request.sampleRate,
-      p.minDuration,
-      p.smoothingWindow,
-      p.threshold,
-      p.useTriadsOnly,
-      p.nFft,
-      p.hopLength,
-      p.useBeatSync,
-      p.useHmm,
-      p.hmmBeamWidth,
-      p.useKeyContext,
-      p.detectInversions,
-      p.chromaMethod,
-      p.tuningCents,
-      p.tuningAuto,
-    );
-  return analysed.chords.map((chord, i) => ({
-    ...chordFromNative(chord),
-    romanNumeral: analysed.roman[i],
-    function: analysed.functions[i],
-  }));
+  return withEntry('chordFunctionalAnalysis', () => {
+    const request = audioCall<ChordFunctionalAnalysisRequest>('chordFunctionalAnalysis', args);
+    assertPitchClass(request.keyRoot, 'keyRoot');
+    const p = resolveChordParams(request);
+    const analysed: { chords: Native[]; roman: string[]; functions: ChordFunction[] } =
+      addon.chordFunctionalAnalysis(
+        request.samples,
+        p.keyRoot,
+        p.keyMode,
+        request.sampleRate,
+        p.minDuration,
+        p.smoothingWindow,
+        p.threshold,
+        p.useTriadsOnly,
+        p.nFft,
+        p.hopLength,
+        p.useBeatSync,
+        p.useHmm,
+        p.hmmBeamWidth,
+        p.useKeyContext,
+        p.detectInversions,
+        p.chromaMethod,
+        p.tuningCents,
+        p.tuningAuto,
+      );
+    return analysed.chords.map((chord, i) => ({
+      ...chordFromNative(chord),
+      romanNumeral: analysed.roman[i],
+      function: analysed.functions[i],
+    }));
+  });
 }
 
 /**
@@ -1426,34 +1469,36 @@ export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
 export function chordFunctions<T extends ChordFunctionsInput = Chord>(
   request: ChordFunctionsRequest<T>,
 ): FunctionalChord<T>[] {
-  const { chords, key } = requestOnly<ChordFunctionsRequest<T>>('chordFunctions', [request]);
-  if (typeof key !== 'object' || key === null) {
-    throw new TypeError('chordFunctions: key must be an object');
-  }
-  assertPitchClass('chordFunctions', key.root, 'key.root');
-  assertClosedToken('chordFunctions', key.mode, KEY_MODES, 'key.mode');
-  if (typeof chords !== 'object' || chords === null) {
-    throw new TypeError('chordFunctions: chords must be an array or a chord analysis result');
-  }
-  const entries = 'chords' in chords ? chords.chords : chords;
-  if (!Array.isArray(entries)) {
-    throw new TypeError('chordFunctions: chords must be an array');
-  }
-  entries.forEach((chord, i) => {
-    if (typeof chord !== 'object' || chord === null) {
-      throw new TypeError(`chordFunctions: chords[${i}] must be an object`);
+  return withEntry('chordFunctions', () => {
+    const { chords, key } = requestOnly<ChordFunctionsRequest<T>>('chordFunctions', [request]);
+    if (typeof key !== 'object' || key === null) {
+      throw refuseType('key must be an object');
     }
-    assertPitchClass('chordFunctions', chord.root, `chords[${i}].root`);
-    assertClosedToken('chordFunctions', chord.quality, CHORD_QUALITIES, `chords[${i}].quality`);
+    assertPitchClass(key.root, 'key.root');
+    assertClosedToken(key.mode, KEY_MODES, 'key.mode');
+    if (typeof chords !== 'object' || chords === null) {
+      throw refuseType('chords must be an array or a chord analysis result');
+    }
+    const entries = 'chords' in chords ? chords.chords : chords;
+    if (!Array.isArray(entries)) {
+      throw refuseType('chords must be an array');
+    }
+    entries.forEach((chord, i) => {
+      if (typeof chord !== 'object' || chord === null) {
+        throw refuseType(`chords[${i}] must be an object`);
+      }
+      assertPitchClass(chord.root, `chords[${i}].root`);
+      assertClosedToken(chord.quality, CHORD_QUALITIES, `chords[${i}].quality`);
+    });
+    const labels: { roman: string[]; functions: ChordFunction[] } = addon.chordFunctions(
+      entries,
+      key.root,
+      key.mode,
+    );
+    return entries.map((chord, i) => ({
+      ...chord,
+      romanNumeral: labels.roman[i],
+      function: labels.functions[i],
+    }));
   });
-  const labels: { roman: string[]; functions: ChordFunction[] } = addon.chordFunctions(
-    entries,
-    key.root,
-    key.mode,
-  );
-  return entries.map((chord, i) => ({
-    ...chord,
-    romanNumeral: labels.roman[i],
-    function: labels.functions[i],
-  }));
 }

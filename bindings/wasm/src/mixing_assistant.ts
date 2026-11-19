@@ -1,3 +1,4 @@
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
@@ -96,26 +97,23 @@ interface PlanarTracks {
 
 /** A track's one or two planes; a stereo pair must agree in length. */
 function trackChannels(
-  fnName: string,
   prefix: string,
   channels: unknown,
 ): [Float32Array, Float32Array | undefined] {
   if (!Array.isArray(channels)) {
-    throw new TypeError(`${fnName}: ${prefix}.channels must be an array of Float32Array`);
+    throw refuseType(`${prefix}.channels must be an array of Float32Array`);
   }
   if (channels.length < 1 || channels.length > 2) {
-    throw new RangeError(
-      `${fnName}: ${prefix}.channels must hold 1 or 2 channels, got ${channels.length}`,
-    );
+    throw refuse(`${prefix}.channels must hold 1 or 2 channels, got ${channels.length}`);
   }
   channels.forEach((plane, ch) => {
     if (!(plane instanceof Float32Array)) {
-      throw new TypeError(`${fnName}: ${prefix}.channels[${ch}] must be a Float32Array`);
+      throw refuseType(`${prefix}.channels[${ch}] must be a Float32Array`);
     }
   });
   const [first, second] = channels as Float32Array[];
   if (second !== undefined && second.length !== first.length) {
-    throw new RangeError(`${fnName}: ${prefix}.channels must have equal lengths`);
+    throw refuse(`${prefix}.channels must have equal lengths`);
   }
   return [first, second];
 }
@@ -125,13 +123,9 @@ function trackChannels(
  * takes, rejecting the shapes that would otherwise reach the analysis as a
  * missing buffer or a nameless strip.
  */
-function planarTracks(
-  fnName: string,
-  tracks: MixAssistantTrack[],
-  sampleRate: number,
-): PlanarTracks {
+function planarTracks(tracks: MixAssistantTrack[], sampleRate: number): PlanarTracks {
   if (!Array.isArray(tracks)) {
-    throw new TypeError(`${fnName}: tracks must be an array`);
+    throw refuseType(`tracks must be an array`);
   }
   const left: Float32Array[] = [];
   const right: (Float32Array | null)[] = [];
@@ -142,16 +136,16 @@ function planarTracks(
   for (let index = 0; index < tracks.length; index++) {
     const track = tracks[index];
     if (track === null || typeof track !== 'object') {
-      throw new TypeError(`${fnName}: tracks[${index}] must be an object`);
+      throw refuseType(`tracks[${index}] must be an object`);
     }
     if (typeof track.id !== 'string' || track.id.length === 0) {
-      throw new TypeError(`${fnName}: tracks[${index}].id must be a non-empty string`);
+      throw refuseType(`tracks[${index}].id must be a non-empty string`);
     }
     // An empty or non-finite track is not refused: the core reports it as an excluded track so a
     // batch needs no per-track error handling.
-    const [first, second] = trackChannels(fnName, `tracks[${index}]`, track.channels);
+    const [first, second] = trackChannels(`tracks[${index}]`, track.channels);
     if (track.sampleRate !== undefined) {
-      assertSampleRate(fnName, track.sampleRate, `tracks[${index}].sampleRate`);
+      assertSampleRate(track.sampleRate, `tracks[${index}].sampleRate`);
     }
     left.push(first);
     right.push(second ?? null);
@@ -182,11 +176,9 @@ const OPTION_KEYS = [
 ] as const;
 
 /** Absence is the transport fallback; the C entry's `0` for it is not a value a caller may pass. */
-function assertTempo(fnName: string, value: unknown): void {
+function assertTempo(value: unknown): void {
   if (typeof value === 'number' && !(value > 0)) {
-    throw new RangeError(
-      `${fnName}: tempoBpm must be positive; omit it to use the transport's fallback tempo`,
-    );
+    throw refuse(`tempoBpm must be positive; omit it to use the transport's fallback tempo`);
   }
 }
 
@@ -217,28 +209,30 @@ function assertTempo(fnName: string, value: unknown): void {
  */
 export function mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult;
 export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
-  const fnName = 'mixingAssistantSuggest';
-  const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
-  // Required, not defaulted: a guessed rate would misread every band edge and lag.
-  assertSampleRate(fnName, req.sampleRate);
-  const { left, right, ids, names, sampleRates } = planarTracks(fnName, req.tracks, req.sampleRate);
-  assertTempo(fnName, req.tempoBpm);
-  const params: Record<string, number | boolean> = {};
-  for (const key of OPTION_KEYS) {
-    if (req[key] !== undefined && req[key] !== null) {
-      params[key] = req[key] as number | boolean;
+  return withEntry('mixingAssistantSuggest', () => {
+    const fnName = 'mixingAssistantSuggest';
+    const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
+    // Required, not defaulted: a guessed rate would misread every band edge and lag.
+    assertSampleRate(req.sampleRate);
+    const { left, right, ids, names, sampleRates } = planarTracks(req.tracks, req.sampleRate);
+    assertTempo(req.tempoBpm);
+    const params: Record<string, number | boolean> = {};
+    for (const key of OPTION_KEYS) {
+      if (req[key] !== undefined && req[key] !== null) {
+        params[key] = req[key] as number | boolean;
+      }
     }
-  }
-  const json = requireModule().mixingAssistantSuggest(
-    left,
-    right,
-    ids,
-    names,
-    sampleRates,
-    req.sampleRate,
-    params,
-  );
-  return parseRecordJson(json) as unknown as MixAssistantResult;
+    const json = requireModule().mixingAssistantSuggest(
+      left,
+      right,
+      ids,
+      names,
+      sampleRates,
+      req.sampleRate,
+      params,
+    );
+    return parseRecordJson(json) as unknown as MixAssistantResult;
+  });
 }
 
 /**
@@ -248,7 +242,9 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
  * {@link mixingAssistantSourceClassFromName} resolves it to.
  */
 export function mixingAssistantSourceClassNames(): MixSourceClass[] {
-  return Array.from(requireModule().mixingAssistantSourceClassNames()) as MixSourceClass[];
+  return withEntry('mixingAssistantSourceClassNames', () => {
+    return Array.from(requireModule().mixingAssistantSourceClassNames()) as MixSourceClass[];
+  });
 }
 
 /**
@@ -259,11 +255,12 @@ export function mixingAssistantSourceClassNames(): MixSourceClass[] {
  * @throws TypeError when `name` is not a string; RangeError for an unknown name
  */
 export function mixingAssistantSourceClassFromName(name: MixSourceClass): number {
-  const fnName = 'mixingAssistantSourceClassFromName';
-  assertString(fnName, name, 'name');
-  const index = requireModule().mixingAssistantSourceClassFromName(name);
-  if (index < 0) {
-    throw new RangeError(`${fnName}: unknown source class '${name}'`);
-  }
-  return index;
+  return withEntry('mixingAssistantSourceClassFromName', () => {
+    assertString(name, 'name');
+    const index = requireModule().mixingAssistantSourceClassFromName(name);
+    if (index < 0) {
+      throw refuse(`unknown source class '${name}'`);
+    }
+    return index;
+  });
 }

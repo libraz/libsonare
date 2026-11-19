@@ -1,3 +1,4 @@
+import { refuse } from '../internal/entry.js';
 import { externalMidiEvent } from '../internal/external_midi.js';
 import type {
   EngineTelemetry,
@@ -17,7 +18,7 @@ export function telemetryFromRecord(record: EngineTelemetryRecord): EngineTeleme
   const type = SonareEngineTelemetryType[record.type as number];
   const error = SonareEngineTelemetryError[record.error as number];
   if (type === undefined || error === undefined) {
-    throw new RangeError(`unknown telemetry ordinal (type ${record.type}, error ${record.error})`);
+    throw refuse(`unknown telemetry ordinal (type ${record.type}, error ${record.error})`);
   }
   return {
     type: lowerCamel(type) as EngineTelemetryType,

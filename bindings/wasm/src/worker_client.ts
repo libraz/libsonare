@@ -1,7 +1,7 @@
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode, type SonareError } from './errors.js';
 import { failureFromPayload, isFailurePayload } from './internal/failure_payload.js';
 import './lifetime.js';
-import { entryClass } from './internal/entry.js';
+import { codedError, entryClass, invalidState, refuseType } from './internal/entry.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import type { ProgressCallback } from './public_types.js';
 import type {
@@ -79,15 +79,13 @@ function cloneForWorker(
   path = 'request',
 ): unknown {
   if (typeof value === 'function') {
-    throw new TypeError(
-      `OfflineWorkerClient: ${path} is a function and cannot be sent to a Worker`,
-    );
+    throw refuseType(`${path} is a function and cannot be sent to a Worker`);
   }
   if (value instanceof Float32Array) {
     const samples = copy ? value.slice() : value;
     const buffer = samples.buffer;
     if (!(buffer instanceof ArrayBuffer)) {
-      throw new TypeError(
+      throw refuseType(
         'OfflineWorkerClient only transfers Float32Array values backed by ArrayBuffer',
       );
     }
@@ -139,7 +137,7 @@ function cancellationFlag(): Int32Array | undefined {
  * `Project`, `Mixer`, and realtime APIs are intentionally absent: their native
  * handles are local to one JavaScript realm and cannot be transferred safely.
  */
-@entryClass('OfflineWorkerClient')
+@entryClass('OfflineWorkerClient', ['rejectAll', 'call'])
 export class OfflineWorkerClient {
   private readonly worker: OfflineWorker;
   private readonly ownsWorker: boolean;
@@ -159,7 +157,7 @@ export class OfflineWorkerClient {
       this.worker = options.worker;
     } else {
       if (!options.workerFactory && typeof Worker === 'undefined') {
-        throw new SonareError(
+        throw codedError(
           ErrorCode.NotSupported,
           'OfflineWorkerClient requires a Worker implementation',
         );
@@ -179,7 +177,7 @@ export class OfflineWorkerClient {
       this.worker.on('message', this.onNodeMessage);
       this.worker.on('error', this.onNodeError);
     } else {
-      throw new TypeError('OfflineWorkerClient requires Worker event listeners');
+      throw refuseType('OfflineWorkerClient requires Worker event listeners');
     }
   }
 
@@ -292,7 +290,7 @@ export class OfflineWorkerClient {
     const transfers: Transferable[] = [];
     try {
       if (onProgress !== undefined && typeof onProgress !== 'function') {
-        throw new TypeError('OfflineWorkerClient: onProgress must be a function');
+        throw refuseType('onProgress must be a function');
       }
       preparedRequest = cloneForWorker(posted, options.copy === true, transfers) as Record<
         string,
@@ -355,8 +353,8 @@ export class OfflineWorkerClient {
   private readonly onMessage = (event: MessageEvent<OfflineWorkerResponseMessage>): void => {
     const message = event.data;
     if (!isResponseMessage(message)) {
-      this.rejectAll(
-        () => new SonareError(ErrorCode.InvalidFormat, 'Offline Worker sent a malformed message'),
+      this.rejectAll(() =>
+        codedError(ErrorCode.InvalidFormat, 'Offline Worker sent a malformed message'),
       );
       return;
     }
@@ -376,17 +374,16 @@ export class OfflineWorkerClient {
     pending.reject(
       isFailurePayload(message.error)
         ? failureFromPayload(message.error)
-        : new SonareError(ErrorCode.InvalidFormat, 'Offline Worker sent a malformed error'),
+        : codedError(ErrorCode.InvalidFormat, 'Offline Worker sent a malformed error'),
     );
   };
 
   private readonly onError = (event: ErrorEvent): void => {
     // A crash has no finer class than Unknown; the original event is the cause.
-    this.rejectAll(
-      () =>
-        new SonareError(ErrorCode.Unknown, event.message || 'Offline Worker failed', {
-          cause: event,
-        }),
+    this.rejectAll(() =>
+      codedError(ErrorCode.Unknown, event.message || 'Offline Worker failed', {
+        cause: event,
+      }),
     );
   };
 
@@ -404,11 +401,11 @@ export class OfflineWorkerClient {
 }
 
 function destroyedError(): SonareError {
-  return new SonareError(ErrorCode.InvalidState, 'OfflineWorkerClient was destroyed');
+  return invalidState('OfflineWorkerClient has been destroyed');
 }
 
 function cancelledError(signal: AbortSignal): SonareError {
-  return new SonareError(ErrorCode.Cancelled, 'Operation cancelled', { cause: signal.reason });
+  return codedError(ErrorCode.Cancelled, 'Operation cancelled', { cause: signal.reason });
 }
 
 function isResponseMessage(value: unknown): value is OfflineWorkerResponseMessage {

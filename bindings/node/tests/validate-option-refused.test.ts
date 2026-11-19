@@ -259,12 +259,14 @@ describe('the validate option is refused', () => {
     try {
       const block = new Float32Array(128);
       expect(() => engine.renderOffline({ channels: [block], validate: false } as never)).toThrow(
-        new TypeError("renderOffline: unknown request key 'validate'"),
+        new TypeError("RealtimeEngine.renderOffline: unknown request key 'validate'"),
       );
       const poisoned = new Float32Array(128);
       poisoned[5] = Number.NaN;
       expect(() => engine.renderOffline({ channels: [poisoned, block] })).toThrow(
-        new RangeError('renderOffline: channels[0] contains a non-finite sample at index 5'),
+        new RangeError(
+          'RealtimeEngine.renderOffline: channels[0] contains a non-finite sample at index 5',
+        ),
       );
     } finally {
       engine.destroy();

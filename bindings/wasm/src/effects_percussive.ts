@@ -4,6 +4,7 @@
  */
 
 import { resolveEntryTimes } from './internal/effects_common.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -26,10 +27,10 @@ function asFloat32(samples: Float32Array | readonly number[]): Float32Array | re
 // The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
 function percussiveRequest<
   R extends { samples: Float32Array | readonly number[]; sampleRate: number },
->(fnName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
+>(requestName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
   const first = args[0];
   const widened = Array.isArray(first) ? [Float32Array.from(first), ...args.slice(1)] : args;
-  return sampleOneShot<R & { samples: Float32Array }>(fnName, widened);
+  return sampleOneShot<R & { samples: Float32Array }>(requestName, widened);
 }
 
 /** Separation settings shared by percussive-event extraction and rendering; a render must repeat the ones the extraction used. */
@@ -119,13 +120,12 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
 
 /** Refuse an explicit 0 in fields the native config reads 0 as "use the default" for. */
 function refuseZeroDefaults<T extends object>(
-  fnName: string,
   options: T,
   fields: readonly (keyof T & string)[],
 ): void {
   for (const field of fields) {
     if (options[field] === 0) {
-      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the library value`);
+      throw refuse(`${field} must not be 0; omit it for the library value`);
     }
   }
 }
@@ -184,15 +184,17 @@ export function extractPercussiveEvents(
   options?: OptionsOf<ExtractPercussiveEventsRequest>,
 ): PercussiveEvent[];
 export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
-  const request = percussiveRequest<ExtractPercussiveEventsRequest>(
-    'extractPercussiveEvents',
-    args,
-  );
-  const samples = asFloat32(request.samples);
-  assertAudioInput('extractPercussiveEvents', samples, request.sampleRate, request);
-  assertPercussiveSeparation('extractPercussiveEvents', request);
-  refuseZeroDefaults('extractPercussiveEvents', request, ['onsetWait', 'onsetDelta', 'maxEventMs']);
-  return requireModule().extractPercussiveEvents(samples, request.sampleRate, request);
+  return withEntry('extractPercussiveEvents', () => {
+    const request = percussiveRequest<ExtractPercussiveEventsRequest>(
+      'extractPercussiveEvents',
+      args,
+    );
+    const samples = asFloat32(request.samples);
+    assertAudioInput(samples, request.sampleRate, request);
+    assertPercussiveSeparation(request);
+    refuseZeroDefaults(request, ['onsetWait', 'onsetDelta', 'maxEventMs']);
+    return requireModule().extractPercussiveEvents(samples, request.sampleRate, request);
+  });
 }
 
 /**
@@ -249,20 +251,19 @@ export function renderPercussiveEvents(
   options: OptionsOf<RenderPercussiveEventsRequest>,
 ): Float32Array;
 export function renderPercussiveEvents(...args: unknown[]): Float32Array {
-  const request = percussiveRequest<RenderPercussiveEventsRequest>('renderPercussiveEvents', args);
-  const samples = asFloat32(request.samples);
-  assertAudioInput('renderPercussiveEvents', samples, request.sampleRate, request);
-  assertPercussiveSeparation('renderPercussiveEvents', request);
-  refuseZeroDefaults('renderPercussiveEvents', request, ['fadeMs']);
-  if (!Array.isArray(request.events)) {
-    throw new TypeError('renderPercussiveEvents: events must be an array');
-  }
-  const events = resolveEntryTimes(
-    'renderPercussiveEvents',
-    request.events,
-    'events',
-    request.sampleRate,
-    true,
-  );
-  return requireModule().renderPercussiveEvents(samples, request.sampleRate, events, request);
+  return withEntry('renderPercussiveEvents', () => {
+    const request = percussiveRequest<RenderPercussiveEventsRequest>(
+      'renderPercussiveEvents',
+      args,
+    );
+    const samples = asFloat32(request.samples);
+    assertAudioInput(samples, request.sampleRate, request);
+    assertPercussiveSeparation(request);
+    refuseZeroDefaults(request, ['fadeMs']);
+    if (!Array.isArray(request.events)) {
+      throw refuseType('events must be an array');
+    }
+    const events = resolveEntryTimes(request.events, 'events', request.sampleRate, true);
+    return requireModule().renderPercussiveEvents(samples, request.sampleRate, events, request);
+  });
 }

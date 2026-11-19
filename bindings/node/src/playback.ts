@@ -1,4 +1,4 @@
-import { entryClass } from './internal/entry.js';
+import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   PlaybackDiagnostics,
@@ -20,9 +20,9 @@ type NativeHrtfSet = InstanceType<typeof addon.HrtfSet>;
 type NativePlaybackRenderer = InstanceType<typeof addon.PlaybackRenderer>;
 type NativePlaybackLoudnessMeter = InstanceType<typeof addon.PlaybackLoudnessMeter>;
 
-function configJsonText(fnName: string, config: PlaybackRendererConfig): string {
+function configJsonText(config: PlaybackRendererConfig): string {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError(`${fnName}: config must be a configuration object`);
+    throw refuseType(`config must be a configuration object`);
   }
   return JSON.stringify(config);
 }
@@ -38,7 +38,7 @@ function nativeHrtf(hrtf: HrtfSet | undefined): NativeHrtfSet | undefined {
     return undefined;
   }
   if (!(hrtf instanceof HrtfSet)) {
-    throw new TypeError('hrtf must be an HrtfSet instance');
+    throw refuseType('hrtf must be an HrtfSet instance');
   }
   return (hrtf as unknown as { native: NativeHrtfSet }).native;
 }
@@ -110,19 +110,19 @@ export class PlaybackRenderer {
   constructor(options: PlaybackRendererOptions) {
     const fnName = 'PlaybackRenderer';
     requestObject(fnName, options, 'options', true);
-    assertSampleRate(fnName, options.sampleRate);
+    assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize;
     if (maxBlockSize !== undefined && maxBlockSize !== null) {
       if (typeof maxBlockSize !== 'number') {
-        throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+        throw refuseType(`maxBlockSize must be a number`);
       }
       if (maxBlockSize === 0) {
-        throw new RangeError(`${fnName}: maxBlockSize must not be 0 (omit it for the default)`);
+        throw refuse(`maxBlockSize must not be 0 (omit it for the default)`);
       }
-      assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
+      assertPositiveInteger(maxBlockSize, 'maxBlockSize');
     }
     this.native = new addon.PlaybackRenderer(
-      configJsonText('PlaybackRenderer', options.config),
+      configJsonText(options.config),
       nativeHrtf(options.hrtf),
       options.sampleRate,
       maxBlockSize ?? undefined,
@@ -146,13 +146,13 @@ export class PlaybackRenderer {
    * An empty or non-finite `samples` is refused with a `RangeError` naming `samples`.
    */
   renderOffline(samples: Float32Array, inChannels: number): Float32Array {
-    assertAudioSamples('renderOffline', samples);
+    assertAudioSamples(samples);
     return this.native.renderOffline(samples, inChannels);
   }
 
   /** Applies a complete configuration document; a changed prepare key throws. */
   setConfig(config: PlaybackRendererConfig): void {
-    this.native.setConfig(configJsonText('PlaybackRenderer.setConfig', config));
+    this.native.setConfig(configJsonText(config));
   }
 
   /** The current complete configuration document. */
@@ -290,14 +290,16 @@ export class PlaybackLoudnessMeter {
  * An empty or non-finite `samples` is refused with a `RangeError` naming `samples`.
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
-  requestObject('renderPlayback', request, 'request', true);
-  assertAudioInput('renderPlayback', request.samples, request.sampleRate, request);
-  const { samples, channels } = addon.renderPlayback(
-    request.samples,
-    request.numChannels,
-    request.sampleRate,
-    configJsonText('renderPlayback', request.config),
-    nativeHrtf(request.hrtf),
-  ) as { samples: Float32Array; channels: number };
-  return { samples, numChannels: channels };
+  return withEntry('renderPlayback', () => {
+    requestObject('renderPlayback', request, 'request', true);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const { samples, channels } = addon.renderPlayback(
+      request.samples,
+      request.numChannels,
+      request.sampleRate,
+      configJsonText(request.config),
+      nativeHrtf(request.hrtf),
+    ) as { samples: Float32Array; channels: number };
+    return { samples, numChannels: channels };
+  });
 }

@@ -48,7 +48,6 @@ import type {
   PitchShiftRequest,
   TimeStretchRequest,
 } from './effects_timepitch.js';
-import { ErrorCode, SonareError } from './errors.js';
 import type { TrimRequest } from './feature_framing.js';
 import type {
   ChromaRequest,
@@ -92,7 +91,7 @@ import {
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
 } from './features.js';
-import { entryClass } from './internal/entry.js';
+import { entryClass, invalidState, refuseType } from './internal/entry.js';
 import type { MasterAudioRequest } from './mastering_chain.js';
 import { masterAudio as masterAudioFn } from './mastering_chain.js';
 import type {
@@ -168,11 +167,11 @@ function audioRequest<R>(
 ): R {
   const bag = options ?? {};
   if (typeof bag !== 'object' || Array.isArray(bag) || ArrayBuffer.isView(bag)) {
-    throw new TypeError(`Audio.${methodName}: options must be an object`);
+    throw refuseType(`Audio.${methodName}: options must be an object`);
   }
   for (const key of ['samples', 'sampleRate']) {
     if (key in bag) {
-      throw new TypeError(`Audio.${methodName}: options must not carry '${key}'`);
+      throw refuseType(`Audio.${methodName}: options must not carry '${key}'`);
     }
   }
   return { ...bag, samples, sampleRate } as R;
@@ -186,7 +185,7 @@ const AUDIO_FACTORY_KEY = Symbol('Audio factory');
  * source is downmixed as it is loaded; {@link Audio.fromFileChannel} loads one channel instead.
  * Release it with `destroy()` or a `using` declaration.
  */
-@entryClass('Audio')
+@entryClass('Audio', ['requireAlive'])
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
   private disposed = false;
@@ -194,8 +193,8 @@ export class Audio {
 
   private constructor(key: symbol, native: InstanceType<typeof addon.Audio>) {
     if (key !== AUDIO_FACTORY_KEY) {
-      throw new TypeError(
-        'Audio: construct it with Audio.fromBuffer, Audio.fromFile, Audio.fromFileChannel or Audio.fromMemory',
+      throw refuseType(
+        'construct it with Audio.fromBuffer, Audio.fromFile, Audio.fromFileChannel or Audio.fromMemory',
       );
     }
     this.native = native;
@@ -257,7 +256,7 @@ export class Audio {
    * of the caller's samples and is required.
    */
   static fromBuffer(samples: Float32Array, sampleRate: number): Audio {
-    assertSampleRate('Audio.fromBuffer', sampleRate);
+    assertSampleRate(sampleRate);
     return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromBuffer(samples, sampleRate));
   }
 
@@ -273,7 +272,7 @@ export class Audio {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new SonareError(ErrorCode.InvalidState, 'Audio has been destroyed');
+      throw invalidState('Audio has been destroyed');
     }
   }
 

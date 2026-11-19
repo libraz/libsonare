@@ -4,13 +4,14 @@
 
 import type { VoicedFlags } from '../types.js';
 import { assertInt64, resolveSampleBound } from '../validation.js';
+import { refuse, refuseType } from './entry.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so validate and normalize here rather than at the
 // N-API boundary. A flag is a decision, not a magnitude: collapse to 1/0 on
 // truthiness, which is the same reduction the WASM facade applies, so both
 // surfaces agree on every accepted input type.
-export function toVoicedInt32(fnName: string, voiced: VoicedFlags): Int32Array {
+export function toVoicedInt32(voiced: VoicedFlags): Int32Array {
   if (
     !(
       voiced instanceof Int32Array ||
@@ -19,8 +20,8 @@ export function toVoicedInt32(fnName: string, voiced: VoicedFlags): Int32Array {
       Array.isArray(voiced)
     )
   ) {
-    throw new TypeError(
-      `${fnName}: voiced must be an Int32Array, Uint8Array, Float32Array, number[], or boolean[]`,
+    throw refuseType(
+      `voiced must be an Int32Array, Uint8Array, Float32Array, number[], or boolean[]`,
     );
   }
   const out = new Int32Array(voiced.length);
@@ -28,7 +29,7 @@ export function toVoicedInt32(fnName: string, voiced: VoicedFlags): Int32Array {
     if (Array.isArray(voiced)) {
       const value = voiced[index];
       if (typeof value !== 'number' && typeof value !== 'boolean') {
-        throw new TypeError(`${fnName}: voiced array entries must be numbers or booleans`);
+        throw refuseType(`voiced array entries must be numbers or booleans`);
       }
     }
     out[index] = voiced[index] ? 1 : 0;
@@ -60,7 +61,6 @@ interface TimedEntry {
  * frame bounds, which carry no sample span.
  */
 export function resolveEntryTimes<T extends TimedEntry>(
-  fnName: string,
   entries: readonly T[],
   arrayName: string,
   sampleRate: number,
@@ -75,7 +75,6 @@ export function resolveEntryTimes<T extends TimedEntry>(
     const resolved: TimedEntry = { ...rest };
     if (spans) {
       resolved.onsetSample = resolveSampleBound(
-        fnName,
         entry.onsetSample,
         onsetSec,
         sampleRate,
@@ -83,7 +82,6 @@ export function resolveEntryTimes<T extends TimedEntry>(
         `${at}.onsetSec`,
       );
       resolved.offsetSample = resolveSampleBound(
-        fnName,
         entry.offsetSample,
         offsetSec,
         sampleRate,
@@ -94,7 +92,6 @@ export function resolveEntryTimes<T extends TimedEntry>(
     if (isPlainObject(entry.edit)) {
       const { timeOffsetSec, ...edit } = entry.edit;
       const offset = resolveSampleBound(
-        fnName,
         edit.timeOffsetSamples,
         timeOffsetSec,
         sampleRate,
@@ -103,7 +100,7 @@ export function resolveEntryTimes<T extends TimedEntry>(
         'signed',
       );
       if (offset !== undefined) {
-        assertInt64(fnName, offset, `${at}.edit.timeOffsetSamples`);
+        assertInt64(offset, `${at}.edit.timeOffsetSamples`);
       }
       resolved.edit = { ...entry.edit, timeOffsetSamples: offset };
       delete (resolved.edit as { timeOffsetSec?: number }).timeOffsetSec;
@@ -128,15 +125,14 @@ export function toSamples(samples: Float32Array | readonly number[]): Float32Arr
 }
 
 export function assertPitchTrackLengths(
-  fnName: string,
   f0Hz: Float32Array,
   voiced?: VoicedFlags | null,
   voicedProb?: Float32Array | null,
 ): void {
   if (voiced != null && voiced.length !== f0Hz.length) {
-    throw new RangeError(`${fnName}: voiced must have the same length as f0Hz`);
+    throw refuse(`voiced must have the same length as f0Hz`);
   }
   if (voiced == null && voicedProb != null && voicedProb.length !== f0Hz.length) {
-    throw new RangeError(`${fnName}: voicedProb must have the same length as f0Hz`);
+    throw refuse(`voicedProb must have the same length as f0Hz`);
   }
 }

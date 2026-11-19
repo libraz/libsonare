@@ -1,4 +1,5 @@
 import type { ClipPagePageRequest } from '../clip_page_streamer.js';
+import { refuse, withEntry } from '../internal/entry.js';
 import {
   loadSonareRingCursor,
   type RingCapacityOptions,
@@ -50,32 +51,32 @@ export interface ClipPageRequestRingReadResult {
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function clipPageRequestRingBufferByteLength(options: { capacity: number }): number {
-  const clampedCapacity = resolveRingCapacity(
-    'clipPageRequestRingBufferByteLength',
-    options,
-    undefined,
-  );
-  return (
-    SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
-    clampedCapacity * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
-  );
+  return withEntry('clipPageRequestRingBufferByteLength', () => {
+    const clampedCapacity = resolveRingCapacity(options, undefined);
+    return (
+      SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+      clampedCapacity * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
+    );
+  });
 }
 
 /** Creates a shared clip-page request ring (default `capacity` 128). RangeError outside the domain, TypeError for an unknown key. */
 export function createClipPageRequestRingBuffer(
   options?: RingCapacityOptions,
 ): ClipPageRequestRingBuffer {
-  const clampedCapacity = resolveRingCapacity('createClipPageRequestRingBuffer', options, 128);
-  const sharedBuffer = new SharedArrayBuffer(
-    clipPageRequestRingBufferByteLength({ capacity: clampedCapacity }),
-  );
-  const ring = clipPageRequestRingFromSharedBuffer(sharedBuffer, clampedCapacity);
-  Atomics.store(ring.header, 0, 0);
-  Atomics.store(ring.header, 1, 0);
-  Atomics.store(ring.header, 2, ring.capacity);
-  Atomics.store(ring.header, 3, SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S);
-  Atomics.store(ring.header, 4, 0);
-  return { sharedBuffer, header: ring.header, records: ring.records, capacity: ring.capacity };
+  return withEntry('createClipPageRequestRingBuffer', () => {
+    const clampedCapacity = resolveRingCapacity(options, 128);
+    const sharedBuffer = new SharedArrayBuffer(
+      clipPageRequestRingBufferByteLength({ capacity: clampedCapacity }),
+    );
+    const ring = clipPageRequestRingFromSharedBuffer(sharedBuffer, clampedCapacity);
+    Atomics.store(ring.header, 0, 0);
+    Atomics.store(ring.header, 1, 0);
+    Atomics.store(ring.header, 2, ring.capacity);
+    Atomics.store(ring.header, 3, SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S);
+    Atomics.store(ring.header, 4, 0);
+    return { sharedBuffer, header: ring.header, records: ring.records, capacity: ring.capacity };
+  });
 }
 
 /**
@@ -152,9 +153,7 @@ export function clipPageRequestRingFromSharedBuffer(
   );
   const minBytes = clipPageRequestRingBufferByteLength({ capacity });
   if (sharedBuffer.byteLength < minBytes) {
-    throw new RangeError(
-      'clipPageRequestSharedBuffer is too small for the requested ring capacity.',
-    );
+    throw refuse('clipPageRequestSharedBuffer is too small for the requested ring capacity.');
   }
   Atomics.store(header, 2, capacity);
   Atomics.store(header, 3, SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S);

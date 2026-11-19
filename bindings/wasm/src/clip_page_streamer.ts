@@ -1,4 +1,4 @@
-import { entryClass, withEntry } from './internal/entry.js';
+import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import {
   createOpfsClipPageProvider,
@@ -105,7 +105,7 @@ const streamerEpochs = new WeakMap<ClipPageStreamer, OwnerEpoch>();
  * per animation frame or per worklet control tick on the main/control thread
  * (never the audio thread; fetches are asynchronous).
  */
-@entryClass('ClipPageStreamer')
+@entryClass('ClipPageStreamer', ['serviceFrontier', 'resetState', 'clearPage'])
 export class ClipPageStreamer {
   private readonly engine: ClipPageStreamerEngine;
   private readonly readAheadPages: number;
@@ -117,11 +117,11 @@ export class ClipPageStreamer {
 
   constructor(options: ClipPageStreamerOptions) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-      throw new TypeError('ClipPageStreamer: options must be an object holding the engine');
+      throw refuseType('options must be an object holding the engine');
     }
     assertKnownRequestKeys('ClipPageStreamer', options);
     if (typeof options.engine?.popClipPageRequest !== 'function') {
-      throw new TypeError('ClipPageStreamer: engine must provide popClipPageRequest()');
+      throw refuseType('engine must provide popClipPageRequest()');
     }
     this.engine = options.engine;
     streamerEpochs.set(this, this.epoch);
@@ -129,23 +129,23 @@ export class ClipPageStreamer {
     this.readAheadPages = options.readAheadPages ?? 2;
     this.retainBehindPages = options.retainBehindPages ?? 1;
     this.maxRequestsPerPump = options.maxRequestsPerPump ?? 256;
-    assertNonNegativeInteger('ClipPageStreamer', this.readAheadPages, 'readAheadPages');
-    assertNonNegativeInteger('ClipPageStreamer', this.retainBehindPages, 'retainBehindPages');
-    assertPositiveInteger('ClipPageStreamer', this.maxRequestsPerPump, 'maxRequestsPerPump');
+    assertNonNegativeInteger(this.readAheadPages, 'readAheadPages');
+    assertNonNegativeInteger(this.retainBehindPages, 'retainBehindPages');
+    assertPositiveInteger(this.maxRequestsPerPump, 'maxRequestsPerPump');
   }
 
   /**
    * Register a paged clip. Pages already supplied to the provider before
    * registration (for example a primed first page) should be passed in
    * `initialResidentPages` so they participate in eviction. Throws
-   * `InvalidState` once the streamer is closed.
+   * `InvalidState` once the streamer has been destroyed.
    */
   addSource(source: ClipPageStreamSource, initialResidentPages: Iterable<number> = []): void {
     if (this.epoch.closed) {
-      throw releasedHandleError('ClipPageStreamer', 'is closed.');
+      throw releasedHandleError('ClipPageStreamer');
     }
     if (source.pageFrames <= 0 || source.numSamples <= 0) {
-      throw new RangeError('pageFrames and numSamples must be positive');
+      throw refuse('pageFrames and numSamples must be positive');
     }
     const lastPage = Math.ceil(source.numSamples / source.pageFrames) - 1;
     const previous = this.sources.get(source.clipId);
@@ -379,12 +379,12 @@ export async function attachOpfsClipStream(
     }
     const streamer = streamerOrEngine;
     if (!options) {
-      throw new TypeError('attachOpfsClipStream requires options.');
+      throw refuseType('attachOpfsClipStream requires options.');
     }
     const { clipId, primePages = 1, ...providerOptions } = options;
     const epoch = streamerEpochs.get(streamer);
     if (!epoch || epoch.closed) {
-      throw releasedHandleError('ClipPageStreamer', 'is closed.');
+      throw releasedHandleError('ClipPageStreamer');
     }
     const token = epoch.current();
     const binding = createOpfsClipPageProvider(providerOptions);

@@ -38,7 +38,7 @@ import { projectModule, type WasmSampleBank } from './project_internal.js';
  * }
  * ```
  */
-@entryClass('SampleBank')
+@entryClass('SampleBank', ['native'])
 export class SampleBank {
   private readonly nativeHandle: WasmSampleBank;
   private released = false;
@@ -78,7 +78,7 @@ export class SampleBank {
    * a bad tuning offset renders the voice silent with no error raised.
    */
   addSample(data: Float32Array, desc: SampleDesc = {}): number {
-    refuseSampleDescOrdinals('addSample', desc);
+    refuseSampleDescOrdinals(desc);
     return this.native.addSample(data, desc);
   }
 

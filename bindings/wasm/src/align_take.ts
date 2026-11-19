@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { projectModule } from './project_internal.js';
 import type { AlignTakeToReferenceRequest, AlignTakeToReferenceResult } from './project_types.js';
 import { assertAudioInput, requestObject } from './validation.js';
@@ -61,15 +62,17 @@ import { assertAudioInput, requestObject } from './validation.js';
 export function alignTakeToReference(
   request: AlignTakeToReferenceRequest,
 ): AlignTakeToReferenceResult {
-  requestObject('alignTakeToReference', request, 'request', true);
-  const takeSampleRate = request.takeSampleRate ?? request.sampleRate;
-  assertAudioInput('alignTakeToReference', request.reference, request.sampleRate, {}, 'reference');
-  assertAudioInput('alignTakeToReference', request.take, takeSampleRate, {}, 'take');
-  return projectModule().alignTakeToReference(
-    request.reference,
-    request.take,
-    request.sampleRate,
-    takeSampleRate,
-    request,
-  );
+  return withEntry('alignTakeToReference', () => {
+    requestObject('alignTakeToReference', request, 'request', true);
+    const takeSampleRate = request.takeSampleRate ?? request.sampleRate;
+    assertAudioInput(request.reference, request.sampleRate, {}, 'reference');
+    assertAudioInput(request.take, takeSampleRate, {}, 'take');
+    return projectModule().alignTakeToReference(
+      request.reference,
+      request.take,
+      request.sampleRate,
+      takeSampleRate,
+      request,
+    );
+  });
 }

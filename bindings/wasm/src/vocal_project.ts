@@ -1,3 +1,4 @@
+import { refuse, refuseType } from './internal/entry.js';
 import { vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import type { VocalReason, VocalStateToken } from './public_types_vocal_edit.js';
 import type {
@@ -24,7 +25,7 @@ const UINT64_MAX = '18446744073709551615';
 
 function requireObject(value: unknown, field: string): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError(`${field} must be an object`);
+    throw refuseType(`${field} must be an object`);
   }
   return value as Record<string, unknown>;
 }
@@ -36,14 +37,14 @@ function uint32(value: unknown, field: string, allowZero = true): number {
     value < (allowZero ? 0 : 1) ||
     value > PROJECT_ID_MAX
   ) {
-    throw new RangeError(`${field} must be a uint32 project id`);
+    throw refuse(`${field} must be a uint32 project id`);
   }
   return value;
 }
 
 function requestUint32(value: unknown, field: string, allowZero = true): number {
   if (typeof value !== 'number') {
-    throw new TypeError(`${field} must be a number`);
+    throw refuseType(`${field} must be a number`);
   }
   return uint32(value, field, allowZero);
 }
@@ -51,10 +52,10 @@ function requestUint32(value: unknown, field: string, allowZero = true): number 
 /** A take id of an apply request: a number, and never `0`, which is spelt by leaving it out. */
 function requestTakeId(value: unknown): number {
   if (typeof value !== 'number') {
-    throw new TypeError('applyVocalEdit: takeId must be a number');
+    throw refuseType('takeId must be a number');
   }
   if (value === 0) {
-    throw new RangeError('applyVocalEdit: takeId must not be 0 (omit it for the base source)');
+    throw refuse('takeId must not be 0 (omit it for the base source)');
   }
   return requestUint32(value, 'takeId', false);
 }
@@ -66,65 +67,65 @@ function nativeUint32(value: unknown, field: string): number {
     value < 0 ||
     value > UINT32_MAX
   ) {
-    throw new RangeError(`${field} must be a native uint32`);
+    throw refuse(`${field} must be a native uint32`);
   }
   return value;
 }
 
 function nativeInt64(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
-    throw new RangeError(`${field} must be a safe integer`);
+    throw refuse(`${field} must be a safe integer`);
   }
   return value;
 }
 
 function positiveSampleCount(value: unknown, field: string): number {
   if (typeof value !== 'number') {
-    throw new TypeError(`${field} must be a number`);
+    throw refuseType(`${field} must be a number`);
   }
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new RangeError(`${field} must be a positive safe integer`);
+    throw refuse(`${field} must be a positive safe integer`);
   }
   return value;
 }
 
 function finite(value: unknown, field: string): number {
   if (typeof value !== 'number') {
-    throw new TypeError(`${field} must be a number`);
+    throw refuseType(`${field} must be a number`);
   }
   if (!Number.isFinite(value)) {
-    throw new RangeError(`${field} must be finite`);
+    throw refuse(`${field} must be finite`);
   }
   return value;
 }
 
 function decimalUint64(value: unknown, field: string): string {
   if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value)) {
-    throw new RangeError(`${field} must be a canonical decimal uint64 string`);
+    throw refuse(`${field} must be a canonical decimal uint64 string`);
   }
   if (
     value.length > UINT64_MAX.length ||
     (value.length === UINT64_MAX.length && value > UINT64_MAX)
   ) {
-    throw new RangeError(`${field} must fit uint64`);
+    throw refuse(`${field} must fit uint64`);
   }
   return value;
 }
 
 function hexSha256(value: unknown, field: string): string {
   if (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value)) {
-    throw new TypeError(`${field} must be 64 hexadecimal characters`);
+    throw refuseType(`${field} must be 64 hexadecimal characters`);
   }
   return value.toLowerCase();
 }
 
 function finiteMono(value: unknown, field: string): Float32Array {
   if (!(value instanceof Float32Array) || value.length === 0) {
-    throw new TypeError(`${field} must be a non-empty Float32Array`);
+    throw refuseType(`${field} must be a non-empty Float32Array`);
   }
   for (let index = 0; index < value.length; index += 1) {
     if (!Number.isFinite(value[index])) {
-      throw new RangeError(`${field} contains a non-finite sample at index ${index}`);
+      throw refuse(`${field} contains a non-finite sample at index ${index}`);
     }
   }
   return new Float32Array(value);
@@ -132,7 +133,7 @@ function finiteMono(value: unknown, field: string): Float32Array {
 
 function vocalState(value: unknown): Uint8Array {
   if (!(value instanceof Uint8Array) || value.length === 0) {
-    throw new TypeError('vocalState must be a non-empty Uint8Array');
+    throw refuseType('vocalState must be a non-empty Uint8Array');
   }
   return new Uint8Array(value);
 }
@@ -175,7 +176,7 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyReq
     'expectedSourceSampleCount',
   );
   if (renderedMono.length !== expectedSourceSampleCount) {
-    throw new RangeError(
+    throw refuse(
       `renderedMono length must equal expectedSourceSampleCount (${renderedMono.length} != ${expectedSourceSampleCount})`,
     );
   }
@@ -183,15 +184,15 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyReq
     source.expectedSourceSampleRate,
     'expectedSourceSampleRate',
   );
-  assertSampleRate('Project.applyVocalEdit', expectedSourceSampleRate);
+  assertSampleRate(expectedSourceSampleRate);
   const renderedSampleRate = finite(source.renderedSampleRate, 'renderedSampleRate');
-  assertSampleRate('Project.applyVocalEdit', renderedSampleRate, 'renderedSampleRate');
+  assertSampleRate(renderedSampleRate, 'renderedSampleRate');
   if (renderedSampleRate !== expectedSourceSampleRate) {
-    throw new RangeError('renderedSampleRate must equal expectedSourceSampleRate');
+    throw refuse('renderedSampleRate must equal expectedSourceSampleRate');
   }
   const renderToken = copyToken(source.renderToken);
   if (renderToken.draftId !== '0' || renderToken.generation !== '0') {
-    throw new RangeError('renderToken must be a committed session token');
+    throw refuse('renderToken must be a committed session token');
   }
   return {
     clipId: requestUint32(source.clipId, 'clipId', false),
@@ -219,7 +220,7 @@ function optionalTake(takeId: number): { takeId?: number } {
 function reasonToken(code: number, field: string): VocalReason {
   const reason = vocalReasonFromCode(code);
   if (reason === undefined) {
-    throw new RangeError(`${field} is not a known vocal reason`);
+    throw refuse(`${field} is not a known vocal reason`);
   }
   return reason;
 }
@@ -238,7 +239,7 @@ function copyApplyResult(value: unknown): ProjectVocalEditApplyResult {
       typeof source.sidecarKey === 'string'
         ? source.sidecarKey
         : (() => {
-            throw new TypeError('result.sidecarKey must be a string');
+            throw refuseType('result.sidecarKey must be a string');
           })(),
   };
 }
@@ -264,7 +265,7 @@ function copyDependency(value: unknown): ProjectVocalEditDependency {
       typeof source.sidecarKey === 'string'
         ? source.sidecarKey
         : (() => {
-            throw new TypeError('dependency.sidecarKey must be a string');
+            throw refuseType('dependency.sidecarKey must be a string');
           })(),
   };
 }
@@ -279,7 +280,7 @@ function copyRehydrateItem(value: unknown): ProjectVocalRehydrateItem {
   const source = requireObject(value, 'vocal rehydrate item');
   const status = REHYDRATE_STATUSES[source.status as number];
   if (status === undefined) {
-    throw new RangeError('rehydrate.status is not a known rehydrate status');
+    throw refuse('rehydrate.status is not a known rehydrate status');
   }
   const reason = nativeUint32(source.reason, 'rehydrate.reason');
   return {
@@ -295,18 +296,18 @@ function copyOriginalSources(
   originals: readonly ProjectVocalOriginalSource[],
 ): ProjectVocalOriginalSource[] {
   if (!Array.isArray(originals)) {
-    throw new TypeError('originals must be an array');
+    throw refuseType('originals must be an array');
   }
   const seen = new Set<number>();
   return originals.map((original, index) => {
     const source = requireObject(original, `originals[${index}]`);
     const sourceId = requestUint32(source.sourceId, `originals[${index}].sourceId`, false);
     if (seen.has(sourceId)) {
-      throw new RangeError(`originals contains duplicate sourceId ${sourceId}`);
+      throw refuse(`originals contains duplicate sourceId ${sourceId}`);
     }
     seen.add(sourceId);
     const sampleRate = finite(source.sampleRate, `originals[${index}].sampleRate`);
-    assertSampleRate('Project.rehydrateVocalEdits', sampleRate, `originals[${index}].sampleRate`);
+    assertSampleRate(sampleRate, `originals[${index}].sampleRate`);
     return {
       sourceId,
       mono: finiteMono(source.mono, `originals[${index}].mono`),
@@ -330,7 +331,7 @@ export function projectGetVocalEditDependencies(
 ): ProjectVocalEditDependency[] {
   const value = native.getVocalEditDependencies();
   if (!Array.isArray(value)) {
-    throw new TypeError('native vocal dependencies must be an array');
+    throw refuseType('native vocal dependencies must be an array');
   }
   return value.map(copyDependency);
 }
@@ -345,16 +346,16 @@ export function projectRehydrateVocalEdits(
   options: ProjectVocalRehydrateOptions = {},
 ): ProjectVocalRehydrateItem[] {
   if (options === null || typeof options !== 'object' || Array.isArray(options)) {
-    throw new TypeError('options must be an object');
+    throw refuseType('options must be an object');
   }
   for (const key of Object.keys(options)) {
     if (key !== 'cancel') {
-      throw new TypeError(`Project.rehydrateVocalEdits: unknown option '${key}'`);
+      throw refuseType(`unknown option '${key}'`);
     }
   }
   const { cancel } = options;
   if (cancel !== undefined && typeof cancel !== 'function') {
-    throw new TypeError('cancel must be a function');
+    throw refuseType('cancel must be a function');
   }
   const normalized = copyOriginalSources(originals);
   let callbackFailed = false;
@@ -390,7 +391,7 @@ export function projectRehydrateVocalEdits(
     throw (value as { cancelFailure: unknown }).cancelFailure;
   }
   if (!Array.isArray(value)) {
-    throw new TypeError('native vocal rehydrate result must be an array');
+    throw refuseType('native vocal rehydrate result must be an array');
   }
   return value.map(copyRehydrateItem);
 }

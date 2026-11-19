@@ -7,33 +7,30 @@ import type { ClippingReport } from '../metering.js';
 import type { ClipDetection, DeclipReport } from '../public_types_repair.js';
 import type { WasmClipDetection, WasmDeclipReport } from '../sonare.js';
 import { assertAudioChannels, assertAudioSamples, assertFloatValue } from '../validation.js';
+import { refuse, refuseType } from './entry.js';
 import { interleavePlanes } from './pod_config.js';
 
 /**
  * An optional numeric field whose native `0` means "library default": an explicit 0 is refused,
  * absent and `null` pass, and any other value is left to the native reader's own checks.
  */
-export function refuseZeroSentinel(
-  fnName: string,
-  request: object,
-  fields: readonly string[],
-): void {
+export function refuseZeroSentinel(request: object, fields: readonly string[]): void {
   for (const field of fields) {
     const value = (request as Record<string, unknown>)[field];
     if (value === undefined || value === null) {
       continue;
     }
     if (value === 0) {
-      throw new RangeError(`${fnName}: ${field} must not be 0 (omit it for the default)`);
+      throw refuse(`${field} must not be 0 (omit it for the default)`);
     }
   }
 }
 
 /** A percentile rank: `TypeError` unless a number, `RangeError` outside [0, 1]. */
-export function assertUnitInterval(fnName: string, value: unknown, argName: string): void {
-  assertFloatValue(fnName, value, argName);
+export function assertUnitInterval(value: unknown, argName: string): void {
+  assertFloatValue(value, argName);
   if ((value as number) < 0 || (value as number) > 1) {
-    throw new RangeError(`${fnName}: ${argName} must be in [0, 1]`);
+    throw refuse(`${argName} must be in [0, 1]`);
   }
 }
 
@@ -43,28 +40,27 @@ export function assertUnitInterval(fnName: string, value: unknown, argName: stri
  * samples) only the buffer checks run.
  */
 export function interleaveMeterChannels(
-  fnName: string,
   channels: unknown,
   options: object,
   sampleRate?: unknown,
 ): { data: Float32Array; numChannels: number } {
   if (sampleRate !== undefined) {
-    assertAudioChannels(fnName, channels, sampleRate, options);
+    assertAudioChannels(channels, sampleRate, options);
   } else {
     if (!Array.isArray(channels)) {
-      throw new TypeError(`${fnName}: channels must be an array of Float32Array`);
+      throw refuseType(`channels must be an array of Float32Array`);
     }
     if (channels.length === 0) {
-      throw new RangeError(`${fnName}: channels must not be empty`);
+      throw refuse(`channels must not be empty`);
     }
     channels.forEach((plane, i) => {
-      assertAudioSamples(fnName, plane, options, `channels[${i}]`);
+      assertAudioSamples(plane, options, `channels[${i}]`);
     });
   }
   const planes = channels as Float32Array[];
   const frames = (planes[0] as Float32Array).length;
   if (planes.some((plane) => plane.length !== frames)) {
-    throw new RangeError(`${fnName}: channels must all have the same length`);
+    throw refuse(`channels must all have the same length`);
   }
   return { data: interleavePlanes(planes), numChannels: planes.length };
 }
@@ -124,21 +120,19 @@ export function clippingReportFromNative(
  * Absent is the native 0, which selects the library's threshold; a level that
  * would reach the detector as 0 is refused, since it would select it silently.
  */
-export function clipThresholdLinear(fnName: string, thresholdDb: unknown): number {
+export function clipThresholdLinear(thresholdDb: unknown): number {
   if (thresholdDb === undefined || thresholdDb === null) {
     return 0;
   }
   if (typeof thresholdDb !== 'number') {
-    throw new TypeError(`${fnName}: thresholdDb must be a number`);
+    throw refuseType(`thresholdDb must be a number`);
   }
   if (Number.isNaN(thresholdDb) || thresholdDb > 0) {
-    throw new RangeError(`${fnName}: thresholdDb must be at most 0 dBFS`);
+    throw refuse(`thresholdDb must be at most 0 dBFS`);
   }
   const linear = Math.fround(10 ** (thresholdDb / 20));
   if (linear === 0) {
-    throw new RangeError(
-      `${fnName}: thresholdDb is below the smallest level the detector can hold`,
-    );
+    throw refuse(`thresholdDb is below the smallest level the detector can hold`);
   }
   return linear;
 }

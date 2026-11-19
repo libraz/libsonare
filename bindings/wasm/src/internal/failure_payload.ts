@@ -1,4 +1,4 @@
-import { ErrorCode, isSonareError, SonareError } from '../errors.js';
+import { ErrorCode, isSonareError } from '../errors.js';
 import { bareText, codedError, refuse, refuseType } from './entry.js';
 
 /** A failure as it crosses a postMessage boundary: class name, message and any SonareError code. */
@@ -59,15 +59,15 @@ export function failureFromPayload(payload: SonareFailurePayload): Error {
     return codedError(ErrorCode.Unknown, text);
   }
   if (payload.code !== undefined) {
-    return new SonareError(narrowErrorCode(payload.code), payload.message);
+    return codedError(narrowErrorCode(payload.code), payload.message);
   }
   if (payload.name === 'RangeError') {
-    return new RangeError(payload.message);
+    return refuse(payload.message);
   }
   if (payload.name === 'TypeError') {
-    return new TypeError(payload.message);
+    return refuseType(payload.message);
   }
-  return new SonareError(ErrorCode.Unknown, payload.message);
+  return codedError(ErrorCode.Unknown, payload.message);
 }
 
 /** Whether a value received over a port is a {@link SonareFailurePayload}. */

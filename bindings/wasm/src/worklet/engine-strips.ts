@@ -1,5 +1,5 @@
 import { panLawCode, panModeCode } from '../codes.js';
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import type {
   BuiltinSynthConfig,
   EqBandInput,
@@ -10,6 +10,7 @@ import type {
   SynthPatch,
   UmpWords,
 } from '../index.js';
+import { codedError, refuse, refuseType } from '../internal/entry.js';
 import { eqBandJson } from '../internal/eq_band_json.js';
 import { packMidi2Program } from '../internal/midi_program_pack.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
@@ -115,16 +116,16 @@ export function setTrackStripJson(
 }
 
 /** Refuses `'master'` for a setter the master strip has no form of. */
-function trackTarget(ctx: EngineStripContext, method: string, target: string | number): number {
+function trackTarget(ctx: EngineStripContext, target: string | number): number {
   if (target === 'master') {
-    throw new RangeError(`${method}: the master strip has no such setter`);
+    throw refuse(`the master strip has no such setter`);
   }
   return trackIdFor(ctx, target);
 }
 
-function requireBand(method: string, band: unknown): asserts band is EqBandInput {
+function requireBand(band: unknown): asserts band is EqBandInput {
   if (typeof band !== 'object' || band === null) {
-    throw new TypeError(`${method}: band must be an object`);
+    throw refuseType(`band must be an object`);
   }
 }
 
@@ -152,7 +153,7 @@ export function setStripEqBand(
   bandIndex: number,
   band: EqBandInput,
 ): void {
-  requireBand('setStripEqBand', band);
+  requireBand(band);
   if (target === 'master') {
     const bandJson = eqBandJson(band);
     commitSync(
@@ -183,7 +184,7 @@ export function setBusEqBand(
   bandIndex: number,
   band: EqBandInput,
 ): void {
-  requireBand('setBusEqBand', band);
+  requireBand(band);
   commitSync(
     ctx,
     (offline) => offline.setBusEqBand(busId, bandIndex, band),
@@ -309,7 +310,7 @@ export function setStripPanLaw(
   target: string | number,
   panLaw: PanLaw,
 ): void {
-  const trackId = trackTarget(ctx, 'setStripPanLaw', target);
+  const trackId = trackTarget(ctx, target);
   const code = panLawCode(panLaw);
   commitSync(
     ctx,
@@ -328,7 +329,7 @@ export function setStripPanMode(
   target: string | number,
   panMode: PanMode,
 ): void {
-  const trackId = trackTarget(ctx, 'setStripPanMode', target);
+  const trackId = trackTarget(ctx, target);
   const code = panModeCode(panMode);
   commitSync(
     ctx,
@@ -348,7 +349,7 @@ export function setStripDualPan(
   leftPan: number,
   rightPan: number,
 ): void {
-  const trackId = trackTarget(ctx, 'setStripDualPan', target);
+  const trackId = trackTarget(ctx, target);
   commitSync(
     ctx,
     (offline) => offline.setStripDualPan(trackId, leftPan, rightPan),
@@ -367,7 +368,7 @@ export function setStripSurroundPan(
   target: string | number,
   pan: SurroundPan,
 ): void {
-  const trackId = trackTarget(ctx, 'setStripSurroundPan', target);
+  const trackId = trackTarget(ctx, target);
   commitSync(
     ctx,
     (offline) => offline.setStripSurroundPan(trackId, pan),
@@ -391,7 +392,7 @@ export function setStripChannelDelaySamples(
   target: string | number,
   delaySamples: number,
 ): void {
-  const trackId = trackTarget(ctx, 'setStripChannelDelaySamples', target);
+  const trackId = trackTarget(ctx, target);
   commitSync(
     ctx,
     (offline) => offline.setStripChannelDelaySamples(trackId, delaySamples),
@@ -496,7 +497,7 @@ export function pushMidiNoteOn(
     channel,
     note,
     velocity,
-    renderFrame: resolveRenderFrame('pushMidiNoteOn', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }
 
@@ -518,7 +519,7 @@ export function pushMidiNoteOff(
     channel,
     note,
     velocity,
-    renderFrame: resolveRenderFrame('pushMidiNoteOff', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }
 
@@ -540,7 +541,7 @@ export function pushMidiCc(
     channel,
     controller,
     value,
-    renderFrame: resolveRenderFrame('pushMidiCc', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }
 
@@ -561,7 +562,7 @@ export function pushMidiPitchBend(
     channel,
     data0: bend14,
     data1: 0,
-    renderFrame: resolveRenderFrame('pushMidiPitchBend', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }
 
@@ -582,7 +583,7 @@ export function pushMidiChannelPressure(
     channel,
     data0: pressure,
     data1: 0,
-    renderFrame: resolveRenderFrame('pushMidiChannelPressure', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }
 
@@ -611,7 +612,7 @@ export function pushMidiPolyPressure(
     channel,
     data0: note,
     data1: pressure,
-    renderFrame: resolveRenderFrame('pushMidiPolyPressure', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }
 
@@ -635,7 +636,7 @@ export function pushMidiUmp(
     type: 'syncMidiUmp',
     destinationId,
     words,
-    renderFrame: resolveRenderFrame('pushMidiUmp', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }
 
@@ -652,7 +653,6 @@ export function pushMidiProgram(
     requestObject('pushMidiProgram', bank, 'bank', true);
   }
   const words = packMidi2Program(
-    'pushMidiProgram',
     group,
     channel,
     program,
@@ -687,9 +687,9 @@ export function setSynthInstrument(
   // A SampleBank handle cannot cross to the worklet, so refuse it before the
   // offline engine changes rather than let the live delivery fail later.
   if (typeof patch === 'object' && patch !== null && patch.sampleBank != null) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.NotSupported,
-      'setSynthInstrument: a patch with sampleBank cannot be delivered to the AudioWorklet engine',
+      'a patch with sampleBank cannot be delivered to the AudioWorklet engine',
     );
   }
   commitSync(
@@ -795,7 +795,7 @@ export function pushMidiSysex(
     type: 'syncMidiSysex',
     destinationId,
     data,
-    renderFrame: resolveRenderFrame('pushMidiSysex', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }
 
@@ -803,6 +803,6 @@ export function pushMidiPanic(ctx: EngineStripContext, renderFrame: number | und
   ctx.offlineEngine.pushMidiPanic(renderFrame);
   ctx.postSync({
     type: 'syncMidiPanic',
-    renderFrame: resolveRenderFrame('pushMidiPanic', renderFrame),
+    renderFrame: resolveRenderFrame(renderFrame),
   });
 }

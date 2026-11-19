@@ -1,4 +1,5 @@
 import type { VoicePresetId } from '../public_types.js';
+import { refuse, refuseType } from './entry.js';
 
 /** Public preset ids in the order of the native preset ordinals. */
 export const VOICE_PRESET_IDS: readonly VoicePresetId[] = [
@@ -21,13 +22,13 @@ export const VOICE_PRESET_IDS: readonly VoicePresetId[] = [
  *
  * @throws TypeError unless `id` is a string; RangeError for an unknown id.
  */
-export function voicePresetOrdinal(fnName: string, id: unknown, argName = 'preset'): number {
+export function voicePresetOrdinal(id: unknown, argName = 'preset'): number {
   if (typeof id !== 'string') {
-    throw new TypeError(`${fnName}: ${argName} must be a string`);
+    throw refuseType(`${argName} must be a string`);
   }
   const ordinal = VOICE_PRESET_IDS.indexOf(id as VoicePresetId);
   if (ordinal < 0) {
-    throw new RangeError(`${fnName}: ${argName} must be one of ${VOICE_PRESET_IDS.join(', ')}`);
+    throw refuse(`${argName} must be one of ${VOICE_PRESET_IDS.join(', ')}`);
   }
   return ordinal;
 }
@@ -37,10 +38,6 @@ export function voicePresetOrdinal(fnName: string, id: unknown, argName = 'prese
  *
  * @throws TypeError unless `id` is a string; RangeError for an unknown id.
  */
-export function checkedVoicePresetId(
-  fnName: string,
-  id: unknown,
-  argName = 'preset',
-): VoicePresetId {
-  return VOICE_PRESET_IDS[voicePresetOrdinal(fnName, id, argName)] as VoicePresetId;
+export function checkedVoicePresetId(id: unknown, argName = 'preset'): VoicePresetId {
+  return VOICE_PRESET_IDS[voicePresetOrdinal(id, argName)] as VoicePresetId;
 }

@@ -121,13 +121,14 @@ export function masteringInsertNames(): MasteringInsertName[] {
 export function masteringInsertParamNames<N extends MasteringInsertName>(
   insert: N,
 ): (keyof MasteringProcessorParams<N> & string)[] {
-  assertClosedToken(
-    'masteringInsertParamNames',
-    insert,
-    withEntry('masteringInsertParamNames', () => masteringInsertNames()),
-    'insert',
-  );
-  return addon.masteringInsertParamNames(insert);
+  return withEntry('masteringInsertParamNames', () => {
+    assertClosedToken(
+      insert,
+      withEntry('masteringInsertParamNames', () => masteringInsertNames()),
+      'insert',
+    );
+    return addon.masteringInsertParamNames(insert);
+  });
 }
 
 /** Request form of {@link masteringInsertParamInfo}. */
@@ -174,12 +175,14 @@ export interface MasteringInsertTimingRequest<N extends MasteringInsertName = Ma
 export function masteringInsertParamInfo(
   request: MasteringInsertParamInfoRequest,
 ): MasteringInsertParamInfo[] {
-  const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
-  if (r.sampleRate !== undefined && r.sampleRate !== null) {
-    assertSampleRate('masteringInsertParamInfo', r.sampleRate);
-  }
-  const json = addon.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
-  return parseRecordJson(json) as MasteringInsertParamInfo[];
+  return withEntry('masteringInsertParamInfo', () => {
+    const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
+    if (r.sampleRate !== undefined && r.sampleRate !== null) {
+      assertSampleRate(r.sampleRate);
+    }
+    const json = addon.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
+    return parseRecordJson(json) as MasteringInsertParamInfo[];
+  });
 }
 
 /**
@@ -201,16 +204,18 @@ export function masteringInsertParamInfo(
 export function masteringInsertTiming<N extends MasteringInsertName>(
   request: MasteringInsertTimingRequest<N>,
 ): MasteringInsertTiming {
-  const r = requestOnly<MasteringInsertTimingRequest<N>>('masteringInsertTiming', [request]);
-  assertSampleRate('masteringInsertTiming', r.sampleRate);
-  const resolved = withEntry('masteringInsertTiming', () =>
-    resolveInsertParams('masteringInsertTiming', r.insert, r.params ?? {}),
-  );
-  return addon.masteringInsertTiming(
-    r.insert,
-    JSON.stringify(resolved),
-    r.sampleRate,
-  ) as MasteringInsertTiming;
+  return withEntry('masteringInsertTiming', () => {
+    const r = requestOnly<MasteringInsertTimingRequest<N>>('masteringInsertTiming', [request]);
+    assertSampleRate(r.sampleRate);
+    const resolved = withEntry('masteringInsertTiming', () =>
+      resolveInsertParams(r.insert, r.params ?? {}),
+    );
+    return addon.masteringInsertTiming(
+      r.insert,
+      JSON.stringify(resolved),
+      r.sampleRate,
+    ) as MasteringInsertTiming;
+  });
 }
 
 /**

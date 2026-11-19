@@ -9,14 +9,13 @@ import { assertIntegerValue, assertPositiveInteger } from '../validation.js';
  */
 
 export function resolvePositiveIntegerOption(
-  fnName: string,
   name: string,
   value: unknown,
   fallback: number,
 ): number {
   const resolved = value === undefined ? fallback : value;
-  assertIntegerValue(fnName, resolved, name);
-  assertPositiveInteger(fnName, resolved, name);
+  assertIntegerValue(resolved, name);
+  assertPositiveInteger(resolved, name);
   return resolved;
 }
 
@@ -30,13 +29,8 @@ export function resolvePositiveIntegerOption(
  * not refused is a non-positive value, which the conversion helpers define --
  * `samplesToFrames` answers 0 frames for a non-positive hop rather than failing.
  */
-export function resolveIntegerOption(
-  fnName: string,
-  name: string,
-  value: unknown,
-  fallback: number,
-): number {
+export function resolveIntegerOption(name: string, value: unknown, fallback: number): number {
   const resolved = value === undefined ? fallback : value;
-  assertIntegerValue(fnName, resolved, name);
+  assertIntegerValue(resolved, name);
   return resolved;
 }

@@ -1,5 +1,4 @@
-import { ErrorCode, SonareError } from './errors.js';
-import { entryClass } from './internal/entry.js';
+import { entryClass, invalidState } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 
 /**
@@ -45,13 +44,10 @@ export class OwnerEpoch {
   /** Throws `InvalidState` unless `token` still names the live owner. */
   assertCurrent(token: number): void {
     if (this.ended) {
-      throw releasedHandleError(this.ownerName, 'is closed.');
+      throw releasedHandleError(this.ownerName);
     }
     if (token !== this.generation) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        `${this.ownerName} was replaced while an operation was pending.`,
-      );
+      throw invalidState(`${this.ownerName} was replaced while an operation was pending.`);
     }
   }
 

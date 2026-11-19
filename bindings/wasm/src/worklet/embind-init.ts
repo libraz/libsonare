@@ -1,5 +1,5 @@
-import { ErrorCode, SonareError } from '../errors.js';
 import { init as initSonareModule, isInitialized, type ModuleHandle } from '../index.js';
+import { invalidState } from '../internal/entry.js';
 import type { SonareModule } from '../sonare.js';
 
 type EmbindModuleFactory = (options?: {
@@ -41,10 +41,7 @@ export async function initializeEmbindInWorklet(
   }
   const moduleFactory = scope.SonareEmbindModuleFactory;
   if (!moduleFactory) {
-    throw new SonareError(
-      ErrorCode.InvalidState,
-      'embind realtime engine module is not initialized.',
-    );
+    throw invalidState('embind realtime engine module is not initialized.');
   }
   await initSonareModule({
     locateFile: (path) => path,

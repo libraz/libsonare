@@ -141,7 +141,7 @@ describe('Mixer runtime controls (WASM)', () => {
         ).not.toThrow();
         for (const key of ['elevation', 'distance']) {
           expect(() => mixer.setSurroundPan(vocal, { [key]: 0 } as never)).toThrow(
-            new TypeError(`setSurroundPan: unknown request key '${key}'`),
+            new TypeError(`Mixer.setSurroundPan: unknown request key '${key}'`),
           );
         }
 

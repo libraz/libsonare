@@ -1,4 +1,5 @@
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
+import { codedError, refuse, refuseType } from '../internal/entry.js';
 export const RING_CURSOR_RANGE = 0x1_0000_0000;
 
 // Overwrite records use one atomic state word per slot. The high bit excludes
@@ -87,7 +88,7 @@ export function tryAcquireOverwriteRead(
     const previous = Atomics.add(slotStates, slot, 1) >>> 0;
     if (previous === OVERWRITE_READER_MASK) {
       Atomics.sub(slotStates, slot, 1);
-      throw new RangeError('overwrite-ring reader count overflow');
+      throw refuse('overwrite-ring reader count overflow');
     }
     if ((previous & OVERWRITE_WRITER_BIT) === 0) {
       return true;
@@ -146,10 +147,10 @@ export function requireRingDimension(
   maximum = Number.MAX_SAFE_INTEGER,
 ): number {
   if (typeof value !== 'number') {
-    throw new TypeError(`${name} must be a number`);
+    throw refuseType(`${name} must be a number`);
   }
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    throw new RangeError(`${name} must be an integer in [${minimum}, ${maximum}]`);
+    throw refuse(`${name} must be an integer in [${minimum}, ${maximum}]`);
   }
   return value;
 }
@@ -160,7 +161,6 @@ export function requireRingDimension(
  * required (TypeError when missing). Values are returned unvalidated.
  */
 export function resolveRingOptions<K extends string>(
-  fn: string,
   options: unknown,
   defaults: Record<K, number | undefined>,
 ): Record<K, unknown> {
@@ -168,20 +168,20 @@ export function resolveRingOptions<K extends string>(
     options = {};
   }
   if (typeof options !== 'object' || Array.isArray(options)) {
-    throw new TypeError(`${fn} options must be an object`);
+    throw refuseType('options must be an object');
   }
   const given = options as Record<string, unknown>;
   const known = new Set<string>(Object.keys(defaults));
   for (const key of Object.keys(given)) {
     if (!known.has(key)) {
-      throw new TypeError(`${fn} does not accept the option '${key}'`);
+      throw refuseType(`unknown option '${key}'`);
     }
   }
   const resolved = {} as Record<K, unknown>;
   for (const key of Object.keys(defaults) as K[]) {
     const value = given[key] ?? defaults[key];
     if (value === undefined) {
-      throw new TypeError(`${fn}: ${key} must be a number`);
+      throw refuseType(`${key} must be a number`);
     }
     resolved[key] = value;
   }
@@ -195,12 +195,8 @@ export interface RingCapacityOptions {
 }
 
 /** Resolves and validates `capacity` from a ring options object (`undefined` default means required). */
-export function resolveRingCapacity(
-  fn: string,
-  options: unknown,
-  defaultCapacity: number | undefined,
-): number {
-  const resolved = resolveRingOptions(fn, options, { capacity: defaultCapacity });
+export function resolveRingCapacity(options: unknown, defaultCapacity: number | undefined): number {
+  const resolved = resolveRingOptions(options, { capacity: defaultCapacity });
   return requireRingDimension(resolved.capacity, 'capacity', 1);
 }
 
@@ -213,17 +209,17 @@ export function requirePositiveCapacity(
     fallbackCapacity !== undefined &&
     (!Number.isSafeInteger(fallbackCapacity) || fallbackCapacity < 1)
   ) {
-    throw new RangeError(`${name} must be a positive integer`);
+    throw refuse(`${name} must be a positive integer`);
   }
   if (existingCapacity !== 0 && (!Number.isSafeInteger(existingCapacity) || existingCapacity < 1)) {
-    throw new RangeError(`${name} must be a positive integer`);
+    throw refuse(`${name} must be a positive integer`);
   }
   const capacity = existingCapacity || fallbackCapacity;
   if (capacity === undefined || capacity < 1) {
-    throw new RangeError(`${name} must be a positive integer`);
+    throw refuse(`${name} must be a positive integer`);
   }
   if (fallbackCapacity !== undefined && existingCapacity !== 0 && capacity !== fallbackCapacity) {
-    throw new RangeError(`${name} does not match the shared-buffer descriptor`);
+    throw refuse(`${name} does not match the shared-buffer descriptor`);
   }
   return capacity;
 }
@@ -236,7 +232,7 @@ export function requireProtocolVersion(
 ): void {
   const version = Atomics.load(header, versionSlot);
   if (version !== 0 && version !== expectedVersion) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.AbiMismatch,
       `${name} protocol version ${version} is incompatible; expected ${expectedVersion}.`,
     );
@@ -254,7 +250,7 @@ export function attachProtocolVersion(
   }
   const previous = Atomics.compareExchange(header, versionSlot, 0, expectedVersion);
   if (previous !== 0 && previous !== expectedVersion) {
-    throw new SonareError(
+    throw codedError(
       ErrorCode.AbiMismatch,
       `${name} protocol version ${previous} is incompatible; expected ${expectedVersion}.`,
     );
@@ -268,10 +264,7 @@ export function requireNoUnpublishedRecords(
   name: string,
 ): void {
   if (Atomics.load(header, versionSlot) === 0 && loadSonareRingCursor(header, 0, capacity) !== 0) {
-    throw new SonareError(
-      ErrorCode.InvalidFormat,
-      `${name} has records without a compatible producer.`,
-    );
+    throw codedError(ErrorCode.InvalidFormat, `${name} has records without a compatible producer.`);
   }
 }
 
@@ -287,7 +280,7 @@ export function validateOverwriteViews(
   expectedTrailingBytes = 0,
 ): void {
   if (!Number.isSafeInteger(capacity) || capacity < 1) {
-    throw new RangeError(`${name} capacity must be a positive integer.`);
+    throw refuse(`${name} capacity must be a positive integer.`);
   }
   const stateOffset = headerBytes + recordBytes * capacity;
   if (
@@ -303,7 +296,7 @@ export function validateOverwriteViews(
     slotStates.byteOffset !== stateOffset ||
     slotStates.length !== capacity
   ) {
-    throw new SonareError(ErrorCode.InvalidFormat, `${name} shared buffer has an invalid layout.`);
+    throw codedError(ErrorCode.InvalidFormat, `${name} shared buffer has an invalid layout.`);
   }
 }
 
@@ -336,7 +329,7 @@ export function isUint32Slot(value: number | undefined): boolean {
 export function toUint32Slot(value: number | undefined, fallback: number, name: string): number {
   const resolved = value ?? fallback;
   if (!isUint32Slot(resolved)) {
-    throw new RangeError(`${name} must be an integer within [0, 4294967295]`);
+    throw refuse(`${name} must be an integer within [0, 4294967295]`);
   }
   return resolved;
 }
@@ -347,7 +340,7 @@ export function toSafeInteger(value: number | bigint | undefined, fallback: numb
     return fallback;
   }
   if (!Number.isSafeInteger(resolved)) {
-    throw new RangeError('64-bit ring values must be safe integers');
+    throw refuse('64-bit ring values must be safe integers');
   }
   return resolved;
 }

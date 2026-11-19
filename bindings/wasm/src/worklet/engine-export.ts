@@ -1,4 +1,3 @@
-import { ErrorCode, SonareError } from '../errors.js';
 import type {
   EngineBounceOptions,
   EngineBounceResult,
@@ -7,6 +6,7 @@ import type {
   EngineFreezeResult,
   RealtimeEngine,
 } from '../index.js';
+import { invalidState, refuse } from '../internal/entry.js';
 import type { OpfsClipPageProviderBinding } from '../opfs_clip_pages.js';
 import type { OwnerEpoch } from '../owner_epoch.js';
 import type { ClipPageProvider } from '../realtime_engine.js';
@@ -73,9 +73,7 @@ function restorePosition(ctx: EngineExportContext, position: number): void {
 function resolveBlockSize(ctx: EngineExportContext, blockSize: number | undefined): number {
   const resolved = requireIntegerOption(blockSize, ctx.offlineBlockSize, 'blockSize', 1);
   if (resolved > ctx.offlineBlockSize) {
-    throw new RangeError(
-      `blockSize must not exceed the offline block size (${ctx.offlineBlockSize})`,
-    );
+    throw refuse(`blockSize must not exceed the offline block size (${ctx.offlineBlockSize})`);
   }
   return resolved;
 }
@@ -148,8 +146,7 @@ async function prefetchOpfsSpan(
         const ok = await source.binding.supplyPage(page);
         ctx.epoch.assertCurrent(token);
         if (!ok) {
-          throw new SonareError(
-            ErrorCode.InvalidState,
+          throw invalidState(
             `Failed to page in OPFS clip ${clip.id ?? '?'} page ${page} for offline render.`,
           );
         }
@@ -246,7 +243,7 @@ export async function freezeOffline(
     const result = ctx.offlineEngine.freezeOffline({ ...options, blockSize });
     const channels = ctx.offlineEngine.prebakedClipChannels(result.clipId);
     if (channels === null) {
-      throw new SonareError(ErrorCode.InvalidState, 'The frozen clip audio is unavailable.');
+      throw invalidState('The frozen clip audio is unavailable.');
     }
     ctx.commitFrozenClip(
       {

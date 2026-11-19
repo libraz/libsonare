@@ -661,7 +661,7 @@ describe('RealtimeEngine strip addressing', () => {
       expect(caught(() => engine.setStripSurroundPan('master', {}))).toBeInstanceOf(RangeError);
       for (const key of ['elevation', 'distance']) {
         expect(() => engine.setStripSurroundPan(10, { [key]: 0 } as never)).toThrow(
-          new TypeError(`setStripSurroundPan: unknown request key '${key}'`),
+          new TypeError(`RealtimeEngine.setStripSurroundPan: unknown request key '${key}'`),
         );
       }
       for (const name of [
@@ -810,7 +810,9 @@ describe('RealtimeEngine capture', () => {
         caught(() => configure({ startSample: 0, startSec: 0, endSample: 48 })),
       ).toBeInstanceOf(RangeError);
       expect(() => configure({ startSample: 0 })).toThrow(
-        new TypeError('configureCapture: give punch.endPpq, punch.endSample or punch.endSec'),
+        new TypeError(
+          'RealtimeEngine.configureCapture: give punch.endPpq, punch.endSample or punch.endSec',
+        ),
       );
       expect(caught(() => configure({ startSample: -1, endSample: 2 }))).toBeInstanceOf(RangeError);
       expect(
@@ -862,7 +864,7 @@ describe('RealtimeEngine offline render and bounce', () => {
       bad[0][3] = Number.NaN;
       expect(caught(() => engine.renderOffline({ channels: bad }))).toBeInstanceOf(RangeError);
       expect(() => engine.renderOffline({ channels: block(), validate: false } as never)).toThrow(
-        new TypeError("renderOffline: unknown request key 'validate'"),
+        new TypeError("RealtimeEngine.renderOffline: unknown request key 'validate'"),
       );
     });
   });

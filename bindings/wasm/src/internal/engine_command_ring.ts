@@ -77,11 +77,7 @@ export interface SonareEngineCommandRingBuffer {
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function sonareEngineCommandRingBufferByteLength(options: { capacity: number }): number {
-  const clampedCapacity = resolveRingCapacity(
-    'sonareEngineCommandRingBufferByteLength',
-    options,
-    undefined,
-  );
+  const clampedCapacity = resolveRingCapacity(options, undefined);
   return (
     SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
     clampedCapacity * SONARE_ENGINE_COMMAND_RECORD_BYTES
@@ -92,7 +88,7 @@ export function sonareEngineCommandRingBufferByteLength(options: { capacity: num
 export function createSonareEngineCommandRingBuffer(
   options?: RingCapacityOptions,
 ): SonareEngineCommandRingBuffer {
-  const clampedCapacity = resolveRingCapacity('createSonareEngineCommandRingBuffer', options, 128);
+  const clampedCapacity = resolveRingCapacity(options, 128);
   const sharedBuffer = new SharedArrayBuffer(
     sonareEngineCommandRingBufferByteLength({ capacity: clampedCapacity }),
   );

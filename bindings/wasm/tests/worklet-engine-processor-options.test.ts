@@ -61,7 +61,7 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
     ])('the processor constructor refuses %s by name', (key, value) => {
       const Processor = registered(registerSonareRealtimeEngineWorkletProcessor, 'engine-test');
       expect(() => new Processor({ processorOptions: { ...base, [key]: value } })).toThrow(
-        new TypeError(`engine-test: unknown option '${key}'`),
+        new TypeError(`unknown option '${key}'`),
       );
       expect(
         () =>
@@ -70,7 +70,7 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
             ...base,
             [key]: value,
           } as never),
-      ).toThrow(new TypeError(`SonareRealtimeEngineWorkletProcessor: unknown option '${key}'`));
+      ).toThrow(new TypeError(`unknown option '${key}'`));
     });
 
     it('accepts the renamed maxBlockSize and numChannels', () => {
@@ -114,10 +114,10 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
     it('the processor constructor refuses an undeclared key by name', () => {
       const Processor = registered(registerSonareWorkletProcessor, 'mixer-test');
       expect(() => new Processor({ processorOptions: { ...base(), bufferSize: 4096 } })).toThrow(
-        new TypeError("mixer-test: unknown option 'bufferSize'"),
+        new TypeError("unknown option 'bufferSize'"),
       );
       expect(() => new SonareWorkletProcessor({ ...base(), bufferSize: 4096 } as never)).toThrow(
-        new TypeError("SonareWorkletProcessor: unknown option 'bufferSize'"),
+        new TypeError("unknown option 'bufferSize'"),
       );
     });
 
@@ -128,7 +128,7 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
 
     it('refuses the retired blockSize key by name', () => {
       expect(() => new SonareWorkletProcessor({ ...base(), blockSize: 128 } as never)).toThrow(
-        new TypeError("SonareWorkletProcessor: unknown option 'blockSize'"),
+        new TypeError("unknown option 'blockSize'"),
       );
     });
   });

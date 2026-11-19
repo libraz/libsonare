@@ -3,6 +3,7 @@
  * it.
  */
 
+import { withEntry } from './internal/entry.js';
 import { interleaveMeterChannels, lufsSeriesFromNative } from './internal/metering_native.js';
 import { getSonareModule } from './module_state.js';
 import type { LufsResult, LufsSeriesResult } from './public_types.js';
@@ -46,16 +47,13 @@ export interface Ebur128LoudnessRangeLuRequest {
  */
 export function lufsMultichannel(request: LufsMultichannelRequest): LufsResult;
 export function lufsMultichannel(...args: unknown[]): LufsResult {
-  const r = requestOnly<LufsMultichannelRequest>('lufsMultichannel', args);
-  assertSampleRate('lufsMultichannel', r.sampleRate);
-  // Native reads one interleaved buffer and a channel count.
-  const { data, numChannels } = interleaveMeterChannels(
-    'lufsMultichannel',
-    r.channels,
-    r,
-    r.sampleRate,
-  );
-  return requireModule().lufsInterleaved(data, numChannels, r.sampleRate);
+  return withEntry('lufsMultichannel', () => {
+    const r = requestOnly<LufsMultichannelRequest>('lufsMultichannel', args);
+    assertSampleRate(r.sampleRate);
+    // Native reads one interleaved buffer and a channel count.
+    const { data, numChannels } = interleaveMeterChannels(r.channels, r, r.sampleRate);
+    return requireModule().lufsInterleaved(data, numChannels, r.sampleRate);
+  });
 }
 
 /**
@@ -79,17 +77,14 @@ export function lufsMultichannel(...args: unknown[]): LufsResult {
  */
 export function lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult;
 export function lufsSeriesMultichannel(...args: unknown[]): LufsSeriesResult {
-  const r = requestOnly<LufsSeriesMultichannelRequest>('lufsSeriesMultichannel', args);
-  assertSampleRate('lufsSeriesMultichannel', r.sampleRate);
-  const { data, numChannels } = interleaveMeterChannels(
-    'lufsSeriesMultichannel',
-    r.channels,
-    r,
-    r.sampleRate,
-  );
-  return lufsSeriesFromNative(
-    requireModule().lufsSeriesInterleaved(data, numChannels, r.sampleRate),
-  );
+  return withEntry('lufsSeriesMultichannel', () => {
+    const r = requestOnly<LufsSeriesMultichannelRequest>('lufsSeriesMultichannel', args);
+    assertSampleRate(r.sampleRate);
+    const { data, numChannels } = interleaveMeterChannels(r.channels, r, r.sampleRate);
+    return lufsSeriesFromNative(
+      requireModule().lufsSeriesInterleaved(data, numChannels, r.sampleRate),
+    );
+  });
 }
 
 /**
@@ -103,7 +98,9 @@ export function ebur128LoudnessRangeLu(
   options?: OptionsOf<Ebur128LoudnessRangeLuRequest>,
 ): number;
 export function ebur128LoudnessRangeLu(...args: unknown[]): number {
-  const r = sampleOneShot<Ebur128LoudnessRangeLuRequest>('ebur128LoudnessRangeLu', args);
-  assertAudioInput('ebur128LoudnessRangeLu', r.samples, r.sampleRate, r);
-  return requireModule().ebur128LoudnessRangeLu(r.samples, r.sampleRate);
+  return withEntry('ebur128LoudnessRangeLu', () => {
+    const r = sampleOneShot<Ebur128LoudnessRangeLuRequest>('ebur128LoudnessRangeLu', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return requireModule().ebur128LoudnessRangeLu(r.samples, r.sampleRate);
+  });
 }

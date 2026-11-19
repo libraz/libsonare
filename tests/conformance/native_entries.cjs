@@ -36,6 +36,8 @@ const SURFACES = {
     natives: 'bindings/node/src/addon',
     moduleReceivers: new Set(['addon']),
     portEndpoints: [],
+    // Refusals raised where no consumer entry is on the stack; they stay unprefixed.
+    unentered: { checkAbiVersion: 'module load' },
   },
   wasm: {
     facade: 'bindings/wasm/src',
@@ -47,6 +49,7 @@ const SURFACES = {
     natives: 'src/wasm',
     // A worker endpoint answers a client over a port; the client relabels the reply with its own entry.
     portEndpoints: ['installVocalEditWorkerEndpoint', 'installOfflineWorkerEndpoint'],
+    unentered: {},
     moduleReceivers: new Set(['requireModule()', 'getSonareModule()', 'module', 'mod', 'm', 'wasm', 'raw', 'sonare']),
   },
 };
@@ -292,7 +295,10 @@ function derive(surface) {
   for (const [cls, methods] of classes) for (const m of methods) natives.push(`${cls}.${m}`);
   const publicEntries = new Set();
   for (const [file, mod] of modules) for (const unit of mod.units.values()) if (unitPublic(file, unit)) publicEntries.add(unit.entry);
+  const unitNames = new Set();
+  for (const mod of modules.values()) for (const unit of mod.units.values()) if (unit.name) unitNames.add(unit.name);
   return {
+    unenteredMissing: Object.keys(cfg.unentered).filter((n) => !unitNames.has(n)),
     scanned: files.length,
     sites: siteCount,
     excluded: [...owned].map((f) => path.relative(root, f)).sort(),
@@ -313,6 +319,34 @@ function scanFile(ts, src, { free, classes, methodClasses, cfg, checker, publish
   const isPrivateMember = (node) =>
     (node.name && node.name.kind === ts.SyntaxKind.PrivateIdentifier) ||
     mods(node).some((m) => m.kind === ts.SyntaxKind.PrivateKeyword || m.kind === ts.SyntaxKind.ProtectedKeyword);
+  // A skip member names its own refusals with try/catch -> nameNativeError('<Class>.<member>').
+  const skipNaming = (bodies, entry) => {
+    let named = false;
+    const bare = [];
+    const visit = (n, inside) => {
+      if (ts.isTryStatement(n) && n.catchClause) {
+        const catches = [];
+        const find = (c) => {
+          if (ts.isCallExpression(c) && ts.isIdentifier(c.expression) && c.expression.text === 'nameNativeError' &&
+              c.arguments[1] && ts.isStringLiteralLike(c.arguments[1]) && c.arguments[1].text === entry) catches.push(c);
+          ts.forEachChild(c, find);
+        };
+        find(n.catchClause);
+        if (catches.length) named = true;
+        visit(n.tryBlock, inside || catches.length > 0);
+        if (!catches.length) visit(n.catchClause, inside);
+        if (n.finallyBlock) visit(n.finallyBlock, inside);
+        return;
+      }
+      // A free-function call may refuse (a refuser or a shared check); a native member call is named by the table.
+      if (!inside && ((ts.isCallExpression(n) && ts.isIdentifier(n.expression)) || ts.isThrowStatement(n))) {
+        bare.push(src.getLineAndCharacterOfPosition(n.getStart(src)).line + 1);
+      }
+      ts.forEachChild(n, (c) => visit(c, inside));
+    };
+    for (const b of bodies) visit(b, false);
+    return { named, bare: [...new Set(bare)] };
+  };
   const out = {
     units: new Map(),
     nativeCalls: [],
@@ -375,7 +409,21 @@ function scanFile(ts, src, { free, classes, methodClasses, cfg, checker, publish
       const skip = skipArg && ts.isArrayLiteralExpression(skipArg)
         ? skipArg.elements.filter(ts.isStringLiteralLike).map((el) => el.text)
         : [];
-      out.decorated.set(cls.name.text, { name: nameArg && ts.isStringLiteralLike(nameArg) ? nameArg.text : null, skip });
+      if (!out.decorated.has(cls.name.text)) {
+        const name = nameArg && ts.isStringLiteralLike(nameArg) ? nameArg.text : null;
+        const members = cls.members.filter((m) =>
+          (ts.isMethodDeclaration(m) || ts.isGetAccessor(m) || ts.isSetAccessor(m)) && m.name && ts.isIdentifier(m.name));
+        // TS `private` is public at runtime, so the decorator would wrap it and its name would stick.
+        const unskippedPrivate = [...new Set(members.filter((m) => isPrivateMember(m) && !skip.includes(m.name.text))
+          .map((m) => m.name.text))];
+        // A private skip member is a helper its calling member names; a public one is a per-block entry.
+        const skipped = skip.map((member) => {
+          const own = members.filter((m) => m.name.text === member && m.body);
+          const helper = own.length > 0 && own.every(isPrivateMember);
+          return { member, helper, ...(helper ? { named: false, bare: [] } : skipNaming(own.map((m) => m.body), `${name}.${member}`)) };
+        });
+        out.decorated.set(cls.name.text, { name, skip, unskippedPrivate, skipped });
+      }
       return { skip };
     }
     return null;
@@ -647,9 +695,21 @@ if (flags.includes('--write')) {
         `decorated=${d.decorated.length} mislabeled=${d.mislabeled.length}\n`,
     );
     for (const e of SURFACES[surface].portEndpoints) process.stdout.write(`  port endpoint ${e}\n`);
+    for (const [n, why] of Object.entries(SURFACES[surface].unentered)) process.stdout.write(`  unentered ${n} (${why})\n`);
+    for (const n of d.unenteredMissing) fail(`unentered ${n} names no function; drop it`);
     for (const c of d.decorated) {
       if (c.name !== c.cls) fail(`${c.file}: @entryClass('${c.name}') on class ${c.cls}`);
-      if (c.skip.length) process.stdout.write(`  skip ${c.cls}: ${c.skip.join(', ')}\n`);
+      if (c.skip.length) {
+        const entries = c.skipped.filter((k) => !k.helper);
+        const helpers = c.skipped.filter((k) => k.helper);
+        const label = (k) => `${k.member}${k.named ? ' (names its refusals)' : ''}`;
+        if (entries.length) process.stdout.write(`  skip ${c.cls}: ${entries.map(label).join(', ')}\n`);
+        if (helpers.length) process.stdout.write(`  private ${c.cls}: ${helpers.map((k) => k.member).join(', ')}\n`);
+      }
+      for (const k of c.skipped) {
+        if (k.bare.length) fail(`${c.file}:${k.bare.join(',')}: skip member ${c.cls}.${k.member} refuses outside try/catch -> nameNativeError('${c.name}.${k.member}')`);
+      }
+      if (c.unskippedPrivate.length) fail(`${c.file}: private members of ${c.cls} not on its skip list: ${c.unskippedPrivate.join(', ')}`);
     }
     for (const m of d.mislabeled) fail(`${m}; decorate the outer entry or name it with withEntry`);
     for (const f of d.excluded) process.stdout.write(`  excluded ${f}\n`);

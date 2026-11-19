@@ -8,6 +8,7 @@ import {
   resolveEntryTimes,
   toVoicedInt32,
 } from './internal/effects_common.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
 import { addon } from './native.js';
 import type {
@@ -212,34 +213,31 @@ export interface AssignNoteTargetsRequest {
  * caller could have named, which leaves nothing downstream able to tell the
  * two apart.
  */
-function assertNoteSetEntries(fnName: string, notes: readonly NoteSetEntry[]): void {
+function assertNoteSetEntries(notes: readonly NoteSetEntry[]): void {
   for (let index = 0; index < notes.length; index += 1) {
     const note = notes[index];
     if (!Number.isFinite(note?.frameStart) || !Number.isFinite(note?.frameEnd)) {
-      throw new TypeError(`${fnName}: notes[${index}] must carry a finite frameStart and frameEnd`);
+      throw refuseType(`notes[${index}] must carry a finite frameStart and frameEnd`);
     }
-    assertIntegerValue(fnName, note.frameStart, `notes[${index}].frameStart`);
-    assertIntegerValue(fnName, note.frameEnd, `notes[${index}].frameEnd`);
+    assertIntegerValue(note.frameStart, `notes[${index}].frameStart`);
+    assertIntegerValue(note.frameEnd, `notes[${index}].frameEnd`);
   }
 }
 
 /** Shared entry check for the three entry points that re-measure a whole track. */
-function assertNoteTrackRequest(
-  fnName: string,
-  request: ExtractNotesRequest,
-): Int32Array | undefined {
-  assertAudioInput(fnName, request.samples, request.sampleRate, request);
+function assertNoteTrackRequest(request: ExtractNotesRequest): Int32Array | undefined {
+  assertAudioInput(request.samples, request.sampleRate, request);
   if (!(request.f0Hz instanceof Float32Array)) {
-    throw new TypeError(`${fnName}: f0Hz must be a Float32Array`);
+    throw refuseType(`f0Hz must be a Float32Array`);
   }
-  assertFiniteScalar(fnName, request.frameRate, 'frameRate');
+  assertFiniteScalar(request.frameRate, 'frameRate');
   if (request.voiced == null && request.voicedProb == null) {
-    throw new TypeError(`${fnName}: give voiced or voicedProb`);
+    throw refuseType(`give voiced or voicedProb`);
   }
   // Normalize first so an unsupported container cannot be mistaken for a
   // length error merely because it happens to expose a matching `length`.
-  const nativeVoiced = request.voiced != null ? toVoicedInt32(fnName, request.voiced) : undefined;
-  assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
+  const nativeVoiced = request.voiced != null ? toVoicedInt32(request.voiced) : undefined;
+  assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
   return nativeVoiced;
 }
 
@@ -260,31 +258,26 @@ export function noteStretch(
   options: NoteStretchOptions,
 ): Float32Array;
 export function noteStretch(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<NoteStretchRequest>('noteStretch', args);
-  const rate = request.sampleRate;
-  assertAudioInput('noteStretch', request.samples, rate, request);
-  assertFloatValue('noteStretch', request.stretchRatio, 'stretchRatio');
-  return addon.noteStretch(
-    request.samples,
-    rate,
-    resolveSampleBound(
-      'noteStretch',
-      request.onsetSample,
-      request.onsetSec,
+  return withEntry('noteStretch', () => {
+    const request = sampleOneShot<NoteStretchRequest>('noteStretch', args);
+    const rate = request.sampleRate;
+    assertAudioInput(request.samples, rate, request);
+    assertFloatValue(request.stretchRatio, 'stretchRatio');
+    return addon.noteStretch(
+      request.samples,
       rate,
-      'onsetSample',
-      'onsetSec',
-    ) ?? 0,
-    resolveSampleBound(
-      'noteStretch',
-      request.offsetSample,
-      request.offsetSec,
-      rate,
-      'offsetSample',
-      'offsetSec',
-    ) ?? request.samples.length,
-    request.stretchRatio,
-  );
+      resolveSampleBound(request.onsetSample, request.onsetSec, rate, 'onsetSample', 'onsetSec') ??
+        0,
+      resolveSampleBound(
+        request.offsetSample,
+        request.offsetSec,
+        rate,
+        'offsetSample',
+        'offsetSec',
+      ) ?? request.samples.length,
+      request.stretchRatio,
+    );
+  });
 }
 
 /**
@@ -304,38 +297,32 @@ export function noteMove(
   options: NoteMoveOptions,
 ): Float32Array;
 export function noteMove(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<NoteMoveRequest>('noteMove', args);
-  const rate = request.sampleRate;
-  assertAudioInput('noteMove', request.samples, rate, request);
-  const target = requireSampleBound(
-    'noteMove',
-    request.targetOnsetSample,
-    request.targetOnsetSec,
-    rate,
-    'targetOnsetSample',
-    'targetOnsetSec',
-  );
-  return addon.noteMove(
-    request.samples,
-    rate,
-    resolveSampleBound(
-      'noteMove',
-      request.onsetSample,
-      request.onsetSec,
+  return withEntry('noteMove', () => {
+    const request = sampleOneShot<NoteMoveRequest>('noteMove', args);
+    const rate = request.sampleRate;
+    assertAudioInput(request.samples, rate, request);
+    const target = requireSampleBound(
+      request.targetOnsetSample,
+      request.targetOnsetSec,
       rate,
-      'onsetSample',
-      'onsetSec',
-    ) ?? 0,
-    resolveSampleBound(
-      'noteMove',
-      request.offsetSample,
-      request.offsetSec,
+      'targetOnsetSample',
+      'targetOnsetSec',
+    );
+    return addon.noteMove(
+      request.samples,
       rate,
-      'offsetSample',
-      'offsetSec',
-    ) ?? request.samples.length,
-    target,
-  );
+      resolveSampleBound(request.onsetSample, request.onsetSec, rate, 'onsetSample', 'onsetSec') ??
+        0,
+      resolveSampleBound(
+        request.offsetSample,
+        request.offsetSec,
+        rate,
+        'offsetSample',
+        'offsetSec',
+      ) ?? request.samples.length,
+      target,
+    );
+  });
 }
 
 /**
@@ -394,15 +381,17 @@ export function extractNotes(
   options: OptionsOf<ExtractNotesRequest>,
 ): NoteObject[];
 export function extractNotes(...args: unknown[]): NoteObject[] {
-  const request = sampleOneShot<ExtractNotesRequest>('extractNotes', args);
-  const { samples, sampleRate, f0Hz, frameRate, voicedProb, ...options } = request;
-  const nativeVoiced = assertNoteTrackRequest('extractNotes', request);
-  const extracted: NoteObject[] = addon.extractNotes(samples, sampleRate, f0Hz, frameRate, {
-    ...options,
-    voiced: nativeVoiced,
-    voicedProb: voicedProb ?? undefined,
+  return withEntry('extractNotes', () => {
+    const request = sampleOneShot<ExtractNotesRequest>('extractNotes', args);
+    const { samples, sampleRate, f0Hz, frameRate, voicedProb, ...options } = request;
+    const nativeVoiced = assertNoteTrackRequest(request);
+    const extracted: NoteObject[] = addon.extractNotes(samples, sampleRate, f0Hz, frameRate, {
+      ...options,
+      voiced: nativeVoiced,
+      voicedProb: voicedProb ?? undefined,
+    });
+    return extracted;
   });
-  return extracted;
 }
 
 /**
@@ -463,31 +452,34 @@ export function renderNotes(
   options: OptionsOf<RenderNotesRequest>,
 ): Float32Array;
 export function renderNotes(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<RenderNotesRequest>('renderNotes', args);
-  const { samples, sampleRate, notes, voiced, ...options } = request;
-  assertAudioInput('renderNotes', samples, sampleRate);
-  if (!Array.isArray(notes)) {
-    throw new TypeError('renderNotes: notes must be an array');
-  }
-  // The addon reads the track as a Float32Array and ignores any other type, so
-  // a plain array would silently render as though no track had been given.
-  if (options.f0Hz !== undefined && !(options.f0Hz instanceof Float32Array)) {
-    throw new TypeError('renderNotes: f0Hz must be a Float32Array');
-  }
-  // Only a track edit reads the frame rate, so it is required exactly when f0Hz is.
-  if (options.f0Hz !== undefined) {
-    assertFiniteScalar('renderNotes', options.frameRate as number, 'frameRate');
-  }
-  const nativeVoiced = voiced != null ? toVoicedInt32('renderNotes', voiced) : undefined;
-  if (nativeVoiced !== undefined) {
-    if (options.f0Hz === undefined) {
-      throw new RangeError('renderNotes: voiced requires f0Hz');
+  return withEntry('renderNotes', () => {
+    const request = sampleOneShot<RenderNotesRequest>('renderNotes', args);
+    const { samples, sampleRate, notes, voiced, ...options } = request;
+    assertAudioInput(samples, sampleRate);
+    if (!Array.isArray(notes)) {
+      throw refuseType('notes must be an array');
     }
-    assertPitchTrackLengths('renderNotes', options.f0Hz, voiced);
-  }
-  const nativeNotes = resolveEntryTimes('renderNotes', notes, 'notes', sampleRate, true);
-  const nativeOptions = nativeVoiced === undefined ? options : { ...options, voiced: nativeVoiced };
-  return addon.renderNotes(samples, sampleRate, nativeNotes, nativeOptions);
+    // The addon reads the track as a Float32Array and ignores any other type, so
+    // a plain array would silently render as though no track had been given.
+    if (options.f0Hz !== undefined && !(options.f0Hz instanceof Float32Array)) {
+      throw refuseType('f0Hz must be a Float32Array');
+    }
+    // Only a track edit reads the frame rate, so it is required exactly when f0Hz is.
+    if (options.f0Hz !== undefined) {
+      assertFiniteScalar(options.frameRate as number, 'frameRate');
+    }
+    const nativeVoiced = voiced != null ? toVoicedInt32(voiced) : undefined;
+    if (nativeVoiced !== undefined) {
+      if (options.f0Hz === undefined) {
+        throw refuse('voiced requires f0Hz');
+      }
+      assertPitchTrackLengths(options.f0Hz, voiced);
+    }
+    const nativeNotes = resolveEntryTimes(notes, 'notes', sampleRate, true);
+    const nativeOptions =
+      nativeVoiced === undefined ? options : { ...options, voiced: nativeVoiced };
+    return addon.renderNotes(samples, sampleRate, nativeNotes, nativeOptions);
+  });
 }
 
 /**
@@ -529,18 +521,20 @@ export function renderNotes(...args: unknown[]): Float32Array {
  * ```
  */
 export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDecompositionResult {
-  requestObject('decomposeNotePitch', request, 'request', true);
-  const { f0Hz, frameRate, medianHz, vibratoCutoffHz = 0, voiced } = request;
-  if (!(f0Hz instanceof Float32Array)) {
-    throw new TypeError('decomposeNotePitch: f0Hz must be a Float32Array');
-  }
-  assertFiniteScalar('decomposeNotePitch', frameRate, 'frameRate');
-  let nativeVoiced: Int32Array | undefined;
-  if (voiced != null) {
-    nativeVoiced = toVoicedInt32('decomposeNotePitch', voiced);
-    assertPitchTrackLengths('decomposeNotePitch', f0Hz, voiced);
-  }
-  return addon.decomposeNotePitch(f0Hz, frameRate, medianHz, vibratoCutoffHz, nativeVoiced);
+  return withEntry('decomposeNotePitch', () => {
+    requestObject('decomposeNotePitch', request, 'request', true);
+    const { f0Hz, frameRate, medianHz, vibratoCutoffHz = 0, voiced } = request;
+    if (!(f0Hz instanceof Float32Array)) {
+      throw refuseType('f0Hz must be a Float32Array');
+    }
+    assertFiniteScalar(frameRate, 'frameRate');
+    let nativeVoiced: Int32Array | undefined;
+    if (voiced != null) {
+      nativeVoiced = toVoicedInt32(voiced);
+      assertPitchTrackLengths(f0Hz, voiced);
+    }
+    return addon.decomposeNotePitch(f0Hz, frameRate, medianHz, vibratoCutoffHz, nativeVoiced);
+  });
 }
 
 /**
@@ -598,51 +592,49 @@ export function splitNote(
   options: OptionsOf<SplitNoteRequest>,
 ): NoteObject[];
 export function splitNote(...args: unknown[]): NoteObject[] {
-  const request = sampleOneShot<SplitNoteRequest>('splitNote', args);
-  const {
-    samples,
-    sampleRate,
-    f0Hz,
-    frameRate,
-    voiced,
-    voicedProb,
-    notes,
-    index,
-    frame: requestFrame,
-    frameSec,
-    ...options
-  } = request;
-  const nativeVoiced = assertNoteTrackRequest('splitNote', request);
-  const hasFrame = requestFrame !== undefined && requestFrame !== null;
-  const hasFrameSec = frameSec !== undefined && frameSec !== null;
-  requireOneOf('splitNote', ['frame', 'frameSec'], [hasFrame, hasFrameSec]);
-  assertFloatValue(
-    'splitNote',
-    hasFrame ? requestFrame : frameSec,
-    hasFrame ? 'frame' : 'frameSec',
-  );
-  const frame = hasFrame ? requestFrame : Math.round((frameSec as number) * frameRate);
-  if (!Array.isArray(notes)) {
-    throw new TypeError('splitNote: notes must be an array');
-  }
-  assertFloatValue('splitNote', index, 'index');
-  assertNoteSetEntries('splitNote', notes);
-  const nativeNotes = resolveEntryTimes('splitNote', notes, 'notes', sampleRate, false);
-  const split: NoteObject[] = addon.splitNote(
-    samples,
-    sampleRate,
-    f0Hz,
-    frameRate,
-    nativeNotes,
-    index,
-    frame,
-    {
-      ...options,
-      voiced: nativeVoiced,
-      voicedProb: voicedProb ?? undefined,
-    },
-  );
-  return split;
+  return withEntry('splitNote', () => {
+    const request = sampleOneShot<SplitNoteRequest>('splitNote', args);
+    const {
+      samples,
+      sampleRate,
+      f0Hz,
+      frameRate,
+      voiced,
+      voicedProb,
+      notes,
+      index,
+      frame: requestFrame,
+      frameSec,
+      ...options
+    } = request;
+    const nativeVoiced = assertNoteTrackRequest(request);
+    const hasFrame = requestFrame !== undefined && requestFrame !== null;
+    const hasFrameSec = frameSec !== undefined && frameSec !== null;
+    requireOneOf(['frame', 'frameSec'], [hasFrame, hasFrameSec]);
+    assertFloatValue(hasFrame ? requestFrame : frameSec, hasFrame ? 'frame' : 'frameSec');
+    const frame = hasFrame ? requestFrame : Math.round((frameSec as number) * frameRate);
+    if (!Array.isArray(notes)) {
+      throw refuseType('notes must be an array');
+    }
+    assertFloatValue(index, 'index');
+    assertNoteSetEntries(notes);
+    const nativeNotes = resolveEntryTimes(notes, 'notes', sampleRate, false);
+    const split: NoteObject[] = addon.splitNote(
+      samples,
+      sampleRate,
+      f0Hz,
+      frameRate,
+      nativeNotes,
+      index,
+      frame,
+      {
+        ...options,
+        voiced: nativeVoiced,
+        voicedProb: voicedProb ?? undefined,
+      },
+    );
+    return split;
+  });
 }
 
 /**
@@ -693,42 +685,44 @@ export function mergeNotes(
   options: OptionsOf<MergeNotesRequest>,
 ): NoteObject[];
 export function mergeNotes(...args: unknown[]): NoteObject[] {
-  const request = sampleOneShot<MergeNotesRequest>('mergeNotes', args);
-  const {
-    samples,
-    sampleRate,
-    f0Hz,
-    frameRate,
-    voiced,
-    voicedProb,
-    notes,
-    first,
-    last,
-    ...options
-  } = request;
-  const nativeVoiced = assertNoteTrackRequest('mergeNotes', request);
-  if (!Array.isArray(notes)) {
-    throw new TypeError('mergeNotes: notes must be an array');
-  }
-  assertFloatValue('mergeNotes', first, 'first');
-  assertFloatValue('mergeNotes', last, 'last');
-  assertNoteSetEntries('mergeNotes', notes);
-  const nativeNotes = resolveEntryTimes('mergeNotes', notes, 'notes', sampleRate, false);
-  const merged: NoteObject[] = addon.mergeNotes(
-    samples,
-    sampleRate,
-    f0Hz,
-    frameRate,
-    nativeNotes,
-    first,
-    last,
-    {
-      ...options,
-      voiced: nativeVoiced,
-      voicedProb: voicedProb ?? undefined,
-    },
-  );
-  return merged;
+  return withEntry('mergeNotes', () => {
+    const request = sampleOneShot<MergeNotesRequest>('mergeNotes', args);
+    const {
+      samples,
+      sampleRate,
+      f0Hz,
+      frameRate,
+      voiced,
+      voicedProb,
+      notes,
+      first,
+      last,
+      ...options
+    } = request;
+    const nativeVoiced = assertNoteTrackRequest(request);
+    if (!Array.isArray(notes)) {
+      throw refuseType('notes must be an array');
+    }
+    assertFloatValue(first, 'first');
+    assertFloatValue(last, 'last');
+    assertNoteSetEntries(notes);
+    const nativeNotes = resolveEntryTimes(notes, 'notes', sampleRate, false);
+    const merged: NoteObject[] = addon.mergeNotes(
+      samples,
+      sampleRate,
+      f0Hz,
+      frameRate,
+      nativeNotes,
+      first,
+      last,
+      {
+        ...options,
+        voiced: nativeVoiced,
+        voicedProb: voicedProb ?? undefined,
+      },
+    );
+    return merged;
+  });
 }
 
 /**
@@ -762,8 +756,10 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
  * ```
  */
 export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarget[] {
-  requestObject('noteTargetsFromSmf', request, 'request', true);
-  return addon.noteTargetsFromSmf(request.data, request.trackIndex ?? 0);
+  return withEntry('noteTargetsFromSmf', () => {
+    requestObject('noteTargetsFromSmf', request, 'request', true);
+    return addon.noteTargetsFromSmf(request.data, request.trackIndex ?? 0);
+  });
 }
 
 /**
@@ -813,34 +809,36 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  * ```
  */
 export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNoteTargetsResult {
-  requestObject('assignNoteTargets', request, 'request', true);
-  const { notes, sampleRate, targets, ...options } = request;
-  assertSampleRate('assignNoteTargets', sampleRate);
-  if (!Array.isArray(notes)) {
-    throw new TypeError('assignNoteTargets: notes must be an array');
-  }
-  if (!Array.isArray(targets)) {
-    throw new TypeError('assignNoteTargets: targets must be an array');
-  }
-  const assigned = addon.assignNoteTargets(notes, sampleRate, targets, options) as {
-    edits: ReadonlyArray<{ pitchSemitones: number; muted: boolean }>;
-    assignedCount: number;
-  };
-  return {
-    // The addon answers only the two fields the assignment writes, so the rest of
-    // each note travels through here rather than through the C ABI.
-    notes: notes.map((note, index) => ({
-      ...note,
-      ...(note.amplitude ? { amplitude: note.amplitude.slice() } : {}),
-      edit: {
-        ...note.edit,
-        pitchSemitones: assigned.edits[index].pitchSemitones,
-        muted: assigned.edits[index].muted,
-        ...(note.edit?.amplitudeEnvelope
-          ? { amplitudeEnvelope: note.edit.amplitudeEnvelope.slice() }
-          : {}),
-      },
-    })),
-    assignedCount: assigned.assignedCount,
-  };
+  return withEntry('assignNoteTargets', () => {
+    requestObject('assignNoteTargets', request, 'request', true);
+    const { notes, sampleRate, targets, ...options } = request;
+    assertSampleRate(sampleRate);
+    if (!Array.isArray(notes)) {
+      throw refuseType('notes must be an array');
+    }
+    if (!Array.isArray(targets)) {
+      throw refuseType('targets must be an array');
+    }
+    const assigned = addon.assignNoteTargets(notes, sampleRate, targets, options) as {
+      edits: ReadonlyArray<{ pitchSemitones: number; muted: boolean }>;
+      assignedCount: number;
+    };
+    return {
+      // The addon answers only the two fields the assignment writes, so the rest of
+      // each note travels through here rather than through the C ABI.
+      notes: notes.map((note, index) => ({
+        ...note,
+        ...(note.amplitude ? { amplitude: note.amplitude.slice() } : {}),
+        edit: {
+          ...note.edit,
+          pitchSemitones: assigned.edits[index].pitchSemitones,
+          muted: assigned.edits[index].muted,
+          ...(note.edit?.amplitudeEnvelope
+            ? { amplitudeEnvelope: note.edit.amplitudeEnvelope.slice() }
+            : {}),
+        },
+      })),
+      assignedCount: assigned.assignedCount,
+    };
+  });
 }

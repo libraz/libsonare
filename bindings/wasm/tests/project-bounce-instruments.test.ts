@@ -103,7 +103,7 @@ describe('bounceWithInstruments', () => {
       project.bounceWithInstruments({ instrument: new ConstantInstrument(0.1) } as never, OPTIONS),
     ).toThrow(
       new TypeError(
-        'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+        'Project.bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
       ),
     );
     expect(
@@ -316,7 +316,9 @@ describe('bounceWithInstruments', () => {
     it('names a missing or mistyped callback before any render starts', () => {
       using project = midiProject();
       expect(() => project.bounceWithInstruments([{ instrument: {} as never }], OPTIONS)).toThrow(
-        new TypeError('bounceWithInstruments: instruments[0].instrument.render must be a function'),
+        new TypeError(
+          'Project.bounceWithInstruments: instruments[0].instrument.render must be a function',
+        ),
       );
       expect(() =>
         project.bounceWithInstruments(
@@ -325,7 +327,7 @@ describe('bounceWithInstruments', () => {
         ),
       ).toThrow(
         new TypeError(
-          'bounceWithInstruments: instruments[0].instrument.prepare must be a function',
+          'Project.bounceWithInstruments: instruments[0].instrument.prepare must be a function',
         ),
       );
       expect(() =>
@@ -335,7 +337,7 @@ describe('bounceWithInstruments', () => {
         ),
       ).toThrow(
         new TypeError(
-          'bounceWithInstruments: instruments[0].instrument.onEvent must be a function',
+          'Project.bounceWithInstruments: instruments[0].instrument.onEvent must be a function',
         ),
       );
     });
@@ -344,21 +346,21 @@ describe('bounceWithInstruments', () => {
       using project = midiProject();
       expect(() => project.bounceWithInstruments(7 as never, OPTIONS)).toThrow(
         new TypeError(
-          'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+          'Project.bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
         ),
       );
       expect(() =>
         project.bounceWithInstruments({ instrument: { render() {} } } as never, OPTIONS),
       ).toThrow(
         new TypeError(
-          'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+          'Project.bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
         ),
       );
       expect(() =>
         project.bounceWithInstruments([[{ instrument: { render() {} } }]] as never, OPTIONS),
       ).toThrow(
         new TypeError(
-          'bounceWithInstruments: instruments[0] must be a { destinationId?, instrument } pair',
+          'Project.bounceWithInstruments: instruments[0] must be a { destinationId?, instrument } pair',
         ),
       );
       // A bare instrument must be wrapped as a pair.

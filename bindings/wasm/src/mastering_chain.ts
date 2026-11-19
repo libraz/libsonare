@@ -1,4 +1,5 @@
 import { chainConfigFromJson, chainConfigJson } from './internal/chain_config.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MasteringChainConfig,
@@ -26,18 +27,15 @@ function requireModule() {
 /** Level statistic `normalize` targets: `'peak'` or `'rms'`. */
 export type NormalizeMode = 'peak' | 'rms';
 
-// `context` is the calling entry point's name: the refusal is about that
-// caller's argument, so naming a fixed one would send a normalizeStereo user
-// looking at normalize.
-function resolveNormalizeMode(value: unknown, context = 'normalize'): NormalizeMode {
+function resolveNormalizeMode(value: unknown): NormalizeMode {
   if (value === undefined) {
     return 'peak';
   }
   if (typeof value !== 'string') {
-    throw new TypeError(`${context}: mode must be the string 'peak' or 'rms'`);
+    throw refuseType(`mode must be 'peak' or 'rms'`);
   }
   if (value !== 'peak' && value !== 'rms') {
-    throw new RangeError(`${context}: mode must be the string 'peak' or 'rms'`);
+    throw refuse(`mode must be 'peak' or 'rms'`);
   }
   return value;
 }
@@ -72,15 +70,17 @@ export function normalize(
   options?: OptionsOf<NormalizeRequest>,
 ): Float32Array;
 export function normalize(...args: unknown[]): Float32Array {
-  const r = sampleOneShot<NormalizeRequest>('normalize', args);
-  assertAudioInput('normalize', r.samples, r.sampleRate, r);
-  const mode = resolveNormalizeMode(r.mode);
-  return requireModule().normalizeEx(
-    r.samples,
-    r.sampleRate,
-    r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
-    mode,
-  );
+  return withEntry('normalize', () => {
+    const r = sampleOneShot<NormalizeRequest>('normalize', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    const mode = resolveNormalizeMode(r.mode);
+    return requireModule().normalizeEx(
+      r.samples,
+      r.sampleRate,
+      r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
+      mode,
+    );
+  });
 }
 
 /** Request for {@link normalizeStereo}. */
@@ -147,33 +147,35 @@ export interface NormalizeStereoResult {
  * ```
  */
 export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
-  requestObject('normalizeStereo', request, 'request', true);
-  assertAudioInput('normalizeStereo', request.left, request.sampleRate, request, 'left');
-  assertAudioInput('normalizeStereo', request.right, request.sampleRate, request, 'right');
-  if (request.left.length !== request.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  const mode = resolveNormalizeMode(request.mode, 'normalizeStereo');
-  // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
-  // default -- the peaks sit well above the RMS, so every one of them clips.
-  const targetDb = request.targetDb ?? (mode === 'rms' ? -20.0 : 0.0);
-  return requireModule().normalizeStereo(
-    request.left,
-    request.right,
-    request.sampleRate,
-    targetDb,
-    mode,
-  );
+  return withEntry('normalizeStereo', () => {
+    requestObject('normalizeStereo', request, 'request', true);
+    assertAudioInput(request.left, request.sampleRate, request, 'left');
+    assertAudioInput(request.right, request.sampleRate, request, 'right');
+    if (request.left.length !== request.right.length) {
+      throw refuse('Stereo channel lengths must match.');
+    }
+    const mode = resolveNormalizeMode(request.mode);
+    // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
+    // default -- the peaks sit well above the RMS, so every one of them clips.
+    const targetDb = request.targetDb ?? (mode === 'rms' ? -20.0 : 0.0);
+    return requireModule().normalizeStereo(
+      request.left,
+      request.right,
+      request.sampleRate,
+      targetDb,
+      mode,
+    );
+  });
 }
 
 type NativeResult = Record<string, unknown>;
 
 /** Throws `TypeError` unless `onProgress` and `cancel` are each absent or a function. */
-function assertChainCallbacks(fnName: string, request: object): void {
+function assertChainCallbacks(request: object): void {
   for (const name of ['onProgress', 'cancel'] as const) {
     const callback = (request as Record<string, unknown>)[name];
     if (callback !== undefined && callback !== null && typeof callback !== 'function') {
-      throw new TypeError(`${fnName}: ${name} must be a function`);
+      throw refuseType(`${name} must be a function`);
     }
   }
 }
@@ -237,35 +239,39 @@ export function streamingLoudnessGain(
   options?: OptionsOf<StreamingLoudnessGainRequest>,
 ): StreamingLoudnessGainResult;
 export function streamingLoudnessGain(...args: unknown[]): StreamingLoudnessGainResult {
-  const r = sampleOneShot<StreamingLoudnessGainRequest>('streamingLoudnessGain', args);
-  assertAudioInput('streamingLoudnessGain', r.samples, r.sampleRate, r);
-  return streamingGainFromNative(
-    requireModule().masteringStreamingLoudnessGain(
-      r.samples,
-      r.sampleRate,
-      chainConfigJson('streamingLoudnessGain', 'config', r.config),
-    ),
-  );
+  return withEntry('streamingLoudnessGain', () => {
+    const r = sampleOneShot<StreamingLoudnessGainRequest>('streamingLoudnessGain', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return streamingGainFromNative(
+      requireModule().masteringStreamingLoudnessGain(
+        r.samples,
+        r.sampleRate,
+        chainConfigJson('config', r.config),
+      ),
+    );
+  });
 }
 
 /** Stereo counterpart of {@link streamingLoudnessGain}, with BS.1770 channel summing. */
 export function streamingLoudnessGainStereo(
   request: StreamingLoudnessGainStereoRequest,
 ): StreamingLoudnessGainResult {
-  const r = requestObject('streamingLoudnessGainStereo', request, 'request', true);
-  assertAudioInput('streamingLoudnessGainStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('streamingLoudnessGainStereo', r.right, r.sampleRate, r, 'right');
-  if (r.left.length !== r.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  return streamingGainFromNative(
-    requireModule().masteringStreamingLoudnessGainStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      chainConfigJson('streamingLoudnessGainStereo', 'config', r.config),
-    ),
-  );
+  return withEntry('streamingLoudnessGainStereo', () => {
+    const r = requestObject('streamingLoudnessGainStereo', request, 'request', true);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    if (r.left.length !== r.right.length) {
+      throw refuse('Stereo channel lengths must match.');
+    }
+    return streamingGainFromNative(
+      requireModule().masteringStreamingLoudnessGainStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        chainConfigJson('config', r.config),
+      ),
+    );
+  });
 }
 
 /** Request form of {@link masterAudio}. */
@@ -320,7 +326,9 @@ export interface MasterAudioStereoRequest {
  * @returns Preset names in display order (e.g. "pop", "edm", "aiMusic")
  */
 export function masteringPresetNames(): MasteringPreset[] {
-  return Array.from(requireModule().masteringPresetNames()) as MasteringPreset[];
+  return withEntry('masteringPresetNames', () => {
+    return Array.from(requireModule().masteringPresetNames()) as MasteringPreset[];
+  });
 }
 
 /**
@@ -332,8 +340,10 @@ export function masteringPresetNames(): MasteringPreset[] {
  * @throws {RangeError} for an unknown `preset`
  */
 export function masteringPresetParams(preset: MasteringPreset): MasteringChainConfig {
-  assertString('masteringPresetParams', preset, 'preset');
-  return chainConfigFromJson(requireModule().masteringPresetParams(preset));
+  return withEntry('masteringPresetParams', () => {
+    assertString(preset, 'preset');
+    return chainConfigFromJson(requireModule().masteringPresetParams(preset));
+  });
 }
 
 /**
@@ -365,8 +375,10 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
  * ```
  */
 export function masteringChainConfigFromJson(document: string): MasteringChainConfig {
-  assertString('masteringChainConfigFromJson', document, 'document');
-  return chainConfigFromJson(requireModule().masteringChainConfigParams(document));
+  return withEntry('masteringChainConfigFromJson', () => {
+    assertString(document, 'document');
+    return chainConfigFromJson(requireModule().masteringChainConfigParams(document));
+  });
 }
 
 /**
@@ -378,7 +390,9 @@ export function masteringChainConfigFromJson(document: string): MasteringChainCo
  * @returns Target names in index order (e.g. "streaming", "broadcast", "club")
  */
 export function masteringPlatformNames(): MasteringPlatform[] {
-  return Array.from(requireModule().masteringPlatformNames()) as MasteringPlatform[];
+  return withEntry('masteringPlatformNames', () => {
+    return Array.from(requireModule().masteringPlatformNames()) as MasteringPlatform[];
+  });
 }
 
 /**
@@ -401,35 +415,37 @@ export function masterAudio(
   options?: OptionsOf<MasterAudioRequest>,
 ): MasteringChainResult;
 export function masterAudio(...args: unknown[]): MasteringChainResult {
-  const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
-  assertChainCallbacks('masterAudio', r);
-  if (r.preset !== undefined && r.preset !== null) {
-    assertString('masterAudio', r.preset, 'preset');
-  }
-  assertAudioInput('masterAudio', r.samples, r.sampleRate, r);
-  if (
-    (r.preset === undefined || r.preset === null) &&
-    (r.overrides === undefined || r.overrides === null)
-  ) {
-    throw new TypeError('masterAudio: give preset or overrides');
-  }
-  const overrides = chainConfigJson('masterAudio', 'overrides', r.overrides);
-  const preset = r.preset ?? null;
-  const progress = r.onProgress ?? undefined;
-  const cancel = r.cancel ?? undefined;
-  const module = requireModule();
-  return (
-    progress || cancel
-      ? module.masterAudioWithProgress(
-          preset,
-          r.samples,
-          r.sampleRate,
-          overrides,
-          progress ?? (() => {}),
-          cancel ?? (() => false),
-        )
-      : module.masterAudio(preset, r.samples, r.sampleRate, overrides)
-  ) as MasteringChainResult;
+  return withEntry('masterAudio', () => {
+    const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
+    assertChainCallbacks(r);
+    if (r.preset !== undefined && r.preset !== null) {
+      assertString(r.preset, 'preset');
+    }
+    assertAudioInput(r.samples, r.sampleRate, r);
+    if (
+      (r.preset === undefined || r.preset === null) &&
+      (r.overrides === undefined || r.overrides === null)
+    ) {
+      throw refuseType('give preset or overrides');
+    }
+    const overrides = chainConfigJson('overrides', r.overrides);
+    const preset = r.preset ?? null;
+    const progress = r.onProgress ?? undefined;
+    const cancel = r.cancel ?? undefined;
+    const module = requireModule();
+    return (
+      progress || cancel
+        ? module.masterAudioWithProgress(
+            preset,
+            r.samples,
+            r.sampleRate,
+            overrides,
+            progress ?? (() => {}),
+            cancel ?? (() => false),
+          )
+        : module.masterAudio(preset, r.samples, r.sampleRate, overrides)
+    ) as MasteringChainResult;
+  });
 }
 
 /**
@@ -442,39 +458,41 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
  *   or an invalid override
  */
 export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult {
-  const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
-  assertChainCallbacks('masterAudioStereo', r);
-  if (r.preset !== undefined && r.preset !== null) {
-    assertString('masterAudioStereo', r.preset, 'preset');
-  }
-  assertSampleRate('masterAudioStereo', r.sampleRate);
-  assertAudioInput('masterAudioStereo', r.left, r.sampleRate, r, 'left');
-  assertAudioInput('masterAudioStereo', r.right, r.sampleRate, r, 'right');
-  if (r.left.length !== r.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  if (
-    (r.preset === undefined || r.preset === null) &&
-    (r.overrides === undefined || r.overrides === null)
-  ) {
-    throw new TypeError('masterAudioStereo: give preset or overrides');
-  }
-  const overrides = chainConfigJson('masterAudioStereo', 'overrides', r.overrides);
-  const preset = r.preset ?? null;
-  const progress = r.onProgress ?? undefined;
-  const cancel = r.cancel ?? undefined;
-  const module = requireModule();
-  return (
-    progress || cancel
-      ? module.masterAudioStereoWithProgress(
-          preset,
-          r.left,
-          r.right,
-          r.sampleRate,
-          overrides,
-          progress ?? (() => {}),
-          cancel ?? (() => false),
-        )
-      : module.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides)
-  ) as MasteringChainStereoResult;
+  return withEntry('masterAudioStereo', () => {
+    const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
+    assertChainCallbacks(r);
+    if (r.preset !== undefined && r.preset !== null) {
+      assertString(r.preset, 'preset');
+    }
+    assertSampleRate(r.sampleRate);
+    assertAudioInput(r.left, r.sampleRate, r, 'left');
+    assertAudioInput(r.right, r.sampleRate, r, 'right');
+    if (r.left.length !== r.right.length) {
+      throw refuse('Stereo channel lengths must match.');
+    }
+    if (
+      (r.preset === undefined || r.preset === null) &&
+      (r.overrides === undefined || r.overrides === null)
+    ) {
+      throw refuseType('give preset or overrides');
+    }
+    const overrides = chainConfigJson('overrides', r.overrides);
+    const preset = r.preset ?? null;
+    const progress = r.onProgress ?? undefined;
+    const cancel = r.cancel ?? undefined;
+    const module = requireModule();
+    return (
+      progress || cancel
+        ? module.masterAudioStereoWithProgress(
+            preset,
+            r.left,
+            r.right,
+            r.sampleRate,
+            overrides,
+            progress ?? (() => {}),
+            cancel ?? (() => false),
+          )
+        : module.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides)
+    ) as MasteringChainStereoResult;
+  });
 }

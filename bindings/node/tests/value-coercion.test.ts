@@ -69,10 +69,11 @@ describe('enum ordinal coercion', () => {
       Object.fromEntries(curveCorpus.accepted.map(({ value, ordinal }) => [value, ordinal])),
     );
     const curve = (value: unknown) =>
-      projectAutomationPointValue(
-        { ppq: 0, value: 1, curveToNext: value as ProjectAutomationCurve },
-        'addAutomationLane',
-      ).curveToNext;
+      projectAutomationPointValue({
+        ppq: 0,
+        value: 1,
+        curveToNext: value as ProjectAutomationCurve,
+      }).curveToNext;
     for (const { value, ordinal } of curveCorpus.accepted) {
       expect(curve(value)).toBe(ordinal);
     }
@@ -86,23 +87,23 @@ describe('enum ordinal coercion', () => {
   });
 
   it('resolves curveToNext and refuses the curve key by name', () => {
-    expect(
-      projectAutomationPointValue(
-        { ppq: 1, value: 0.5, curveToNext: 'sCurve' },
-        'addAutomationLane',
-      ),
-    ).toEqual({ ppq: 1, value: 0.5, curveToNext: 3 });
+    expect(projectAutomationPointValue({ ppq: 1, value: 0.5, curveToNext: 'sCurve' })).toEqual({
+      ppq: 1,
+      value: 0.5,
+      curveToNext: 3,
+    });
     // An omitted curve is Linear, matching the documented default.
-    expect(projectAutomationPointValue({ ppq: 1, value: 0.5 }, 'addAutomationLane')).toEqual({
+    expect(projectAutomationPointValue({ ppq: 1, value: 0.5 })).toEqual({
       ppq: 1,
       value: 0.5,
       curveToNext: 0,
     });
     expect(() =>
-      projectAutomationPointValue(
-        { ppq: 1, value: 0.5, curve: 'hold' } as unknown as ProjectAutomationPoint,
-        'addAutomationLane',
-      ),
+      projectAutomationPointValue({
+        ppq: 1,
+        value: 0.5,
+        curve: 'hold',
+      } as unknown as ProjectAutomationPoint),
     ).toThrow(/unknown option 'curve' in 'points'/);
   });
 });

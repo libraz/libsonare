@@ -1,4 +1,5 @@
 import { chordQualityOrdinal, keyModeOrdinal, pitchClassOrdinal } from './analysis_helpers.js';
+import { refuseType, withEntry } from './internal/entry.js';
 import { projectChordQualityName, projectKeyModeName, projectModule } from './project_internal.js';
 import type { ProjectChordQuality, ProjectKeyMode } from './project_types.js';
 import type { Chord, KeyMode } from './public_types.js';
@@ -48,18 +49,23 @@ export interface ChordSymbolFields {
 export function chordSymbolFromAnalysis(
   chord: Pick<Chord, 'root' | 'bass' | 'quality'>,
 ): ChordSymbolFields {
-  if (typeof chord !== 'object' || chord === null || Array.isArray(chord)) {
-    throw new TypeError('chordSymbolFromAnalysis: chord must be an object');
-  }
-  const root = pitchClassOrdinal('chordSymbolFromAnalysis', chord.root, 'root');
-  const bass = pitchClassOrdinal('chordSymbolFromAnalysis', chord.bass, 'bass');
-  const quality = chordQualityOrdinal(chord.quality, 'quality');
-  const { slashBassPc, ...native } = projectModule().chordSymbolFromAnalysis(root, quality, bass);
-  const fields: ChordSymbolFields = { ...native, quality: projectChordQualityName(native.quality) };
-  if (slashBassPc !== NO_SLASH_BASS) {
-    fields.slashBassPc = slashBassPc;
-  }
-  return fields;
+  return withEntry('chordSymbolFromAnalysis', () => {
+    if (typeof chord !== 'object' || chord === null || Array.isArray(chord)) {
+      throw refuseType('chord must be an object');
+    }
+    const root = pitchClassOrdinal(chord.root, 'root');
+    const bass = pitchClassOrdinal(chord.bass, 'bass');
+    const quality = chordQualityOrdinal(chord.quality, 'quality');
+    const { slashBassPc, ...native } = projectModule().chordSymbolFromAnalysis(root, quality, bass);
+    const fields: ChordSymbolFields = {
+      ...native,
+      quality: projectChordQualityName(native.quality),
+    };
+    if (slashBassPc !== NO_SLASH_BASS) {
+      fields.slashBassPc = slashBassPc;
+    }
+    return fields;
+  });
 }
 
 /**
@@ -74,5 +80,7 @@ export function chordSymbolFromAnalysis(
  * @throws {RangeError} naming `mode` for an unrecognised value
  */
 export function keyModeFromAnalysis(mode: KeyMode): ProjectKeyMode {
-  return projectKeyModeName(projectModule().keyModeFromAnalysis(keyModeOrdinal(mode, 'mode')));
+  return withEntry('keyModeFromAnalysis', () => {
+    return projectKeyModeName(projectModule().keyModeFromAnalysis(keyModeOrdinal(mode, 'mode')));
+  });
 }

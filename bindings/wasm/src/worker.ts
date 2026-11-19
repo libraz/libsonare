@@ -7,9 +7,10 @@
  * make ownership and `destroy()` semantics unsound.
  */
 
+import { codedError, withEntry } from './internal/entry.js';
 import { failurePayload } from './internal/failure_payload.js';
 import './lifetime.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode, type SonareError } from './errors.js';
 import { init } from './index.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import { masterAudio, masterAudioStereo } from './mastering_chain.js';
@@ -81,7 +82,7 @@ function errorMessage(error: unknown): OfflineWorkerErrorMessage['error'] {
 }
 
 function cancelledError(): SonareError {
-  return new SonareError(ErrorCode.Cancelled, 'Operation cancelled');
+  return codedError(ErrorCode.Cancelled, 'Operation cancelled');
 }
 
 /**
@@ -90,94 +91,97 @@ function cancelledError(): SonareError {
  * when this module is loaded as a Worker entry point.
  */
 export function installOfflineWorkerEndpoint(endpoint: OfflineWorkerEndpoint): void {
-  const cancelled = new Set<number>();
-  // IDs with a run() in flight, from message dispatch to its finally block.
-  // A cancel naming an ID outside this set has nothing left to cancel -- the
-  // run already settled, or never started -- and must not be recorded, or it
-  // leaks a Set entry no later message ever clears.
-  const inFlight = new Set<number>();
+  withEntry('installOfflineWorkerEndpoint', () => {
+    const cancelled = new Set<number>();
+    // IDs with a run() in flight, from message dispatch to its finally block.
+    // A cancel naming an ID outside this set has nothing left to cancel -- the
+    // run already settled, or never started -- and must not be recorded, or it
+    // leaks a Set entry no later message ever clears.
+    const inFlight = new Set<number>();
 
-  const run = async (message: OfflineWorkerRunMessage): Promise<void> => {
-    // Synchronous: runs before this async function's first `await`, so it is
-    // visible to the listener below before any other message can be handled.
-    inFlight.add(message.id);
-    const cancelFlag = message.cancelBuffer ? new Int32Array(message.cancelBuffer) : undefined;
-    const isCancelled = (): boolean =>
-      cancelled.has(message.id) || (cancelFlag !== undefined && Atomics.load(cancelFlag, 0) !== 0);
-    const onProgress = (progress: number, stage: string): undefined | false => {
-      endpoint.postMessage({ type: 'sonare:offline-progress', id: message.id, progress, stage });
-      return isCancelled() ? false : undefined;
+    const run = async (message: OfflineWorkerRunMessage): Promise<void> => {
+      // Synchronous: runs before this async function's first `await`, so it is
+      // visible to the listener below before any other message can be handled.
+      inFlight.add(message.id);
+      const cancelFlag = message.cancelBuffer ? new Int32Array(message.cancelBuffer) : undefined;
+      const isCancelled = (): boolean =>
+        cancelled.has(message.id) ||
+        (cancelFlag !== undefined && Atomics.load(cancelFlag, 0) !== 0);
+      const onProgress = (progress: number, stage: string): undefined | false => {
+        endpoint.postMessage({ type: 'sonare:offline-progress', id: message.id, progress, stage });
+        return isCancelled() ? false : undefined;
+      };
+      try {
+        await init();
+        if (isCancelled()) {
+          throw cancelledError();
+        }
+
+        // `cancel` is a separate channel from `onProgress`: the native call polls
+        // it and never reads what the progress callback returns, so passing only
+        // onProgress left a running operation no way to learn it was cancelled.
+        let result: unknown;
+        switch (message.operation) {
+          case 'analyze':
+            result = analyze({
+              ...(message.request as unknown as AnalyzeRequest),
+              onProgress,
+              cancel: isCancelled,
+            });
+            break;
+          case 'detectBpm':
+            result = detectBpm(message.request as unknown as DetectBpmRequest);
+            break;
+          case 'detectKey':
+            result = detectKey(message.request as unknown as DetectKeyRequest);
+            break;
+          case 'detectChords':
+            result = detectChords(message.request as unknown as DetectChordsRequest);
+            break;
+          case 'masterAudio':
+            result = masterAudio({
+              ...(message.request as unknown as MasterAudioRequest),
+              onProgress,
+              cancel: isCancelled,
+            });
+            break;
+          case 'masterAudioStereo':
+            result = masterAudioStereo({
+              ...(message.request as unknown as MasterAudioStereoRequest),
+              onProgress,
+              cancel: isCancelled,
+            });
+            break;
+        }
+        if (isCancelled()) {
+          throw cancelledError();
+        }
+        endpoint.postMessage(
+          { type: 'sonare:offline-result', id: message.id, result },
+          transferableBuffers(result),
+        );
+      } catch (error) {
+        endpoint.postMessage({
+          type: 'sonare:offline-error',
+          id: message.id,
+          error: errorMessage(error),
+        });
+      } finally {
+        cancelled.delete(message.id);
+        inFlight.delete(message.id);
+      }
     };
-    try {
-      await init();
-      if (isCancelled()) {
-        throw cancelledError();
-      }
 
-      // `cancel` is a separate channel from `onProgress`: the native call polls
-      // it and never reads what the progress callback returns, so passing only
-      // onProgress left a running operation no way to learn it was cancelled.
-      let result: unknown;
-      switch (message.operation) {
-        case 'analyze':
-          result = analyze({
-            ...(message.request as unknown as AnalyzeRequest),
-            onProgress,
-            cancel: isCancelled,
-          });
-          break;
-        case 'detectBpm':
-          result = detectBpm(message.request as unknown as DetectBpmRequest);
-          break;
-        case 'detectKey':
-          result = detectKey(message.request as unknown as DetectKeyRequest);
-          break;
-        case 'detectChords':
-          result = detectChords(message.request as unknown as DetectChordsRequest);
-          break;
-        case 'masterAudio':
-          result = masterAudio({
-            ...(message.request as unknown as MasterAudioRequest),
-            onProgress,
-            cancel: isCancelled,
-          });
-          break;
-        case 'masterAudioStereo':
-          result = masterAudioStereo({
-            ...(message.request as unknown as MasterAudioStereoRequest),
-            onProgress,
-            cancel: isCancelled,
-          });
-          break;
+    endpoint.addEventListener('message', (event) => {
+      const message = event.data;
+      if (message.type === 'sonare:offline-cancel') {
+        if (inFlight.has(message.id)) {
+          cancelled.add(message.id);
+        }
+        return;
       }
-      if (isCancelled()) {
-        throw cancelledError();
-      }
-      endpoint.postMessage(
-        { type: 'sonare:offline-result', id: message.id, result },
-        transferableBuffers(result),
-      );
-    } catch (error) {
-      endpoint.postMessage({
-        type: 'sonare:offline-error',
-        id: message.id,
-        error: errorMessage(error),
-      });
-    } finally {
-      cancelled.delete(message.id);
-      inFlight.delete(message.id);
-    }
-  };
-
-  endpoint.addEventListener('message', (event) => {
-    const message = event.data;
-    if (message.type === 'sonare:offline-cancel') {
-      if (inFlight.has(message.id)) {
-        cancelled.add(message.id);
-      }
-      return;
-    }
-    void run(message);
+      void run(message);
+    });
   });
 }
 

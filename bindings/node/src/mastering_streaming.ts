@@ -1,5 +1,5 @@
 import { chainConfigJson } from './internal/chain_config.js';
-import { entryClass } from './internal/entry.js';
+import { entryClass, refuse, refuseType } from './internal/entry.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
@@ -74,18 +74,18 @@ export interface StreamingEqualizerConfig {
   maxBlockSize?: number;
 }
 
-function assertConfigObject(fnName: string, config: unknown): asserts config is object {
+function assertConfigObject(config: unknown): asserts config is object {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError(`${fnName}: config must be an object`);
+    throw refuseType(`config must be an object`);
   }
 }
 
 /** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
-function optionalIntegerBlockSize(fnName: string, value: unknown): number | undefined {
+function optionalIntegerBlockSize(value: unknown): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
-  assertIntegerValue(fnName, value, 'maxBlockSize');
+  assertIntegerValue(value, 'maxBlockSize');
   return value;
 }
 
@@ -142,8 +142,7 @@ export class StreamingMasteringChain {
    *   `sampleRate`; RangeError for an out-of-domain rate, block size or channel count.
    */
   constructor(config: StreamingMasteringChainConfig) {
-    const fn = 'StreamingMasteringChain';
-    assertConfigObject(fn, config);
+    assertConfigObject(config);
     const {
       sampleRate,
       maxBlockSize,
@@ -152,11 +151,11 @@ export class StreamingMasteringChain {
       loudnessStaticGainPeakDb,
       ...chainConfig
     } = config;
-    assertIntegerValue(fn, sampleRate, 'sampleRate');
-    const blockSize = optionalIntegerBlockSize(fn, maxBlockSize);
-    assertIntegerValue(fn, numChannels, 'numChannels');
+    assertIntegerValue(sampleRate, 'sampleRate');
+    const blockSize = optionalIntegerBlockSize(maxBlockSize);
+    assertIntegerValue(numChannels, 'numChannels');
     if (numChannels !== 1 && numChannels !== 2) {
-      throw new RangeError(`${fn}: numChannels must be 1 or 2`);
+      throw refuse(`numChannels must be 1 or 2`);
     }
     const options: Record<string, number> = {};
     if (loudnessStaticGainDb !== undefined) {
@@ -166,7 +165,7 @@ export class StreamingMasteringChain {
       options.loudnessStaticGainPeakDb = loudnessStaticGainPeakDb;
     }
     this.native = new addon.StreamingMasteringChain(
-      chainConfigJson(fn, 'config', chainConfig),
+      chainConfigJson('config', chainConfig),
       options,
     );
     try {
@@ -535,20 +534,17 @@ function streamStats(s: NativeStreamStats): StreamStats {
 }
 
 /** Refuses an A4 reference outside what native accepts: `TypeError` for a non-number, `RangeError` outside 220..880 Hz. */
-function assertStreamReferenceHz(
-  fnName: string,
-  referenceHz: unknown,
-): asserts referenceHz is number {
+function assertStreamReferenceHz(referenceHz: unknown): asserts referenceHz is number {
   if (typeof referenceHz !== 'number') {
-    throw new TypeError(`${fnName}: referenceHz must be a number`);
+    throw refuseType(`referenceHz must be a number`);
   }
   if (
     !Number.isFinite(referenceHz) ||
     referenceHz < STREAM_REFERENCE_HZ_RANGE[0] ||
     referenceHz > STREAM_REFERENCE_HZ_RANGE[1]
   ) {
-    throw new RangeError(
-      `${fnName}: referenceHz must be within ${STREAM_REFERENCE_HZ_RANGE[0]}..${STREAM_REFERENCE_HZ_RANGE[1]} Hz`,
+    throw refuse(
+      `referenceHz must be within ${STREAM_REFERENCE_HZ_RANGE[0]}..${STREAM_REFERENCE_HZ_RANGE[1]} Hz`,
     );
   }
 }
@@ -583,33 +579,33 @@ export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
 /** Validates the public config and spells it the way the addon reads it. */
 function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError('StreamAnalyzer: config must be an object with a sampleRate');
+    throw refuseType('config must be an object with a sampleRate');
   }
   for (const key of Object.keys(config)) {
     if (!STREAM_CONFIG_KEYS.has(key)) {
-      throw new TypeError(`StreamAnalyzer: unknown config key '${key}'`);
+      throw refuseType(`unknown config key '${key}'`);
     }
   }
-  assertSampleRate('StreamAnalyzer', config.sampleRate);
+  assertSampleRate(config.sampleRate);
   const { fminHz, fmaxHz, referenceHz, window, ...rest } = config;
   const native: Record<string, unknown> = { ...rest };
   if (fminHz !== undefined) {
-    assertFloatValue('StreamAnalyzer', fminHz, 'fminHz');
+    assertFloatValue(fminHz, 'fminHz');
     native.fmin = fminHz;
   }
   if (fmaxHz !== undefined) {
-    assertFloatValue('StreamAnalyzer', fmaxHz, 'fmaxHz');
+    assertFloatValue(fmaxHz, 'fmaxHz');
     if (!(fmaxHz > 0)) {
-      throw new RangeError('StreamAnalyzer: fmaxHz must be positive (omit it for Nyquist)');
+      throw refuse('fmaxHz must be positive (omit it for Nyquist)');
     }
     native.fmax = fmaxHz;
   }
   if (referenceHz !== undefined) {
-    assertStreamReferenceHz('StreamAnalyzer', referenceHz);
+    assertStreamReferenceHz(referenceHz);
     native.referenceHz = referenceHz;
   }
   if (window !== undefined) {
-    assertClosedToken('StreamAnalyzer', window, WINDOW_TYPES, 'window');
+    assertClosedToken(window, WINDOW_TYPES, 'window');
     native.window = WINDOW_TYPES.indexOf(window);
   }
   return native;
@@ -802,7 +798,7 @@ export class StreamAnalyzer {
    * supplied the reference.
    */
   setReferenceHz(referenceHz: number): void {
-    assertStreamReferenceHz('StreamAnalyzer.setReferenceHz', referenceHz);
+    assertStreamReferenceHz(referenceHz);
     this.native.setReferenceHz(referenceHz);
   }
 
@@ -842,17 +838,15 @@ const EQ_PLACEMENT_ORDINALS: Record<EqStereoPlacement, number> = {
 };
 
 /** Absent or null takes `'stereo'`; a non-string is a `TypeError`, an unknown token a `RangeError`. */
-function checkedEqPlacement(fnName: string, value: unknown): EqStereoPlacement {
+function checkedEqPlacement(value: unknown): EqStereoPlacement {
   if (value === undefined || value === null) {
     return 'stereo';
   }
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: placement must be a string`);
+    throw refuseType(`placement must be a string`);
   }
   if (!Object.hasOwn(EQ_PLACEMENT_ORDINALS, value)) {
-    throw new RangeError(
-      `${fnName}: placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`,
-    );
+    throw refuse(`placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`);
   }
   return value as EqStereoPlacement;
 }
@@ -903,11 +897,10 @@ export class StreamingEqualizer {
    *   `sampleRate`; RangeError for an out-of-domain rate or block size.
    */
   constructor(config: StreamingEqualizerConfig) {
-    const fn = 'StreamingEqualizer';
-    assertConfigObject(fn, config);
+    assertConfigObject(config);
     const { sampleRate, maxBlockSize } = config;
-    assertIntegerValue(fn, sampleRate, 'sampleRate');
-    const blockSize = optionalIntegerBlockSize(fn, maxBlockSize);
+    assertIntegerValue(sampleRate, 'sampleRate');
+    const blockSize = optionalIntegerBlockSize(maxBlockSize);
     this.native = new addon.StreamingEqualizer(
       blockSize === undefined ? { sampleRate } : { sampleRate, maxBlockSize: blockSize },
     );
@@ -917,7 +910,7 @@ export class StreamingEqualizer {
   setBand(index: number, band: EqBandInput): void {
     const native: Record<string, unknown> = { ...band };
     if (band.placement !== undefined) {
-      native.placement = checkedEqPlacement('StreamingEqualizer.setBand', band.placement);
+      native.placement = checkedEqPlacement(band.placement);
     }
     this.native.setBand(index, native);
   }
@@ -932,7 +925,7 @@ export class StreamingEqualizer {
    * any spelling other than the three tokens (numbers and synonyms included).
    */
   setPhaseMode(mode: EqPhaseMode): void {
-    assertClosedToken('StreamingEqualizer.setPhaseMode', mode, EQ_PHASE_MODES, 'mode');
+    assertClosedToken(mode, EQ_PHASE_MODES, 'mode');
     this.native.setPhaseMode(EQ_PHASE_MODE_ORDINALS[mode]);
   }
 
@@ -943,11 +936,9 @@ export class StreamingEqualizer {
    */
   setAutoGain(options: { enabled: boolean }): void {
     if (typeof options !== 'object' || options === null) {
-      throw new TypeError('StreamingEqualizer.setAutoGain: options must be an object');
+      throw refuseType('options must be an object');
     }
-    this.native.setAutoGain(
-      requireBoolean('StreamingEqualizer.setAutoGain', options.enabled, 'enabled'),
-    );
+    this.native.setAutoGain(requireBoolean(options.enabled, 'enabled'));
   }
 
   /** Set all-band EQ gain scale as a 0.0..2.0 multiplier. */
@@ -1076,8 +1067,7 @@ export class StreamingEqualizer {
     frequenciesHz: Float32Array,
     placement: EqStereoPlacement = 'stereo',
   ): Float32Array {
-    const ordinal =
-      EQ_PLACEMENT_ORDINALS[checkedEqPlacement('StreamingEqualizer.magnitudeResponse', placement)];
+    const ordinal = EQ_PLACEMENT_ORDINALS[checkedEqPlacement(placement)];
     return this.native.magnitudeResponse(ordinal, frequenciesHz);
   }
 

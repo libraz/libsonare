@@ -6,6 +6,7 @@
  * required.
  */
 
+import { withEntry } from './internal/entry.js';
 import './lifetime.js';
 import {
   assertAbiCompatible,
@@ -131,29 +132,32 @@ export async function init(options?: {
     wasmBinary?: ArrayBuffer | Uint8Array;
   }) => Promise<ModuleHandle>;
 }): Promise<void> {
-  if (module) {
-    assertSameInitOptions(firstInitOptions, options);
-    return;
-  }
-  if (initPromise) {
-    assertSameInitOptions(firstInitOptions, options);
-    return initPromise;
-  }
-  firstInitOptions = options && { ...options };
-  initPromise = (async () => {
-    try {
-      const createModule = options?.moduleFactory ?? (await import('./sonare-analysis.js')).default;
-      const created = (await createModule(options)) as unknown as SonareModule;
-      assertAbiCompatible(created);
-      module = created;
-      setSonareModule(module);
-    } catch (error) {
-      initPromise = null;
-      firstInitOptions = undefined;
-      throw error;
+  return withEntry('init', async () => {
+    if (module) {
+      assertSameInitOptions(firstInitOptions, options);
+      return;
     }
-  })();
-  return initPromise;
+    if (initPromise) {
+      assertSameInitOptions(firstInitOptions, options);
+      return initPromise;
+    }
+    firstInitOptions = options && { ...options };
+    initPromise = (async () => {
+      try {
+        const createModule =
+          options?.moduleFactory ?? (await import('./sonare-analysis.js')).default;
+        const created = (await createModule(options)) as unknown as SonareModule;
+        assertAbiCompatible(created);
+        module = created;
+        setSonareModule(module);
+      } catch (error) {
+        initPromise = null;
+        firstInitOptions = undefined;
+        throw error;
+      }
+    })();
+    return initPromise;
+  });
 }
 
 /** Whether this analysis entry has loaded its WASM module. */
@@ -163,10 +167,12 @@ export function isInitialized(): boolean {
 
 /** Version reported by the loaded analysis WASM module. */
 export function version(): string {
-  if (!module) {
-    throw notInitializedError();
-  }
-  return module.version();
+  return withEntry('version', () => {
+    if (!module) {
+      throw notInitializedError();
+    }
+    return module.version();
+  });
 }
 
 /**
@@ -176,32 +182,40 @@ export function version(): string {
  * @throws SonareError `InvalidState` before {@link init} has resolved.
  */
 export function capabilities(): Capabilities {
-  if (!module) {
-    throw notInitializedError();
-  }
-  return module.capabilities();
+  return withEntry('capabilities', () => {
+    if (!module) {
+      throw notInitializedError();
+    }
+    return module.capabilities();
+  });
 }
 
 /** Packed C-ABI version for compatibility checks. */
 export function abiVersion(): number {
-  if (!module) {
-    throw notInitializedError();
-  }
-  return module.abiVersion();
+  return withEntry('abiVersion', () => {
+    if (!module) {
+      throw notInitializedError();
+    }
+    return module.abiVersion();
+  });
 }
 
 /** Realtime command-queue ABI version shared with the full entry. */
 export function engineAbiVersion(): number {
-  if (!module) {
-    throw notInitializedError();
-  }
-  return module.engineAbiVersion();
+  return withEntry('engineAbiVersion', () => {
+    if (!module) {
+      throw notInitializedError();
+    }
+    return module.engineAbiVersion();
+  });
 }
 
 /** Voice-changer ABI version retained for cross-entry compatibility checks. */
 export function voiceChangerAbiVersion(): number {
-  if (!module) {
-    throw notInitializedError();
-  }
-  return module.voiceChangerAbiVersion();
+  return withEntry('voiceChangerAbiVersion', () => {
+    if (!module) {
+      throw notInitializedError();
+    }
+    return module.voiceChangerAbiVersion();
+  });
 }

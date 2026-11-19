@@ -1,3 +1,4 @@
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type { OptionsOf } from './validation.js';
 import { assertAudioInput, requestObject, sampleOneShot } from './validation.js';
@@ -34,26 +35,28 @@ export function normalize(
   options?: OptionsOf<NormalizeRequest>,
 ): Float32Array;
 export function normalize(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<NormalizeRequest>('normalize', args);
-  const resolvedMode = resolveNormalizeMode('normalize', request.mode);
-  assertAudioInput('normalize', request.samples, request.sampleRate, request);
-  return addon.normalize(
-    request.samples,
-    request.sampleRate,
-    request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0),
-    resolvedMode,
-  );
+  return withEntry('normalize', () => {
+    const request = sampleOneShot<NormalizeRequest>('normalize', args);
+    const resolvedMode = resolveNormalizeMode(request.mode);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return addon.normalize(
+      request.samples,
+      request.sampleRate,
+      request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0),
+      resolvedMode,
+    );
+  });
 }
 
-function resolveNormalizeMode(fnName: string, value: unknown): NormalizeMode {
+function resolveNormalizeMode(value: unknown): NormalizeMode {
   if (value === undefined) {
     return 'peak';
   }
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: mode must be 'peak' or 'rms'`);
+    throw refuseType(`mode must be 'peak' or 'rms'`);
   }
   if (value !== 'peak' && value !== 'rms') {
-    throw new RangeError(`${fnName}: mode must be 'peak' or 'rms'`);
+    throw refuse(`mode must be 'peak' or 'rms'`);
   }
   return value;
 }
@@ -129,18 +132,20 @@ export interface NormalizeStereoResult {
  * ```
  */
 export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
-  requestObject('normalizeStereo', request, 'request', true);
-  const resolvedMode = resolveNormalizeMode('normalizeStereo', request.mode);
-  assertAudioInput('normalizeStereo', request.left, request.sampleRate, request, 'left');
-  assertAudioInput('normalizeStereo', request.right, request.sampleRate, request, 'right');
-  // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
-  // default -- the peaks sit well above the RMS, so effectively all of them clip.
-  const resolvedTargetDb = request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0);
-  return addon.normalizeStereo(
-    request.left,
-    request.right,
-    request.sampleRate,
-    resolvedTargetDb,
-    resolvedMode,
-  );
+  return withEntry('normalizeStereo', () => {
+    requestObject('normalizeStereo', request, 'request', true);
+    const resolvedMode = resolveNormalizeMode(request.mode);
+    assertAudioInput(request.left, request.sampleRate, request, 'left');
+    assertAudioInput(request.right, request.sampleRate, request, 'right');
+    // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
+    // default -- the peaks sit well above the RMS, so effectively all of them clip.
+    const resolvedTargetDb = request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0);
+    return addon.normalizeStereo(
+      request.left,
+      request.right,
+      request.sampleRate,
+      resolvedTargetDb,
+      resolvedMode,
+    );
+  });
 }

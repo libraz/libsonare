@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { interleaveMeterChannels, lufsSeriesFromNative } from './internal/metering_native.js';
 import { addon } from './native.js';
 import type { LufsResult, LufsSeriesResult } from './types.js';
@@ -51,16 +52,13 @@ export interface Ebur128LoudnessRangeLuRequest {
  */
 export function lufsMultichannel(request: LufsMultichannelRequest): LufsResult;
 export function lufsMultichannel(...args: unknown[]): LufsResult {
-  const r = requestOnly<LufsMultichannelRequest>('lufsMultichannel', args);
-  assertSampleRate('lufsMultichannel', r.sampleRate);
-  // The addon reads one interleaved buffer and a channel count.
-  const { data, numChannels } = interleaveMeterChannels(
-    'lufsMultichannel',
-    r.channels,
-    r,
-    r.sampleRate,
-  );
-  return addon.lufsInterleaved(data, numChannels, r.sampleRate);
+  return withEntry('lufsMultichannel', () => {
+    const r = requestOnly<LufsMultichannelRequest>('lufsMultichannel', args);
+    assertSampleRate(r.sampleRate);
+    // The addon reads one interleaved buffer and a channel count.
+    const { data, numChannels } = interleaveMeterChannels(r.channels, r, r.sampleRate);
+    return addon.lufsInterleaved(data, numChannels, r.sampleRate);
+  });
 }
 
 /**
@@ -85,15 +83,12 @@ export function lufsMultichannel(...args: unknown[]): LufsResult {
  */
 export function lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult;
 export function lufsSeriesMultichannel(...args: unknown[]): LufsSeriesResult {
-  const r = requestOnly<LufsSeriesMultichannelRequest>('lufsSeriesMultichannel', args);
-  assertSampleRate('lufsSeriesMultichannel', r.sampleRate);
-  const { data, numChannels } = interleaveMeterChannels(
-    'lufsSeriesMultichannel',
-    r.channels,
-    r,
-    r.sampleRate,
-  );
-  return lufsSeriesFromNative(addon.lufsSeriesInterleaved(data, numChannels, r.sampleRate));
+  return withEntry('lufsSeriesMultichannel', () => {
+    const r = requestOnly<LufsSeriesMultichannelRequest>('lufsSeriesMultichannel', args);
+    assertSampleRate(r.sampleRate);
+    const { data, numChannels } = interleaveMeterChannels(r.channels, r, r.sampleRate);
+    return lufsSeriesFromNative(addon.lufsSeriesInterleaved(data, numChannels, r.sampleRate));
+  });
 }
 
 /**
@@ -107,9 +102,11 @@ export function ebur128LoudnessRangeLu(
   options?: OptionsOf<Ebur128LoudnessRangeLuRequest>,
 ): number;
 export function ebur128LoudnessRangeLu(...args: unknown[]): number {
-  const r = sampleOneShot<Ebur128LoudnessRangeLuRequest>('ebur128LoudnessRangeLu', args);
-  assertAudioInput('ebur128LoudnessRangeLu', r.samples, r.sampleRate, r);
-  return addon.ebur128LoudnessRangeLu(r.samples, r.sampleRate);
+  return withEntry('ebur128LoudnessRangeLu', () => {
+    const r = sampleOneShot<Ebur128LoudnessRangeLuRequest>('ebur128LoudnessRangeLu', args);
+    assertAudioInput(r.samples, r.sampleRate, r);
+    return addon.ebur128LoudnessRangeLu(r.samples, r.sampleRate);
+  });
 }
 
 /**
@@ -124,9 +121,11 @@ export function lufs(
   options?: OptionsOf<LufsRequest>,
 ): LufsResult;
 export function lufs(...args: unknown[]): LufsResult {
-  const request = sampleOneShot<LufsRequest>('lufs', args);
-  assertAudioInput('lufs', request.samples, request.sampleRate, request);
-  return addon.lufs(request.samples, request.sampleRate);
+  return withEntry('lufs', () => {
+    const request = sampleOneShot<LufsRequest>('lufs', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return addon.lufs(request.samples, request.sampleRate);
+  });
 }
 
 /** Per-block momentary (400 ms) LUFS series. Pass the buffer's actual `sampleRate`. */
@@ -137,9 +136,11 @@ export function momentaryLufs(
   options?: OptionsOf<MomentaryLufsRequest>,
 ): Float32Array;
 export function momentaryLufs(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
-  assertAudioInput('momentaryLufs', request.samples, request.sampleRate, request);
-  return addon.momentaryLufs(request.samples, request.sampleRate);
+  return withEntry('momentaryLufs', () => {
+    const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return addon.momentaryLufs(request.samples, request.sampleRate);
+  });
 }
 
 /** Per-block short-term (3 s) LUFS series. Pass the buffer's actual `sampleRate`. */
@@ -150,7 +151,9 @@ export function shortTermLufs(
   options?: OptionsOf<ShortTermLufsRequest>,
 ): Float32Array;
 export function shortTermLufs(...args: unknown[]): Float32Array {
-  const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);
-  assertAudioInput('shortTermLufs', request.samples, request.sampleRate, request);
-  return addon.shortTermLufs(request.samples, request.sampleRate);
+  return withEntry('shortTermLufs', () => {
+    const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    return addon.shortTermLufs(request.samples, request.sampleRate);
+  });
 }

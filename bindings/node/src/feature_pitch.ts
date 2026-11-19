@@ -1,5 +1,5 @@
 import { toVoicedInt32 } from './internal/effects_common.js';
-import { withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveFftOptions } from './internal/fft_options.js';
@@ -274,15 +274,12 @@ function toCqtResult(r: NativeCqt): CqtResult {
 const DEFAULT_CQT_FMIN_HZ = 32.70319566257483;
 
 // Shared guard of the CQT family: audio, then the three counts every entry point refuses at zero.
-function checkCqtRequest(
-  fnName: 'cqt' | 'pseudoCqt' | 'hybridCqt' | 'vqt',
-  request: CqtRequest,
-): void {
-  assertAudioInput(fnName, request.samples, request.sampleRate, request);
-  assertPositiveInteger(fnName, request.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger(fnName, request.nBins ?? 84, 'nBins');
-  assertPositiveInteger(fnName, request.binsPerOctave ?? 12, 'binsPerOctave');
-  assertPositiveFloatValue(fnName, request.fminHz ?? DEFAULT_CQT_FMIN_HZ, 'fminHz');
+function checkCqtRequest(request: CqtRequest): void {
+  assertAudioInput(request.samples, request.sampleRate, request);
+  assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger(request.nBins ?? 84, 'nBins');
+  assertPositiveInteger(request.binsPerOctave ?? 12, 'binsPerOctave');
+  assertPositiveFloatValue(request.fminHz ?? DEFAULT_CQT_FMIN_HZ, 'fminHz');
 }
 
 /**
@@ -303,10 +300,14 @@ export function chroma(
   options?: OptionsOf<ChromaRequest>,
 ): ChromaResult;
 export function chroma(...args: unknown[]): ChromaResult {
-  const request = sampleOneShot<ChromaRequest>('chroma', args);
-  assertAudioInput('chroma', request.samples, request.sampleRate, request);
-  const fft = resolveFftOptions('chroma', request.nFft, request.hopLength);
-  return toChromaResult(addon.chroma(request.samples, request.sampleRate, fft.nFft, fft.hopLength));
+  return withEntry('chroma', () => {
+    const request = sampleOneShot<ChromaRequest>('chroma', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    return toChromaResult(
+      addon.chroma(request.samples, request.sampleRate, fft.nFft, fft.hopLength),
+    );
+  });
 }
 
 /** CENS chromagram. Returns `features` as rows = chroma bins, cols = frames. */
@@ -317,20 +318,22 @@ export function chromaCens(
   options?: OptionsOf<ChromaCensRequest>,
 ): ChromaResult;
 export function chromaCens(...args: unknown[]): ChromaResult {
-  const request = sampleOneShot<ChromaCensRequest>('chromaCens', args);
-  assertAudioInput('chromaCens', request.samples, request.sampleRate, request);
-  assertPositiveInteger('chromaCens', request.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('chromaCens', request.nChroma ?? 12, 'nChroma');
-  assertPositiveInteger('chromaCens', request.binsPerOctave ?? 36, 'binsPerOctave');
-  return toChromaResult(
-    addon.chromaCens(
-      request.samples,
-      request.sampleRate,
-      request.hopLength ?? 512,
-      request.nChroma ?? 12,
-      request.binsPerOctave ?? 36,
-    ),
-  );
+  return withEntry('chromaCens', () => {
+    const request = sampleOneShot<ChromaCensRequest>('chromaCens', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+    assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
+    assertPositiveInteger(request.binsPerOctave ?? 36, 'binsPerOctave');
+    return toChromaResult(
+      addon.chromaCens(
+        request.samples,
+        request.sampleRate,
+        request.hopLength ?? 512,
+        request.nChroma ?? 12,
+        request.binsPerOctave ?? 36,
+      ),
+    );
+  });
 }
 
 /** Constant-Q chromagram. Returns `features` as rows = chroma bins, cols = frames. */
@@ -341,20 +344,22 @@ export function chromaCqt(
   options?: OptionsOf<ChromaCqtRequest>,
 ): ChromaResult;
 export function chromaCqt(...args: unknown[]): ChromaResult {
-  const request = sampleOneShot<ChromaCqtRequest>('chromaCqt', args);
-  assertAudioInput('chromaCqt', request.samples, request.sampleRate, request);
-  assertPositiveInteger('chromaCqt', request.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('chromaCqt', request.nChroma ?? 12, 'nChroma');
-  assertPositiveInteger('chromaCqt', request.binsPerOctave ?? 36, 'binsPerOctave');
-  return toChromaResult(
-    addon.chromaCqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength ?? 512,
-      request.nChroma ?? 12,
-      request.binsPerOctave ?? 36,
-    ),
-  );
+  return withEntry('chromaCqt', () => {
+    const request = sampleOneShot<ChromaCqtRequest>('chromaCqt', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+    assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
+    assertPositiveInteger(request.binsPerOctave ?? 36, 'binsPerOctave');
+    return toChromaResult(
+      addon.chromaCqt(
+        request.samples,
+        request.sampleRate,
+        request.hopLength ?? 512,
+        request.nChroma ?? 12,
+        request.binsPerOctave ?? 36,
+      ),
+    );
+  });
 }
 
 /** Bass-focused chromagram. Returns `features` as rows = chroma bins, cols = frames. */
@@ -365,18 +370,20 @@ export function bassChroma(
   options?: OptionsOf<BassChromaRequest>,
 ): ChromaResult;
 export function bassChroma(...args: unknown[]): ChromaResult {
-  const request = sampleOneShot<BassChromaRequest>('bassChroma', args);
-  assertAudioInput('bassChroma', request.samples, request.sampleRate, request);
-  assertPositiveInteger('bassChroma', request.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('bassChroma', request.nChroma ?? 12, 'nChroma');
-  return toChromaResult(
-    addon.bassChroma(
-      request.samples,
-      request.sampleRate,
-      request.hopLength ?? 512,
-      request.nChroma ?? 12,
-    ),
-  );
+  return withEntry('bassChroma', () => {
+    const request = sampleOneShot<BassChromaRequest>('bassChroma', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+    assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
+    return toChromaResult(
+      addon.bassChroma(
+        request.samples,
+        request.sampleRate,
+        request.hopLength ?? 512,
+        request.nChroma ?? 12,
+      ),
+    );
+  });
 }
 
 /** Constant-Q transform magnitude. `magnitude` is rows = CQT bins, cols = frames. */
@@ -387,18 +394,20 @@ export function cqt(
   options?: OptionsOf<CqtRequest>,
 ): CqtResult;
 export function cqt(...args: unknown[]): CqtResult {
-  const request = sampleOneShot<CqtRequest>('cqt', args);
-  checkCqtRequest('cqt', request);
-  return toCqtResult(
-    addon.cqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength ?? 512,
-      request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
-      request.nBins ?? 84,
-      request.binsPerOctave ?? 12,
-    ),
-  );
+  return withEntry('cqt', () => {
+    const request = sampleOneShot<CqtRequest>('cqt', args);
+    checkCqtRequest(request);
+    return toCqtResult(
+      addon.cqt(
+        request.samples,
+        request.sampleRate,
+        request.hopLength ?? 512,
+        request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
+        request.nBins ?? 84,
+        request.binsPerOctave ?? 12,
+      ),
+    );
+  });
 }
 
 /** Faster pseudo-CQT magnitude approximation. `magnitude` is rows = CQT bins, cols = frames. */
@@ -409,18 +418,20 @@ export function pseudoCqt(
   options?: OptionsOf<PseudoCqtRequest>,
 ): CqtResult;
 export function pseudoCqt(...args: unknown[]): CqtResult {
-  const request = sampleOneShot<PseudoCqtRequest>('pseudoCqt', args);
-  checkCqtRequest('pseudoCqt', request);
-  return toCqtResult(
-    addon.pseudoCqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength ?? 512,
-      request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
-      request.nBins ?? 84,
-      request.binsPerOctave ?? 12,
-    ),
-  );
+  return withEntry('pseudoCqt', () => {
+    const request = sampleOneShot<PseudoCqtRequest>('pseudoCqt', args);
+    checkCqtRequest(request);
+    return toCqtResult(
+      addon.pseudoCqt(
+        request.samples,
+        request.sampleRate,
+        request.hopLength ?? 512,
+        request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
+        request.nBins ?? 84,
+        request.binsPerOctave ?? 12,
+      ),
+    );
+  });
 }
 
 /** Hybrid CQT magnitude. `magnitude` is rows = CQT bins, cols = frames. */
@@ -431,18 +442,20 @@ export function hybridCqt(
   options?: OptionsOf<HybridCqtRequest>,
 ): CqtResult;
 export function hybridCqt(...args: unknown[]): CqtResult {
-  const request = sampleOneShot<HybridCqtRequest>('hybridCqt', args);
-  checkCqtRequest('hybridCqt', request);
-  return toCqtResult(
-    addon.hybridCqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength ?? 512,
-      request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
-      request.nBins ?? 84,
-      request.binsPerOctave ?? 12,
-    ),
-  );
+  return withEntry('hybridCqt', () => {
+    const request = sampleOneShot<HybridCqtRequest>('hybridCqt', args);
+    checkCqtRequest(request);
+    return toCqtResult(
+      addon.hybridCqt(
+        request.samples,
+        request.sampleRate,
+        request.hopLength ?? 512,
+        request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
+        request.nBins ?? 84,
+        request.binsPerOctave ?? 12,
+      ),
+    );
+  });
 }
 
 /**
@@ -457,32 +470,36 @@ export function vqt(
   options?: OptionsOf<VqtRequest>,
 ): CqtResult;
 export function vqt(...args: unknown[]): CqtResult {
-  const request = sampleOneShot<VqtRequest>('vqt', args);
-  checkCqtRequest('vqt', request);
-  return toCqtResult(
-    addon.vqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength ?? 512,
-      request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
-      request.nBins ?? 84,
-      request.binsPerOctave ?? 12,
-      resolveOptionalNonNegative('vqt', request.gamma, 'gamma'),
-    ),
-  );
+  return withEntry('vqt', () => {
+    const request = sampleOneShot<VqtRequest>('vqt', args);
+    checkCqtRequest(request);
+    return toCqtResult(
+      addon.vqt(
+        request.samples,
+        request.sampleRate,
+        request.hopLength ?? 512,
+        request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
+        request.nBins ?? 84,
+        request.binsPerOctave ?? 12,
+        resolveOptionalNonNegative(request.gamma, 'gamma'),
+      ),
+    );
+  });
 }
 
 /** Global tuning offset, in cents, from a set of frequencies (librosa.pitch_tuning). */
 export function pitchTuning(request: PitchTuningRequest): number;
 export function pitchTuning(...args: unknown[]): number {
-  const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
-  assertFloat32Array('pitchTuning', r.frequencies, 'frequencies');
-  const binsPerOctave = r.binsPerOctave ?? 12;
-  assertPositiveInteger('pitchTuning', binsPerOctave, 'binsPerOctave');
-  return nativeTuningToCents(
-    addon.pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave),
-    binsPerOctave,
-  );
+  return withEntry('pitchTuning', () => {
+    const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
+    assertFloat32Array(r.frequencies, 'frequencies');
+    const binsPerOctave = r.binsPerOctave ?? 12;
+    assertPositiveInteger(binsPerOctave, 'binsPerOctave');
+    return nativeTuningToCents(
+      addon.pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave),
+      binsPerOctave,
+    );
+  });
 }
 
 /**
@@ -498,22 +515,24 @@ export function estimateTuning(
   options?: OptionsOf<EstimateTuningRequest>,
 ): number;
 export function estimateTuning(...args: unknown[]): number {
-  const request = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
-  assertAudioInput('estimateTuning', request.samples, request.sampleRate, request);
-  const fft = resolveFftOptions('estimateTuning', request.nFft, request.hopLength);
-  const binsPerOctave = request.binsPerOctave ?? 12;
-  assertPositiveInteger('estimateTuning', binsPerOctave, 'binsPerOctave');
-  return nativeTuningToCents(
-    addon.estimateTuning(
-      request.samples,
-      request.sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      request.resolution ?? 0.01,
+  return withEntry('estimateTuning', () => {
+    const request = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    const binsPerOctave = request.binsPerOctave ?? 12;
+    assertPositiveInteger(binsPerOctave, 'binsPerOctave');
+    return nativeTuningToCents(
+      addon.estimateTuning(
+        request.samples,
+        request.sampleRate,
+        fft.nFft,
+        fft.hopLength,
+        request.resolution ?? 0.01,
+        binsPerOctave,
+      ),
       binsPerOctave,
-    ),
-    binsPerOctave,
-  );
+    );
+  });
 }
 
 /**
@@ -552,36 +571,38 @@ export function piptrack(
   options?: OptionsOf<PiptrackRequest>,
 ): PiptrackResult;
 export function piptrack(...args: unknown[]): PiptrackResult {
-  const request = sampleOneShot<PiptrackRequest>('piptrack', args);
-  assertAudioInput('piptrack', request.samples, request.sampleRate, request);
-  const fft = resolveFftOptions('piptrack', request.nFft, request.hopLength);
-  const fminHz = request.fminHz ?? 150;
-  const fmaxHz = request.fmaxHz ?? 4000;
-  assertFrequencyBounds('piptrack', fminHz, fmaxHz, 'fminHz', 'fmaxHz');
-  const r = addon.piptrack(
-    request.samples,
-    request.sampleRate,
-    fft.nFft,
-    fft.hopLength,
-    fminHz,
-    fmaxHz,
-    request.threshold ?? 0.1,
-  );
-  return {
-    pitches: toMatrix2D(r.pitches, r.nBins, r.nFrames),
-    magnitudes: toMatrix2D(r.magnitudes, r.nBins, r.nFrames),
-  };
+  return withEntry('piptrack', () => {
+    const request = sampleOneShot<PiptrackRequest>('piptrack', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    const fft = resolveFftOptions(request.nFft, request.hopLength);
+    const fminHz = request.fminHz ?? 150;
+    const fmaxHz = request.fmaxHz ?? 4000;
+    assertFrequencyBounds(fminHz, fmaxHz, 'fminHz', 'fmaxHz');
+    const r = addon.piptrack(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      fminHz,
+      fmaxHz,
+      request.threshold ?? 0.1,
+    );
+    return {
+      pitches: toMatrix2D(r.pitches, r.nBins, r.nFrames),
+      magnitudes: toMatrix2D(r.magnitudes, r.nBins, r.nFrames),
+    };
+  });
 }
 
-function pitchTrack(fnName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchResult {
-  const request = sampleOneShot<PitchPyinRequest>(fnName, args);
-  assertAudioInput(fnName, request.samples, request.sampleRate, request);
+function pitchTrack(requestName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchResult {
+  const request = sampleOneShot<PitchPyinRequest>(requestName, args);
+  assertAudioInput(request.samples, request.sampleRate, request);
   // frameLength is a framing window, not a transform size, so it carries no evenness rule.
-  assertPositiveInteger(fnName, request.frameLength ?? 2048, 'frameLength');
-  assertPositiveInteger(fnName, request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger(request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
   const f0MinHz = request.f0MinHz ?? 65;
   const f0MaxHz = request.f0MaxHz ?? 2093;
-  assertFrequencyBounds(fnName, f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
+  assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
   const positional = [
     request.samples,
     request.sampleRate,
@@ -593,7 +614,7 @@ function pitchTrack(fnName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchRes
   ] as const;
   // Only pYIN takes a fill flag; the YIN request refuses fillNa as an unknown key.
   const native: PitchResult & { nFrames: number } =
-    fnName === 'pitchPyin'
+    requestName === 'pitchPyin'
       ? addon.pitchPyin(...positional, request.fillNa ?? false)
       : addon.pitchYin(...positional);
   // The frame count is the length of every per-frame array; the result does not repeat it.
@@ -626,47 +647,49 @@ export function pitchPyin(...args: unknown[]): PitchResult {
 /** Segment a host-supplied monophonic F0 track into stable note regions. */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[];
 export function noteSegments(...args: unknown[]): NoteSegment[] {
-  const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
-  const { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold } = r;
-  const hasTuningOptions =
-    segmentationThresholdCents !== undefined ||
-    minNoteMs !== undefined ||
-    referenceHz !== undefined ||
-    voicedThreshold !== undefined;
-  if (r.voiced == null && r.voicedProb == null) {
-    throw new TypeError('noteSegments: give voiced or voicedProb');
-  }
-  // The native reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
-  const flags = r.voiced != null ? Uint8Array.from(toVoicedInt32('noteSegments', r.voiced)) : null;
-  const prob = flags === null ? r.voicedProb : null;
-  const voicing = flags ?? prob;
-  if (
-    ArrayBuffer.isView(r.f0Hz) &&
-    ArrayBuffer.isView(voicing) &&
-    r.f0Hz.length !== voicing.length
-  ) {
-    throw new RangeError(
-      `noteSegments: ${flags ? 'voiced' : 'voicedProb'} must have the same length as f0Hz`,
+  return withEntry('noteSegments', () => {
+    const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
+    const { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold } = r;
+    const hasTuningOptions =
+      segmentationThresholdCents !== undefined ||
+      minNoteMs !== undefined ||
+      referenceHz !== undefined ||
+      voicedThreshold !== undefined;
+    if (r.voiced == null && r.voicedProb == null) {
+      throw refuseType('give voiced or voicedProb');
+    }
+    // The native reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
+    const flags = r.voiced != null ? Uint8Array.from(toVoicedInt32(r.voiced)) : null;
+    const prob = flags === null ? r.voicedProb : null;
+    const voicing = flags ?? prob;
+    if (
+      ArrayBuffer.isView(r.f0Hz) &&
+      ArrayBuffer.isView(voicing) &&
+      r.f0Hz.length !== voicing.length
+    ) {
+      throw refuse(`${flags ? 'voiced' : 'voicedProb'} must have the same length as f0Hz`);
+    }
+    return addon.noteSegments(
+      r.f0Hz,
+      prob ?? null,
+      flags,
+      r.frameRate,
+      hasTuningOptions
+        ? { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold }
+        : undefined,
     );
-  }
-  return addon.noteSegments(
-    r.f0Hz,
-    prob ?? null,
-    flags,
-    r.frameRate,
-    hasTuningOptions
-      ? { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold }
-      : undefined,
-  );
+  });
 }
 
 /** Tonal centroid features of a chromagram. Returns rows = 6 tonnetz dims, cols = frames. */
 export function tonnetz(request: TonnetzRequest): Matrix2D;
 export function tonnetz(...args: unknown[]): Matrix2D {
-  const r = requestOnly<TonnetzRequest>('tonnetz', args);
-  assertMatrix2D('tonnetz', r.chromagram, 'chromagram');
-  const out = addon.tonnetz(r.chromagram.data, r.chromagram.rows, r.chromagram.cols);
-  return toMatrix2D(out, 6, r.chromagram.cols);
+  return withEntry('tonnetz', () => {
+    const r = requestOnly<TonnetzRequest>('tonnetz', args);
+    assertMatrix2D(r.chromagram, 'chromagram');
+    const out = addon.tonnetz(r.chromagram.data, r.chromagram.rows, r.chromagram.cols);
+    return toMatrix2D(out, 6, r.chromagram.cols);
+  });
 }
 
 /** NNLS chroma. Returns rows = 12 chroma bins, cols = frames. */
@@ -677,17 +700,19 @@ export function nnlsChroma(
   options?: OptionsOf<NnlsChromaRequest>,
 ): Matrix2D;
 export function nnlsChroma(...args: unknown[]): Matrix2D {
-  const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
-  assertAudioInput('nnlsChroma', request.samples, request.sampleRate, request);
-  // stftBlendNFft defaults to 4096, not the 2048/512 pair resolveFftOptions assumes.
-  assertPositiveInteger('nnlsChroma', request.stftBlendNFft ?? 4096, 'stftBlendNFft');
-  const r = addon.nnlsChroma(
-    request.samples,
-    request.sampleRate,
-    request.enableStftBlend ?? true,
-    request.stftBlendWeight ?? 0.55,
-    request.stftBlendNFft ?? 4096,
-    resolvePositiveIntegerOption('nnlsChroma', 'hopLength', request.hopLength, 512),
-  );
-  return toMatrix2D(r.data, r.nChroma, r.nFrames);
+  return withEntry('nnlsChroma', () => {
+    const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
+    assertAudioInput(request.samples, request.sampleRate, request);
+    // stftBlendNFft defaults to 4096, not the 2048/512 pair resolveFftOptions assumes.
+    assertPositiveInteger(request.stftBlendNFft ?? 4096, 'stftBlendNFft');
+    const r = addon.nnlsChroma(
+      request.samples,
+      request.sampleRate,
+      request.enableStftBlend ?? true,
+      request.stftBlendWeight ?? 0.55,
+      request.stftBlendNFft ?? 4096,
+      resolvePositiveIntegerOption('hopLength', request.hopLength, 512),
+    );
+    return toMatrix2D(r.data, r.nChroma, r.nFrames);
+  });
 }

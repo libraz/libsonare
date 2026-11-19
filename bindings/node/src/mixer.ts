@@ -1,4 +1,4 @@
-import { entryClass } from './internal/entry.js';
+import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
 import { assertStripMetering, mixSceneJsonToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
@@ -138,32 +138,31 @@ function isAbsent(value: unknown): value is undefined | null {
   return value === undefined || value === null;
 }
 
-function requiredNumber(fnName: string, value: unknown, name: string): number {
-  assertFloatValue(fnName, value, name);
+function requiredNumber(value: unknown, name: string): number {
+  assertFloatValue(value, name);
   return value as number;
 }
 
-function optionalNumber(fnName: string, value: unknown, name: string, fallback: number): number {
-  return isAbsent(value) ? fallback : requiredNumber(fnName, value, name);
+function optionalNumber(value: unknown, name: string, fallback: number): number {
+  return isAbsent(value) ? fallback : requiredNumber(value, name);
 }
 
-function requiredString(fnName: string, value: unknown, name: string): string {
+function requiredString(value: unknown, name: string): string {
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: ${name} must be a string`);
+    throw refuseType(`${name} must be a string`);
   }
   return value;
 }
 
-function requiredBoolean(fnName: string, value: unknown, name: string): boolean {
+function requiredBoolean(value: unknown, name: string): boolean {
   if (typeof value !== 'boolean') {
-    throw new TypeError(`${fnName}: ${name} must be a boolean`);
+    throw refuseType(`${name} must be a boolean`);
   }
   return value;
 }
 
 /** A closed token: a non-string is a `TypeError` (a number never selects an ordinal), an unknown string a `RangeError`. */
 function tokenArg(
-  fnName: string,
   value: unknown,
   name: string,
   resolve: (token: string) => number,
@@ -171,12 +170,12 @@ function tokenArg(
 ): number {
   if (isAbsent(value)) {
     if (fallback === undefined) {
-      throw new TypeError(`${fnName}: ${name} must be a string`);
+      throw refuseType(`${name} must be a string`);
     }
     return resolve(fallback);
   }
   if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: ${name} must be a string`);
+    throw refuseType(`${name} must be a string`);
   }
   return resolve(value);
 }
@@ -184,16 +183,16 @@ function tokenArg(
 const curveToken = (token: string): number => automationCurveValue(token as AutomationCurve);
 
 /** An omitted block size stays undefined, which the addon passes on as the library default. */
-function maxBlockSizeOf(fnName: string, value: unknown): number | undefined {
+function maxBlockSizeOf(value: unknown): number | undefined {
   if (isAbsent(value)) {
     return undefined;
   }
-  assertIntegerValue(fnName, value, 'maxBlockSize');
+  assertIntegerValue(value, 'maxBlockSize');
   if (value === 0) {
-    throw new RangeError(`${fnName}: maxBlockSize must not be 0 (omit it for the default)`);
+    throw refuse(`maxBlockSize must not be 0 (omit it for the default)`);
   }
   if (value < 0) {
-    throw new RangeError(`${fnName}: maxBlockSize must be a positive integer`);
+    throw refuse(`maxBlockSize must be a positive integer`);
   }
   return value;
 }
@@ -229,16 +228,16 @@ export class Mixer {
     const json = adoptedSceneJson;
     adoptedSceneJson = undefined;
     const bag = requestObject('Mixer', config, 'config', true);
-    assertSampleRate('Mixer', bag.sampleRate);
-    const maxBlockSize = maxBlockSizeOf('Mixer', bag.maxBlockSize);
+    assertSampleRate(bag.sampleRate);
+    const maxBlockSize = maxBlockSizeOf(bag.maxBlockSize);
     let sceneJson = json;
     if (sceneJson === undefined) {
       if (!isAbsent(bag.scene) && !isObject(bag.scene)) {
-        throw new TypeError('Mixer: scene must be an object');
+        throw refuseType('scene must be an object');
       }
       sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
     }
-    sceneJson = mixSceneJsonToNative('Mixer', sceneJson);
+    sceneJson = mixSceneJsonToNative(sceneJson);
     this.native = new addon.Mixer(sceneJson, bag.sampleRate as number, maxBlockSize);
   }
 
@@ -251,7 +250,7 @@ export class Mixer {
    *   RangeError for a sample rate outside `[8000, 384000]` or a `maxBlockSize` of `0` or below.
    */
   static fromJson(json: string, options: MixerJsonOptions): Mixer {
-    requiredString('Mixer.fromJson', json, 'json');
+    requiredString(json, 'json');
     const bag = requestObject('Mixer.fromJson', options, 'options', true);
     adoptedSceneJson = json;
     try {
@@ -343,7 +342,7 @@ export class Mixer {
   configureMeter(options: MixerMeterOptions): void {
     const bag = requestObject('configureMeter', options, 'options', true);
     this.native.configureMeter(
-      requiredBoolean('configureMeter', bag.enabled, 'enabled'),
+      requiredBoolean(bag.enabled, 'enabled'),
       bag.truePeakOversample as number | undefined,
       bag.measureLufs as boolean | undefined,
       bag.measureTruePeak as boolean | undefined,
@@ -369,8 +368,12 @@ export class Mixer {
    * @throws RangeError when more inputs are given than the mixer has strips
    */
   processStereo(leftInputs: Float32Array[], rightInputs: Float32Array[]): MixerProcessResult {
-    if (leftInputs.length !== rightInputs.length) {
-      throw new RangeError('leftInputs and rightInputs must have the same length.');
+    try {
+      if (leftInputs.length !== rightInputs.length) {
+        throw refuse('leftInputs and rightInputs must have the same length.');
+      }
+    } catch (error) {
+      throw nameNativeError(error, 'Mixer.processStereo');
     }
     return this.native.processStereo(leftInputs, rightInputs);
   }
@@ -398,10 +401,10 @@ export class Mixer {
     this.native.scheduleInsertAutomation(
       index,
       insertIndex,
-      requiredNumber(fn, bag.paramId, 'paramId'),
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.value, 'value'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      requiredNumber(bag.paramId, 'paramId'),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.value, 'value'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -411,10 +414,10 @@ export class Mixer {
    * @throws RangeError when no strip has that id
    */
   stripById(id: string): number {
-    requiredString('stripById', id, 'id');
+    requiredString(id, 'id');
     const index = this.native.stripById(id);
     if (index === null || index === undefined) {
-      throw new RangeError(`stripById: no strip with id '${id}'`);
+      throw refuse(`no strip with id '${id}'`);
     }
     return index;
   }
@@ -433,7 +436,7 @@ export class Mixer {
    * @throws If the id is already taken; RangeError when `truePeakOversample` is not 4 or 8 (omit it for the default)
    */
   addStrip(id: string, metering?: StripMeteringOptions): number {
-    assertStripMetering('addStrip', metering);
+    assertStripMetering(metering);
     this.native.addStrip(id, metering);
     return this.stripById(id);
   }
@@ -448,7 +451,7 @@ export class Mixer {
    */
   addBus(id: string, role?: MixBusRole): void {
     if (!isAbsent(role)) {
-      assertClosedToken('addBus', role, MIX_BUS_ROLES, 'role');
+      assertClosedToken(role, MIX_BUS_ROLES, 'role');
     }
     this.native.addBus(id, role ?? 'aux');
   }
@@ -607,8 +610,8 @@ export class Mixer {
     const bag = requestObject('setPolarityInvert', invert, 'invert', true);
     this.native.setPolarityInvert(
       strip,
-      requiredBoolean('setPolarityInvert', bag.left, 'left'),
-      requiredBoolean('setPolarityInvert', bag.right, 'right'),
+      requiredBoolean(bag.left, 'left'),
+      requiredBoolean(bag.right, 'right'),
     );
   }
 
@@ -620,7 +623,7 @@ export class Mixer {
   setPanLaw(strip: StripRef, panLaw: PanLaw): void {
     this.native.setPanLaw(
       strip,
-      tokenArg('setPanLaw', panLaw, 'panLaw', (token) => panLawValue(token as PanLaw)),
+      tokenArg(panLaw, 'panLaw', (token) => panLawValue(token as PanLaw)),
     );
   }
 
@@ -669,16 +672,10 @@ export class Mixer {
     const bag = requestObject(fn, send, 'send', true);
     return this.native.addSend(
       strip,
-      requiredString(fn, bag.id, 'id'),
-      requiredString(fn, bag.destinationBusId, 'destinationBusId'),
-      optionalNumber(fn, bag.sendDb, 'sendDb', 0),
-      tokenArg(
-        fn,
-        bag.timing,
-        'timing',
-        (token) => sendTimingValue(token as SendTiming),
-        'postFader',
-      ),
+      requiredString(bag.id, 'id'),
+      requiredString(bag.destinationBusId, 'destinationBusId'),
+      optionalNumber(bag.sendDb, 'sendDb', 0),
+      tokenArg(bag.timing, 'timing', (token) => sendTimingValue(token as SendTiming), 'postFader'),
     );
   }
 
@@ -710,7 +707,7 @@ export class Mixer {
     }
     return this.native.meterTap(
       strip,
-      tokenArg('stripMeter', tap, 'tap', (token) => meterTapValue(token as MeterTap)),
+      tokenArg(tap, 'tap', (token) => meterTapValue(token as MeterTap)),
     );
   }
 
@@ -793,9 +790,9 @@ export class Mixer {
     const bag = requestObject(fn, point, 'point', true);
     this.native.scheduleFaderAutomation(
       strip,
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.faderDb, 'faderDb'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.faderDb, 'faderDb'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -812,9 +809,9 @@ export class Mixer {
     const bag = requestObject(fn, point, 'point', true);
     this.native.schedulePanAutomation(
       strip,
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.pan, 'pan'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.pan, 'pan'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -831,9 +828,9 @@ export class Mixer {
     const bag = requestObject(fn, point, 'point', true);
     this.native.scheduleWidthAutomation(
       strip,
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.width, 'width'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.width, 'width'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -852,9 +849,9 @@ export class Mixer {
     this.native.scheduleSendAutomation(
       strip,
       sendIndex,
-      requiredNumber(fn, bag.samplePos, 'samplePos'),
-      requiredNumber(fn, bag.sendDb, 'sendDb'),
-      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+      requiredNumber(bag.samplePos, 'samplePos'),
+      requiredNumber(bag.sendDb, 'sendDb'),
+      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 

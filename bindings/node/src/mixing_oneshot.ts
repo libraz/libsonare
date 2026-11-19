@@ -1,4 +1,4 @@
-import { withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { panModeToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
@@ -30,14 +30,16 @@ export function mixingScenePresetNames(): MixScenePreset[] {
  * @throws TypeError when `name` is not a string; RangeError for an unknown preset name
  */
 export function mixingScenePreset(name: MixScenePreset): MixSceneDocument {
-  if (typeof name !== 'string') {
-    throw new TypeError('mixingScenePreset: name must be a string');
-  }
-  const names = withEntry('mixingScenePreset', () => mixingScenePresetNames());
-  if (!names.includes(name)) {
-    throw new RangeError(`mixingScenePreset: name must be one of ${names.join(', ')}`);
-  }
-  return JSON.parse(addon.mixingScenePresetJson(name)) as MixSceneDocument;
+  return withEntry('mixingScenePreset', () => {
+    if (typeof name !== 'string') {
+      throw refuseType('name must be a string');
+    }
+    const names = withEntry('mixingScenePreset', () => mixingScenePresetNames());
+    if (!names.includes(name)) {
+      throw refuse(`name must be one of ${names.join(', ')}`);
+    }
+    return JSON.parse(addon.mixingScenePresetJson(name)) as MixSceneDocument;
+  });
 }
 
 /** One strip of {@link mixStereo}: a stereo pair and its mixer settings. */
@@ -100,60 +102,62 @@ const STRIP_NUMBER_KEYS = ['inputTrimDb', 'faderDb', 'pan', 'width'] as const;
  */
 export function mixStereo(request: MixStereoRequest): MixResult;
 export function mixStereo(...args: unknown[]): MixResult {
-  const fnName = 'mixStereo';
-  const req = requestOnly<MixStereoRequest>(fnName, args);
-  assertSampleRate(fnName, req.sampleRate);
-  if (!Array.isArray(req.strips)) {
-    throw new TypeError(`${fnName}: strips must be an array`);
-  }
-  if (req.strips.length === 0) {
-    throw new RangeError(`${fnName}: strips must not be empty`);
-  }
-  const left: Float32Array[] = [];
-  const right: Float32Array[] = [];
-  const options: Record<string, unknown[]> = {};
-  req.strips.forEach((strip, index) => {
-    const path = `strips[${index}]`;
-    if (strip === null || typeof strip !== 'object' || Array.isArray(strip)) {
-      throw new TypeError(`${fnName}: ${path} must be an object`);
+  return withEntry('mixStereo', () => {
+    const fnName = 'mixStereo';
+    const req = requestOnly<MixStereoRequest>(fnName, args);
+    assertSampleRate(req.sampleRate);
+    if (!Array.isArray(req.strips)) {
+      throw refuseType(`strips must be an array`);
     }
-    for (const key of Object.keys(strip)) {
-      if (!(STRIP_KEYS as readonly string[]).includes(key)) {
-        throw new TypeError(`${fnName}: unknown option '${key}' in '${path}'`);
+    if (req.strips.length === 0) {
+      throw refuse(`strips must not be empty`);
+    }
+    const left: Float32Array[] = [];
+    const right: Float32Array[] = [];
+    const options: Record<string, unknown[]> = {};
+    req.strips.forEach((strip, index) => {
+      const path = `strips[${index}]`;
+      if (strip === null || typeof strip !== 'object' || Array.isArray(strip)) {
+        throw refuseType(`${path} must be an object`);
       }
-    }
-    assertAudioInput(fnName, strip.left, req.sampleRate, req, `${path}.left`);
-    assertAudioInput(fnName, strip.right, req.sampleRate, req, `${path}.right`);
-    if (strip.left.length !== strip.right.length) {
-      throw new RangeError(`${fnName}: ${path}.left and ${path}.right must have equal lengths`);
-    }
-    left.push(strip.left);
-    right.push(strip.right);
-    const given: Record<string, unknown> = {};
-    for (const key of STRIP_NUMBER_KEYS) {
-      if (strip[key] !== undefined && strip[key] !== null) {
-        assertFloatValue(fnName, strip[key], `${path}.${key}`);
-        given[key] = strip[key];
+      for (const key of Object.keys(strip)) {
+        if (!(STRIP_KEYS as readonly string[]).includes(key)) {
+          throw refuseType(`unknown option '${key}' in '${path}'`);
+        }
       }
-    }
-    if (strip.panMode !== undefined && strip.panMode !== null) {
-      given.panMode = panModeToNative(fnName, strip.panMode, `${path}.panMode`);
-    }
-    if (strip.muted !== undefined && strip.muted !== null) {
-      given.muted = requireBoolean(fnName, strip.muted, `${path}.muted`);
-    }
-    for (const [key, value] of Object.entries(given)) {
-      // A strip that leaves a field out stays at its default: the native array holds a hole.
-      const column = options[key] ?? new Array(req.strips.length).fill(undefined);
-      column[index] = value;
-      options[key] = column;
-    }
+      assertAudioInput(strip.left, req.sampleRate, req, `${path}.left`);
+      assertAudioInput(strip.right, req.sampleRate, req, `${path}.right`);
+      if (strip.left.length !== strip.right.length) {
+        throw refuse(`${path}.left and ${path}.right must have equal lengths`);
+      }
+      left.push(strip.left);
+      right.push(strip.right);
+      const given: Record<string, unknown> = {};
+      for (const key of STRIP_NUMBER_KEYS) {
+        if (strip[key] !== undefined && strip[key] !== null) {
+          assertFloatValue(strip[key], `${path}.${key}`);
+          given[key] = strip[key];
+        }
+      }
+      if (strip.panMode !== undefined && strip.panMode !== null) {
+        given.panMode = panModeToNative(strip.panMode, `${path}.panMode`);
+      }
+      if (strip.muted !== undefined && strip.muted !== null) {
+        given.muted = requireBoolean(strip.muted, `${path}.muted`);
+      }
+      for (const [key, value] of Object.entries(given)) {
+        // A strip that leaves a field out stays at its default: the native array holds a hole.
+        const column = options[key] ?? new Array(req.strips.length).fill(undefined);
+        column[index] = value;
+        options[key] = column;
+      }
+    });
+    const native = addon.mixStereo(left, right, req.sampleRate, options);
+    return {
+      left: native.left,
+      right: native.right,
+      sampleRate: native.sampleRate,
+      meters: native.meters as MixMeterSnapshot[],
+    };
   });
-  const native = addon.mixStereo(left, right, req.sampleRate, options);
-  return {
-    left: native.left,
-    right: native.right,
-    sampleRate: native.sampleRate,
-    meters: native.meters as MixMeterSnapshot[],
-  };
 }
