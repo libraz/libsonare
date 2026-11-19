@@ -306,6 +306,30 @@ TEST_CASE("a layout switch leaves the sine seamless", "[playback][layout-switch]
   CHECK(from_71_to_mono <= 1e-5f);
 }
 
+TEST_CASE("the first block under auto fixes the layout without counting a switch",
+          "[playback][layout-switch]") {
+  const RendererConfig config = auto_config(TargetKind::Speakers, ChannelLayout::Stereo);
+  RendererConfig fixed_mono = config;
+  fixed_mono.prepare.input_layout = InputLayout::Mono;
+  const Source source = [](int, int ch, int n) { return ch == 0 ? sine(n) : 0.0f; };
+
+  PlaybackRenderer automatic(config, nullptr, kRate, kBlock);
+  PlaybackRenderer fixed(fixed_mono, nullptr, kRate, kBlock);
+  const Planes from_auto = run(automatic, {{1, 20}}, source);
+  const Planes from_fixed = run(fixed, {{1, 20}}, source);
+  CHECK(automatic.diagnostics().layout_switches == 0u);
+  CHECK(automatic.input_channel_count() == 1);
+  CHECK(from_auto == from_fixed);
+
+  // A real change afterwards counts, and a reset leaves the next layout to the next block again.
+  (void)run(automatic, {{2, 10}, {1, 10}}, source);
+  CHECK(automatic.diagnostics().layout_switches == 2u);
+  automatic.reset();
+  (void)run(automatic, {{6, 10}}, source);
+  CHECK(automatic.diagnostics().layout_switches == 2u);
+  CHECK(automatic.input_channel_count() == 6);
+}
+
 TEST_CASE("an impulse in every layout section lands at its latency", "[playback][layout-switch]") {
   PlaybackRenderer renderer(auto_config(TargetKind::Speakers, ChannelLayout::FivePointOne), nullptr,
                             kRate, kBlock);

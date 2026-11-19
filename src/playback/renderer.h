@@ -39,7 +39,7 @@ inline constexpr int kOfflineRenderBlockFrames = 4096;
 /// Snapshot of the renderer's diagnostics.
 struct RendererDiagnostics {
   ChannelLayout active_input_layout = ChannelLayout::Stereo;
-  uint64_t layout_switches = 0;
+  uint64_t layout_switches = 0;  ///< input layout changes after the first block fixed it
   uint64_t truncated_drains = 0;
   uint32_t inactive_stages = 0;  ///< bit `1u << Stage`
   std::array<int, kStageCount> stage_latency_q8{};

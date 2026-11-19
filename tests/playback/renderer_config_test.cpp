@@ -122,7 +122,7 @@ TEST_CASE("an out-of-range value is refused by name", "[playback][config]") {
 TEST_CASE("a number no float can hold is refused, not narrowed", "[playback][config]") {
   const std::string message = refusal(R"({"loudness": {"targetLufs": -1e39}})");
   CHECK(mentions(message, "loudness.targetLufs"));
-  CHECK(mentions(message, "32-bit float"));
+  CHECK(mentions(message, "must be finite and in [-3.4028235e38, 3.4028235e38]"));
 }
 
 TEST_CASE("target.layout is required for speakers and refused for headphones",

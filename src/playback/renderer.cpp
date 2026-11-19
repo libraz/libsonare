@@ -99,6 +99,9 @@ struct PlaybackRenderer::Impl {
   int sample_rate = 0;
   int max_block = 0;
   bool auto_layout = false;
+  /// Under auto, whether a block has fixed the input layout; the first one is adopted, not
+  /// switched to.
+  bool layout_established = false;
   OutputBus bus{};
   int out_count = 0;
   int latency = 0;
@@ -183,6 +186,12 @@ struct PlaybackRenderer::Impl {
     }
   }
 
+  /// Adopts @p layout for the first block under auto: nothing has played, so there is no drain.
+  void establish(ChannelLayout layout) noexcept {
+    active = layout_index(layout) * kInstancesPerLayout;
+    active_index.store(active, std::memory_order_relaxed);
+  }
+
   void switch_to(ChannelLayout layout) noexcept {
     const int base = layout_index(layout) * kInstancesPerLayout;
     if (fading >= 0) {
@@ -221,8 +230,13 @@ struct PlaybackRenderer::Impl {
         in_channels != front_ends[static_cast<size_t>(active)]->input_channel_count()) {
       ChannelLayout layout = ChannelLayout::Stereo;
       layout_for_channel_count(in_channels, &layout);
-      switch_to(layout);
+      if (layout_established) {
+        switch_to(layout);
+      } else {
+        establish(layout);
+      }
     }
+    layout_established = true;
 
     const int bus_count = bus.channel_count();
     for (int p = 0; p < bus_count; ++p) {
@@ -345,6 +359,7 @@ PlaybackRenderer::PlaybackRenderer(const RendererConfig& config, const HrtfSet* 
   m.max_block = max_block_size;
   const PrepareConfig& prepare = config.prepare;
   m.auto_layout = prepare.input_layout == InputLayout::Auto;
+  m.layout_established = false;
   m.bus = make_output_bus(prepare);
   m.out_count = ::sonare::playback::output_channel_count(prepare);
   const auto rate = static_cast<double>(sample_rate);
@@ -534,6 +549,7 @@ void PlaybackRenderer::reset() noexcept {
   m.draining = -1;
   m.fading = -1;
   m.drain_left = 0;
+  m.layout_established = false;
   if (m.speakers) m.speakers->reset();
   if (m.binaural) m.binaural->reset();
   m.main_limiter.reset();

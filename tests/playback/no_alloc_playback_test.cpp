@@ -119,7 +119,7 @@ void run_switch_sequence(const RendererConfig& config) {
 
   const RendererDiagnostics d = renderer.diagnostics();
   CHECK(driver.all_ok());
-  CHECK(d.layout_switches == 7u);
+  CHECK(d.layout_switches == 6u);
   CHECK(d.truncated_drains == 1u);
   // Non-vacuity: the guarded path rendered sound.
   CHECK(driver.energy() > 0.0);
