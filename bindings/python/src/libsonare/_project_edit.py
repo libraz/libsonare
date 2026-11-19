@@ -76,7 +76,6 @@ from ._runtime import (
     _narrow_float,
     _narrow_int,
     _optional_positive_int,
-    _require_export,
     _to_c_float_array,
     _to_c_int,
     _to_c_int64,
@@ -224,11 +223,6 @@ class _ProjectEditMixin:
             if value == "":
                 raise _refuse(f"{arg_name} must not be empty; pass None to clear it")
         lib = _get_lib()
-        _require_export(
-            lib,
-            "sonare_project_set_audio_source_metadata",
-            "loaded libsonare does not support audio-source metadata",
-        )
         _check(
             lib.sonare_project_set_audio_source_metadata(
                 self._require_handle(),
@@ -785,12 +779,6 @@ class _ProjectEditMixin:
         mode_value = _part_rig_mode_value(mode)
         json_arg = _part_rig_inserts_arg(mode_value, inserts)
         lib = _get_lib()
-        _require_export(
-            lib,
-            "sonare_project_set_part_rig",
-            "loaded libsonare does not export sonare_project_set_part_rig; "
-            "rebuild or upgrade the shared library before calling set_part_rig",
-        )
         _check(
             lib.sonare_project_set_part_rig(
                 self._require_handle(),
@@ -810,12 +798,6 @@ class _ProjectEditMixin:
         (``params`` is a dict) and ``None`` otherwise.
         """
         lib = _get_lib()
-        _require_export(
-            lib,
-            "sonare_project_get_part_rig",
-            "loaded libsonare does not export sonare_project_get_part_rig; "
-            "rebuild or upgrade the shared library before calling part_rig",
-        )
         mode = ctypes.c_int()
         out_json = ctypes.c_char_p()
         present = ctypes.c_int()
@@ -849,12 +831,6 @@ class _ProjectEditMixin:
     def clear_part_rig(self, destination_id: int, part: int) -> None:
         """Remove one part-rig entry via an undoable edit (absent entries are a no-op)."""
         lib = _get_lib()
-        _require_export(
-            lib,
-            "sonare_project_clear_part_rig",
-            "loaded libsonare does not export sonare_project_clear_part_rig; "
-            "rebuild or upgrade the shared library before calling clear_part_rig",
-        )
         _check(
             lib.sonare_project_clear_part_rig(
                 self._require_handle(),
@@ -1126,11 +1102,6 @@ class _ProjectEditMixin:
                 )
             )
         else:
-            _require_export(
-                lib,
-                "sonare_project_add_automation_lane_ex",
-                "loaded libsonare does not support typed automation lanes",
-            )
             desc_ex = SonareAutomationLaneDescEx(
                 target_param_id=desc.target_param_id,
                 target_kind=kind,
@@ -1177,11 +1148,6 @@ class _ProjectEditMixin:
                 )
             )
         else:
-            _require_export(
-                lib,
-                "sonare_project_edit_automation_lane_ex",
-                "loaded libsonare does not support typed automation lanes",
-            )
             desc_ex = SonareAutomationLaneDescEx(
                 target_param_id=desc.target_param_id,
                 target_kind=kind,
@@ -1246,13 +1212,6 @@ class _ProjectEditMixin:
         value = _narrow_int(bytes, "bytes", 0, _SIZE_T_MAX)
 
         lib = _get_lib()
-        _require_export(
-            lib,
-            "sonare_project_set_max_history_bytes",
-            "loaded libsonare does not export sonare_project_set_max_history_bytes; "
-            "rebuild or upgrade the shared library before calling "
-            "Project.set_max_history_bytes",
-        )
         _check(
             lib.sonare_project_set_max_history_bytes(
                 self._require_handle(), _to_c_size_t(value, "value")

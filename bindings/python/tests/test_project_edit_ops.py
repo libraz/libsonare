@@ -215,17 +215,6 @@ def test_set_max_history_bytes_zero_keeps_mutation_but_discards_undo() -> None:
     assert p.to_json() == after
 
 
-def test_set_max_history_bytes_reports_missing_additive_symbol(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import libsonare._project_edit as project_edit
-
-    p = Project()
-    monkeypatch.setattr(project_edit, "_get_lib", lambda: object())
-    with raises_coded(ErrorCode.NOT_SUPPORTED, match="sonare_project_set_max_history_bytes"):
-        p.set_max_history_bytes(0)
-
-
 def test_automation_lane_add_edit_remove() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()

@@ -38,7 +38,6 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
-    _unsupported_effect_symbol,
     _validate_scalar,
 )
 
@@ -640,9 +639,6 @@ def _note_set_edit(
     pool, the extractor config -- is marshalled identically.
     """
     lib = _get_lib()
-    if not hasattr(lib, symbol):
-        raise _unsupported_effect_symbol(symbol)
-
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
     prob_array, voiced_array = _note_voicing_arrays(n_frames, voiced, voiced_prob)

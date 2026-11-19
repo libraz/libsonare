@@ -14,7 +14,6 @@ from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import (
     _entry,
-    _not_supported,
     _refuse,
     _refuse_type,
     _require_open,
@@ -237,19 +236,12 @@ def decode_channels(data: bytes) -> DecodedChannels:
         entry points take.
 
     Raises:
-        RuntimeError: If the loaded native library predates this additive
-            entry point.
         SonareError: If the bytes are empty, cannot be decoded, hold a
             non-finite sample, or declare a sample rate outside the supported
             range.
     """
     lib = _get_lib()
-    decode = getattr(lib, "sonare_decode_channels", None)
-    if decode is None:
-        raise _not_supported(
-            "loaded libsonare does not expose sonare_decode_channels; "
-            "rebuild or install a newer native library"
-        )
+    decode = lib.sonare_decode_channels
     encoded = np.frombuffer(data, dtype=np.uint8)
     c_array = encoded.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
     channels = ctypes.c_int()
@@ -311,20 +303,13 @@ def downmix(
         ``(target_channel_count, frames)``.
 
     Raises:
-        RuntimeError: If the loaded native library predates this additive
-            entry point.
         TypeError: If ``normalize`` or ``include_lfe`` is not a ``bool``.
         SonareValueError: If ``channels`` is empty, not planar, or its channels
             differ in length.
         SonareError: For an upmix or an unknown ``target_layout``.
     """
     lib = _get_lib()
-    mix = getattr(lib, "sonare_downmix", None)
-    if mix is None:
-        raise _not_supported(
-            "loaded libsonare does not expose sonare_downmix; "
-            "rebuild or install a newer native library"
-        )
+    mix = lib.sonare_downmix
     if not isinstance(normalize, bool):
         raise _refuse_type("normalize must be a bool")
     if not isinstance(include_lfe, bool):
@@ -406,18 +391,11 @@ class Audio:
         The format set and the decoded-buffer contract are :meth:`from_file`'s.
 
         Raises:
-            RuntimeError: If the loaded native library predates this additive
-                entry point.
             SonareError: If the file cannot be loaded, or if ``channel_index``
                 names no channel the file has.
         """
         lib = _get_lib()
-        load = getattr(lib, "sonare_audio_from_file_channel", None)
-        if load is None:
-            raise _not_supported(
-                "loaded libsonare does not expose sonare_audio_from_file_channel; "
-                "rebuild or install a newer native library"
-            )
+        load = lib.sonare_audio_from_file_channel
         handle = ctypes.c_void_p()
         _check(
             load(
@@ -440,17 +418,10 @@ class Audio:
         audio for the public mono API.
 
         Raises:
-            RuntimeError: If the loaded native library predates this additive
-                probe entry point.
             SonareError: If the file cannot be opened, parsed, or probed.
         """
         lib = _get_lib()
-        probe = getattr(lib, "sonare_audio_file_num_channels", None)
-        if probe is None:
-            raise _not_supported(
-                "loaded libsonare does not expose sonare_audio_file_num_channels; "
-                "rebuild or install a newer native library"
-            )
+        probe = lib.sonare_audio_file_num_channels
         out_channels = ctypes.c_int()
         rc = probe(_utf8_arg(path, "path"), ctypes.byref(out_channels))
         _check(rc)

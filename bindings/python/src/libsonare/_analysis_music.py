@@ -27,7 +27,6 @@ from ._runtime import (
     _guard_buffer,
     _mapping_keys,
     _mode_value,
-    _require_export,
     _section_type_token,
     _to_c_float,
     _to_c_float_array,
@@ -361,9 +360,6 @@ def analyze_sections(
         The detected :class:`Section` list, in time order.
     """
     lib = _get_lib()
-    _require_export(
-        lib, "sonare_analyze_sections", "libsonare was built without section-analysis support"
-    )
     c_array, length = _to_c_float_array(samples)
     options = lib.sonare_section_options_default()
     options.n_fft = _to_c_int(n_fft, "n_fft")
@@ -466,9 +462,6 @@ def detect_boundaries(
             there is nothing to combine.
     """
     lib = _get_lib()
-    _require_export(
-        lib, "sonare_detect_boundaries", "libsonare was built without boundary-detection support"
-    )
     c_array, length = _to_c_float_array(samples)
     options = SonareBoundaryOptions(
         n_fft=_to_c_int(n_fft, "n_fft"),
@@ -591,12 +584,6 @@ def version() -> str:
 def _capabilities_document() -> dict[str, Any]:
     """The library's capabilities document as parsed JSON, keyed as the C ABI spells it."""
     lib = _get_lib()
-    _require_export(
-        lib,
-        "sonare_capabilities_json",
-        "loaded libsonare does not expose sonare_capabilities_json; "
-        "rebuild or install a newer native library",
-    )
     descriptor = json.loads(_call_string(lib.sonare_capabilities_json))
     if not isinstance(descriptor, dict):
         raise _unknown_error("libsonare returned a non-object capabilities descriptor")

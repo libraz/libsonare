@@ -13,7 +13,7 @@ import libsonare._effects_repair_noise as repair_noise
 import libsonare._effects_separation as separation
 import libsonare._effects_spectral as spectral
 import libsonare._effects_timepitch as timepitch
-from libsonare import ErrorCode, SonareError, SonareValueError
+from libsonare import ErrorCode, SonareValueError
 from libsonare._runtime import _get_lib
 
 
@@ -105,15 +105,6 @@ def test_trim_and_rms_normalization_symbols(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(level, "_get_lib", lambda: rms_lib)
     assert level.normalize(_samples(), sample_rate=22050, mode="rms", target_db=-12.0).size == 0
     assert float(rms_call.calls[0][3].value) == pytest.approx(-12.0)
-
-
-def test_rms_normalization_without_the_native_entry_is_explicitly_unsupported(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(level, "_get_lib", lambda: SimpleNamespace())
-    with pytest.raises(SonareError, match="sonare_normalize_rms") as error:
-        level.normalize(_samples(), sample_rate=22050, mode="rms")
-    assert error.value.code == ErrorCode.NOT_SUPPORTED
 
 
 def test_invalid_options_are_rejected_before_library_lookup(

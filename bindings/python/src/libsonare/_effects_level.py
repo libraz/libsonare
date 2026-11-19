@@ -25,7 +25,6 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
-    _unsupported_effect_symbol,
     _validate_samples,
     _validate_scalar,
 )
@@ -110,8 +109,6 @@ def _run_normalize_stereo(
     """
     target_db_c = _normalize_target(target_db)
     lib = _get_lib()
-    if not hasattr(lib, symbol):
-        raise _unsupported_effect_symbol(symbol)
     left_array, left_length = _to_c_float_array(left, arg_name="left")
     right_array, right_length = _to_c_float_array(right, arg_name="right")
     if left_length != right_length:
@@ -168,8 +165,6 @@ def normalize(
     )
     symbol = _NORMALIZE_SYMBOLS[resolved]
     lib = _get_lib()
-    if not hasattr(lib, symbol):
-        raise _unsupported_effect_symbol(symbol)
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):
         rc = getattr(lib, symbol)(
