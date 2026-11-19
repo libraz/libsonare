@@ -86,7 +86,7 @@ describe('normalizeStereo', () => {
     expect(() =>
       // @ts-expect-error -- the refusal is the point; a caller could reach it from JS
       normalizeStereo({ left, right, sampleRate, mode: 'loudness' }),
-    ).toThrow(/normalizeStereo: mode/);
+    ).toThrow(/^normalizeStereo: mode must be one of peak, rms$/);
   });
 
   it('leaves a silent pair alone', () => {

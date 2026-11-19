@@ -146,7 +146,7 @@ import {
   detectOnsets,
 } from './quick_analysis.js';
 import type { OptionsOf } from './validation.js';
-import { requireToken, validateAudioBuffer } from './validation.js';
+import { assertClosedToken, validateAudioBuffer } from './validation.js';
 
 // ============================================================================
 // Audio Class
@@ -289,7 +289,8 @@ export function decodeChannels(bytes: Uint8Array): DecodedChannels {
  *   at full scale, in phase) cannot exceed unity; `includeLfe` folds the LFE
  *   plane in at -3 dB instead of dropping it. Both default to `false`.
  * @throws TypeError for a `targetLayout` that is not a string.
- * @throws RangeError for an upmix or an unknown layout name.
+ * @throws SonareError coded `NotSupported` for an upmix.
+ * @throws RangeError for an unknown layout name.
  * @throws RangeError for no channels, or channels of differing length.
  * @throws TypeError for an `options` that is not an object or a non-boolean option.
  * @returns One `Float32Array` per channel of the target layout.
@@ -300,11 +301,8 @@ export function downmix(
   options: DownmixOptions = {},
 ): Float32Array[] {
   return withEntry('downmix', () => {
-    if (typeof targetLayout !== 'string') {
-      throw refuseType(`targetLayout must be one of ${CHANNEL_LAYOUTS.join(', ')}`);
-    }
-    const layout = requireToken(targetLayout, 'targetLayout', CHANNEL_LAYOUTS, 'mono');
-    return getSonareModule().downmix(channels, CHANNEL_LAYOUT_VALUES[layout], options);
+    assertClosedToken(targetLayout, CHANNEL_LAYOUTS, 'targetLayout');
+    return getSonareModule().downmix(channels, CHANNEL_LAYOUT_VALUES[targetLayout], options);
   });
 }
 

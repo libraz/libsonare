@@ -32,10 +32,10 @@ function resolveNormalizeMode(value: unknown): NormalizeMode {
     return 'peak';
   }
   if (typeof value !== 'string') {
-    throw refuseType(`mode must be 'peak' or 'rms'`);
+    throw refuseType(`mode must be one of peak, rms`);
   }
   if (value !== 'peak' && value !== 'rms') {
-    throw refuse(`mode must be 'peak' or 'rms'`);
+    throw refuse(`mode must be one of peak, rms`);
   }
   return value;
 }

@@ -51,6 +51,15 @@ function fakeAudioBuffer(channels: Float32Array[], sampleRate: number): AudioBuf
   } as AudioBuffer;
 }
 
+const upmixRefusal = (call: () => unknown): { codeName?: string; message: string } => {
+  try {
+    call();
+  } catch (error) {
+    return error as { codeName?: string; message: string };
+  }
+  throw new Error('the upmix was not refused');
+};
+
 describe('decodeChannels', () => {
   beforeAll(async () => {
     await init();
@@ -144,7 +153,9 @@ describe('downmix', () => {
   });
 
   it('refuses an upmix, an unknown layout, no channels and ragged channels', () => {
-    expect(() => downmix([plane(0.1), plane(0.1)], '5.1')).toThrow();
+    const upmix = upmixRefusal(() => downmix([plane(0.1), plane(0.1)], '5.1'));
+    expect(upmix.codeName).toBe('NotSupported');
+    expect(upmix.message).toBe('downmix: downmix cannot upmix');
     expect(() => downmix([plane(0.1), plane(0.1)], '4.0' as never)).toThrow(RangeError);
     expect(() => downmix([plane(0.1), plane(0.1)], 1 as never)).toThrow(TypeError);
     expect(() => downmix([plane(0.1), plane(0.1)], undefined as never)).toThrow(TypeError);

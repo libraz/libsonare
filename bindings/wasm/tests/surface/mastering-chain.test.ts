@@ -535,7 +535,16 @@ describe('chain config: nested form only, tokens only', () => {
         } as MasteringChainConfig,
       });
     expect(() => run(-1)).not.toThrow();
-    expectInvalidFormat(() => run(0.5), 'repair.declip.clipThresholdDb must be at or below 0 dBFS');
+    expect(() => run(0)).not.toThrow();
+    expect(() => run(-890)).not.toThrow();
+    expectInvalidFormat(
+      () => run(0.5),
+      'masterAudio: params.repair.declip.clipThresholdDb must be finite and in [-890, 0]',
+    );
+    expectInvalidFormat(
+      () => run(-891),
+      'masterAudio: params.repair.declip.clipThresholdDb must be finite and in [-890, 0]',
+    );
     expectInvalidFormat(
       () => run(Number.NaN),
       'masterAudio: params.repair.declip.clipThresholdDb must be a number, a boolean or a token',

@@ -233,6 +233,14 @@ describe('normalizeStereo refusals', () => {
         left: loud(),
         right: quiet(),
         sampleRate: SR,
+        mode: 'loudness' as 'peak',
+      }),
+    ).toThrow(/^normalizeStereo: mode must be one of peak, rms$/);
+    expect(() =>
+      normalizeStereo({
+        left: loud(),
+        right: quiet(),
+        sampleRate: SR,
         mode: 7 as unknown as 'peak',
       }),
     ).toThrow(TypeError);

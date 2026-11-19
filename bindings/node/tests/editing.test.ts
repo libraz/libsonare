@@ -459,10 +459,10 @@ describe('editing effects', () => {
   });
 
   it('voiceChange absolute mode refuses a factor the warp cannot reach', () => {
-    // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079].
+    // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079], printed inward.
     const request = { pitchSemitones: 4, formantFactor: 2.5, formantMode: 'absolute' as const };
     expect(() => voiceChange(tone, SR, request)).toThrow(RangeError);
-    expectRefusal(() => voiceChange(tone, SR, request), RangeError, /\[0\.693, 2\.079\]/);
+    expectRefusal(() => voiceChange(tone, SR, request), RangeError, /\[0\.693, 2\.078\]$/);
     expect(() =>
       voiceChange(tone, SR, { formantMode: 'sideways' as unknown as 'relative' }),
     ).toThrow(RangeError);

@@ -588,10 +588,10 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('voiceChange absolute mode refuses a factor the warp cannot reach', () => {
-      // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079].
+      // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079], printed inward.
       const request = { pitchSemitones: 4, formantFactor: 2.5, formantMode: 'absolute' as const };
       expect(() => voiceChange(signal, SR, request)).toThrow(RangeError);
-      expect(() => voiceChange(signal, SR, request)).toThrow(/\[0\.693, 2\.079\]/);
+      expect(() => voiceChange(signal, SR, request)).toThrow(/\[0\.693, 2\.078\]$/);
       expect(() =>
         voiceChange(signal, SR, { formantMode: 'sideways' as unknown as 'relative' }),
       ).toThrow(RangeError);

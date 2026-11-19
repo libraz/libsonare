@@ -71,8 +71,8 @@ export function decodeChannels(data: Uint8Array): DecodedChannels {
  * @param options - `normalize` scales the fold so the worst case (every input
  *   at full scale, in phase) cannot exceed unity; `includeLfe` folds the LFE
  *   plane in at -3 dB instead of dropping it. Both default to `false`.
- * @throws `RangeError` for an upmix, an unknown layout, no channels, or channels that
- *   differ in length;
+ * @throws `SonareError` coded `NotSupported` for an upmix;
+ *   `RangeError` for an unknown layout, no channels, or channels that differ in length;
  *   `TypeError` for a `targetLayout` that is not a layout string, an `options` that is
  *   not an object, or a non-boolean option.
  * @returns One `Float32Array` per channel of the target layout.
