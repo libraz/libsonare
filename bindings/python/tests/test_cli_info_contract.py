@@ -11,24 +11,9 @@ import numpy as np
 import pytest
 
 from libsonare import Audio, ErrorCode, _cli_analysis
-from libsonare import audio as audio_module
 from libsonare._runtime import SonareError
 
-from ._helpers import LIB_AVAILABLE, raises_coded
-
-
-def _source_probe_available() -> bool:
-    if not LIB_AVAILABLE:
-        return False
-    try:
-        from libsonare._runtime import _get_lib
-
-        return hasattr(_get_lib(), "sonare_audio_file_num_channels")
-    except Exception:
-        return False
-
-
-SOURCE_PROBE_AVAILABLE = _source_probe_available()
+from ._helpers import raises_coded
 
 
 def _write_wav(path, *, channels: int, frames: int = 32, sample_rate: int = 22050) -> None:
@@ -39,7 +24,6 @@ def _write_wav(path, *, channels: int, frames: int = 32, sample_rate: int = 2205
         wav.writeframes(b"\x00\x00" * channels * frames)
 
 
-@pytest.mark.skipif(not SOURCE_PROBE_AVAILABLE, reason="native source-channel probe unavailable")
 def test_audio_file_num_channels_probes_source_without_changing_mono_audio(tmp_path) -> None:
     source = tmp_path / "stereo.wav"
     _write_wav(source, channels=2)
@@ -50,17 +34,10 @@ def test_audio_file_num_channels_probes_source_without_changing_mono_audio(tmp_p
         assert audio.length == 32
 
 
-@pytest.mark.skipif(not SOURCE_PROBE_AVAILABLE, reason="native source-channel probe unavailable")
 def test_audio_file_num_channels_propagates_probe_failure(tmp_path) -> None:
     missing = tmp_path / "missing.wav"
     with pytest.raises(SonareError):
         Audio.file_num_channels(str(missing))
-
-
-def test_audio_file_num_channels_reports_missing_optional_symbol(monkeypatch) -> None:
-    monkeypatch.setattr(audio_module, "_get_lib", lambda: SimpleNamespace())
-    with raises_coded(ErrorCode.NOT_SUPPORTED, match="sonare_audio_file_num_channels"):
-        Audio.file_num_channels("input.wav")
 
 
 def test_info_json_uses_vectorized_float64_reductions_and_source_channels(monkeypatch, capsys):
@@ -113,17 +90,12 @@ def test_info_reports_the_real_channel_probe_failure_without_a_wav_fallback(
     _write_wav(source, channels=1)
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(2), 10))
 
-    def missing_probe(path):
-        raise SonareError(
-            int(ErrorCode.NOT_SUPPORTED),
-            "loaded libsonare does not expose sonare_audio_file_num_channels",
-        )
+    def failing_probe(path):
+        raise SonareError(int(ErrorCode.DECODE_FAILED), "the channel probe could not decode it")
 
-    monkeypatch.setattr(Audio, "file_num_channels", missing_probe)
+    monkeypatch.setattr(Audio, "file_num_channels", failing_probe)
 
-    with raises_coded(
-        ErrorCode.NOT_SUPPORTED, match="does not expose sonare_audio_file_num_channels"
-    ):
+    with raises_coded(ErrorCode.DECODE_FAILED, match="the channel probe could not decode it"):
         _cli_analysis.cmd_info(SimpleNamespace(file=str(source), json=True))
 
 
