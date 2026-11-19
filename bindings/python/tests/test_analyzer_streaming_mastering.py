@@ -624,7 +624,7 @@ _CHAIN_CONTENT_REFUSALS = {
     ),
     "clip_threshold_above_full_scale": (
         {"repair": {"declip": {"clipThresholdDb": 1.0}}},
-        r"repair\.declip\.clipThresholdDb must be at or below 0 dBFS",
+        r"params\.repair\.declip\.clipThresholdDb must be finite and in \[-890, 0\]$",
     ),
     "earlier_true_peak_ceiling_spelling": (
         {"loudness": {"ceilingDb": -1.0}},

@@ -12,6 +12,7 @@ import pytest
 from libsonare import (
     Audio,
     DecodedChannels,
+    ErrorCode,
     SonareError,
     SonareValueError,
     decode_channels,
@@ -119,8 +120,9 @@ def test_downmix_copies_on_identity_and_means_an_unmodelled_count() -> None:
 
 def test_downmix_refuses_an_upmix_an_unknown_layout_and_malformed_channels() -> None:
     pair = [np.zeros(8, dtype=np.float32), np.zeros(8, dtype=np.float32)]
-    with pytest.raises(SonareError):
+    with pytest.raises(SonareError, match=r"^\[6\] downmix: downmix cannot upmix$") as upmix:
         downmix(pair, "5.1")
+    assert upmix.value.code == ErrorCode.NOT_SUPPORTED
     with pytest.raises(SonareValueError, match="7.1"):
         downmix(pair, "quad")  # type: ignore[arg-type]
     with pytest.raises(TypeError):

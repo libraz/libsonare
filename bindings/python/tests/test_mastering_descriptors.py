@@ -86,7 +86,7 @@ def test_receiver_spacing_names_the_room_geometry_it_is_accepted_against(stage: 
 
 def test_eq_ceiling_follows_the_rate_the_insert_is_built_for() -> None:
     import libsonare
-    from libsonare import SonareError
+    from libsonare import SonareValueError
 
     def ceiling(rate: int | None) -> float:
         info = libsonare.mastering_insert_param_info("eq.parametric", rate)
@@ -98,7 +98,10 @@ def test_eq_ceiling_follows_the_rate_the_insert_is_built_for() -> None:
     x = _noise(2048)
     params = {"band0.frequencyHz": 30000.0, "band0.gainDb": 3.0}
     libsonare.mastering_apply_processor("eq.parametric", x, 96000, params)
-    with pytest.raises(SonareError, match=r"below 24000 Hz \(Nyquist at 48000 Hz\)"):
+    with pytest.raises(
+        SonareValueError,
+        match=r"^mastering_apply_processor: band0\.frequencyHz must be finite and in \(0, 24000\)$",
+    ):
         libsonare.mastering_apply_processor("eq.parametric", x, SR, params)
 
 

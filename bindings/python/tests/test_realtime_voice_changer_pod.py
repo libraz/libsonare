@@ -249,7 +249,9 @@ def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None
         base, voice_engine="grain", formant_mode="absolute", retune_pitch_semitones=-9.0
     )
     # The creation document is a JSON entry point: its content defect is InvalidFormat.
-    with pytest.raises(SonareError, match=r"\[0\.55, 0\.9811\]") as refused:
+    with pytest.raises(
+        SonareError, match=r"formantFactor must be in \[0\.55, 0\.981\] "
+    ) as refused:
         libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(unreachable))
     assert not isinstance(refused.value, SonareValueError)
     assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
