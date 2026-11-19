@@ -118,7 +118,7 @@ describe.each(FAMILIES)('$method', (family) => {
       );
       // A bare config, or a name, must be wrapped as a pair.
       expect(() => family.run(project, [family.instrument])).toThrow(
-        /: (unknown key instruments\[0\]\.(\w+) \(expected destinationId, instrument, or instruments\[0\]\.instrument\.\2\)|instruments\[0\]\.instrument must be given)$/,
+        /: (unknown key instruments\[0\]\.\w+ \(expected destinationId, instrument\)|instruments\[0\]\.instrument must be given)$/,
       );
       expect(() => family.run(project, ['piano'])).toThrow(
         new TypeError(`Project.${family.method}: instruments[0] must be a ${expected}`),

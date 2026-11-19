@@ -862,8 +862,10 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
       if (typeof beat !== 'object' || beat === null) {
         throw refuseType(`beats[${i}] must be an object`);
       }
-      if (typeof beat.timeSec !== 'number' || typeof beat.strength !== 'number') {
-        throw refuseType(`beats[${i}] must carry numeric timeSec and strength`);
+      for (const key of ['timeSec', 'strength'] as const) {
+        if (typeof beat[key] !== 'number') {
+          throw refuseType(`beats[${i}].${key} must be a number`);
+        }
       }
       times.push(beat.timeSec);
       strengths.push(beat.strength);

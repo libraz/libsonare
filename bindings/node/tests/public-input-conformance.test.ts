@@ -807,7 +807,7 @@ describe('async entry points reject instead of throwing synchronously', () => {
     [
       'masterAudioAsync({})',
       () => masterAudioAsync({} as never),
-      /masterAudioAsync: sampleRate must be a number/,
+      /masterAudioAsync: sampleRate must be an integer/,
     ],
     [
       'masterAudioAsync without samples',

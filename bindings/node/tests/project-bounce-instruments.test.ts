@@ -355,7 +355,7 @@ describe('bounceWithInstruments', () => {
       // A bare instrument must be wrapped as a pair.
       expect(() => project.bounceWithInstruments([{ render() {} }] as never, OPTIONS)).toThrow(
         new TypeError(
-          'Project.bounceWithInstruments: unknown key instruments[0].render (expected destinationId, instrument, or instruments[0].instrument.render)',
+          'Project.bounceWithInstruments: unknown key instruments[0].render (expected destinationId, instrument)',
         ),
       );
     });

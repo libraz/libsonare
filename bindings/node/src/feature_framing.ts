@@ -341,8 +341,6 @@ export function frameSignal(...args: unknown[]): Matrix2D {
     const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     // Both positive, as the sibling framing entries; neither has a default.
-    assertIntegerValue(request.frameLength, 'frameLength');
-    assertIntegerValue(request.hopLength, 'hopLength');
     assertPositiveInteger(request.frameLength, 'frameLength');
     assertPositiveInteger(request.hopLength, 'hopLength');
     const r = addon.frameSignal(request.samples, request.frameLength, request.hopLength);

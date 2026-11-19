@@ -301,7 +301,7 @@ describe('wrong-typed first argument of a buffer-or-request entry point', () => 
       // A number array is a legal sample buffer there, so the missing rate is what is refused.
       const expected =
         label === 'an array' && ARRAY_SAMPLES.has(name)
-          ? `${name}: sampleRate must be a number`
+          ? `${name}: sampleRate must be an integer`
           : `${name}: ${argName} must be a Float32Array`;
       expect(() => fn(name)(value)).toThrow(expected);
     });

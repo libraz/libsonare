@@ -446,7 +446,7 @@ describe('standalone functions', () => {
 
   it('converts invalid native arguments into JS exceptions', () => {
     expect(() => timeStretch(new Float32Array(SR), -1, { speedRatio: 2.0 })).toThrow(
-      /sampleRate out of supported range/,
+      /sampleRate must be an integer in \[8000, 384000\]/,
     );
   });
 

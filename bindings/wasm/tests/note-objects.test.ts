@@ -630,7 +630,7 @@ describe('renderNotes', () => {
         frameRate: Number.NaN,
         voiced: invalidVoiced,
       }),
-    ).toThrow('renderNotes: frameRate must be a finite number');
+    ).toThrow('renderNotes: frameRate must be finite');
     expect(() =>
       renderNotes({
         samples,
@@ -1188,7 +1188,7 @@ describe('renderNotes pitch curve edits', () => {
           f0Hz: track,
           frameRate: badRate,
         }),
-      ).toThrow('renderNotes: frameRate must be a finite number');
+      ).toThrow('renderNotes: frameRate must be finite');
     }
     // Positive control: a note ending exactly at the track's last frame is
     // inside it, so none of the above passes by rejecting every curve edit.
@@ -1610,7 +1610,7 @@ describe('decomposeNotePitch', () => {
     }
     for (const badRate of [Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => decomposeNotePitch({ ...base, frameRate: badRate })).toThrow(
-        'decomposeNotePitch: frameRate must be a finite number',
+        'decomposeNotePitch: frameRate must be finite',
       );
     }
     // 0 is the no-pitch spelling and 0 is the default cutoff, so only a value

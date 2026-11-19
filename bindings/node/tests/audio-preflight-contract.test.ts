@@ -615,7 +615,7 @@ describe('wrong-typed arguments are TypeErrors that name the argument', () => {
       new TypeError('detectBpm: samples must be a Float32Array'),
     );
     expect(() => sonare.detectBpm(x, '44100' as never)).toThrow(
-      new TypeError('detectBpm: sampleRate must be a number'),
+      new TypeError('detectBpm: sampleRate must be an integer'),
     );
   });
 

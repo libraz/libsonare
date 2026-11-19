@@ -268,7 +268,7 @@ describe('percussive-event separation kernel', () => {
         expect(caught).toBeInstanceOf(RangeError);
         const error = caught as RangeError;
         expect(error.message).toContain(
-          `extractPercussiveEvents: ${key} must be a finite number within the 32-bit integer range`,
+          `extractPercussiveEvents: ${key} must be an integer in [-2147483648, 2147483647]`,
         );
         expect(error.message).not.toContain('exceeds the maximum');
       });

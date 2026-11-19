@@ -486,7 +486,7 @@ const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['keyRoot'],
-        error: 'TypeError: chordFunctionalAnalysis: keyRoot must be a pitch class number 0-11',
+        error: 'TypeError: chordFunctionalAnalysis: keyRoot must be an integer',
       },
     ],
   },
@@ -975,7 +975,7 @@ const ROWS: Row[] = [
     },
     invalid: { hopLength: 0 },
     oneOf: [
-      { fields: ['sampleRate'], error: 'TypeError: cqtToAudio: sampleRate must be a number' },
+      { fields: ['sampleRate'], error: 'TypeError: cqtToAudio: sampleRate must be an integer' },
     ],
   },
   {
@@ -994,7 +994,7 @@ const ROWS: Row[] = [
     },
     invalid: { hopLength: 0 },
     oneOf: [
-      { fields: ['sampleRate'], error: 'TypeError: vqtToAudio: sampleRate must be a number' },
+      { fields: ['sampleRate'], error: 'TypeError: vqtToAudio: sampleRate must be an integer' },
     ],
   },
   {
@@ -1013,7 +1013,7 @@ const ROWS: Row[] = [
     invalid: { hopLength: 0 },
     defaults: { nFft: 512, hopLength: 128 },
     oneOf: [
-      { fields: ['sampleRate'], error: 'TypeError: griffinLim: sampleRate must be a number' },
+      { fields: ['sampleRate'], error: 'TypeError: griffinLim: sampleRate must be an integer' },
     ],
     inert: {
       sampleRate: 'reconstruction runs in bins and frames',
@@ -1395,7 +1395,10 @@ const ROWS: Row[] = [
         fields: ['onsetEnvelope'],
         error: 'TypeError: cyclicTempogram: onsetEnvelope must be a Float32Array',
       },
-      { fields: ['sampleRate'], error: 'TypeError: cyclicTempogram: sampleRate must be a number' },
+      {
+        fields: ['sampleRate'],
+        error: 'TypeError: cyclicTempogram: sampleRate must be an integer',
+      },
     ],
   },
   {

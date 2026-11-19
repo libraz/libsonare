@@ -37,7 +37,6 @@ const methodShapes = [
   'Mixer.fromJson',
   'PlaybackLoudnessMeter',
   'PlaybackRenderer',
-  'ProjectInstrumentBinding',
   'RealtimeEngine',
   'StreamingRetune',
   'addClip',
@@ -299,10 +298,6 @@ describe('a Project request method refuses an unknown key', () => {
     ['bounceWithInstruments', (p) => p.bounceWithInstruments([], extra as never)],
     ['bounceWithSf2Instruments', (p) => p.bounceWithSf2Instruments([], extra as never)],
     ['bounceWithSynthInstruments', (p) => p.bounceWithSynthInstruments([], extra as never)],
-    [
-      'ProjectInstrumentBinding',
-      (p) => p.bounceWithInstruments([{ destinationId: 1, ...extra } as never]),
-    ],
     ['clearPartRig', (p) => p.clearPartRig({ destinationId: 1, part: 0, ...extra } as never)],
     [
       'importExternalStems',
@@ -326,7 +321,6 @@ describe('a Project request method refuses an unknown key', () => {
 
   // Nested shapes are refused under the member that took them.
   const entryOf: Record<string, string> = {
-    ProjectInstrumentBinding: 'bounceWithInstruments',
     ExternalSeparatedStem: 'importExternalStems',
   };
 

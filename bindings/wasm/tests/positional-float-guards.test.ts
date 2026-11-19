@@ -265,7 +265,7 @@ describe('every positional float parameter refuses a value the float type cannot
           // call, so it is a RangeError rather than the WASM range refusal.
           expect(caught, `${key} = ${value}`).toBeInstanceOf(RangeError);
           expect((caught as RangeError).message, `${key} = ${value}`).toContain(
-            `${key} must be a finite number`,
+            `${key} must be finite`,
           );
         } else {
           expectRangeRefusal(caught, key, `${key} = ${value}`);

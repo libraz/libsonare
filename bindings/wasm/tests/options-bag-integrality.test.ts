@@ -249,7 +249,9 @@ describe('the facade and the reader refuse the same inputs', () => {
         expect(facadeError.message).toMatch(/^extractPercussiveEvents: /);
         expect(readerError.message).toMatch(/^meteringSpectrum: /);
         if (facade === 'range') {
-          expect(facadeError.message).toContain('within the 32-bit integer range');
+          expect(facadeError.message).toContain(
+            'extractPercussiveEvents: nFft must be an integer in [-2147483648, 2147483647]',
+          );
         } else if (facade === 'zero') {
           expect(facadeError.message).toContain('extractPercussiveEvents: nFft must not be 0');
         } else {

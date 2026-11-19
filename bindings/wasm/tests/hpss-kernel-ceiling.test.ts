@@ -301,7 +301,7 @@ describe('percussive-event separation kernel', () => {
         const error = expectReaderRefusal(
           capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: passed })),
         );
-        expect(error.message).toContain(`${key} must be a finite number within the 32-bit integer`);
+        expect(error.message).toContain(`${key} must be an integer in [-2147483648, 2147483647]`);
         expect(error.message).not.toContain('exceeds the maximum');
       });
 
@@ -341,7 +341,7 @@ describe('percussive-event separation kernel', () => {
       const error = expectReaderRefusal(
         capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: INT_MAX + 1 })),
       );
-      expect(error.message).toContain(`${key} must be a finite number within the 32-bit integer`);
+      expect(error.message).toContain(`${key} must be an integer in [-2147483648, 2147483647]`);
     });
 
     it(`refuses a negative ${direction} kernel by name`, () => {

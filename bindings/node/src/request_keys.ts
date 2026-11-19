@@ -1368,7 +1368,6 @@ const PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS = keySet(
   'numChannels',
   'instrumentLatencySamples',
 );
-const PROJECT_INSTRUMENT_BINDING_REQUEST_KEYS = keySet('destinationId', 'instrument');
 const PROJECT_TEMPO_OPTION_KEYS = [
   'adaptiveTempo',
   'tempoUpdateIntervalBeats',
@@ -1394,7 +1393,6 @@ export const REQUEST_KEYS = {
   bounceWithSynthInstruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
   bounceWithSf2Instruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
   bounceWithInstruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
-  ProjectInstrumentBinding: PROJECT_INSTRUMENT_BINDING_REQUEST_KEYS,
   addClip: keySet(
     'trackId',
     'isMidi',

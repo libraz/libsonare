@@ -106,7 +106,7 @@ export function assertFiniteScalar(value: number, argName: string): void {
     throw refuseType(`${argName} must be a number`);
   }
   if (!Number.isFinite(value)) {
-    throw refuse(`${argName} must be a finite number`);
+    throw refuse(`${argName} must be finite`);
   }
 }
 
@@ -193,31 +193,17 @@ export const MAX_AUDIO_SAMPLE_RATE = 384000;
  * reporting the substitution. What is deliberately not refused is a rate
  * outside `[8000, 384000]`, which the signal generators do accept.
  */
-export function assertIntegralSampleRate(sampleRate: number, argName = 'sampleRate'): void {
-  if (!Number.isInteger(sampleRate)) {
-    throw refuse(`${argName} must be an integer`);
-  }
+export function assertIntegralSampleRate(sampleRate: unknown, argName = 'sampleRate'): void {
+  assertBoundedInteger(sampleRate, argName, C_INT_MIN, C_INT_MAX);
 }
 
 /**
  * A sample rate: `TypeError` unless a number, `RangeError` unless an integer
  * inside the supported range (NaN, infinities, fractions, zero and negatives
- * included).
+ * included), stated as the interval either way.
  */
 export function assertSampleRate(sampleRate: unknown, argName = 'sampleRate'): void {
-  if (typeof sampleRate !== 'number') {
-    throw refuseType(`${argName} must be a number`);
-  }
-  // Two refusals, not one: 22050.7 sits inside the range, so reporting it as
-  // out of range names an argument that is not the one at fault. `argName` is
-  // the same point for a rate the caller spelled something else, such as a
-  // resampler's source and target.
-  assertIntegralSampleRate(sampleRate, argName);
-  if (sampleRate < MIN_AUDIO_SAMPLE_RATE || sampleRate > MAX_AUDIO_SAMPLE_RATE) {
-    throw refuse(
-      `${argName} out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,
-    );
-  }
+  assertBoundedInteger(sampleRate, argName, MIN_AUDIO_SAMPLE_RATE, MAX_AUDIO_SAMPLE_RATE);
 }
 
 /**
@@ -275,23 +261,20 @@ export function assertAudioChannels(
 }
 
 export function assertU7(value: number, argName: string): number {
-  if (!Number.isInteger(value) || value < 0 || value > 127) {
-    throw refuse(`${argName} must be an integer in [0, 127]`);
-  }
+  assertBoundedInteger(value, argName, 0, 127);
   return value;
 }
 
 export function assertNibble(value: number, argName: string): number {
-  if (!Number.isInteger(value) || value < 0 || value > 15) {
-    throw refuse(`${argName} must be an integer in [0, 15]`);
-  }
+  assertBoundedInteger(value, argName, 0, 15);
   return value;
 }
 
 /**
  * Split "not an integer" into the two mistakes it can be: `TypeError` when the
- * value is not a `number` at all, `RangeError` when it is a number but not
- * integral -- the right-type, wrong-domain half of the same message.
+ * value is not a `number` at all, `RangeError` when it is a number but not an
+ * integer in `[min, max]` (the native `int` by default) -- the right-type,
+ * wrong-domain half, which always states the domain.
  *
  * `Number.isInteger` alone answers both, which is why a single check reads as
  * sufficient; what it cannot do is say which one happened, and a caller can act
@@ -299,22 +282,28 @@ export function assertNibble(value: number, argName: string): number {
  * so a sibling argument in the same call must not report a fraction differently
  * from this one.
  */
-export function assertIntegerValue(value: unknown, argName: string): asserts value is number {
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (!Number.isInteger(value)) {
-    throw refuse(`${argName} must be an integer`);
-  }
+export function assertIntegerValue(
+  value: unknown,
+  argName: string,
+  min = C_INT_MIN,
+  max = C_INT_MAX,
+): asserts value is number {
+  assertBoundedInteger(value, argName, min, max);
 }
 
-/** General integer-in-`[min, max]` check, for a bound {@link assertU7}/{@link assertNibble} don't cover. */
+/**
+ * An integer in `[min, max]`: `TypeError` "must be an integer" unless a number, by type alone;
+ * `RangeError` stating the interval for any other number outside it (fractions and NaN included).
+ */
 export function assertBoundedInteger(
-  value: number,
+  value: unknown,
   argName: string,
   min: number,
   max: number,
-): void {
+): asserts value is number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be an integer`);
+  }
   if (!Number.isInteger(value) || value < min || value > max) {
     throw refuse(`${argName} must be an integer in [${min}, ${max}]`);
   }
@@ -324,12 +313,12 @@ export function assertBoundedInteger(
 const MAX_RETUNE_GRAIN_SAMPLES = 8192;
 
 /**
- * A given retune grain: `TypeError` unless a number; `RangeError` for 0, since absence is the
+ * A given retune grain: `TypeError` "must be an integer" unless a number; `RangeError` for 0, since absence is the
  * automatic grain, and for anything but a multiple of 4 in `[4, 8192]` (the hop is a quarter).
  */
 export function assertRetuneGrain(value: unknown, argName: string): void {
   if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (value === 0) {
     throw refuse(`${argName} must not be 0; omit it for the automatic grain`);
@@ -344,10 +333,10 @@ export function assertRetuneGrain(value: unknown, argName: string): void {
   }
 }
 
-/** A pitch class: `TypeError` unless a number, `RangeError` unless an integer in `[0, 11]`. Names are refused. */
+/** A pitch class: `TypeError` "must be an integer" unless a number, `RangeError` unless an integer in `[0, 11]`. Names are refused. */
 export function assertPitchClass(value: unknown, argName: string): void {
   if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a pitch class number 0-11`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (!Number.isInteger(value) || value < 0 || value > 11) {
     throw refuse(`${argName} must be an integer in [0, 11]`);
@@ -384,24 +373,20 @@ export function assertString(value: unknown, argName: string): void {
 }
 
 /** Integer strictly greater than zero, up to the native `int` ceiling. */
-export function assertPositiveInteger(value: number, argName: string): void {
-  if (!Number.isInteger(value) || value < 1 || value > C_INT_MAX) {
-    throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
-  }
+export function assertPositiveInteger(value: unknown, argName: string): asserts value is number {
+  assertBoundedInteger(value, argName, 1, C_INT_MAX);
 }
 
 /** Even integer in `[min, max]`, for an FFT-style size where only parity matters. */
 export function assertEvenIntegerAtLeast(
-  value: number,
+  value: unknown,
   argName: string,
   min: number,
   max: number,
-): void {
+): asserts value is number {
   // Range and parity are separate refusals: 2 ** 31 is already even, so telling
   // its caller the value must be even names a property it has.
-  if (!Number.isInteger(value) || value < min || value > max) {
-    throw refuse(`${argName} must be an integer in [${min}, ${max}]`);
-  }
+  assertBoundedInteger(value, argName, min, max);
   if (value % 2 !== 0) {
     throw refuse(`${argName} must be an even integer in [${min}, ${max}]`);
   }
@@ -463,13 +448,8 @@ export const C_INT_MAX = 2147483647;
  * through all three, rather than left here as a claim — editing one surface's
  * validator says nothing about the other two on its own.
  */
-export function assertInt32(value: number, argName: string): void {
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
-  }
-  if (!Number.isInteger(value) || value < C_INT_MIN || value > C_INT_MAX) {
-    throw refuse(`${argName} must be an integer in [${C_INT_MIN}, ${C_INT_MAX}]`);
-  }
+export function assertInt32(value: unknown, argName: string): asserts value is number {
+  assertBoundedInteger(value, argName, C_INT_MIN, C_INT_MAX);
 }
 
 /**
@@ -485,9 +465,7 @@ export function assertHpssKernels(kernelHarmonic: number, kernelPercussive: numb
 }
 
 export function assertU32(value: number, argName: string): void {
-  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
-    throw refuse(`${argName} must be an integer in [0, 4294967295]`);
-  }
+  assertBoundedInteger(value, argName, 0, 0xffffffff);
 }
 
 /**
@@ -503,12 +481,7 @@ export function assertU32(value: number, argName: string): void {
  * callee's to enforce.
  */
 export function assertNonNegativeSafeInteger(value: number, argName: string): void {
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw refuse(`${argName} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
-  }
+  assertBoundedInteger(value, argName, 0, Number.MAX_SAFE_INTEGER);
 }
 
 /**
@@ -520,12 +493,7 @@ export function assertNonNegativeSafeInteger(value: number, argName: string): vo
  * to accept or refuse.
  */
 export function assertInt64(value: number, argName: string): void {
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
-  }
-  if (!Number.isSafeInteger(value)) {
-    throw refuse(`${argName} must be an integer within the safe-integer range`);
-  }
+  assertBoundedInteger(value, argName, -Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
 }
 
 export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>): void {
@@ -538,14 +506,6 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
       throw refuseType(`${prefix} must be a { ppq, word0, word1? } object`);
     }
     const record = event as ProjectMidiEvent;
-    for (const key of ['ppq', 'word0'] as const) {
-      if (typeof record[key] !== 'number') {
-        throw refuseType(`${prefix}.${key} must be a number`);
-      }
-    }
-    if (record.word1 !== undefined && typeof record.word1 !== 'number') {
-      throw refuseType(`${prefix}.word1 must be a number`);
-    }
     assertNonNegativeScalar(record.ppq, `${prefix}.ppq`);
     assertU32(record.word0, `${prefix}.word0`);
     if (record.word1 !== undefined) {

@@ -62,11 +62,11 @@ describe('phaseVocoder speedRatio guard matches the C ABI (no upper cap)', () =>
     // message no other surface produces, which is the divergence this file
     // exists to prevent.
     expect(() => phaseVocoder({ samples: sine(), sampleRate: SR, speedRatio: Number.NaN })).toThrow(
-      /phaseVocoder: speedRatio must be a finite number/,
+      /phaseVocoder: speedRatio must be finite/,
     );
     expect(() =>
       phaseVocoder({ samples: sine(), sampleRate: SR, speedRatio: Number.POSITIVE_INFINITY }),
-    ).toThrow(/phaseVocoder: speedRatio must be a finite number/);
+    ).toThrow(/phaseVocoder: speedRatio must be finite/);
   });
 });
 

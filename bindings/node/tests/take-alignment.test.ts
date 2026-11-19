@@ -144,10 +144,10 @@ describe('alignTakeToReference', () => {
 
   it('refuses a sample rate outside the supported range', () => {
     expect(() => alignTakeToReference(request({ sampleRate: 0 }))).toThrowError(
-      /sampleRate out of supported range/,
+      /sampleRate must be an integer in \[8000, 384000\]/,
     );
     expect(() => alignTakeToReference(request({ sampleRate: -SR }))).toThrowError(
-      /sampleRate out of supported range/,
+      /sampleRate must be an integer in \[8000, 384000\]/,
     );
     expect(() => alignTakeToReference(request({ sampleRate: SR + 0.5 }))).toThrowError(
       /sampleRate must be an integer/,
@@ -218,10 +218,10 @@ describe('alignTakeToReference', () => {
 
     it('refuses a take rate the way it refuses sampleRate, naming the field', () => {
       for (const bad of [0, -TAKE_RATE, 7999, 384001]) {
-        expect(() => at(bad)).toThrowError(/takeSampleRate out of supported range/);
+        expect(() => at(bad)).toThrowError(/takeSampleRate must be an integer in \[8000, 384000\]/);
       }
       expect(() => at(TAKE_RATE + 0.5)).toThrowError(/takeSampleRate must be an integer/);
-      expect(() => at('x' as unknown as number)).toThrowError(/takeSampleRate must be a number/);
+      expect(() => at('x' as unknown as number)).toThrowError(/takeSampleRate must be an integer/);
     });
   });
 });

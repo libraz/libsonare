@@ -848,8 +848,6 @@ export function frameSignal(...args: unknown[]): Matrix2D {
   return withEntry('frameSignal', () => {
     const r = sampleOneShot<FrameSignalRequest>('frameSignal', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    assertIntegerValue(r.frameLength, 'frameLength');
-    assertIntegerValue(r.hopLength, 'hopLength');
     assertPositiveInteger(r.frameLength, 'frameLength');
     assertPositiveInteger(r.hopLength, 'hopLength');
     const { nFrames, frames } = requireModule().frameSignal(r.samples, r.frameLength, r.hopLength);

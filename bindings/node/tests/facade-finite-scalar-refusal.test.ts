@@ -143,7 +143,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     for (const bad of NON_FINITE) {
       expect(() => phaseVocoder(tone.samples, SR, { speedRatio: bad })).toThrow(RangeError);
       expect(() => phaseVocoder(tone.samples, SR, { speedRatio: bad })).toThrow(
-        /phaseVocoder: speedRatio must be a finite number/,
+        /phaseVocoder: speedRatio must be finite/,
       );
     }
     expect(() => phaseVocoder(tone.samples, SR, { speedRatio: PAST_FLT_MAX })).toThrow(
@@ -164,7 +164,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     for (const bad of NON_FINITE) {
       expect(() => extractNotes({ ...track, frameRate: bad })).toThrow(RangeError);
       expect(() => extractNotes({ ...track, frameRate: bad })).toThrow(
-        /extractNotes: frameRate must be a finite number/,
+        /extractNotes: frameRate must be finite/,
       );
     }
     expect(() => extractNotes({ ...track, frameRate: PAST_FLT_MAX })).toThrow(NARROWING_REFUSAL);
@@ -185,7 +185,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
         RangeError,
       );
       expect(() => splitNote({ ...track, frameRate: bad, notes, index: 0, frame: 10 })).toThrow(
-        /splitNote: frameRate must be a finite number/,
+        /splitNote: frameRate must be finite/,
       );
     }
     expect(() =>
@@ -211,11 +211,19 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     // A number outside the integer domain, so RangeError -- the class a wrong
     // TYPE would get is reserved for a wrong type.
     expect(() => withBound(10.7)).toThrow(RangeError);
-    expect(() => withBound(10.7)).toThrow(/notes\[0\]\.frameEnd must be an integer/);
-    expect(() => withBound('10' as unknown as number)).toThrow(TypeError);
+    expect(() => withBound(10.7)).toThrow(
+      'splitNote: notes[0].frameEnd must be an integer in [-2147483648, 2147483647]',
+    );
+    expect(() => withBound('10' as unknown as number)).toThrow(
+      new TypeError('splitNote: notes[0].frameEnd must be an integer'),
+    );
 
-    // A missing or non-finite bound keeps the message that names that instead.
-    expect(() => withBound(Number.NaN)).toThrow(/notes\[0\] must carry a finite/);
+    // A non-finite bound is a number outside the domain, refused the same way.
+    expect(() => withBound(Number.NaN)).toThrow(
+      new RangeError(
+        'splitNote: notes[0].frameEnd must be an integer in [-2147483648, 2147483647]',
+      ),
+    );
   });
 
   it('mergeNotes consumes frameRate', () => {
@@ -231,7 +239,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
 
     for (const bad of NON_FINITE) {
       expect(() => merge(bad)).toThrow(RangeError);
-      expect(() => merge(bad)).toThrow(/mergeNotes: frameRate must be a finite number/);
+      expect(() => merge(bad)).toThrow(/mergeNotes: frameRate must be finite/);
     }
     expect(() => merge(PAST_FLT_MAX)).toThrow(NARROWING_REFUSAL);
   });
@@ -268,9 +276,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     expect(atFastRate).not.toBeCloseTo(atTrackRate, 3);
 
     for (const bad of NON_FINITE) {
-      expect(() => render(bad)).toThrow(
-        new RangeError('renderNotes: frameRate must be a finite number'),
-      );
+      expect(() => render(bad)).toThrow(new RangeError('renderNotes: frameRate must be finite'));
     }
     // A missing field is a wrong type, not an out-of-domain value.
     expect(() => render(undefined)).toThrow(
@@ -306,7 +312,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
 
     for (const bad of NON_FINITE) {
       expect(() => decompose(bad)).toThrow(RangeError);
-      expect(() => decompose(bad)).toThrow(/decomposeNotePitch: frameRate must be a finite number/);
+      expect(() => decompose(bad)).toThrow(/decomposeNotePitch: frameRate must be finite/);
     }
     expect(() => decompose(PAST_FLT_MAX)).toThrow(NARROWING_REFUSAL);
   });

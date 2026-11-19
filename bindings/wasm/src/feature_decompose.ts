@@ -12,7 +12,6 @@ import {
   assertAudioChannels,
   assertAudioInput,
   assertHpssKernels,
-  assertIntegerValue,
   assertMatrix2D,
   assertNonNegativeSafeInteger,
   assertPositiveInteger,
@@ -216,7 +215,6 @@ export function decompose(...args: unknown[]): DecomposeResult {
   return withEntry('decompose', () => {
     const r = requestOnly<DecomposeRequest>('decompose', args);
     const s = assertMatrix2D(r.s, 's');
-    assertIntegerValue(r.nComponents, 'nComponents');
     assertPositiveInteger(r.nComponents, 'nComponents');
     // An empty token is the embind reader's spelling of the library's initialiser.
     const init = optionalToken(r.init, 'init', NMF_INITS) ?? '';

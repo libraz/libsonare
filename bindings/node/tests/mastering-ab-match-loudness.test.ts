@@ -77,7 +77,9 @@ describe('masteringAbMatchLoudness', () => {
     // everything off the coded path.
     const caught = capture(() => masteringAbMatchLoudness({ source, reference, sampleRate: 0 }));
     expect(caught).toBeInstanceOf(RangeError);
-    expect((caught as RangeError).message).toMatch(/sampleRate out of supported range/);
+    expect((caught as RangeError).message).toMatch(
+      /sampleRate must be an integer in \[8000, 384000\]/,
+    );
   });
 
   it('rejects a non-finite sample in the reference', () => {

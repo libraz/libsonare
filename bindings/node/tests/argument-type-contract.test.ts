@@ -284,7 +284,7 @@ describe.each(BUFFER_FIRST.filter(([name]) => typeof fn(name) === 'function'))(
     ])('refuses %s as a TypeError naming %s', (_label, value) => {
       const message =
         _label === 'an array' && ARRAY_AUDIO.has(name)
-          ? `${name}: sampleRate must be a number`
+          ? `${name}: sampleRate must be an integer`
           : `${name}: ${argName} must be a Float32Array`;
       expect(() => fn(name)(value)).toThrow(TypeError);
       expect(() => fn(name)(value)).toThrow(message);

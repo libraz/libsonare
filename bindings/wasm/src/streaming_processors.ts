@@ -13,6 +13,7 @@ import type {
   StreamingRetuneConfig,
 } from './public_types.js';
 import {
+  assertBoundedInteger,
   assertInt32,
   assertIntegerValue,
   assertKnownRequestKeys,
@@ -74,7 +75,6 @@ function optionalIntegerBlockSize(value: unknown): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
-  assertIntegerValue(value, 'maxBlockSize');
   assertInt32(value, 'maxBlockSize');
   return value;
 }
@@ -181,10 +181,7 @@ export class StreamingMasteringChain {
     } = config;
     assertIntegerValue(sampleRate, 'sampleRate');
     const blockSize = optionalIntegerBlockSize(maxBlockSize);
-    assertIntegerValue(numChannels, 'numChannels');
-    if (numChannels !== 1 && numChannels !== 2) {
-      throw refuse(`numChannels must be 1 or 2`);
-    }
+    assertBoundedInteger(numChannels, 'numChannels', 1, 2);
     const options: Record<string, number> = {};
     if (loudnessStaticGainDb !== undefined) {
       options.loudnessStaticGainDb = loudnessStaticGainDb;

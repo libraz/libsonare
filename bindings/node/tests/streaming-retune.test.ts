@@ -241,7 +241,7 @@ describe('StreamingRetune grain', () => {
         ),
       );
       expect(() => retune.setConfig({ grainSizeSamples: '512' as never })).toThrow(
-        new TypeError('StreamingRetune.setConfig: grainSizeSamples must be a number'),
+        new TypeError('StreamingRetune.setConfig: grainSizeSamples must be an integer'),
       );
       // A refused grain leaves the configured one in place.
       expect(retune.config().grainSizeSamples).toBe(512);

@@ -216,10 +216,7 @@ export interface AssignNoteTargetsRequest {
 function assertNoteSetEntries(notes: readonly NoteSetEntry[]): void {
   for (let index = 0; index < notes.length; index += 1) {
     const note = notes[index];
-    if (!Number.isFinite(note?.frameStart) || !Number.isFinite(note?.frameEnd)) {
-      throw refuseType(`notes[${index}] must carry a finite frameStart and frameEnd`);
-    }
-    assertIntegerValue(note.frameStart, `notes[${index}].frameStart`);
+    assertIntegerValue(note?.frameStart, `notes[${index}].frameStart`);
     assertIntegerValue(note.frameEnd, `notes[${index}].frameEnd`);
   }
 }

@@ -295,7 +295,7 @@ describe('argument refusal classes shared with the Node surface', () => {
     const refused = (call: () => unknown, key: string) => {
       const error = thrown(call);
       expect(error).toBeInstanceOf(TypeError);
-      expect((error as Error).message).toContain(`'${key}'`);
+      expect((error as Error).message).toContain(`unknown key ${key} (expected `);
     };
     refused(() => melToStft({ power, nfft: 4096 } as never), 'nfft');
     refused(() => melToAudio({ power, nfft: 4096 } as never), 'nfft');

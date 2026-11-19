@@ -72,6 +72,38 @@ describe('Sonare WASM Project edit ops', () => {
     return { project, trackId, clipId };
   }
 
+  it('refuses an undeclared take or comp-segment field by its path without mutating', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio' });
+      const clip = project.addClip({
+        trackId,
+        startPpq: 0,
+        lengthPpq: 4,
+        sourceUri: 'asset://a.wav',
+      });
+      const before = project.toJson();
+      expect(() => project.setClipTakes(clip, [{ id: 1, sorceOffsetPpq: 2 } as never])).toThrow(
+        new TypeError(
+          'Project.setClipTakes: unknown key takes[0].sorceOffsetPpq (expected id, sourceId, sourceOffsetPpq, name)',
+        ),
+      );
+      expect(() =>
+        project.setClipCompSegments(clip, [
+          { startPpq: 0, endPpq: 2 },
+          { startPpq: 2, endPpq: 4, crossfadePq: 0.25 } as never,
+        ]),
+      ).toThrow(
+        new TypeError(
+          'Project.setClipCompSegments: unknown key segments[1].crossfadePq (expected startPpq, endPpq, takeId, crossfadePpq)',
+        ),
+      );
+      expect(project.toJson()).toBe(before);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('accepts a metadata-only audio clip with a source URI', () => {
     const project = new Project();
     try {

@@ -8,13 +8,7 @@ import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
 import type { OptionsOf } from './validation.js';
-import {
-  assertAudioInput,
-  assertInt32,
-  C_INT_MAX,
-  C_INT_MIN,
-  sampleOneShot,
-} from './validation.js';
+import { assertAudioInput, assertInt32, sampleOneShot } from './validation.js';
 
 // The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
 function percussiveRequest<
@@ -32,8 +26,7 @@ function percussiveRequest<
  * is refused for the same reason.
  *
  * Either refusal is an argument refusal, a `RangeError`, as the WASM reader
- * raises it and Python raises `SonareValueError`; the integer past the 32-bit
- * range just gets its own wording.
+ * raises it and Python raises `SonareValueError`.
  */
 function assertPercussiveSeparation(options: PercussiveSeparationOptions): void {
   const fields = ['nFft', 'hopLength', 'hpssKernelHarmonic', 'hpssKernelPercussive'] as const;
@@ -41,9 +34,6 @@ function assertPercussiveSeparation(options: PercussiveSeparationOptions): void 
     const value = options[field];
     if (value === undefined) {
       continue;
-    }
-    if (Number.isInteger(value) && (value < C_INT_MIN || value > C_INT_MAX)) {
-      throw refuse(`${field} must be a finite number within the 32-bit integer range`);
     }
     assertInt32(value, field);
     if (value === 0) {

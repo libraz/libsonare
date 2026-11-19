@@ -1,9 +1,5 @@
-import {
-  assertEvenIntegerAtLeast,
-  assertIntegerValue,
-  assertPositiveInteger,
-} from '../validation.js';
-import { refuse } from './entry.js';
+import { assertEvenIntegerAtLeast, assertPositiveInteger } from '../validation.js';
+import { refuse, refuseType } from './entry.js';
 
 /**
  * The facade's single FFT-size/hop domain.
@@ -45,8 +41,10 @@ export function resolveEffectFftOptions(
   hopLength: unknown,
 ): { nFft: number; hopLength: number } {
   const size = nFft === undefined ? 2048 : nFft;
-  assertIntegerValue(size, 'nFft');
-  if (size < 4 || size > MAX_EFFECT_N_FFT || size % 2 !== 0) {
+  if (typeof size !== 'number') {
+    throw refuseType('nFft must be an integer');
+  }
+  if (!Number.isInteger(size) || size < 4 || size > MAX_EFFECT_N_FFT || size % 2 !== 0) {
     throw refuse(`nFft must be an even integer in [4, ${MAX_EFFECT_N_FFT}]`);
   }
   return { nFft: size, hopLength: resolveResynthesisHop(hopLength) };
@@ -60,7 +58,6 @@ export function resolveResynthesisHop(hopLength: unknown): number {
   if (hopLength === undefined) {
     return 0;
   }
-  assertIntegerValue(hopLength, 'hopLength');
   assertPositiveInteger(hopLength, 'hopLength');
   return hopLength;
 }
@@ -72,9 +69,7 @@ function resolveWithMinimum(
 ): { nFft: number; hopLength: number } {
   const resolvedNFft = nFft === undefined ? 2048 : nFft;
   const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  assertIntegerValue(resolvedNFft, 'nFft');
   assertEvenIntegerAtLeast(resolvedNFft, 'nFft', minNFft, 2 ** 30);
-  assertIntegerValue(resolvedHopLength, 'hopLength');
   assertPositiveInteger(resolvedHopLength, 'hopLength');
   return { nFft: resolvedNFft, hopLength: resolvedHopLength };
 }

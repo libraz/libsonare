@@ -11,7 +11,6 @@ import {
   assertClosedToken,
   assertHpssKernels,
   assertInt32,
-  assertIntegerValue,
   assertPositiveInteger,
   requestOnly,
   sampleOneShot,
@@ -365,7 +364,6 @@ export function decompose(...args: unknown[]): DecomposeResult {
   return withEntry('decompose', () => {
     const r = requestOnly<DecomposeRequest>('decompose', args);
     assertMatrix2D(r.s, 's');
-    assertIntegerValue(r.nComponents, 'nComponents');
     assertPositiveInteger(r.nComponents, 'nComponents');
     if (r.init !== undefined) {
       assertClosedToken(r.init, NMF_INITS, 'init');
