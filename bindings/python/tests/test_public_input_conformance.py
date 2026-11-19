@@ -17,6 +17,7 @@ from libsonare import (
     ProjectMidiCcBindingKind,
     RealtimeEngine,
     SonareValueError,
+    StreamingRetune,
     mix_stereo,
 )
 
@@ -381,3 +382,38 @@ def test_number_reader_split_follows_the_corpus(case: dict[str, Any]) -> None:
         match=rf"^Project\.{_NUMBER_SPLIT['fn']}: {re.escape(refusal)}$",
     ):
         fn(**args)
+
+
+_RETUNE = _CORPUS["streaming_retune"]
+_RETUNE_ENTRIES = {"constructor": "StreamingRetune", "set_config": "StreamingRetune.set_config"}
+
+
+@pytest.mark.parametrize("entry", _RETUNE["entries"])
+@pytest.mark.parametrize("case", _RETUNE["cases"], ids=lambda case: case["id"])
+def test_streaming_retune_controls_follow_the_corpus(case: dict[str, Any], entry: str) -> None:
+    base = dict(_RETUNE["base"])
+    value = _corpus_number(case["value"])
+    refusal = None
+    if "refused" in case:
+        text = f"{_RETUNE_ENTRIES[entry]}: {case['key']} {case['predicate']}"
+        refusal = pytest.raises(_GM_REFUSALS[case["refused"]], match=rf"^{re.escape(text)}$")
+    if entry == "constructor":
+        if refusal is None:
+            with StreamingRetune(**{**base, case["key"]: value}) as retune:
+                assert retune.config()[case["key"]] == value
+        else:
+            with refusal:
+                StreamingRetune(**{**base, case["key"]: value})
+        return
+    with StreamingRetune(**base) as retune:
+        if refusal is None:
+            retune.set_config(**{case["key"]: value})
+            assert retune.config()[case["key"]] == value
+        else:
+            with refusal:
+                retune.set_config(**{case["key"]: value})
+            config = retune.config()
+            assert (config["pitch_semitones"], config["mix"]) == (
+                base["pitch_semitones"],
+                base["mix"],
+            )
