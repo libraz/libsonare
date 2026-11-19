@@ -27,17 +27,18 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    _WITHOUT_MASTERING,
     _check,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _narrow_int,
     _planar_channel_arrays,
+    _require_export,
     _require_power_of_two,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
-    _unsupported_effect_symbol,
 )
 from .types import (
     DereverbClassicalConfig,
@@ -444,9 +445,7 @@ def mastering_repair_dereverb_classical_linked(
         raise _refuse("hop_length must be in (0, n_fft // 2]")
 
     lib = _get_lib()
-    symbol = "sonare_mastering_repair_dereverb_classical_linked"
-    if not hasattr(lib, symbol):
-        raise _unsupported_effect_symbol(symbol)
+    _require_export(lib, "sonare_mastering_repair_dereverb_classical_linked", _WITHOUT_MASTERING)
     planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     config = SonareDereverbClassicalConfig(  # noqa: F405
@@ -563,9 +562,7 @@ def mastering_repair_dereverb_config_for_room(
         into :func:`mastering_repair_dereverb_classical`.
     """
     lib = _get_lib()
-    symbol = "sonare_mastering_repair_dereverb_apply_room_estimate"
-    if not hasattr(lib, symbol):
-        raise _unsupported_effect_symbol(symbol)
+    _require_export(lib, "sonare_mastering_repair_dereverb_apply_room_estimate", _WITHOUT_MASTERING)
     if estimate is None:
         raise _refuse("estimate must not be None")
     bands, band_count = _to_c_float_array(estimate.rt60_bands, arg_name="estimate.rt60_bands")
@@ -606,7 +603,9 @@ def mastering_repair_dereverb_config_for_room(
         wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
     _check(
-        getattr(lib, symbol)(ctypes.byref(c_estimate), ctypes.byref(config)),
+        lib.sonare_mastering_repair_dereverb_apply_room_estimate(
+            ctypes.byref(c_estimate), ctypes.byref(config)
+        ),
     )
     return DereverbClassicalConfig(
         threshold=_narrow_double(config.threshold, "config.threshold"),

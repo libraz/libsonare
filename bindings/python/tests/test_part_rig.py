@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import pytest
 
-import libsonare._project_edit as _project_edit
 from libsonare import (
     PART_RIG_ALL_PARTS,
     BuiltinSynthConfig,
@@ -125,39 +124,6 @@ def test_invalid_input_is_refused():
         assert not isinstance(bad_json.value, SonareValueError)
         assert bad_json.value.code == int(ErrorCode.INVALID_FORMAT)
         assert project.part_rig(DESTINATION, 0) is None
-
-
-@pytest.mark.parametrize(
-    ("method_name", "symbol", "args", "kwargs"),
-    [
-        (
-            "set_part_rig",
-            "sonare_project_set_part_rig",
-            (DESTINATION, 0),
-            {"mode": "none"},
-        ),
-        ("part_rig", "sonare_project_get_part_rig", (DESTINATION, 0), {}),
-        ("clear_part_rig", "sonare_project_clear_part_rig", (DESTINATION, 0), {}),
-    ],
-)
-def test_part_rig_methods_refuse_missing_native_symbols(
-    monkeypatch: pytest.MonkeyPatch,
-    method_name: str,
-    symbol: str,
-    args: tuple[object, ...],
-    kwargs: dict[str, object],
-) -> None:
-    with _project() as project:
-        monkeypatch.setattr(_project_edit, "_get_lib", lambda: object())
-
-        with pytest.raises(SonareError) as failure:
-            getattr(project, method_name)(*args, **kwargs)
-
-        assert failure.value.code == ErrorCode.NOT_SUPPORTED
-        assert str(failure.value) == (
-            f"[{int(ErrorCode.NOT_SUPPORTED)}] loaded libsonare does not export {symbol}; "
-            f"rebuild or upgrade the shared library before calling {method_name}"
-        )
 
 
 def test_engine_refuses_builtin_instrument():

@@ -152,10 +152,6 @@ def _entry(name: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     return decorate
 
 
-def _unsupported_effect_symbol(symbol: str) -> SonareError:
-    return _not_supported(f"libsonare does not export {symbol}; install a matching native library")
-
-
 def _not_supported(message: str) -> SonareError:
     """Build the error for a capability the loaded native library lacks."""
     return SonareError(int(ErrorCode.NOT_SUPPORTED), message)

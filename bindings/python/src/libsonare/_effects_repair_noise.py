@@ -31,6 +31,7 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    _WITHOUT_MASTERING,
     _as_float32_buffer,
     _check,
     _from_c_float_array,
@@ -39,12 +40,12 @@ from ._runtime import (
     _guard_buffer,
     _narrow_int,
     _planar_channel_arrays,
+    _require_export,
     _require_power_of_two,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
     _token_ordinal,
-    _unsupported_effect_symbol,
 )
 from ._types_enums import (
     _DEHUM_MODES,
@@ -539,9 +540,7 @@ def mastering_repair_denoise_classical_linked(
     )
 
     lib = _get_lib()
-    symbol = "sonare_mastering_repair_denoise_classical_linked"
-    if not hasattr(lib, symbol):
-        raise _unsupported_effect_symbol(symbol)
+    _require_export(lib, "sonare_mastering_repair_denoise_classical_linked", _WITHOUT_MASTERING)
     planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     config = SonareDenoiseClassicalConfig(  # noqa: F405

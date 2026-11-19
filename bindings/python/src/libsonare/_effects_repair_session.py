@@ -21,12 +21,13 @@ from ._errors import _entry, _refuse_type
 from ._ffi import SonareMasteringProgressCallback
 from ._result_records import _camel, _fields, _snake
 from ._runtime import (
+    _WITHOUT_MASTERING,
     _check,
     _get_lib,
     _planar_channel_arrays,
+    _require_export,
     _to_c_int,
     _to_c_size_t,
-    _unsupported_effect_symbol,
     _utf8_arg,
 )
 from .types import (
@@ -193,9 +194,7 @@ def mastering_repair_analyze(
         SonareError: If the C call rejects the request.
     """
     lib = _get_lib()
-    symbol = "sonare_mastering_repair_analyze"
-    if not hasattr(lib, symbol):
-        raise _unsupported_effect_symbol(symbol)
+    _require_export(lib, "sonare_mastering_repair_analyze", _WITHOUT_MASTERING)
     planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     request = json.dumps({"preferStreamingSafe": bool(prefer_streaming_safe)})
@@ -268,9 +267,7 @@ def mastering_repair_apply(
             stage, an unknown or out-of-range setting) or it was cancelled.
     """
     lib = _get_lib()
-    symbol = "sonare_mastering_repair_apply"
-    if not hasattr(lib, symbol):
-        raise _unsupported_effect_symbol(symbol)
+    _require_export(lib, "sonare_mastering_repair_apply", _WITHOUT_MASTERING)
     stage_types = tuple(_STAGE_TYPES.values())
     if isinstance(stages, (str, bytes, Mapping)) or not all(
         isinstance(stage, stage_types) for stage in stages

@@ -8,7 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from ._errors import _entry, _not_supported, _refuse
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonareCqtResult,
     SonareInverseResult,
@@ -99,8 +99,6 @@ def _cqt_variant(
     bins_per_octave: int,
 ) -> CqtResult:
     lib = _get_lib()
-    if not hasattr(lib, fn_name):
-        raise _not_supported(f"libsonare was built without {fn_name} support")
     c_array, length = _to_c_float_array(samples)
     out = SonareCqtResult()
     rc = getattr(lib, fn_name)(

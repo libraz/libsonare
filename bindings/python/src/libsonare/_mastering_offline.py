@@ -14,7 +14,7 @@ from ._cancellation import (
     make_progress_trampoline,
     raise_callback_error,
 )
-from ._errors import ErrorCode, _entry, _not_supported, _refuse, _refuse_type
+from ._errors import ErrorCode, _entry, _refuse, _refuse_type
 from ._ffi import (
     SonareMasteringChainResult,
     SonareMasteringChainStereoResult,
@@ -26,6 +26,7 @@ from ._ffi import (
 )
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
+    _WITHOUT_MASTERING,
     _call_string,
     _check,
     _coded_error,
@@ -33,6 +34,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_error,
+    _require_export,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -81,8 +83,7 @@ def mastering(
     ``SonareValueError``.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_process"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_process", _WITHOUT_MASTERING)
 
     c_array, length = _to_c_float_array(samples)
     config = SonareMasteringConfig(
@@ -199,6 +200,7 @@ def _assistant_params(
     resolved: dict[str, float | int | bool] = {}
     for key, value in params.items():
         if key == "targetPlatform":
+            _require_export(_get_lib(), "sonare_mastering_platform_from_name", _WITHOUT_MASTERING)
             resolved[key] = _resolve_name(
                 key,
                 value,
@@ -209,6 +211,7 @@ def _assistant_params(
             )
             continue
         if key == "preset":
+            _require_export(_get_lib(), "sonare_mastering_preset_from_name", _WITHOUT_MASTERING)
             resolved[key] = _resolve_name(
                 key,
                 value,
@@ -236,8 +239,6 @@ def _resolve_name(
     if not isinstance(value, str):
         raise _refuse(f"{key} must be a {kind} name; expected one of: {', '.join(names())}")
     lib = _get_lib()
-    if not hasattr(lib, symbol):
-        raise _not_supported("libsonare was built without mastering assistant support")
     index = getattr(lib, symbol)(_utf8_arg(value, "value"))
     if index < 0:
         raise _refuse(f"unknown {noun} {value!r}; expected one of: {', '.join(names())}")
@@ -248,8 +249,7 @@ def _resolve_name(
 def mastering_processor_names() -> list[str]:
     """Return supported mastering processor names shared by CLI/Node/WASM/Python."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_processor_names"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_processor_names", _WITHOUT_MASTERING)
     raw = lib.sonare_mastering_processor_names()
     return raw.decode("utf-8").splitlines() if raw else []
 
@@ -258,8 +258,7 @@ def mastering_processor_names() -> list[str]:
 def mastering_pair_processor_names() -> list[str]:
     """Return supported two-input mastering processor names."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_pair_processor_names"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_pair_processor_names", _WITHOUT_MASTERING)
     raw = lib.sonare_mastering_pair_processor_names()
     return raw.decode("utf-8").splitlines() if raw else []
 
@@ -268,8 +267,7 @@ def mastering_pair_processor_names() -> list[str]:
 def mastering_pair_analysis_names() -> list[str]:
     """Return supported two-input mastering analysis names."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_pair_analysis_names"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_pair_analysis_names", _WITHOUT_MASTERING)
     raw = lib.sonare_mastering_pair_analysis_names()
     return raw.decode("utf-8").splitlines() if raw else []
 
@@ -278,8 +276,7 @@ def mastering_pair_analysis_names() -> list[str]:
 def mastering_stereo_analysis_names() -> list[str]:
     """Return supported stereo mastering analysis names."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_stereo_analysis_names"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_stereo_analysis_names", _WITHOUT_MASTERING)
     raw = lib.sonare_mastering_stereo_analysis_names()
     return raw.decode("utf-8").splitlines() if raw else []
 
@@ -292,8 +289,7 @@ def mastering_insert_names() -> list[str]:
     caller must NOT free (same convention as the other ``*_names`` getters).
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_insert_names"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_insert_names", _WITHOUT_MASTERING)
     raw = lib.sonare_mastering_insert_names()
     if raw is None:
         raise _last_error(int(ErrorCode.UNKNOWN), "failed to list mastering inserts")
@@ -315,8 +311,7 @@ def mastering_insert_param_names(insert: str) -> list[str]:
     must NOT free (same convention as the other ``*_names`` getters).
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_insert_param_names"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_insert_param_names", _WITHOUT_MASTERING)
     raw = lib.sonare_mastering_insert_param_names(_utf8_arg(insert, "insert"))
     if raw is None:
         raise _last_error(int(ErrorCode.UNKNOWN), "failed to list mastering insert params")
@@ -346,13 +341,11 @@ def mastering_insert_param_info(
     the 48 kHz probe. A rate outside the supported range raises.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_insert_param_info"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_insert_param_info", _WITHOUT_MASTERING)
     if sample_rate is None:
         raw = _call_string(lib.sonare_mastering_insert_param_info, _utf8_arg(insert, "insert"))
     else:
-        if not hasattr(lib, "sonare_mastering_insert_param_info_at_rate"):
-            raise _not_supported("libsonare was built without mastering support")
+        _require_export(lib, "sonare_mastering_insert_param_info_at_rate", _WITHOUT_MASTERING)
         raw = _call_string(
             lib.sonare_mastering_insert_param_info_at_rate,
             _utf8_arg(insert, "insert"),
@@ -384,8 +377,7 @@ def mastering_insert_timing(
     for a configuration the caller did not ask for.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_insert_timing"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_insert_timing", _WITHOUT_MASTERING)
     payload = _insert_params(insert, params)
     params_json = _utf8_arg(json.dumps(payload, allow_nan=False), "params")
     out_latency = ctypes.c_int(0)
@@ -421,12 +413,10 @@ def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
     the precedence pair > realtime > offline:
     a processor exposed as a pair processor is reported as ``"pair"``, an
     otherwise realtime-capable processor as ``"realtime"``, and the remainder
-    as ``"offline"``. Returns an empty list when the build lacks mastering
-    support.
+    as ``"offline"``. Raises NOT_SUPPORTED when built without mastering.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_processor_catalog"):
-        return []
+    _require_export(lib, "sonare_mastering_processor_catalog", _WITHOUT_MASTERING)
     raw = _call_string(lib.sonare_mastering_processor_catalog)
     return [_from_wire(MasteringProcessorCatalogEntry, entry) for entry in json.loads(raw)]
 
@@ -438,12 +428,11 @@ def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
     One entry per rig, in ``saturation.ampSim`` ``presetIndex`` order, each
     with ``index``, ``name``, and ``params`` (the rig's resolved starting
     values under the insert's camelCase keys, e.g. ``drive``, ``bassDb``,
-    ``ampModel``, with enum-valued keys as integer ordinals). Returns an
-    empty list when the build lacks mastering support.
+    ``ampModel``, with enum-valued keys as integer ordinals). Raises
+    NOT_SUPPORTED when built without mastering.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_amp_preset_catalog"):
-        return []
+    _require_export(lib, "sonare_mastering_amp_preset_catalog", _WITHOUT_MASTERING)
     raw = _call_string(lib.sonare_mastering_amp_preset_catalog)
     return [_from_wire(MasteringAmpPresetCatalogEntry, entry) for entry in json.loads(raw)]
 
@@ -456,8 +445,7 @@ def capability_catalog() -> CapabilityCatalog:
     has no published descriptor, rather than guessed by this binding.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_capability_catalog_json"):
-        raise _not_supported("libsonare was built without capability catalog support")
+    _require_export(lib, "sonare_capability_catalog_json", _WITHOUT_MASTERING)
     return _from_wire(
         CapabilityCatalog, json.loads(_call_string(lib.sonare_capability_catalog_json))
     )
@@ -477,8 +465,7 @@ def mastering_apply_processor(
     (``{"noiseEstimator": "mcra"}``), resolved by the core.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_apply_processor"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_apply_processor", _WITHOUT_MASTERING)
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _mastering_params(_processor_params(processor, params))
     out = SonareMasteringResult()
@@ -521,8 +508,7 @@ def mastering_apply_processor_stereo(
     ``params`` takes enum names as :func:`mastering_apply_processor` does.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_apply_processor_stereo"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_apply_processor_stereo", _WITHOUT_MASTERING)
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
@@ -563,8 +549,7 @@ def _enum_value(processor: str | None, key: str, name: str) -> float:
     ``key`` is a flat mastering chain key.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_enum_value"):
-        raise _not_supported("libsonare was built without mastering support")
+    _require_export(lib, "sonare_mastering_enum_value", _WITHOUT_MASTERING)
     is_enum = ctypes.c_int(0)
     value = ctypes.c_double(0.0)
     rc = lib.sonare_mastering_enum_value(
@@ -682,8 +667,7 @@ def _check_chain_document(config: Mapping[str, Any]) -> None:
     naming the path.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_chain_config_params_json"):
-        raise _not_supported("libsonare was built without mastering chain config support")
+    _require_export(lib, "sonare_mastering_chain_config_params_json", _WITHOUT_MASTERING)
     document = json.dumps({"version": 2, "params": dict(config)})
     json_ptr = ctypes.c_char_p()
     _check(
@@ -794,7 +778,7 @@ def _run_mastering(
     state = CancellationState(cancel)
     if on_progress is None and cancel is None:
         rc = getattr(lib, symbol)(*head, *tail, ctypes.byref(out))
-    elif hasattr(lib, f"{symbol}_with_progress_ex"):
+    else:
         cb = (
             _make_progress_trampoline(on_progress, state)
             if on_progress is not None
@@ -804,15 +788,6 @@ def _run_mastering(
         rc = getattr(lib, f"{symbol}_with_progress_ex")(
             *head, *tail, cb, None, ctypes.byref(out), cancel_cb, None
         )
-    else:
-        if cancel is not None:
-            raise _not_supported("loaded libsonare does not support mastering cancellation")
-        if on_progress is None:
-            raise AssertionError("progress callback is required on this path")
-        if not hasattr(lib, f"{symbol}_with_progress"):
-            raise _not_supported("libsonare was built without mastering progress support")
-        cb = _make_progress_trampoline(on_progress, state)
-        rc = getattr(lib, f"{symbol}_with_progress")(*head, *tail, cb, None, ctypes.byref(out))
     raise_callback_error(state, rc, lambda: release(ctypes.byref(out)))
     _check(rc)
 
@@ -841,8 +816,7 @@ def _chain_result_fields(out: Any) -> dict[str, Any]:
 def mastering_preset_names() -> list[str]:
     """Return built-in mastering preset identifiers (e.g. ``"pop"``, ``"aiMusic"``)."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_preset_names"):
-        raise _not_supported("libsonare was built without mastering preset support")
+    _require_export(lib, "sonare_mastering_preset_names", _WITHOUT_MASTERING)
     raw = lib.sonare_mastering_preset_names()
     return raw.decode("utf-8").splitlines() if raw else []
 
@@ -856,8 +830,7 @@ def mastering_platform_names() -> list[str]:
     here, so a target added in the core is visible without a Python change.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mastering_platform_names"):
-        raise _not_supported("libsonare was built without mastering assistant support")
+    _require_export(lib, "sonare_mastering_platform_names", _WITHOUT_MASTERING)
     raw = lib.sonare_mastering_platform_names()
     return raw.decode("utf-8").splitlines() if raw else []
 
@@ -917,11 +890,11 @@ def master_audio(
         raise _refuse("give preset or overrides")
     head: tuple[Any, ...]
     if preset is None:
+        _require_export(lib, "sonare_mastering_chain", _WITHOUT_MASTERING)
         symbol, head = "sonare_mastering_chain", audio
     else:
+        _require_export(lib, "sonare_master_audio", _WITHOUT_MASTERING)
         symbol, head = "sonare_master_audio", (_utf8_arg(preset, "preset"), *audio)
-    if not hasattr(lib, symbol):
-        raise _not_supported("libsonare was built without mastering chain support")
     out = SonareMasteringChainResult()
     release = lib.sonare_free_mastering_chain_result
     _run_mastering(lib, symbol, head, overrides, on_progress, cancel, out, release)
@@ -967,11 +940,11 @@ def master_audio_stereo(
         raise _refuse("give preset or overrides")
     head: tuple[Any, ...]
     if preset is None:
+        _require_export(lib, "sonare_mastering_chain_stereo", _WITHOUT_MASTERING)
         symbol, head = "sonare_mastering_chain_stereo", audio
     else:
+        _require_export(lib, "sonare_master_audio_stereo", _WITHOUT_MASTERING)
         symbol, head = "sonare_master_audio_stereo", (_utf8_arg(preset, "preset"), *audio)
-    if not hasattr(lib, symbol):
-        raise _not_supported("libsonare was built without mastering chain support")
     out = SonareMasteringChainStereoResult()
     release = lib.sonare_free_mastering_chain_stereo_result
     _run_mastering(lib, symbol, head, overrides, on_progress, cancel, out, release)
