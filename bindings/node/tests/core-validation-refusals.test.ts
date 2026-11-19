@@ -165,6 +165,13 @@ const errorClassFor: Record<Cause, ErrorConstructor> = {
   missing_argument: TypeError,
 };
 const literal = (text: string) => new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+/** A core text as the facade renders it: the leading snake_case key respelled in camelCase. */
+const publicText = (text: string) =>
+  literal(
+    text.replace(/^[a-z0-9]+(?:_[a-z0-9]+)+/, (key) =>
+      key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase()),
+    ),
+  );
 
 describe('mfcc_to_mel refusals come from the core', () => {
   const { input, accepted, refused } = corpus.mfcc_to_mel;
@@ -178,7 +185,7 @@ describe('mfcc_to_mel refusals come from the core', () => {
 
   it.each(refused)('refuses $id', ({ n_mels, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = new RegExp(message as string);
+    const text = publicText(message as string);
     expectRefusal(() => mfccToMel({ coefficients, nMels: n_mels }), kind, text);
     expectRefusal(() => addon.mfccToMel(data, input.n_mfcc, input.n_frames, n_mels, 0), kind, text);
     expectRefusal(() => mfccToAudio({ coefficients, nMels: n_mels, nIter: 1 }), kind, text);
@@ -228,7 +235,7 @@ describe('mel_to_audio refusals come from the core', () => {
 
   it.each(refused)('refuses $id', ({ n_iter, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = new RegExp(message as string);
+    const text = publicText(message as string);
     expectRefusal(() => melToAudio({ power, nIter: n_iter }), kind, text);
     expectRefusal(
       () =>
@@ -266,7 +273,7 @@ describe('mfcc_to_audio refusals come from the core', () => {
 
   it.each(refused)('refuses $id', ({ n_iter, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = new RegExp(message as string);
+    const text = publicText(message as string);
     expectRefusal(
       () => mfccToAudio({ coefficients, nMels: input.n_mels, nIter: n_iter }),
       kind,
@@ -411,7 +418,7 @@ describe('an absent inverse-transform hop is derived from nFft by the core', () 
       ({ n_fft, hop_length, cause, message }) => {
         const kind = errorClassFor[cause as Cause];
         expectRefusal(() => route.facade(n_fft, hop_length), kind, /hopLength/);
-        expectRefusal(() => route.native(n_fft, hop_length), kind, new RegExp(message as string));
+        expectRefusal(() => route.native(n_fft, hop_length), kind, publicText(message as string));
       },
     );
   }

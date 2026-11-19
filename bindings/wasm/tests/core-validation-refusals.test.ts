@@ -164,6 +164,13 @@ const errorClassFor: Record<Cause, typeof RangeError> = {
   missing_argument: TypeError,
 };
 const literal = (text: string) => new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+/** A core text as the facade renders it: the leading snake_case key respelled in camelCase. */
+const publicText = (text: string) =>
+  literal(
+    text.replace(/^[a-z0-9]+(?:_[a-z0-9]+)+/, (key) =>
+      key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase()),
+    ),
+  );
 
 type RawInverse = {
   mfccToMel(
@@ -209,7 +216,7 @@ describe('mfcc_to_mel refusals come from the core', () => {
 
   it.each(refused)('refuses $id', ({ n_mels, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = new RegExp(message as string);
+    const text = publicText(message as string);
     const calls: Array<() => unknown> = [
       () => mfccToMel({ coefficients, nMels: n_mels }),
       () => raw().mfccToMel(data, input.n_mfcc, input.n_frames, n_mels, 0),
@@ -261,7 +268,7 @@ describe('mel_to_audio refusals come from the core', () => {
 
   it.each(refused)('refuses $id', ({ n_iter, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = new RegExp(message as string);
+    const text = publicText(message as string);
     const calls: Array<() => unknown> = [
       () => melToAudio({ power, nIter: n_iter }),
       () =>
@@ -301,7 +308,7 @@ describe('mfcc_to_audio refusals come from the core', () => {
 
   it.each(refused)('refuses $id', ({ n_iter, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = new RegExp(message as string);
+    const text = publicText(message as string);
     const calls: Array<() => unknown> = [
       () => mfccToAudio({ coefficients, nMels: input.n_mels, nIter: n_iter }),
       () =>
@@ -449,7 +456,7 @@ describe('an absent inverse-transform hop is derived from nFft by the core', () 
           /hopLength/,
         );
         expect(expectRefusalOf(() => route.native(n_fft, hop_length), kind).message).toMatch(
-          new RegExp(message as string),
+          publicText(message as string),
         );
       },
     );
