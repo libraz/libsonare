@@ -752,6 +752,56 @@ describe('SonareRealtimeEngineNode', () => {
       ]);
     });
 
+    it('names a worklet sync rejection with the entry whose call posted the sync', async () => {
+      const posted: unknown[] = [];
+      const livePosted: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => posted.push(message),
+        onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+      };
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      }) as unknown as OfflineEngineOption;
+      const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineNumChannels: 2,
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      const live = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 2,
+        transport: { postMessage: (message) => livePosted.push(message) },
+      });
+      try {
+        const seen: Array<{ message: string; failure?: Error }> = [];
+        engine.onSyncError((message) => seen.push(message));
+        engine.setTempo(120);
+        const sync = posted.at(-1) as { type: string; entry?: string; bpm: number };
+        expect(sync).toMatchObject({ type: 'syncTempo', entry: 'SonareEngine.setTempo' });
+        // The live engine refuses what the offline mirror accepted.
+        live.receiveSync({
+          ...sync,
+          tempoSegments: undefined,
+          bpm: Number.NaN,
+        } as Parameters<typeof live.receiveSync>[0]);
+        const reply = livePosted.at(-1) as { type: string; entry?: string; message: string };
+        expect(reply).toMatchObject({ type: 'syncError', entry: 'SonareEngine.setTempo' });
+        port.onmessage?.({ data: reply } as MessageEvent<unknown>);
+        expect(seen).toHaveLength(1);
+        // One prefix, the consumer's entry, even though the audio thread raised through its own.
+        expect(seen[0].message).toMatch(/^SonareEngine\.setTempo: tempo must be /);
+        expect(seen[0].message).not.toContain('RealtimeEngine.');
+        expect(seen[0].failure?.message).toBe(seen[0].message);
+      } finally {
+        live.destroy();
+        engine.destroy();
+      }
+    });
+
     it('stops delivering sync rejections after destroy', async () => {
       const port = {
         postMessage: () => undefined,
@@ -940,18 +990,30 @@ describe('SonareRealtimeEngineNode', () => {
         expect(inputUmp).toHaveBeenCalledWith(Uint32Array.from([0x41923c00, 0x87654321]), 512);
         expect(posted).toEqual(
           expect.arrayContaining([
-            { type: 'syncMidiUmp', destinationId: 3, words: [0x20903c64], renderFrame: 128 },
+            {
+              type: 'syncMidiUmp',
+              destinationId: 3,
+              words: [0x20903c64],
+              renderFrame: 128,
+              entry: 'SonareEngine.pushMidiUmp',
+            },
             {
               type: 'syncMidiUmp',
               destinationId: 3,
               words: Uint32Array.from([0x41923c00, 0x12345678]),
               renderFrame: 256,
+              entry: 'SonareEngine.pushMidiUmp',
             },
-            { type: 'syncMidiInputSource', destinationId: 3 },
+            {
+              type: 'syncMidiInputSource',
+              destinationId: 3,
+              entry: 'SonareEngine.setMidiInputSource',
+            },
             {
               type: 'syncMidiInputUmp',
               words: Uint32Array.from([0x41923c00, 0x87654321]),
               offsetInBlockSamples: 512,
+              entry: 'SonareEngine.pushMidiInputUmp',
             },
           ]),
         );
@@ -3670,7 +3732,9 @@ describe('SonareRealtimeEngineNode', () => {
       engine.setWarpVoiceCapacity(12);
       expect(engine.warpVoiceCapacity).toBe(12);
       expect(posted).toEqual(
-        expect.arrayContaining([{ type: 'syncWarpVoiceCapacity', voices: 12 }]),
+        expect.arrayContaining([
+          { type: 'syncWarpVoiceCapacity', voices: 12, entry: 'SonareEngine.setWarpVoiceCapacity' },
+        ]),
       );
 
       // A rejected value leaves the previously accepted capacity in place on

@@ -147,23 +147,49 @@ function renameRejection<T>(result: T, entry: string): T {
  */
 export function withEntry<T>(entry: string, body: () => T): T {
   let result: T;
+  const outer = enter(entry);
   try {
     result = body();
   } catch (error) {
     throw rename(error, entry);
+  } finally {
+    if (outer) {
+      outermost = undefined;
+    }
   }
   return renameRejection(result, entry);
+}
+
+// The outermost entry on the synchronous stack; a message answered later on another thread carries it.
+let outermost: string | undefined;
+
+function enter(entry: string): boolean {
+  if (outermost !== undefined) {
+    return false;
+  }
+  outermost = entry;
+  return true;
+}
+
+/** The outermost public entry the current synchronous call runs inside; undefined outside every entry. */
+export function activeEntry(): string | undefined {
+  return outermost;
 }
 
 type Callable = (...args: unknown[]) => unknown;
 
 function named(fn: Callable, entry: string): Callable {
   const wrapper = function (this: unknown) {
+    const outer = enter(entry);
     try {
       // biome-ignore lint/complexity/noArguments: forwarded without an array allocation
       return renameRejection(Reflect.apply(fn, this, arguments), entry);
     } catch (error) {
       throw rename(error, entry);
+    } finally {
+      if (outer) {
+        outermost = undefined;
+      }
     }
   };
   // The member keeps the arity and name a consumer reads off it.
@@ -212,10 +238,15 @@ export function entryClass(name: string, skip: readonly string[] = []) {
     // A proxy rather than a subclass keeps the exported class's prototype the one its instances carry.
     const named: typeof cls = new Proxy(cls, {
       construct(base, args, newTarget): object {
+        const outer = enter(name);
         try {
           return Reflect.construct(base, args, newTarget === named ? base : newTarget);
         } catch (error) {
           throw rename(error, name);
+        } finally {
+          if (outer) {
+            outermost = undefined;
+          }
         }
       },
     });

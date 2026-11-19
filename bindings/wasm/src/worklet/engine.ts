@@ -55,7 +55,10 @@ import type {
   MidiFxConfig,
   SidechainSource,
 } from '../public_types_engine.js';
-import type { SonareRealtimeEngineNodeCapabilities } from '../public_types_worklet.js';
+import type {
+  EngineSyncErrorMessage,
+  SonareRealtimeEngineNodeCapabilities,
+} from '../public_types_worklet.js';
 import type { ClipPageProvider } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
 import type { EngineAutomationContext } from './engine-automation.js';
@@ -1638,6 +1641,11 @@ export class SonareEngine {
   /** Subscribes to engine telemetry records from the worklet. Returns a function that removes the subscription. */
   onTelemetry(callback: (telemetry: EngineTelemetry) => void): () => void {
     return this.realtimeNode.onTelemetry(callback);
+  }
+
+  /** Subscribes to syncs the worklet refused after the offline mirror accepted them. Returns a function that removes the subscription. */
+  onSyncError(callback: (message: EngineSyncErrorMessage) => void): () => void {
+    return this.realtimeNode.onSyncError(callback);
   }
 
   /** Drains telemetry published since the last poll (SAB mode); empty otherwise. See {@link SonareRealtimeEngineNode.pollTelemetry}. */

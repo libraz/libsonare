@@ -396,11 +396,13 @@ export class SonareRealtimeEngineWorkletProcessor {
     try {
       this.applySync(message);
     } catch (error) {
+      const entry = (message as { entry?: unknown }).entry;
       this.transport?.postMessage?.({
         type: 'syncError',
         syncType: message.type,
         message: error instanceof Error ? error.message : String(error),
         failure: failurePayload(error),
+        ...(typeof entry === 'string' ? { entry } : {}),
       });
     } finally {
       // A refused sync still counts: the commands posted after it must not wait forever.

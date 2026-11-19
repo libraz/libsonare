@@ -115,6 +115,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
             type: 'syncError',
             syncType: data.type,
             message: `Unrecognized worklet sync message: ${data.type}`,
+            ...(typeof data.entry === 'string' ? { entry: data.entry } : {}),
           });
           bridge.noteSyncSequence(data.syncSequence);
         }

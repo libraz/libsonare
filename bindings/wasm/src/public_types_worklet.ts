@@ -350,7 +350,10 @@ export interface SonareRealtimeEngineNodeOptions
 export interface EngineSyncErrorMessage {
   /** Always `'syncError'`. */
   type: 'syncError';
-  /** The refusal as raised on the audio thread, rebuilt with its class and any SonareError code. */
+  /**
+   * The refusal as raised on the audio thread, rebuilt with its class and any SonareError code,
+   * and named with the public entry whose call posted the sync (`SonareEngine.setTempo: ...`).
+   */
   failure?: Error;
   /**
    * Discriminant of the rejected sync. Usually a known member, but a
@@ -359,7 +362,10 @@ export interface EngineSyncErrorMessage {
    * known members as editor completions instead of collapsing to `string`.
    */
   syncType: SonareEngineSyncMessage['type'] | (string & Record<never, never>);
-  /** The refusal's message, as raised on the audio thread. */
+  /**
+   * The refusal's message, prefixed with the public entry whose call posted the sync; a sync
+   * posted outside any entry call (a background page pump) carries the bare text.
+   */
   message: string;
 }
 

@@ -1,6 +1,14 @@
 import { ErrorCode } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
-import { codedError, entryClass, invalidState, refuse, withEntry } from '../internal/entry.js';
+import {
+  activeEntry,
+  codedError,
+  entryClass,
+  invalidState,
+  nameNativeError,
+  refuse,
+  withEntry,
+} from '../internal/entry.js';
 import { externalMidiEvent } from '../internal/external_midi.js';
 import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
@@ -335,13 +343,24 @@ export class SonareRealtimeEngineNode {
       } else if (isClipPageRequestMessage(event.data)) {
         this.emitClipPageRequests(event.data);
       } else if (isRecord(event.data) && event.data.type === 'syncError') {
+        const entry = typeof event.data.entry === 'string' ? event.data.entry : undefined;
+        const raw = String(event.data.message ?? 'AudioWorklet sync failed');
+        const failure = isFailurePayload(event.data.failure)
+          ? failureFromPayload(event.data.failure)
+          : undefined;
+        // The audio thread's text may carry its own inner entry; the failure keeps the bare reason.
+        let message = raw;
+        if (entry !== undefined && failure !== undefined) {
+          nameNativeError(failure, entry);
+          message = failure.message;
+        } else if (entry !== undefined) {
+          message = `${entry}: ${raw}`;
+        }
         const syncError: EngineSyncErrorMessage = {
           type: 'syncError',
           syncType: String(event.data.syncType),
-          message: String(event.data.message ?? 'AudioWorklet sync failed'),
-          ...(isFailurePayload(event.data.failure)
-            ? { failure: failureFromPayload(event.data.failure) }
-            : {}),
+          message,
+          ...(failure === undefined ? {} : { failure }),
         };
         for (const listener of this.syncErrorListeners) {
           listener(syncError);
@@ -700,7 +719,13 @@ export class SonareRealtimeEngineNode {
   postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void {
     this.assertOpen();
     const syncSequence = (this.syncSequence + 1) >>> 0;
-    const posted = this.commandRing ? { ...message, syncSequence } : message;
+    // The entry that posted the sync names a refusal the worklet reports back for it.
+    const entry = activeEntry();
+    const posted = {
+      ...message,
+      ...(this.commandRing ? { syncSequence } : {}),
+      ...(entry === undefined ? {} : { entry }),
+    };
     if (transfer && transfer.length > 0) {
       this.node.port.postMessage(posted, transfer);
     } else {
