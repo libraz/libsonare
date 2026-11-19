@@ -268,8 +268,9 @@ describe('the HPSS positional readers default only an omitted argument', () => {
     // A well-formed number the library does not accept is the core's to refuse,
     // and it answers with a RangeError naming the constraint it broke. An
     // addon-side copy of that rule would be redundant and would word it vaguer.
+    const refusedValues: Record<string, number[]> = { nFft: [0, -2048], hopLength: [-2048] };
     for (const [index, argument] of ['nFft', 'hopLength'].entries()) {
-      for (const bad of [0, -2048]) {
+      for (const bad of refusedValues[argument]) {
         it(`${entry.name}: a ${argument} of ${bad} is refused by the core as a RangeError`, () => {
           const args = [...DEFAULTS];
           args[index + 2] = bad;
@@ -282,6 +283,10 @@ describe('the HPSS positional readers default only an omitted argument', () => {
         });
       }
     }
+
+    it(`${entry.name}: a hopLength of 0 is the core's quarter of nFft`, () => {
+      expect(digest(entry.run(31, 31, 2048, 0))).toBe(digest(entry.run(31, 31, 2048, 512)));
+    });
 
     // A value that cannot be represented at all is the reader's to refuse, and
     // it is the one class that must NOT be deferred: ToInt32 turns every

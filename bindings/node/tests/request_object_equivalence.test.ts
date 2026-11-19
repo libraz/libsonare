@@ -1928,7 +1928,7 @@ const ROWS: Row[] = [
     values: {
       samples: SHORT,
       sampleRate: SR,
-      options: { nComponents: 2, nFft: 512, hopLength: 128, nIter: 8, beta: 1, maskPower: 2 },
+      options: { nComponents: 2, nFft: 512, hopLength: 64, nIter: 8, beta: 1, maskPower: 2 },
     },
     invalid: { nComponents: -1 },
   },

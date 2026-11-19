@@ -535,7 +535,7 @@ export const ROWS: Row[] = [
     fn: sonare.extractPercussiveEvents,
     form: 'sampleOptions',
     params: 'samples sampleRate nFft? hopLength?',
-    values: { samples: SIG, sampleRate: ALT_SR, nFft: 1024, hopLength: 256 },
+    values: { samples: SIG, sampleRate: ALT_SR, nFft: 1024, hopLength: 128 },
     invalid: { nFft: -1 },
   },
   {

@@ -46,7 +46,19 @@ type StretchCase = {
   cause?: Cause;
   message?: string;
 };
-type StretchRoute = { input: StretchInput; accepted: StretchCase[]; refused: StretchCase[] };
+type AbsentHopCase = {
+  id: string;
+  n_fft: number;
+  hop_length: number;
+  derived_hop_length: number;
+  primitive_message: string;
+};
+type StretchRoute = {
+  input: StretchInput;
+  accepted: StretchCase[];
+  refused: StretchCase[];
+  absent_hop: AbsentHopCase[];
+};
 type RateBlockCase = {
   id: string;
   sample_rate: number;
@@ -299,6 +311,59 @@ describe('native spectral stretch geometry refusals come from the core', () => {
       text,
     );
   });
+});
+
+describe('an absent resynthesis hop is derived from nFft by the core', () => {
+  const { input, absent_hop } = corpus.native_spectral_stretch;
+  const samples = new Float32Array(input.length).fill(input.fill);
+  const rate = input.sample_rate;
+
+  // The core primitive's own refusal of a 0 hop is not reachable from a binding;
+  // the C++ corpus reader pins primitive_message.
+  it.each(absent_hop)(
+    '$id: an omitted hop runs as the derived one',
+    ({ n_fft, derived_hop_length }) => {
+      const stretch = { samples, sampleRate: rate, speedRatio: input.speed_ratio, nFft: n_fft };
+      const shift = {
+        samples,
+        sampleRate: rate,
+        pitchSemitones: input.pitch_semitones,
+        nFft: n_fft,
+      };
+      const derived = { hopLength: derived_hop_length };
+      expect(timeStretch(stretch)).toEqual(timeStretch({ ...stretch, ...derived }));
+      expect(pitchShift(shift)).toEqual(pitchShift({ ...shift, ...derived }));
+      expect(addon.timeStretch(samples, rate, input.speed_ratio, n_fft)).toEqual(
+        addon.timeStretch(samples, rate, input.speed_ratio, n_fft, derived_hop_length),
+      );
+      expect(addon.pitchShift(samples, rate, input.pitch_semitones, n_fft)).toEqual(
+        addon.pitchShift(samples, rate, input.pitch_semitones, n_fft, derived_hop_length),
+      );
+    },
+  );
+
+  it.each(absent_hop)(
+    '$id: an explicit hop of 0 is refused by the facade',
+    ({ n_fft, hop_length }) => {
+      const options = { nFft: n_fft, hopLength: hop_length };
+      expectRefusal(
+        () => timeStretch({ samples, sampleRate: rate, speedRatio: input.speed_ratio, ...options }),
+        RangeError,
+        /hopLength/,
+      );
+      expectRefusal(
+        () =>
+          pitchShift({
+            samples,
+            sampleRate: rate,
+            pitchSemitones: input.pitch_semitones,
+            ...options,
+          }),
+        RangeError,
+        /hopLength/,
+      );
+    },
+  );
 });
 
 describe('streaming mastering chain prepare refusals come from the core', () => {

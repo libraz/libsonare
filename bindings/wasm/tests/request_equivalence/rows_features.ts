@@ -737,7 +737,7 @@ export const ROWS: Row[] = [
       sampleRate: ALT_SR,
       nComponents: 2,
       nFft: 512,
-      hopLength: 128,
+      hopLength: 64,
       nIter: 10,
     },
     invalid: { nComponents: -1 },
