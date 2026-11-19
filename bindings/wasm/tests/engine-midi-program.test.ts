@@ -187,6 +187,7 @@ describe('SonareEngine.pushMidiProgram (worklet facade)', () => {
         destinationId: DEST,
         words: Uint32Array.from([built.word0, built.word1 ?? 0]),
         renderFrame: 256,
+        entry: 'SonareEngine.pushMidiProgram',
       });
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 5)).not.toThrow();
       expect(() => engine.pushMidiProgram(DEST, 0, 16, 0)).toThrow(RangeError);
