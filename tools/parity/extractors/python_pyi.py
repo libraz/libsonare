@@ -350,6 +350,10 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
         "result-record plumbing: private wire parsers and the CLI JSON view, no public signatures",
         ("_result_records.py",),
     ),
+    (
+        "generated refusal field-spelling table: tools/api/gen_field_spelling.py output, no public signatures",
+        ("_field_spelling.py",),
+    ),
 )
 
 
