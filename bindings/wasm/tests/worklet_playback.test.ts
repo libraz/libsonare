@@ -157,7 +157,8 @@ describe('SonarePlaybackWorkletProcessor', () => {
       }
       const diagnostics = requestDiagnostics(processor, port);
       expect(diagnostics.unsupported_input_blocks).toBe(1);
-      expect(diagnostics.layoutSwitches).toBe(1);
+      // The first block fixes the 5.1 layout; the refused block does not change it.
+      expect(diagnostics.layoutSwitches).toBe(0);
       const peak = Math.max(...center.map(Math.abs));
       const rise = center.findIndex((v) => Math.abs(v) >= peak * 0.01);
       expect(
