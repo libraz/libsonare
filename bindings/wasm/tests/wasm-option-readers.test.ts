@@ -75,7 +75,7 @@ describe('wrong-typed option values are refused by name', () => {
       );
       expectInvalid(
         () => oneStrip(SR, { gain: 1 }),
-        /^mixStereo: unknown key strips\[0\]\.gain \(expected left, right, inputTrimDb, faderDb, pan, panMode, width, muted\)$/,
+        /^mixStereo: unknown key strips\[0\]\.gain \(expected faderDb, inputTrimDb, left, muted, pan, panMode, right, width\)$/,
       );
       expectInvalid(
         () => (mixStereo as (...args: unknown[]) => unknown)([leftOnly()], [silence()], SR),

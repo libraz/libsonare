@@ -85,7 +85,7 @@ describe('Sonare WASM Project edit ops', () => {
       const before = project.toJson();
       expect(() => project.setClipTakes(clip, [{ id: 1, sorceOffsetPpq: 2 } as never])).toThrow(
         new TypeError(
-          'Project.setClipTakes: unknown key takes[0].sorceOffsetPpq (expected id, sourceId, sourceOffsetPpq, name)',
+          'Project.setClipTakes: unknown key takes[0].sorceOffsetPpq (expected id, name, sourceId, sourceOffsetPpq)',
         ),
       );
       expect(() =>
@@ -95,7 +95,7 @@ describe('Sonare WASM Project edit ops', () => {
         ]),
       ).toThrow(
         new TypeError(
-          'Project.setClipCompSegments: unknown key segments[1].crossfadePq (expected startPpq, endPpq, takeId, crossfadePpq)',
+          'Project.setClipCompSegments: unknown key segments[1].crossfadePq (expected crossfadePpq, endPpq, startPpq, takeId)',
         ),
       );
       expect(project.toJson()).toBe(before);
@@ -785,7 +785,7 @@ describe('Sonare WASM Project edit ops', () => {
         }),
       ).toThrow(
         new TypeError(
-          'Project.addAutomationLane: unknown key points[0].curve (expected ppq, value, curveToNext)',
+          'Project.addAutomationLane: unknown key points[0].curve (expected curveToNext, ppq, value)',
         ),
       );
       expect(project.toJson()).toBe(before);

@@ -81,14 +81,16 @@ export function refuseType(text: string): TypeError {
 
 /**
  * Refusal of a key outside a declared set, named by its path from the request
- * root and listing the set; `also` names the one other place the key is read.
+ * root and listing the set deduplicated in byte order, the order every layer
+ * lists accepted keys in; `also` names the one other place the key is read.
  */
 export function refuseUnknownKey(
   path: string,
   allowed: readonly string[],
   also?: string,
 ): TypeError {
-  const expected = also === undefined ? allowed.join(', ') : `${allowed.join(', ')}, or ${also}`;
+  const listed = [...new Set(allowed)].sort().join(', ');
+  const expected = also === undefined ? listed : `${listed}, or ${also}`;
   return refuseType(`unknown key ${path} (expected ${expected})`);
 }
 
