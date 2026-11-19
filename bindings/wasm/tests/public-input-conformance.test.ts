@@ -2,12 +2,21 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { MixStereoStrip } from '../dist/index.js';
 import {
+  gm2DrumName,
+  gm2DrumSetName,
+  gm2InstrumentName,
+  gmDrumName,
+  gmFamilyFirstProgram,
+  gmFamilyName,
+  gmInstrumentName,
   init,
   midiCc,
   midiCcLearn,
+  midiCcName,
   midiCcToBreakpoint,
   midiParamToCc,
   mixStereo,
+  perNoteControllerName,
   RealtimeEngine,
 } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
@@ -214,5 +223,57 @@ describe('shared public-input conformance corpus (WASM)', () => {
         }
       });
     }
+  }
+});
+
+type GmLookupCase = {
+  id: string;
+  lookup: string;
+  args: Record<string, unknown>;
+  name?: string;
+  value?: number;
+  absent?: true;
+  refused?: 'range' | 'type';
+  key?: string;
+  predicate?: string;
+};
+
+const camel = (key: string) => key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+
+const GM_LOOKUPS: Record<string, (args: Record<string, unknown>) => unknown> = {
+  gm_instrument_name: (a) => gmInstrumentName(a.program as number),
+  gm_family_name: (a) => gmFamilyName(a.family as number),
+  gm_family_first_program: (a) => gmFamilyFirstProgram(a.family as number),
+  gm2_instrument_name: (a) =>
+    gm2InstrumentName({ bankLsb: a.bank_lsb as number, program: a.program as number }),
+  gm_drum_name: (a) => gmDrumName(a.note as number),
+  gm2_drum_set_name: (a) => gm2DrumSetName(a.bank_lsb as number),
+  gm2_drum_name: (a) => gm2DrumName({ bankLsb: a.bank_lsb as number, note: a.note as number }),
+  midi_cc_name: (a) => midiCcName(a.controller as number),
+  per_note_controller_name: (a) => perNoteControllerName(a.index as number),
+};
+
+describe('GM lookups answer the shared corpus with a name, absence or a domain refusal', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  for (const testCase of (corpus as unknown as { gm_lookup: { cases: GmLookupCase[] } }).gm_lookup
+    .cases) {
+    it(testCase.id, () => {
+      const lookup = GM_LOOKUPS[testCase.lookup];
+      expect(lookup, testCase.lookup).toBeDefined();
+      const call = () => lookup(testCase.args);
+      if (testCase.refused !== undefined) {
+        const refusal = `${camel(testCase.lookup)}: ${camel(testCase.key ?? '')} ${testCase.predicate}`;
+        expect(call).toThrow(
+          testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
+        );
+      } else if (testCase.absent) {
+        expect(call()).toBeUndefined();
+      } else {
+        expect(call()).toBe(testCase.name ?? testCase.value);
+      }
+    });
   }
 });

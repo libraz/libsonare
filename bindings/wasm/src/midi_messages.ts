@@ -493,7 +493,10 @@ export function midi2PerNoteManagement(request: Midi2PerNoteManagementRequest): 
 
 /** An integer argument in `[0, max]`: a non-number is a `TypeError`, anything else out of range a `RangeError`. */
 function lookupIndex(value: unknown, argName: string, max: number): number {
-  const n = num(value, argName);
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be an integer`);
+  }
+  const n = value;
   if (!Number.isInteger(n) || n < 0 || n > max) {
     throw refuse(`${argName} must be an integer in [0, ${max}]`);
   }
@@ -524,10 +527,7 @@ function found<T>(value: T | null, what: string): T {
 export function gmInstrumentName(program: number): string {
   return withEntry('gmInstrumentName', () => {
     const n = lookupIndex(program, 'program', 127);
-    return found(
-      projectModule().midiGmInstrumentName(n),
-      'program must name a General MIDI instrument',
-    );
+    return found(projectModule().midiGmInstrumentName(n), 'program must be an integer in [0, 127]');
   });
 }
 
@@ -541,7 +541,7 @@ export function gmProgramForName(name: string): number {
     const s = lookupName(name, 'name');
     const program = projectModule().midiGmProgramForName(s);
     if (program < 0) {
-      throw refuse('name must be a General MIDI instrument name');
+      throw refuse('name must be a GM instrument name');
     }
     return program;
   });
@@ -555,7 +555,7 @@ export function gmProgramForName(name: string): number {
 export function gmFamilyName(family: number): string {
   return withEntry('gmFamilyName', () => {
     const n = lookupIndex(family, 'family', 15);
-    return found(projectModule().midiGmFamilyName(n), 'family must name a General MIDI family');
+    return found(projectModule().midiGmFamilyName(n), 'family must be an integer in [0, 15]');
   });
 }
 
@@ -569,7 +569,7 @@ export function gmFamilyFirstProgram(family: number): number {
     const n = lookupIndex(family, 'family', 15);
     const program = projectModule().midiGmFamilyFirstProgram(n);
     if (program < 0) {
-      throw refuse('family must name a General MIDI family');
+      throw refuse('family must be an integer in [0, 15]');
     }
     return program;
   });
@@ -577,31 +577,30 @@ export function gmFamilyFirstProgram(family: number): number {
 
 /**
  * Return the GM2 bank/program instrument variation name.
+ * @returns The name, or `undefined` when the number names nothing in the table.
  * @throws {TypeError} A non-object request, an unknown key or a non-number field.
- * @throws {RangeError} A field outside 0..127, or a bank/program with no GM2 variation.
+ * @throws {RangeError} A field outside 0..127.
  */
-export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string {
+export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string | undefined {
   return withEntry('gm2InstrumentName', () => {
     const fn = 'gm2InstrumentName';
     const r = requestObject(fn, request, 'request', true);
     const bankLsb = lookupIndex(r.bankLsb, 'bankLsb', 127);
     const program = lookupIndex(r.program, 'program', 127);
-    return found(
-      projectModule().midiGm2InstrumentName(bankLsb, program),
-      'bankLsb and program must name a GM2 instrument',
-    );
+    return projectModule().midiGm2InstrumentName(bankLsb, program) ?? undefined;
   });
 }
 
 /**
  * Return the General MIDI drum name for `note` (0..127).
+ * @returns The name, or `undefined` when the number names nothing in the table.
  * @throws {TypeError} A non-number `note`.
- * @throws {RangeError} A `note` with no drum name.
+ * @throws {RangeError} A `note` outside 0..127.
  */
-export function gmDrumName(note: number): string {
+export function gmDrumName(note: number): string | undefined {
   return withEntry('gmDrumName', () => {
     const n = lookupIndex(note, 'note', 127);
-    return found(projectModule().midiGmDrumName(n), 'note must name a General MIDI drum');
+    return projectModule().midiGmDrumName(n) ?? undefined;
   });
 }
 
@@ -615,7 +614,7 @@ export function gmDrumNoteForName(name: string): number {
     const s = lookupName(name, 'name');
     const note = projectModule().midiGmDrumNoteForName(s);
     if (note < 0) {
-      throw refuse('name must be a General MIDI drum name');
+      throw refuse('name must be a GM drum name');
     }
     return note;
   });
@@ -623,43 +622,43 @@ export function gmDrumNoteForName(name: string): number {
 
 /**
  * Return the GM2 drum-set name for `bankLsb` (0..127).
+ * @returns The name, or `undefined` when the number names nothing in the table.
  * @throws {TypeError} A non-number `bankLsb`.
- * @throws {RangeError} A `bankLsb` with no drum set.
+ * @throws {RangeError} A `bankLsb` outside 0..127.
  */
-export function gm2DrumSetName(bankLsb: number): string {
+export function gm2DrumSetName(bankLsb: number): string | undefined {
   return withEntry('gm2DrumSetName', () => {
     const n = lookupIndex(bankLsb, 'bankLsb', 127);
-    return found(projectModule().midiGm2DrumSetName(n), 'bankLsb must name a GM2 drum set');
+    return projectModule().midiGm2DrumSetName(n) ?? undefined;
   });
 }
 
 /**
  * Return the GM2 drum name for `bankLsb`/`note`.
+ * @returns The name, or `undefined` when the number names nothing in the table.
  * @throws {TypeError} A non-object request, an unknown key or a non-number field.
- * @throws {RangeError} A field outside 0..127, or a drum set with no such note.
+ * @throws {RangeError} A field outside 0..127.
  */
-export function gm2DrumName(request: Gm2DrumNameRequest): string {
+export function gm2DrumName(request: Gm2DrumNameRequest): string | undefined {
   return withEntry('gm2DrumName', () => {
     const fn = 'gm2DrumName';
     const r = requestObject(fn, request, 'request', true);
     const bankLsb = lookupIndex(r.bankLsb, 'bankLsb', 127);
     const note = lookupIndex(r.note, 'note', 127);
-    return found(
-      projectModule().midiGm2DrumName(bankLsb, note),
-      'bankLsb and note must name a GM2 drum',
-    );
+    return projectModule().midiGm2DrumName(bankLsb, note) ?? undefined;
   });
 }
 
 /**
  * Return the MIDI CC name for `controller` (0..127).
+ * @returns The name, or `undefined` when the number names nothing in the table.
  * @throws {TypeError} A non-number `controller`.
  * @throws {RangeError} A `controller` outside 0..127.
  */
-export function midiCcName(controller: number): string {
+export function midiCcName(controller: number): string | undefined {
   return withEntry('midiCcName', () => {
     const n = lookupIndex(controller, 'controller', 127);
-    return found(projectModule().midiCcName(n), 'controller must name a MIDI controller');
+    return projectModule().midiCcName(n) ?? undefined;
   });
 }
 
@@ -673,7 +672,7 @@ export function midiCcIndexForName(name: string): number {
     const s = lookupName(name, 'name');
     const index = projectModule().midiCcIndexForName(s);
     if (index < 0) {
-      throw refuse('name must be a MIDI controller name');
+      throw refuse('name must be a standard MIDI CC name');
     }
     return index;
   });
@@ -681,16 +680,14 @@ export function midiCcIndexForName(name: string): number {
 
 /**
  * Return the MIDI 2.0 per-note controller name for `index` (0..255).
+ * @returns The name, or `undefined` when the number names nothing in the table.
  * @throws {TypeError} A non-number `index`.
- * @throws {RangeError} An `index` with no name.
+ * @throws {RangeError} An `index` outside 0..255.
  */
-export function perNoteControllerName(index: number): string {
+export function perNoteControllerName(index: number): string | undefined {
   return withEntry('perNoteControllerName', () => {
     const n = lookupIndex(index, 'index', 255);
-    return found(
-      projectModule().midiPerNoteControllerName(n),
-      'index must name a per-note controller',
-    );
+    return projectModule().midiPerNoteControllerName(n) ?? undefined;
   });
 }
 

@@ -1468,18 +1468,15 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
     expect(() => gmInstrumentName(128)).toThrow(RangeError);
     expect(gmProgramForName('Violin')).toBe(40);
     expect(() => gmProgramForName('No Such Instrument')).toThrow(
-      new RangeError('gmProgramForName: name must be a General MIDI instrument name'),
+      new RangeError('gmProgramForName: name must be a GM instrument name'),
     );
     expect(gmFamilyName(4)).toBe('Bass');
     expect(gmFamilyFirstProgram(4)).toBe(32);
     expect(gm2InstrumentName({ bankLsb: 1, program: 24 })).toBe('Ukulele');
     expect(gmDrumName(38)).toBe('Acoustic Snare');
-    expect(() => gmDrumName(0)).toThrow(
-      new RangeError('gmDrumName: note must name a General MIDI drum'),
-    );
-    expect(() => gm2DrumSetName(1)).toThrow(
-      new RangeError('gm2DrumSetName: bankLsb must name a GM2 drum set'),
-    );
+    // An in-range number that names nothing in the table is absence, not a refusal.
+    expect(gmDrumName(0)).toBeUndefined();
+    expect(gm2DrumSetName(1)).toBeUndefined();
     expect(gmDrumNoteForName('Open Triangle')).toBe(81);
     expect(gm2DrumSetName(40)).toBe('Brush');
     expect(gm2DrumName({ bankLsb: 40, note: 40 })).toBe('Brush Swirl');
@@ -1635,7 +1632,7 @@ describe('MIDI message module functions', () => {
       ['gmFamilyName', () => gmFamilyName(16)],
       ['gmFamilyFirstProgram', () => gmFamilyFirstProgram(16)],
       ['gmDrumName', () => gmDrumName(200)],
-      ['gm2DrumSetName', () => gm2DrumSetName(127)],
+      ['gm2DrumSetName', () => gm2DrumSetName(128)],
       ['gm2InstrumentName', () => gm2InstrumentName({ bankLsb: 0, program: 128 })],
       ['gm2DrumName', () => gm2DrumName({ bankLsb: 0, note: 128 })],
       ['midiCcName', () => midiCcName(128)],

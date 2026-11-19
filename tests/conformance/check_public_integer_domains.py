@@ -204,7 +204,7 @@ GUARD_HOME = ("_runtime.py", "_narrowing.py")
 # than asserted: the conversion readers (`_to_c_*`), the root predicates
 # (`_narrow_*`), the array refusals (`_reject_*`), the field and option
 # validators (`_validate_*`, `_require_*`) and the closed-domain resolvers
-# (`_resolve_enum`, and the `_*_value` / `_*_values` family that wraps it).
+# (`_resolve_*`, and the `_*_value` / `_*_values` family over `_token_ordinal`).
 #
 # A guard named outside these families is invisible here, and that is contained
 # rather than trusted: a parameter routed only through an unnamed guard reaches
@@ -229,13 +229,6 @@ GUARD_SUFFIXES = ("_value", "_values")
 # containment as an unnamed guard -- a value routed through a resolver written
 # outside the home reaches nothing recognised, so it reports as `unreached`.
 HOME_ONLY_PREFIXES = ("_to_c_", "_narrow_")
-
-# `_resolve_enum`'s own escape hatch. It bounds an integer against the ordinals
-# its table spells; `validate_int=False` removes that bound rather than widening
-# it, so a resolver handed it is not a guard and neither is a call site that
-# passes it. Nothing in the tree does today -- this is here so the day one does,
-# the credit stops instead of the check staying green.
-UNBOUNDED_ENUM = ("validate_int", False)
 
 # The mapping spellings a param bag is written as. A value inside one of these
 # reaches an integral C field through a string key, which is not a declared
@@ -948,32 +941,6 @@ class Tree:
         return frozenset(reached)
 
 
-def _unbounds_enum(node: ast.AST) -> bool:
-    """Whether this function hands `_resolve_enum` its own bound-removing flag."""
-    name, disabled = UNBOUNDED_ENUM
-    return any(
-        isinstance(child, ast.Call)
-        and any(
-            keyword.arg == name
-            and isinstance(keyword.value, ast.Constant)
-            and keyword.value.value is disabled
-            for keyword in child.keywords
-        )
-        for child in ast.walk(node)
-    )
-
-
-def _unbounds_enum_call(call: ast.Call) -> bool:
-    """The same flag, read at one call rather than over a whole function."""
-    name, disabled = UNBOUNDED_ENUM
-    return any(
-        keyword.arg == name
-        and isinstance(keyword.value, ast.Constant)
-        and keyword.value.value is disabled
-        for keyword in call.keywords
-    )
-
-
 def vocabulary(tree: Tree) -> dict[str, ast.FunctionDef]:
     """Every guard the narrowing home defines, keyed by name."""
     found: dict[str, ast.FunctionDef] = {}
@@ -984,7 +951,7 @@ def vocabulary(tree: Tree) -> dict[str, ast.FunctionDef]:
             named = node.name.startswith(GUARD_PREFIXES) or node.name.endswith(
                 GUARD_SUFFIXES
             )
-            if named and not _unbounds_enum(node):
+            if named:
                 found[node.name] = node
     return found
 
@@ -1445,7 +1412,7 @@ class Flow:
         if isinstance(node, ast.Call):
             named = _callee_name(node.func)
             if self._passes(node, aliases, scope):
-                if named in self.guards and not _unbounds_enum_call(node):
+                if named in self.guards:
                     return Reach("guarded", f"{named}(...)")
                 if _is_index_call(node.func):
                     return Reach("refused", "operator.index(...)")

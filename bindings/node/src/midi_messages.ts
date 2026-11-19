@@ -63,9 +63,11 @@ function requireNumber(value: unknown, argName: string): number {
 
 /** A lookup index: `TypeError` unless a number, `RangeError` unless an integer in `[0, max]`. */
 function lookupIndex(value: unknown, argName: string, max: number): number {
-  const n = requireNumber(value, argName);
-  assertBoundedInteger(n, argName, 0, max);
-  return n;
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be an integer`);
+  }
+  assertBoundedInteger(value, argName, 0, max);
+  return value;
 }
 
 function requireString(value: unknown, argName: string): string {
@@ -593,10 +595,7 @@ function foundIndex(value: number, what: string): number {
 export function gmInstrumentName(program: number): string {
   return withEntry('gmInstrumentName', () => {
     lookupIndex(program, 'program', 127);
-    return found(
-      addon.midiGmInstrumentName(program),
-      'program must name a General MIDI instrument',
-    );
+    return found(addon.midiGmInstrumentName(program), 'program must be an integer in [0, 127]');
   });
 }
 
@@ -610,10 +609,7 @@ export function gmInstrumentName(program: number): string {
 export function gmProgramForName(name: string): number {
   return withEntry('gmProgramForName', () => {
     requireString(name, 'name');
-    return foundIndex(
-      addon.midiGmProgramForName(name),
-      'name must be a General MIDI instrument name',
-    );
+    return foundIndex(addon.midiGmProgramForName(name), 'name must be a GM instrument name');
   });
 }
 
@@ -627,7 +623,7 @@ export function gmProgramForName(name: string): number {
 export function gmFamilyName(family: number): string {
   return withEntry('gmFamilyName', () => {
     lookupIndex(family, 'family', 15);
-    return found(addon.midiGmFamilyName(family), 'family must name a General MIDI family');
+    return found(addon.midiGmFamilyName(family), 'family must be an integer in [0, 15]');
   });
 }
 
@@ -643,7 +639,7 @@ export function gmFamilyFirstProgram(family: number): number {
     lookupIndex(family, 'family', 15);
     return foundIndex(
       addon.midiGmFamilyFirstProgram(family),
-      'family must name a General MIDI family',
+      'family must be an integer in [0, 15]',
     );
   });
 }
@@ -651,34 +647,33 @@ export function gmFamilyFirstProgram(family: number): number {
 /**
  * Returns the GM2 instrument variation name for a bank LSB and program.
  *
- * @param request - Bank LSB and program number
+ * @param request - Bank LSB and program number, each `0`..`127`
+ * @returns The name, or `undefined` when the number names nothing in the table
  * @throws TypeError for a wrong-typed or unknown field
- * @throws RangeError when the bank/program pair names no instrument
+ * @throws RangeError when a field is outside `0`..`127`
  */
-export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string {
+export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string | undefined {
   return withEntry('gm2InstrumentName', () => {
     const fn = 'gm2InstrumentName';
     const record = requestObject(fn, request, 'request', true);
     const bankLsb = lookupIndex(record.bankLsb, 'bankLsb', 127);
     const program = lookupIndex(record.program, 'program', 127);
-    return found(
-      addon.midiGm2InstrumentName(bankLsb, program),
-      'bankLsb and program must name a GM2 instrument',
-    );
+    return addon.midiGm2InstrumentName(bankLsb, program) ?? undefined;
   });
 }
 
 /**
  * Returns the General MIDI drum name for `note`.
  *
- * @param note - Drum note number
+ * @param note - Drum note number, `0`..`127`
+ * @returns The name, or `undefined` when the number names nothing in the table
  * @throws TypeError when `note` is not a number
- * @throws RangeError when `note` names no drum
+ * @throws RangeError when `note` is outside `0`..`127`
  */
-export function gmDrumName(note: number): string {
+export function gmDrumName(note: number): string | undefined {
   return withEntry('gmDrumName', () => {
     lookupIndex(note, 'note', 127);
-    return found(addon.midiGmDrumName(note), 'note must name a General MIDI drum');
+    return addon.midiGmDrumName(note) ?? undefined;
   });
 }
 
@@ -692,38 +687,40 @@ export function gmDrumName(note: number): string {
 export function gmDrumNoteForName(name: string): number {
   return withEntry('gmDrumNoteForName', () => {
     requireString(name, 'name');
-    return foundIndex(addon.midiGmDrumNoteForName(name), 'name must be a General MIDI drum name');
+    return foundIndex(addon.midiGmDrumNoteForName(name), 'name must be a GM drum name');
   });
 }
 
 /**
  * Returns the GM2 drum-set name for a bank LSB.
  *
- * @param bankLsb - GM2 drum-set bank LSB
+ * @param bankLsb - GM2 drum-set bank LSB, `0`..`127`
+ * @returns The name, or `undefined` when the number names nothing in the table
  * @throws TypeError when `bankLsb` is not a number
- * @throws RangeError when no drum set uses that bank
+ * @throws RangeError when `bankLsb` is outside `0`..`127`
  */
-export function gm2DrumSetName(bankLsb: number): string {
+export function gm2DrumSetName(bankLsb: number): string | undefined {
   return withEntry('gm2DrumSetName', () => {
     lookupIndex(bankLsb, 'bankLsb', 127);
-    return found(addon.midiGm2DrumSetName(bankLsb), 'bankLsb must name a GM2 drum set');
+    return addon.midiGm2DrumSetName(bankLsb) ?? undefined;
   });
 }
 
 /**
  * Returns the GM2 drum name for a bank LSB and drum note.
  *
- * @param request - Drum-set bank LSB and note number
+ * @param request - Drum-set bank LSB and note number, each `0`..`127`
+ * @returns The name, or `undefined` when the number names nothing in the table
  * @throws TypeError for a wrong-typed or unknown field
- * @throws RangeError when the bank/note pair names no drum
+ * @throws RangeError when a field is outside `0`..`127`
  */
-export function gm2DrumName(request: Gm2DrumNameRequest): string {
+export function gm2DrumName(request: Gm2DrumNameRequest): string | undefined {
   return withEntry('gm2DrumName', () => {
     const fn = 'gm2DrumName';
     const record = requestObject(fn, request, 'request', true);
     const bankLsb = lookupIndex(record.bankLsb, 'bankLsb', 127);
     const note = lookupIndex(record.note, 'note', 127);
-    return found(addon.midiGm2DrumName(bankLsb, note), 'bankLsb and note must name a GM2 drum');
+    return addon.midiGm2DrumName(bankLsb, note) ?? undefined;
   });
 }
 
@@ -731,13 +728,14 @@ export function gm2DrumName(request: Gm2DrumNameRequest): string {
  * Returns the MIDI CC name for `controller`.
  *
  * @param controller - Controller number, `0`..`127`
+ * @returns The name, or `undefined` when the number names nothing in the table
  * @throws TypeError when `controller` is not a number
- * @throws RangeError when `controller` is out of range
+ * @throws RangeError when `controller` is outside `0`..`127`
  */
-export function midiCcName(controller: number): string {
+export function midiCcName(controller: number): string | undefined {
   return withEntry('midiCcName', () => {
     lookupIndex(controller, 'controller', 127);
-    return found(addon.midiCcName(controller), 'controller must name a MIDI controller');
+    return addon.midiCcName(controller) ?? undefined;
   });
 }
 
@@ -751,21 +749,22 @@ export function midiCcName(controller: number): string {
 export function midiCcIndexForName(name: string): number {
   return withEntry('midiCcIndexForName', () => {
     requireString(name, 'name');
-    return foundIndex(addon.midiCcIndexForName(name), 'name must be a MIDI controller name');
+    return foundIndex(addon.midiCcIndexForName(name), 'name must be a standard MIDI CC name');
   });
 }
 
 /**
  * Returns the MIDI 2.0 per-note controller name for `index`.
  *
- * @param index - Per-note controller index
+ * @param index - Per-note controller index, `0`..`255`
+ * @returns The name, or `undefined` when the number names nothing in the table
  * @throws TypeError when `index` is not a number
- * @throws RangeError when `index` names no per-note controller
+ * @throws RangeError when `index` is outside `0`..`255`
  */
-export function perNoteControllerName(index: number): string {
+export function perNoteControllerName(index: number): string | undefined {
   return withEntry('perNoteControllerName', () => {
     lookupIndex(index, 'index', 255);
-    return found(addon.midiPerNoteControllerName(index), 'index must name a per-note controller');
+    return addon.midiPerNoteControllerName(index) ?? undefined;
   });
 }
 

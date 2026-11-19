@@ -61,8 +61,8 @@ def _to_c_int64(value, name):
     return _narrow_int(value, name, 0, 1)
 
 
-def _resolve_enum(value, names, what, *, validate_int=True):
-    raise SonareValueError(what)
+def _mode_value(value, key):
+    raise SonareValueError(key)
 """
 
 
@@ -471,21 +471,12 @@ class FlowFidelityTest(_SyntheticTree):
         )
         self.assertEqual(self.verdict(root), "unreached")
 
-    def test_an_unbounded_enum_resolver_is_not_a_guard(self) -> None:
-        """`validate_int=False` removes the bound rather than widening it."""
+    def test_a_closed_domain_resolver_is_a_guard(self) -> None:
+        """A `_*_value` resolver refuses anything outside its set."""
         root = self.tree(
             "def f(n: int | str) -> None: ...\n",
-            "from ._runtime import _resolve_enum\n\n\ndef f(n):\n"
-            "    return _resolve_enum(n, {'a': 1}, 'thing', validate_int=False)\n",
-        )
-        self.assertEqual(self.verdict(root), "unreached")
-
-    def test_a_bounded_enum_resolver_is_a_guard(self) -> None:
-        """The companion: the same call with the bound left on."""
-        root = self.tree(
-            "def f(n: int | str) -> None: ...\n",
-            "from ._runtime import _resolve_enum\n\n\ndef f(n):\n"
-            "    return _resolve_enum(n, {'a': 1}, 'thing')\n",
+            "from ._runtime import _mode_value\n\n\ndef f(n):\n"
+            "    return _mode_value(n, 'mode')\n",
         )
         self.assertEqual(self.verdict(root), "guarded")
 

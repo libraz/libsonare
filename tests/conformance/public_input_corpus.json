@@ -273,5 +273,36 @@
     "legacy_output_formats_rejected": [1, 2],
     "disabled_feature_shape": "empty",
     "overflow_policy": "drop_newest"
+  },
+  "gm_lookup": {
+    "cases": [
+      { "id": "program_named", "lookup": "gm_instrument_name", "args": {"program": 40}, "name": "Violin" },
+      { "id": "program_above_domain", "lookup": "gm_instrument_name", "args": {"program": 128}, "refused": "range", "key": "program", "predicate": "must be an integer in [0, 127]" },
+      { "id": "program_negative", "lookup": "gm_instrument_name", "args": {"program": -1}, "refused": "range", "key": "program", "predicate": "must be an integer in [0, 127]" },
+      { "id": "program_wrong_type", "lookup": "gm_instrument_name", "args": {"program": "0"}, "refused": "type", "key": "program", "predicate": "must be an integer" },
+      { "id": "family_named", "lookup": "gm_family_name", "args": {"family": 4}, "name": "Bass" },
+      { "id": "family_above_domain", "lookup": "gm_family_name", "args": {"family": 16}, "refused": "range", "key": "family", "predicate": "must be an integer in [0, 15]" },
+      { "id": "family_first_program", "lookup": "gm_family_first_program", "args": {"family": 4}, "value": 32 },
+      { "id": "family_first_program_above_domain", "lookup": "gm_family_first_program", "args": {"family": 16}, "refused": "range", "key": "family", "predicate": "must be an integer in [0, 15]" },
+      { "id": "gm2_instrument_named", "lookup": "gm2_instrument_name", "args": {"bank_lsb": 1, "program": 24}, "name": "Ukulele" },
+      { "id": "gm2_instrument_bank_above_domain", "lookup": "gm2_instrument_name", "args": {"bank_lsb": 128, "program": 0}, "refused": "range", "key": "bank_lsb", "predicate": "must be an integer in [0, 127]" },
+      { "id": "gm2_instrument_program_above_domain", "lookup": "gm2_instrument_name", "args": {"bank_lsb": 1, "program": 128}, "refused": "range", "key": "program", "predicate": "must be an integer in [0, 127]" },
+      { "id": "drum_named", "lookup": "gm_drum_name", "args": {"note": 38}, "name": "Acoustic Snare" },
+      { "id": "drum_unnamed", "lookup": "gm_drum_name", "args": {"note": 0}, "absent": true },
+      { "id": "drum_above_domain", "lookup": "gm_drum_name", "args": {"note": 128}, "refused": "range", "key": "note", "predicate": "must be an integer in [0, 127]" },
+      { "id": "drum_wrong_type", "lookup": "gm_drum_name", "args": {"note": "38"}, "refused": "type", "key": "note", "predicate": "must be an integer" },
+      { "id": "drum_set_named", "lookup": "gm2_drum_set_name", "args": {"bank_lsb": 40}, "name": "Brush" },
+      { "id": "drum_set_unnamed", "lookup": "gm2_drum_set_name", "args": {"bank_lsb": 1}, "absent": true },
+      { "id": "drum_set_above_domain", "lookup": "gm2_drum_set_name", "args": {"bank_lsb": 128}, "refused": "range", "key": "bank_lsb", "predicate": "must be an integer in [0, 127]" },
+      { "id": "gm2_drum_named", "lookup": "gm2_drum_name", "args": {"bank_lsb": 40, "note": 40}, "name": "Brush Swirl" },
+      { "id": "gm2_drum_unnamed", "lookup": "gm2_drum_name", "args": {"bank_lsb": 0, "note": 0}, "absent": true },
+      { "id": "gm2_drum_note_above_domain", "lookup": "gm2_drum_name", "args": {"bank_lsb": 40, "note": 128}, "refused": "range", "key": "note", "predicate": "must be an integer in [0, 127]" },
+      { "id": "cc_named", "lookup": "midi_cc_name", "args": {"controller": 74}, "name": "Brightness" },
+      { "id": "cc_unnamed", "lookup": "midi_cc_name", "args": {"controller": 3}, "absent": true },
+      { "id": "cc_above_domain", "lookup": "midi_cc_name", "args": {"controller": 128}, "refused": "range", "key": "controller", "predicate": "must be an integer in [0, 127]" },
+      { "id": "per_note_named", "lookup": "per_note_controller_name", "args": {"index": 11}, "name": "Expression" },
+      { "id": "per_note_unnamed_upper_half", "lookup": "per_note_controller_name", "args": {"index": 200}, "absent": true },
+      { "id": "per_note_above_domain", "lookup": "per_note_controller_name", "args": {"index": 256}, "refused": "range", "key": "index", "predicate": "must be an integer in [0, 255]" }
+    ]
   }
 }
