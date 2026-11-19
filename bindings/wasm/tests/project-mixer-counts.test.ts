@@ -70,8 +70,8 @@ describe('Project counts and timeline metadata (WASM)', () => {
         sourceOffsetPpq: 1,
         gain: 0.75,
         loopMode: 'off',
-        loopLengthPpq: 0,
       });
+      expect(project.clips()[0]).not.toHaveProperty('loopLengthPpq');
       expect(project.sources()[0]).toMatchObject({
         id: project.clips()[0].sourceId,
         kind: 'audio',

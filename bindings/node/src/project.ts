@@ -362,9 +362,29 @@ function trackFromNative(raw: Record<string, unknown>): ProjectTrack {
   return { ...raw, kind: tokenName(TRACK_KIND, raw.kind as number, 'track kind') } as ProjectTrack;
 }
 
+/**
+ * A clip loop length as the native layer reads it: an omitted length is its whole-clip `0`, and an
+ * explicit `0` is refused so that omission is the one spelling of a whole-clip loop.
+ */
+function wholeClipLoopLength(fnName: string, value: unknown): number {
+  if (isAbsent(value)) {
+    return 0;
+  }
+  const length = requireNumber(fnName, value, 'loopLengthPpq');
+  if (length === 0) {
+    throw new RangeError(
+      'Project.setClipLoop: loopLengthPpq must not be 0; omit it to loop the whole clip',
+    );
+  }
+  return length;
+}
+
+/** A clip record; a whole-clip loop, or no loop, reads back without `loopLengthPpq`. */
 function clipFromNative(raw: Record<string, unknown>): ProjectClip {
+  const { loopLengthPpq, ...rest } = raw;
   return {
-    ...raw,
+    ...rest,
+    ...(loopLengthPpq === 0 ? {} : { loopLengthPpq }),
     sourceKind: tokenName(SOURCE_KIND, raw.sourceKind as number, 'source kind'),
     loopMode: tokenName(LOOP_MODE, raw.loopMode as number, 'loop mode'),
   } as ProjectClip;
@@ -1103,9 +1123,7 @@ export class Project {
     this.native.setClipLoop(
       clipId,
       tokenOrdinal(fnName, record.loopMode, LOOP_MODE, 'loopMode'),
-      isAbsent(record.loopLengthPpq)
-        ? 0
-        : requireNumber(fnName, record.loopLengthPpq, 'loopLengthPpq'),
+      wholeClipLoopLength(fnName, record.loopLengthPpq),
       isAbsent(record.loopCrossfadePpq)
         ? 0
         : requireNumber(fnName, record.loopCrossfadePpq, 'loopCrossfadePpq'),

@@ -75,8 +75,8 @@ export interface ProjectClip {
   readonly gain: number;
   /** Whether the clip loops. */
   readonly loopMode: ProjectLoopMode;
-  /** Loop length in PPQ; `0` loops the whole clip. */
-  readonly loopLengthPpq: number;
+  /** Loop length in PPQ; absent for a whole-clip loop or a clip that does not loop. */
+  readonly loopLengthPpq?: number;
 }
 
 /** Read-only stored audio or MIDI source descriptor. */
@@ -692,8 +692,9 @@ export interface ProjectClipLoopRequest {
   /** Whether the clip loops. */
   loopMode: ProjectLoopMode;
   /**
-   * Loop length in PPQ, finite and >= 0. Omitted or `0` loops the entire clip
-   * (the effective length is resolved from the clip's own duration).
+   * Loop length in PPQ, finite and > 0. Omit it to loop the entire clip (the
+   * effective length is resolved from the clip's own duration); an explicit `0`
+   * is refused.
    */
   loopLengthPpq?: number;
   /**

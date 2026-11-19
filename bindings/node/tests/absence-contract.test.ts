@@ -417,3 +417,33 @@ describe('a percussive-event field whose native 0 is the default refuses an expl
     ).toEqual(renderPercussiveEvents({ samples: hits, sampleRate, events }));
   });
 });
+
+describe('a whole-clip loop is spelt by omitting the loop length', () => {
+  const ZERO = 'Project.setClipLoop: loopLengthPpq must not be 0; omit it to loop the whole clip';
+
+  it('refuses an explicit 0 and reads a whole-clip loop back without a length', () => {
+    withProject((project, _trackId, clipId) => {
+      expect(project.clips()[0]).not.toHaveProperty('loopLengthPpq');
+      expect(() => project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 0 })).toThrow(
+        new RangeError(ZERO),
+      );
+      for (const loopLengthPpq of [undefined, null]) {
+        project.setClipLoop(clipId, {
+          loopMode: 'loop',
+          loopLengthPpq: loopLengthPpq as number | undefined,
+        });
+        const clip = project.clips()[0];
+        expect(clip.loopMode).toBe('loop');
+        expect(clip).not.toHaveProperty('loopLengthPpq');
+      }
+      project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 2 });
+      const looped = project.clips()[0];
+      expect(looped.loopLengthPpq).toBe(2);
+      project.setClipLoop(clipId, {
+        loopMode: looped.loopMode,
+        loopLengthPpq: looped.loopLengthPpq,
+      });
+      expect(project.clips()[0].loopLengthPpq).toBe(2);
+    });
+  });
+});

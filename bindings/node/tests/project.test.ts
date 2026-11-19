@@ -123,8 +123,8 @@ it('reads stored tracks, clips, and sources as arrays', () => {
       sourceOffsetPpq: 1,
       gain: 0.75,
       loopMode: 'off',
-      loopLengthPpq: 0,
     });
+    expect(project.clips()[0]).not.toHaveProperty('loopLengthPpq');
     expect(project.sources()).toHaveLength(1);
     expect(project.sources()[0]).toMatchObject({
       id: project.clips()[0].sourceId,

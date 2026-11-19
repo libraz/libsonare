@@ -155,8 +155,8 @@ export interface ProjectClip {
   readonly gain: number;
   /** Loop mode. */
   readonly loopMode: ProjectLoopMode;
-  /** Loop length in PPQ. */
-  readonly loopLengthPpq: number;
+  /** Loop length in PPQ; absent for a whole-clip loop or a clip that does not loop. */
+  readonly loopLengthPpq?: number;
 }
 
 /** Kind of a project source. */
@@ -216,7 +216,7 @@ export interface ProjectClipTakesOptions {
 export interface ProjectClipLoopInput {
   /** Loop mode. */
   loopMode: ProjectLoopMode;
-  /** Loop length in PPQ. Omit to loop the clip's own length. */
+  /** Loop length in PPQ. Omit it to loop the clip's own length; an explicit 0 is refused. */
   loopLengthPpq?: number;
   /**
    * Equal-power crossfade at the loop seam in PPQ (finite and >= 0). Omit for a

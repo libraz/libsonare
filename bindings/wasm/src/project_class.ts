@@ -1300,6 +1300,11 @@ export class Project {
       'input',
       true,
     );
+    if (loopLengthPpq === 0) {
+      throw new RangeError(
+        'Project.setClipLoop: loopLengthPpq must not be 0; omit it to loop the whole clip',
+      );
+    }
     this.native.setClipLoop(
       clipId,
       projectLoopModeValue(loopMode),
@@ -1471,9 +1476,11 @@ export class Project {
   /** Every clip, in stored order. */
   clips(): ProjectClip[] {
     return this.readAll(this.native.clipCount(), (index) => {
-      const clip = this.native.clipByIndex(index);
+      const { loopLengthPpq, ...clip } = this.native.clipByIndex(index);
+      // A whole-clip loop, or no loop, reads back without a loop length.
       return {
         ...clip,
+        ...(loopLengthPpq === 0 ? {} : { loopLengthPpq }),
         sourceKind: projectSourceKindName(clip.sourceKind),
         loopMode: projectLoopModeName(clip.loopMode),
       };
