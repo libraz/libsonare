@@ -1,10 +1,15 @@
 {
   "node": {
     "raw-error": 0,
-    "fn-name-param": 0
+    "fn-name-param": 0,
+    "value-echo": 11
   },
   "wasm": {
     "raw-error": 0,
-    "fn-name-param": 0
+    "fn-name-param": 0,
+    "value-echo": 8
+  },
+  "native": {
+    "value-echo": 34
   }
 }

@@ -1,4 +1,4 @@
-"""Hold the JS facades to entry-named refusals: a ratchet on the two old shapes.
+"""Hold the JS facades to entry-named refusals: a ratchet on the old shapes.
 
 A Node or WASM facade refusal is raised bare through the helpers in
 ``internal/entry.ts`` (``refuse`` / ``refuseType`` / ``invalidState`` /
@@ -6,7 +6,11 @@ A Node or WASM facade refusal is raised bare through the helpers in
 ``withEntry`` or the native wrapper). Two spellings predate that and are counted
 here per surface: a raw ``new RangeError(`` / ``new TypeError(`` /
 ``new SonareError(`` outside ``entry.ts``, and a helper parameter that carries
-the caller's name as text (``fnName`` and its siblings).
+the caller's name as text (``fnName`` and its siblings). A third kind,
+``value-echo``, counts string literals stating ``, got <value>`` or ``out of
+range`` instead of the predicate the value failed; it is also counted over the
+native readers (``bindings/node/src/addon`` and ``src/wasm``) as the ``native``
+surface, so the TS and native halves are two lines of one scan.
 
 The counts in ``facade_refusal_ratchet.json`` are a line, not a target: a count
 above it fails, and a count below it fails too until the file is rewritten with
@@ -26,7 +30,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = Path(__file__).resolve().parent / "facade_refusal_ratchet.json"
-SURFACES = {"node": "bindings/node/src", "wasm": "bindings/wasm/src"}
+# surface -> (source roots, file suffixes, counted kinds)
+TS_KINDS = ("raw-error", "fn-name-param", "value-echo")
+SURFACES: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
+    "node": (("bindings/node/src",), (".ts",), TS_KINDS),
+    "wasm": (("bindings/wasm/src",), (".ts",), TS_KINDS),
+    "native": (("bindings/node/src/addon", "src/wasm"), (".cpp", ".h"), ("value-echo",)),
+}
 # The helpers' own home, and a generated table.
 EXEMPT = {"internal/entry.ts", "internal/native_entries.ts"}
 FN_PARAM_NAMES = ("fnName", "fn", "fnLabel", "entryName", "caller")
@@ -36,6 +46,13 @@ FN_PARAM = re.compile(
     r"[(,]\s*(?:" + "|".join(FN_PARAM_NAMES) + r")\s*\??\s*:\s*(?:string|RequestFn)\b"
 )
 KINDS = {"raw-error": RAW_ERROR, "fn-name-param": FN_PARAM}
+# A refusal states the predicate, never the value it refused or a bare "out of range".
+VALUE_ECHO = re.compile(r", got\b|out of range", re.IGNORECASE)
+HINTS = {
+    "raw-error": "raise the refusal through refuse/refuseType/invalidState/codedError",
+    "fn-name-param": "name it with the entry, not a passed-in name",
+    "value-echo": 'state the predicate ("<key> must be ...") without echoing the value',
+}
 
 
 def strip_comments(text: str) -> str:
@@ -78,29 +95,66 @@ def strip_comments(text: str) -> str:
     return "".join(out)
 
 
-def count_text(text: str) -> Counter:
-    """Occurrences of each kind in one source text, comments excluded."""
-    code = strip_comments(text)
-    return Counter({kind: len(pattern.findall(code)) for kind, pattern in KINDS.items()})
+def string_literals(text: str, cpp: bool = False) -> list[str]:
+    """Contents of the string literals in ``text``, comments skipped.
+
+    TS reads ``'``, ``"`` and template literals; C++ reads ``"`` literals and
+    steps over ``'`` character literals.
+    """
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if text.startswith("//", i):
+            end = text.find("\n", i)
+            i = n if end < 0 else end
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+        elif c == '"' or (not cpp and c in "'`") or (cpp and c == "'"):
+            j = i + 1
+            while j < n and text[j] != c:
+                j += 2 if text[j] == "\\" else 1
+            if not (cpp and c == "'"):
+                out.append(text[i + 1 : j])
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+
+def count_text(text: str, kinds: tuple[str, ...] = TS_KINDS, cpp: bool = False) -> Counter:
+    """Occurrences of each of ``kinds`` in one source text, comments excluded."""
+    found: Counter = Counter()
+    if "raw-error" in kinds or "fn-name-param" in kinds:
+        code = strip_comments(text)
+        for kind in kinds:
+            if kind in KINDS:
+                found[kind] = len(KINDS[kind].findall(code))
+    if "value-echo" in kinds:
+        found["value-echo"] = sum(len(VALUE_ECHO.findall(s)) for s in string_literals(text, cpp))
+    return found
 
 
 def scan(root: Path) -> dict[str, dict]:
     """Per surface: files scanned, total per kind, and per-file counts."""
     result: dict[str, dict] = {}
-    for surface, rel in SURFACES.items():
-        base = root / rel
-        totals: Counter = Counter({kind: 0 for kind in KINDS})
+    for surface, (rels, suffixes, kinds) in SURFACES.items():
+        totals: Counter = Counter({kind: 0 for kind in kinds})
         per_file: dict[str, Counter] = {}
         scanned = 0
-        for path in sorted(base.rglob("*.ts")):
-            name = path.relative_to(base).as_posix()
-            if path.name.endswith(".d.ts") or name in EXEMPT:
-                continue
-            scanned += 1
-            counts = count_text(path.read_text(encoding="utf-8"))
-            totals.update(counts)
-            if any(counts.values()):
-                per_file[name] = counts
+        cpp = ".cpp" in suffixes
+        for rel in rels:
+            base = root / rel
+            for path in sorted(p for p in base.rglob("*") if p.suffix in suffixes):
+                name = path.relative_to(base).as_posix()
+                if path.name.endswith(".d.ts") or name in EXEMPT:
+                    continue
+                scanned += 1
+                counts = count_text(path.read_text(encoding="utf-8"), kinds, cpp)
+                totals.update(counts)
+                if any(counts.values()):
+                    per_file[path.relative_to(root).as_posix()] = counts
         result[surface] = {"scanned": scanned, "totals": dict(totals), "files": per_file}
     return result
 
@@ -110,7 +164,7 @@ def evaluate(found: dict[str, dict], baseline: dict[str, dict]) -> list[str]:
     errors: list[str] = []
     for surface, data in found.items():
         if data["scanned"] == 0:
-            errors.append(f"{surface}: scanned no facade source under {SURFACES[surface]}")
+            errors.append(f"{surface}: scanned no source under {', '.join(SURFACES[surface][0])}")
             continue
         recorded = baseline.get(surface, {})
         for kind, count in data["totals"].items():
@@ -123,9 +177,7 @@ def evaluate(found: dict[str, dict], baseline: dict[str, dict]) -> list[str]:
                 )[:8]
                 where = ", ".join(f"{f} {c}" for c, f in worst)
                 errors.append(
-                    f"{surface} {kind}: {count} exceeds the recorded {line}; raise the refusal "
-                    f"through refuse/refuseType/invalidState/codedError and name it with the "
-                    f"entry, not a passed-in name ({where})"
+                    f"{surface} {kind}: {count} exceeds the recorded {line}; {HINTS[kind]} ({where})"
                 )
             elif count < line:
                 errors.append(

@@ -54,6 +54,35 @@ class CountTextTest(unittest.TestCase):
         self.assertEqual(counts(text)["fn-name-param"], 3)
 
 
+class ValueEchoTest(unittest.TestCase):
+    def test_counts_got_and_out_of_range_in_every_ts_literal_kind(self) -> None:
+        text = (
+            "throw refuse(`strip must be a track id, got '${ref}'`);\n"
+            "throw refuse('index out of range');\n"
+            'throw refuseType("mode must be a name, got " + typeof v);\n'
+            "throw refuse('gain must be finite');\n"
+        )
+        self.assertEqual(counts(text)["value-echo"], 3)
+
+    def test_ignores_comments_and_code(self) -> None:
+        text = (
+            "/** @throws RangeError when `program` is out of range */\n"
+            "// a value, got here\n"
+            "const gotIt = outOfRange;\n"
+        )
+        self.assertEqual(counts(text)["value-echo"], 0)
+
+    def test_cpp_reads_double_quoted_literals_past_char_literals(self) -> None:
+        text = (
+            "char q = '\"';\n"
+            'throw WasmRangeError("strip index out of range");\n'
+            '// "commented, got"\n'
+            'auto s = std::string(key) + " must be one of " + valid + ", got \'" + name + "\'";\n'
+        )
+        found = ratchet.count_text(text, ("value-echo",), cpp=True)
+        self.assertEqual(dict(found), {"value-echo": 2})
+
+
 class EvaluateTest(unittest.TestCase):
     def found(self, raw: int, scanned: int = 1) -> dict:
         totals = {"raw-error": raw, "fn-name-param": 0}
@@ -81,7 +110,7 @@ class EvaluateTest(unittest.TestCase):
         line = {"node": {"raw-error": 0, "fn-name-param": 0}}
         errors = ratchet.evaluate(self.found(0, scanned=0), line)
         self.assertEqual(len(errors), 1)
-        self.assertIn("scanned no facade source", errors[0])
+        self.assertIn("scanned no source", errors[0])
 
     def test_an_unrecorded_kind_fails(self) -> None:
         errors = ratchet.evaluate(self.found(0), {"node": {"raw-error": 0}})
@@ -93,16 +122,30 @@ class ScanTest(unittest.TestCase):
     def test_skips_declarations_and_the_helpers_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for rel in ratchet.SURFACES.values():
-                src = root / rel
+            for surface in ("node", "wasm"):
+                src = root / ratchet.SURFACES[surface][0][0]
                 (src / "internal").mkdir(parents=True)
                 (src / "a.ts").write_text("throw new RangeError('a');\n")
                 (src / "b.d.ts").write_text("throw new RangeError('b');\n")
                 (src / "internal" / "entry.ts").write_text("throw new RangeError('c');\n")
             found = ratchet.scan(root)
-            for data in found.values():
-                self.assertEqual(data["scanned"], 1)
-                self.assertEqual(data["totals"]["raw-error"], 1)
+            for surface in ("node", "wasm"):
+                self.assertEqual(found[surface]["scanned"], 1)
+                self.assertEqual(found[surface]["totals"]["raw-error"], 1)
+
+    def test_native_reads_both_roots_and_fails_when_it_reads_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = ratchet.scan(root)["native"]
+            self.assertEqual(empty["scanned"], 0)
+            self.assertIn("scanned no source", ratchet.evaluate({"native": empty}, {})[0])
+            for rel in ratchet.SURFACES["native"][0]:
+                (root / rel).mkdir(parents=True)
+                (root / rel / "a.cpp").write_text('throw X("i out of range");\n')
+                (root / rel / "b.h").write_text('throw X("i must be below 4");\n')
+            native = ratchet.scan(root)["native"]
+            self.assertEqual(native["scanned"], 4)
+            self.assertEqual(native["totals"], {"value-echo": 2})
 
 
 if __name__ == "__main__":
