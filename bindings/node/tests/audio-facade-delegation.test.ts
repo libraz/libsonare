@@ -81,6 +81,8 @@ interface IntArg {
 /** An `Audio` method that delegates, and how to drive both of its forms. */
 interface Delegation {
   name: string;
+  /** The Audio member, where its name differs from the free function's. */
+  member?: string;
   /** The arguments both forms take after `samples` / `sampleRate`, all valid. */
   valid?: number[];
   /** Positions in `valid` that are narrowed into a C `int`. */
@@ -370,6 +372,7 @@ const DELEGATIONS: Delegation[] = [
   { name: 'meteringDynamicRange', noIntArgs: 'its window and hop are seconds' },
   {
     name: 'meteringSilenceRatio',
+    member: 'silenceRatio',
     valid: [1024, 256],
     intArgs: [
       { index: 0, name: 'frameLength' },
@@ -381,6 +384,7 @@ const DELEGATIONS: Delegation[] = [
   },
   {
     name: 'meteringTruePeakDbtp',
+    member: 'truePeakDbtp',
     valid: [4],
     intArgs: [{ index: 0, name: 'oversampleFactor' }],
     method: (audio, [a]) => audio.truePeakDbtp(a),
@@ -392,6 +396,7 @@ const DELEGATIONS: Delegation[] = [
   },
   {
     name: 'meteringSpectrum',
+    member: 'spectrum',
     valid: [2048],
     intArgs: [{ index: 0, name: 'nFft' }],
     method: (audio, [a]) => audio.spectrum({ nFft: a }),
@@ -399,6 +404,7 @@ const DELEGATIONS: Delegation[] = [
   },
   {
     name: 'meteringSpectrumFrame',
+    member: 'spectrumFrame',
     // startSample is a 64-bit offset (a start past the end reads a zero-padded frame).
     valid: [2048],
     intArgs: [{ index: 0, name: 'nFft' }],
@@ -532,11 +538,8 @@ describe('both forms answer a wrong integer with one class and one message', () 
             const facade = split(viaFacade);
             expect({ ...method, prefix: undefined }).toEqual({ ...facade, prefix: undefined });
             expect('prefix' in facade ? facade.prefix : undefined).toBe(entry.name);
-            // A refusal the native layer raised carries the Audio member; one a facade
-            // check raised still carries the function until those checks are routed.
-            const methodPrefix = 'prefix' in method ? method.prefix : undefined;
-            expect(methodPrefix === entry.name || /^Audio\.\w+$/.test(methodPrefix ?? '')).toBe(
-              true,
+            expect('prefix' in method ? method.prefix : undefined).toBe(
+              `Audio.${entry.member ?? entry.name}`,
             );
             // Without this a pair that silently stopped refusing would compare
             // two successes and read as covered.
