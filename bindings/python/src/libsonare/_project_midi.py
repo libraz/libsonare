@@ -13,7 +13,7 @@ from ._effects_note_model import (
     _transcribe_config,
     _transcribe_sample_rate,
 )
-from ._errors import _entry, _refuse
+from ._errors import _entry, _not_supported, _refuse
 
 # The transcription config is built once for the whole binding: this method and
 # the free `transcribe` take the same keyword options, and two builders would be
@@ -64,6 +64,24 @@ from ._runtime import (
     _utf8_arg,
 )
 from ._types_engine import AutomationPoint, MidiFxConfig
+
+# Domains of the static GM tables: a number outside is refused, one inside that
+# names nothing answers None. Per-note controller indices are 8-bit (MIDI 2.0).
+_GM_BYTE_MAX = 127
+_GM_FAMILY_MAX = 15
+_PER_NOTE_CONTROLLER_MAX = 255
+
+
+def _table_name(raw: bytes | None) -> str | None:
+    """A table lookup's answer; the C ABI's NULL (nothing named there) is ``None``."""
+    return raw.decode("utf-8") if raw else None
+
+
+def _total_table_name(raw: bytes | None) -> str:
+    """A lookup whose table names every in-domain index; NULL means it was compiled out."""
+    if not raw:
+        raise _not_supported("the GM tables need the arrangement subsystem")
+    return raw.decode("utf-8")
 
 
 def _found_index(value: int, message: str) -> int:
@@ -836,10 +854,15 @@ class _ProjectMidiMixin:
 
     @staticmethod
     @_entry("Project.gm_instrument_name")
-    def gm_instrument_name(program: int) -> str | None:
-        """GM Level 1 instrument name for ``program`` [0,127], or ``None``."""
-        r = _get_lib().sonare_midi_gm_instrument_name(_to_c_int(program, "program"))
-        return r.decode("utf-8") if r else None
+    def gm_instrument_name(program: int) -> str:
+        """GM Level 1 instrument name for ``program``; every program in [0, 127] has one.
+
+        Raises:
+            TypeError: If ``program`` is not an integer.
+            SonareValueError: If ``program`` is outside [0, 127].
+        """
+        program = _narrow_int(program, "program", 0, _GM_BYTE_MAX)
+        return _total_table_name(_get_lib().sonare_midi_gm_instrument_name(program))
 
     @staticmethod
     @_entry("Project.gm_program_for_name")
@@ -856,10 +879,15 @@ class _ProjectMidiMixin:
 
     @staticmethod
     @_entry("Project.gm_family_name")
-    def gm_family_name(family: int) -> str | None:
-        """GM family name for ``family`` [0,15], or ``None``."""
-        r = _get_lib().sonare_midi_gm_family_name(_to_c_int(family, "family"))
-        return r.decode("utf-8") if r else None
+    def gm_family_name(family: int) -> str:
+        """GM family name for ``family``; every family in [0, 15] has one.
+
+        Raises:
+            TypeError: If ``family`` is not an integer.
+            SonareValueError: If ``family`` is outside [0, 15].
+        """
+        family = _narrow_int(family, "family", 0, _GM_FAMILY_MAX)
+        return _total_table_name(_get_lib().sonare_midi_gm_family_name(family))
 
     @staticmethod
     @_entry("Project.gm_family_first_program")
@@ -867,28 +895,41 @@ class _ProjectMidiMixin:
         """First GM program in ``family`` [0,15].
 
         Raises:
-            SonareValueError: If ``family`` is outside 0..15.
+            TypeError: If ``family`` is not an integer.
+            SonareValueError: If ``family`` is outside [0, 15].
         """
+        family = _narrow_int(family, "family", 0, _GM_FAMILY_MAX)
         return _found_index(
-            _get_lib().sonare_midi_gm_family_first_program(_to_c_int(family, "family")),
+            _get_lib().sonare_midi_gm_family_first_program(family),
             "family must be an integer in [0, 15]",
         )
 
     @staticmethod
     @_entry("Project.gm2_instrument_name")
     def gm2_instrument_name(bank_lsb: int, program: int) -> str | None:
-        """GM2 melodic instrument name for ``bank_lsb`` + ``program``, or ``None``."""
-        r = _get_lib().sonare_midi_gm2_instrument_name(
-            _to_c_int(bank_lsb, "bank_lsb"), _to_c_int(program, "program")
-        )
-        return r.decode("utf-8") if r else None
+        """GM2 melodic instrument name for ``bank_lsb`` + ``program``.
+
+        Returns ``None`` for a pair in the domain that GM2 names nothing.
+
+        Raises:
+            TypeError: If ``bank_lsb`` or ``program`` is not an integer.
+            SonareValueError: If ``bank_lsb`` or ``program`` is outside [0, 127].
+        """
+        bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _GM_BYTE_MAX)
+        program = _narrow_int(program, "program", 0, _GM_BYTE_MAX)
+        return _table_name(_get_lib().sonare_midi_gm2_instrument_name(bank_lsb, program))
 
     @staticmethod
     @_entry("Project.gm_drum_name")
     def gm_drum_name(note: int) -> str | None:
-        """GM drum name for ``note`` [35,81], or ``None``."""
-        r = _get_lib().sonare_midi_gm_drum_name(_to_c_int(note, "note"))
-        return r.decode("utf-8") if r else None
+        """GM drum name for ``note``; ``None`` for a note outside the kit's [35, 81].
+
+        Raises:
+            TypeError: If ``note`` is not an integer.
+            SonareValueError: If ``note`` is outside [0, 127].
+        """
+        note = _narrow_int(note, "note", 0, _GM_BYTE_MAX)
+        return _table_name(_get_lib().sonare_midi_gm_drum_name(note))
 
     @staticmethod
     @_entry("Project.gm_drum_note_for_name")
@@ -906,25 +947,39 @@ class _ProjectMidiMixin:
     @staticmethod
     @_entry("Project.gm2_drum_set_name")
     def gm2_drum_set_name(bank_lsb: int) -> str | None:
-        """GM2 drum-set name for ``bank_lsb``, or ``None``."""
-        r = _get_lib().sonare_midi_gm2_drum_set_name(_to_c_int(bank_lsb, "bank_lsb"))
-        return r.decode("utf-8") if r else None
+        """GM2 drum-set name for ``bank_lsb``; ``None`` where GM2 defines no set.
+
+        Raises:
+            TypeError: If ``bank_lsb`` is not an integer.
+            SonareValueError: If ``bank_lsb`` is outside [0, 127].
+        """
+        bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _GM_BYTE_MAX)
+        return _table_name(_get_lib().sonare_midi_gm2_drum_set_name(bank_lsb))
 
     @staticmethod
     @_entry("Project.gm2_drum_name")
     def gm2_drum_name(bank_lsb: int, note: int) -> str | None:
-        """GM2 drum name for ``bank_lsb`` + ``note``, or ``None``."""
-        r = _get_lib().sonare_midi_gm2_drum_name(
-            _to_c_int(bank_lsb, "bank_lsb"), _to_c_int(note, "note")
-        )
-        return r.decode("utf-8") if r else None
+        """GM2 drum name for ``bank_lsb`` + ``note``; ``None`` where that set names nothing.
+
+        Raises:
+            TypeError: If ``bank_lsb`` or ``note`` is not an integer.
+            SonareValueError: If ``bank_lsb`` or ``note`` is outside [0, 127].
+        """
+        bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _GM_BYTE_MAX)
+        note = _narrow_int(note, "note", 0, _GM_BYTE_MAX)
+        return _table_name(_get_lib().sonare_midi_gm2_drum_name(bank_lsb, note))
 
     @staticmethod
     @_entry("Project.midi_cc_name")
     def midi_cc_name(controller: int) -> str | None:
-        """Standard MIDI CC name for ``controller`` [0,127], or ``None``."""
-        r = _get_lib().sonare_midi_cc_name(_to_c_int(controller, "controller"))
-        return r.decode("utf-8") if r else None
+        """Standard MIDI CC name for ``controller``; ``None`` for an unassigned controller.
+
+        Raises:
+            TypeError: If ``controller`` is not an integer.
+            SonareValueError: If ``controller`` is outside [0, 127].
+        """
+        controller = _narrow_int(controller, "controller", 0, _GM_BYTE_MAX)
+        return _table_name(_get_lib().sonare_midi_cc_name(controller))
 
     @staticmethod
     @_entry("Project.midi_cc_index_for_name")
@@ -942,9 +997,16 @@ class _ProjectMidiMixin:
     @staticmethod
     @_entry("Project.per_note_controller_name")
     def per_note_controller_name(index: int) -> str | None:
-        """MIDI 2.0 registered per-note controller name for ``index``, or ``None``."""
-        r = _get_lib().sonare_midi_per_note_controller_name(_to_c_int(index, "index"))
-        return r.decode("utf-8") if r else None
+        """MIDI 2.0 registered per-note controller name for ``index``.
+
+        Returns ``None`` for an index in the domain that names no registered controller.
+
+        Raises:
+            TypeError: If ``index`` is not an integer.
+            SonareValueError: If ``index`` is outside [0, 255].
+        """
+        index = _narrow_int(index, "index", 0, _PER_NOTE_CONTROLLER_MAX)
+        return _table_name(_get_lib().sonare_midi_per_note_controller_name(index))
 
     # -- MIDI pure conversion helpers ---------------------------------------
 

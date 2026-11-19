@@ -313,7 +313,6 @@ def test_midi_events_come_back_as_project_midi_event_records() -> None:
 def test_gm_program_and_cc_name_tables_round_trip() -> None:
     assert Project.gm_instrument_name(0) == "Acoustic Grand Piano"
     assert Project.gm_program_for_name("Acoustic Grand Piano") == 0
-    assert Project.gm_instrument_name(9999) is None
     assert isinstance(Project.gm_family_name(0), str)
     assert Project.gm_family_first_program(0) >= 0
     assert isinstance(Project.gm2_instrument_name(0, 0), (str, type(None)))
@@ -323,6 +322,41 @@ def test_gm_program_and_cc_name_tables_round_trip() -> None:
     assert Project.midi_cc_name(7) is not None
     assert Project.midi_cc_index_for_name(Project.midi_cc_name(7)) == 7
     assert isinstance(Project.per_note_controller_name(0), (str, type(None)))
+
+
+@pytest.mark.parametrize(
+    ("lookup", "args", "key", "high"),
+    [
+        (Project.gm_instrument_name, (128,), "program", 127),
+        (Project.gm_family_name, (16,), "family", 15),
+        (Project.gm_family_first_program, (-1,), "family", 15),
+        (Project.gm2_instrument_name, (128, 0), "bank_lsb", 127),
+        (Project.gm2_instrument_name, (0, -1), "program", 127),
+        (Project.gm_drum_name, (128,), "note", 127),
+        (Project.gm2_drum_set_name, (-1,), "bank_lsb", 127),
+        (Project.gm2_drum_name, (0, 128), "note", 127),
+        (Project.midi_cc_name, (128,), "controller", 127),
+        (Project.per_note_controller_name, (256,), "index", 255),
+    ],
+)
+def test_a_gm_lookup_refuses_a_number_outside_its_domain(lookup, args, key, high) -> None:
+    with pytest.raises(SonareValueError, match=rf": {key} must be an integer in \[0, {high}\]$"):
+        lookup(*args)
+
+
+def test_a_gm_lookup_answers_none_for_an_in_domain_number_that_names_nothing() -> None:
+    assert Project.gm_drum_name(34) is None
+    assert Project.gm_drum_name(127) is None
+    assert Project.per_note_controller_name(200) is None
+    assert all(isinstance(Project.gm_instrument_name(p), str) for p in range(128))
+    assert all(isinstance(Project.gm_family_name(f), str) for f in range(16))
+
+
+def test_a_gm_lookup_refuses_a_non_integer_by_type() -> None:
+    with pytest.raises(TypeError, match=r": note must be an integer$"):
+        Project.gm_drum_name("36")  # type: ignore[arg-type]
+    with pytest.raises(SonareValueError, match=r": note must be an integer in \[0, 127\]$"):
+        Project.gm_drum_name(36.5)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
