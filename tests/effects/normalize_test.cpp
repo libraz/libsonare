@@ -116,6 +116,24 @@ TEST_CASE("gain and RMS normalization reject non-finite targets", "[normalize]")
   REQUIRE_THROWS_AS(normalize_rms(audio, infinity), SonareException);
 }
 
+TEST_CASE("normalize refusals read as core member names", "[normalize]") {
+  Audio audio = create_audio_with_amplitude(0.5f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const char* finite = " must be finite and in [-3.4028235e38, 3.4028235e38]";
+
+  REQUIRE_THROWS_WITH(apply_gain(audio, nan), std::string("gain_db") + finite);
+  REQUIRE_THROWS_WITH(apply_gain(audio, 800.0f), "gain_db must produce a finite linear gain");
+  REQUIRE_THROWS_WITH(normalize(audio, nan), std::string("target_db") + finite);
+  REQUIRE_THROWS_WITH(normalize(audio, 3.0f, true), "target_db must be at most 0 when clip is set");
+  REQUIRE_THROWS_WITH(fade_in(audio, -0.5f), "duration_sec must be finite and at least 0");
+  REQUIRE_THROWS_WITH(detect_silence_boundaries(audio, nan, 2048, 512),
+                      std::string("threshold_db") + finite);
+  REQUIRE_THROWS_WITH(detect_silence_boundaries(audio, -40.0f, 0, 512),
+                      "frame_length must be an integer in [1, 2147483647]");
+  REQUIRE_THROWS_WITH(detect_silence_boundaries(audio, -40.0f, 2048, 0),
+                      "hop_length must be an integer in [1, 2147483647]");
+}
+
 TEST_CASE("fades reject negative and non-finite durations", "[normalize]") {
   Audio audio = create_audio_with_amplitude(0.5f);
   const float nan = std::numeric_limits<float>::quiet_NaN();

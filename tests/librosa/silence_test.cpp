@@ -203,7 +203,7 @@ TEST_CASE("silence validation preserves input and framing precedence", "[silence
       static_cast<void>(trim(nullptr, 1, nan, 0, 0));
       FAIL("Expected trim to reject a null input first");
     } catch (const SonareException& error) {
-      REQUIRE(std::string(error.what()).find("null input") != std::string::npos);
+      REQUIRE(std::string(error.what()) == "x must not be null");
     }
   }
 

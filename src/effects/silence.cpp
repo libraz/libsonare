@@ -13,6 +13,7 @@
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -63,11 +64,8 @@ std::vector<bool> non_silent_frames(const std::vector<float>& rms, float top_db)
 }
 
 /// @brief Rejects inputs whose sample indices do not fit the int interval arithmetic.
-void require_indexable_length(std::size_t n, const char* who) {
-  if (n > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(who) + ": input length exceeds the supported maximum");
-  }
+void require_indexable_length(std::size_t n) {
+  util::check::integer_in_range(static_cast<long long>(n), 0, std::numeric_limits<int>::max(), "n");
 }
 
 /// @brief Per-frame RMS and the non-silent mask derived from it.
@@ -81,25 +79,20 @@ struct FrameDecision {
 ///          all-silent result, so accepting an empty buffer would make "nothing was passed in"
 ///          and "nothing rose above the threshold" indistinguishable to the caller.
 FrameDecision decide_frames(const float* x, std::size_t n, float top_db, int frame_length,
-                            int hop_length, const char* who) {
-  const std::string prefix = std::string(who) + ": ";
+                            int hop_length) {
   if (n == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, prefix + "input must not be empty");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "x", "must not be empty");
   }
   if (x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, prefix + "null input with non-zero length");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "x", "must not be null");
   }
-  if (frame_length <= 0 || hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          prefix + "frame_length and hop_length must be > 0");
-  }
-  require_indexable_length(n, who);
-  if (!numeric::finite_positive(top_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, prefix + "top_db must be finite and > 0");
-  }
+  util::check::integer_at_least(frame_length, 1, "frame_length");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
+  require_indexable_length(n);
+  util::check::greater_than(top_db, 0.0, "top_db");
   if (!numeric::all_finite(x, n)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          prefix + "input contains a non-finite sample");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "x",
+                                            "contains a non-finite sample");
   }
   FrameDecision decision;
   decision.rms = centered_rms(x, n, frame_length, hop_length);
@@ -111,7 +104,7 @@ FrameDecision decide_frames(const float* x, std::size_t n, float top_db, int fra
 
 TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, int hop_length) {
   TrimResult result{{}, 0, 0};
-  const auto mask = decide_frames(x, n, top_db, frame_length, hop_length, "trim").mask;
+  const auto mask = decide_frames(x, n, top_db, frame_length, hop_length).mask;
 
   int first = -1;
   int last = -1;
@@ -141,7 +134,7 @@ TrimResult trim(const std::vector<float>& x, float top_db, int frame_length, int
 SplitReport split_with_report(const float* x, std::size_t n, float top_db, int frame_length,
                               int hop_length) {
   std::vector<std::pair<int, int>> intervals;
-  const auto decision = decide_frames(x, n, top_db, frame_length, hop_length, "split");
+  const auto decision = decide_frames(x, n, top_db, frame_length, hop_length);
   const auto& rms = decision.rms;
   const auto& mask = decision.mask;
 
@@ -186,15 +179,33 @@ std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_
 CommonSplitReport split_common_with_report(const float* const* signals, const std::size_t* lengths,
                                            std::size_t signal_count, float top_db, int frame_length,
                                            int hop_length) {
-  if (signal_count == 0 || signals == nullptr || lengths == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "split_common: at least one signal is required");
+  util::check::integer_at_least(static_cast<long long>(signal_count), 1, "signal_count");
+  if (signals == nullptr) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "signals",
+                                            "must not be null");
+  }
+  if (lengths == nullptr) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "lengths",
+                                            "must not be null");
   }
   CommonSplitReport out;
   std::vector<std::pair<int, int>> collected;
   for (std::size_t index = 0; index < signal_count; ++index) {
-    SplitReport one =
-        split_with_report(signals[index], lengths[index], top_db, frame_length, hop_length);
+    SplitReport one;
+    try {
+      one = split_with_report(signals[index], lengths[index], top_db, frame_length, hop_length);
+    } catch (const SonareParameterRefusal& e) {
+      // A per-signal refusal names the signal it came from.
+      const std::string at = "[" + std::to_string(index) + "]";
+      throw e.respelled(
+          e.code(),
+          [&at](const std::string& subject) {
+            if (subject == "x") return "signals" + at;
+            if (subject == "n") return "lengths" + at;
+            return subject;
+          },
+          false);
+    }
     const int count = static_cast<int>(one.intervals.size());
     if (index == 0) {
       out.silence_ceiling_db = one.silence_ceiling_db;

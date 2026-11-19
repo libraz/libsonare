@@ -10,6 +10,7 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -75,10 +76,10 @@ float pair_rms_db(const Audio& left, const Audio& right) {
 /// @brief The argument refusals the two stereo entries share with their mono
 ///        counterparts, before either channel is measured.
 void check_normalize_target(float target_db, bool clip) {
-  SONARE_CHECK_MSG(std::isfinite(target_db), ErrorCode::InvalidParameter,
-                   "target_db must be finite, got " + util::to_text(target_db));
-  SONARE_CHECK_MSG(!clip || target_db <= 0.0f, ErrorCode::InvalidParameter,
-                   "target_db must be <= 0 when clip is set, got " + util::to_text(target_db));
+  util::check::finite_float(target_db, "target_db");
+  if (clip && target_db > 0.0f) {
+    util::check::refuse_relation({"target_db", "clip"}, "{0} must be at most 0 when {1} is set");
+  }
 }
 
 /// @brief Moves a validated pair by one gain, given the level it sits at now.
@@ -93,14 +94,15 @@ NormalizeStereoResult gain_pair_to(const Audio& left, const Audio& right, float 
 }  // namespace
 
 Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
-  SONARE_CHECK_MSG(std::isfinite(gain_db), ErrorCode::InvalidParameter,
-                   "gain_db must be finite, got " + util::to_text(gain_db));
+  util::check::finite_float(gain_db, "gain_db");
   if (audio.empty()) return audio;
 
   const float gain_linear = db_to_linear(gain_db);
   // A finite dB value past ~770 dB has no finite multiplier; 0 * inf would be NaN.
-  SONARE_CHECK_MSG(std::isfinite(gain_linear), ErrorCode::InvalidParameter,
-                   "gain_db must produce a finite linear gain, got " + util::to_text(gain_db));
+  if (!std::isfinite(gain_linear)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "gain_db",
+                                            "must produce a finite linear gain");
+  }
 
   std::vector<float> samples(audio.size());
   const float* data = audio.data();
@@ -168,13 +170,12 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
                                                     int frame_length, int hop_length) {
   // Reject non-positive frame/hop before any loop or division: a zero/negative
   // hop_length spins the scan forever and a zero frame_length divides by zero.
-  SONARE_CHECK_MSG(frame_length > 0, ErrorCode::InvalidParameter, "frame_length must be > 0");
-  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
+  util::check::integer_at_least(frame_length, 1, "frame_length");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   // Agrees with metering::silence_ratio, which measures the same quantity: a
   // non-finite threshold makes every comparison below false, so both scans
   // return the whole buffer for a request they could not evaluate.
-  SONARE_CHECK_MSG(std::isfinite(threshold_db), ErrorCode::InvalidParameter,
-                   "threshold_db must be finite, got " + util::to_text(threshold_db));
+  util::check::finite_float(threshold_db, "threshold_db");
   if (audio.empty()) return {0, 0};
 
   float threshold_linear = db_to_linear(threshold_db);
@@ -255,12 +256,11 @@ namespace {
 /// @param is_fade_in If true, fade in; if false, fade out
 Audio apply_fade(const Audio& audio, float duration_sec, bool is_fade_in) {
   const double requested_samples = static_cast<double>(duration_sec) * audio.sample_rate();
-  SONARE_CHECK_MSG(std::isfinite(duration_sec) && duration_sec >= 0.0f, ErrorCode::InvalidParameter,
-                   "duration_sec must be finite and >= 0, got " + util::to_text(duration_sec));
-  SONARE_CHECK_MSG(
-      requested_samples <= static_cast<double>(std::numeric_limits<size_t>::max()),
-      ErrorCode::InvalidParameter,
-      "duration_sec is too long for this sample rate, got " + util::to_text(duration_sec));
+  util::check::at_least(duration_sec, 0.0, "duration_sec");
+  if (requested_samples > static_cast<double>(std::numeric_limits<size_t>::max())) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "duration_sec",
+                                            "is too long for this sample rate");
+  }
   if (audio.empty()) return audio;
 
   size_t fade_samples = static_cast<size_t>(requested_samples);
