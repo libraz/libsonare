@@ -1,0 +1,18 @@
+{
+  "excused_tokens": {
+    "bowed_string": "a synth engine name, a value the caller selects",
+    "invalid_sample_rate": "a project document diagnostic code",
+    "malformed_json": "a project document diagnostic code",
+    "avformat_open_input": "the decoder library call that failed",
+    "worker_threads": "the Node module the hint names",
+    "size_t": "the native integer type a bound is stated against"
+  },
+  "surfaces": {
+    "node": {
+      "leaking_refusals": 95
+    },
+    "wasm": {
+      "leaking_refusals": 99
+    }
+  }
+}
