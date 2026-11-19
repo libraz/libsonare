@@ -263,16 +263,22 @@ CLAIMS: tuple[Claim, ...] = (
         key="retune grain size refused bound",
         pattern=r"multiple of 4 in `?\[4, (?P<max>\d+)\]",
         groups={"max": ("max_grain_size", 0)},
-        floor=13,
+        floor=16,
     ),
     Claim(
         key="retune semitone refused bound",
         pattern=(
-            r"[Pp]itch shift (?:of the retune stage )?in semitones,"
-            r" (?:finite and in )?\[-(?P<low>\d+), (?P<max>\d+)\]"
+            r"[Pp]itch shift (?:of the retune stage )?in semitones(?:,|; outside)"
+            r" (?:finite and in |finite )?\[-(?P<low>\d+), (?P<max>\d+)\]"
         ),
         groups={"low": ("max_retune_semitones", 0), "max": ("max_retune_semitones", 0)},
-        floor=6,
+        floor=7,
+    ),
+    Claim(
+        key="retune semitone refused bound by keyword",
+        pattern=r"`pitch_semitones`+ must be finite and in \[-(?P<low>\d+), (?P<max>\d+)\]",
+        groups={"low": ("max_retune_semitones", 0), "max": ("max_retune_semitones", 0)},
+        floor=2,
     ),
     Claim(
         key="explicit metronome click length ceiling",
