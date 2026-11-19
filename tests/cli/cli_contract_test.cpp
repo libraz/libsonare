@@ -86,6 +86,13 @@ TEST_CASE("CLI numeric option validation", "[cli]") {
     REQUIRE(partial_code == none_code);
     REQUIRE_THAT(partial_output, ContainsSubstring("invalid integer value for --size: 1.5x"));
     REQUIRE_THAT(none_output, ContainsSubstring("invalid integer value for --size: abc"));
+    // A number past the C int range is a range refusal in the option formatter's wording.
+    auto [wide_code, wide_output] =
+        exec_command(CLI + " pad-center --values 1,2,3 --size 99999999999");
+    REQUIRE(wide_code == none_code);
+    REQUIRE_THAT(wide_output,
+                 ContainsSubstring("value out of range for --size: 99999999999 (expected a "
+                                   "signed 32-bit integer)"));
   }
 
   SECTION("a list element names the option and the element that failed") {

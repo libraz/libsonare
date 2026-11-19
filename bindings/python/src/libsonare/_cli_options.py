@@ -27,6 +27,18 @@ from ._runtime import _C_INT_MAX, _C_INT_MIN, _narrow_int
 from ._types_enums import KeyMode
 
 
+class _OutOfRange(Exception):
+    """A value the option's type parsed but cannot hold, refused in the CLI's range wording.
+
+    Not an ``ArgumentTypeError``: argparse would word that itself before the parser could name
+    the option.
+    """
+
+    def __init__(self, expected: str) -> None:
+        super().__init__(expected)
+        self.expected = expected
+
+
 class _ContractArgumentParser(argparse.ArgumentParser):
     """Argument parser with the cross-surface usage exit contract.
 
@@ -60,6 +72,16 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         ):
             kwargs["type"] = _token_of(tuple(choices))
         return super().add_argument(*args, **kwargs)
+
+    def _get_value(self, action: argparse.Action, arg_string: str) -> Any:
+        try:
+            return super()._get_value(action, arg_string)
+        except _OutOfRange as exc:
+            # Worded as the native option formatter words it, naming the option the caller spelled.
+            option = max(action.option_strings, key=len, default=action.dest)
+            raise argparse.ArgumentError(
+                None, f"value out of range for {option}: {arg_string} (expected {exc.expected})"
+            ) from exc
 
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
@@ -262,7 +284,7 @@ def _c_int_option(value: str, requirement: str) -> int:
     try:
         return _narrow_int(parsed, "value", _C_INT_MIN, _C_INT_MAX)
     except SonareValueError as exc:
-        raise argparse.ArgumentTypeError("must fit in a signed 32-bit integer") from exc
+        raise _OutOfRange("a signed 32-bit integer") from exc
 
 
 def _c_int(value: str) -> int:

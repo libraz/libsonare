@@ -70,6 +70,9 @@ int parse_int_strict(const std::string& option, const std::string& value) {
   int parsed = 0;
   try {
     parsed = std::stoi(value, &consumed);
+  } catch (const std::out_of_range&) {
+    throw std::invalid_argument("value out of range for --" + option + ": " + value +
+                                " (expected a signed 32-bit integer)");
   } catch (const std::exception&) {
     throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
   }

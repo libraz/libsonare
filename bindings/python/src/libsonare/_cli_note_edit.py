@@ -345,8 +345,12 @@ def _parse_polyphonic_edit_int(value: str) -> int:
             parsed = int(value)
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid integer value for --edit: {value}") from exc
-    if parsed is None or not _C_INT_MIN <= parsed <= _C_INT_MAX:
+    if parsed is None:
         raise ValueError(f"invalid integer value for --edit: {value}")
+    if not _C_INT_MIN <= parsed <= _C_INT_MAX:
+        raise ValueError(
+            f"value out of range for --edit: {value} (expected a signed 32-bit integer)"
+        )
     return parsed
 
 

@@ -163,7 +163,7 @@ def test_polyphonic_render_cli_applies_one_edit_per_occurrence() -> None:
         ("0.gain_db=1_0", "invalid float value for --edit: 1_0"),
         (
             "0.time_offset_samples=99999999999",
-            "invalid integer value for --edit: 99999999999",
+            "value out of range for --edit: 99999999999 (expected a signed 32-bit integer)",
         ),
     ],
 )
