@@ -12466,3 +12466,10 @@ old = "voice_change_realtime(channels)"
 new = "voice_change_realtime(num_channels)"
 domain = "effects"
 rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "Project.set_source_audio(channels)"
+new = "Project.set_source_audio(num_channels)"
+domain = "project"
+rule = "num-channels"

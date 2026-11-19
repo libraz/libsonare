@@ -380,21 +380,16 @@ def test_a_wrapped_source_audio_argument_is_refused_rather_than_replacing_anothe
     for value in WRAPPED_INTS:
         _refuses("sample_rate", bounced, 1, 1, value)
 
-    # ``channels`` divides the sample count, so for any non-empty audio the
-    # local semantic half refuses a wrapped value before the narrowing is
-    # reached. Both halves are driven rather than assumed: the modulo check on
-    # its own message, the type check on the one path that reaches it.
-    def empty(channels) -> None:
-        ls.Project().set_source_audio(1, [], channels, 48000)
-
-    for value in (2**32, 2**32 + 1, 1.5):
-        _refuses("channels", empty, value)
-    for value in (2**32, -1, 0):
-        with pytest.raises(
-            SonareValueError,
-            match="^Project.set_source_audio: audio length must be a multiple of channels$",
-        ):
-            bounced(1, value, 48000)
+    # The count is narrowed before it divides the sample count, so a wrapped or
+    # non-positive value is refused under its own name, and only an in-domain
+    # count meets the modulo check.
+    for value in (2**32, 2**32 + 1, 1.5, -1, 0):
+        _refuses("num_channels", bounced, 1, value, 48000)
+    with pytest.raises(
+        SonareValueError,
+        match="^Project.set_source_audio: audio length must be a multiple of num_channels$",
+    ):
+        bounced(1, 3, 48000)
 
 
 @pytest.fixture

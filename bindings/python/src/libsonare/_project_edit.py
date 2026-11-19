@@ -184,15 +184,18 @@ class _ProjectEditMixin:
 
     @_entry("Project.set_source_audio")
     def set_source_audio(
-        self, source_id: int, audio: Sequence[float] | np.ndarray, channels: int, sample_rate: int
+        self,
+        source_id: int,
+        audio: Sequence[float] | np.ndarray,
+        num_channels: int,
+        sample_rate: int,
     ) -> None:
         """Register decoded interleaved PCM for an existing audio source (undoable)."""
         backing, total = _to_c_float_array(audio, arg_name="audio")
-        if channels <= 0 or total % channels != 0:
-            raise _refuse("audio length must be a multiple of channels")
-        # Narrowed before the frame count is derived from it, so a `channels`
-        # the C type cannot hold is refused under its own name.
-        channel_count = _to_c_int(channels, "channels")
+        num_channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
+        if total % num_channels != 0:
+            raise _refuse("audio length must be a multiple of num_channels")
+        channel_count = _to_c_int(num_channels, "num_channels")
         _check(
             _get_lib().sonare_project_set_source_audio(
                 self._require_handle(),
