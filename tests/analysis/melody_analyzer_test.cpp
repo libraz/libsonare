@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <vector>
 
@@ -341,4 +342,10 @@ TEST_CASE("MelodyAnalyzer onset time and pitch agree across input rates", "[melo
             static_cast<float>(kHop) / rates[a] + static_cast<float>(kHop) / rates[b]);
     }
   }
+}
+
+TEST_CASE("validate_melody_config names fmax against fmin", "[melody_analyzer]") {
+  MelodyConfig config;
+  config.fmax = config.fmin;
+  REQUIRE_THROWS_WITH(validate_melody_config(config), "fmax must be finite and greater than fmin");
 }

@@ -1047,3 +1047,15 @@ TEST_CASE("YIN and pYIN refuse the parameters librosa refuses", "[pitch]") {
   REQUIRE_NOTHROW(yin_track(audio, defaults));
   REQUIRE_NOTHROW(pyin(audio, defaults));
 }
+
+TEST_CASE("pitch_tuning and estimate_tuning refuse a member by its name", "[pitch]") {
+  const std::vector<float> freqs{440.0f, 450.0f};
+  CHECK_THROWS_WITH(pitch_tuning(freqs, 0.0f, 12), "resolution must be finite and in (0, 1)");
+  CHECK_THROWS_WITH(pitch_tuning(freqs, 0.01f, 0),
+                    "bins_per_octave must be an integer in [1, 2147483647]");
+  const Audio audio = generate_sine(440.0f, 0.5f, 22050);
+  CHECK_THROWS_WITH(estimate_tuning(audio, 2048, 512, 1.0f, 12),
+                    "resolution must be finite and in (0, 1)");
+  CHECK_THROWS_WITH(estimate_tuning(audio, 2048, 512, 0.01f, 0),
+                    "bins_per_octave must be an integer in [1, 2147483647]");
+}

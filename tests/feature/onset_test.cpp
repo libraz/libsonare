@@ -525,3 +525,20 @@ TEST_CASE("tempogram frames an uncentered envelope as librosa does", "[onset][te
     CHECK_THROWS_AS(run(std::vector<float>(kWin - 1, 1.0f)), SonareException);
   }
 }
+
+TEST_CASE("onset entry points refuse lag and n_bands by name", "[onset]") {
+  const std::vector<float> magnitude(4 * 8, 1.0f);
+  CHECK_THROWS_WITH(spectral_flux(magnitude.data(), 4, 8, 0),
+                    "lag must be an integer in [1, 2147483647]");
+
+  MelConfig mel_config;
+  mel_config.n_mels = 16;
+  const Audio audio = Audio::from_vector(std::vector<float>(22050, 0.1f), 22050);
+  const MelSpectrogram mel = MelSpectrogram::compute(audio, mel_config);
+  OnsetConfig bad_lag;
+  bad_lag.lag = 0;
+  CHECK_THROWS_WITH(compute_onset_strength(mel, bad_lag),
+                    "lag must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(onset_strength_multi(mel, 0), "n_bands must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(onset_strength_multi(mel, 17), "n_bands must be at most n_mels");
+}

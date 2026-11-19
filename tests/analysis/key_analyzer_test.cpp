@@ -506,7 +506,15 @@ TEST_CASE("KeyAnalyzer refuses an n_fft of 0 even where the call leaves it unrea
   const std::array<float, 12> mean_chroma{1.0f, 0.0f, 0.5f, 0.0f, 0.8f, 0.6f,
                                           0.0f, 0.9f, 0.0f, 0.4f, 0.0f, 0.3f};
   const auto message =
-      Catch::Matchers::ContainsSubstring("KeyConfig: n_fft and hop_length must be positive");
+      Catch::Matchers::ContainsSubstring("n_fft must be an integer in [1, 2147483647]");
   REQUIRE_THROWS_WITH(KeyAnalyzer(audio, config), message);
   REQUIRE_THROWS_WITH(KeyAnalyzer(mean_chroma, config), message);
+}
+
+TEST_CASE("validate_key_config names hop_length against use_hpss", "[analysis][key]") {
+  KeyConfig config;
+  config.use_hpss = true;
+  config.hop_length = kMinKeyHpssHopLength - 1;
+  REQUIRE_THROWS_WITH(validate_key_config(config),
+                      "hop_length must be at least 16 when use_hpss is set");
 }

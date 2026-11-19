@@ -4,6 +4,7 @@
 #include "mastering/assistant/audio_profile.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <limits>
@@ -31,6 +32,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/json.h"
+#include "util/parameter_checks.h"
 #include "util/peak.h"
 
 namespace sonare::mastering::assistant {
@@ -172,6 +174,13 @@ float noise_power_to_db(double power) {
 
 }  // namespace
 
+void validate_audio_profile_config(const AudioProfileConfig& config) {
+  util::check::integer_in_range(config.n_fft, 1, kMaxStftNFft, "n_fft");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::one_of(config.true_peak_oversample, std::array<int, 5>{1, 2, 4, 8, 16},
+                      "true_peak_oversample");
+}
+
 AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
                                    const AudioProfileConfig& config) {
   return analyze_audio_profile(samples, length, sample_rate, config, nullptr);
@@ -179,6 +188,7 @@ AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int
 
 AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
                                    const AudioProfileConfig& config, Spectrogram* spec_out) {
+  validate_audio_profile_config(config);
   if (samples == nullptr || length == 0 || sample_rate <= 0) return AudioProfile{};
   return analyze_audio_profile(Audio::from_buffer(samples, length, sample_rate), config, spec_out);
 }
@@ -517,6 +527,7 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
 
 AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config,
                                    Spectrogram* spec_out) {
+  validate_audio_profile_config(config);
   AudioProfile profile;
   if (audio.empty() || audio.sample_rate() <= 0) return profile;
 
@@ -546,6 +557,7 @@ AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t
                                                int channels, int sample_rate,
                                                const AudioProfileConfig& config,
                                                Spectrogram* spec_out) {
+  validate_audio_profile_config(config);
   AudioProfile profile;
   if (samples == nullptr || frames == 0 || channels <= 0 || sample_rate <= 0) return profile;
 

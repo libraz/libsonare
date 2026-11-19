@@ -360,3 +360,17 @@ TEST_CASE("MelConfig binds its converted fields by name", "[mel][config]") {
   REQUIRE(runtime_stft.center == runtime.center);
   REQUIRE(runtime_stft.pad_mode == PadMode::Constant);
 }
+
+TEST_CASE("mfcc and delta refuse a member by its name", "[mel_spectrogram]") {
+  MelConfig config;
+  config.n_mels = 40;
+  const Audio audio = Audio::from_vector(std::vector<float>(22050, 0.1f), 22050);
+  const MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  CHECK_THROWS_WITH(mel.mfcc(0), "n_mfcc must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(mel.mfcc(41), "n_mfcc must be at most n_mels");
+
+  const std::vector<float> features(4 * 8, 1.0f);
+  const char* expected = "width must be an odd integer in [3, 2147483647]";
+  CHECK_THROWS_WITH(MelSpectrogram::delta(features.data(), 4, 8, 1), expected);
+  CHECK_THROWS_WITH(MelSpectrogram::delta(features.data(), 4, 8, 4), expected);
+}

@@ -154,3 +154,25 @@ TEST_CASE("the JS refusal renderer renders once and leaves a caller-spelled refu
   CHECK(std::string(check::camel_spelled(relation).what()) ==
         "fundamentalHz + searchRangeHz must be at least 1");
 }
+
+TEST_CASE("an unknown key and a wrong type are shape refusals, a domain refusal is not",
+          "[util][refusal]") {
+  using sonare::ErrorCode;
+  using sonare::SonareParameterRefusal;
+  const auto wrong = SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, "irBase64",
+                                                        "must be a string");
+  CHECK(std::string(wrong.what()) == "irBase64 must be a string");
+  CHECK(wrong.shape_error());
+  CHECK(SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, "gainDbb").shape_error());
+  CHECK_FALSE(SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "gainDb",
+                                                "must be finite and at most 770")
+                  .shape_error());
+  CHECK_FALSE(SonareParameterRefusal::relation(ErrorCode::InvalidParameter, {"fmax", "fmin"},
+                                               "{0} must be finite and greater than {1}")
+                  .shape_error());
+  // A respelling keeps the kind, so the class a translation point picks survives it.
+  const auto respelled = sonare::util::check::camel_spelled(SonareParameterRefusal::wrong_type(
+      ErrorCode::InvalidParameter, "ir_base64", "must be a string"));
+  CHECK(respelled.shape_error());
+  CHECK(std::string(respelled.what()) == "irBase64 must be a string");
+}

@@ -14,6 +14,7 @@
 #include "feature/chroma.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -170,17 +171,12 @@ struct ChordConfig {
 ///         nothing), threshold is finite in [0, 1], n_fft and hop_length are positive, and
 ///         hmm_beam_width is at least 0.
 inline void validate_chord_config(const ChordConfig& config) {
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.min_duration), ErrorCode::InvalidParameter,
-                   "ChordConfig: min_duration must be finite and at least 0");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.smoothing_window),
-                   ErrorCode::InvalidParameter,
-                   "ChordConfig: smoothing_window must be finite and at least 0");
-  SONARE_CHECK_MSG(numeric::finite_in_closed_range(config.threshold, 0.0f, 1.0f),
-                   ErrorCode::InvalidParameter, "ChordConfig: threshold must be finite in [0, 1]");
-  SONARE_CHECK_MSG(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
-                   "ChordConfig: n_fft and hop_length must be positive");
-  SONARE_CHECK_MSG(config.hmm_beam_width >= 0, ErrorCode::InvalidParameter,
-                   "ChordConfig: hmm_beam_width must be at least 0");
+  util::check::at_least(config.min_duration, 0.0, "min_duration");
+  util::check::at_least(config.smoothing_window, 0.0, "smoothing_window");
+  util::check::in_range(config.threshold, 0.0, 1.0, "threshold");
+  util::check::integer_at_least(config.n_fft, 1, "n_fft");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_at_least(config.hmm_beam_width, 0, "hmm_beam_width");
 }
 
 /// @brief Chord analyzer for detecting chords from audio.

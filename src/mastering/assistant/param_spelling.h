@@ -5,8 +5,10 @@
 
 #include <initializer_list>
 #include <string>
+#include <vector>
 
 #include "util/exception.h"
+#include "util/json_schema.h"
 
 namespace sonare::mastering::assistant {
 
@@ -37,6 +39,14 @@ inline void refuse_snake_case_param(const std::string& key,
                             "assistant param " + key + " is an earlier spelling; write " + camel);
     }
   }
+}
+
+/// @brief Refuses `key` as an unknown key of a flat param list, listing the keys the reader takes.
+[[noreturn]] inline void refuse_unknown_param(const std::string& key,
+                                              const std::vector<std::string>& accepted) {
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key, std::string(),
+                                        sonare::util::json::schema::expected_keys(accepted))
+      .as_caller_spelled();
 }
 
 }  // namespace sonare::mastering::assistant

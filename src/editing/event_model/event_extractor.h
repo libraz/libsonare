@@ -70,6 +70,12 @@ struct PercussiveEventExtractorConfig {
   float min_percussive_ratio = 0.0f;
 };
 
+/// @brief Refuses the extraction controls the C ABI and the bindings expose, naming the control;
+///        0 for @p onset_wait, @p onset_delta or @p max_event_ms keeps the library default.
+/// @throws SonareParameterRefusal(InvalidParameter).
+void check_percussive_extract_controls(int onset_wait, float onset_delta, float max_event_ms,
+                                       float min_percussive_ratio);
+
 /// @brief Extracts percussive events from @p audio.
 /// @details Onsets are detected on the percussive component rather than on the
 ///          source, so a harmonic attack is attenuated before the detector sees

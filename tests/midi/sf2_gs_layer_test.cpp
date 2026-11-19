@@ -675,9 +675,9 @@ TEST_CASE("the pitch shifter's coarse and balance bytes reach its stage", "[midi
   GsEfx up;
   up.type = 0x0160;   // 2-voice Pitch Shifter
   up.params[0] = 76;  // 64 + 12 -> +12 semitones (one octave up)
-  REQUIRE(shifter_of(up).find("\"semitones\":12") != std::string::npos);
+  REQUIRE(shifter_of(up).find("\"pitchSemitones\":12") != std::string::npos);
   up.params[0] = 52;  // 64 - 12 -> -12 semitones
-  REQUIRE(shifter_of(up).find("\"semitones\":-12") != std::string::npos);
+  REQUIRE(shifter_of(up).find("\"pitchSemitones\":-12") != std::string::npos);
 
   // Neither byte reads 0 as "unset". A coarse byte of 0 is 64 steps below centre
   // and clamps to the -24 st floor; a balance byte of 0 is all direct signal and
@@ -686,7 +686,7 @@ TEST_CASE("the pitch shifter's coarse and balance bytes reach its stage", "[midi
   zeroed.type = 0x0161;  // Feedback Pitch Shifter shares the translation
   zeroed.params[0] = 0;
   zeroed.params[15] = 0;
-  REQUIRE(shifter_of(zeroed).find("\"semitones\":-24") != std::string::npos);
+  REQUIRE(shifter_of(zeroed).find("\"pitchSemitones\":-24") != std::string::npos);
   REQUIRE(shifter_of(zeroed).find("\"dryWet\":0") != std::string::npos);
 
   // Effect Balance (PARAMETER 16 = params[15]) -> dry/wet when set.
@@ -695,7 +695,7 @@ TEST_CASE("the pitch shifter's coarse and balance bytes reach its stage", "[midi
   mixed.params[0] = 71;    // +7 semitones
   mixed.params[15] = 127;  // full effect
   const std::string json = shifter_of(mixed);
-  REQUIRE(json.find("\"semitones\":7") != std::string::npos);
+  REQUIRE(json.find("\"pitchSemitones\":7") != std::string::npos);
   REQUIRE(json.find("\"dryWet\":1") != std::string::npos);
 }
 

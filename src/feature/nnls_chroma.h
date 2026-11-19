@@ -10,6 +10,7 @@
 #include "feature/cqt.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -59,17 +60,13 @@ struct NnlsChromaConfig {
 /// @brief Refuses the caller-settable NnlsChromaConfig fields outside the argument domain every
 ///        public surface shares.
 /// @throws SonareException(InvalidParameter) unless stft_blend_weight is finite in [0, 1],
-///         stft_blend_n_fft is even and at least 2, and cqt.hop_length is positive. The blend
+///         stft_blend_n_fft is even and at least 2, and hop_length is positive. The blend
 ///         fields are checked whether or not enable_stft_blend is set.
 inline void validate_nnls_chroma_config(const NnlsChromaConfig& config) {
-  SONARE_CHECK_MSG(numeric::finite_in_closed_range(config.stft_blend_weight, 0.0f, 1.0f),
-                   ErrorCode::InvalidParameter,
-                   "NnlsChromaConfig: stft_blend_weight must be finite in [0, 1]");
-  SONARE_CHECK_MSG(config.stft_blend_n_fft >= 2 && config.stft_blend_n_fft % 2 == 0,
-                   ErrorCode::InvalidParameter,
-                   "NnlsChromaConfig: stft_blend_n_fft must be even and at least 2");
-  SONARE_CHECK_MSG(config.cqt.hop_length > 0, ErrorCode::InvalidParameter,
-                   "NnlsChromaConfig: hop_length must be positive");
+  util::check::in_range(config.stft_blend_weight, 0.0, 1.0, "stft_blend_weight");
+  util::check::even_integer_in_range(config.stft_blend_n_fft, 2, std::numeric_limits<int>::max(),
+                                     "stft_blend_n_fft");
+  util::check::integer_at_least(config.cqt.hop_length, 1, "hop_length");
 }
 
 /// @brief Builds a log-frequency harmonic template matrix for NNLS.

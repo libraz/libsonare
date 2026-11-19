@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "realtime_engine_wasm.h"
+#include "util/parameter_checks.h"
 
 void RealtimeEngineWasm::play(const val& render_frame_val) {
   sonare::rt::Command command{};
@@ -59,11 +60,8 @@ void RealtimeEngineWasm::primeOfflineParameters(const val& num_channels_val,
   if (!block_size_val.isUndefined() && !block_size_val.isNull()) {
     block_size = checkedIntFromVal(block_size_val, "blockSize");
   }
-  if (num_channels <= 0 || block_size < 0) {
-    throw WasmRangeError(
-        "numChannels must be an integer of at least 1 and blockSize "
-        "an integer of at least 0");
-  }
+  sonare::util::check::integer_at_least(num_channels, 1, "num_channels");
+  sonare::util::check::integer_at_least(block_size, 0, "block_size");
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
@@ -190,15 +188,7 @@ int64_t RealtimeEngineWasm::sampleAtPpq(double ppq) {
   return engine_.sample_at_ppq(ppq);
 }
 void RealtimeEngineWasm::setLoop(double start_ppq, double end_ppq, bool enabled) {
-  // Mirror the C-ABI guard (sonare_engine_set_loop): reject non-finite or
-  // negative bounds, and an empty/inverted range when enabling the loop.
-  if (!std::isfinite(start_ppq) || !std::isfinite(end_ppq) ||
-      !sonare::transport::valid_public_ppq(start_ppq) ||
-      !sonare::transport::valid_public_ppq(end_ppq) || (enabled && end_ppq <= start_ppq)) {
-    throw WasmRangeError(
-        "startPpq and endPpq must each be finite and at least 0; endPpq must be greater than "
-        "startPpq when enabled");
-  }
+  sonare::transport::check_loop_range(start_ppq, end_ppq, enabled);
   engine_.set_loop(start_ppq, end_ppq, enabled);
 }
 

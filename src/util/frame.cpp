@@ -8,6 +8,7 @@
 
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -22,12 +23,8 @@ int frame_count(std::size_t n, int frame_length, int hop_length) {
 }
 
 std::vector<float> frame(const float* x, std::size_t n, int frame_length, int hop_length) {
-  if (frame_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "frame: frame_length must be > 0");
-  }
-  if (hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "frame: hop_length must be > 0");
-  }
+  util::check::integer_at_least(frame_length, 1, "frame_length");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   if (n > 0 && x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "frame: null input with non-zero length");
   }

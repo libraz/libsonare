@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <functional>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "util/constants.h"
@@ -686,6 +687,14 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
     rejects([&](SonarePercussiveEventsResult* out) {
       return extract_at(samples, &negative_span, out);
     });
+    CHECK(std::string(sonare_last_error_message()) == "max_event_ms must be finite and at least 0");
+    SonarePercussiveEventConfig negative_wait{};
+    negative_wait.onset_wait = -1;
+    rejects([&](SonarePercussiveEventsResult* out) {
+      return extract_at(samples, &negative_wait, out);
+    });
+    CHECK(std::string(sonare_last_error_message()) ==
+          "onset_wait must be an integer in [0, 2147483647]");
 
     for (const float outside : {-0.01f, -1.0f, 1.01f, 2.0f}) {
       SonarePercussiveEventConfig ratio{};

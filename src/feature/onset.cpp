@@ -7,6 +7,7 @@
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -46,7 +47,7 @@ std::vector<float> shift_onset_frames(std::vector<float> onset_env, int frame_of
 std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
                                           const OnsetConfig& config) {
   SONARE_CHECK(!mel_spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.lag >= 1, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(config.lag, 1, "lag");
 
   int n_mels = mel_spec.n_mels();
   int n_frames = mel_spec.n_frames();
@@ -130,17 +131,21 @@ std::vector<float> center_onset_strength(std::vector<float> onset_env, const Stf
   return shift_onset_frames(std::move(onset_env), onset_center_shift_frames(geometry, center));
 }
 
+void validate_onset_n_bands(int n_bands) { util::check::integer_at_least(n_bands, 1, "n_bands"); }
+
 std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_bands,
                                         const OnsetConfig& config) {
   SONARE_CHECK(!mel_spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bands > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.lag >= 1, ErrorCode::InvalidParameter);
+  validate_onset_n_bands(n_bands);
+  util::check::integer_at_least(config.lag, 1, "lag");
 
   int n_mels = mel_spec.n_mels();
   int n_frames = mel_spec.n_frames();
   // More bands than Mel bins would give zero-width bands whose column mean is
   // NaN; require at least one Mel bin per band.
-  SONARE_CHECK(n_bands <= n_mels, ErrorCode::InvalidParameter);
+  if (n_bands > n_mels) {
+    util::check::refuse_relation({"n_bands", "n_mels"}, "{0} must be at most {1}");
+  }
   const float* power = mel_spec.power_data();
 
   // Map power data to Eigen matrix [n_mels x n_frames] (row-major)
@@ -239,7 +244,7 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
 std::vector<float> spectral_flux(const float* magnitude, int n_bins, int n_frames, int lag) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(lag >= 1, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(lag, 1, "lag");
 
   std::vector<float> flux(n_frames, 0.0f);
 

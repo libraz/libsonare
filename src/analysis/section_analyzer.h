@@ -11,6 +11,7 @@
 #include "core/audio.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -60,14 +61,10 @@ struct SectionConfig {
 /// @throws SonareException(InvalidParameter) unless n_fft and hop_length are positive and
 ///         min_section_sec and boundary_threshold are finite and non-negative.
 inline void validate_section_config(const SectionConfig& config) {
-  SONARE_CHECK_MSG(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
-                   "SectionConfig: n_fft and hop_length must be positive");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.min_section_sec),
-                   ErrorCode::InvalidParameter,
-                   "SectionConfig: min_section_sec must be finite and non-negative");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.boundary_threshold),
-                   ErrorCode::InvalidParameter,
-                   "SectionConfig: boundary_threshold must be finite and non-negative");
+  util::check::integer_at_least(config.n_fft, 1, "n_fft");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::at_least(config.min_section_sec, 0.0, "min_section_sec");
+  util::check::at_least(config.boundary_threshold, 0.0, "boundary_threshold");
 }
 
 /// @brief Beat grid the section analysis is laid on.

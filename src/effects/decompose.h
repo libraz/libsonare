@@ -20,6 +20,11 @@ struct DecomposeResult {
   std::vector<float> H;  ///< Activation matrix [n_components x n_frames] row-major.
 };
 
+/// @brief Refuses a non-positive dimension or component count and a negative iteration count,
+///        naming each (n_features, n_frames, n_components, then n_iter).
+/// @throws SonareParameterRefusal(InvalidParameter).
+void validate_decompose_shape(int n_features, int n_frames, int n_components, int n_iter);
+
 /// @brief Non-negative matrix factorisation of a non-negative spectrogram.
 /// @details Implements `librosa.decompose.decompose` (multiplicative-update
 /// NMF). Supports the full beta-divergence family used by `sklearn.NMF`

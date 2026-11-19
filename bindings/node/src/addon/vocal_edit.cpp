@@ -629,8 +629,8 @@ Napi::Object RenderResultToObject(Napi::Env env, const SonareVocalRenderResult& 
 
 Napi::Error MakeVocalError(Napi::Env env, SonareError error,
                            const SonareVocalErrorDetail* detail = nullptr) {
-  Napi::Error js_error =
-      sonare_node::MakeSonareError(env, error, sonare_node::ErrorMessageForCode(error));
+  Napi::Error js_error = sonare_node::MakeSonareError(
+      env, error, sonare_node::ErrorMessageForCode(error), sonare_node::LastRefusalIsShape());
   Napi::Object object = js_error.Value();
   object.Set("reason", detail == nullptr ? 0u : detail->reason);
   object.Set("field", detail == nullptr ? "" : detail->field);
@@ -970,7 +970,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
     Napi::HandleScope scope(Env());
     DetachSignal();
     Napi::Object value = error.Value();
-    sonare_node::DecorateSonareError(Env(), value, error_code_);
+    sonare_node::DecorateSonareError(Env(), value, error_code_, shape_refusal_);
     value.Set("reason", detail_.reason);
     value.Set("field", detail_.field);
     value.Set("expected", detail_.expected_text[0] == '\0' ? Uint64String(detail_.expected)
@@ -997,6 +997,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
 
   void CaptureError(SonareError error) {
     error_code_ = error;
+    shape_refusal_ = sonare_node::LastRefusalIsShape();
     sonare_vocal_error_detail_init(&detail_);
     sonare_vocal_last_error_detail(&detail_);
     // Runs on the render worker thread, whose thread-local holds the refusal's detail.
@@ -1031,6 +1032,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
   SonareVocalRenderResult result_{};
   bool result_initialized_ = false;
   SonareError error_code_ = SONARE_ERROR_UNKNOWN;
+  bool shape_refusal_ = false;
   SonareVocalErrorDetail detail_{};
 };
 

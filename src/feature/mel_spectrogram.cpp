@@ -3,12 +3,14 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 
 #include "filters/dct.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -80,8 +82,9 @@ std::vector<float> MelSpectrogram::to_db(float ref, float amin, float top_db) co
 }
 
 std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
-  SONARE_CHECK(n_mfcc > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_mfcc <= n_mels_, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(n_mfcc, 1, "n_mfcc");
+  if (n_mfcc > n_mels_)
+    util::check::refuse_relation({"n_mfcc", "n_mels"}, "{0} must be at most {1}");
 
   // Compute log Mel spectrogram in dB with the standard 10 * log10 scaling and
   // top_db clamp. This is exactly the shared power_to_db (ref=1.0, amin=kEpsilon,
@@ -130,7 +133,7 @@ std::vector<float> MelSpectrogram::delta(const float* features, int n_features, 
                                          int width) {
   SONARE_CHECK(features != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_features > 0 && n_frames > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(width >= 3 && width % 2 == 1, ErrorCode::InvalidParameter);
+  util::check::odd_integer_in_range(width, 3, std::numeric_limits<int>::max(), "width");
   // The regression below spreads one non-finite element across every frame
   // whose window covers it, so a NaN input yields a mostly-NaN delta that is
   // indistinguishable from a valid result by shape. Rejected here rather than

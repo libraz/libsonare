@@ -71,10 +71,8 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
                                     "preferStreamingSafe", "speechMonoAmount", "targetPlatform"});
       // Refused rather than ignored, as a chain override is: a misspelt key
       // would otherwise leave its setting at the default with nothing to say so.
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "unknown mastering assistant param: " + key +
-                                " (expected targetLufs, ceilingDbtp, enableRepair, "
-                                "preferStreamingSafe, speechMonoAmount, targetPlatform, preset)");
+      refuse_unknown_param(key, {"targetLufs", "ceilingDbtp", "enableRepair", "preferStreamingSafe",
+                                 "speechMonoAmount", "targetPlatform", "preset"});
     }
   }
   return config;
@@ -98,9 +96,7 @@ inline AudioProfileConfig audio_profile_config_from_params(const api::Param* par
       config.detect_defects = value != 0.0;
     } else {
       refuse_snake_case_param(key, {"nFft", "hopLength", "truePeakOversample", "detectDefects"});
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "unknown mastering profile param: " + key +
-                                " (expected nFft, hopLength, truePeakOversample, detectDefects)");
+      refuse_unknown_param(key, {"nFft", "hopLength", "truePeakOversample", "detectDefects"});
     }
   }
   return config;

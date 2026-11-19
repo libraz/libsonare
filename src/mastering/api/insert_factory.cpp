@@ -197,6 +197,12 @@ const Value* admit_insert_params(const std::string& json_params,
       .as_caller_spelled();
 }
 
+// Refuses the parameter @p key for carrying a value of the wrong type.
+[[noreturn]] void refuse_param_type(const std::string& key, const std::string& predicate) {
+  throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, key, predicate)
+      .as_caller_spelled();
+}
+
 // Decodes a little-endian f32 array carried as base64 under @p key. Two inserts
 // take an IR this way (the convolution reverb and the amp sim's cabinet), so the
 // key is a parameter rather than being baked in. Not FX-gated: the amp sim ships
@@ -206,7 +212,7 @@ std::vector<float> read_ir_f32_base64_key(const Value* root, const char* key) {
   const auto* value = root->find(key);
   if (value == nullptr) return {};
   if (!value->is_string()) {
-    refuse_param(key, "must be a string");
+    refuse_param_type(key, "must be a string");
   }
 
   std::vector<uint8_t> bytes;
@@ -242,7 +248,7 @@ std::string read_string_key(const Value* root, const char* key) {
   const auto* value = root->find(key);
   if (value == nullptr) return {};
   if (!value->is_string()) {
-    refuse_param(key, "must be a string");
+    refuse_param_type(key, "must be a string");
   }
   return value->as_string();
 }
@@ -286,7 +292,7 @@ std::vector<Param> insert_params_from_root(const Value* root, const std::string&
       // reported instead of dropped.
       continue;
     } else {
-      refuse_param(key, "must be a number or a boolean");
+      refuse_param_type(key, "must be a number or a boolean");
     }
   }
   return params;
@@ -648,7 +654,7 @@ SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::SourceListener, 2);
 std::vector<float> acoustic_material_bands(const Value* value, const char* key) {
   if (value == nullptr) return {};
   if (!value->is_array()) {
-    refuse_param(key, "must be an array");
+    refuse_param_type(key, "must be an array");
   }
 
   std::vector<float> bands;

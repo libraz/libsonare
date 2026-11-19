@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -301,4 +302,16 @@ TEST_CASE("cached vocal note work does not allocate for unrelated notes", "[voca
   const auto large = allocations_for_first_note(10);
   INFO("cached first-note allocations: " << small << " vs " << large);
   CHECK(large == small);
+}
+
+TEST_CASE("a render range whose end is not after its start names both members",
+          "[vocal_renderer_contract]") {
+  auto session = tone_session(16000, 1);
+  auto snapshot = session.capture_render_snapshot();
+  CHECK_THROWS_WITH(VocalRenderJob(snapshot, {{100, 100}, 1}),
+                    "range.end must be greater than range.start");
+  CHECK_THROWS_WITH(VocalRenderJob(snapshot, {{200, 100}, 1}),
+                    "range.end must be greater than range.start");
+  CHECK_THROWS_WITH(VocalRenderJob(snapshot, {{0, 16001}, 1}),
+                    "render range is outside output bounds");
 }

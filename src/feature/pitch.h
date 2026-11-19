@@ -120,6 +120,10 @@ struct PiptrackResult {
 PiptrackResult piptrack(const Audio& audio, int n_fft = 2048, int hop_length = 512,
                         float fmin = 150.0f, float fmax = 4000.0f, float threshold = 0.1f);
 
+/// @brief Refuses a tuning resolution outside (0, 1) or a bin count below one, naming each.
+/// @throws SonareParameterRefusal(InvalidParameter).
+void validate_tuning_params(float resolution, int bins_per_octave);
+
 /// @brief Estimates a per-octave tuning offset from a list of detected pitches.
 /// @param frequencies Detected pitch frequencies (Hz). Non-positive values are ignored.
 /// @param resolution Tuning resolution in fractions of a bin (default 0.01 = 1 cent).

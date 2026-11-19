@@ -12,6 +12,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -200,11 +201,7 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
   // power-of-two nFft (spectral_edit.h) and every surface already enforces it. It is checked
   // first so a size the shared rule would also refuse is reported against this one.
   // Shape checks never bound magnitude: 2^30 passes them all and then asks for 4 GiB.
-  SONARE_CHECK_MSG(
-      is_power_of_two(config.n_fft) && config.n_fft >= 4 && config.n_fft <= kSpectralEditMaxNFft,
-      ErrorCode::InvalidParameter,
-      "SpectralEditConfig: nFft must be a power of two in [4, " +
-          std::to_string(kSpectralEditMaxNFft) + "], got " + std::to_string(config.n_fft));
+  util::check::power_of_two_in_range(config.n_fft, 4, kSpectralEditMaxNFft, "n_fft");
   const int hop_length = resolve_resynthesis_hop(config.hop_length, config.n_fft);
   validate_cola_geometry(config.n_fft, hop_length);
   SONARE_CHECK(config.heal_radius_frames >= 1, ErrorCode::InvalidParameter);

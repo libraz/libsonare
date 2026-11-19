@@ -638,7 +638,9 @@ TEST_CASE("Assistant param builders refuse a snake_case spelling", "[mastering][
     FAIL("the former ceiling key was accepted");
   } catch (const sonare::SonareException& e) {
     REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
-    REQUIRE(std::string(e.what()).find("expected targetLufs, ceilingDbtp") != std::string::npos);
+    REQUIRE(std::string(e.what()) ==
+            "unknown key ceilingDb (expected ceilingDbtp, enableRepair, preferStreamingSafe, "
+            "preset, speechMonoAmount, targetLufs, targetPlatform)");
   }
   const sonare::mastering::api::Param profile[] = {{"hop_length", 256.0}};
   REQUIRE_THROWS_AS(assistant::audio_profile_config_from_params(profile, 1),

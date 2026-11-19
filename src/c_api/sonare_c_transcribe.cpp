@@ -1,7 +1,5 @@
 #include <sonare/sonare_c_transcribe.h>
 
-#include <cstdio>
-
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
@@ -11,6 +9,7 @@
 #include "feature/chroma.h"
 #include "feature/pitch.h"
 #include "util/insertion_sort.h"
+#include "util/parameter_checks.h"
 #endif
 
 using sonare::constants::kCentsPerSemitone;
@@ -29,29 +28,30 @@ constexpr int32_t kTranscribeConfigVersion = 4;
 constexpr int32_t kTranscribeResultVersion = 2;
 constexpr int32_t kMaxMinNoteDivision = 128;
 
-/// Records which field was refused and why, so a caller reading
-/// sonare_last_error_message is told the field rather than left with a bare
-/// "invalid parameter". Every rejection below goes through this: a refusal that
-/// does not name its field is the one a caller cannot act on.
-SonareError refuse(const char* message) {
-  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER, message);
-  return SONARE_ERROR_INVALID_PARAMETER;
+/// Refuses @p subject, named by its C field, so each binding respells it in its own keys.
+[[noreturn]] void refuse(const char* subject, const char* predicate) {
+  throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter, subject,
+                                                  predicate);
+}
+
+[[noreturn]] void refuse_pair(const char* a, const char* b, const char* text) {
+  sonare::util::check::refuse_relation({a, b}, text);
 }
 
 /// Reads the public config into the core one. Every numeric field spells its
 /// default as 0, so a zero-filled struct is the defaults; a value outside the
 /// field's domain is REFUSED rather than replaced, because a silently
 /// substituted default is indistinguishable downstream from a deliberate one.
-SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out,
-                        uint8_t* out_group, uint8_t* out_channel, bool* out_reference_auto) {
+void read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out, uint8_t* out_group,
+                 uint8_t* out_channel, bool* out_reference_auto) {
   *out = ntm::TranscribeConfig{};
   *out_group = 0;
   *out_channel = 0;
   *out_reference_auto = false;
-  if (in == nullptr) return SONARE_OK;
+  if (in == nullptr) return;
   if (in->struct_version < kTranscribeConfigVersionMin ||
       in->struct_version > kTranscribeConfigVersion) {
-    return refuse("struct_version must be 1, 2, 3 or 4");
+    refuse("struct_version", "must be 1, 2, 3 or 4");
   }
   if (in->struct_version >= 2) *out_reference_auto = in->reference_auto != 0;
 
@@ -60,87 +60,84 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
 
   // Zero keeps the default; other values must be valid, and this layer names the offending field.
   if (in->reference_hz != 0.0f) {
-    if (!finite_positive(in->reference_hz)) return refuse("reference_hz must be a positive number");
+    if (!finite_positive(in->reference_hz)) refuse("reference_hz", "must be a positive number");
     out->reference_hz = in->reference_hz;
   }
   if (in->f0_min_hz != 0.0f) {
-    if (!finite_positive(in->f0_min_hz)) return refuse("f0_min_hz must be a positive number");
+    if (!finite_positive(in->f0_min_hz)) refuse("f0_min_hz", "must be a positive number");
     out->fmin = in->f0_min_hz;
   }
   if (in->f0_max_hz != 0.0f) {
-    if (!finite_positive(in->f0_max_hz)) return refuse("f0_max_hz must be a positive number");
+    if (!finite_positive(in->f0_max_hz)) refuse("f0_max_hz", "must be a positive number");
     out->fmax = in->f0_max_hz;
   }
   const ntm::TranscribeF0Range range = ntm::resolve_transcribe_f0_range(*out);
   if (range.fmax <= range.fmin) {
-    char message[96];
-    std::snprintf(message, sizeof(message), "f0_max_hz (%g Hz) must be above f0_min_hz (%g Hz)",
-                  static_cast<double>(range.fmax), static_cast<double>(range.fmin));
-    return refuse(message);
+    refuse_pair("f0_max_hz", "f0_min_hz", "{0} must be greater than {1}");
   }
   if (in->min_note_ms != 0.0f) {
-    if (!finite_positive(in->min_note_ms)) return refuse("min_note_ms must be a positive number");
+    if (!finite_positive(in->min_note_ms)) refuse("min_note_ms", "must be a positive number");
     out->min_note_ms = in->min_note_ms;
   }
   if (in->segmentation_threshold_cents != 0.0f) {
     if (!finite_positive(in->segmentation_threshold_cents)) {
-      return refuse("segmentation_threshold_cents must be a positive number");
+      refuse("segmentation_threshold_cents", "must be a positive number");
     }
     out->segmentation_threshold_cents = in->segmentation_threshold_cents;
   }
   if (in->velocity_floor_db != 0.0f) {
     if (!std::isfinite(in->velocity_floor_db) || in->velocity_floor_db >= 0.0f) {
-      return refuse("velocity_floor_db must be a finite negative number");
+      refuse("velocity_floor_db", "must be a finite negative number");
     }
     out->velocity_floor_db = in->velocity_floor_db;
   }
   if (in->fixed_velocity != 0) {
     if (in->fixed_velocity < 1 || in->fixed_velocity > 127) {
-      return refuse("fixed_velocity must be an integer in [1, 127]");
+      refuse("fixed_velocity", "must be an integer in [1, 127]");
     }
     out->fixed_velocity = in->fixed_velocity;
   }
-  if (in->group < 0 || in->group > 15) return refuse("group must be an integer in [0, 15]");
+  if (in->group < 0 || in->group > 15) refuse("group", "must be an integer in [0, 15]");
   if (in->channel < 0 || in->channel > 15) {
-    return refuse("channel must be an integer in [0, 15]");
+    refuse("channel", "must be an integer in [0, 15]");
   }
   *out_group = static_cast<uint8_t>(in->group);
   *out_channel = static_cast<uint8_t>(in->channel);
-  if (in->struct_version < 3) return SONARE_OK;
+  if (in->struct_version < 3) return;
 
   // The core shares these sentinels (0 => default, negative => 0 / off), so they are copied as-is,
   // except reattack_ratio.
   if (in->max_polyphony < 0 ||
       in->max_polyphony > sonare::editing::polyphony::kMaxPolyphonyVoices) {
-    return refuse("max_polyphony must be 0 or an integer in [1, 64]");
+    refuse("max_polyphony", "must be 0 or an integer in [1, 64]");
   }
   if (!std::isfinite(in->min_frame_peak_ratio) || in->min_frame_peak_ratio > 1.0f) {
-    return refuse("min_frame_peak_ratio must be a finite number no greater than 1");
+    refuse("min_frame_peak_ratio", "must be a finite number no greater than 1");
   }
   if (!std::isfinite(in->min_ridge_peak_ratio) || in->min_ridge_peak_ratio > 1.0f) {
-    return refuse("min_ridge_peak_ratio must be a finite number no greater than 1");
+    refuse("min_ridge_peak_ratio", "must be a finite number no greater than 1");
   }
   if (in->reattack_ratio != 0.0f &&
       (!std::isfinite(in->reattack_ratio) || in->reattack_ratio <= 1.0f)) {
-    return refuse("reattack_ratio must be 0 (no split) or a finite number above 1");
+    refuse("reattack_ratio", "must be 0 (no split) or a finite number above 1");
   }
   if (in->min_note_division < 0 || in->min_note_division > kMaxMinNoteDivision) {
-    return refuse("min_note_division must be 0 or an integer in [1, 128]");
+    refuse("min_note_division", "must be 0 or an integer in [1, 128]");
   }
   if (in->min_note_division != 0 && in->min_note_ms != 0.0f) {
-    return refuse("min_note_division and min_note_ms cannot both be set");
+    refuse_pair("min_note_division", "min_note_ms", "{0} and {1} cannot both be set");
   }
   out->min_note_division = in->min_note_division;
   if (out->source == ntm::TranscribeSource::kMonophonic) {
-    if (in->max_polyphony != 0) return refuse("max_polyphony requires polyphonic transcription");
+    if (in->max_polyphony != 0) refuse("max_polyphony", "requires polyphonic transcription");
     if (in->min_frame_peak_ratio != 0.0f) {
-      return refuse("min_frame_peak_ratio requires polyphonic transcription");
+      refuse("min_frame_peak_ratio", "requires polyphonic transcription");
     }
     if (in->min_ridge_peak_ratio != 0.0f) {
-      return refuse("min_ridge_peak_ratio requires polyphonic transcription");
+      refuse("min_ridge_peak_ratio", "requires polyphonic transcription");
     }
     if (in->reattack_ratio != 0.0f) {
-      return refuse("reattack_ratio requires polyphonic transcription");
+      refuse("reattack_ratio", "requires polyphonic transcription");
     }
   }
   out->max_polyphony = in->max_polyphony;
@@ -151,17 +148,16 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
       (in->reattack_ratio == 0.0f && out->source == ntm::TranscribeSource::kPolyphonic)
           ? -1.0f
           : in->reattack_ratio;
-  if (in->struct_version < 4) return SONARE_OK;
+  if (in->struct_version < 4) return;
 
   if (in->monophonic_model != 0 && in->monophonic_model != 1) {
-    return refuse("monophonic_model must be 0 (segments) or 1 (singing)");
+    refuse("monophonic_model", "must be 0 (segments) or 1 (singing)");
   }
   if (out->source == ntm::TranscribeSource::kPolyphonic && in->monophonic_model != 0) {
-    return refuse("monophonic_model requires monophonic transcription");
+    refuse("monophonic_model", "requires monophonic transcription");
   }
   out->monophonic_model =
       in->monophonic_model == 1 ? ntm::MonophonicModel::kSinging : ntm::MonophonicModel::kSegments;
-  return SONARE_OK;
 }
 
 /// Converts a sample index in the SOURCE's rate to PPQ on @p map, whose own rate
@@ -282,8 +278,8 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
   uint8_t group = 0;
   uint8_t channel = 0;
   bool reference_auto = false;
-  const SonareError config_error =
-      read_config(config, &core_config, &group, &channel, &reference_auto);
+  const SonareError config_error = sonare_c_detail::run_validation(
+      [&] { read_config(config, &core_config, &group, &channel, &reference_auto); });
   if (config_error != SONARE_OK) return config_error;
 
   SONARE_C_TRY
@@ -332,8 +328,8 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   uint8_t group = 0;
   uint8_t channel = 0;
   bool reference_auto = false;
-  const SonareError config_error =
-      read_config(config, &core_config, &group, &channel, &reference_auto);
+  const SonareError config_error = sonare_c_detail::run_validation(
+      [&] { read_config(config, &core_config, &group, &channel, &reference_auto); });
   if (config_error != SONARE_OK) return config_error;
 
   SONARE_C_TRY

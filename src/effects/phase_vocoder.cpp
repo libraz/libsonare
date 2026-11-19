@@ -13,6 +13,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/phase.h"
 #include "util/time_map.h"
 
@@ -50,9 +51,9 @@ StreamingPhaseVocoderConfig normalized_streaming_config(StreamingPhaseVocoderCon
 
 Spectrogram stretch_spectrogram(const Spectrogram& spec, float rate,
                                 const PhaseVocoderConfig& config, bool phase_lock) {
+  validate_stretch_rate(rate);
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
 
   const int n_bins = spec.n_bins();
   const int n_frames_in = spec.n_frames();
@@ -560,6 +561,8 @@ Spectrogram phase_vocoder_analysis(const Audio& audio, int n_fft, int hop_length
   return Spectrogram::compute(Audio::from_vector(std::move(extended), audio.sample_rate()),
                               stft_config);
 }
+
+void validate_stretch_rate(float rate) { util::check::greater_than(rate, 0.0, "rate"); }
 
 Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocoderConfig& config) {
   return stretch_spectrogram(spec, rate, config, /*phase_lock=*/false);

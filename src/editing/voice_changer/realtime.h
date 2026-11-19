@@ -682,8 +682,9 @@ const char* prepare_arguments_error(double sample_rate, int max_block_size,
                                     int num_channels) noexcept;
 
 /// @brief How a validator refusal spells a field: as the config member path ("retune.mix"), under
-///        a preset document's dsp object ("dsp.retune.mix"), or as a flat POD key ("retuneMix").
-enum class ConfigFieldSpelling { Member, PresetDocument, FlatPod };
+///        a preset document's dsp object ("dsp.retune.mix"), as a flat POD key ("retuneMix"), or
+///        as the C ABI config struct's field ("retune_mix").
+enum class ConfigFieldSpelling { Member, PresetDocument, FlatPod, CStruct };
 
 /// @brief Checks that @p config's formant warp is within reach.
 /// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones / 12) and the

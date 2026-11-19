@@ -308,8 +308,10 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
   if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
   *out_tuning = 0.0f;
   if (!frequencies && length > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!numeric::finite_positive(resolution) || bins_per_octave <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err =
+          run_validation([&] { validate_tuning_params(resolution, bins_per_octave); });
+      err != SONARE_OK) {
+    return err;
   }
 
   SONARE_C_TRY
@@ -328,8 +330,10 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
   SONARE_C_API_ENTRY;
   if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
   *out_tuning = 0.0f;
-  if (!numeric::finite_positive(resolution) || bins_per_octave <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err =
+          run_validation([&] { validate_tuning_params(resolution, bins_per_octave); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline("estimate_tuning", "samples", samples, length, sample_rate,

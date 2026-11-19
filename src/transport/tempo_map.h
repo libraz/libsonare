@@ -10,6 +10,7 @@
 
 #include "rt/rt_publisher.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::transport {
 
@@ -27,6 +28,18 @@ inline constexpr double kMaxPublicTempoBpm = 100000.0;
 inline constexpr double kMinEffectiveTempoBpm = 1.0e-6;
 
 inline bool valid_public_ppq(double ppq) noexcept { return ppq >= 0.0 && ppq <= kMaxPublicPpq; }
+
+/// @brief Refuses a loop bound outside [0, kMaxPublicPpq], then, while @p enabled, an end at or
+///        before the start.
+/// @throws SonareParameterRefusal(InvalidParameter) naming the bound.
+inline void check_loop_range(double start_ppq, double end_ppq, bool enabled) {
+  ::sonare::util::check::in_range(start_ppq, 0.0, kMaxPublicPpq, "start_ppq");
+  ::sonare::util::check::in_range(end_ppq, 0.0, kMaxPublicPpq, "end_ppq");
+  if (enabled && !(end_ppq > start_ppq)) {
+    ::sonare::util::check::refuse_relation(
+        {"end_ppq", "start_ppq"}, "{0} must be greater than {1} while the loop is enabled");
+  }
+}
 
 inline bool valid_public_tempo(double bpm) noexcept {
   return std::isfinite(bpm) && bpm > 0.0 && bpm <= kMaxPublicTempoBpm;

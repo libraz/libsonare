@@ -71,12 +71,10 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
           key, {"targetTrackLufs", "suggestionStrength", "eqMaxCutDb", "mixBusHeadroomDbtp",
                 "tempoBpm", "enableStructure", "enableGain", "enableBalance", "enableEq",
                 "enableDynamics", "enableImage", "enableHighPass", "nFft", "hopLength"});
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "unknown mixing assistant param: " + key +
-                                " (expected targetTrackLufs, suggestionStrength, eqMaxCutDb, "
-                                "mixBusHeadroomDbtp, tempoBpm, enableStructure, enableGain, "
-                                "enableBalance, enableEq, enableDynamics, enableImage, "
-                                "enableHighPass, nFft, hopLength)");
+      mastering::assistant::refuse_unknown_param(
+          key, {"targetTrackLufs", "suggestionStrength", "eqMaxCutDb", "mixBusHeadroomDbtp",
+                "tempoBpm", "enableStructure", "enableGain", "enableBalance", "enableEq",
+                "enableDynamics", "enableImage", "enableHighPass", "nFft", "hopLength"});
     }
   }
   return config;
@@ -99,9 +97,7 @@ inline TrackProfileConfig track_profile_config_from_params(const mastering::api:
       config.min_duration_sec = static_cast<float>(value);
     } else {
       mastering::assistant::refuse_snake_case_param(key, {"nFft", "hopLength", "minDurationSec"});
-      throw SonareException(
-          ErrorCode::InvalidParameter,
-          "unknown track profile param: " + key + " (expected nFft, hopLength, minDurationSec)");
+      mastering::assistant::refuse_unknown_param(key, {"nFft", "hopLength", "minDurationSec"});
     }
   }
   return config;

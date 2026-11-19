@@ -29,6 +29,10 @@ struct StreamingPhaseVocoderConfig {
   bool phase_lock = true;
 };
 
+/// @brief Refuses a stretch rate that is not finite and greater than zero, naming rate.
+/// @throws SonareParameterRefusal(InvalidParameter).
+void validate_stretch_rate(float rate);
+
 /// @brief Performs phase vocoder time-stretching on a spectrogram.
 /// @details Resamples the spectrogram in time while maintaining phase coherence.
 ///          Uses linear magnitude interpolation and phase accumulation with

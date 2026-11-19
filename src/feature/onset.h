@@ -57,6 +57,10 @@ std::vector<float> compute_onset_strength(const Audio& audio,
                                           const MelConfig& mel_config = MelConfig(),
                                           const OnsetConfig& onset_config = OnsetConfig());
 
+/// @brief Refuses a multi-band onset band count below one, naming n_bands.
+/// @throws SonareParameterRefusal(InvalidParameter).
+void validate_onset_n_bands(int n_bands);
+
 /// @brief Computes multi-band onset strength (separate strength for different frequency bands).
 /// @param mel_spec Mel spectrogram
 /// @param n_bands Number of frequency bands (divides Mel bands evenly)

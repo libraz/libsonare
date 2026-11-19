@@ -14,6 +14,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::polyphony {
 namespace {
@@ -57,17 +58,10 @@ void check_config(const InharmonicityConfig& config) {
   // Named rather than bare: these are the caller's own values, and a refusal is the
   // only place a caller learns where their range ends. The spelling is the one a
   // binding will expose rather than the core's.
-  SONARE_CHECK_MSG(
-      config.min_partials >= kMinFitPartials && config.min_partials <= kMaxNoteMaskHarmonics,
-      ErrorCode::InvalidParameter, "InharmonicityConfig: minPartials must be in [2, 128]");
-  // One-sided ranges admit both NaN and infinity, so finiteness is checked rather
-  // than left to the comparison.
-  SONARE_CHECK_MSG(std::isfinite(config.max_residual_bins) && config.max_residual_bins > 0.0f,
-                   ErrorCode::InvalidParameter,
-                   "InharmonicityConfig: maxResidualBins must be finite and positive");
-  SONARE_CHECK_MSG(std::isfinite(config.max_inharmonicity) && config.max_inharmonicity > 0.0f,
-                   ErrorCode::InvalidParameter,
-                   "InharmonicityConfig: maxInharmonicity must be finite and positive");
+  util::check::integer_in_range(config.min_partials, kMinFitPartials, kMaxNoteMaskHarmonics,
+                                "min_partials");
+  util::check::greater_than(config.max_residual_bins, 0.0, "max_residual_bins");
+  util::check::greater_than(config.max_inharmonicity, 0.0, "max_inharmonicity");
 }
 
 StretchFit fit_stretch(const std::vector<double>& x, const std::vector<double>& y) {

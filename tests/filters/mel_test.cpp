@@ -357,3 +357,15 @@ TEST_CASE("get_mel_filterbank_cached promotes on hit (true LRU)", "[mel][cache]"
   const void* a_ptr_after = get_mel_filterbank_cached(sr, n_fft, a)->data();
   REQUIRE(a_ptr_after == a_ptr);
 }
+
+TEST_CASE("mel filters refuse n_mels by its name", "[mel]") {
+  CHECK_THROWS_WITH(mel_frequencies(0, 0.0f, 8000.0f, false),
+                    "n_mels must be an integer in [1, 2147483647]");
+  MelFilterConfig config;
+  config.n_mels = 0;
+  CHECK_THROWS_WITH(create_mel_filterbank(22050, 2048, config),
+                    "n_mels must be an integer in [1, 4096]");
+  config.n_mels = kMaxMelBands + 1;
+  CHECK_THROWS_WITH(create_mel_filterbank(22050, 2048, config),
+                    "n_mels must be an integer in [1, 4096]");
+}

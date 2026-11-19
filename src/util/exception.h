@@ -42,12 +42,21 @@ class SonareException : public std::runtime_error {
 ///          constrains.
 class SonareParameterRefusal : public SonareException {
  public:
-  enum class Form { Predicate, UnknownKey, Relation };
+  /// @brief WrongType reads as a Predicate does; it and UnknownKey are shape errors, refusing the
+  ///        request's form rather than a value's domain (TypeError on the JS surfaces).
+  enum class Form { Predicate, WrongType, UnknownKey, Relation };
 
   /// @brief A refusal reading "<subject> <predicate>".
   static SonareParameterRefusal predicate(ErrorCode code, const std::string& subject,
                                           const std::string& predicate) {
     return SonareParameterRefusal(code, Form::Predicate, {subject}, predicate, std::string(),
+                                  std::string(), false);
+  }
+
+  /// @brief A refusal reading "<subject> <predicate>" for a value of the wrong type.
+  static SonareParameterRefusal wrong_type(ErrorCode code, const std::string& subject,
+                                           const std::string& predicate) {
+    return SonareParameterRefusal(code, Form::WrongType, {subject}, predicate, std::string(),
                                   std::string(), false);
   }
 
@@ -70,6 +79,9 @@ class SonareParameterRefusal : public SonareException {
   }
 
   Form form() const { return form_; }
+  /// @brief Whether the refusal is of the request's shape (an unknown key or a wrong type) rather
+  ///        than of a value's domain.
+  bool shape_error() const { return form_ == Form::WrongType || form_ == Form::UnknownKey; }
   /// @brief The first subject.
   const std::string& subject() const { return subjects_.front(); }
   /// @brief Every subject, in the order the text names them.
@@ -114,7 +126,9 @@ class SonareParameterRefusal : public SonareException {
   static std::string compose(Form form, const std::vector<std::string>& subjects,
                              const std::string& predicate, const std::string& renamed_to,
                              const std::string& expected) {
-    if (form == Form::Predicate) return subjects.front() + " " + predicate;
+    if (form == Form::Predicate || form == Form::WrongType) {
+      return subjects.front() + " " + predicate;
+    }
     if (form == Form::UnknownKey) {
       std::string text = "unknown key " + subjects.front();
       if (!renamed_to.empty()) {

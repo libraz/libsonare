@@ -16,6 +16,10 @@ struct WaveformPeaksResult {
   size_t samples_per_bucket = 0;
 };
 
+/// @brief Refuses a zero bucket width, naming samples_per_bucket.
+/// @throws SonareParameterRefusal(InvalidParameter).
+void validate_samples_per_bucket(size_t samples_per_bucket);
+
 /// @brief Compute per-channel min/max buckets from an interleaved buffer.
 /// @details `samples` holds `frames * channels` values in channel-interleaved
 ///          order. The result arrays are channel-major:

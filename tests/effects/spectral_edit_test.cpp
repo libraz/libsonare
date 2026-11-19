@@ -314,11 +314,13 @@ TEST_CASE("spectral_edit rejects invalid parameters", "[spectral_edit]") {
     SpectralEditConfig cfg = default_config();
     cfg.n_fft = 2000;
     REQUIRE_THROWS_AS(spectral_edit(audio, cfg, nullptr, 0), SonareException);
-    REQUIRE_THROWS_WITH(spectral_edit(audio, cfg, nullptr, 0),
-                        Catch::Matchers::ContainsSubstring("nFft must be a power of two"));
+    REQUIRE_THROWS_WITH(
+        spectral_edit(audio, cfg, nullptr, 0),
+        Catch::Matchers::ContainsSubstring("n_fft must be a power of two in [4, 262144]"));
     cfg.n_fft = 6;  // even, so the shared even-size rule would have named a different constraint
-    REQUIRE_THROWS_WITH(spectral_edit(audio, cfg, nullptr, 0),
-                        Catch::Matchers::ContainsSubstring("nFft must be a power of two"));
+    REQUIRE_THROWS_WITH(
+        spectral_edit(audio, cfg, nullptr, 0),
+        Catch::Matchers::ContainsSubstring("n_fft must be a power of two in [4, 262144]"));
   }
   SECTION("n_fft below the four-point floor, whatever the window") {
     SpectralEditConfig cfg = default_config();
@@ -327,8 +329,9 @@ TEST_CASE("spectral_edit rejects invalid parameters", "[spectral_edit]") {
     for (const WindowType window : {WindowType::Hann, WindowType::Rectangular}) {
       cfg.window = window;
       REQUIRE_THROWS_AS(spectral_edit(audio, cfg, nullptr, 0), SonareException);
-      REQUIRE_THROWS_WITH(spectral_edit(audio, cfg, nullptr, 0),
-                          Catch::Matchers::ContainsSubstring("nFft must be a power of two"));
+      REQUIRE_THROWS_WITH(
+          spectral_edit(audio, cfg, nullptr, 0),
+          Catch::Matchers::ContainsSubstring("n_fft must be a power of two in [4, 262144]"));
     }
     cfg.n_fft = 4;
     cfg.hop_length = 2;
@@ -362,7 +365,7 @@ TEST_CASE("spectral_edit bounds n_fft by magnitude and not only by shape", "[spe
     } catch (const SonareException& e) {
       const std::string message = e.what();
       REQUIRE(e.code() == ErrorCode::InvalidParameter);
-      REQUIRE(message.find("nFft") != std::string::npos);
+      REQUIRE(message.find("n_fft") != std::string::npos);
       REQUIRE(message.find(std::to_string(kSpectralEditMaxNFft)) != std::string::npos);
     }
   }

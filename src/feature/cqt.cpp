@@ -19,6 +19,7 @@
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
 #include "util/parallel_for.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -216,9 +217,14 @@ const std::complex<float>& CqtResult::at(int bin, int frame) const {
   return data_[bin * n_frames_ + frame];
 }
 
-void validate_cqt_fmin(float fmin) {
-  SONARE_CHECK_MSG(numeric::finite_positive(fmin), ErrorCode::InvalidParameter,
-                   "fmin must be finite and > 0, got " + util::to_text(fmin));
+void validate_cqt_fmin(float fmin) { util::check::greater_than(fmin, 0.0, "fmin"); }
+
+void validate_cqt_config(const CqtConfig& config) {
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  validate_cqt_fmin(config.fmin);
+  util::check::integer_at_least(config.n_bins, 1, "n_bins");
+  util::check::integer_at_least(config.bins_per_octave, 1, "bins_per_octave");
+  util::check::greater_than(config.filter_scale, 0.0, "filter_scale");
 }
 
 // CqtKernel implementation
@@ -524,14 +530,8 @@ std::vector<std::complex<float>> apply_sparse_kernel_frames(
 }  // namespace detail
 
 CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback progress_callback) {
-  validate_cqt_fmin(config.fmin);
+  validate_cqt_config(config);
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.fmin) && config.fmin > 0.0f &&
-                   std::isfinite(config.filter_scale) && config.filter_scale > 0.0f,
-               ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
 
@@ -660,11 +660,8 @@ Audio icqt(const CqtResult& cqt_result, int length) {
 }
 
 CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
+  validate_cqt_config(config);
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  validate_cqt_fmin(config.fmin);
 
   const int sr = audio.sample_rate();
   // librosa.pseudo_cqt: |basis| . |Hann STFT| at the kernel's own FFT size,
@@ -713,11 +710,8 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
 }
 
 CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
+  validate_cqt_config(config);
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  validate_cqt_fmin(config.fmin);
 
   const int sr = audio.sample_rate();
   std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);

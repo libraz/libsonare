@@ -1049,3 +1049,10 @@ TEST_CASE("raising the relative threshold never adds a boundary", "[boundary_det
     looser = frames;
   }
 }
+
+TEST_CASE("validate_boundary_config requires a feature stream", "[boundary_detector]") {
+  BoundaryConfig config;
+  config.use_mfcc = false;
+  config.use_chroma = false;
+  REQUIRE_THROWS_WITH(validate_boundary_config(config), "use_mfcc or use_chroma must be set");
+}

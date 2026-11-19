@@ -620,15 +620,17 @@ TEST_CASE("compute_cent_spectrum names the axis field and its bound when it refu
   CentSpectrumConfig fine;
   fine.cents_per_bin = 0.5f;
   REQUIRE_THROWS_WITH(compute_cent_spectrum(spectrogram, fine),
-                      ContainsSubstring("centsPerBin") && ContainsSubstring("1 cent"));
+                      "cents_per_bin must be finite and at least 1");
 
   CentSpectrumConfig bad_ref;
   bad_ref.ref_hz = 0.0f;
-  REQUIRE_THROWS_WITH(compute_cent_spectrum(spectrogram, bad_ref), ContainsSubstring("centRefHz"));
+  REQUIRE_THROWS_WITH(compute_cent_spectrum(spectrogram, bad_ref),
+                      "ref_hz must be finite and greater than 0");
 
   CentSpectrumConfig bad_max;
   bad_max.max_hz = 27.5f;
-  REQUIRE_THROWS_WITH(compute_cent_spectrum(spectrogram, bad_max), ContainsSubstring("centMaxHz"));
+  REQUIRE_THROWS_WITH(compute_cent_spectrum(spectrogram, bad_max),
+                      "max_hz must be finite and greater than ref_hz");
 }
 
 TEST_CASE("compute_cent_spectrum rejects a one-frame spectrogram and a malformed axis",
@@ -2861,4 +2863,16 @@ TEST_CASE("attack_window_ms starts a ridge at the strike its attack reading plac
   frames[1][0].attack_frames = kNaN;
   REQUIRE(code_of([&] { track_f0_ridges(frames, kHopLength, kSampleRate); }) ==
           sonare::ErrorCode::InvalidParameter);
+}
+
+TEST_CASE("track_f0_ridges refuses reattack_ratio by its name", "[polyphonic_f0]") {
+  const std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 4);
+  for (const float ratio : {1.0f, 0.5f, -1.0f, std::numeric_limits<float>::infinity(),
+                            std::numeric_limits<float>::quiet_NaN()}) {
+    RidgeConfig config;
+    config.reattack_ratio = ratio;
+    INFO("reattack_ratio " << ratio);
+    CHECK_THROWS_WITH(track_f0_ridges(frames, kHopLength, kSampleRate, config),
+                      "reattack_ratio must be 0 or finite and greater than 1");
+  }
 }

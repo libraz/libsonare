@@ -5,6 +5,7 @@
 
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 namespace {
@@ -43,11 +44,17 @@ MinMax scalar_minmax_interleaved_channel(const float* samples, size_t start, siz
 
 }  // namespace
 
+void validate_samples_per_bucket(size_t samples_per_bucket) {
+  constexpr size_t kMaxLong = static_cast<size_t>(std::numeric_limits<long long>::max());
+  util::check::integer_at_least(static_cast<long long>(std::min(samples_per_bucket, kMaxLong)), 1,
+                                "samples_per_bucket");
+}
+
 WaveformPeaksResult waveform_peaks(const float* samples, size_t frames, int channels,
                                    size_t samples_per_bucket) {
   SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(samples_per_bucket > 0, ErrorCode::InvalidParameter);
+  validate_samples_per_bucket(samples_per_bucket);
   const size_t channel_count = static_cast<size_t>(channels);
   SONARE_CHECK(frames <= std::numeric_limits<size_t>::max() / channel_count,
                ErrorCode::InvalidParameter);

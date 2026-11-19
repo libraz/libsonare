@@ -12,6 +12,7 @@
 #include "feature/chroma.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -94,14 +95,14 @@ constexpr int kMinKeyHpssHopLength = 16;
 ///         hop_length below @ref kMinKeyHpssHopLength with use_hpss, or a negative or
 ///         non-finite high_pass_hz.
 inline void validate_key_config(const KeyConfig& config) {
-  SONARE_CHECK_MSG(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
-                   "KeyConfig: n_fft and hop_length must be positive");
-  SONARE_CHECK_MSG(!config.use_hpss || config.hop_length >= kMinKeyHpssHopLength,
-                   ErrorCode::InvalidParameter,
-                   "KeyConfig: hop_length must be at least " +
-                       std::to_string(kMinKeyHpssHopLength) + " when use_hpss is set");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.high_pass_hz), ErrorCode::InvalidParameter,
-                   "KeyConfig: high_pass_hz must be finite and non-negative");
+  util::check::integer_at_least(config.n_fft, 1, "n_fft");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  if (config.use_hpss && config.hop_length < kMinKeyHpssHopLength) {
+    util::check::refuse_relation(
+        {"hop_length", "use_hpss"},
+        "{0} must be at least " + std::to_string(kMinKeyHpssHopLength) + " when {1} is set");
+  }
+  util::check::at_least(config.high_pass_hz, 0.0, "high_pass_hz");
 }
 
 /// @brief Key analyzer using chroma correlation.

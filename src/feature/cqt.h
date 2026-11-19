@@ -168,6 +168,11 @@ class CqtKernel {
 /// @throws SonareException(InvalidParameter).
 void validate_cqt_fmin(float fmin);
 
+/// @brief Refuses a CQT configuration member outside its domain, naming it.
+/// @details Checks hop_length, fmin, n_bins, bins_per_octave and filter_scale in that order.
+/// @throws SonareParameterRefusal(InvalidParameter).
+void validate_cqt_config(const CqtConfig& config);
+
 /// @brief Computes Constant-Q Transform.
 /// @param audio Input audio
 /// @param config CQT configuration

@@ -16,6 +16,7 @@
 #include "util/non_finite_sample.h"
 #include "util/numeric_validation.h"
 #include "util/padding.h"
+#include "util/parameter_checks.h"
 #include "util/reflect_padding.h"
 
 namespace sonare {
@@ -328,12 +329,9 @@ void check_yin_rate_params(int sr, const PitchConfig& config) {
 
 int validate_yin_track_input(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK_MSG(!audio.empty(), ErrorCode::InvalidParameter, "audio must not be empty");
-  SONARE_CHECK_MSG(config.frame_length > 0, ErrorCode::InvalidParameter,
-                   "frame_length must be > 0");
-  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
-  // Exclusive lower bound, so not SONARE_CHECK_RANGE.
-  SONARE_CHECK_MSG(config.threshold > 0.0f && config.threshold <= 1.0f, ErrorCode::InvalidParameter,
-                   "threshold must be in (0, 1], got " + util::to_text(config.threshold));
+  util::check::integer_at_least(config.frame_length, 1, "frame_length");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::in_interval(config.threshold, 0.0, false, 1.0, true, "threshold");
   // The same domain the piptrack front-end already enforces on these two
   // fields. Both engines are reachable from one public entry point (the pitch
   // command's --algorithm switch), so a config either engine rejects has to be
@@ -342,11 +340,10 @@ int validate_yin_track_input(const Audio& audio, const PitchConfig& config) {
   // untuned signal rather than as the swapped-arguments mistake it is. Checked
   // before the short-signal early returns so the verdict is a property of the
   // arguments, not of the input length.
-  SONARE_CHECK_MSG(numeric::finite_positive(config.fmin), ErrorCode::InvalidParameter,
-                   "fmin must be finite and > 0, got " + util::to_text(config.fmin));
-  SONARE_CHECK_MSG(numeric::finite(config.fmax) && config.fmax > config.fmin,
-                   ErrorCode::InvalidParameter,
-                   "fmax must be finite and > fmin, got " + util::to_text(config.fmax));
+  util::check::greater_than(config.fmin, 0.0, "fmin");
+  if (!(numeric::finite(config.fmax) && config.fmax > config.fmin)) {
+    util::check::refuse_relation({"fmax", "fmin"}, "{0} must be finite and greater than {1}");
+  }
 
   const int sr = audio.sample_rate();
   check_yin_rate_params(sr, config);
@@ -708,17 +705,16 @@ float midi_to_freq(float midi) { return midi_to_hz(midi); }
 PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmin, float fmax,
                         float threshold) {
   SONARE_CHECK_MSG(!audio.empty(), ErrorCode::InvalidParameter, "audio must not be empty");
-  SONARE_CHECK_MSG(n_fft > 0, ErrorCode::InvalidParameter, "n_fft must be > 0");
-  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
-  SONARE_CHECK_MSG(numeric::finite_positive(fmin), ErrorCode::InvalidParameter,
-                   "fmin must be finite and > 0, got " + util::to_text(fmin));
-  SONARE_CHECK_MSG(numeric::finite(fmax) && fmax > fmin, ErrorCode::InvalidParameter,
-                   "fmax must be finite and > fmin, got " + util::to_text(fmax));
+  util::check::integer_at_least(n_fft, 1, "n_fft");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::greater_than(fmin, 0.0, "fmin");
+  if (!(numeric::finite(fmax) && fmax > fmin)) {
+    util::check::refuse_relation({"fmax", "fmin"}, "{0} must be finite and greater than {1}");
+  }
   // An infinite threshold makes `mag > threshold` false in every bin, so the scan
   // reports "no pitch anywhere" for a request it could not evaluate. In the core
   // rather than the C-ABI wrapper: WASM calls this function directly.
-  SONARE_CHECK_MSG(numeric::finite_non_negative(threshold), ErrorCode::InvalidParameter,
-                   "threshold must be finite and >= 0, got " + util::to_text(threshold));
+  util::check::at_least(threshold, 0.0, "threshold");
 
   StftConfig cfg;
   cfg.n_fft = n_fft;
@@ -813,11 +809,13 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
   return out;
 }
 
+void validate_tuning_params(float resolution, int bins_per_octave) {
+  util::check::in_interval(resolution, 0.0, false, 1.0, false, "resolution");
+  util::check::integer_at_least(bins_per_octave, 1, "bins_per_octave");
+}
+
 float pitch_tuning(const std::vector<float>& frequencies, float resolution, int bins_per_octave) {
-  // Exclusive on both ends, so not SONARE_CHECK_RANGE.
-  SONARE_CHECK_MSG(resolution > 0.0f && resolution < 1.0f, ErrorCode::InvalidParameter,
-                   "resolution must be in (0, 1), got " + util::to_text(resolution));
-  SONARE_CHECK_MSG(bins_per_octave > 0, ErrorCode::InvalidParameter, "bins_per_octave must be > 0");
+  validate_tuning_params(resolution, bins_per_octave);
 
   // Convert to log-frequency bin offsets relative to A4.
   // librosa: residual = mod(bins_per_octave * log2(freq/440) + 0.5, 1.0) - 0.5
@@ -866,6 +864,7 @@ float pitch_tuning(const std::vector<float>& frequencies, float resolution, int 
 
 float estimate_tuning(const Audio& audio, int n_fft, int hop_length, float resolution,
                       int bins_per_octave) {
+  validate_tuning_params(resolution, bins_per_octave);
   PiptrackResult pp = piptrack(audio, n_fft, hop_length);
 
   // librosa.feature.estimate_tuning thresholds piptrack peaks against a SINGLE

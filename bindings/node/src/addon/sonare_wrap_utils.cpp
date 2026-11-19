@@ -29,9 +29,22 @@ std::string ErrorMessageForCode(SonareError err) {
   return sonare_error_message(err);
 }
 
-const char* ExceptionMessage(const std::exception& e) {
+std::string ExceptionMessage(const std::exception& e) {
+  if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(&e)) {
+    return sonare::util::check::camel_spelled(*refusal).what();
+  }
   const char* what = e.what();
   return what + sonare_c_entries::CEntryPrefixLength(what);
+}
+
+bool IsShapeRefusal(const std::exception& e) {
+  const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(&e);
+  return refusal != nullptr && refusal->shape_error();
+}
+
+bool LastRefusalIsShape() {
+  const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
+  return refusal != nullptr && refusal->shape_error();
 }
 
 const char* ErrorCodeName(SonareError err) {
@@ -85,7 +98,13 @@ void SetSonareErrorProperties(Napi::Env env, Napi::Object error, SonareError err
 }  // namespace
 
 Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message) {
+  return MakeSonareError(env, err, message, false);
+}
+
+Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message,
+                            bool shape_refusal) {
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    if (shape_refusal) return Napi::TypeError::New(env, message);
     return Napi::RangeError::New(env, message);
   }
   Napi::Error error = Napi::Error::New(env, message);
@@ -95,7 +114,8 @@ Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& m
 
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix) {
   if (env.IsExceptionPending()) return;
-  MakeSonareError(env, err, prefix + ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+  MakeSonareError(env, err, prefix + ErrorMessageForCode(err), LastRefusalIsShape())
+      .ThrowAsJavaScriptException();
 }
 
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message) {
@@ -127,11 +147,6 @@ void ThrowCurrentException(Napi::Env env) {
     throw;
   } catch (const Napi::Error& e) {
     e.ThrowAsJavaScriptException();
-  } catch (const sonare::SonareParameterRefusal& e) {
-    ThrowSonareErrorMessage(env, CErrorFromException(e),
-                            sonare::util::check::camel_spelled(e).what());
-  } catch (const sonare::SonareException& e) {
-    ThrowSonareErrorMessage(env, CErrorFromException(e), ExceptionMessage(e));
   } catch (const std::exception& e) {
     ThrowStdException(env, e);
   } catch (...) {
@@ -150,7 +165,9 @@ Napi::Promise RejectedFromPending(Napi::Env env) {
 void ThrowLastSonareError(Napi::Env env, const std::string& prefix, SonareError fallback) {
   SonareError code = sonare_last_error_code();
   if (code == SONARE_OK) code = fallback;
-  ThrowSonareErrorMessage(env, code, prefix + ErrorMessageForCode(code));
+  if (env.IsExceptionPending()) return;
+  MakeSonareError(env, code, prefix + ErrorMessageForCode(code), LastRefusalIsShape())
+      .ThrowAsJavaScriptException();
 }
 
 Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::string& what) {
@@ -177,23 +194,26 @@ Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::str
 
 void ThrowStdException(Napi::Env env, const std::exception& e) {
   if (const auto* coded = dynamic_cast<const sonare::SonareException*>(&e)) {
-    ThrowSonareErrorMessage(env, CErrorFromException(*coded), ExceptionMessage(e));
+    if (env.IsExceptionPending()) return;
+    MakeSonareError(env, CErrorFromException(*coded), ExceptionMessage(e), IsShapeRefusal(e))
+        .ThrowAsJavaScriptException();
     return;
   }
   ThrowSonareErrorMessage(env, static_cast<SonareError>(sonare::error_code_for_std_exception(e)),
                           ExceptionMessage(e));
 }
 
-void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err) {
+void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal) {
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    // The async worker built a plain Error; re-class it as the RangeError the
+    // The async worker built a plain Error; re-class it as the TypeError or RangeError the
     // synchronous path throws, so both report a refused argument alike.
-    Napi::Object range_error_proto =
-        env.Global().Get("RangeError").As<Napi::Object>().Get("prototype").As<Napi::Object>();
+    Napi::Object proto = env.Global()
+                             .Get(shape_refusal ? "TypeError" : "RangeError")
+                             .As<Napi::Object>()
+                             .Get("prototype")
+                             .As<Napi::Object>();
     Napi::Object object_ctor = env.Global().Get("Object").As<Napi::Object>();
-    object_ctor.Get("setPrototypeOf")
-        .As<Napi::Function>()
-        .Call(object_ctor, {error, range_error_proto});
+    object_ctor.Get("setPrototypeOf").As<Napi::Function>().Call(object_ctor, {error, proto});
     return;
   }
   SetSonareErrorProperties(env, error, err);

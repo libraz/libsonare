@@ -16,16 +16,14 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
 Chroma chord_chroma(const Audio& audio, const ChordChromaConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK_MSG(is_valid_chroma_tuning(config.tuning), ErrorCode::InvalidParameter,
-                   "ChordChromaConfig: tuning must be finite and in [-0.5, 0.5)");
-  SONARE_CHECK_MSG(std::isfinite(config.highpass_hz) && config.highpass_hz >= 0.0f,
-                   ErrorCode::InvalidParameter,
-                   "ChordChromaConfig: highpass_hz must be finite and non-negative");
+  util::check::in_interval(config.tuning, -0.5, true, 0.5, false, "tuning");
+  util::check::at_least(config.highpass_hz, 0.0, "highpass_hz");
   const int sr = audio.sample_rate();
 
   Audio source = audio;
@@ -110,9 +108,9 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
   const ChordConfig& config = config_;
   init_templates();
   signal_duration_ = static_cast<float>(audio.size()) / static_cast<float>(audio.sample_rate());
-  SONARE_CHECK_MSG(!config_.tuning || is_valid_chroma_tuning(*config_.tuning),
-                   ErrorCode::InvalidParameter,
-                   "ChordConfig: tuning must be finite and in [-0.5, 0.5)");
+  if (config_.tuning) {
+    util::check::in_interval(*config_.tuning, -0.5, true, 0.5, false, "tuning");
+  }
   if (!config_.tuning) config_.tuning = measure_tuning(audio);
   const float tuning = *config_.tuning;
 

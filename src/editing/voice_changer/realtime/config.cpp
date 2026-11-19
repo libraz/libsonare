@@ -56,12 +56,15 @@ std::string field_path(std::string_view member, ConfigFieldSpelling spelling) {
     case ConfigFieldSpelling::PresetDocument:
       return schema::child_path("dsp", member);
     case ConfigFieldSpelling::FlatPod:
+    case ConfigFieldSpelling::CStruct:
       break;
   }
   // A flat POD key joins section and field in camel case; an enum named after its section is
   // the section alone.
-  if (member == "voiceEngine.engine") return "voiceEngine";
-  if (member == "reverbVariation.variation") return "reverbVariation";
+  // The C struct's field is the flat key in snake case.
+  const bool snake = spelling == ConfigFieldSpelling::CStruct;
+  if (member == "voiceEngine.engine") return snake ? "voice_engine" : "voiceEngine";
+  if (member == "reverbVariation.variation") return snake ? "reverb_variation" : "reverbVariation";
   std::string out;
   bool upper = false;
   for (const char c : member) {
@@ -69,7 +72,13 @@ std::string field_path(std::string_view member, ConfigFieldSpelling spelling) {
       upper = true;
       continue;
     }
-    out += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c;
+    const bool cap = upper || std::isupper(static_cast<unsigned char>(c));
+    if (snake && cap) {
+      out += '_';
+      out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    } else {
+      out += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c;
+    }
     upper = false;
   }
   return out;

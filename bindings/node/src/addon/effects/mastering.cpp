@@ -589,6 +589,7 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
       result_ = chain.process_mono(samples_.data(), samples_.size(), sample_rate_);
     } catch (const sonare::SonareException& e) {
       error_code_ = sonare_node::CErrorFromException(e);
+      shape_refusal_ = sonare_node::IsShapeRefusal(e);
       SetError(sonare_node::ExceptionMessage(e));
     } catch (const std::bad_alloc&) {
       error_code_ = SONARE_ERROR_OUT_OF_MEMORY;
@@ -605,7 +606,7 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
 
   void OnError(const Napi::Error& error) override {
     Napi::HandleScope scope(Env());
-    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_);
+    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_, shape_refusal_);
     deferred_.Reject(error.Value());
   }
 
@@ -619,6 +620,7 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
   std::optional<std::string> overrides_;
   sonare::mastering::api::MonoChainResult result_;
   SonareError error_code_ = SONARE_ERROR_UNKNOWN;
+  bool shape_refusal_ = false;
 };
 
 class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
@@ -645,6 +647,7 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
       result_ = chain.process_stereo(left_.data(), right_.data(), left_.size(), sample_rate_);
     } catch (const sonare::SonareException& e) {
       error_code_ = sonare_node::CErrorFromException(e);
+      shape_refusal_ = sonare_node::IsShapeRefusal(e);
       SetError(sonare_node::ExceptionMessage(e));
     } catch (const std::bad_alloc&) {
       error_code_ = SONARE_ERROR_OUT_OF_MEMORY;
@@ -661,7 +664,7 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
 
   void OnError(const Napi::Error& error) override {
     Napi::HandleScope scope(Env());
-    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_);
+    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_, shape_refusal_);
     deferred_.Reject(error.Value());
   }
 
@@ -676,6 +679,7 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
   std::optional<std::string> overrides_;
   sonare::mastering::api::StereoChainResult result_;
   SonareError error_code_ = SONARE_ERROR_UNKNOWN;
+  bool shape_refusal_ = false;
 };
 
 }  // namespace

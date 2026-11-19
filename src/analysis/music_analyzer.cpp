@@ -12,6 +12,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 #ifndef __EMSCRIPTEN__
 #include <future>
@@ -22,55 +23,48 @@ namespace sonare {
 void validate_config(const MusicAnalyzerConfig& config) {
   // A real-valued FFT of an odd size has no n_fft/2 + 1 bin layout, so an odd
   // size is rejected rather than silently rounded.
-  SONARE_CHECK_MSG(config.n_fft >= 2 && (config.n_fft & 1) == 0, ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: nFft must be an even value of at least 2");
-  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: hopLength must be positive");
-  SONARE_CHECK_MSG(numeric::finite_positive(config.bpm_min), ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: bpmMin must be finite and positive");
-  SONARE_CHECK_MSG(numeric::finite(config.bpm_max) && config.bpm_max >= config.bpm_min,
-                   ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: bpmMax must be finite and at least bpmMin");
-  SONARE_CHECK_MSG(numeric::finite_positive(config.start_bpm), ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: startBpm must be finite and positive");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.chroma_highpass_hz),
-                   ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: chromaHighpassHz must be finite and non-negative");
-  SONARE_CHECK_MSG(config.chroma_hop_multiplier > 0, ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: chromaHopMultiplier must be positive");
-  SONARE_CHECK_MSG(!config.tuning || is_valid_chroma_tuning(*config.tuning),
-                   ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: tuning must be finite and in [-0.5, 0.5)");
+  util::check::even_integer_in_range(config.n_fft, 2, std::numeric_limits<int>::max(), "n_fft");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::greater_than(config.bpm_min, 0.0, "bpm_min");
+  if (!(numeric::finite(config.bpm_max) && config.bpm_max >= config.bpm_min)) {
+    util::check::refuse_relation({"bpm_max", "bpm_min"}, "{0} must be finite and at least {1}");
+  }
+  util::check::greater_than(config.start_bpm, 0.0, "start_bpm");
+  util::check::at_least(config.chroma_highpass_hz, 0.0, "chroma_highpass_hz");
+  util::check::integer_at_least(config.chroma_hop_multiplier, 1, "chroma_hop_multiplier");
+  if (config.tuning) util::check::in_interval(*config.tuning, -0.5, true, 0.5, false, "tuning");
   // A non-positive beam width disables the HMM beam cut instead of erroring,
   // which turns chord smoothing into an order-of-magnitude slower full search.
-  SONARE_CHECK_MSG(config.chord_hmm_beam_width > 0, ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: chordHmmBeamWidth must be positive");
-  SONARE_CHECK_MSG(config.tempo_update_interval_beats > 0, ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: tempoUpdateIntervalBeats must be positive");
+  util::check::integer_at_least(config.chord_hmm_beam_width, 1, "chord_hmm_beam_width");
+  util::check::integer_at_least(config.tempo_update_interval_beats, 1,
+                                "tempo_update_interval_beats");
   // An empty candidate set makes the meter estimator return a fixed
   // low-confidence 4/4 rather than searching, which reads as a detection
   // result. Reject it instead so a caller who cleared the list is told.
-  SONARE_CHECK_MSG(!config.meter_candidate_numerators.empty(), ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: meterCandidateNumerators must not be empty");
-  SONARE_CHECK_MSG(
-      config.meter_candidate_numerators.size() <= static_cast<size_t>(kMaxMeterCandidateNumerators),
-      ErrorCode::InvalidParameter,
-      "MusicAnalyzerConfig: meterCandidateNumerators must hold at most 16 entries");
+  if (config.meter_candidate_numerators.empty()) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
+                                            "meter_candidate_numerators", "must not be empty");
+  }
+  if (config.meter_candidate_numerators.size() >
+      static_cast<size_t>(kMaxMeterCandidateNumerators)) {
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, "meter_candidate_numerators",
+        "must hold at most " + std::to_string(kMaxMeterCandidateNumerators) + " entries");
+  }
   for (int numerator : config.meter_candidate_numerators) {
-    SONARE_CHECK_MSG(
-        numerator >= kMinMeterCandidateNumerator && numerator <= kMaxMeterCandidateNumerator,
-        ErrorCode::InvalidParameter,
-        "MusicAnalyzerConfig: meterCandidateNumerators entries must be in [2, 32]");
+    if (numerator < kMinMeterCandidateNumerator || numerator > kMaxMeterCandidateNumerator) {
+      throw SonareParameterRefusal::predicate(
+          ErrorCode::InvalidParameter, "meter_candidate_numerators",
+          "must hold only integers in [" + std::to_string(kMinMeterCandidateNumerator) + ", " +
+              std::to_string(kMaxMeterCandidateNumerator) + "]");
+    }
   }
   // Only a power of two is a note value, and the estimator reports 8 itself
   // when it resolves a compound meter, so a non-power-of-two could never
   // round-trip through the reported signature. The ceiling is a separate
   // question, on kMaxMeterDenominator.
-  SONARE_CHECK_MSG(config.meter_denominator > 0 &&
-                       config.meter_denominator <= kMaxMeterDenominator &&
-                       (config.meter_denominator & (config.meter_denominator - 1)) == 0,
-                   ErrorCode::InvalidParameter,
-                   "MusicAnalyzerConfig: meterDenominator must be a power of two in [1, 32]");
+  util::check::power_of_two_in_range(config.meter_denominator, 1, kMaxMeterDenominator,
+                                     "meter_denominator");
 }
 
 MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& config)

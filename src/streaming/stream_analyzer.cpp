@@ -15,6 +15,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -48,31 +49,19 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// is a real core feature (although SOA bindings do not surface it) and window
   /// is an enum, so those two are intentionally not re-checked here. The legacy
   /// output_format selector is checked separately below.
-  const auto finite_positive = [](float v) { return std::isfinite(v) && v > 0.0f; };
-  const auto finite_non_negative = [](float v) { return std::isfinite(v) && v >= 0.0f; };
-  if (const char* oversized = stream_config_sizing_error(config_))
-    throw SonareException(ErrorCode::InvalidParameter, oversized);
-  if (config_.n_fft <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "StreamConfig: n_fft must be positive");
-  if (config_.n_mels <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "StreamConfig: n_mels must be positive");
-  if (config_.hop_length > config_.n_fft)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: hop_length must not exceed n_fft");
-  if (!finite_non_negative(config_.fmin) || !finite_non_negative(config_.fmax))
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: fmin/fmax must be finite and non-negative");
-  if (config_.fmax > 0.0f && config_.fmax <= config_.fmin)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: fmax must be greater than fmin");
-  if (!finite_positive(config_.tuning_ref_hz) || config_.tuning_ref_hz < kMinTuningRefHz ||
-      config_.tuning_ref_hz > kMaxTuningRefHz)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: tuning_ref_hz must be finite and within 220..880 Hz");
-  if (!finite_positive(config_.key_update_interval_sec) ||
-      !finite_positive(config_.bpm_update_interval_sec))
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: key/bpm_update_interval_sec must be finite and positive");
+  validate_stream_config_sizing(config_);
+  if (config_.hop_length > config_.n_fft) {
+    util::check::refuse_relation({"hop_length", "n_fft"}, "{0} must be at most {1}");
+  }
+  util::check::at_least(config_.fmin, 0.0, "fmin");
+  util::check::at_least(config_.fmax, 0.0, "fmax");
+  if (config_.fmax > 0.0f && config_.fmax <= config_.fmin) {
+    util::check::refuse_relation({"fmax", "fmin"}, "{0} must be 0 or greater than {1}");
+  }
+  // Named as every public surface spells the member: reference_hz (C, Python), referenceHz (JS).
+  util::check::in_range(config_.tuning_ref_hz, kMinTuningRefHz, kMaxTuningRefHz, "reference_hz");
+  util::check::greater_than(config_.key_update_interval_sec, 0.0, "key_update_interval_sec");
+  util::check::greater_than(config_.bpm_update_interval_sec, 0.0, "bpm_update_interval_sec");
 
   /// Reject loop/sizing parameters that the C-ABI also rejects, so direct
   /// C++/Node/WASM construction is consistent with the C-ABI oracle instead of
@@ -84,28 +73,20 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// breaks the emission throttle. The C-ABI validates before constructing, so
   /// it never reaches here with these values; this guard catches the binding
   /// layers that construct directly.
-  if (config_.hop_length <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "StreamConfig: hop_length must be positive");
-  if (config_.emit_every_n_frames <= 0)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: emit_every_n_frames must be positive");
-  if (config_.magnitude_downsample <= 0)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: magnitude_downsample must be positive");
-  if (config_.max_pending_frames == 0 || config_.max_pending_frames > kMaxStreamPendingFrames) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: max_pending_frames is outside supported bounds");
-  }
-  if (config_.max_progression_entries == 0 ||
-      config_.max_progression_entries > kMaxStreamProgressionEntries) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: max_progression_entries is outside supported bounds");
-  }
+  util::check::integer_at_least(config_.hop_length, 1, "hop_length");
+  util::check::integer_at_least(config_.emit_every_n_frames, 1, "emit_every_n_frames");
+  util::check::integer_at_least(config_.magnitude_downsample, 1, "magnitude_downsample");
+  util::check::integer_in_range(static_cast<long long>(config_.max_pending_frames), 1,
+                                static_cast<long long>(kMaxStreamPendingFrames),
+                                "max_pending_frames");
+  util::check::integer_in_range(static_cast<long long>(config_.max_progression_entries), 1,
+                                static_cast<long long>(kMaxStreamProgressionEntries),
+                                "max_progression_entries");
 
   if (config_.output_format != OutputFormat::Float32) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "StreamConfig: output_format is deprecated; use an explicit quantized read method");
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, "output_format",
+        "must be Float32; read quantized output through an explicit quantized read method");
   }
 
   // Onset is derived from log-mel flux. Keep that dependency internal so

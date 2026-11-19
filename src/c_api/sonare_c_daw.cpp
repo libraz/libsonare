@@ -1002,11 +1002,13 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
         config->hpss_kernel_percussive, extractor_config.separation);
     if (separation_error != SONARE_OK) return separation_error;
 
-    if (!std::isfinite(config->onset_delta) || !std::isfinite(config->max_event_ms) ||
-        !std::isfinite(config->min_percussive_ratio) || config->onset_wait < 0 ||
-        config->max_event_ms < 0.0f || config->min_percussive_ratio < 0.0f ||
-        config->min_percussive_ratio > 1.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err = run_validation([&] {
+          editing::event_model::check_percussive_extract_controls(
+              config->onset_wait, config->onset_delta, config->max_event_ms,
+              config->min_percussive_ratio);
+        });
+        err != SONARE_OK) {
+      return err;
     }
     if (config->onset_wait != 0) extractor_config.onset.wait = config->onset_wait;
     if (config->onset_delta != 0.0f) extractor_config.onset.delta = config->onset_delta;

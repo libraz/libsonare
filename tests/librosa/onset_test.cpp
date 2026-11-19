@@ -169,7 +169,7 @@ TEST_CASE("the onset entry inherits the shared STFT size ceiling", "[onset][edge
       const std::string message = e.what();
       CAPTURE(message);
       REQUIRE(e.code() == ErrorCode::InvalidParameter);
-      REQUIRE(message.find("nFft") != std::string::npos);
+      REQUIRE(message.find("n_fft") != std::string::npos);
     }
   }
 

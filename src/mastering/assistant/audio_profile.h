@@ -121,6 +121,11 @@ struct AudioProfileConfig {
   bool detect_defects = false;
 };
 
+/// @brief Refuses an AudioProfileConfig outside the argument domain every surface shares.
+/// @throws SonareParameterRefusal(InvalidParameter) unless n_fft is in [1, kMaxStftNFft],
+///         hop_length is at least 1 and true_peak_oversample is one of 1, 2, 4, 8, 16.
+void validate_audio_profile_config(const AudioProfileConfig& config);
+
 AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
                                    const AudioProfileConfig& config = {});
 AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config = {});

@@ -10,6 +10,7 @@
 #include "feature/mel_spectrogram.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -35,12 +36,11 @@ struct TimbreConfig {
 /// @throws SonareException(InvalidParameter) unless n_fft, hop_length, n_mels and n_mfcc are
 ///         positive and window_sec is finite and positive.
 inline void validate_timbre_config(const TimbreConfig& config) {
-  SONARE_CHECK_MSG(
-      config.n_fft > 0 && config.hop_length > 0 && config.n_mels > 0 && config.n_mfcc > 0,
-      ErrorCode::InvalidParameter,
-      "TimbreConfig: n_fft, hop_length, n_mels and n_mfcc must be positive");
-  SONARE_CHECK_MSG(numeric::finite_positive(config.window_sec), ErrorCode::InvalidParameter,
-                   "TimbreConfig: window_sec must be finite and positive");
+  util::check::integer_at_least(config.n_fft, 1, "n_fft");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_at_least(config.n_mels, 1, "n_mels");
+  util::check::integer_at_least(config.n_mfcc, 1, "n_mfcc");
+  util::check::greater_than(config.window_sec, 0.0, "window_sec");
 }
 
 /// @brief Timbre analyzer for extracting sound characteristics.

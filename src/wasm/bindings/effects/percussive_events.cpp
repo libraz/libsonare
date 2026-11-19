@@ -86,14 +86,8 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
   const float onset_delta = floatProperty(options, "onsetDelta", 0.0f);
   const float max_event_ms = floatProperty(options, "maxEventMs", 0.0f);
   const float min_percussive_ratio = floatProperty(options, "minPercussiveRatio", 0.0f);
-  if (!std::isfinite(onset_delta) || !std::isfinite(max_event_ms) ||
-      !std::isfinite(min_percussive_ratio) || onset_wait < 0 || max_event_ms < 0.0f ||
-      min_percussive_ratio < 0.0f || min_percussive_ratio > 1.0f) {
-    throw WasmRangeError(
-        "onsetDelta, maxEventMs and minPercussiveRatio must be finite, onsetWait must be an "
-        "integer in [0, 2147483647], maxEventMs must be at least 0, and minPercussiveRatio "
-        "must be in [0, 1]");
-  }
+  editing::event_model::check_percussive_extract_controls(onset_wait, onset_delta, max_event_ms,
+                                                          min_percussive_ratio);
   // config.onset keeps percussive_onset_defaults(), so backtracking stays on:
   // a span that opened after its own transient would report the next hit's peak
   // and leave its attack behind when muted. Only the two peak-picking knobs the

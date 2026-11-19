@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <chrono>
 #include <cmath>
 #include <complex>
@@ -1606,7 +1607,7 @@ TEST_CASE("The STFT layer bounds n_fft by magnitude and not only by shape", "[sp
       // Not OutOfMemory: reaching the allocator would report a failure that names
       // nothing the caller passed.
       REQUIRE(e.code() == ErrorCode::InvalidParameter);
-      REQUIRE(message.find("nFft") != std::string::npos);
+      REQUIRE(message.find("n_fft") != std::string::npos);
       REQUIRE(message.find(std::to_string(kMaxStftNFft)) != std::string::npos);
     }
   }
@@ -1755,4 +1756,14 @@ TEST_CASE("griffin_lim gives a single frame the same reconstruction at every ite
   const std::vector<float> wider(static_cast<size_t>(kNFft / 2 + 1) * 2, 1.0f);
   REQUIRE_FALSE(
       griffin_lim(wider.data(), kNFft / 2 + 1, 2, kNFft, kNFft / 4, 22050, two_frames).empty());
+}
+
+TEST_CASE("STFT geometry refusals name both members of a relation", "[spectrum]") {
+  StftConfig wide_window;
+  wide_window.win_length = wide_window.n_fft * 2;
+  REQUIRE_THROWS_WITH(validate_config(wide_window), "win_length must be at most n_fft");
+
+  REQUIRE_THROWS_WITH(validate_cola_geometry(512, 257), "hop_length must be at most n_fft / 2");
+  REQUIRE_THROWS_WITH(validate_cola_geometry(512, 128, WindowType::Hann, 1024),
+                      "win_length must be at most n_fft");
 }

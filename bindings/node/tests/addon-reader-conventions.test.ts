@@ -174,8 +174,6 @@ const NON_OPTION_SHARED_READERS: ReadonlySet<string> = new Set([
   // Reads a per-band array off a RESULT record (a room estimate), not off an
   // options bag, so a call to it says nothing about its caller's options.
   'FloatArrayProperty',
-  // Refuses keys outside a declared list; it reads no value, so it makes no caller an options reader.
-  'RefuseUnknownKeys',
   // Refuses unknown keys of a document element (a graph node or connection) by its path; it reads no value.
   'RefuseUnknownDocumentKeys',
   'RequiredIntProperty',

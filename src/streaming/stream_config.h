@@ -10,6 +10,7 @@
 #include "streaming/realtime_limits.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -149,17 +150,15 @@ struct StreamConfig {
   }
 };
 
-/// @brief Names the first sizing field of @p config that is outside its ceiling, or nullptr.
-/// @details The one place the stream analyzer's sample rate, n_fft and mel band count are bounded,
-///          so the constructor and the C ABI create refuse the same values before any allocation.
-///          n_fft is a duration at 44100 Hz, so the ceiling applies to the requested value
-///          whichever rate branch the analyzer later takes.
-inline const char* stream_config_sizing_error(const StreamConfig& config) noexcept {
-  if (!is_valid_realtime_sample_rate(static_cast<double>(config.sample_rate)))
-    return "StreamConfig: sample_rate must be within the supported range";
-  if (config.n_fft > kMaxStftNFft) return "StreamConfig: n_fft exceeds the supported maximum";
-  if (config.n_mels > kMaxMelBands) return "StreamConfig: n_mels exceeds the supported maximum";
-  return nullptr;
+/// @brief Refuses a sample rate, n_fft or mel band count outside the supported bounds.
+/// @details The one place these are bounded, so the constructor and the C ABI create refuse the
+///          same values before any allocation. n_fft is a duration at 44100 Hz, so the ceiling
+///          applies to the requested value whichever rate branch the analyzer later takes.
+inline void validate_stream_config_sizing(const StreamConfig& config) {
+  util::check::integer_in_range(config.sample_rate, kMinAudioSampleRate, kMaxAudioSampleRate,
+                                "sample_rate");
+  util::check::integer_in_range(config.n_fft, 1, kMaxStftNFft, "n_fft");
+  util::check::integer_in_range(config.n_mels, 1, kMaxMelBands, "n_mels");
 }
 
 /// @brief Rejects a config that a caller limited to the SOA read paths could

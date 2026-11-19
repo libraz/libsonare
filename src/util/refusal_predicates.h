@@ -124,6 +124,11 @@ inline std::string power_of_two_predicate(long long lo, long long hi) {
   return "must be a power of two in [" + std::to_string(lo) + ", " + std::to_string(hi) + "]";
 }
 
+/// @brief "must be an even integer in [lo, hi]".
+inline std::string even_integer_predicate(long long lo, long long hi) {
+  return "must be an even integer in [" + std::to_string(lo) + ", " + std::to_string(hi) + "]";
+}
+
 /// @brief "must be an odd integer in [lo, hi]".
 inline std::string odd_integer_predicate(long long lo, long long hi) {
   return "must be an odd integer in [" + std::to_string(lo) + ", " + std::to_string(hi) + "]";

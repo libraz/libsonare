@@ -1133,8 +1133,10 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
   CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(handle == nullptr);
-  CHECK_THAT(std::string(sonare_last_error_message()),
-             Catch::Matchers::ContainsSubstring("[0.55, 0.981]"));
+  // Both members are named as the C struct spells them.
+  CHECK(std::string(sonare_last_error_message()) ==
+        "formant_factor must be finite and in [0.55, 0.981] in absolute formant mode at "
+        "retune_pitch_semitones -9 (the warp reaches [0.3271, 0.981] there)");
 
   config.retune_pitch_semitones = 0.0f;
   config.formant_mode = 7;
@@ -1165,12 +1167,12 @@ TEST_CASE("The POD config refuses an out-of-range field and keeps the previous c
   bad.formant_factor = 3.0f;
   CHECK(sonare_realtime_voice_changer_set_config(handle, &bad) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()) ==
-        "formant.factor must be finite and in [0.55, 1.65]");
+        "formant_factor must be finite and in [0.55, 1.65]");
   bad = config;
   bad.limiter_ceiling_db = 0.5f;
   CHECK(sonare_realtime_voice_changer_set_config(handle, &bad) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(std::string(sonare_last_error_message()),
-             Catch::Matchers::ContainsSubstring("limiter.ceilingDb must be finite and in ["));
+             Catch::Matchers::ContainsSubstring("limiter_ceiling_db must be finite and in ["));
 
   SonareRealtimeVoiceChangerConfig after{};
   REQUIRE(sonare_realtime_voice_changer_get_config(handle, &after) == SONARE_OK);

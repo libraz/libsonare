@@ -9,6 +9,7 @@
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/vector_normalize.h"
 
 namespace sonare {
@@ -267,10 +268,18 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
                 config.cqt.hop_length);
 }
 
+void validate_bass_chroma_config(const BassChromaConfig& config) {
+  // Unprefixed: every surface passes the CQT's hop as the call's own hop_length.
+  validate_cqt_config(config.cqt);
+  util::check::integer_at_least(config.n_chroma, 1, "n_chroma");
+  if (config.cqt.bins_per_octave % config.n_chroma != 0) {
+    util::check::refuse_relation({"bins_per_octave", "n_chroma"}, "{0} must be a multiple of {1}");
+  }
+}
+
 Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
+  validate_bass_chroma_config(config);
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.cqt.bins_per_octave % config.n_chroma == 0, ErrorCode::InvalidParameter);
 
   // Run a CQT over the bass frequency range (fmin / bins_per_octave / n_bins all
   // come from config.cqt, so the number of octaves covered is honored by n_bins),

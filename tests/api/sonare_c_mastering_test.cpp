@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "c_api/eq_band_json.h"
+#include "c_api/sonare_c_last_refusal.h"
 #include "c_api/sonare_c_mastering_helpers.h"
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
@@ -2712,4 +2713,29 @@ TEST_CASE("sonare_mastering_apply_processor runs eq.shelving with no params at a
     REQUIRE(result.length == samples.size());
     sonare_free_mastering_result(&result);
   }
+}
+
+TEST_CASE("an unknown insert key is kept as a shape refusal and a later domain refusal replaces it",
+          "[c_api][mastering]") {
+  int latency = -1;
+  int tail = -1;
+  REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{\"alpha\":2}", 48000, &latency,
+                                         &tail) == SONARE_ERROR_INVALID_PARAMETER);
+  const sonare::SonareParameterRefusal* unknown = sonare_c_detail::last_parameter_refusal();
+  REQUIRE(unknown != nullptr);
+  CHECK(unknown->shape_error());
+
+  // A domain refusal on the same thread carries no shape over from the one before it.
+  REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{\"driveDb\":1e9}", 48000,
+                                         &latency, &tail) == SONARE_ERROR_INVALID_PARAMETER);
+  const sonare::SonareParameterRefusal* domain = sonare_c_detail::last_parameter_refusal();
+  REQUIRE(domain != nullptr);
+  CHECK_FALSE(domain->shape_error());
+
+  // Nor does a failure that is no parameter refusal at all.
+  REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{\"alpha\":2}", 48000, &latency,
+                                         &tail) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mastering_insert_timing("saturation.noSuchThing", "{}", 48000, &latency, &tail) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_c_detail::last_parameter_refusal() == nullptr);
 }

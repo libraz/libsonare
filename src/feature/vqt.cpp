@@ -267,12 +267,8 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
 }
 
 VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback progress_callback) {
+  validate_cqt_config(config.to_cqt_config());
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  validate_cqt_fmin(config.fmin);
-  SONARE_CHECK(numeric::finite_positive(config.filter_scale), ErrorCode::InvalidParameter);
 
   VqtConfig resolved = config;
   resolved.gamma = resolve_vqt_gamma(config);

@@ -441,9 +441,14 @@ VocalRenderJob::VocalRenderJob(std::shared_ptr<const VocalRenderSnapshot> snapsh
                                VocalRenderRequest request)
     : impl_(std::make_unique<Impl>()) {
   if (!snapshot || !snapshot->valid()) invalid("snapshot", "render snapshot is invalid");
-  if (request.range.start < 0 || request.range.end <= request.range.start ||
-      request.range.end > snapshot->data().output_length_samples) {
+  if (request.range.start < 0 || request.range.end > snapshot->data().output_length_samples) {
     invalid("request.range", "render range is outside output bounds");
+  }
+  if (request.range.end <= request.range.start) {
+    invalid("request.range", SonareParameterRefusal::relation(ErrorCode::InvalidParameter,
+                                                              {"range.start", "range.end"},
+                                                              "{1} must be greater than {0}")
+                                 .what());
   }
   impl_->snapshot = std::move(snapshot);
   impl_->request = request;

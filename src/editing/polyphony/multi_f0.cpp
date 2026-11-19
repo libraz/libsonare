@@ -14,6 +14,7 @@
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::polyphony {
 namespace {
@@ -364,9 +365,10 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
                ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.min_duration_ms) && config.min_duration_ms >= 0.0f,
                ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.reattack_ratio) &&
-                   (config.reattack_ratio == 0.0f || config.reattack_ratio > 1.0f),
-               ErrorCode::InvalidParameter);
+  if (!(std::isfinite(config.reattack_ratio) &&
+        (config.reattack_ratio == 0.0f || config.reattack_ratio > 1.0f))) {
+    util::check::refuse_relation({"reattack_ratio"}, "{0} must be 0 or finite and greater than 1");
+  }
   SONARE_CHECK(std::isfinite(config.max_gap_ms) && config.max_gap_ms >= 0.0f,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.attack_window_ms) && config.attack_window_ms >= 0.0f,

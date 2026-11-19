@@ -12,6 +12,7 @@
 #include "analysis/analysis_rate.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/reflect_padding.h"
 #include "util/validated.h"
 
@@ -195,15 +196,11 @@ CentSpectrum compute_cent_spectrum(const Spectrogram& spec, const CentSpectrumCo
   SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
   // Named rather than bare: these three are set straight through from every
   // binding, so the refusal is the only place a caller learns the bound.
-  SONARE_CHECK_MSG(std::isfinite(config.ref_hz) && config.ref_hz > 0.0f,
-                   ErrorCode::InvalidParameter,
-                   "CentSpectrumConfig: centRefHz must be finite and positive");
-  SONARE_CHECK_MSG(std::isfinite(config.cents_per_bin) && config.cents_per_bin >= 1.0f,
-                   ErrorCode::InvalidParameter,
-                   "CentSpectrumConfig: centsPerBin must be finite and at least 1 cent");
-  SONARE_CHECK_MSG(std::isfinite(config.max_hz) && config.max_hz > config.ref_hz,
-                   ErrorCode::InvalidParameter,
-                   "CentSpectrumConfig: centMaxHz must be finite and greater than centRefHz");
+  util::check::greater_than(config.ref_hz, 0.0, "ref_hz");
+  util::check::at_least(config.cents_per_bin, 1.0, "cents_per_bin");
+  if (!(std::isfinite(config.max_hz) && config.max_hz > config.ref_hz)) {
+    util::check::refuse_relation({"max_hz", "ref_hz"}, "{0} must be finite and greater than {1}");
+  }
   // The frequency is a phase advance over one hop read at one bin spacing, so a
   // spectrogram carrying neither is not an input this can read.
   SONARE_CHECK(

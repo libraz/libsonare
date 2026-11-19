@@ -453,3 +453,15 @@ TEST_CASE("Chroma release_features hands over the matrix without copying it", "[
   CHECK(chroma.n_chroma() == n_chroma);
   CHECK(chroma.n_frames() == n_frames);
 }
+
+TEST_CASE("bass_chroma refuses a member by its name", "[chroma]") {
+  const Audio audio = Audio::from_vector(std::vector<float>(22050, 0.1f), 22050);
+  BassChromaConfig config;
+  config.n_chroma = 0;
+  CHECK_THROWS_WITH(bass_chroma(audio, config), "n_chroma must be an integer in [1, 2147483647]");
+  config.n_chroma = 5;
+  CHECK_THROWS_WITH(bass_chroma(audio, config), "bins_per_octave must be a multiple of n_chroma");
+  config = BassChromaConfig();
+  config.cqt.n_bins = 0;
+  CHECK_THROWS_WITH(bass_chroma(audio, config), "n_bins must be an integer in [1, 2147483647]");
+}

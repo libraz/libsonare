@@ -84,7 +84,10 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
   *out = nullptr;
   *out_length = 0;
   *out_n_frames = 0;
-  if (n_bands <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] { validate_onset_n_bands(n_bands); });
+      err != SONARE_OK) {
+    return err;
+  }
 
   return run_offline("onset_strength_multi", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -159,13 +162,16 @@ SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_r
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  BassChromaConfig config;
+  config.cqt.hop_length = hop_length;
+  config.n_chroma = n_chroma;
+  if (const SonareError err = run_validation([&] { validate_bass_chroma_config(config); });
+      err != SONARE_OK) {
+    return err;
+  }
 
   return run_offline("bass_chroma", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
-                       BassChromaConfig config;
-                       config.cqt.hop_length = hop_length;
-                       config.n_chroma = n_chroma;
                        Chroma chroma = bass_chroma(audio, config);
                        return fill_chroma_result(chroma, out);
                      });

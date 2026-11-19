@@ -230,8 +230,8 @@ TEST_CASE("C effects _ex options reach their native processing paths", "[c_api][
     SonareHpssResult refused{};
     CHECK(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, -1, 1, 0,
                          &refused, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()).find("hopLength must be positive") !=
-          std::string::npos);
+    CHECK(std::string(sonare_last_error_message())
+              .find("hop_length must be an integer in [1, 2147483647]") != std::string::npos);
   }
 }
 

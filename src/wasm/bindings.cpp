@@ -242,6 +242,10 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
     // A core refusal not yet in the caller's spelling is rendered in request-object keys.
     if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(base)) {
       message = sonare::util::check::camel_spelled(*refusal).what();
+      // An unknown key or a wrong type refuses the request's shape: a TypeError, not a RangeError.
+      if (refusal->shape_error() && refusal->code() == sonare::ErrorCode::InvalidParameter) {
+        info.set("kind", std::string("TypeError"));
+      }
     }
     // A refused argument surfaces as the native JS class, not a coded SonareError;
     // code and codeName below still read InvalidParameter.

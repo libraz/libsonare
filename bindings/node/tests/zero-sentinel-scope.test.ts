@@ -200,6 +200,7 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['NumberMapProperty', 'Reads an object of doubles; truncation is not in play.'],
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
   ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],
+  ['DomainFloatProperty', 'Reads a float; truncation is not in play.'],
   ['AutoFiniteFloatProperty', 'Reads a float or the string "auto"; truncation is not in play.'],
   ['StringProperty', 'Reads a string, so it has no numeric fallback at all.'],
   ['ChoiceProperty', 'Reads an enum name, so it has no numeric fallback at all.'],
@@ -239,7 +240,6 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['RequiredStringProperty', 'Reads a string, and takes an out-pointer rather than a fallback.'],
   ['DbfsAsLinearProperty', 'Reads a float in dBFS; truncation is not in play.'],
   ['XyzProperty', 'Reads three floats; truncation is not in play.'],
-  ['RefuseUnknownKeys', 'Checks key names and reads no value, so it has no fallback at all.'],
   [
     'RefuseUnknownDocumentKeys',
     'Checks key names against a document path and reads no value, so it has no fallback at all.',

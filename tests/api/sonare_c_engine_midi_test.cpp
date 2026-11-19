@@ -626,6 +626,11 @@ TEST_CASE("sonare_engine converts PPQ to samples from the tempo map", "[c_api][e
   REQUIRE(sonare_engine_sample_at_ppq(engine, 1.0e300, &sample) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_seek_ppq(engine, 1.0e300, -1) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_loop(engine, 0.0, 1.0e300, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "end_ppq must be finite and in [0, 1e12]");
+  REQUIRE(sonare_engine_set_loop(engine, 4.0, 4.0, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "end_ppq must be greater than start_ppq while the loop is enabled");
+  REQUIRE(sonare_engine_set_loop(engine, 4.0, 4.0, 0) == SONARE_OK);
   REQUIRE(sonare_engine_sample_at_ppq(engine, 1.0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   std::array<float, 4> clip_audio{1.0f, 0.0f, 0.0f, 0.0f};

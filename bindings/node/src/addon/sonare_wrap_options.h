@@ -510,6 +510,7 @@ inline float DbfsAsLinearProperty(const Napi::Object& obj, const char* key, floa
                                   ToLinear&& to_linear) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return linear_fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return to_linear(DomainFloatProperty(obj, key, 0.0f), key);
 }
 

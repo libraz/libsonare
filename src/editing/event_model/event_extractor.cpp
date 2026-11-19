@@ -9,6 +9,7 @@
 #include "core/convert.h"
 #include "core/spectrum.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::event_model {
 namespace {
@@ -59,6 +60,14 @@ double energy_over(const Audio& audio, int64_t begin, int64_t end) {
 }
 
 }  // namespace
+
+void check_percussive_extract_controls(int onset_wait, float onset_delta, float max_event_ms,
+                                       float min_percussive_ratio) {
+  util::check::integer_at_least(onset_wait, 0, "onset_wait");
+  util::check::finite_float(onset_delta, "onset_delta");
+  util::check::at_least(max_event_ms, 0.0, "max_event_ms");
+  util::check::in_range(min_percussive_ratio, 0.0, 1.0, "min_percussive_ratio");
+}
 
 std::vector<PercussiveEvent> extract_percussive_events(
     const Audio& audio, const PercussiveEventExtractorConfig& config) {

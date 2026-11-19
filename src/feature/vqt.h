@@ -36,10 +36,12 @@ struct VqtConfig {
 
 /// @brief Refuses an infinite gamma, which the automatic sentinel would otherwise absorb.
 /// @details A NaN or negative gamma stays the automatic spelling; -inf is not one of them.
-/// @throws SonareException(InvalidParameter) when @p gamma is infinite.
+/// @throws SonareParameterRefusal(InvalidParameter) when @p gamma is infinite.
 inline void validate_vqt_gamma(float gamma) {
-  SONARE_CHECK_MSG(!std::isinf(gamma), ErrorCode::InvalidParameter,
-                   "VqtConfig: gamma must not be infinite (NaN or negative selects automatic)");
+  if (std::isinf(gamma)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "gamma",
+                                            "must not be infinite");
+  }
 }
 
 /// @brief VQT result (same structure as CQT).

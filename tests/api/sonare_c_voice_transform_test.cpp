@@ -120,30 +120,30 @@ double energy(const std::vector<float>& v, std::size_t from = 0) {
 // ---------------------------------------------------------------------------------------------
 
 struct FloatField {
-  const char* path;  // the name the refusal message carries
+  const char* path;  // the POD member the refusal message names
   float Config::*member;
   float lo;
   float hi;
 };
 
 const FloatField kFloatFields[] = {
-    {"voiceEngine.f0MinHz", &Config::voice_engine_f0_min_hz, 50.0f, 200.0f},
-    {"pitchCorrection.amount", &Config::pitch_correction_amount, 0.0f, 1.0f},
-    {"pitchCorrection.speedMs", &Config::pitch_correction_speed_ms, 0.0f, 400.0f},
-    {"harmony.level", &Config::harmony_level, 0.0f, 1.0f},
-    {"harmony.leadLevel", &Config::harmony_lead_level, 0.0f, 1.0f},
-    {"harmony.detuneCents", &Config::harmony_detune_cents, 0.0f, 30.0f},
-    {"harmony.delayMs", &Config::harmony_delay_ms, 0.0f, 40.0f},
-    {"vocoder.attackMs", &Config::vocoder_attack_ms, 0.5f, 50.0f},
-    {"vocoder.releaseMs", &Config::vocoder_release_ms, 2.0f, 300.0f},
-    {"vocoder.sibilance", &Config::vocoder_sibilance, 0.0f, 1.0f},
-    {"vocoder.ensembleDetuneCents", &Config::vocoder_ensemble_detune_cents, 0.0f, 30.0f},
-    {"vocoder.level", &Config::vocoder_level, 0.0f, 1.0f},
-    {"character.amount", &Config::character_amount, 0.0f, 1.0f},
-    {"character.tone", &Config::character_tone, -1.0f, 1.0f},
-    {"reverbVariation.delayMs", &Config::reverb_variation_delay_ms, 1.0f, 3000.0f},
-    {"reverbVariation.feedback", &Config::reverb_variation_feedback, 0.0f, 0.95f},
-    {"reverbVariation.tempoBpm", &Config::reverb_variation_tempo_bpm, 30.0f, 300.0f},
+    {"voice_engine_f0_min_hz", &Config::voice_engine_f0_min_hz, 50.0f, 200.0f},
+    {"pitch_correction_amount", &Config::pitch_correction_amount, 0.0f, 1.0f},
+    {"pitch_correction_speed_ms", &Config::pitch_correction_speed_ms, 0.0f, 400.0f},
+    {"harmony_level", &Config::harmony_level, 0.0f, 1.0f},
+    {"harmony_lead_level", &Config::harmony_lead_level, 0.0f, 1.0f},
+    {"harmony_detune_cents", &Config::harmony_detune_cents, 0.0f, 30.0f},
+    {"harmony_delay_ms", &Config::harmony_delay_ms, 0.0f, 40.0f},
+    {"vocoder_attack_ms", &Config::vocoder_attack_ms, 0.5f, 50.0f},
+    {"vocoder_release_ms", &Config::vocoder_release_ms, 2.0f, 300.0f},
+    {"vocoder_sibilance", &Config::vocoder_sibilance, 0.0f, 1.0f},
+    {"vocoder_ensemble_detune_cents", &Config::vocoder_ensemble_detune_cents, 0.0f, 30.0f},
+    {"vocoder_level", &Config::vocoder_level, 0.0f, 1.0f},
+    {"character_amount", &Config::character_amount, 0.0f, 1.0f},
+    {"character_tone", &Config::character_tone, -1.0f, 1.0f},
+    {"reverb_variation_delay_ms", &Config::reverb_variation_delay_ms, 1.0f, 3000.0f},
+    {"reverb_variation_feedback", &Config::reverb_variation_feedback, 0.0f, 0.95f},
+    {"reverb_variation_tempo_bpm", &Config::reverb_variation_tempo_bpm, 30.0f, 300.0f},
 };
 
 struct IntField {
@@ -154,10 +154,10 @@ struct IntField {
 };
 
 const IntField kIntFields[] = {
-    {"pitchCorrection.keyRoot", &Config::pitch_correction_key_root, 0, 11},
-    {"pitchCorrection.robotOctave", &Config::pitch_correction_robot_octave, -1, 1},
-    {"harmony.voices", &Config::harmony_voices, 0, 3},
-    {"vocoder.bands", &Config::vocoder_bands, 8, 32},
+    {"pitch_correction_key_root", &Config::pitch_correction_key_root, 0, 11},
+    {"pitch_correction_robot_octave", &Config::pitch_correction_robot_octave, -1, 1},
+    {"harmony_voices", &Config::harmony_voices, 0, 3},
+    {"vocoder_bands", &Config::vocoder_bands, 8, 32},
 };
 
 struct EnumField {
@@ -464,7 +464,7 @@ TEST_CASE("Each harmony step accepts -7 and 7 and refuses 8 and -8", "[capi][voi
       Handle h;
       CHECK(create(c, &h) == SONARE_ERROR_INVALID_PARAMETER);
       CHECK_THAT(std::string(sonare_last_error_message()),
-                 ContainsSubstring("harmony.steps[" + std::to_string(i) + "]"));
+                 ContainsSubstring("harmony_steps[" + std::to_string(i) + "]"));
     }
   }
 }
@@ -643,7 +643,7 @@ TEST_CASE("A chromatic scale validates key_root and ignores it", "[capi][voice_t
     c.pitch_correction_key_root = bad;
     CHECK(create(c, &none) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(std::string(sonare_last_error_message()),
-               ContainsSubstring("pitchCorrection.keyRoot"));
+               ContainsSubstring("pitch_correction_key_root"));
   }
 
   // A pitch between two semitones (C#4 plus 30 cents), long enough for the tracker to settle.

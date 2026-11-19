@@ -12,6 +12,7 @@
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -153,10 +154,8 @@ float note_to_hz(const std::string& note) {
 }
 
 float frames_to_time(int frames, int sr, int hop_length) {
-  if (sr <= 0 || hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "frames_to_time: sr and hop_length must be positive");
-  }
+  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   return static_cast<float>(frames) * static_cast<float>(hop_length) / static_cast<float>(sr);
 }
 
@@ -165,10 +164,8 @@ float envelope_frame_time(int frame, int shift_frames, int sr, int hop) {
 }
 
 int time_to_frames(float time, int sr, int hop_length) {
-  if (sr <= 0 || hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "time_to_frames: sr and hop_length must be positive");
-  }
+  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   // Compute in double and saturate into int before casting: a large time (long
   // file) would otherwise floor to a float beyond INT_MAX and casting an
   // out-of-range float to int is undefined behaviour. Mirrors the double+clamp

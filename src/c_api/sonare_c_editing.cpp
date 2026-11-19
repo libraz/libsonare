@@ -9,6 +9,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -33,6 +34,7 @@
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 #include "util/zero_is_default.h"
 
 using namespace sonare;
@@ -71,17 +73,14 @@ SonareError fill_dynamic_range_result(const metering::DynamicRangeResult& result
   return SONARE_OK;
 }
 
-// The oversample factor a true-peak entry runs, 0 selecting the meter's default, or 0 after
-// recording a refusal under @p fn when the core has no polyphase design for it.
-int true_peak_factor_or_refuse(const char* fn, int oversample_factor) {
-  const int factor =
-      oversample_factor == 0 ? metering::kDefaultTruePeakOversample : oversample_factor;
-  if (rt::is_supported_polyphase_oversample_factor(factor)) return factor;
-  set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                 (std::string(fn) + ": oversample_factor must be one of 1, 2, 4, 8, 16, got " +
-                  std::to_string(oversample_factor))
-                     .c_str());
-  return 0;
+// The oversample factor a true-peak entry runs, 0 selecting the meter's default; a factor the
+// core has no polyphase design for is refused here, ahead of the audio checks.
+int true_peak_factor(int oversample_factor) {
+  if (oversample_factor == 0) return metering::kDefaultTruePeakOversample;
+  if (!rt::is_supported_polyphase_oversample_factor(oversample_factor)) {
+    util::check::one_of(oversample_factor, std::array<int, 5>{1, 2, 4, 8, 16}, "oversample_factor");
+  }
+  return oversample_factor;
 }
 
 }  // namespace
@@ -174,8 +173,7 @@ SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, 
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   *out_db = 0.0f;
-  const int factor = true_peak_factor_or_refuse("metering_true_peak_dbtp", oversample_factor);
-  if (factor == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  const int factor = true_peak_factor(oversample_factor);
   return run_offline("metering_true_peak_dbtp", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_db = metering::true_peak_db(audio, factor);
@@ -568,8 +566,7 @@ SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, "audio_true_peak_dbtp: out_db must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const int factor = true_peak_factor_or_refuse("audio_true_peak_dbtp", oversample_factor);
-  if (factor == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  const int factor = true_peak_factor(oversample_factor);
   *out_db = metering::true_peak_db(audio->audio, factor);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -689,7 +686,12 @@ struct WaveformPyramidLevels {
 SonareError sonare_waveform_peaks(const float* samples, size_t frames, int channels,
                                   size_t samples_per_bucket, SonareWaveformPeaksResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out || samples_per_bucket == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err =
+          run_validation([&] { metering::validate_samples_per_bucket(samples_per_bucket); });
+      err != SONARE_OK) {
+    return err;
+  }
   std::memset(out, 0, sizeof(*out));
   SonareError err = validate_interleaved_audio(samples, frames, channels);
   if (err != SONARE_OK) return err;
@@ -710,7 +712,7 @@ SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, in
   if (err != SONARE_OK) return err;
   std::vector<size_t> levels(samples_per_bucket_levels, samples_per_bucket_levels + level_count);
   for (size_t level : levels) {
-    if (level == 0) return SONARE_ERROR_INVALID_PARAMETER;
+    metering::validate_samples_per_bucket(level);
   }
   const auto pyramid = metering::waveform_peak_pyramid(samples, frames, channels, levels);
   WaveformPyramidLevels c_levels(pyramid.size());

@@ -19,6 +19,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare;
 using namespace sonare::effects::acoustic;
@@ -622,4 +623,34 @@ TEST_CASE("room_morph_stereo refuses mismatched channels and an invalid receiver
   REQUIRE(refuses([&] { room_morph_stereo(a, a, wide); }));
   // The mono entry point never reads the pair spacing.
   REQUIRE_NOTHROW(room_morph(a, wide));
+}
+
+TEST_CASE("a room morph geometry refusal renders in the JS request's flat keys",
+          "[effects][acoustic][room_morph]") {
+  const auto rendered = [](const RoomMorphConfig& cfg) {
+    try {
+      validate_room_morph_config(cfg);
+    } catch (const SonareParameterRefusal& refusal) {
+      return std::string(util::check::camel_spelled(refusal, kRoomMorphRenamedKeys).what());
+    }
+    return std::string("no refusal");
+  };
+  RoomMorphConfig cfg = reference_stereo_config();
+  cfg.target.dims.width = -1.0f;
+  CHECK(rendered(cfg) == "widthM must be finite and in (0, 10000]");
+  cfg = reference_stereo_config();
+  cfg.placement.listener.y = 99.0f;
+  CHECK(rendered(cfg) == "listener.y must be finite and in [0, 6]");
+  cfg = reference_stereo_config();
+  cfg.placement.listener.y = 0.5f;
+  cfg.receiver_spacing_m = 2.0f;
+  std::string pair_text = "no refusal";
+  try {
+    RoomMorphProcessor processor(cfg, sonare::acoustic::ReceiverLayout::MonoAndPair);
+  } catch (const SonareParameterRefusal& refusal) {
+    pair_text = util::check::camel_spelled(refusal, kRoomMorphRenamedKeys).what();
+  }
+  CHECK(pair_text ==
+        "receiverSpacingM must place both receivers inside the room for listener.x, listener.y, "
+        "source.x, source.y, lengthM and widthM");
 }

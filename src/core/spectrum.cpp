@@ -17,6 +17,7 @@
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
 #include "util/padding.h"
+#include "util/parameter_checks.h"
 #include "util/reflect_padding.h"
 #include "util/validated.h"
 
@@ -296,34 +297,30 @@ Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int 
 }
 
 void validate_config(const StftConfig& config) {
-  SONARE_CHECK_MSG(config.n_fft > 0, ErrorCode::InvalidParameter,
-                   "StftConfig: nFft must be positive");
-  SONARE_CHECK_MSG(config.n_fft <= kMaxStftNFft, ErrorCode::InvalidParameter,
-                   "StftConfig: nFft must not exceed " + std::to_string(kMaxStftNFft) + ", got " +
-                       std::to_string(config.n_fft));
-  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter,
-                   "StftConfig: hopLength must be positive");
+  util::check::integer_in_range(config.n_fft, 1, kMaxStftNFft, "n_fft");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
   // 0 is the documented "use nFft" sentinel; a negative value would take the
   // same branch and silently read as that default.
-  SONARE_CHECK_MSG(config.win_length >= 0, ErrorCode::InvalidParameter,
-                   "StftConfig: winLength must be non-negative");
-  SONARE_CHECK_MSG(config.actual_win_length() <= config.n_fft, ErrorCode::InvalidParameter,
-                   "StftConfig: winLength must not exceed nFft");
+  util::check::integer_at_least(config.win_length, 0, "win_length");
+  if (config.actual_win_length() > config.n_fft) {
+    util::check::refuse_relation({"win_length", "n_fft"}, "{0} must be at most {1}");
+  }
 }
 
 void validate_cola_geometry(int n_fft, int hop_length) {
-  SONARE_CHECK_MSG(n_fft >= 4 && (n_fft % 2) == 0, ErrorCode::InvalidParameter,
-                   "StftConfig: nFft must be an even integer >= 4");
-  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter,
-                   "StftConfig: hopLength must be positive");
-  SONARE_CHECK_MSG(hop_length <= n_fft / 2, ErrorCode::InvalidParameter,
-                   "StftConfig: hopLength must not exceed nFft / 2 (constant overlap-add)");
+  util::check::even_integer_in_range(n_fft, 4, std::numeric_limits<int>::max(), "n_fft");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
+  if (hop_length > n_fft / 2) {
+    util::check::refuse_relation({"hop_length", "n_fft"}, "{0} must be at most {1} / 2");
+  }
 }
 
 void validate_cola_geometry(int n_fft, int hop_length, WindowType window, int win_length) {
   validate_cola_geometry(n_fft, hop_length);
-  SONARE_CHECK_MSG(win_length > 0 && win_length <= n_fft, ErrorCode::InvalidParameter,
-                   "StftConfig: winLength must lie in (0, nFft]");
+  util::check::integer_at_least(win_length, 1, "win_length");
+  if (win_length > n_fft) {
+    util::check::refuse_relation({"win_length", "n_fft"}, "{0} must be at most {1}");
+  }
   const std::vector<float> analysis = build_padded_window(window, win_length, n_fft, true);
   const std::vector<float> synthesis = build_padded_window(window, win_length, n_fft, false);
   for (int residue = 0; residue < hop_length; ++residue) {
@@ -332,9 +329,11 @@ void validate_cola_geometry(int n_fft, int hop_length, WindowType window, int wi
       coverage += static_cast<double>(analysis[static_cast<size_t>(i)]) *
                   static_cast<double>(synthesis[static_cast<size_t>(i)]);
     }
-    SONARE_CHECK_MSG(coverage > static_cast<double>(sonare::constants::kSpectrumEpsilon),
-                     ErrorCode::InvalidParameter,
-                     "StftConfig: winLength leaves samples no overlap-added window covers");
+    if (!(coverage > static_cast<double>(sonare::constants::kSpectrumEpsilon))) {
+      throw SonareParameterRefusal::predicate(
+          ErrorCode::InvalidParameter, "win_length",
+          "must leave every sample covered by the overlap-added window");
+    }
   }
 }
 

@@ -20,8 +20,13 @@ namespace sonare_node {
 ///        generic text for @p err.
 std::string ErrorMessageForCode(SonareError err);
 
-/// The exception text without a leading C-entry prefix, which the public entry replaces.
-const char* ExceptionMessage(const std::exception& e);
+/// The exception text without a leading C-entry prefix, which the public entry replaces; a
+/// parameter refusal is rendered in request keys from its subjects.
+std::string ExceptionMessage(const std::exception& e);
+
+/// Whether @p e refuses the request's shape (an unknown key or a wrong type), which surfaces as a
+/// TypeError rather than the RangeError of a value outside its domain.
+bool IsShapeRefusal(const std::exception& e);
 
 /// @brief Canonical name for a C-ABI error code ("InvalidParameter", ...).
 ///        Mirrors the JS-exposed ErrorCode enum; used as the error's codeName.
@@ -42,7 +47,14 @@ sonare::ErrorCode CodeFromCError(SonareError err);
 /// other code is an Error carrying { name: 'SonareError', code, codeName }.
 /// This is the single point a C code or SonareException becomes a JS error, so
 /// every Throw* helper below inherits the rule.
+/// A shape refusal (@ref IsShapeRefusal) under INVALID_PARAMETER is a TypeError instead; this
+/// overload is for a binding-composed message, which is never one.
 Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message);
+
+/// @brief MakeSonareError with the refusal's shape stated by the caller: @ref IsShapeRefusal for a
+///        caught exception, @ref LastRefusalIsShape for a message read from the last C-ABI error.
+Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message,
+                            bool shape_refusal);
 
 /// @brief Throw MakeSonareError(@p err, ...) unless an exception is already pending.
 ///        The detail message is @p prefix + the thread-local / generic message.
@@ -87,7 +99,12 @@ void MarkPendingForeign(Napi::Env env);
 /// @brief Add the public SonareError shape to an existing JavaScript Error, or
 /// re-class it as a RangeError for INVALID_PARAMETER (see MakeSonareError).
 /// Used by AsyncWorker completion handlers before rejecting their Promise.
-void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err);
+/// A shape refusal (@p shape_refusal) is re-classed as a TypeError instead.
+void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal);
+
+/// @brief Whether the calling thread's last C-ABI failure was a shape refusal; an async worker
+///        records it on its own thread beside the code.
+bool LastRefusalIsShape();
 
 /// @brief Read the optional JavaScript music-analysis settings into the C ABI
 /// struct. Returns true only when @p value is an object supplied by the caller.

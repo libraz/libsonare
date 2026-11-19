@@ -8,6 +8,7 @@
 #include "streaming/stream_analyzer_utils.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -444,11 +445,7 @@ void StreamAnalyzer::set_normalization_gain(float gain) {
   // different number, silently, so an integer-scaled buffer asking for 3e-4 was
   // analyzed roughly 30 dB hot with no error, no warning and no way to read
   // back what the analyzer actually used.
-  if (!numeric::finite_positive(gain) || gain < kMinNormalizationGain ||
-      gain > kMaxNormalizationGain) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "normalization gain must be finite and within 0.01..100");
-  }
+  util::check::in_range(gain, kMinNormalizationGain, kMaxNormalizationGain, "gain");
   normalization_gain_ = gain;
 }
 
@@ -457,10 +454,7 @@ void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
   // construction: clamping here would silently turn a 1000 Hz request into
   // 880 Hz while the same value handed to the constructor was refused, so the
   // chromagram would depend on which entry point the host used.
-  if (!numeric::finite_positive(ref_hz) || ref_hz < kMinTuningRefHz || ref_hz > kMaxTuningRefHz) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tuning reference must be finite and within 220..880 Hz");
-  }
+  util::check::in_range(ref_hz, kMinTuningRefHz, kMaxTuningRefHz, "reference_hz");
   config_.tuning_ref_hz = ref_hz;
 
   if (config_.compute_chroma) {

@@ -12,6 +12,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -82,8 +83,7 @@ TimbreAnalyzer::TimbreAnalyzer(const Spectrogram& spec, const MelSpectrogram& me
 }
 
 void TimbreAnalyzer::validate_window_sec(float window_sec) {
-  SONARE_CHECK_MSG(numeric::finite_positive(window_sec), ErrorCode::InvalidParameter,
-                   "TimbreConfig: windowSec must be finite and positive");
+  util::check::greater_than(window_sec, 0.0, "window_sec");
 }
 
 void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectrogram& mel_spec) {

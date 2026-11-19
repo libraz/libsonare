@@ -8,6 +8,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <random>
 #include <vector>
@@ -965,4 +966,10 @@ TEST_CASE("MusicAnalyzer analyze publishes the chroma posterior of the chosen ke
     CHECK(result.key.confidence >= 0.0f);
     CHECK(result.key.confidence < 1.0f);
   }
+}
+
+TEST_CASE("MusicAnalyzer config refuses bpm_max below bpm_min by naming both", "[music_analyzer]") {
+  MusicAnalyzerConfig config;
+  config.bpm_max = config.bpm_min - 1.0f;
+  REQUIRE_THROWS_WITH(validate_config(config), "bpm_max must be finite and at least bpm_min");
 }

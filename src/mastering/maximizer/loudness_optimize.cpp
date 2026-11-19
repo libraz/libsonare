@@ -1,5 +1,6 @@
 #include "mastering/maximizer/loudness_optimize.h"
 
+#include <array>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -7,29 +8,22 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/common/loudness_measure.h"
-#include "mastering/common/parameter_domain.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/zero_is_default.h"
 
 namespace sonare::mastering::maximizer {
 
 float validate_loudness_params(float target_lufs, float ceiling_dbtp, float release_ms,
                                float max_limiter_gain_reduction_db, int true_peak_oversample) {
-  SONARE_CHECK_MSG(std::isfinite(target_lufs), ErrorCode::InvalidParameter,
-                   "target_lufs must be finite");
-  SONARE_CHECK_MSG(common::valid_ceiling_db(ceiling_dbtp), ErrorCode::InvalidParameter,
-                   "ceiling_dbtp must be finite and <= 0");
-  SONARE_CHECK_MSG(std::isfinite(release_ms) && release_ms >= 0.0f, ErrorCode::InvalidParameter,
-                   "release_ms must be 0 (the library default) or a finite positive value");
-  SONARE_CHECK_MSG(
-      std::isfinite(max_limiter_gain_reduction_db) && max_limiter_gain_reduction_db >= 0.0f,
-      ErrorCode::InvalidParameter, "max_limiter_gain_reduction_db must be finite and >= 0");
-  SONARE_CHECK_MSG(true_peak_oversample == 1 || true_peak_oversample == 2 ||
-                       true_peak_oversample == 4 || true_peak_oversample == 8 ||
-                       true_peak_oversample == 16,
-                   ErrorCode::InvalidParameter, "oversample must be one of 1, 2, 4, 8, or 16");
+  util::check::finite_float(target_lufs, "target_lufs");
+  util::check::at_most(ceiling_dbtp, 0.0, "ceiling_dbtp");
+  util::check::at_least(release_ms, 0.0, "release_ms");
+  util::check::at_least(max_limiter_gain_reduction_db, 0.0, "max_limiter_gain_reduction_db");
+  util::check::one_of(true_peak_oversample, std::array<int, 5>{1, 2, 4, 8, 16},
+                      "true_peak_oversample");
   // Checked above, so the sentinel is the only value that resolves to anything
   // other than itself.
   return ZeroIsDefault(release_ms).or_default(kDefaultLoudnessReleaseMs);

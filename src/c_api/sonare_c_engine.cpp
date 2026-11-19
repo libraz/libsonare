@@ -355,10 +355,11 @@ SonareError sonare_engine_sample_at_ppq(SonareEngine* engine, double ppq, int64_
 SonareError sonare_engine_set_loop(SonareEngine* engine, double start_ppq, double end_ppq,
                                    int enabled) {
   SONARE_C_API_ENTRY;
-  if (!engine || !std::isfinite(start_ppq) || !std::isfinite(end_ppq) ||
-      !transport::valid_public_ppq(start_ppq) || !transport::valid_public_ppq(end_ppq) ||
-      (enabled && end_ppq <= start_ppq)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err =
+          run_validation([&] { transport::check_loop_range(start_ppq, end_ppq, enabled != 0); });
+      err != SONARE_OK) {
+    return err;
   }
   engine->engine.set_loop(start_ppq, end_ppq, enabled != 0);
   return SONARE_OK;

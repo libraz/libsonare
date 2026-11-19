@@ -1447,3 +1447,29 @@ TEST_CASE("a CQT kernel does not depend on how many workers built it", "[cqt][sp
     }
   }
 }
+
+TEST_CASE("cqt, pseudo_cqt, hybrid_cqt and vqt refuse a member by its name", "[cqt]") {
+  const Audio audio = generate_sine(440.0f, 0.5f, 22050);
+  CqtConfig config;
+  const auto refusal = [&](auto edit) {
+    CqtConfig bad = config;
+    edit(bad);
+    return bad;
+  };
+  const CqtConfig bad_hop = refusal([](CqtConfig& c) { c.hop_length = 0; });
+  CHECK_THROWS_WITH(cqt(audio, bad_hop), "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(pseudo_cqt(audio, bad_hop), "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(hybrid_cqt(audio, bad_hop), "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(cqt(audio, refusal([](CqtConfig& c) { c.fmin = 0.0f; })),
+                    "fmin must be finite and greater than 0");
+  CHECK_THROWS_WITH(cqt(audio, refusal([](CqtConfig& c) { c.n_bins = 0; })),
+                    "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(cqt(audio, refusal([](CqtConfig& c) { c.bins_per_octave = 0; })),
+                    "bins_per_octave must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(cqt(audio, refusal([](CqtConfig& c) { c.filter_scale = 0.0f; })),
+                    "filter_scale must be finite and greater than 0");
+
+  VqtConfig vqt_config;
+  vqt_config.n_bins = 0;
+  CHECK_THROWS_WITH(vqt(audio, vqt_config), "n_bins must be an integer in [1, 2147483647]");
+}

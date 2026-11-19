@@ -37,11 +37,21 @@
 namespace sonare::effects::acoustic {
 
 /// @brief The config members whose request key camel case does not derive (`maxSec`, the flat
-///        climate keys), for respelling a refusal into a JS request's keys.
-inline constexpr std::array<std::pair<const char*, const char*>, 3> kRoomMorphRenamedKeys{{
+///        climate and dimension keys, the top-level placement points), for respelling a refusal
+///        into a JS request's keys.
+inline constexpr std::array<std::pair<const char*, const char*>, 12> kRoomMorphRenamedKeys{{
     {"max_seconds", "maxSec"},
     {"air.temperature_c", "airTemperatureC"},
     {"air.humidity_percent", "airHumidityPercent"},
+    {"target.dims.length", "lengthM"},
+    {"target.dims.width", "widthM"},
+    {"target.dims.height", "heightM"},
+    {"placement.source.x", "source.x"},
+    {"placement.source.y", "source.y"},
+    {"placement.source.z", "source.z"},
+    {"placement.listener.x", "listener.x"},
+    {"placement.listener.y", "listener.y"},
+    {"placement.listener.z", "listener.z"},
 }};
 
 /// @brief Configuration for the room-character morph.

@@ -4,11 +4,13 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <string>
 
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/peak.h"
 
 namespace sonare {
@@ -540,35 +542,33 @@ void validate_meter_config(const MeterConfig& config) {
   // An empty candidate set makes the estimator return a fixed low-confidence
   // 4/4 rather than searching, which reads as a detection result. Reject it so
   // a caller who cleared the list is told instead of being answered.
-  SONARE_CHECK_MSG(!config.candidate_numerators.empty(), ErrorCode::InvalidParameter,
-                   "MeterConfig: candidateNumerators must not be empty");
-  SONARE_CHECK_MSG(
-      config.candidate_numerators.size() <= static_cast<size_t>(kMaxMeterCandidateNumerators),
-      ErrorCode::InvalidParameter, "MeterConfig: candidateNumerators must hold at most 16 entries");
+  if (config.candidate_numerators.empty()) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "candidate_numerators",
+                                            "must not be empty");
+  }
+  if (config.candidate_numerators.size() > static_cast<size_t>(kMaxMeterCandidateNumerators)) {
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, "candidate_numerators",
+        "must hold at most " + std::to_string(kMaxMeterCandidateNumerators) + " entries");
+  }
   for (int numerator : config.candidate_numerators) {
-    SONARE_CHECK_MSG(
-        numerator >= kMinMeterCandidateNumerator && numerator <= kMaxMeterCandidateNumerator,
-        ErrorCode::InvalidParameter, "MeterConfig: candidateNumerators entries must be in [2, 32]");
+    if (numerator < kMinMeterCandidateNumerator || numerator > kMaxMeterCandidateNumerator) {
+      throw SonareParameterRefusal::predicate(
+          ErrorCode::InvalidParameter, "candidate_numerators",
+          "must hold only integers in [" + std::to_string(kMinMeterCandidateNumerator) + ", " +
+              std::to_string(kMaxMeterCandidateNumerator) + "]");
+    }
   }
   // Only a power of two is a note value, and the estimator reports 8 itself
   // when it resolves a compound meter, so a non-power-of-two could never
   // round-trip through the reported signature. The ceiling is a separate
   // question, on kMaxMeterDenominator.
-  SONARE_CHECK_MSG(config.denominator > 0 && config.denominator <= kMaxMeterDenominator &&
-                       (config.denominator & (config.denominator - 1)) == 0,
-                   ErrorCode::InvalidParameter,
-                   "MeterConfig: denominator must be a power of two in [1, 32]");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.downbeat_weight),
-                   ErrorCode::InvalidParameter,
-                   "MeterConfig: downbeatWeight must be finite and non-negative");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.measure_weight), ErrorCode::InvalidParameter,
-                   "MeterConfig: measureWeight must be finite and non-negative");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.subdivision_weight),
-                   ErrorCode::InvalidParameter,
-                   "MeterConfig: subdivisionWeight must be finite and non-negative");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.compound_subdivision_threshold),
-                   ErrorCode::InvalidParameter,
-                   "MeterConfig: compoundSubdivisionThreshold must be finite and non-negative");
+  util::check::power_of_two_in_range(config.denominator, 1, kMaxMeterDenominator, "denominator");
+  util::check::at_least(config.downbeat_weight, 0.0, "downbeat_weight");
+  util::check::at_least(config.measure_weight, 0.0, "measure_weight");
+  util::check::at_least(config.subdivision_weight, 0.0, "subdivision_weight");
+  util::check::at_least(config.compound_subdivision_threshold, 0.0,
+                        "compound_subdivision_threshold");
 }
 
 MeterResult estimate_meter_from_beats(const std::vector<float>& beat_times,

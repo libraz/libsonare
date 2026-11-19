@@ -10,6 +10,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -25,8 +26,7 @@ constexpr float kCompressedCrestFactorDb = 8.0f;
 DynamicsAnalyzer::DynamicsAnalyzer(const Audio& audio, const DynamicsConfig& config)
     : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK_MSG(numeric::finite_positive(config.window_sec), ErrorCode::InvalidParameter,
-                   "DynamicsConfig: windowSec must be finite and positive");
+  util::check::greater_than(config.window_sec, 0.0, "window_sec");
   analyze(audio);
 }
 

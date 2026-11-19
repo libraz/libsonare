@@ -60,8 +60,8 @@ struct RhythmConfig {
 /// @brief Refuses a RhythmConfig tempo search outside the argument domain every surface shares.
 /// @throws SonareException(InvalidParameter) as @ref validate_tempo_search describes.
 inline void validate_rhythm_config(const RhythmConfig& config) {
-  validate_tempo_search("RhythmConfig", config.bpm_min, config.bpm_max, config.start_bpm,
-                        config.n_fft, config.hop_length);
+  validate_tempo_search(config.bpm_min, config.bpm_max, config.start_bpm, config.n_fft,
+                        config.hop_length);
 }
 
 /// @brief Regularity measures derived from a run of beat intervals.

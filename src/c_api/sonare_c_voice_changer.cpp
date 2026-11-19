@@ -491,8 +491,9 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
     editing::voice_changer::RealtimeVoiceChangerConfig normalized;
     std::string error;
     if (!vc_pod_is_valid(*config, &error) ||
-        !editing::voice_changer::validate_realtime_voice_changer_config(vc_config_from_pod(*config),
-                                                                        &normalized, &error)) {
+        !editing::voice_changer::validate_realtime_voice_changer_config(
+            vc_config_from_pod(*config), &normalized, &error,
+            editing::voice_changer::ConfigFieldSpelling::CStruct)) {
       set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -525,8 +526,9 @@ SonareError sonare_realtime_voice_changer_set_config(
   editing::voice_changer::RealtimeVoiceChangerConfig normalized;
   std::string error;
   if (!vc_pod_is_valid(*config, &error) ||
-      !editing::voice_changer::validate_realtime_voice_changer_config(vc_config_from_pod(*config),
-                                                                      &normalized, &error)) {
+      !editing::voice_changer::validate_realtime_voice_changer_config(
+          vc_config_from_pod(*config), &normalized, &error,
+          editing::voice_changer::ConfigFieldSpelling::CStruct)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }

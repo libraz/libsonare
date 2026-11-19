@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstring>
 #include <limits>
 #include <thread>
@@ -2262,4 +2263,15 @@ TEST_CASE("StreamAnalyzer enabled features do not depend on which others are ena
   }
   // Equal zeros would also pass, so the fixture has to have produced signal.
   REQUIRE(saw_energy);
+}
+
+TEST_CASE("StreamAnalyzer refuses a geometry relation by naming both members", "[streaming]") {
+  StreamConfig hop_past_fft;
+  hop_past_fft.hop_length = hop_past_fft.n_fft + 1;
+  REQUIRE_THROWS_WITH(StreamAnalyzer(hop_past_fft), "hop_length must be at most n_fft");
+
+  StreamConfig inverted_band;
+  inverted_band.fmin = 4000.0f;
+  inverted_band.fmax = 1000.0f;
+  REQUIRE_THROWS_WITH(StreamAnalyzer(inverted_band), "fmax must be 0 or greater than fmin");
 }

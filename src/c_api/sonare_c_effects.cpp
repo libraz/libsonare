@@ -325,12 +325,14 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
   *out_w_length = 0;
   *out_h = nullptr;
   *out_h_length = 0;
-  if (!s || n_features <= 0 || n_frames <= 0 || n_components <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!s) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation(
+          [&] { validate_decompose_shape(n_features, n_frames, n_components, n_iter); });
+      err != SONARE_OK) {
+    return err;
   }
   // 0 selects the library default; the core would read it as "no iterations"
   // and return the raw init matrices, so it never reaches the core as 0.
-  if (n_iter < 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_iter == 0) n_iter = kDecomposeDefaultIter;
   // Reject dims whose product would overflow size_t before the core indexes
   // n_features * n_frames elements of the caller-owned buffer.
@@ -607,7 +609,10 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
                                  size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!numeric::finite_positive(speed_ratio)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] { validate_stretch_rate(speed_ratio); });
+      err != SONARE_OK) {
+    return err;
+  }
 
   return run_offline("phase_vocoder", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {

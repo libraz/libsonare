@@ -14,6 +14,7 @@
 #include "filters/chroma.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -126,15 +127,16 @@ constexpr int kChromaCqtOctaves = 7;
 
 /// @brief The ChromaCqtConfig a public chroma_cqt / chroma_cens entry point runs with.
 /// @details Spans @ref kChromaCqtOctaves octaves at @p bins_per_octave.
-/// @throws SonareException(InvalidParameter) unless hop_length and n_chroma are positive and
-///         bins_per_octave is a positive multiple of n_chroma whose octave span fits an int.
+/// @throws SonareParameterRefusal(InvalidParameter) unless hop_length and n_chroma are positive
+///         and bins_per_octave is a positive multiple of n_chroma whose octave span fits an int.
 inline ChromaCqtConfig make_chroma_cqt_config(int hop_length, int n_chroma, int bins_per_octave) {
-  SONARE_CHECK_MSG(hop_length > 0 && n_chroma > 0, ErrorCode::InvalidParameter,
-                   "chroma CQT: hop_length and n_chroma must be positive");
-  SONARE_CHECK_MSG(bins_per_octave > 0 && bins_per_octave % n_chroma == 0 &&
-                       bins_per_octave <= std::numeric_limits<int>::max() / kChromaCqtOctaves,
-                   ErrorCode::InvalidParameter,
-                   "chroma CQT: bins_per_octave must be a positive multiple of n_chroma");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_at_least(n_chroma, 1, "n_chroma");
+  util::check::integer_in_range(
+      bins_per_octave, 1, std::numeric_limits<int>::max() / kChromaCqtOctaves, "bins_per_octave");
+  if (bins_per_octave % n_chroma != 0) {
+    util::check::refuse_relation({"bins_per_octave", "n_chroma"}, "{0} must be a multiple of {1}");
+  }
   ChromaCqtConfig config;
   config.cqt.hop_length = hop_length;
   config.cqt.bins_per_octave = bins_per_octave;
@@ -156,6 +158,13 @@ struct BassChromaConfig {
   float tuning = 0.0f;
   bool normalize_frames = true;
 };
+
+/// @brief Refuses a bass chroma configuration member outside its domain, naming it.
+/// @details Checks the CQT members (unprefixed, as every caller passes them), then n_chroma, then
+/// that
+///          bins_per_octave is a multiple of n_chroma.
+/// @throws SonareParameterRefusal(InvalidParameter).
+void validate_bass_chroma_config(const BassChromaConfig& config);
 
 class Chroma;  // forward declaration; full definition below.
 

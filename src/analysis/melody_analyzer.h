@@ -3,11 +3,13 @@
 /// @file melody_analyzer.h
 /// @brief Melody analysis using YIN pitch detection algorithm.
 
+#include <cmath>
 #include <vector>
 
 #include "core/audio.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -52,14 +54,13 @@ struct MelodyConfig {
 ///         and above fmin, frame_length and hop_length are positive, and threshold is finite and
 ///         positive.
 inline void validate_melody_config(const MelodyConfig& config) {
-  SONARE_CHECK_MSG(numeric::finite_positive(config.fmin) &&
-                       numeric::finite_ordered_range(config.fmin, config.fmax),
-                   ErrorCode::InvalidParameter,
-                   "MelodyConfig: fmin must be finite and positive and fmax above it");
-  SONARE_CHECK_MSG(config.frame_length > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
-                   "MelodyConfig: frame_length and hop_length must be positive");
-  SONARE_CHECK_MSG(numeric::finite_positive(config.threshold), ErrorCode::InvalidParameter,
-                   "MelodyConfig: threshold must be finite and positive");
+  util::check::greater_than(config.fmin, 0.0, "fmin");
+  if (!(std::isfinite(config.fmax) && config.fmax > config.fmin)) {
+    util::check::refuse_relation({"fmax", "fmin"}, "{0} must be finite and greater than {1}");
+  }
+  util::check::integer_at_least(config.frame_length, 1, "frame_length");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::greater_than(config.threshold, 0.0, "threshold");
 }
 
 /// @brief Melody analyzer using YIN (or, optionally, pYIN) pitch detection.

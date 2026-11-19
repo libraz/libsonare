@@ -6,6 +6,7 @@
 #include "core/convert.h"
 #include "util/exception.h"
 #include "util/lru_cache.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -47,7 +48,7 @@ constexpr size_t kMaxMelCacheSize = 8;
 }  // namespace
 
 std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk) {
-  SONARE_CHECK(n_mels > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(n_mels, 1, "n_mels");
   SONARE_CHECK_MSG(fmax > fmin, ErrorCode::InvalidParameter,
                    "mel_frequencies: fmax must be greater than fmin");
 
@@ -70,10 +71,7 @@ std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk)
 std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfig& config) {
   SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_fft > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_mels > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK_MSG(config.n_mels <= kMaxMelBands, ErrorCode::InvalidParameter,
-                   "MelFilterConfig: nMels must not exceed " + std::to_string(kMaxMelBands) +
-                       ", got " + std::to_string(config.n_mels));
+  util::check::integer_in_range(config.n_mels, 1, kMaxMelBands, "n_mels");
 
   int n_bins = n_fft / 2 + 1;
   const float nyquist = static_cast<float>(sr) / 2.0f;

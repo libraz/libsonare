@@ -1,5 +1,4 @@
 #include "c_api/core_internal.h"
-#include "util/numeric_validation.h"
 
 namespace {
 
@@ -11,8 +10,16 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (hop_length <= 0 || !numeric::finite_positive(fmin) || n_bins <= 0 || bins_per_octave <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        CqtConfig config;
+        config.hop_length = hop_length;
+        config.fmin = fmin;
+        config.n_bins = n_bins;
+        config.bins_per_octave = bins_per_octave;
+        validate_cqt_config(config);
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(fn, name, samples, length, sample_rate,
@@ -63,9 +70,17 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (hop_length <= 0 || !std::isfinite(fmin_hz) || fmin_hz <= 0.0f || n_bins <= 0 ||
-      bins_per_octave <= 0 || std::isinf(gamma)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        VqtConfig config;
+        config.hop_length = hop_length;
+        config.fmin = fmin_hz;
+        config.n_bins = n_bins;
+        config.bins_per_octave = bins_per_octave;
+        validate_cqt_config(config.to_cqt_config());
+        validate_vqt_gamma(gamma);
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline("vqt", "samples", samples, length, sample_rate,

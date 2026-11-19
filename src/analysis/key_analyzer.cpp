@@ -12,6 +12,7 @@
 #include "feature/spectral.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -161,9 +162,7 @@ KeyProfileType resolve_profile_type(const KeyConfig& config) {
 }
 
 void validate_chroma_config(const Audio& audio, const KeyConfig& config) {
-  SONARE_CHECK_MSG(!config.tuning || is_valid_chroma_tuning(*config.tuning),
-                   ErrorCode::InvalidParameter,
-                   "KeyConfig: tuning must be finite and in [-0.5, 0.5)");
+  if (config.tuning) util::check::in_interval(*config.tuning, -0.5, true, 0.5, false, "tuning");
   SONARE_CHECK(config.high_pass_hz >= 0.0f, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.high_pass_hz < static_cast<float>(audio.sample_rate()) * 0.5f,
                ErrorCode::InvalidParameter);

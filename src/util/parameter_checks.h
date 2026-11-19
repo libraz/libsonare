@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -98,12 +99,39 @@ inline void integer_in_range(long long value, long long lo, long long hi, const 
   }
 }
 
+/// @brief Refuses @p value unless it is at least @p bound. A type no wider than int states its
+///        whole domain ("must be an integer in [N, 2147483647]"), the form a binding's integer
+///        reader prints; a 64-bit count states its floor ("must be an integer of at least N").
+template <typename T>
+inline void integer_at_least(T value, long long bound, const char* subject) {
+  static_assert(std::is_integral_v<T>, "integer_at_least takes an integer");
+  if (static_cast<long long>(value) >= bound) return;
+  if constexpr (sizeof(T) <= sizeof(int)) {
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, subject,
+        refusal::integer_range_predicate(static_cast<double>(bound),
+                                         static_cast<double>(std::numeric_limits<T>::max())));
+  } else {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            refusal::integer_at_least_predicate(bound));
+  }
+}
+
 /// @brief Refuses @p value unless it is a power of two in [lo, hi].
 inline void power_of_two_in_range(long long value, long long lo, long long hi,
                                   const char* subject) {
   if (value < lo || value > hi || value <= 0 || (value & (value - 1)) != 0) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
                                             refusal::power_of_two_predicate(lo, hi));
+  }
+}
+
+/// @brief Refuses @p value unless it is an even integer in [lo, hi].
+inline void even_integer_in_range(long long value, long long lo, long long hi,
+                                  const char* subject) {
+  if (value < lo || value > hi || value % 2 != 0) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            refusal::even_integer_predicate(lo, hi));
   }
 }
 

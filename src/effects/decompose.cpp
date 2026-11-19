@@ -12,6 +12,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/validated.h"
 
 namespace sonare {
@@ -173,22 +174,24 @@ void build_component_model(const DecomposeResult& factors, int n_bins, int n_fra
 
 }  // namespace
 
+void validate_decompose_shape(int n_features, int n_frames, int n_components, int n_iter) {
+  util::check::integer_at_least(n_features, 1, "n_features");
+  util::check::integer_at_least(n_frames, 1, "n_frames");
+  util::check::integer_at_least(n_components, 1, "n_components");
+  util::check::integer_at_least(n_iter, 0, "n_iter");
+}
+
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
                           int n_iter, const std::string& solver, float beta,
                           const std::string& init) {
   if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "decompose: S is null");
-  if (n_features <= 0 || n_frames <= 0 || n_components <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "decompose: dimensions must be positive");
-  }
+  validate_decompose_shape(n_features, n_frames, n_components, n_iter);
   if (solver != "mu") {
     throw SonareException(ErrorCode::InvalidParameter,
                           "decompose: only solver=\"mu\" is supported");
   }
   if (!std::isfinite(beta)) {
     throw SonareException(ErrorCode::InvalidParameter, "decompose: beta must be finite");
-  }
-  if (n_iter < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "decompose: n_iter must be non-negative");
   }
   // A non-finite element factorises into all-NaN W/H that no caller can tell
   // apart from a valid result by shape. Rejected here rather than at each
@@ -451,19 +454,13 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
 }
 
 void validate_config(const DecomposeStemsConfig& config) {
-  SONARE_CHECK_MSG(config.n_components > 0, ErrorCode::InvalidParameter,
-                   "DecomposeStemsConfig: nComponents must be positive");
-  SONARE_CHECK_MSG(config.n_fft > 0, ErrorCode::InvalidParameter,
-                   "DecomposeStemsConfig: nFft must be positive");
-  SONARE_CHECK_MSG(config.hop_length >= 0, ErrorCode::InvalidParameter,
-                   "DecomposeStemsConfig: hopLength must be positive, or 0 for a quarter of nFft");
-  SONARE_CHECK_MSG(config.n_iter > 0, ErrorCode::InvalidParameter,
-                   "DecomposeStemsConfig: nIter must be positive");
-  SONARE_CHECK_MSG(numeric::finite(config.beta), ErrorCode::InvalidParameter,
-                   "DecomposeStemsConfig: beta must be finite");
-  SONARE_CHECK_MSG(numeric::finite(config.mask_power) && config.mask_power >= 1.0f,
-                   ErrorCode::InvalidParameter,
-                   "DecomposeStemsConfig: maskPower must be finite and at least 1");
+  util::check::integer_at_least(config.n_components, 1, "n_components");
+  util::check::integer_at_least(config.n_fft, 1, "n_fft");
+  // 0 takes a quarter of n_fft.
+  util::check::integer_at_least(config.hop_length, 0, "hop_length");
+  util::check::integer_at_least(config.n_iter, 1, "n_iter");
+  util::check::finite_float(config.beta, "beta");
+  util::check::at_least(config.mask_power, 1.0, "mask_power");
   // The components are resynthesised, so the analysis has to overlap-add back
   // to the input under the same rule every other resynthesising effect applies.
   const StftConfig stft =

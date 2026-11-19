@@ -227,7 +227,8 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
       vcParseEnum<NoteDivision>(pod, "reverbVariationDivision", kVcDivisionNames);
   parsed.midi.release = vcParseEnum<MidiRelease>(pod, "midiRelease", kVcMidiReleaseNames);
   std::string error;
-  if (!validate_realtime_voice_changer_config(parsed, nullptr, &error)) {
+  if (!validate_realtime_voice_changer_config(parsed, nullptr, &error,
+                                              ConfigFieldSpelling::FlatPod)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, error);
   }
   return parsed;

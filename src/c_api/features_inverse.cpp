@@ -1,4 +1,5 @@
 #include "c_api/features_internal.h"
+#include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
 namespace {
@@ -30,10 +31,19 @@ size_t inverse_input_length(int rows, int n_frames) noexcept {
 SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, int n_bins,
                                  int n_frames, int sample_rate, int hop_length, float fmin,
                                  int bins_per_octave, int n_iter) {
-  if (!magnitude || n_bins <= 0 || n_frames <= 0 || sample_rate < kMinSampleRate ||
-      sample_rate > kMaxSampleRate || hop_length <= 0 || !std::isfinite(fmin) || fmin <= 0.0f ||
-      bins_per_octave <= 0 || n_iter <= 0 || n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!magnitude) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        namespace check = sonare::util::check;
+        check::integer_at_least(n_bins, 1, "n_bins");
+        check::integer_at_least(n_frames, 1, "n_frames");
+        check::integer_in_range(sample_rate, kMinSampleRate, kMaxSampleRate, "sample_rate");
+        check::integer_at_least(hop_length, 1, "hop_length");
+        check::greater_than(fmin, 0.0, "fmin");
+        check::integer_at_least(bins_per_octave, 1, "bins_per_octave");
+        check::integer_in_range(n_iter, 1, sonare::resource::kMaxGriffinLimIterations, "n_iter");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   return check_inverse_input_length(input_length, n_bins, n_frames);
 }
@@ -77,8 +87,9 @@ SonareError sonare_vqt_to_audio_checked(const float* magnitude, size_t input_len
                                         float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (std::isinf(gamma)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] { validate_vqt_gamma(gamma); });
+      err != SONARE_OK) {
+    return err;
   }
   const SonareError validation =
       validate_cqt_inverse(magnitude, input_length, n_bins, n_frames, sample_rate, hop_length,

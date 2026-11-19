@@ -34,6 +34,7 @@
 #include "util/exception.h"
 #include "util/json_schema.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -281,9 +282,7 @@ StreamingMasteringChain& StreamingMasteringChain::operator=(StreamingMasteringCh
     default;
 
 void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, int num_channels) {
-  if (num_channels != 1 && num_channels != 2) {
-    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be 1 or 2");
-  }
+  util::check::integer_in_range(num_channels, 1, 2, "num_channels");
   if (!is_valid_realtime_block_size(max_block_size)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamingMasteringChain::prepare: max_block_size must be within [1, " +

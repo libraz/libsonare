@@ -171,10 +171,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.output_format = OutputFormat::Float32;
   cfg.key_update_interval_sec = config->key_update_interval_sec;
   cfg.bpm_update_interval_sec = config->bpm_update_interval_sec;
-  if (const char* oversized = stream_config_sizing_error(cfg)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, oversized);
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  validate_stream_config_sizing(cfg);
 
   auto handle = std::make_unique<SonareStreamAnalyzer>();
   handle->analyzer = std::make_unique<StreamAnalyzer>(cfg);

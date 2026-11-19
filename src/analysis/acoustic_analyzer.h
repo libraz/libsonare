@@ -8,6 +8,7 @@
 #include "core/audio.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -31,15 +32,10 @@ struct AcousticConfig {
 ///         non-finite or non-positive min_decay_db, or a negative or non-finite
 ///         noise_floor_margin_db.
 inline void validate_acoustic_config(const AcousticConfig& config) {
-  SONARE_CHECK_MSG(config.n_octave_bands >= 0 && config.n_third_octave_subbands >= 0,
-                   ErrorCode::InvalidParameter,
-                   "AcousticConfig: n_octave_bands and n_third_octave_subbands must be "
-                   "non-negative");
-  SONARE_CHECK_MSG(numeric::finite_positive(config.min_decay_db), ErrorCode::InvalidParameter,
-                   "AcousticConfig: min_decay_db must be finite and positive");
-  SONARE_CHECK_MSG(numeric::finite_non_negative(config.noise_floor_margin_db),
-                   ErrorCode::InvalidParameter,
-                   "AcousticConfig: noise_floor_margin_db must be finite and non-negative");
+  util::check::integer_at_least(config.n_octave_bands, 0, "n_octave_bands");
+  util::check::integer_at_least(config.n_third_octave_subbands, 0, "n_third_octave_subbands");
+  util::check::greater_than(config.min_decay_db, 0.0, "min_decay_db");
+  util::check::at_least(config.noise_floor_margin_db, 0.0, "noise_floor_margin_db");
 }
 
 /// @brief Acoustic room parameters.

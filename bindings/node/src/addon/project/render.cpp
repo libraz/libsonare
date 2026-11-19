@@ -360,6 +360,7 @@ struct BounceJob {
   int num_channels = 0;
   SonareError error = SONARE_OK;
   std::string detail;
+  bool shape_refusal = false;
 
   BounceJob(JsThreadBridge* bridge_in, SonareProject* project_in,
             const SonareProjectBounceOptions* options_in,
@@ -395,7 +396,10 @@ void RunBounceJob(void* arg) {
                                                       job->binding_count, &job->interleaved,
                                                       &job->len, &job->num_channels);
   // The detail slot is thread-local, so it is read here and not on the JS thread.
-  if (job->error != SONARE_OK) job->detail = sonare_node::ErrorMessageForCode(job->error);
+  if (job->error != SONARE_OK) {
+    job->detail = sonare_node::ErrorMessageForCode(job->error);
+    job->shape_refusal = sonare_node::LastRefusalIsShape();
+  }
   job->bridge->Finish();
 }
 }  // namespace
@@ -574,7 +578,8 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
   if (job.error != SONARE_OK) {
     if (env.IsExceptionPending()) (void)env.GetAndClearPendingException();
     if (!job.detail.empty()) {
-      sonare_node::ThrowSonareErrorMessage(env, job.error, job.detail);
+      sonare_node::MakeSonareError(env, job.error, job.detail, job.shape_refusal)
+          .ThrowAsJavaScriptException();
     } else {
       // The detail slot is thread-local and was read on the bounce thread.
       sonare_node::ThrowSonareErrorMessage(env, job.error, sonare_error_message(job.error));

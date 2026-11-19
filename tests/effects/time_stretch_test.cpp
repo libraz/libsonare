@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -380,4 +381,20 @@ TEST_CASE("phase_vocoder rejects a hop below the half-window overlap contract", 
   override_config.hop_length = 768;
   REQUIRE_THROWS_AS(phase_vocoder(dense_spec, 1.2f, override_config), SonareException);
   REQUIRE_NOTHROW(phase_vocoder(dense_spec, 1.2f));
+}
+
+TEST_CASE("time_stretch and phase_vocoder refuse the rate by its name", "[time_stretch]") {
+  const Audio audio = create_test_audio();
+  const char* expected = "rate must be finite and greater than 0";
+  CHECK_THROWS_WITH(time_stretch(audio, 0.0f), expected);
+  CHECK_THROWS_WITH(time_stretch(audio, -1.0f), expected);
+  CHECK_THROWS_WITH(time_stretch(audio, std::numeric_limits<float>::quiet_NaN()), expected);
+
+  // A rate so small the output exceeds the buffer limit is refused as a range.
+  CHECK_THROWS_WITH(time_stretch(audio, 1e-12f),
+                    Catch::Matchers::StartsWith("rate must be finite and in ["));
+
+  const Spectrogram spec = Spectrogram::compute(audio, StftConfig());
+  CHECK_THROWS_WITH(phase_vocoder(spec, 0.0f), expected);
+  CHECK_THROWS_WITH(phase_vocoder_phaselocked(spec, 0.0f), expected);
 }

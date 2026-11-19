@@ -1843,13 +1843,93 @@ TEST_CASE("true_peak names the oversample factor it refuses", "[metering][true_p
       FAIL("expected a refusal");
     } catch (const SonareException& error) {
       CHECK(error.code() == ErrorCode::InvalidParameter);
-      CHECK(std::string(error.what()) ==
-            "true_peak: oversample_factor must be one of 1, 2, 4, 8, 16, got " +
-                std::to_string(factor));
+      CHECK(std::string(error.what()) == "oversample_factor must be one of 1, 2, 4, 8, 16");
     }
   }
   for (const int factor : {1, 2, 4, 8, 16}) {
     CAPTURE(factor);
     CHECK(metering::true_peak(samples.data(), samples.size(), factor) > 0.0f);
   }
+}
+
+TEST_CASE("the basic meters refuse in the shared parameter vocabulary", "[metering][refusal]") {
+  const auto message_of = [](const auto& call) {
+    try {
+      call();
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      return std::string(error.what());
+    }
+    return std::string("no refusal");
+  };
+  const std::vector<float> samples(256, 0.25f);
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+  const float nan_value = std::numeric_limits<float>::quiet_NaN();
+
+  CHECK(message_of([&] { (void)metering::silence_ratio(audio, -60.0f, 0, 512); }) ==
+        "frame_length must be an integer in [1, 2147483647]");
+  CHECK(message_of([&] { (void)metering::silence_ratio(audio, -60.0f, 2048, 0); }) ==
+        "hop_length must be an integer in [1, 2147483647]");
+  CHECK(message_of([&] { (void)metering::silence_ratio(audio, nan_value, 2048, 512); }) ==
+        "threshold_db must be finite and in [-3.4028235e38, 3.4028235e38]");
+
+  CHECK(message_of([&] { (void)metering::true_peak(nullptr, 4, 4); }) ==
+        "samples must not be null when length is greater than 0");
+
+  std::vector<float> poisoned = samples;
+  poisoned[10] = nan_value;
+  const Audio bad = Audio::from_buffer(poisoned.data(), poisoned.size(), 48000);
+  const std::string non_finite = "audio contains a non-finite sample";
+  CHECK(message_of([&] { (void)metering::peak_db(bad); }) == non_finite);
+  CHECK(message_of([&] { (void)metering::rms_db(bad); }) == non_finite);
+  CHECK(message_of([&] { (void)metering::crest_factor_db(bad); }) == non_finite);
+  CHECK(message_of([&] { (void)metering::dc_offset(bad); }) == non_finite);
+  CHECK(message_of([&] { (void)metering::true_peak(poisoned.data(), poisoned.size(), 4); }) ==
+        non_finite);
+}
+
+TEST_CASE("dynamic range config refuses a member by its name", "[metering][dynamic_range]") {
+  using namespace sonare::metering;
+  DynamicRangeConfig config;
+  config.window_sec = 0.0f;
+  CHECK_THROWS_WITH(validate_dynamic_range_config(config),
+                    "window_sec must be finite and greater than 0");
+  config = DynamicRangeConfig();
+  config.hop_sec = -1.0f;
+  CHECK_THROWS_WITH(validate_dynamic_range_config(config),
+                    "hop_sec must be finite and greater than 0");
+  config = DynamicRangeConfig();
+  config.low_percentile = 1.5f;
+  CHECK_THROWS_WITH(validate_dynamic_range_config(config),
+                    "low_percentile must be finite and in [0, 1]");
+  config = DynamicRangeConfig();
+  config.high_percentile = -0.1f;
+  CHECK_THROWS_WITH(validate_dynamic_range_config(config),
+                    "high_percentile must be finite and in [0, 1]");
+  config = DynamicRangeConfig();
+  config.low_percentile = 0.9f;
+  config.high_percentile = 0.5f;
+  CHECK_THROWS_WITH(validate_dynamic_range_config(config),
+                    "low_percentile must be at most high_percentile");
+  config = DynamicRangeConfig();
+  config.floor_db = std::numeric_limits<float>::infinity();
+  CHECK_THROWS_WITH(validate_dynamic_range_config(config),
+                    "floor_db must be finite and in [-3.4028235e38, 3.4028235e38]");
+
+  CHECK_THROWS_WITH(dynamic_range_config_from_public(-1.0f, 0.0f, 0.0f, 0.0f),
+                    "window_sec must be finite and at least 0");
+  CHECK_THROWS_WITH(dynamic_range_config_from_public(0.0f, -1.0f, 0.0f, 0.0f),
+                    "hop_sec must be finite and at least 0");
+  CHECK_THROWS_WITH(
+      dynamic_range_config_from_public(0.0f, 0.0f, std::numeric_limits<float>::quiet_NaN(), 0.0f),
+      "low_percentile must be finite and in [-3.4028235e38, 3.4028235e38]");
+  CHECK_THROWS_WITH(
+      dynamic_range_config_from_public(0.0f, 0.0f, 0.0f, std::numeric_limits<float>::infinity()),
+      "high_percentile must be finite and in [-3.4028235e38, 3.4028235e38]");
+}
+
+TEST_CASE("waveform_peaks refuses a zero bucket width by name", "[metering][waveform]") {
+  const std::vector<float> samples(16, 0.5f);
+  CHECK_THROWS_WITH(sonare::metering::waveform_peaks(samples.data(), samples.size(), 1, 0),
+                    "samples_per_bucket must be an integer of at least 1");
 }

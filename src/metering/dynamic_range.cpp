@@ -10,6 +10,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
@@ -28,22 +29,24 @@ float rms_db_for_window(const float* data, size_t start, size_t length, float fl
 }  // namespace
 
 void validate_dynamic_range_config(const DynamicRangeConfig& config) {
-  SONARE_CHECK(numeric::finite_positive(config.window_sec), ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_positive(config.hop_sec), ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_in_closed_range(config.low_percentile, 0.0f, 1.0f),
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_in_closed_range(config.high_percentile, 0.0f, 1.0f),
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.low_percentile <= config.high_percentile, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.floor_db), ErrorCode::InvalidParameter);
+  namespace check = util::check;
+  check::greater_than(config.window_sec, 0.0, "window_sec");
+  check::greater_than(config.hop_sec, 0.0, "hop_sec");
+  check::in_range(config.low_percentile, 0.0, 1.0, "low_percentile");
+  check::in_range(config.high_percentile, 0.0, 1.0, "high_percentile");
+  if (config.low_percentile > config.high_percentile) {
+    check::refuse_relation({"low_percentile", "high_percentile"}, "{0} must be at most {1}");
+  }
+  check::finite_float(config.floor_db, "floor_db");
 }
 
 DynamicRangeConfig dynamic_range_config_from_public(float window_sec, float hop_sec,
                                                     float low_percentile, float high_percentile) {
-  SONARE_CHECK(numeric::finite_non_negative(window_sec), ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_non_negative(hop_sec), ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite(low_percentile), ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite(high_percentile), ErrorCode::InvalidParameter);
+  namespace check = util::check;
+  check::at_least(window_sec, 0.0, "window_sec");
+  check::at_least(hop_sec, 0.0, "hop_sec");
+  check::finite_float(low_percentile, "low_percentile");
+  check::finite_float(high_percentile, "high_percentile");
 
   DynamicRangeConfig config;
   if (window_sec > 0.0f) config.window_sec = window_sec;
