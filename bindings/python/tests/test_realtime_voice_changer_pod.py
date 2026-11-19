@@ -291,3 +291,28 @@ def test_a_changer_built_from_a_record_reproduces_the_source() -> None:
     ):
         assert copy.config_json() == source.config_json()
         assert copy.latency_samples == source.latency_samples
+
+
+@pytest.mark.parametrize("grain", [1, 3, 6, 1.5, -4, 8196])
+def test_set_config_refuses_a_retune_grain_outside_its_domain(grain: float) -> None:
+    changer = _build_changer()
+    try:
+        refused = dataclasses.replace(changer.config, retune_grain_size_samples=grain)
+        with pytest.raises(SonareValueError) as caught:
+            changer.set_config(refused)
+        assert str(caught.value) == (
+            "RealtimeVoiceChanger.set_config: retune_grain_size_samples "
+            "must be a multiple of 4 in [4, 8192]"
+        )
+    finally:
+        changer.close()
+
+
+@pytest.mark.parametrize("grain", [4, 8192])
+def test_set_config_keeps_a_retune_grain_inside_its_domain(grain: int) -> None:
+    changer = _build_changer()
+    try:
+        changer.set_config(dataclasses.replace(changer.config, retune_grain_size_samples=grain))
+        assert changer.config.retune_grain_size_samples == grain
+    finally:
+        changer.close()

@@ -153,3 +153,32 @@ def test_streaming_retune_refuses_an_explicit_zero_grain() -> None:
         StreamingRetune(grain_size_samples=0)
     with StreamingRetune() as retune, pytest.raises(SonareValueError, match="grain_size_samples"):
         retune.set_config(grain_size_samples=0)
+
+
+_GRAIN_DOMAIN = "must be a multiple of 4 in [4, 8192]"
+
+
+@pytest.mark.parametrize("grain", [1, 3, 6, 1.5, -4, 8196])
+def test_streaming_retune_refuses_a_grain_outside_its_domain(grain: float) -> None:
+    # The engine used to round such a request up to a grain nobody asked for.
+    expected = f"grain_size_samples {_GRAIN_DOMAIN}"
+    with pytest.raises(SonareValueError) as created:
+        StreamingRetune(grain_size_samples=grain)  # type: ignore[arg-type]
+    assert str(created.value) == f"StreamingRetune: {expected}"
+    with StreamingRetune() as retune, pytest.raises(SonareValueError) as configured:
+        retune.set_config(grain_size_samples=grain)  # type: ignore[arg-type]
+    assert str(configured.value) == f"StreamingRetune.set_config: {expected}"
+
+
+def test_streaming_retune_refuses_a_grain_that_is_not_a_number() -> None:
+    with pytest.raises(TypeError) as caught:
+        StreamingRetune(grain_size_samples="64")  # type: ignore[arg-type]
+    assert str(caught.value) == "StreamingRetune: grain_size_samples must be a number"
+
+
+@pytest.mark.parametrize("grain", [4, 8192])
+def test_streaming_retune_runs_at_the_grain_it_was_given(grain: int) -> None:
+    with StreamingRetune(grain_size_samples=grain) as retune:
+        assert retune.config()["grain_size_samples"] == grain
+        retune.prepare(SR, BLOCK)
+        assert retune.grain_size_samples == grain

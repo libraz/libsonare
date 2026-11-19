@@ -7,6 +7,7 @@ import ctypes
 import dataclasses
 import functools
 import json
+import operator
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal, TypeAlias, cast, get_args
 
@@ -19,7 +20,7 @@ from ._ffi import (
     SonareRealtimeVoiceChangerConfig,
     SonareVoiceChangeConfig,
 )
-from ._narrowing import _resolve_zero_default
+from ._narrowing import _is_number, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -784,14 +785,38 @@ def _neutral_default(name: str) -> Callable[[], Any]:
     return lambda: _neutral_monitor_defaults()[name]
 
 
+# The grain lengths the retune engine runs at as given, rather than rounding.
+_GRAIN_SIZE_MIN = 4
+_GRAIN_SIZE_MAX = 8192
+_GRAIN_SIZE_STEP = 4
+
+
 def _grain_size_request(grain_size_samples: int | None, name: str) -> int:
-    """Map a grain size to the C argument; ``None`` is automatic (C ``0``)."""
+    """Map a grain size to the C argument; ``None`` is automatic (C ``0``).
+
+    An explicit grain outside the engine's domain is refused, never rounded to
+    the nearest one it can run.
+    """
     if grain_size_samples is None:
         return 0
-    # Narrowed rather than coerced: int() would take 0.5 as the automatic 0.
-    value = _narrow_int(grain_size_samples, name, _C_INT_MIN, _C_INT_MAX)
-    if value == 0:
+    if not _is_number(grain_size_samples):
+        raise _refuse_type(f"{name} must be a number")
+    if grain_size_samples == 0:
         raise _refuse(f"{name} must not be 0; omit it for the automatic grain")
+    # Narrowed rather than coerced: int() would take 4.5 as the grain 4.
+    try:
+        value = operator.index(grain_size_samples)
+    except TypeError:
+        value = None
+    if (
+        value is None
+        or not _GRAIN_SIZE_MIN <= value <= _GRAIN_SIZE_MAX
+        or value % _GRAIN_SIZE_STEP != 0
+    ):
+        raise _refuse(
+            f"{name} must be a multiple of {_GRAIN_SIZE_STEP} "
+            f"in [{_GRAIN_SIZE_MIN}, {_GRAIN_SIZE_MAX}]"
+        )
     return value
 
 
