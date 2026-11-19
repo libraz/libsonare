@@ -65,9 +65,7 @@ def _is_number(value: object) -> bool:
 
 
 def _narrowing_error(name: str, low: int, high: int) -> str:
-    """Word one refusal for both halves of the family, as the Node and WASM readers do."""
-    if (low, high) == (-(2**31), 2**31 - 1):
-        return f"{name} must be an integer within the signed 32-bit range"
+    """Word one refusal for both halves of the family: the closed range of the target type."""
     return f"{name} must be an integer in [{low}, {high}]"
 
 

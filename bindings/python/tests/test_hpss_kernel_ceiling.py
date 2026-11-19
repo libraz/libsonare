@@ -168,7 +168,7 @@ def test_even_kernel_is_refused_for_parity_not_for_the_ceiling(
         entry(tone, SR, **_kernels(direction, kernel))
     _assert_parameter_refusal(raised.value)
     arg_name = f"kernel_{direction}"
-    assert f"{arg_name} must be a positive odd signed 32-bit integer" in str(raised.value)
+    assert f"{arg_name} must be an odd integer in [1, 2147483647]" in str(raised.value)
     assert str(CEILING) not in str(raised.value)
 
 
@@ -186,7 +186,7 @@ def test_a_kernel_past_the_signed_range_is_refused_rather_than_wrapped(
     with pytest.raises(SonareValueError) as raised:
         entry(tone, SR, **_kernels(direction, INT_MAX + 1))
     _assert_parameter_refusal(raised.value)
-    assert f"kernel_{direction} must be a positive odd signed 32-bit integer" in str(raised.value)
+    assert f"kernel_{direction} must be an odd integer in [1, 2147483647]" in str(raised.value)
 
 
 @pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
@@ -198,7 +198,7 @@ def test_a_wrapping_kernel_is_refused_by_name(entry, direction, passed, truncate
     with pytest.raises(SonareValueError) as raised:
         entry(tone, SR, **_kernels(direction, passed))
     _assert_parameter_refusal(raised.value)
-    assert f"kernel_{direction} must be a positive odd signed 32-bit integer" in str(raised.value)
+    assert f"kernel_{direction} must be an odd integer in [1, 2147483647]" in str(raised.value)
     assert "exceeds the maximum" not in str(raised.value)
 
 

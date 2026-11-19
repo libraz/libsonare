@@ -1050,7 +1050,7 @@ def _validate_c_int_field(value: object, arg_name: str) -> int:
         return _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
         raise _int_refusal(
-            value, arg_name, "must be an integer within the signed 32-bit range"
+            value, arg_name, f"must be an integer in [{_C_INT_MIN}, {_C_INT_MAX}]"
         ) from exc
 
 
@@ -1072,9 +1072,9 @@ def _validate_hpss_kernel(value: int, arg_name: str) -> int:
 
     Raises:
         TypeError: If the value is not a number.
-        SonareValueError: If the value is not a positive odd signed 32-bit int.
+        SonareValueError: If the value is not an odd integer in ``[1, 2**31 - 1]``.
     """
-    domain = "must be a positive odd signed 32-bit integer"
+    domain = f"must be an odd integer in [1, {_C_INT_MAX}]"
     try:
         kernel = _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
@@ -1124,9 +1124,9 @@ def _validate_stft_n_fft(n_fft: int) -> int:
     Raises:
         TypeError: If ``n_fft`` is not a number.
         SonareValueError: If ``n_fft`` is not an even integer in
-            ``[4, 2**31 - 1]``.
+            ``[4, 2**31 - 2]``.
     """
-    domain = "must be an even signed 32-bit integer >= 4"
+    domain = f"must be an even integer in [4, {_C_INT_MAX - 1}]"
     try:
         size = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:

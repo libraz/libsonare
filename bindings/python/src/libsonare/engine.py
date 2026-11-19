@@ -938,7 +938,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                     raise _int_refusal(
                         event.group,
                         "EngineMidiEvent.group",
-                        f"must be in [0, {_UINT8_MAX}]",
+                        f"must be an integer in [0, {_UINT8_MAX}]",
                     ) from exc
                 # Same tolerance the C bridge documents: a word_count outside
                 # [1, 4] means "infer the word form", so this narrows integrality

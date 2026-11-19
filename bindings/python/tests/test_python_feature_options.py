@@ -111,7 +111,7 @@ def test_nnls_chroma_rejects_custom_hop_without_ex2(monkeypatch: pytest.MonkeyPa
         ({"stft_blend_n_fft": 0}, "stft_blend_n_fft must be at least 2"),
         (
             {"stft_blend_n_fft": 2**31},
-            "stft_blend_n_fft must be an integer within the signed 32-bit range",
+            "stft_blend_n_fft must be an integer in [-2147483648, 2147483647]",
         ),
     ],
 )

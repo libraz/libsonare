@@ -318,8 +318,8 @@ def extract_percussive_events(
 
     Raises:
         SonareValueError: If ``samples`` is empty or non-finite, a framing,
-            kernel size or ``onset_wait`` is not a positive whole number fitting
-            in a signed 32-bit integer, or ``onset_delta`` or ``max_event_ms`` is
+            kernel size or ``onset_wait`` is not an integer in
+            ``[1, 2**31 - 1]``, or ``onset_delta`` or ``max_event_ms`` is
             an explicit 0.
         SonareError: If the C call rejects the request (a framing that breaks
             overlap-add, a negative ``onset_wait``, a negative ``max_event_ms``,
@@ -436,7 +436,7 @@ def render_percussive_events(
 
     Raises:
         SonareValueError: If ``samples`` is empty or non-finite, or a framing or
-            kernel size does not fit in a signed 32-bit integer.
+            kernel size is not an integer in ``[1, 2**31 - 1]``.
         SonareError: If the C call rejects the request (an empty, reversed or
             out-of-range span, overlapping source spans, a non-finite gain, a
             framing that breaks overlap-add). The

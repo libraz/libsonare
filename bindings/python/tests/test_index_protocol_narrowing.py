@@ -132,8 +132,8 @@ def _refusal(entry, error=SonareValueError, **kwargs) -> str:
 @pytest.mark.parametrize(
     ("keyword", "domain"),
     [
-        ("kernel_harmonic", "hpss: kernel_harmonic must be a positive odd signed 32-bit integer"),
-        ("n_fft", "hpss: n_fft must be an even signed 32-bit integer >= 4"),
+        ("kernel_harmonic", "hpss: kernel_harmonic must be an odd integer in [1, 2147483647]"),
+        ("n_fft", "hpss: n_fft must be an even integer in [4, 2147483646]"),
         ("hop_length", "hpss: hop_length must be an integer in [1, 2147483647]"),
     ],
 )
