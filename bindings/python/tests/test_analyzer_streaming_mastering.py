@@ -361,9 +361,9 @@ def test_streaming_mastering_chain_rejects_denoise_with_the_quantile_estimator()
     """The whole-signal estimator is refused by name; the stream's default prepares."""
     from libsonare import SonareError, StreamingMasteringChain
 
-    with pytest.raises(SonareError, match="quantile"):
+    with pytest.raises(SonareError, match="the quantile noise estimator"):
         StreamingMasteringChain(
-            {"repair": {"denoise": {"enabled": 1, "noiseEstimator": 0}}},
+            {"repair": {"denoise": {"enabled": 1, "noiseEstimator": "quantile"}}},
             sample_rate=44100,
             num_channels=1,
         )
