@@ -560,6 +560,7 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
 SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written) {
   SONARE_C_API_ENTRY;
+  if (written) *written = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_drain_telemetry: engine must not be NULL");
@@ -596,6 +597,7 @@ SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_drain_meter_telemetry: engine must not be NULL");
@@ -634,6 +636,7 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
                                                      SonareMeterTelemetryRecordWide* out,
                                                      size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_drain_meter_telemetry_wide: engine must not be NULL");
@@ -673,6 +676,7 @@ SonareError sonare_engine_drain_meter_telemetry_v2(SonareEngine* engine,
                                                    SonareMeterTelemetryRecordV2* out,
                                                    size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_drain_meter_telemetry_v2: engine must not be NULL");
@@ -711,6 +715,7 @@ SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareEngine* engine,
                                                         SonareMeterTelemetryRecordWideV2* out,
                                                         size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_drain_meter_telemetry_wide_v2: engine must not be NULL");
@@ -823,6 +828,7 @@ SonareError sonare_engine_drain_scope_telemetry(SonareEngine* engine,
                                                 SonareScopeTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_drain_scope_telemetry: engine must not be NULL");

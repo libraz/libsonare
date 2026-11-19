@@ -389,12 +389,13 @@ void refuseUnknownDocumentKeys(const val& object, const std::string& path,
 
 val requireTypedProperty(const val& object, const char* key, const char* subject,
                          const char* js_type, const char* article_type) {
-  if (!hasProperty(object, key)) {
-    throw WasmTypeError(std::string(subject) + "." + key + " must be given");
-  }
+  namespace schema = sonare::util::json::schema;
+  if (!hasProperty(object, key))
+    throw WasmTypeError(schema::missing_key(schema::child_path(subject, key)));
   val value = object[key];
   if (value.typeOf().as<std::string>() != js_type) {
-    throw WasmTypeError(std::string(subject) + "." + key + " must be " + article_type);
+    throw WasmTypeError(
+        schema::refusal(schema::child_path(subject, key), std::string("must be ") + article_type));
   }
   return value;
 }

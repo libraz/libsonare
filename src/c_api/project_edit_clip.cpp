@@ -8,6 +8,7 @@
 
 SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_curve) {
   SONARE_C_API_ENTRY;
+  if (out_curve != nullptr) *out_curve = 0;
   SONARE_C_TRY
   if (name == nullptr) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,

@@ -446,6 +446,8 @@ SonareError sonare_align_take_to_reference_ex(
     size_t take_len, int take_sample_rate, const SonareTakeAlignConfig* config,
     SonareProjectWarpAnchor** out_anchors, size_t* out_count, SonareTakeAlignment* out_alignment) {
   SONARE_C_API_ENTRY;
+  if (out_anchors != nullptr) *out_anchors = nullptr;
+  if (out_count != nullptr) *out_count = 0;
   if (out_alignment != nullptr) *out_alignment = SonareTakeAlignment{};
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_anchors == nullptr) {
@@ -458,8 +460,6 @@ SonareError sonare_align_take_to_reference_ex(
                    "align_take_to_reference_ex: out_count must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out_anchors = nullptr;
-  *out_count = 0;
   if (const SonareError err =
           validate_audio_params("align_take_to_reference_ex", "reference", reference, reference_len,
                                 reference_sample_rate);

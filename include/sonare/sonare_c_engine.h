@@ -1101,6 +1101,9 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
 /// @details The @c error field uses SonareEngineTelemetryError ordinals; core
 /// reserves ordinal 19 for the WASM worklet and publishes the channel-bound
 /// diagnostic at ordinal 20. The SonareEngineTelemetry POD layout is unchanged.
+/// @param out Receives up to @p max_records records; written only on success.
+/// @param max_records Capacity of @p out; 0 drains nothing.
+/// @param written Receives the number of records written; set to 0 on entry.
 SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written);
 /// @brief Drains pending meter telemetry records published by the engine.

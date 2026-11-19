@@ -190,6 +190,7 @@ SonareError sonare_engine_reset_capture(SonareEngine* engine) {
 
 SonareError sonare_engine_capture_status(SonareEngine* engine, SonareEngineCaptureStatus* out) {
   SONARE_C_API_ENTRY;
+  if (out) *out = SonareEngineCaptureStatus{};
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_capture_status: engine must not be NULL");
@@ -335,6 +336,7 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
 
 SonareError sonare_engine_graph_node_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_graph_node_count: engine must not be NULL");
@@ -361,6 +363,7 @@ SonareError sonare_engine_graph_node_count(SonareEngine* engine, size_t* out_cou
 
 SonareError sonare_engine_graph_connection_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_graph_connection_count: engine must not be NULL");
