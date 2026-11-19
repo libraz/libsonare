@@ -1,6 +1,6 @@
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
-import { quarterHop } from './internal/fft_options.js';
+import { resolveResynthesisHop } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -260,12 +260,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
   // Positivity only, as melToStft: the geometry rule this reconstruction carries
   // is that all three are positive.
   const nFft = resolvePositiveIntegerOption('melToAudio', 'nFft', r.nFft, 2048);
-  const hopLength = resolvePositiveIntegerOption(
-    'melToAudio',
-    'hopLength',
-    r.hopLength,
-    quarterHop(nFft),
-  );
+  const hopLength = resolveResynthesisHop('melToAudio', r.hopLength);
   const nIter = resolveIntegerOption('melToAudio', 'nIter', r.nIter, 32);
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
@@ -307,12 +302,7 @@ export function griffinLim(...args: unknown[]): Float32Array {
   const nBins = r.magnitude.rows;
   const nFft = resolvePositiveIntegerOption('griffinLim', 'nFft', r.nFft, (nBins - 1) * 2);
   assertGriffinLimFftSize(nBins, nFft);
-  const hopLength = resolvePositiveIntegerOption(
-    'griffinLim',
-    'hopLength',
-    r.hopLength,
-    quarterHop(nFft),
-  );
+  const hopLength = resolveResynthesisHop('griffinLim', r.hopLength);
   const nIter = resolvePositiveIntegerOption('griffinLim', 'nIter', r.nIter, 32);
   return addon.griffinLim(
     r.magnitude.data,
@@ -351,12 +341,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   // Positivity only, as melToAudio: the same reconstruction behind one more
   // inverse transform, under the same geometry rule.
   const nFft = resolvePositiveIntegerOption('mfccToAudio', 'nFft', r.nFft, 2048);
-  const hopLength = resolvePositiveIntegerOption(
-    'mfccToAudio',
-    'hopLength',
-    r.hopLength,
-    quarterHop(nFft),
-  );
+  const hopLength = resolveResynthesisHop('mfccToAudio', r.hopLength);
   const nIter = resolveIntegerOption('mfccToAudio', 'nIter', r.nIter, 32);
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;

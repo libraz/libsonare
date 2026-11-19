@@ -4,7 +4,7 @@
  */
 
 import { validatePositiveIntegers } from './internal/feature_validation.js';
-import { quarterHop, resolveFftOptions } from './internal/fft_options.js';
+import { resolveFftOptions, resolveResynthesisHop } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -27,14 +27,17 @@ function requireModule() {
   return getSonareModule();
 }
 
-/** The `nFft` / `hopLength` pair of a Griffin-Lim inverse: an omitted hop is a quarter of the size. */
+/** The `nFft` / `hopLength` pair of a Griffin-Lim inverse: an omitted hop is left to the core. */
 function resolveInverseFftOptions(
   fnName: string,
   nFft: unknown,
   hopLength: unknown,
 ): { nFft: number; hopLength: number } {
   assertIntegerValue(fnName, nFft, 'nFft');
-  return resolveFftOptions(fnName, nFft, hopLength === undefined ? quarterHop(nFft) : hopLength);
+  return {
+    nFft: resolveFftOptions(fnName, nFft, undefined).nFft,
+    hopLength: resolveResynthesisHop(fnName, hopLength),
+  };
 }
 
 /** Mel power to linear STFT magnitude request. */

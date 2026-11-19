@@ -34,8 +34,8 @@ export function resolveFftOptions(
 
 /**
  * The same pair for an effect that resynthesizes audio: the symmetric Hann
- * synthesis window is all zeros at two points, so the smallest size is 4, and
- * an omitted hop is a quarter of the size so overlap-add holds at any size.
+ * synthesis window is all zeros at two points, so the smallest size is 4. An
+ * omitted hop reaches native as 0, which the core runs as a quarter of `nFft`.
  */
 export function resolveEffectFftOptions(
   fnName: string,
@@ -44,17 +44,21 @@ export function resolveEffectFftOptions(
 ): { nFft: number; hopLength: number } {
   const size = nFft === undefined ? 2048 : nFft;
   assertIntegerValue(fnName, size, 'nFft');
-  return resolveWithMinimum(
-    fnName,
-    size,
-    hopLength === undefined ? quarterHop(size) : hopLength,
-    4,
-  );
+  assertEvenIntegerAtLeast(fnName, size, 'nFft', 4, 2 ** 30);
+  return { nFft: size, hopLength: resolveResynthesisHop(fnName, hopLength) };
 }
 
-/** The hop a resynthesizing call takes when none is given: a quarter of the frame, never below one sample. */
-export function quarterHop(nFft: number): number {
-  return Math.max(1, Math.floor(nFft / 4));
+/**
+ * The hop of a resynthesizing call as native reads it: omitted is 0, which the
+ * core runs as a quarter of `nFft`; a given hop is a positive integer.
+ */
+export function resolveResynthesisHop(fnName: string, hopLength: unknown): number {
+  if (hopLength === undefined) {
+    return 0;
+  }
+  assertIntegerValue(fnName, hopLength, 'hopLength');
+  assertPositiveInteger(fnName, hopLength, 'hopLength');
+  return hopLength;
 }
 
 function resolveWithMinimum(
