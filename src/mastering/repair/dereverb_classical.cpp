@@ -13,9 +13,12 @@
 #include "mastering/repair/dereverb_internal.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
+
+namespace check = sonare::util::check;
 namespace {
 
 constexpr double kRegularization = static_cast<double>(sonare::constants::kSpectrumEpsilon);
@@ -269,60 +272,20 @@ double dereverb_subtraction_gain(double current_power, double late_psd,
 }  // namespace detail
 
 void validate_config(const DereverbClassicalConfig& config) {
-  if (!std::isfinite(config.threshold) || config.threshold < 0.0f || config.threshold > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb threshold must be finite and in [0, 1]");
-  }
-  if (!std::isfinite(config.attenuation) || config.attenuation < 0.0f ||
-      config.attenuation > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb attenuation must be finite and in [0, 1]");
-  }
-  if (config.n_fft < 2 || config.n_fft > kMaxStftNFft || (config.n_fft & (config.n_fft - 1)) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb n_fft must be an even power of two in the supported range");
-  }
-  if (config.hop_length <= 0 || config.hop_length > config.n_fft / 2) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb hop_length must be in (0, n_fft / 2]");
-  }
-  if (!std::isfinite(config.t60_sec) || config.t60_sec <= 0.0f ||
-      config.t60_sec > kDereverbMaxT60Sec) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb t60_sec must be finite and in (0, 10]");
-  }
-  if (!std::isfinite(config.late_delay_ms) || config.late_delay_ms < 0.0f ||
-      config.late_delay_ms > kDereverbMaxLateDelayMs) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb late_delay_ms must be finite and in [0, 500]");
-  }
-  if (!std::isfinite(config.over_subtraction) || config.over_subtraction < 0.0f ||
-      config.over_subtraction > 16.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb over_subtraction must be finite and in [0, 16]");
-  }
-  if (!std::isfinite(config.spectral_floor) || config.spectral_floor < 0.0f ||
-      config.spectral_floor > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb spectral_floor must be finite and in [0, 1]");
-  }
-  if (config.wpe_iterations < 1 || config.wpe_iterations > kDereverbMaxWpeIterations) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb wpe_iterations must be in [1, kDereverbMaxWpeIterations]");
-  }
-  if (config.wpe_taps < 1 || config.wpe_taps > kDereverbMaxWpeTaps) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb wpe_taps must be in [1, kDereverbMaxWpeTaps]");
-  }
-  if (!std::isfinite(config.wpe_strength) || config.wpe_strength < 0.0f ||
-      config.wpe_strength > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb wpe_strength must be finite and in [0, 1]");
-  }
+  check::in_range(config.threshold, 0.0, 1.0, "threshold");
+  check::in_range(config.attenuation, 0.0, 1.0, "attenuation");
+  check::power_of_two_in_range(config.n_fft, 2, kMaxStftNFft, "n_fft");
+  check::integer_in_range(config.hop_length, 1, config.n_fft / 2, "hop_length");
+  check::in_interval(config.t60_sec, 0.0, false, kDereverbMaxT60Sec, true, "t60_sec");
+  check::in_range(config.late_delay_ms, 0.0, kDereverbMaxLateDelayMs, "late_delay_ms");
+  check::in_range(config.over_subtraction, 0.0, 16.0, "over_subtraction");
+  check::in_range(config.spectral_floor, 0.0, 1.0, "spectral_floor");
+  check::integer_in_range(config.wpe_iterations, 1, kDereverbMaxWpeIterations, "wpe_iterations");
+  check::integer_in_range(config.wpe_taps, 1, kDereverbMaxWpeTaps, "wpe_taps");
+  check::in_range(config.wpe_strength, 0.0, 1.0, "wpe_strength");
   if (!common::has_reconstructible_hann_geometry(config.n_fft, config.hop_length)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "dereverb n_fft and hop_length leave an unreconstructible Hann overlap residue");
+    check::refuse_relation({"n_fft", "hop_length"},
+                           "{0} and {1} must leave every Hann overlap-add sum above 1e-8");
   }
 }
 

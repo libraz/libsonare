@@ -24,6 +24,9 @@ enum class DenoiseMode {
   SpectralSubtraction,
 };
 
+/// @brief Number of DenoiseMode enumerators; keep in step with the enum.
+inline constexpr int kDenoiseModeCount = 3;
+
 enum class DenoiseNoiseEstimator {
   /// Estimate one stationary noise spectrum from the quietest frames. A
   /// steady tone -- a calibration tone, a drone, a long held note -- reads
@@ -39,6 +42,9 @@ enum class DenoiseNoiseEstimator {
   /// a window length nor the bias compensation the two MCRA variants need.
   Spp,
 };
+
+/// @brief Number of DenoiseNoiseEstimator enumerators; keep in step with the enum.
+inline constexpr int kDenoiseNoiseEstimatorCount = 4;
 
 /// @brief STFT-based denoiser supporting three classical gain functions.
 ///

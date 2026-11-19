@@ -823,7 +823,8 @@ inline const char* integer_refusal_predicate(double value) {
 /// @brief Refuses a flat param value that no integral field can hold, naming @p subject.
 [[noreturn]] inline void reject_integer_param(const std::string& subject, double value) {
   throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                          integer_refusal_predicate(value));
+                                          integer_refusal_predicate(value))
+      .as_caller_spelled();
 }
 
 /// @brief A value refusal raised where the parameter's key is not known.
@@ -842,14 +843,16 @@ class FieldValueRefusal : public SonareException {
 
 /// @brief Rethrows @p refusal as a refusal of the parameter @p key.
 [[noreturn]] inline void rethrow_keyed(const FieldValueRefusal& refusal, const std::string& key) {
-  throw SonareParameterRefusal::predicate(refusal.code(), key, refusal.predicate());
+  throw SonareParameterRefusal::predicate(refusal.code(), key, refusal.predicate())
+      .as_caller_spelled();
 }
 
 /// @brief Converts a flat integer to a size, refusing a negative one by name.
 inline std::size_t checked_nonnegative_size(int value, const std::string& subject) {
   if (value < 0) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            "must be non-negative");
+                                            "must be non-negative")
+        .as_caller_spelled();
   }
   return static_cast<std::size_t>(value);
 }

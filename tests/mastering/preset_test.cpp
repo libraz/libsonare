@@ -423,9 +423,9 @@ TEST_CASE("a chain document refuses what it cannot mean, naming the path",
           "dynamics.compressor.detector: unknown name 'loud' (valid names: ");
   refused(R"({"params":{"eq.tilt.tiltDb":"high"}})", "params.eq.tilt.tiltDb is a string");
   refused(R"({"params":{"repair.declip.clipThresholdDb":0.5}})",
-          "params.repair.declip.clipThresholdDb must be at or below 0 dBFS");
+          "params.repair.declip.clipThresholdDb must be finite and in [-890, 0]");
   refused(R"({"params":{"repair.declip.enabled":false,"repair.declip.clipThresholdDb":3}})",
-          "params.repair.declip.clipThresholdDb must be at or below 0 dBFS");
+          "params.repair.declip.clipThresholdDb must be finite and in [-890, 0]");
   refused(R"({"params":{"dynamics.multibandComp.lowCutoffHz":200}})",
           "renamed to params.dynamics.multibandComp.crossover.cutoffsHz.0");
   refused(R"({"params":{"dynamics.multibandComp.highCutoffHz":2000}})",

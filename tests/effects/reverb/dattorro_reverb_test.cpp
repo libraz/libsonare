@@ -143,10 +143,10 @@ void require_dattorro_refusal(const DattorroReverbConfig& config, const std::str
   try {
     DattorroReverb subject(config);
     FAIL("constructed with " << field << " out of range");
-  } catch (const sonare::SonareException& error) {
+  } catch (const sonare::SonareParameterRefusal& error) {
     CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
-    CHECK(std::string(error.what()).find("DattorroReverb: " + field + " out of range") !=
-          std::string::npos);
+    CHECK(error.subjects() == std::vector<std::string>{field});
+    CHECK(std::string(error.what()).rfind(field + " must be", 0) == 0);
   }
 }
 

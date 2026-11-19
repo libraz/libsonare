@@ -21,9 +21,7 @@ using sonare::constants::kPiD;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
 float safe_q(float q) {
-  if (!band_q_valid(q)) {
-    throw SonareException(ErrorCode::InvalidParameter, "EQ band Q must be positive");
-  }
+  check_band_q(q);
   return std::max(q, 1.0e-6f);
 }
 
@@ -219,7 +217,7 @@ BiquadCoefficients design_eq_biquad(const EqBand& band, double sample_rate) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (!band_frequency_in_range(band.frequency_hz, sample_rate)) {
-    refuse_band_frequency(band.frequency_hz, sample_rate);
+    refuse_band_frequency(sample_rate);
   }
 
   const double q = safe_q(band.q);

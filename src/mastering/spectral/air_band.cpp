@@ -11,8 +11,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::spectral {
+
+namespace check = sonare::util::check;
 namespace {
 
 using sonare::discard_group_if_non_finite;
@@ -290,10 +293,9 @@ std::vector<rt::ParamDescriptor> AirBand::parameter_descriptors() const {
 }
 
 void AirBand::validate_config(const AirBandConfig& config) {
-  if (!amount_valid(config.amount) || !shelf_frequency_valid(config.shelf_frequency_hz) ||
-      !dynamic_range_valid(config.dynamic_range_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid air band configuration");
-  }
+  check::in_range(config.amount, 0.0, 1.0, "amount");
+  check::greater_than(config.shelf_frequency_hz, 0.0, "shelf_frequency_hz");
+  check::at_least(config.dynamic_range_db, 0.0, "dynamic_range_db");
 }
 
 void AirBand::ensure_state(int num_channels) {

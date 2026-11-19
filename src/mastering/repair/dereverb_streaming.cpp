@@ -18,9 +18,9 @@ namespace {
 DereverbClassicalConfig streaming_config(const DereverbClassicalConfig& config) {
   const auto validated = Validated<DereverbClassicalConfig>::make(config);
   if (validated->wpe_enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb wpe_enabled must be false when dereverberating a stream: the "
-                          "WPE predictor is fitted over the whole signal");
+    throw SonareParameterRefusal::predicate(ErrorCode::NotSupported, "wpe_enabled",
+                                            "is not supported for a streaming dereverb: the WPE "
+                                            "predictor is fitted over the whole signal");
   }
   return validated.get();
 }

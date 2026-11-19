@@ -5,6 +5,7 @@
 ///        builder records while it reads (kind, default, bound, dependency).
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -224,6 +225,49 @@ class ParamMap {
     return slots_;
   }
 
+  /// @brief Records that config member @p member is read from @p key.
+  /// @details The first record wins. A validator names the member it refuses, and
+  ///          @ref caller_key turns that name back into the key the caller wrote.
+  void note_member(const char* member, const char* key) const {
+    if (records_declarations_) member_keys_.try_emplace(member, key);
+  }
+
+  /// @brief Records that members under @p member_prefix are read from keys under @p key_prefix.
+  void note_member_prefix(std::string member_prefix, std::string key_prefix) const {
+    if (records_declarations_) {
+      member_prefixes_.emplace_back(std::move(member_prefix), std::move(key_prefix));
+    }
+  }
+
+  /// @brief The key @p member was read from, else @p member in the keys' camel case behind the
+  ///        key prefix its recorded member prefix maps to.
+  std::string caller_key(const std::string& member) const {
+    const auto found = member_keys_.find(member);
+    if (found != member_keys_.end()) return found->second;
+    for (const auto& [member_prefix, key_prefix] : member_prefixes_) {
+      if (member.compare(0, member_prefix.size(), member_prefix) == 0) {
+        return key_prefix + camel_key(member.substr(member_prefix.size()));
+      }
+    }
+    return camel_key(member);
+  }
+
+ private:
+  static std::string camel_key(const std::string& member) {
+    std::string key;
+    bool upper = false;
+    for (const char c : member) {
+      if (c == '_' || c == '.') {
+        upper = !key.empty();
+        continue;
+      }
+      key += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c;
+      upper = false;
+    }
+    return key;
+  }
+
+ public:
   /// @brief Turns off the declaration-only work the catalog needs.
   /// @details A bounds probe builds the same processor thousands of times and
   ///          asks one question of each build — did construction throw. It has
@@ -287,6 +331,8 @@ class ParamMap {
   mutable std::unordered_map<std::string, double> effective_;
   mutable std::unordered_map<std::string, std::vector<EnumChoice>> choices_;
   mutable std::vector<std::pair<std::string, SlotDeclaration>> slots_;
+  mutable std::unordered_map<std::string, std::string> member_keys_;
+  mutable std::vector<std::pair<std::string, std::string>> member_prefixes_;
   bool records_declarations_ = true;
 };
 
@@ -381,7 +427,8 @@ inline std::uint32_t u32(const ParamMap& params, const char* key, std::uint32_t 
   }
   if (it->second < 0.0) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
-                                            "must be non-negative");
+                                            "must be non-negative")
+        .as_caller_spelled();
   }
   std::uint32_t converted = 0;
   if (!numeric::checked_integral_cast(it->second, &converted)) {
@@ -402,7 +449,8 @@ inline bool b(const ParamMap& params, const char* key, bool default_value) {
   params.note_default(key, default_value ? 1.0 : 0.0);
   auto it = params.find(key);
   if (it != params.end() && !common::valid_switch_value(it->second)) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key, "must be 0 or 1");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key, "must be 0 or 1")
+        .as_caller_spelled();
   }
   const bool value = it == params.end() ? default_value : it->second == 1.0;
   params.note_effective(key, value ? 1.0 : 0.0);
@@ -427,7 +475,8 @@ inline Enum read_enum(const ParamMap& params, const char* key, Enum fallback) {
   const Enum candidate = static_cast<Enum>(converted);
   if (!enum_value_declared(candidate)) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
-                                            "must name a declared value");
+                                            "must name a declared value")
+        .as_caller_spelled();
   }
   params.note_effective(key, converted);
   return candidate;
@@ -521,6 +570,27 @@ inline void note_pair_order(const ParamMap& params, const char* first, Relation 
 // Expands one SONARE_FIELDS_* table row into a field overlay. A config builder
 // is then just `Config config; SONARE_FIELDS_X(SONARE_READ_FIELD); return ...`,
 // equivalent to the prior per-field `config.x = f(params, "x", config.x)` lines.
-#define SONARE_READ_FIELD(key, member, meta) read_field(params, key, config.member, meta);
+#define SONARE_READ_FIELD(key, member, meta) \
+  params.note_member(#member, key);          \
+  read_field(params, key, config.member, meta);
+
+/// @brief Runs @p build, rethrowing a validator's refusal with each member subject spelled as
+///        the key it was read from, behind @p prefix.
+/// @details A refusal already in the caller's spelling passes through untouched.
+template <typename Build>
+auto with_caller_keys(const ParamMap& params, const std::string& prefix,
+                      Build&& build) -> decltype(build()) {
+  try {
+    return build();
+  } catch (const SonareParameterRefusal& e) {
+    if (e.caller_spelled()) throw;
+    throw e.respelled(
+        e.code(),
+        [&params, &prefix](const std::string& member) {
+          return prefix + params.caller_key(member);
+        },
+        true);
+  }
+}
 
 }  // namespace sonare::mastering::api::detail

@@ -8,8 +8,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -67,7 +70,6 @@ void AutoPan::set_config(const AutoPanConfig& config) {
 namespace {
 bool rate_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
 bool depth_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f && v <= 1.0f; }
-bool phase_valid(float v) noexcept { return std::isfinite(v); }
 }  // namespace
 
 bool AutoPan::set_parameter_impl(unsigned int param_id, float value) {
@@ -101,9 +103,9 @@ std::vector<rt::ParamDescriptor> AutoPan::parameter_descriptors() const {
 }
 
 void AutoPan::validate_config(const AutoPanConfig& config) {
-  if (!rate_valid(config.rate_hz) || !depth_valid(config.depth) || !phase_valid(config.phase)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid auto pan configuration");
-  }
+  check::at_least(config.rate_hz, 0.0, "rate_hz");
+  check::in_range(config.depth, 0.0, 1.0, "depth");
+  check::finite_float(config.phase, "phase");
 }
 
 }  // namespace sonare::mastering::stereo

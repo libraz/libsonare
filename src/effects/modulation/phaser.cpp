@@ -10,6 +10,7 @@
 #include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::effects::modulation {
 
@@ -35,7 +36,7 @@ constexpr double kLoopHighpassHz = 20.0;
 // are further limited to the prepared rate's Nyquist guard inside process().
 constexpr FieldRange kRateHz{0.0f, kNoUpperBound};
 constexpr FieldRange kSweepHz{1.0f, kNoUpperBound};
-constexpr FieldRange kStages{1.0f, 12.0f};
+constexpr int kMaxStages = 12;
 constexpr FieldRange kDryWet{0.0f, 1.0f};
 constexpr FieldRange kFeedback{-kMaxFeedback, kMaxFeedback};
 constexpr FieldRange kDepth{0.0f, 1.0f};
@@ -56,13 +57,13 @@ float max_sweep_hz(double sample_rate) noexcept {
 Phaser::Phaser(PhaserConfig config) : config_(config) { validate_config(config_); }
 
 void Phaser::validate_config(const PhaserConfig& config) {
-  require_in_domain("phaser", "rate_hz", config.rate_hz, kRateHz);
-  require_in_domain("phaser", "min_hz", config.min_hz, kSweepHz);
-  require_in_domain("phaser", "max_hz", config.max_hz, kSweepHz);
-  require_in_domain("phaser", "stages", static_cast<float>(config.stages), kStages);
-  require_in_domain("phaser", "dry_wet", config.dry_wet, kDryWet);
-  require_in_domain("phaser", "feedback", config.feedback, kFeedback);
-  require_in_domain("phaser", "depth", config.depth, kDepth);
+  require_in_domain("rate_hz", config.rate_hz, kRateHz);
+  require_in_domain("min_hz", config.min_hz, kSweepHz);
+  require_in_domain("max_hz", config.max_hz, kSweepHz);
+  util::check::integer_in_range(config.stages, 1, kMaxStages, "stages");
+  require_in_domain("dry_wet", config.dry_wet, kDryWet);
+  require_in_domain("feedback", config.feedback, kFeedback);
+  require_in_domain("depth", config.depth, kDepth);
 }
 
 void Phaser::prepare(double sample_rate, int) {

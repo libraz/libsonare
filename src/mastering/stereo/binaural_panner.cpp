@@ -16,8 +16,11 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
+
+namespace check = sonare::util::check;
 namespace {
 
 namespace ring {
@@ -79,19 +82,10 @@ BinauralPanner::BinauralPanner(BinauralPannerConfig config) : config_(config) {
 }
 
 void BinauralPanner::validate_config(const BinauralPannerConfig& config) {
-  if (!std::isfinite(config.azimuth_deg)) {
-    throw SonareException(ErrorCode::InvalidParameter, "binaural azimuthDeg must be finite");
-  }
-  if (!turn_rate_valid(config.turn_rate_hz)) {
-    throw SonareException(ErrorCode::InvalidParameter, "binaural turnRateHz must be in [0, 10]");
-  }
-  if (!dry_wet_valid(config.dry_wet)) {
-    throw SonareException(ErrorCode::InvalidParameter, "binaural dryWet must be in [0, 1]");
-  }
-  const int output = static_cast<int>(config.output);
-  if (output < 0 || output >= kBinauralOutputCount) {
-    throw SonareException(ErrorCode::InvalidParameter, "binaural output must be 0 or 1");
-  }
+  check::finite_float(config.azimuth_deg, "azimuth_deg");
+  check::in_range(config.turn_rate_hz, 0.0, kMaxTurnRateHz, "turn_rate_hz");
+  check::in_range(config.dry_wet, 0.0, 1.0, "dry_wet");
+  check::integer_in_range(static_cast<int>(config.output), 0, kBinauralOutputCount - 1, "output");
 }
 
 void BinauralPanner::prepare(double sample_rate, int max_block_size) {

@@ -654,8 +654,7 @@ TEST_CASE("measured bounds reproduce the validation they were measured through",
   REQUIRE(find_param(compressor, "thresholdDb")->find("min")->is_null());
   REQUIRE(find_param(compressor, "makeupGainDb")->find("min")->is_null());
   const double makeup_max = find_param(compressor, "makeupGainDb")->find("max")->as_number();
-  REQUIRE(makeup_max > 770.0);
-  REQUIRE(makeup_max < 771.0);
+  REQUIRE(makeup_max == 770.0);
   // sidechainHighPassHz is validated as strictly positive, and an exclusive bound is
   // published as the limit it excludes, flagged as such.
   REQUIRE(find_param(compressor, "sidechainHighPassHz")->find("min")->as_number() == 0.0);
@@ -1558,12 +1557,9 @@ TEST_CASE("the refusal of an equalizer band frequency names the ceiling", "[mast
     }
     return std::string();
   };
-  CHECK(message(60000.0, 96000).find("must be below 48000 Hz (Nyquist at 96000 Hz)") !=
-        std::string::npos);
-  CHECK(message(30000.0, 48000).find("must be below 24000 Hz (Nyquist at 48000 Hz)") !=
-        std::string::npos);
-  CHECK(message(30000.0, 44100).find("must be below 22050 Hz (Nyquist at 44100 Hz)") !=
-        std::string::npos);
+  CHECK(message(60000.0, 96000) == "band0.frequencyHz must be finite and in (0, 48000)");
+  CHECK(message(30000.0, 48000) == "band0.frequencyHz must be finite and in (0, 24000)");
+  CHECK(message(30000.0, 44100) == "band0.frequencyHz must be finite and in (0, 22050)");
 }
 
 namespace {
@@ -1870,9 +1866,9 @@ TEST_CASE("a receiver spacing past the default geometry's limit builds in a larg
             json::dump(json::Value(json::Object{{"receiverSpacingM", json::Value(spacing_m)}}));
         make_insert(name, text);
         FAIL("the default geometry accepted the spacing");
-      } catch (const sonare::SonareException& error) {
-        CHECK(std::string(error.what()).find("acoustic.receiver_outside_room") !=
-              std::string::npos);
+      } catch (const sonare::SonareParameterRefusal& error) {
+        const std::vector<std::string>& subjects = error.subjects();
+        CHECK(std::find(subjects.begin(), subjects.end(), "receiverSpacingM") != subjects.end());
       }
     }
   }

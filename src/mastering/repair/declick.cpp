@@ -13,9 +13,12 @@
 #include "mastering/repair/transient_envelope.h"
 #include "util/exception.h"
 #include "util/lpc.h"
+#include "util/parameter_checks.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
+
+namespace check = sonare::util::check;
 namespace {
 
 bool can_use_lpc(size_t size, int order) {
@@ -250,31 +253,14 @@ DeclickReport to_report(const ChannelAnalysis& analysis, const std::vector<Click
 }  // namespace
 
 void validate_config(const DeclickConfig& config) {
-  if (!std::isfinite(config.threshold) || !(config.threshold > 0.0f) ||
-      config.threshold > kDeclickMaxThreshold) {
-    throw SonareException(ErrorCode::InvalidParameter, "threshold must be in (0, 10]");
-  }
-  if (!std::isfinite(config.neighbor_ratio) || !(config.neighbor_ratio > 0.0f) ||
-      config.neighbor_ratio > kDeclickMaxNeighborRatio) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "neighbor_ratio must be in (0, " +
-                              std::to_string(static_cast<int>(kDeclickMaxNeighborRatio)) + "]");
-  }
-  if (config.max_click_samples == 0 || config.max_click_samples > kDeclickMaxClickSamples) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "max_click_samples must be in [1, " + std::to_string(kDeclickMaxClickSamples) + "]");
-  }
-  if (config.lpc_order < 0 || config.lpc_order > kDeclickMaxLpcOrder) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "lpc_order must be in [0, " + std::to_string(kDeclickMaxLpcOrder) + "]");
-  }
-  if (!std::isfinite(config.residual_ratio) || !(config.residual_ratio > 0.0f) ||
-      config.residual_ratio > kDeclickMaxResidualRatio) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "residual_ratio must be in (0, " +
-                              std::to_string(static_cast<int>(kDeclickMaxResidualRatio)) + "]");
-  }
+  check::in_interval(config.threshold, 0.0, false, kDeclickMaxThreshold, true, "threshold");
+  check::in_interval(config.neighbor_ratio, 0.0, false, kDeclickMaxNeighborRatio, true,
+                     "neighbor_ratio");
+  check::integer_in_range(static_cast<long long>(config.max_click_samples), 1,
+                          static_cast<long long>(kDeclickMaxClickSamples), "max_click_samples");
+  check::integer_in_range(config.lpc_order, 0, kDeclickMaxLpcOrder, "lpc_order");
+  check::in_interval(config.residual_ratio, 0.0, false, kDeclickMaxResidualRatio, true,
+                     "residual_ratio");
 }
 
 ClickDetection detect_clicks(const float* samples, size_t size, int sample_rate,

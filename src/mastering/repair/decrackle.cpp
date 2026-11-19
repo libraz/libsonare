@@ -11,9 +11,12 @@
 #include "mastering/repair/transient_envelope.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
+
+namespace check = sonare::util::check;
 namespace {
 
 float soft_threshold(float value, float threshold) {
@@ -257,17 +260,10 @@ std::vector<float> wavelet_shrink_spun(const std::vector<float>& samples,
 }  // namespace detail
 
 void validate_config(const DecrackleConfig& config) {
-  if (!std::isfinite(config.threshold) || !(config.threshold > 0.0f) ||
-      config.threshold > kDecrackleMaxThreshold) {
-    throw SonareException(ErrorCode::InvalidParameter, "threshold must be in (0, 1000]");
-  }
-  if (config.mode != DecrackleMode::Median && config.mode != DecrackleMode::WaveletShrinkage) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid decrackle mode");
-  }
-  if (config.levels < 1 || config.levels > kDecrackleMaxLevels) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "levels must be in [1, " + std::to_string(kDecrackleMaxLevels) + "]");
-  }
+  check::in_interval(config.threshold, 0.0, false, kDecrackleMaxThreshold, true, "threshold");
+  check::integer_in_range(static_cast<int>(config.mode), 0,
+                          static_cast<int>(DecrackleMode::WaveletShrinkage), "mode");
+  check::integer_in_range(config.levels, 1, kDecrackleMaxLevels, "levels");
 }
 
 CrackleDetection detect_crackle(const float* samples, size_t size, int sample_rate,

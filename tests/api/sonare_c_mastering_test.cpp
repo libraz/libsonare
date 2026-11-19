@@ -490,7 +490,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_streaming_mastering_chain_destroy(chain);
   }
 
-  SECTION("named processor validation includes processor and parameter name") {
+  SECTION("named processor validation names the parameter by its key") {
     auto samples = generate_sine(440.0f, 22050, 0.5f);
     SonareMasteringParam params[] = {{"width", 3.5}};
     SonareMasteringStereoResult stereo{};
@@ -500,8 +500,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                                     &stereo) == SONARE_ERROR_INVALID_PARAMETER);
     const char* msg = sonare_last_error_message();
     REQUIRE(msg != nullptr);
-    REQUIRE(std::string(msg).find("stereo.imager.width must be in [0, 2], got 3.5") !=
-            std::string::npos);
+    REQUIRE(std::string(msg).find("width must be finite and in [0, 2]") != std::string::npos);
     sonare_free_mastering_stereo_result(&stereo);
   }
 
@@ -2122,7 +2121,7 @@ TEST_CASE("sonare_mastering_apply_pair_processor_stereo crossfades both planes",
   REQUIRE(sonare_mastering_apply_pair_processor_stereo_ex(
               "match.abSwitch", source_left.data(), source_right.data(), source_left.size(),
               reference_left.data(), reference_right.data(), reference_left.size(), kSampleRate,
-              kSampleRate, nullptr, 0, &rejected) == SONARE_ERROR_INVALID_PARAMETER);
+              kSampleRate, nullptr, 0, &rejected) == SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(rejected.left == nullptr);
   REQUIRE(rejected.right == nullptr);
   REQUIRE(rejected.length == 0);

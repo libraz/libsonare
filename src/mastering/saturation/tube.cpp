@@ -1,6 +1,7 @@
 #include "mastering/saturation/tube.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "mastering/common/prepare_args.h"
@@ -13,8 +14,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -245,16 +249,13 @@ std::vector<rt::ParamDescriptor> Tube::parameter_descriptors() const {
 }
 
 void Tube::validate_config(const TubeConfig& config) {
-  if (!valid_unit(config.mix) || !std::isfinite(config.bias_v) || !std::isfinite(config.bias) ||
-      !valid_unit(config.harmonic_drive) || config.oversample_factor < 1 ||
-      (config.oversample_factor != 1 && config.oversample_factor != 2 &&
-       config.oversample_factor != 4 && config.oversample_factor != 8)) {
-    throw SonareException(ErrorCode::InvalidParameter, "tube mix must be in [0, 1]");
-  }
-  if (!numeric::finite(db_to_linear(config.drive_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tube drive must produce a finite linear gain");
-  }
+  check::in_range(config.mix, 0.0, 1.0, "mix");
+  check::finite_float(config.bias_v, "bias_v");
+  check::finite_float(config.bias, "bias");
+  check::in_range(config.harmonic_drive, 0.0, 1.0, "harmonic_drive");
+  static constexpr std::array<int, 4> kOversampleFactors = {1, 2, 4, 8};
+  check::one_of(config.oversample_factor, kOversampleFactors, "oversample_factor");
+  check::at_most(config.drive_db, sonare::kMaxFiniteGainDb, "drive_db");
 }
 
 void Tube::ensure_state(int num_channels) {

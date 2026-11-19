@@ -10,8 +10,11 @@
 #include "rt/tail_budget.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::spectral {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
@@ -146,10 +149,10 @@ std::vector<rt::ParamDescriptor> LowEndFocus::parameter_descriptors() const {
 }
 
 void LowEndFocus::validate_config(const LowEndFocusConfig& config) {
-  if (!cutoff_valid(config.cutoff_hz) || !width_valid(config.width) ||
-      !unit_valid(config.subharmonic_amount) || !unit_valid(config.transient_tightness)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid low end focus configuration");
-  }
+  check::greater_than(config.cutoff_hz, 0.0, "cutoff_hz");
+  check::in_range(config.width, 0.0, 2.0, "width");
+  check::in_range(config.subharmonic_amount, 0.0, 1.0, "subharmonic_amount");
+  check::in_range(config.transient_tightness, 0.0, 1.0, "transient_tightness");
 }
 
 }  // namespace sonare::mastering::spectral

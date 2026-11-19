@@ -21,13 +21,10 @@ namespace {
 DenoiseClassicalConfig streaming_config(const DenoiseClassicalConfig& config) {
   const auto validated = Validated<DenoiseClassicalConfig>::make(config);
   if (validated->noise_estimator == DenoiseNoiseEstimator::Quantile) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "denoise noise_estimator must not be Quantile when denoising a stream: it ranks every "
-        "frame of the whole signal by energy, which a stream never reaches the end of. Set "
-        "noise_estimator to Spp, which tracks recursively without a minimum window. Mcra and "
-        "Imcra also track recursively and are accepted, but their minimum tracking over-reports "
-        "the floor wherever the programme is intermittent.");
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::NotSupported, "noise_estimator",
+        "quantile is not supported for a streaming denoise: it ranks every frame of the whole "
+        "signal by energy; spp, mcra and imcra track recursively");
   }
   return validated.get();
 }

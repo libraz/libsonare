@@ -15,8 +15,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -244,14 +247,17 @@ std::vector<rt::ParamDescriptor> SidechainRouter::parameter_descriptors() const 
 }
 
 void SidechainRouter::validate_config(const SidechainRouterConfig& config) {
-  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
-      !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
-      !std::isfinite(config.range_db) || !std::isfinite(config.lookahead_ms) ||
-      !std::isfinite(config.sidechain_hpf_hz) || !valid_ratio(config.ratio) ||
-      !valid_non_negative_ms(config.attack_ms) || !valid_non_negative_ms(config.release_ms) ||
-      !valid_non_negative_ms(config.range_db) || config.lookahead_ms < 0.0f ||
-      (config.sidechain_hpf_enabled && config.sidechain_hpf_hz <= 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid sidechain router configuration");
+  check::finite_float(config.threshold_db, "threshold_db");
+  check::at_least(config.ratio, 1.0, "ratio");
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_least(config.range_db, 0.0, "range_db");
+  check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
+  // The high-pass corner is only held positive while the filter is enabled.
+  if (config.sidechain_hpf_enabled) {
+    check::greater_than(config.sidechain_hpf_hz, 0.0, "sidechain_hpf_hz");
+  } else {
+    check::finite_float(config.sidechain_hpf_hz, "sidechain_hpf_hz");
   }
 }
 

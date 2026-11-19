@@ -27,11 +27,11 @@ constexpr FieldRange kDryWet{0.0f, 1.0f};
 Wah::Wah(WahConfig config) : config_(config) { validate_config(config_); }
 
 void Wah::validate_config(const WahConfig& config) {
-  require_in_domain("wah", "rate_hz", config.rate_hz, kRateHz);
-  require_in_domain("wah", "min_hz", config.min_hz, kSweepHz);
-  require_in_domain("wah", "max_hz", config.max_hz, kSweepHz);
-  require_in_domain("wah", "resonance", config.resonance, kResonance);
-  require_in_domain("wah", "dry_wet", config.dry_wet, kDryWet);
+  require_in_domain("rate_hz", config.rate_hz, kRateHz);
+  require_in_domain("min_hz", config.min_hz, kSweepHz);
+  require_in_domain("max_hz", config.max_hz, kSweepHz);
+  require_in_domain("resonance", config.resonance, kResonance);
+  require_in_domain("dry_wet", config.dry_wet, kDryWet);
 }
 
 void Wah::prepare(double sample_rate, int) {

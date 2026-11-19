@@ -12,9 +12,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
 
+namespace check = sonare::util::check;
 using sonare::discard_if_non_finite;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
@@ -108,7 +110,7 @@ void PassiveTubeEq::reset() {
 }
 
 void PassiveTubeEq::set_low_frequency(float frequency_hz) {
-  low_frequency_hz_ = validate_frequency(frequency_hz);
+  low_frequency_hz_ = validate_frequency(frequency_hz, "low_frequency_hz");
   update_component_coefficients();
   rebuild();
 }
@@ -124,14 +126,15 @@ void PassiveTubeEq::set_low_attenuation(float amount) {
 }
 
 void PassiveTubeEq::set_high_boost(float frequency_hz, float amount, float bandwidth) {
-  high_boost_frequency_hz_ = validate_frequency(frequency_hz);
+  high_boost_frequency_hz_ = validate_frequency(frequency_hz, "high_boost_frequency_hz");
   high_boost_ = clamp_amount(amount);
   high_bandwidth_ = std::clamp(bandwidth, 0.0f, 1.0f);
   rebuild();
 }
 
 void PassiveTubeEq::set_high_attenuation(float frequency_hz, float amount) {
-  high_attenuation_frequency_hz_ = validate_frequency(frequency_hz);
+  high_attenuation_frequency_hz_ =
+      validate_frequency(frequency_hz, "high_attenuation_frequency_hz");
   high_attenuation_ = clamp_amount(amount);
   update_component_coefficients();
   rebuild();
@@ -143,10 +146,7 @@ void PassiveTubeEq::set_component_model(PassiveTubeComponentModel model) {
 }
 
 void PassiveTubeEq::set_output_drive(float drive) {
-  if (!valid_output_drive(drive)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "Passive tube EQ output drive must be non-negative");
-  }
+  check::at_least(drive, 0.0, "output_drive");
   output_drive_ = std::min(drive, kMaxOutputDrive);
 }
 
@@ -249,10 +249,8 @@ std::vector<rt::ParamDescriptor> PassiveTubeEq::parameter_descriptors() const {
 
 float PassiveTubeEq::clamp_amount(float amount) { return std::clamp(amount, 0.0f, 10.0f); }
 
-float PassiveTubeEq::validate_frequency(float frequency_hz) {
-  if (!valid_frequency_hz(frequency_hz)) {
-    throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
-  }
+float PassiveTubeEq::validate_frequency(float frequency_hz, const char* subject) {
+  check::greater_than(frequency_hz, 0.0, subject);
   return frequency_hz;
 }
 

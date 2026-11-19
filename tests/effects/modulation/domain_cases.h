@@ -4,6 +4,7 @@
 /// @brief Table-driven checks that a modulation processor refuses a config field
 ///        outside its domain, at construction and in live automation.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
@@ -52,20 +53,22 @@ std::vector<float> render(Processor& processor) {
   return left;
 }
 
-/// Constructing with @p config must throw InvalidParameter naming @p field.
+/// Constructing with @p config must throw an InvalidParameter refusal whose subject is @p field
+/// and whose message reads "<field> must be ...".
 template <typename Processor, typename Config>
 void require_refused(const char* name, const char* field, const Config& config, float value) {
   INFO(name << "." << field << " = " << value);
   bool threw = false;
   try {
     Processor processor(config);
-  } catch (const sonare::SonareException& error) {
+  } catch (const sonare::SonareParameterRefusal& error) {
     threw = true;
     CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    const std::vector<std::string>& subjects = error.subjects();
+    CHECK(std::find(subjects.begin(), subjects.end(), std::string(field)) != subjects.end());
     const std::string message = error.what();
-    CHECK(message.find(name) != std::string::npos);
-    CHECK(message.find(field) != std::string::npos);
-    CHECK(message.find("out of range") != std::string::npos);
+    const std::string prefix = std::string(field) + " must be";
+    CHECK(message.compare(0, prefix.size(), prefix) == 0);
   }
   CHECK(threw);
 }

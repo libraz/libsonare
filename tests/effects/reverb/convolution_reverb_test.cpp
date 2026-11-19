@@ -492,11 +492,10 @@ TEST_CASE("ConvolutionReverb construction refuses a field outside its domain",
       try {
         ConvolutionReverb subject(config);
         FAIL("constructed with " << row.name << " out of range");
-      } catch (const sonare::SonareException& error) {
+      } catch (const sonare::SonareParameterRefusal& error) {
         CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
-        CHECK(std::string(error.what())
-                  .find(std::string("ConvolutionReverb: ") + row.name + " out of range") !=
-              std::string::npos);
+        CHECK(error.subjects() == std::vector<std::string>{row.name});
+        CHECK(std::string(error.what()).rfind(std::string(row.name) + " must be", 0) == 0);
       }
     }
   }

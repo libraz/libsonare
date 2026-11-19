@@ -12,8 +12,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::multiband {
+
+namespace check = sonare::util::check;
 
 MultibandDynamicEq::MultibandDynamicEq(MultibandDynamicEqConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
@@ -162,20 +165,26 @@ std::vector<rt::ParamDescriptor> MultibandDynamicEq::parameter_descriptors() con
 
 void MultibandDynamicEq::validate_config(const MultibandDynamicEqConfig& config) {
   const size_t expected_bands = config.crossover.cutoffs_hz.size() + 1;
-  if (config.bands.size() != expected_bands) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "multiband dynamic EQ band count must match crossover");
-  }
-  for (const auto& band : config.bands) {
-    if (band.size() > eq::DynamicEq::kMaxBands) {
-      throw SonareException(ErrorCode::InvalidParameter, "too many dynamic EQ bands");
-    }
+  check::integer_in_range(static_cast<long long>(config.bands.size()),
+                          static_cast<long long>(expected_bands),
+                          static_cast<long long>(expected_bands), "bands");
+  for (std::size_t index = 0; index < config.bands.size(); ++index) {
+    const std::string subject = "bands[" + std::to_string(index) + "]";
+    check::integer_in_range(static_cast<long long>(config.bands[index].size()), 0,
+                            static_cast<long long>(eq::DynamicEq::kMaxBands), subject.c_str());
   }
   // The crossover and every band are checked here, so set_config() refuses
   // before it commits anything.
   Crossover::validate_config(config.crossover);
-  for (const auto& bands : config.bands) {
-    for (const auto& band : bands) eq::DynamicEq::validate_band(band);
+  for (std::size_t index = 0; index < config.bands.size(); ++index) {
+    for (std::size_t sub = 0; sub < config.bands[index].size(); ++sub) {
+      try {
+        eq::DynamicEq::validate_band(config.bands[index][sub]);
+      } catch (const SonareParameterRefusal& e) {
+        util::check::rethrow_under_member(
+            e, "bands[" + std::to_string(index) + "][" + std::to_string(sub) + "]");
+      }
+    }
   }
 }
 

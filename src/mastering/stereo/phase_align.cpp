@@ -8,8 +8,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
+
+namespace check = sonare::util::check;
 
 PhaseAlign::PhaseAlign(PhaseAlignConfig config) : config_(config) { validate_config(config_); }
 
@@ -84,9 +87,10 @@ std::vector<rt::ParamDescriptor> PhaseAlign::parameter_descriptors() const {
 }
 
 void PhaseAlign::validate_config(const PhaseAlignConfig& config) {
-  if (config.delay_samples < 0 || !fraction_valid(config.fractional_delay_samples)) {
-    throw SonareException(ErrorCode::InvalidParameter, "phase align delay must be non-negative");
-  }
+  check::integer_in_range(config.delay_samples, 0, std::numeric_limits<int>::max(),
+                          "delay_samples");
+  check::in_interval(config.fractional_delay_samples, 0.0, true, 1.0, false,
+                     "fractional_delay_samples");
 }
 
 void PhaseAlign::rebuild_delay() { delay_.assign(static_cast<size_t>(config_.delay_samples) + 5u); }

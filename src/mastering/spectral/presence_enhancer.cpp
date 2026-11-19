@@ -11,8 +11,11 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::spectral {
+
+namespace check = sonare::util::check;
 namespace {
 
 using sonare::discard_group_if_non_finite;
@@ -210,10 +213,10 @@ std::vector<rt::ParamDescriptor> PresenceEnhancer::parameter_descriptors() const
 }
 
 void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {
-  if (!amount_valid(config.amount) || !drive_valid(config.drive) ||
-      !center_valid(config.center_frequency_hz) || !q_valid(config.q)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid presence enhancer configuration");
-  }
+  check::in_range(config.amount, 0.0, 1.0, "amount");
+  check::at_least(config.drive, 0.0, "drive");
+  check::greater_than(config.center_frequency_hz, 0.0, "center_frequency_hz");
+  check::greater_than(config.q, 0.0, "q");
   // Adaa2 is not implemented: reject it instead of silently behaving like None.
   if (config.aliasing == sonare::rt::AliasingControl::Adaa2) {
     throw SonareException(

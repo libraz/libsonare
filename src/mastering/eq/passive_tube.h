@@ -60,7 +60,7 @@ class PassiveTubeEq : public rt::ProcessorBase {
  private:
   void rebuild();
   static float clamp_amount(float amount);
-  static float validate_frequency(float frequency_hz);
+  static float validate_frequency(float frequency_hz, const char* subject);
   void update_component_coefficients();
   void prepare_component_state(int num_channels);
   float process_component_sample(float input, int channel);

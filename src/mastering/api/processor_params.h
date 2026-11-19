@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -89,6 +90,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::api::detail {
 
@@ -112,6 +114,8 @@ inline std::vector<float> cutoffs(const ParamMap& params) {
     }
     auto it = params.find(key);
     if (it != params.end()) {
+      // The crossover refuses its cutoffs by list position, which skips the keys not given.
+      params.note_member(("cutoff" + std::to_string(values.size()) + "_hz").c_str(), key.c_str());
       values.push_back(static_cast<float>(it->second));
     }
   }
@@ -124,7 +128,8 @@ inline void refuse_earlier_lookahead(const ParamMap& params, const std::string& 
   if (params.has(earlier)) {
     throw SonareParameterRefusal::predicate(
         ErrorCode::InvalidParameter, earlier,
-        "is an earlier spelling; write " + prefix + "detectorDelayMs");
+        "is an earlier spelling; write " + prefix + "detectorDelayMs")
+        .as_caller_spelled();
   }
 }
 
@@ -144,6 +149,8 @@ inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   band.proportional_q = b(params, (prefix + "proportionalQ").c_str(), band.proportional_q);
   band.proportional_q_strength =
       f(params, (prefix + "proportionalQStrength").c_str(), band.proportional_q_strength, kNone);
+  // The dynamic fields sit flat beside the band's own keys, not under a "dyn." key.
+  params.note_member_prefix("dyn.", "");
   band.dyn.enabled = b(params, (prefix + "dynamic").c_str(), band.dyn.enabled);
   band.dyn.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.dyn.threshold_db, kDb);
   band.dyn.auto_threshold = b(params, (prefix + "autoThreshold").c_str(), band.dyn.auto_threshold);
@@ -272,7 +279,8 @@ inline void configure_eq_bands(Processor& processor, const ParamMap& params,
     const std::string band_prefix = prefix + std::to_string(index) + ".";
     declare_eq_band_params(params, band_prefix);
     if (supplied_slot(params, band_prefix, eq_band_fields())) {
-      processor.set_band(index, eq_band(params, band_prefix));
+      with_caller_keys(params, band_prefix,
+                       [&] { processor.set_band(index, eq_band(params, band_prefix)); });
     }
   }
 }
@@ -355,6 +363,7 @@ inline void populate_crossover_bands(std::vector<BandConfig>& bands,
   for (size_t index = 0; index < kMaxCrossoverBands; ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     note_crossover_band_slot(params, index);
+    params.note_member_prefix("bands[" + std::to_string(index) + "].", prefix);
     if (index < bands.size()) {
       read_band(params, prefix, bands[index]);
     } else if (params.records_declarations()) {
@@ -468,6 +477,8 @@ inline void populate_dynamic_eq_bands(multiband::MultibandDynamicEqConfig& confi
         continue;
       }
       if (supplied_slot(params, prefix, dynamic_eq_band_fields(), band)) {
+        params.note_member_prefix(
+            "bands[" + std::to_string(index) + "][" + std::to_string(sub) + "].", prefix);
         config.bands[index].resize(sub);
         config.bands[index].push_back(dynamic_eq_band(params, prefix));
       }
@@ -605,7 +616,7 @@ inline void configure_dynamic_eq_bands(eq::DynamicEq& p, const ParamMap& params)
     const std::string prefix = "band" + std::to_string(index) + ".";
     declare_dynamic_eq_band_params(params, prefix);
     if (supplied_slot(params, prefix, dynamic_eq_band_fields())) {
-      p.set_band(index, dynamic_eq_band(params, prefix));
+      with_caller_keys(params, prefix, [&] { p.set_band(index, dynamic_eq_band(params, prefix)); });
     }
   }
 }
@@ -634,11 +645,36 @@ inline void configure_cut_filter(eq::CutFilter& p, const ParamMap& params) {
                  b(params, "lowPassEnabled", false));
 }
 
+/// @brief Runs a setter, placing a refusal of one of its arguments under the key it was read from.
+/// @details A setter refuses its argument by name; @p keys pairs each name with the caller's key.
+template <typename Setter>
+void with_setter_keys(std::initializer_list<std::pair<const char*, const char*>> keys,
+                      Setter setter) {
+  try {
+    setter();
+  } catch (const SonareParameterRefusal& e) {
+    if (e.caller_spelled()) throw;
+    throw e.respelled(
+        e.code(),
+        [&keys](const std::string& subject) {
+          for (const auto& [argument, key] : keys) {
+            if (subject == argument) return std::string(key);
+          }
+          return subject;
+        },
+        true);
+  }
+}
+
 inline void configure_band_pass(eq::BandPassEq& p, const ParamMap& params) {
-  p.set_band_pass(f(params, "bandPassFrequencyHz", 1000.0f, kHzLog),
-                  f(params, "bandPassQ", 1.0f, kNone), b(params, "bandPassEnabled", true));
-  p.set_notch(f(params, "notchFrequencyHz", 1000.0f, kHzLog), f(params, "notchQ", 1.0f, kNone),
-              b(params, "notchEnabled", false));
+  with_setter_keys({{"frequency_hz", "bandPassFrequencyHz"}, {"q", "bandPassQ"}}, [&] {
+    p.set_band_pass(f(params, "bandPassFrequencyHz", 1000.0f, kHzLog),
+                    f(params, "bandPassQ", 1.0f, kNone), b(params, "bandPassEnabled", true));
+  });
+  with_setter_keys({{"frequency_hz", "notchFrequencyHz"}, {"q", "notchQ"}}, [&] {
+    p.set_notch(f(params, "notchFrequencyHz", 1000.0f, kHzLog), f(params, "notchQ", 1.0f, kNone),
+                b(params, "notchEnabled", false));
+  });
   params.note_coupled("bandPassFrequencyHz", "bandPassEnabled");
   params.note_coupled("bandPassQ", "bandPassEnabled");
   params.note_coupled("notchFrequencyHz", "notchEnabled");
@@ -648,13 +684,20 @@ inline void configure_band_pass(eq::BandPassEq& p, const ParamMap& params) {
 inline void configure_shelving(eq::ShelvingEq& p, const ParamMap& params) {
   // A corner left at its default is resolved at the prepared rate; a supplied one is refused
   // when that rate cannot carry it.
-  p.set_low_shelf(f(params, "lowFrequencyHz", 100.0f, kHzLog), f(params, "lowGainDb", 0.0f, kDb),
-                  f(params, "lowQ", constants::kButterworthQ, kNone), b(params, "lowEnabled", true),
-                  !params.has("lowFrequencyHz"));
-  p.set_high_shelf(f(params, "highFrequencyHz", 10000.0f, kHzLog),
-                   f(params, "highGainDb", 0.0f, kDb),
-                   f(params, "highQ", constants::kButterworthQ, kNone),
-                   b(params, "highEnabled", true), !params.has("highFrequencyHz"));
+  with_setter_keys({{"frequency_hz", "lowFrequencyHz"}, {"gain_db", "lowGainDb"}, {"q", "lowQ"}},
+                   [&] {
+                     p.set_low_shelf(f(params, "lowFrequencyHz", 100.0f, kHzLog),
+                                     f(params, "lowGainDb", 0.0f, kDb),
+                                     f(params, "lowQ", constants::kButterworthQ, kNone),
+                                     b(params, "lowEnabled", true), !params.has("lowFrequencyHz"));
+                   });
+  with_setter_keys(
+      {{"frequency_hz", "highFrequencyHz"}, {"gain_db", "highGainDb"}, {"q", "highQ"}}, [&] {
+        p.set_high_shelf(f(params, "highFrequencyHz", 10000.0f, kHzLog),
+                         f(params, "highGainDb", 0.0f, kDb),
+                         f(params, "highQ", constants::kButterworthQ, kNone),
+                         b(params, "highEnabled", true), !params.has("highFrequencyHz"));
+      });
   params.note_coupled("lowFrequencyHz", "lowEnabled");
   params.note_coupled("lowQ", "lowEnabled");
   params.note_coupled("highFrequencyHz", "highEnabled");
@@ -669,7 +712,9 @@ inline void configure_graphic(eq::GraphicEq& p, const ParamMap& params) {
     // processor's own gain. The read cannot throw and probes the key the
     // presence test probes anyway, so nothing else changes.
     const float gain_db = f(params, key.c_str(), 0.0f, kDb);
-    if (params.find(key) != params.end()) p.set_gain_db(index, gain_db);
+    if (params.find(key) != params.end()) {
+      with_setter_keys({{"gain_db", key.c_str()}}, [&] { p.set_gain_db(index, gain_db); });
+    }
   }
   p.set_q(f(params, "q", 0.0f, kNone));
 }
@@ -681,10 +726,10 @@ inline void configure_mid_side(eq::MidSideEq& p, const ParamMap& params) {
     declare_eq_band_params(params, mid);
     declare_eq_band_params(params, side);
     if (supplied_slot(params, mid, eq_band_fields())) {
-      p.set_mid_band(index, eq_band(params, mid));
+      with_caller_keys(params, mid, [&] { p.set_mid_band(index, eq_band(params, mid)); });
     }
     if (supplied_slot(params, side, eq_band_fields())) {
-      p.set_side_band(index, eq_band(params, side));
+      with_caller_keys(params, side, [&] { p.set_side_band(index, eq_band(params, side)); });
     }
   }
 }
@@ -894,8 +939,8 @@ inline stereo::HaasEnhancerConfig haas_enhancer_config(const ParamMap& params) {
 inline stereo::ImagerConfig imager_config(const ParamMap& params) {
   stereo::ImagerConfig config;
   SONARE_FIELDS_IMAGER(SONARE_READ_FIELD)
-  SONARE_CHECK_RANGE("stereo.imager.width", config.width, 0.0f, 2.0f);
-  SONARE_CHECK_RANGE("stereo.imager.decorrelationAmount", config.decorrelation_amount, 0.0f, 1.0f);
+  // The insert narrows the processor's open-ended width to the range its control publishes.
+  sonare::util::check::in_range(config.width, 0.0, 2.0, "width");
   return config;
 }
 

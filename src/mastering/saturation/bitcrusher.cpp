@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <limits>
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
@@ -12,8 +13,11 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 using sonare::constants::kDefaultDawSampleRate;
 
@@ -331,19 +335,29 @@ std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
 }
 
 void BitCrusher::validate_config(const BitCrusherConfig& config) {
-  if (!valid_bit_depth(config.bit_depth) || config.downsample_factor < 1 ||
-      !valid_level(config.mix) || !std::isfinite(config.hold_hz) || config.hold_hz < 0.0f ||
-      !valid_level(config.radio_noise_level) || !valid_level(config.wp_noise_level) ||
-      !valid_level(config.disc_noise_level) || !valid_level(config.hum_level) ||
-      !valid_level(config.noise_detune) || static_cast<int>(config.disc_type) < 0 ||
-      static_cast<int>(config.disc_type) >= kBitCrusherDiscTypeCount || !valid_hz(config.hum_hz) ||
-      !valid_hz(config.noise_lpf_hz) || !valid_hz(config.wp_noise_lpf_hz) ||
-      !valid_hz(config.disc_noise_lpf_hz) || !valid_hz(config.hum_lpf_hz) ||
-      !valid_hz(config.pre_filter_hz) || !valid_hz(config.post_filter_hz) ||
-      config.type_ladder < 0 || config.type_ladder > static_cast<int>(kTypeLadderHoldHz.size()) ||
-      static_cast<int>(config.filter_type) < 0 || static_cast<int>(config.filter_type) > 2) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid bitcrusher configuration");
-  }
+  check::integer_in_range(config.bit_depth, kBitCrusherMinBitDepth, kBitCrusherMaxBitDepth,
+                          "bit_depth");
+  check::integer_in_range(config.downsample_factor, 1, std::numeric_limits<int>::max(),
+                          "downsample_factor");
+  check::in_range(config.mix, 0.0, 1.0, "mix");
+  check::at_least(config.hold_hz, 0.0, "hold_hz");
+  check::in_range(config.radio_noise_level, 0.0, 1.0, "radio_noise_level");
+  check::in_range(config.wp_noise_level, 0.0, 1.0, "wp_noise_level");
+  check::in_range(config.disc_noise_level, 0.0, 1.0, "disc_noise_level");
+  check::in_range(config.hum_level, 0.0, 1.0, "hum_level");
+  check::in_range(config.noise_detune, 0.0, 1.0, "noise_detune");
+  check::integer_in_range(static_cast<int>(config.disc_type), 0, kBitCrusherDiscTypeCount - 1,
+                          "disc_type");
+  check::at_least(config.hum_hz, 0.0, "hum_hz");
+  check::at_least(config.noise_lpf_hz, 0.0, "noise_lpf_hz");
+  check::at_least(config.wp_noise_lpf_hz, 0.0, "wp_noise_lpf_hz");
+  check::at_least(config.disc_noise_lpf_hz, 0.0, "disc_noise_lpf_hz");
+  check::at_least(config.hum_lpf_hz, 0.0, "hum_lpf_hz");
+  check::at_least(config.pre_filter_hz, 0.0, "pre_filter_hz");
+  check::at_least(config.post_filter_hz, 0.0, "post_filter_hz");
+  check::integer_in_range(config.type_ladder, 0, static_cast<int>(kTypeLadderHoldHz.size()),
+                          "type_ladder");
+  check::integer_in_range(static_cast<int>(config.filter_type), 0, 2, "filter_type");
 }
 
 int BitCrusher::tail_samples() const noexcept {

@@ -15,8 +15,11 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -434,21 +437,16 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "dynamic EQ band type does not support TiltShelf/FlatTilt");
   }
-  if (!valid_frequency_hz(band.frequency_hz)) {
-    throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
-  }
-  if (!band_q_valid(band.q)) {
-    throw SonareException(ErrorCode::InvalidParameter, "Q must be positive");
-  }
-  if (!valid_ratio(band.ratio)) {
-    throw SonareException(ErrorCode::InvalidParameter, "ratio must be at least 1");
-  }
-  if (!band_q_valid(band.sidechain_q) || !valid_time_ms(band.attack_ms) ||
-      !valid_time_ms(band.release_ms) || !valid_time_ms(band.detector_delay_ms) ||
-      !valid_sidechain_freq_hz(band.sidechain_freq_hz)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "invalid dynamic EQ sidechain configuration");
-  }
+  check::greater_than(band.frequency_hz, 0.0, "frequency_hz");
+  check_band_q(band.q);
+  check::at_least(band.ratio, 1.0, "ratio");
+  check_band_q(band.sidechain_q, "sidechain_q");
+  check::at_least(band.attack_ms, 0.0, "attack_ms");
+  check::at_least(band.release_ms, 0.0, "release_ms");
+  check::at_least(band.detector_delay_ms, 0.0, "detector_delay_ms");
+  // -1 follows the band frequency.
+  if (band.sidechain_freq_hz != -1.0f)
+    check::greater_than(band.sidechain_freq_hz, 0.0, "sidechain_freq_hz");
 }
 
 void DynamicEq::ensure_detector(size_t index, int num_channels) {

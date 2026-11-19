@@ -18,9 +18,12 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
+
+namespace check = sonare::util::check;
 
 using sonare::constants::kDefaultDawSampleRate;
 
@@ -140,10 +143,13 @@ SearchWindow search_window(const DehumConfig& config, int sample_rate) noexcept 
 void require_search_window(const DehumConfig& config, int sample_rate) {
   const SearchWindow window = search_window(config, sample_rate);
   if (!(window.low <= window.high)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "fundamental_hz +/- search_range_hz must overlap [1 Hz, 0.49 x "
-                          "sample_rate] at " +
-                              std::to_string(sample_rate) + " Hz");
+    if (!(config.fundamental_hz + config.search_range_hz >= 1.0f)) {
+      check::refuse_relation({"fundamental_hz", "search_range_hz"}, "{0} + {1} must be at least 1");
+    }
+    const float ceiling = static_cast<float>(sample_rate) * kSearchCeilingRatio;
+    check::refuse_relation({"fundamental_hz", "search_range_hz"},
+                           "{0} - {1} must be at most " +
+                               sonare::util::refusal::bound_text(static_cast<double>(ceiling)));
   }
 }
 
@@ -664,40 +670,16 @@ void fill_report(DehumReport* report, const PassTrace& trace, const float* sampl
 }  // namespace
 
 void validate_config(const DehumConfig& config) {
-  if (!std::isfinite(config.fundamental_hz) || !(config.fundamental_hz > 0.0f) ||
-      config.fundamental_hz > kDehumMaxFundamentalHz) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "fundamental_hz must be in (0, " +
-                              std::to_string(static_cast<int>(kDehumMaxFundamentalHz)) + "]");
-  }
-  if (config.harmonics < 1 || config.harmonics > kDehumMaxHarmonics) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "harmonics must be in [1, " + std::to_string(kDehumMaxHarmonics) + "]");
-  }
-  if (!std::isfinite(config.q) || !(config.q > 0.0f) || config.q > kDehumMaxQ) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "q must be in (0, " + std::to_string(static_cast<int>(kDehumMaxQ)) + "]");
-  }
-  if (!std::isfinite(config.search_range_hz) || config.search_range_hz < 0.0f ||
-      config.search_range_hz > kDehumMaxSearchRangeHz) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "search_range_hz must be in [0, " +
-                              std::to_string(static_cast<int>(kDehumMaxSearchRangeHz)) + "]");
-  }
-  if (!(config.adaptation >= 0.0f) || !(config.adaptation <= 1.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "adaptation must be in [0, 1]");
-  }
-  if (config.frame_size < 16 || config.frame_size > kDehumMaxFrameSize) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "frame_size must be in [16, " + std::to_string(kDehumMaxFrameSize) + "]");
-  }
-  if (!std::isfinite(config.pll_bandwidth) || config.pll_bandwidth < 0.0f ||
-      config.pll_bandwidth > kDehumMaxPllBandwidth) {
-    throw SonareException(ErrorCode::InvalidParameter, "pll_bandwidth must be in [0, 1]");
-  }
-  if (config.mode != DehumMode::Subtract && config.mode != DehumMode::Notch) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dehum mode");
-  }
+  check::in_interval(config.fundamental_hz, 0.0, false, kDehumMaxFundamentalHz, true,
+                     "fundamental_hz");
+  check::integer_in_range(config.harmonics, 1, kDehumMaxHarmonics, "harmonics");
+  check::in_interval(config.q, 0.0, false, kDehumMaxQ, true, "q");
+  check::in_range(config.search_range_hz, 0.0, kDehumMaxSearchRangeHz, "search_range_hz");
+  check::in_range(config.adaptation, 0.0, 1.0, "adaptation");
+  check::integer_in_range(config.frame_size, 16, kDehumMaxFrameSize, "frame_size");
+  check::in_range(config.pll_bandwidth, 0.0, kDehumMaxPllBandwidth, "pll_bandwidth");
+  check::integer_in_range(static_cast<int>(config.mode), 0, static_cast<int>(DehumMode::Notch),
+                          "mode");
 }
 
 HumDetection detect_hum(const float* samples, size_t size, int sample_rate,

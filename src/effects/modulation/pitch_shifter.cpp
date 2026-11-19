@@ -5,6 +5,7 @@
 #include <string>
 
 #include "effects/common/control_ranges.h"
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -88,7 +89,7 @@ struct FieldDomain {
 // The single definition of each field's domain, shared by validate_config and live automation.
 constexpr FieldDomain kFields[] = {
     {"semitones", &PitchShifterConfig::semitones, 0, -kMaxSemitones, kMaxSemitones},
-    {"dryWet", &PitchShifterConfig::dry_wet, 1, 0.0f, 1.0f},
+    {"dry_wet", &PitchShifterConfig::dry_wet, 1, 0.0f, 1.0f},
     {"cents", &PitchShifterConfig::cents, 2, -kMaxCents, kMaxCents},
     {"pan", &PitchShifterConfig::pan, 3, -1.0f, 1.0f},
     {"semitones2", &PitchShifterConfig::semitones2, 4, -kMaxSemitones, kMaxSemitones},
@@ -96,9 +97,9 @@ constexpr FieldDomain kFields[] = {
     {"level2", &PitchShifterConfig::level2, 6, 0.0f, 1.0f},
     {"pan2", &PitchShifterConfig::pan2, 7, -1.0f, 1.0f},
     {"feedback", &PitchShifterConfig::feedback, 8, -kMaxFeedback, kMaxFeedback},
-    {"windowMs", &PitchShifterConfig::window_ms, 12, kMinWindowMs, kMaxWindowMs},
-    {"preDelayMs", &PitchShifterConfig::pre_delay_ms, 13, 0.0f, kMaxPreDelayMs},
-    {"preDelay2Ms", &PitchShifterConfig::pre_delay2_ms, 14, 0.0f, kMaxPreDelayMs},
+    {"window_ms", &PitchShifterConfig::window_ms, 12, kMinWindowMs, kMaxWindowMs},
+    {"pre_delay_ms", &PitchShifterConfig::pre_delay_ms, 13, 0.0f, kMaxPreDelayMs},
+    {"pre_delay2_ms", &PitchShifterConfig::pre_delay2_ms, 14, 0.0f, kMaxPreDelayMs},
 };
 
 bool in_domain(const FieldDomain& field, float value) noexcept {
@@ -121,11 +122,7 @@ PitchShifter::PitchShifter(PitchShifterConfig config) : config_(config) {
 void PitchShifter::validate_config(const PitchShifterConfig& config) {
   for (const FieldDomain& field : kFields) {
     const float value = config.*field.member;
-    if (in_domain(field, value)) continue;
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string("pitch shifter: ") + field.name + " out of range [" +
-                              util::to_text(field.lo) + ", " + util::to_text(field.hi) + "], got " +
-                              util::to_text(value));
+    common::require_in_domain(field.name, value, field.lo, field.hi);
   }
 }
 

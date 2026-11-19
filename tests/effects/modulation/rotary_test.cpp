@@ -250,23 +250,23 @@ struct DomainRow {
 };
 
 const DomainRow kDomainRows[] = {
-    {"rateHz", &RotaryConfig::rate_hz, 0, 0.0f, kInf, -1.0f, false, false},
-    {"depthMs", &RotaryConfig::depth_ms, 1, 0.0f, 20.0f, -1.0f, false, false},
+    {"rate_hz", &RotaryConfig::rate_hz, 0, 0.0f, kInf, -1.0f, false, false},
+    {"depth_ms", &RotaryConfig::depth_ms, 1, 0.0f, 20.0f, -1.0f, false, false},
     {"tremolo", &RotaryConfig::tremolo, 2, 0.0f, 1.0f, -1.0f, false, false},
-    {"dryWet", &RotaryConfig::dry_wet, 3, 0.0f, 1.0f, -1.0f, false, false},
-    {"drumRateHz", &RotaryConfig::drum_rate_hz, 4, 0.0f, kInf, -1.0f, false, false},
-    {"hornSlowHz", &RotaryConfig::horn_slow_hz, 5, 0.0f, kInf, 0.0f, false, false},
-    {"hornFastHz", &RotaryConfig::horn_fast_hz, 6, 0.0f, kInf, 1.0f, false, false},
-    {"drumSlowHz", &RotaryConfig::drum_slow_hz, 7, 0.0f, kInf, 0.0f, false, false},
-    {"drumFastHz", &RotaryConfig::drum_fast_hz, 8, 0.0f, kInf, 1.0f, false, false},
+    {"dry_wet", &RotaryConfig::dry_wet, 3, 0.0f, 1.0f, -1.0f, false, false},
+    {"drum_rate_hz", &RotaryConfig::drum_rate_hz, 4, 0.0f, kInf, -1.0f, false, false},
+    {"horn_slow_hz", &RotaryConfig::horn_slow_hz, 5, 0.0f, kInf, 0.0f, false, false},
+    {"horn_fast_hz", &RotaryConfig::horn_fast_hz, 6, 0.0f, kInf, 1.0f, false, false},
+    {"drum_slow_hz", &RotaryConfig::drum_slow_hz, 7, 0.0f, kInf, 0.0f, false, false},
+    {"drum_fast_hz", &RotaryConfig::drum_fast_hz, 8, 0.0f, kInf, 1.0f, false, false},
     {"speed", &RotaryConfig::speed, 9, -1.0f, 1.0f, -1.0f, false, false},
-    {"hornLevelDb", &RotaryConfig::horn_level_db, 10, -kInf, kInf, -1.0f, false, true},
-    {"drumLevelDb", &RotaryConfig::drum_level_db, 11, -kInf, kInf, -1.0f, false, true},
-    {"stereoSpread", &RotaryConfig::stereo_spread, 14, 0.0f, 1.0f, -1.0f, false, false},
-    {"accelTauS", &RotaryConfig::accel_tau_s, 15, 0.0f, kInf, 0.0f, true, false},
-    {"decelTauS", &RotaryConfig::decel_tau_s, 16, 0.0f, kInf, 0.0f, true, false},
-    {"undershootHz", &RotaryConfig::undershoot_hz, 17, 0.0f, kInf, 0.0f, true, false},
-    {"drumUndershootHz", &RotaryConfig::drum_undershoot_hz, 18, 0.0f, kInf, 0.0f, true, false},
+    {"horn_level_db", &RotaryConfig::horn_level_db, 10, -kInf, kInf, -1.0f, false, true},
+    {"drum_level_db", &RotaryConfig::drum_level_db, 11, -kInf, kInf, -1.0f, false, true},
+    {"stereo_spread", &RotaryConfig::stereo_spread, 14, 0.0f, 1.0f, -1.0f, false, false},
+    {"accel_tau_s", &RotaryConfig::accel_tau_s, 15, 0.0f, kInf, 0.0f, true, false},
+    {"decel_tau_s", &RotaryConfig::decel_tau_s, 16, 0.0f, kInf, 0.0f, true, false},
+    {"undershoot_hz", &RotaryConfig::undershoot_hz, 17, 0.0f, kInf, 0.0f, true, false},
+    {"drum_undershoot_hz", &RotaryConfig::drum_undershoot_hz, 18, 0.0f, kInf, 0.0f, true, false},
 };
 
 std::vector<float> domain_refused(const DomainRow& row) {
@@ -315,9 +315,10 @@ void require_refused_with_field(const RotaryConfig& config, const char* field) {
   try {
     Rotary rotary(config);
     FAIL("construction accepted " << field);
-  } catch (const SonareException& error) {
+  } catch (const sonare::SonareParameterRefusal& error) {
     CHECK(error.code() == ErrorCode::InvalidParameter);
-    CHECK(std::string(error.what()).find(field) != std::string::npos);
+    CHECK(error.subjects() == std::vector<std::string>{field});
+    CHECK(std::string(error.what()).rfind(std::string(field) + " must be", 0) == 0);
   }
 }
 

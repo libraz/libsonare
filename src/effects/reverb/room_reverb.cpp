@@ -6,8 +6,10 @@
 #include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
 #include "core/diagnostic.h"
+#include "effects/common/room_field_checks.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::effects::reverb {
 
@@ -33,9 +35,12 @@ RoomReverb::RoomReverb(RoomReverbConfig config, sonare::acoustic::ReceiverLayout
   // would reach validate_shoebox already inside the range and be accepted as a
   // different room. The insert factory rejects the same value; so does the C
   // entry point.
+  util::check::in_range(config_.absorption, 0.0, 1.0, "absorption");
   sonare::acoustic::validate_material_coefficient(config_.absorption, "absorption");
   const sonare::acoustic::ShoeboxRoom room =
       sonare::acoustic::uniform_shoebox(config_.dims, config_.absorption);
+  const common::RoomMemberPaths paths{"dims", "source", "listener"};
+  common::check_room_geometry(config_.dims, config_.source, config_.listener, paths);
   const std::vector<Diagnostic> geometry = sonare::acoustic::validate_shoebox(
       room, sonare::acoustic::SourceListener{config_.source, config_.listener});
   SONARE_CHECK_MSG(!has_error(geometry), ErrorCode::InvalidParameter,
@@ -43,11 +48,15 @@ RoomReverb::RoomReverb(RoomReverbConfig config, sonare::acoustic::ReceiverLayout
   // Every input synthesize_rir would reject is rejected here instead: an Error
   // from it yields an empty RIR, which the convolution path treats as dry
   // passthrough, so accepting these values would produce a silently inert insert.
+  common::check_rir_synth_config(rir_config_from(config_));
   const std::vector<Diagnostic> synthesis =
       sonare::acoustic::validate_rir_synth_config(rir_config_from(config_));
   SONARE_CHECK_MSG(!has_error(synthesis), ErrorCode::InvalidParameter,
                    "room reverb image-source order, RIR length cap, or air absorption is invalid");
   if (layout_ == sonare::acoustic::ReceiverLayout::MonoAndPair) {
+    common::check_receiver_pair(room,
+                                sonare::acoustic::SourceListener{config_.source, config_.listener},
+                                config_.receiver_spacing_m, paths);
     const std::vector<Diagnostic> pair = sonare::acoustic::validate_receiver_pair(
         room, sonare::acoustic::SourceListener{config_.source, config_.listener},
         config_.receiver_spacing_m);

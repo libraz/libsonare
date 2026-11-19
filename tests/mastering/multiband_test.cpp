@@ -1360,14 +1360,14 @@ TEST_CASE("MultibandImager validates configuration", "[mastering][multiband]") {
 
   config.crossover = {{1000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
   config.bands = {{1.0f, true}, {-1.0f, true}};
-  REQUIRE_THROWS_WITH(MultibandImager(config), "imager width must be finite and non-negative");
+  REQUIRE_THROWS_WITH(MultibandImager(config), "bands[1].width must be finite and at least 0");
 
   config.bands = {{1.0f, true}, {std::numeric_limits<float>::quiet_NaN(), true}};
-  REQUIRE_THROWS_WITH(MultibandImager(config), "imager width must be finite and non-negative");
+  REQUIRE_THROWS_WITH(MultibandImager(config), "bands[1].width must be finite and at least 0");
 
   config.bands = {{1.0f, true}, {1.0f, true, 1.1f}};
   REQUIRE_THROWS_WITH(MultibandImager(config),
-                      "imager decorrelation amount must be finite in [0, 1]");
+                      "bands[1].decorrelation_amount must be finite and in [0, 1]");
 }
 
 TEST_CASE("MultibandImager rejects non-finite decorrelation and preserves its configuration",

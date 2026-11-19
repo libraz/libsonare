@@ -1,12 +1,12 @@
 #pragma once
 
 /// @file band_frequency.h
-/// @brief The refusal for an equalizer band frequency outside (0, Nyquist).
+/// @brief The refusals for an equalizer band frequency outside (0, Nyquist) and a band Q.
 
-#include <string>
+#include <cmath>
 
 #include "util/exception.h"
-#include "util/number_format.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::mastering::eq {
 
@@ -18,16 +18,19 @@ inline bool band_frequency_in_range(float frequency_hz, double sample_rate) noex
 /// @brief True when @p q is a positive number (NaN is refused).
 inline bool band_q_valid(float q) noexcept { return q > 0.0f; }
 
-/// @brief Throws the refusal for a band frequency outside (0, Nyquist) at @p sample_rate, naming
-/// the ceiling.
-[[noreturn]] inline void refuse_band_frequency(float frequency_hz, double sample_rate) {
-  if (!(frequency_hz > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "EQ band frequency must be above 0 Hz");
+/// @brief Throws the refusal for a band frequency outside (0, Nyquist) at @p sample_rate.
+[[noreturn]] inline void refuse_band_frequency(double sample_rate) {
+  throw SonareParameterRefusal::predicate(
+      ErrorCode::InvalidParameter, "frequency_hz",
+      util::refusal::interval_predicate(0.0, false, sample_rate * 0.5, false));
+}
+
+/// @brief Refuses a band Q that is not finite and positive.
+inline void check_band_q(float q, const char* subject = "q") {
+  if (!(std::isfinite(q) && band_q_valid(q))) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            util::refusal::greater_than_predicate(0.0));
   }
-  throw SonareException(
-      ErrorCode::InvalidParameter,
-      "EQ band frequency must be below " + sonare::util::format_general(sample_rate * 0.5, 12) +
-          " Hz (Nyquist at " + sonare::util::format_general(sample_rate, 12) + " Hz)");
 }
 
 }  // namespace sonare::mastering::eq

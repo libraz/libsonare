@@ -13,8 +13,11 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::spectral {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -191,12 +194,15 @@ std::vector<rt::ParamDescriptor> SpectralShaper::parameter_descriptors() const {
 }
 
 void SpectralShaper::validate_config(const SpectralShaperConfig& config) {
-  if (!threshold_valid(config.threshold) || !amount_valid(config.amount) ||
-      !corner_pair_valid(config.frequency_hz, config.high_frequency_hz) ||
-      !time_valid(config.attack_ms) || !time_valid(config.release_ms) ||
-      !range_valid(config.range_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid spectral shaper configuration");
+  check::at_least(config.threshold, 0.0, "threshold");
+  check::in_range(config.amount, 0.0, 1.0, "amount");
+  check::greater_than(config.frequency_hz, 0.0, "frequency_hz");
+  if (!(config.high_frequency_hz > config.frequency_hz)) {
+    check::refuse_relation({"frequency_hz", "high_frequency_hz"}, "{0} must be less than {1}");
   }
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_least(config.range_db, 0.0, "range_db");
 }
 
 }  // namespace sonare::mastering::spectral

@@ -17,8 +17,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 using constants::kButterworthQ;
 using constants::kTwoPi;
@@ -291,23 +294,28 @@ float power_stage(float x, float power, float crossover, float drive_scale,
 }  // namespace
 
 void AmpSim::validate_config(const AmpSimConfig& config) {
-  if (!std::isfinite(config.input_db) || !std::isfinite(config.drive) ||
-      !std::isfinite(config.bass_db) || !std::isfinite(config.mid_db) ||
-      !std::isfinite(config.treble_db) || !std::isfinite(config.presence_db) ||
-      !std::isfinite(config.level_db) || !std::isfinite(config.power) ||
-      !std::isfinite(config.sag) || !std::isfinite(config.transformer) ||
-      !std::isfinite(config.nfb) || !std::isfinite(config.mic_axis) ||
-      !std::isfinite(config.mic_b_axis) || !std::isfinite(config.mic_blend) ||
-      !std::isfinite(config.mic_distance_cm) || !std::isfinite(config.mic_b_distance_cm) ||
-      !std::isfinite(config.cone) || !std::isfinite(config.doppler) ||
-      !std::isfinite(config.crossover) || !std::isfinite(config.bias_shift)) {
-    throw SonareException(ErrorCode::InvalidParameter, "amp-sim params must be finite");
-  }
-  if (!numeric::finite(sonare::db_to_linear(config.input_db)) ||
-      !numeric::finite(sonare::db_to_linear(config.level_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "amp-sim input and level must produce finite linear gains");
-  }
+  check::finite_float(config.input_db, "input_db");
+  check::finite_float(config.drive, "drive");
+  check::finite_float(config.bass_db, "bass_db");
+  check::finite_float(config.mid_db, "mid_db");
+  check::finite_float(config.treble_db, "treble_db");
+  check::finite_float(config.presence_db, "presence_db");
+  check::finite_float(config.level_db, "level_db");
+  check::finite_float(config.power, "power");
+  check::finite_float(config.sag, "sag");
+  check::finite_float(config.transformer, "transformer");
+  check::finite_float(config.nfb, "nfb");
+  check::finite_float(config.mic_axis, "mic_axis");
+  check::finite_float(config.mic_b_axis, "mic_b_axis");
+  check::finite_float(config.mic_blend, "mic_blend");
+  check::finite_float(config.mic_distance_cm, "mic_distance_cm");
+  check::finite_float(config.mic_b_distance_cm, "mic_b_distance_cm");
+  check::finite_float(config.cone, "cone");
+  check::finite_float(config.doppler, "doppler");
+  check::finite_float(config.crossover, "crossover");
+  check::finite_float(config.bias_shift, "bias_shift");
+  check::at_most(config.input_db, sonare::kMaxFiniteGainDb, "input_db");
+  check::at_most(config.level_db, sonare::kMaxFiniteGainDb, "level_db");
 }
 
 void AmpSim::prepare(double sample_rate, int max_block_size) {

@@ -86,6 +86,7 @@
 #include "util/base64.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
+#include "util/refusal_predicates.h"
 #include "util/resource_limits.h"
 
 #ifdef SONARE_WITH_VOICE_CHANGER
@@ -191,7 +192,8 @@ const Value* admit_insert_params(const std::string& json_params,
 
 // Refuses the parameter @p key; the caller's document layer may relabel it under a path.
 [[noreturn]] void refuse_param(const std::string& key, const std::string& predicate) {
-  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key, predicate);
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key, predicate)
+      .as_caller_spelled();
 }
 
 // Decodes a little-endian f32 array carried as base64 under @p key. Two inserts
@@ -705,6 +707,21 @@ void read_air_and_spacing(const ParamMap& params, Config& config) {
                                   .or_default(config.receiver_spacing_m);
 }
 
+// The room validators refuse config member paths; these are the flat keys each one is read from.
+void note_room_members(const ParamMap& params, const std::string& dims, const std::string& source,
+                       const std::string& listener) {
+  static constexpr const char* kDims[3][2] = {
+      {"length", "lengthM"}, {"width", "widthM"}, {"height", "heightM"}};
+  for (const auto& [member, key] : kDims) params.note_member((dims + "." + member).c_str(), key);
+  for (const char* axis : {"x", "y", "z"}) {
+    const std::string upper(1, static_cast<char>(std::toupper(static_cast<unsigned char>(*axis))));
+    params.note_member((source + "." + axis).c_str(), ("source" + upper).c_str());
+    params.note_member((listener + "." + axis).c_str(), ("listener" + upper).c_str());
+  }
+  params.note_member("air.temperature_c", "airTemperatureC");
+  params.note_member("air.humidity_percent", "airHumidityPercent");
+}
+
 // Source and listener sit inside the shoebox, so each coordinate is bounded by its dimension.
 void note_room_containment(const ParamMap& params) {
   static constexpr const char* kAxes[3][3] = {{"sourceX", "listenerX", "lengthM"},
@@ -756,8 +773,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       const float max_decay_sec =
           kNegLn1000 * kTankLoopSeconds / (4.0f * std::log(effects::common::kMaxFeedback));
       const float decay_sec = f(params, "decaySec", 5.0f, kSecondsLog);
-      effects::common::require_in_domain(name.c_str(), "decaySec", decay_sec, kMinDecaySeconds,
-                                         max_decay_sec);
+      effects::common::require_in_domain("decaySec", decay_sec, kMinDecaySeconds, max_decay_sec);
       config.decay = std::exp(kNegLn1000 * kTankLoopSeconds / (4.0f * decay_sec));
     } else {
       config.decay = f(params, "decay", config.decay, kNone);
@@ -776,6 +792,15 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     if (params.find("preDelayMs") != params.end()) {
       config.pre_delay_samples = f(params, "preDelayMs", 0.0f, kMs) *
                                  static_cast<float>(DattorroReverb::kReferenceSampleRate) / 1000.0f;
+      // The tank bounds the converted count; the caller wrote milliseconds, so the refusal does.
+      const float max_samples = DattorroReverb::kMaxConfiguredPreDelayMs *
+                                static_cast<float>(DattorroReverb::kReferenceSampleRate) / 1000.0f;
+      if (!effects::common::in_domain(config.pre_delay_samples, 0.0f, max_samples)) {
+        throw SonareParameterRefusal::predicate(
+            ErrorCode::InvalidParameter, "preDelayMs",
+            sonare::util::refusal::range_predicate(0.0, DattorroReverb::kMaxConfiguredPreDelayMs))
+            .as_caller_spelled();
+      }
     }
     params.note_effective("preDelayMs",
                           config.pre_delay_samples * 1000.0f /
@@ -803,13 +828,14 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       // decay = decaySec / 10, and the core's decay ceiling is the tail ceiling.
       constexpr float kDecayPerSecond = 0.1f;
       const float decay_sec = f(params, "decaySec", 5.5f, kSecondsLog);
-      effects::common::require_in_domain(name.c_str(), "decaySec", decay_sec, 0.0f,
+      effects::common::require_in_domain("decaySec", decay_sec, 0.0f,
                                          FdnReverbConfig::kMaxDecay / kDecayPerSecond);
       config.decay = decay_sec * kDecayPerSecond;
     } else {
       config.decay = f(params, "decay", config.decay, kNone);
     }
     params.note_effective("decay", config.decay);
+    params.note_member("hf_damping", params.has("damping") ? "damping" : "hfDamping");
     config.hf_damping =
         f(params, "damping", f(params, "hfDamping", config.hf_damping, kNone), kNone);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
@@ -830,8 +856,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       // is only checked against the range it implies for a valid one.
       if (effects::common::in_domain(config.decay, 0.0f, 1.0f)) {
         effects::common::require_in_domain(
-            name.c_str(), "decaySec", decay_sec,
-            VelvetReverbConfig::kMinReverbTimeSeconds * decay_factor,
+            "decaySec", decay_sec, VelvetReverbConfig::kMinReverbTimeSeconds * decay_factor,
             VelvetReverbConfig::kMaxReverbTimeSeconds * decay_factor);
       }
       config.reverb_time_s = decay_sec / decay_factor;
@@ -859,7 +884,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       // An out-of-range request like {decaySec:40} is refused by key, not truncated
       // to the ceiling.
       config.decay_sec = f(params, "decaySec", config.decay_sec, kSecondsLog);
-      effects::common::require_in_domain(name.c_str(), "decaySec", config.decay_sec, 0.0f,
+      effects::common::require_in_domain("decaySec", config.decay_sec, 0.0f,
                                          ConvolutionReverbConfig::kMaxDecaySeconds);
     }
     config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms, kMs);
@@ -882,6 +907,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
                    f(params, "heightM", config.dims.height, kMeters)};
     config.source = read_vec3(params, "source", config.source);
     config.listener = read_vec3(params, "listener", config.listener);
+    note_room_members(params, "dims", "source", "listener");
     note_room_containment(params);
     note_room_coupling(params);
     // Rejected rather than clamped, matching sonare_synthesize_rir: the same
@@ -915,10 +941,12 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
     config.placement.source = read_vec3(params, "source", source);
     config.placement.listener = read_vec3(params, "listener", listener);
+    note_room_members(params, "target.dims", "placement.source", "placement.listener");
     note_room_containment(params);
     note_room_coupling(params);
     config.source_tail_suppression =
         f(params, "sourceTailSuppression", config.source_tail_suppression, kNone);
+    params.note_member("wet", "dryWet");
     config.wet = f(params, "dryWet", config.wet, kNone);
     config.ism_order = detail::i(params, "ismOrder", config.ism_order, kCount);
     config.seed = detail::u32(params, "seed", config.seed, kNone);
@@ -1250,8 +1278,12 @@ std::unique_ptr<Processor> build_repair(const std::string& name, const ParamMap&
 
 namespace detail {
 
-std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params,
-                                        const Value* json_root, double sample_rate) {
+namespace {
+
+std::unique_ptr<Processor> build_insert_in_member_spelling(const std::string& name,
+                                                           const ParamMap& params,
+                                                           const Value* json_root,
+                                                           double sample_rate) {
   if (auto p = build_dynamics(name, params)) return p;
   if (auto p = build_eq(name, params, sample_rate)) return p;
   if (auto p = build_saturation(name, params, json_root)) return p;
@@ -1269,6 +1301,15 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
   if (auto p = build_voice(name, params)) return p;
 #endif
   return nullptr;
+}
+
+}  // namespace
+
+std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params,
+                                        const Value* json_root, double sample_rate) {
+  return with_caller_keys(params, std::string(), [&] {
+    return build_insert_in_member_spelling(name, params, json_root, sample_rate);
+  });
 }
 
 }  // namespace detail

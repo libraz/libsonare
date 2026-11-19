@@ -63,11 +63,9 @@ void scale_ir(std::vector<float>& samples, double energy) {
 }  // namespace
 
 void ConvolutionReverb::validate_config(const ConvolutionReverbConfig& config) {
-  common::require_in_domain("ConvolutionReverb", "decay_sec", config.decay_sec, 0.0f,
-                            kMaxDecaySeconds);
-  common::require_in_domain("ConvolutionReverb", "pre_delay_ms", config.pre_delay_ms, 0.0f,
-                            kMaxPreDelayMs);
-  common::require_in_domain("ConvolutionReverb", "dry_wet", config.dry_wet, 0.0f, 1.0f);
+  common::require_in_domain("decay_sec", config.decay_sec, 0.0f, kMaxDecaySeconds);
+  common::require_in_domain("pre_delay_ms", config.pre_delay_ms, 0.0f, kMaxPreDelayMs);
+  common::require_in_domain("dry_wet", config.dry_wet, 0.0f, 1.0f);
 }
 
 void ConvolutionReverb::synthesize_default_ir(double sample_rate) {

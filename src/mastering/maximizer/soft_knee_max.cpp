@@ -9,8 +9,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::maximizer {
+
+namespace check = sonare::util::check;
 namespace {
 
 bool valid_non_negative(float ms) noexcept { return std::isfinite(ms) && ms >= 0.0f; }
@@ -127,17 +130,10 @@ bool SoftKneeMax::parameter_is_realtime_safe(unsigned int param_id) const noexce
 }
 
 void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {
-  if (!common::valid_ceiling_db(config.ceiling_db)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "soft knee maximizer ceiling must be finite and <= 0");
-  }
-  if (!valid_non_negative(config.knee_db) || !valid_non_negative(config.release_ms)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid soft knee maximizer configuration");
-  }
-  if (!numeric::finite(db_to_linear(config.input_gain_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "soft knee maximizer input gain must produce a finite linear gain");
-  }
+  check::at_most(config.ceiling_db, 0.0, "ceiling_db");
+  check::at_least(config.knee_db, 0.0, "knee_db");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_most(config.input_gain_db, sonare::kMaxFiniteGainDb, "input_gain_db");
 }
 
 }  // namespace sonare::mastering::maximizer

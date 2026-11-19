@@ -100,7 +100,8 @@ sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
 sonare::mastering::repair::DeclipConfig to_cpp_declip_config(const SonareDeclipConfig* config) {
   sonare::mastering::repair::DeclipConfig cpp;
   if (!config) return cpp;
-  cpp.clip_threshold = threshold_db_to_linear(config->clip_threshold_db, "clip_threshold_db");
+  cpp.clip_threshold = sonare::mastering::repair::clip_threshold_from_db(config->clip_threshold_db,
+                                                                         "clip_threshold_db");
   cpp.lpc_order = config->lpc_order;
   cpp.iterations = config->iterations;
   cpp.lpc_blend = config->lpc_blend;

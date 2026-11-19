@@ -75,10 +75,10 @@ float vowel_table_hz(int vowel, int band) noexcept {
 }
 
 void VowelFilter::validate_config(const VowelFilterConfig& config) {
-  common::require_in_domain("VowelFilter", "vowel", config.vowel, 0.0f, kVowelMax);
-  common::require_in_domain("VowelFilter", "accel_ms", config.accel_ms, 0.0f, kMaxAccelMs);
-  common::require_in_domain("VowelFilter", "drive", config.drive, 0.0f, 1.0f);
-  common::require_in_domain("VowelFilter", "dry_wet", config.dry_wet, 0.0f, 1.0f);
+  common::require_in_domain("vowel", config.vowel, 0.0f, kVowelMax);
+  common::require_in_domain("accel_ms", config.accel_ms, 0.0f, kMaxAccelMs);
+  common::require_in_domain("drive", config.drive, 0.0f, 1.0f);
+  common::require_in_domain("dry_wet", config.dry_wet, 0.0f, 1.0f);
 }
 
 VowelFilter::VowelFilter(VowelFilterConfig config) : config_((validate_config(config), config)) {

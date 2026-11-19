@@ -70,6 +70,11 @@ struct DeclipConfig {
 /// entrypoints share this oracle so range handling cannot drift between them.
 void validate_config(const DeclipConfig& config);
 
+/// @brief The clip threshold given in dBFS as the linear DeclipConfig::clip_threshold.
+/// @details Refused outside [kMinPositiveGainDb, 0], the dB range whose linear value lies in
+///          (0, 1]; stated in dB so the published bound does not depend on the platform's pow.
+float clip_threshold_from_db(float threshold_db, const char* subject);
+
 /// @brief What a declip analysis found.
 struct ClipDetection {
   size_t sample_count = 0;       ///< Samples at or past clip_threshold.

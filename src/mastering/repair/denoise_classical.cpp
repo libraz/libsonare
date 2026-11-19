@@ -17,9 +17,12 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_run_if_non_finite;
 
@@ -632,47 +635,23 @@ const double* GainStage::finish(const double* source) {
 
 void validate_config(const DenoiseClassicalConfig& config) {
   if (!is_known_denoise_mode(config.mode)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid denoise mode");
+    check::integer_in_range(static_cast<int>(config.mode), 0, kDenoiseModeCount - 1, "mode");
   }
   if (!is_known_noise_estimator(config.noise_estimator)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid denoise noise estimator");
+    check::integer_in_range(static_cast<int>(config.noise_estimator), 0,
+                            kDenoiseNoiseEstimatorCount - 1, "noise_estimator");
   }
-  if (config.n_fft < 2 || config.n_fft > kMaxStftNFft || (config.n_fft & (config.n_fft - 1)) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise n_fft must be an even power of two in the supported range");
-  }
-  if (config.hop_length <= 0 || config.hop_length > config.n_fft / 2) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise hop_length must be in (0, n_fft / 2]");
-  }
-  if (!std::isfinite(config.dd_alpha) || config.dd_alpha < 0.0f || config.dd_alpha >= 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise dd_alpha must be finite and in [0, 1)");
-  }
-  if (!std::isfinite(config.reduction_db) || config.reduction_db < 0.0f ||
-      config.reduction_db > kDenoiseMaxReductionDb) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise reduction_db must be finite and in [0, 120]");
-  }
-  if (!std::isfinite(config.over_subtraction) || config.over_subtraction < 0.0f ||
-      config.over_subtraction > 16.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise over_subtraction must be finite and in [0, 16]");
-  }
-  if (!std::isfinite(config.spectral_floor) || config.spectral_floor < 0.0f ||
-      config.spectral_floor > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise spectral_floor must be finite and in [0, 1]");
-  }
-  if (!std::isfinite(config.noise_estimation_quantile) ||
-      config.noise_estimation_quantile <= 0.0f || config.noise_estimation_quantile > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise noise_estimation_quantile must be finite and in (0, 1]");
-  }
+  check::power_of_two_in_range(config.n_fft, 2, kMaxStftNFft, "n_fft");
+  check::integer_in_range(config.hop_length, 1, config.n_fft / 2, "hop_length");
+  check::in_interval(config.dd_alpha, 0.0, true, 1.0, false, "dd_alpha");
+  check::in_range(config.reduction_db, 0.0, kDenoiseMaxReductionDb, "reduction_db");
+  check::in_range(config.over_subtraction, 0.0, 16.0, "over_subtraction");
+  check::in_range(config.spectral_floor, 0.0, 1.0, "spectral_floor");
+  check::in_interval(config.noise_estimation_quantile, 0.0, false, 1.0, true,
+                     "noise_estimation_quantile");
   if (!common::has_reconstructible_hann_geometry(config.n_fft, config.hop_length)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "denoise n_fft and hop_length leave an unreconstructible Hann overlap residue");
+    check::refuse_relation({"n_fft", "hop_length"},
+                           "{0} and {1} must leave every Hann overlap-add sum above 1e-8");
   }
 }
 

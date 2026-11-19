@@ -2,8 +2,10 @@
 // place it under the path the parameter sits at. Probes every cataloged insert one parameter at a
 // time and counts the refusals that do not lead with the key.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -20,7 +22,7 @@ using sonare::mastering::api::insert_param_info_json;
 using sonare::mastering::api::make_insert;
 
 // The count may only fall.
-constexpr std::size_t kKeylessCeiling = 1471;
+constexpr std::size_t kKeylessCeiling = 6;
 
 constexpr double kBeyondBound = 1.0e6;
 constexpr const char* kMakeInsertPrefix = "make_insert: ";
@@ -36,6 +38,7 @@ std::string number_text(double value) {
 struct Tally {
   std::size_t read = 0;
   std::size_t keyless = 0;
+  std::vector<std::string> offenders;
 };
 
 void probe(const std::string& insert, const std::string& key, const std::string& value_text,
@@ -49,7 +52,17 @@ void probe(const std::string& insert, const std::string& key, const std::string&
       message.erase(0, std::string(kMakeInsertPrefix).size());
     if (message.find(kUnreadNote) != std::string::npos) return;
     ++tally->read;
-    if (message.rfind(key + " ", 0) != 0) ++tally->keyless;
+    // A relation names every member it constrains, so the probed key need not come first.
+    bool keyed = message.rfind(key + " ", 0) == 0;
+    if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(&e);
+        refusal != nullptr && refusal->form() == sonare::SonareParameterRefusal::Form::Relation) {
+      const auto& subjects = refusal->subjects();
+      keyed = std::find(subjects.begin(), subjects.end(), key) != subjects.end();
+    }
+    if (!keyed) {
+      ++tally->keyless;
+      tally->offenders.push_back(insert + "\t" + key + "\t" + value_text + "\t" + message);
+    }
   }
 }
 
@@ -84,6 +97,7 @@ TEST_CASE("an insert parameter refusal leads with the parameter key",
     }
   }
   WARN("refusals read: " << tally.read << ", keyless: " << tally.keyless);
+  for (const std::string& offender : tally.offenders) std::cout << "KEYLESS\t" << offender << "\n";
   REQUIRE(tally.read > 0);
   CHECK(tally.keyless <= kKeylessCeiling);
 }

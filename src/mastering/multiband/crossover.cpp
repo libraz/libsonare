@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string>
 
 #include "core/window.h"
 #include "mastering/common/prepare_args.h"
@@ -11,8 +13,11 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::multiband {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -316,21 +321,21 @@ void Crossover::set_config(const CrossoverConfig& config) {
 
 void Crossover::validate_config(const CrossoverConfig& config, double sample_rate) {
   for (size_t i = 0; i < config.cutoffs_hz.size(); ++i) {
-    if (!(config.cutoffs_hz[i] > 0.0f)) {
-      throw SonareException(ErrorCode::InvalidParameter, "crossover cutoffs must be positive");
-    }
+    // Spelled so its camelCase is the scalar reader's key, cutoff<i>Hz.
+    const std::string subject = "cutoff" + std::to_string(i) + "_hz";
+    check::greater_than(config.cutoffs_hz[i], 0.0, subject.c_str());
     if (i > 0 && !(config.cutoffs_hz[i] > config.cutoffs_hz[i - 1])) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "crossover cutoffs must be strictly ascending");
+      check::refuse_relation({subject, "cutoff" + std::to_string(i - 1) + "_hz"},
+                             "{0} must be greater than {1}");
     }
-    if (sample_rate > 0.0 && !(config.cutoffs_hz[i] < static_cast<float>(sample_rate * 0.5))) {
-      throw SonareException(ErrorCode::InvalidParameter, "crossover cutoffs must be below Nyquist");
+    if (sample_rate > 0.0) {
+      check::less_than(config.cutoffs_hz[i], static_cast<float>(sample_rate * 0.5),
+                       subject.c_str());
     }
   }
-  if (config.mode == CrossoverMode::FirLinearPhase &&
-      (config.fir_kernel_size < 3 || config.fir_kernel_size % 2 == 0)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "linear-phase crossover FIR kernel size must be odd and >= 3");
+  if (config.mode == CrossoverMode::FirLinearPhase) {
+    check::odd_integer_in_range(config.fir_kernel_size, 3, std::numeric_limits<int>::max(),
+                                "fir_kernel_size");
   }
 }
 

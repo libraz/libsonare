@@ -42,17 +42,17 @@ constexpr FieldRange kPanDev{0.0f, 1.0f};
 Ensemble::Ensemble(EnsembleConfig config) : config_(config) { validate_config(config_); }
 
 void Ensemble::validate_config(const EnsembleConfig& config) {
-  require_in_domain("ensemble", "rate_slow_hz", config.rate_slow_hz, kRateHz);
-  require_in_domain("ensemble", "rate_fast_hz", config.rate_fast_hz, kRateHz);
-  require_in_domain("ensemble", "depth_slow_ms", config.depth_slow_ms, kDepthMs);
-  require_in_domain("ensemble", "depth_fast_ms", config.depth_fast_ms, kDepthMs);
-  require_in_domain("ensemble", "center_delay_ms", config.center_delay_ms, kCenterDelayMs);
-  require_in_domain("ensemble", "tone_hz", config.tone_hz, kToneHz);
-  require_in_domain("ensemble", "dry_wet", config.dry_wet, kDryWet);
-  require_in_domain("ensemble", "rate_hz", config.rate_hz, kRateHz);
-  require_in_domain("ensemble", "pre_delay_dev_ms", config.pre_delay_dev_ms, kPreDelayDevMs);
-  require_in_domain("ensemble", "depth_dev", config.depth_dev, kDepthDev);
-  require_in_domain("ensemble", "pan_dev", config.pan_dev, kPanDev);
+  require_in_domain("rate_slow_hz", config.rate_slow_hz, kRateHz);
+  require_in_domain("rate_fast_hz", config.rate_fast_hz, kRateHz);
+  require_in_domain("depth_slow_ms", config.depth_slow_ms, kDepthMs);
+  require_in_domain("depth_fast_ms", config.depth_fast_ms, kDepthMs);
+  require_in_domain("center_delay_ms", config.center_delay_ms, kCenterDelayMs);
+  require_in_domain("tone_hz", config.tone_hz, kToneHz);
+  require_in_domain("dry_wet", config.dry_wet, kDryWet);
+  require_in_domain("rate_hz", config.rate_hz, kRateHz);
+  require_in_domain("pre_delay_dev_ms", config.pre_delay_dev_ms, kPreDelayDevMs);
+  require_in_domain("depth_dev", config.depth_dev, kDepthDev);
+  require_in_domain("pan_dev", config.pan_dev, kPanDev);
 }
 
 void Ensemble::apply_rates() noexcept {

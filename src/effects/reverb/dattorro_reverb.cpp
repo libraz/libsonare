@@ -14,6 +14,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::effects::reverb {
 
@@ -38,8 +39,6 @@ float scale_modulation_depth(float requested, double rate) noexcept {
 // (gs_reverb_predelay_ms) and the EFX pre-delay ladder 100 ms. prepare() sizes the
 // ring for max(ceiling, configured value), so the realtime setter never grows it.
 constexpr float kLiveMaxPreDelayMs = 127.0f;
-// Longest configured pre-delay: it sizes the ring at prepare(), so it needs a bound.
-constexpr float kMaxConfiguredPreDelayMs = 4000.0f;
 constexpr float kMaxGateHoldMs = 1.0e6f;  // keeps the hold in samples inside int.
 constexpr float kMaxDecay = common::kMaxFeedback;
 constexpr float kInf = common::kNoUpperBound;
@@ -232,21 +231,19 @@ void DattorroReverb::update_damping_coefficient() noexcept {
 }
 
 void DattorroReverb::validate_config(const DattorroReverbConfig& config) {
-  const char* const name = "DattorroReverb";
   const float pre_delay_max = kMaxConfiguredPreDelayMs * static_cast<float>(kRefRate) / 1000.0f;
-  common::require_in_domain(name, "decay", config.decay, 0.0f, kMaxDecay);
-  common::require_in_domain(name, "damping", config.damping, 0.0f, 1.0f);
-  common::require_in_domain(name, "dry_wet", config.dry_wet, 0.0f, 1.0f);
-  common::require_in_domain(name, "mod_rate_hz", config.mod_rate_hz, -kInf, kInf);
-  common::require_in_domain(name, "mod_depth_samples", config.mod_depth_samples, 0.0f,
+  common::require_in_domain("decay", config.decay, 0.0f, kMaxDecay);
+  common::require_in_domain("damping", config.damping, 0.0f, 1.0f);
+  common::require_in_domain("dry_wet", config.dry_wet, 0.0f, 1.0f);
+  common::require_in_domain("mod_rate_hz", config.mod_rate_hz, -kInf, kInf);
+  common::require_in_domain("mod_depth_samples", config.mod_depth_samples, 0.0f,
                             static_cast<float>(kModAllpassLeftRefLength));
-  common::require_in_domain(name, "pre_delay_samples", config.pre_delay_samples, 0.0f,
-                            pre_delay_max);
-  common::require_in_domain(name, "damping_hz", config.damping_hz, 0.0f, kInf);
-  common::require_in_domain(name, "gate_threshold_db", config.gate_threshold_db, -kInf, kInf);
-  common::require_in_domain(name, "gate_hold_ms", config.gate_hold_ms, 0.0f, kMaxGateHoldMs);
-  common::require_in_domain(name, "character", static_cast<float>(config.character), 0.0f,
-                            static_cast<float>(kDattorroMaxCharacter));
+  common::require_in_domain("pre_delay_samples", config.pre_delay_samples, 0.0f, pre_delay_max);
+  common::require_in_domain("damping_hz", config.damping_hz, 0.0f, kInf);
+  common::require_in_domain("gate_threshold_db", config.gate_threshold_db, -kInf, kInf);
+  common::require_in_domain("gate_hold_ms", config.gate_hold_ms, 0.0f, kMaxGateHoldMs);
+  util::check::integer_in_range(static_cast<int>(config.character), 0, kDattorroMaxCharacter,
+                                "character");
 }
 
 DattorroReverb::DattorroReverb(DattorroReverbConfig config)

@@ -10,8 +10,11 @@
 #include "mastering/multiband/multiband_common.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::multiband {
+
+namespace check = sonare::util::check;
 
 MultibandCompressor::MultibandCompressor(MultibandCompressorConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
@@ -132,14 +135,19 @@ std::vector<rt::ParamDescriptor> MultibandCompressor::parameter_descriptors() co
 
 void MultibandCompressor::validate_config(const MultibandCompressorConfig& config) {
   const size_t expected_bands = config.crossover.cutoffs_hz.size() + 1;
-  if (config.bands.size() != expected_bands) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "multiband compressor band count must match crossover");
-  }
+  check::integer_in_range(static_cast<long long>(config.bands.size()),
+                          static_cast<long long>(expected_bands),
+                          static_cast<long long>(expected_bands), "bands");
   // The crossover and every band are checked here, so set_config() refuses
   // before it commits anything.
   Crossover::validate_config(config.crossover);
-  for (const auto& band : config.bands) dynamics::Compressor::validate_config(band);
+  for (size_t i = 0; i < config.bands.size(); ++i) {
+    try {
+      dynamics::Compressor::validate_config(config.bands[i]);
+    } catch (const SonareParameterRefusal& e) {
+      check::rethrow_under_member(e, "bands[" + std::to_string(i) + "]");
+    }
+  }
 }
 
 void MultibandCompressor::rebuild_processors() {

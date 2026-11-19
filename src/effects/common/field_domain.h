@@ -8,11 +8,11 @@
 /// or non-finite, is refused rather than clamped.
 
 #include <cmath>
-#include <cstdio>
 #include <limits>
 #include <string>
 
 #include "util/exception.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::effects::common {
 
@@ -34,23 +34,31 @@ inline bool in_domain(float value, float lo, float hi) noexcept {
   return std::isfinite(value) && value >= lo && value <= hi;
 }
 
-/// Throws InvalidParameter naming @p processor and @p field unless @p value is in [@p lo, @p hi].
-inline void require_in_domain(const char* processor, const char* field, float value, float lo,
-                              float hi) {
+/// Throws a SonareParameterRefusal naming member @p field unless @p value is in [@p lo, @p hi].
+/// The test runs in float; an infinite or float-extreme bound is stated as a one-sided domain.
+inline void require_in_domain(const char* field, float value, float lo, float hi) {
   if (in_domain(value, lo, hi)) return;
-  char text[160];
-  std::snprintf(text, sizeof(text), "%s: %s out of range [%g, %g], got %g", processor, field,
-                static_cast<double>(lo), static_cast<double>(hi), static_cast<double>(value));
-  throw SonareException(ErrorCode::InvalidParameter, text);
+  const bool no_lower = lo <= std::numeric_limits<float>::lowest();
+  const bool no_upper = hi >= std::numeric_limits<float>::max();
+  std::string predicate;
+  if (no_lower && no_upper) {
+    predicate = util::refusal::kFloatRangePredicate;
+  } else if (no_upper) {
+    predicate = util::refusal::at_least_predicate(lo);
+  } else if (no_lower) {
+    predicate = util::refusal::at_most_predicate(hi);
+  } else {
+    predicate = util::refusal::range_predicate(lo, hi);
+  }
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, field, predicate);
 }
 
 inline bool in_domain(float value, FieldRange range) noexcept {
   return in_domain(value, range.lo, range.hi);
 }
 
-inline void require_in_domain(const char* processor, const char* field, float value,
-                              FieldRange range) {
-  require_in_domain(processor, field, value, range.lo, range.hi);
+inline void require_in_domain(const char* field, float value, FieldRange range) {
+  require_in_domain(field, value, range.lo, range.hi);
 }
 
 }  // namespace sonare::effects::common

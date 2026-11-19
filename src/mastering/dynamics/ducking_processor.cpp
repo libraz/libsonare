@@ -4,8 +4,11 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 DuckingProcessor::DuckingProcessor(DuckingConfig config)
     : config_(config), router_(to_router_config(config)) {}
@@ -72,9 +75,7 @@ std::vector<rt::ParamDescriptor> DuckingProcessor::parameter_descriptors() const
 }
 
 SidechainRouterConfig DuckingProcessor::to_router_config(const DuckingConfig& config) {
-  if (config.lookahead_ms < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "ducking lookahead must be non-negative");
-  }
+  check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
   SidechainRouterConfig router_config;
   router_config.threshold_db = config.threshold_db;
   router_config.ratio = config.ratio;

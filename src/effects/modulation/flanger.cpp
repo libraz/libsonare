@@ -46,14 +46,14 @@ constexpr FieldRange kStepRateHz{0.0f, kNoUpperBound};
 Flanger::Flanger(FlangerConfig config) : config_(config) { validate_config(config_); }
 
 void Flanger::validate_config(const FlangerConfig& config) {
-  require_in_domain("flanger", "rate_hz", config.rate_hz, kRateHz);
-  require_in_domain("flanger", "depth_ms", config.depth_ms, kDepthMs);
-  require_in_domain("flanger", "center_delay_ms", config.center_delay_ms, kCenterDelayMs);
-  require_in_domain("flanger", "feedback", config.feedback, kFeedback);
-  require_in_domain("flanger", "dry_wet", config.dry_wet, kDryWet);
-  require_in_domain("flanger", "pre_filter_hz", config.pre_filter_hz, kAnyFinite);
-  require_in_domain("flanger", "phase_deg", config.phase_deg, kPhaseDeg);
-  require_in_domain("flanger", "step_rate_hz", config.step_rate_hz, kStepRateHz);
+  require_in_domain("rate_hz", config.rate_hz, kRateHz);
+  require_in_domain("depth_ms", config.depth_ms, kDepthMs);
+  require_in_domain("center_delay_ms", config.center_delay_ms, kCenterDelayMs);
+  require_in_domain("feedback", config.feedback, kFeedback);
+  require_in_domain("dry_wet", config.dry_wet, kDryWet);
+  require_in_domain("pre_filter_hz", config.pre_filter_hz, kAnyFinite);
+  require_in_domain("phase_deg", config.phase_deg, kPhaseDeg);
+  require_in_domain("step_rate_hz", config.step_rate_hz, kStepRateHz);
 }
 
 void Flanger::prepare(double sample_rate, int) {

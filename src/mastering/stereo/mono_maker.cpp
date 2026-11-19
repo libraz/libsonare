@@ -9,8 +9,11 @@
 #include "rt/tail_budget.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 
@@ -107,12 +110,8 @@ std::vector<rt::ParamDescriptor> MonoMaker::parameter_descriptors() const {
 }
 
 void MonoMaker::validate_config(const MonoMakerConfig& config) {
-  if (!amount_valid(config.amount)) {
-    throw SonareException(ErrorCode::InvalidParameter, "mono maker amount must be in [0, 1]");
-  }
-  if (!frequency_valid(config.frequency_hz)) {
-    throw SonareException(ErrorCode::InvalidParameter, "mono maker frequency_hz must be positive");
-  }
+  check::in_range(config.amount, 0.0, 1.0, "amount");
+  check::greater_than(config.frequency_hz, 0.0, "frequency_hz");
 }
 
 void MonoMaker::update_coefficient() noexcept {

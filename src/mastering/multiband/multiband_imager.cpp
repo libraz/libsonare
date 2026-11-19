@@ -14,8 +14,11 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::multiband {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 
@@ -207,19 +210,14 @@ std::vector<rt::ParamDescriptor> MultibandImager::parameter_descriptors() const 
 
 void MultibandImager::validate_config(const MultibandImagerConfig& config) {
   const size_t expected_bands = config.crossover.cutoffs_hz.size() + 1;
-  if (config.bands.size() != expected_bands) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "multiband imager band count must match crossover");
-  }
-  for (const auto& band : config.bands) {
-    if (!valid_width(band.width)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "imager width must be finite and non-negative");
-    }
-    if (!valid_decorrelation_amount(band.decorrelation_amount)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "imager decorrelation amount must be finite in [0, 1]");
-    }
+  check::integer_in_range(static_cast<long long>(config.bands.size()),
+                          static_cast<long long>(expected_bands),
+                          static_cast<long long>(expected_bands), "bands");
+  for (std::size_t index = 0; index < config.bands.size(); ++index) {
+    const auto& band = config.bands[index];
+    const std::string prefix = "bands[" + std::to_string(index) + "].";
+    check::at_least(band.width, 0.0, (prefix + "width").c_str());
+    check::in_range(band.decorrelation_amount, 0.0, 1.0, (prefix + "decorrelation_amount").c_str());
   }
   // The crossover and every band are checked here, so set_config() refuses
   // before it commits anything.

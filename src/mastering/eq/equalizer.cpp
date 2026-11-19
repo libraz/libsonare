@@ -16,9 +16,44 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
-#include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
+
+namespace check = sonare::util::check;
+
+namespace {
+
+bool is_mid_side(StereoPlacement placement) noexcept {
+  return placement == StereoPlacement::Mid || placement == StereoPlacement::Side;
+}
+
+std::string band_member(size_t index, const char* field) {
+  return "bands[" + std::to_string(index) + "]." + field;
+}
+
+}  // namespace
+
+void EqualizerProcessor::refuse_mid_side_width() const {
+  size_t index = 0;
+  while (index + 1 < kMaxBands && !is_mid_side(bands_[index].placement)) ++index;
+  check::refuse_relation({band_member(index, "placement"), "num_channels"},
+                         "{1} must be 2 when {0} is mid or side");
+}
+
+void EqualizerProcessor::refuse_linear_phase_width() const {
+  size_t index = 0;
+  for (; index + 1 < kMaxBands; ++index) {
+    const EqBand& band = bands_[index];
+    const PhaseMode phase = band.phase == PhaseMode::Inherit ? phase_mode_ : band.phase;
+    if (band.enabled && !is_mid_side(band.placement) && phase == PhaseMode::LinearPhase) break;
+  }
+  const std::string phase_subject =
+      bands_[index].phase == PhaseMode::Inherit ? "phase_mode" : band_member(index, "phase");
+  check::refuse_relation({phase_subject, "num_channels"},
+                         "{1} must be at most 2 when {0} makes a left, right or stereo band "
+                         "linear-phase");
+}
 
 namespace {
 
@@ -78,7 +113,7 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   if (!prepared_) {
     for (const EqBand& band : bands_) {
       if (band.enabled && !(band.frequency_hz < static_cast<float>(sample_rate * 0.5))) {
-        refuse_band_frequency(band.frequency_hz, sample_rate);
+        refuse_band_frequency(sample_rate);
       }
     }
   }
@@ -149,18 +184,10 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   // The linear-phase backends carry one stream per stereo side, so a wider block
   // would leave its other channels unfiltered and undelayed. Refused before any
   // stage runs, like a Mid/Side band given anything but stereo.
-  if (has_lr_linear_bands_ && num_channels > 2) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor linear-phase bands support at most two channels");
-  }
-  if (has_mid_side_linear_bands_ && num_channels != 2) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor Mid/Side placement requires stereo input");
-  }
+  if (has_lr_linear_bands_ && num_channels > 2) refuse_linear_phase_width();
   // Raised before any state moves, like the linear-phase check above.
-  if (has_mid_side_bands_ && num_channels != 2) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor Mid/Side placement requires stereo input");
+  if ((has_mid_side_linear_bands_ || has_mid_side_bands_) && num_channels != 2) {
+    refuse_mid_side_width();
   }
   EqualizerSpectrumSnapshot pre_snapshot;
   capture_stream(const_cast<const float* const*>(channels), num_channels, num_samples,
@@ -435,7 +462,7 @@ void EqualizerProcessor::validate_band(const EqBand& band) const {
   // A band requested at a known rate is refused if the rate cannot carry it; one
   // stored before prepare() is resolved to that rate instead.
   if (!band_frequency_accepted(band, prepared_, sample_rate_)) {
-    refuse_band_frequency(band.frequency_hz, sample_rate_);
+    refuse_band_frequency(sample_rate_);
   }
 }
 
@@ -510,10 +537,7 @@ void EqualizerProcessor::clear() {
 }
 
 void EqualizerProcessor::set_gain_scale(float scale) {
-  if (!std::isfinite(scale) || scale < 0.0f || scale > 2.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor gain scale must be in 0..2");
-  }
+  check::in_range(scale, 0.0, 2.0, "gain_scale");
   if (scale == gain_scale_) return;
   gain_scale_ = scale;
   if (prepared_) {
@@ -527,18 +551,12 @@ void EqualizerProcessor::set_gain_scale(float scale) {
 }
 
 void EqualizerProcessor::set_output_gain_db(float gain_db) {
-  if (!numeric::finite(gain_db) || !numeric::finite(db_to_linear(gain_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor output gain must produce a finite linear gain");
-  }
+  check::at_most(gain_db, kMaxFiniteGainDb, "output_gain_db");
   output_gain_db_ = gain_db;
 }
 
 void EqualizerProcessor::set_output_pan(float pan) {
-  if (!std::isfinite(pan) || pan < -1.0f || pan > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor output pan must be in -1..1");
-  }
+  check::in_range(pan, -1.0, 1.0, "output_pan");
   output_pan_ = pan;
 }
 

@@ -13,8 +13,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 namespace {
 
 using sonare::discard_if_non_finite;
@@ -184,17 +187,16 @@ std::vector<rt::ParamDescriptor> TransientShaper::parameter_descriptors() const 
 }
 
 void TransientShaper::validate_config(const TransientShaperConfig& config) {
-  if (!std::isfinite(config.attack_gain_db) || !std::isfinite(config.sustain_gain_db) ||
-      !valid_non_negative(config.fast_attack_ms) || !valid_non_negative(config.fast_release_ms) ||
-      !valid_non_negative(config.slow_attack_ms) || !valid_non_negative(config.slow_release_ms) ||
-      !valid_non_negative(config.sensitivity) || !valid_non_negative(config.max_gain_db) ||
-      !valid_non_negative(config.gain_smoothing_ms) || !valid_non_negative(config.lookahead_ms)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid transient shaper configuration");
-  }
-  if (!valid_max_gain_db(config.max_gain_db)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "transient shaper max gain must produce a finite linear gain");
-  }
+  check::finite_float(config.attack_gain_db, "attack_gain_db");
+  check::finite_float(config.sustain_gain_db, "sustain_gain_db");
+  check::at_least(config.fast_attack_ms, 0.0, "fast_attack_ms");
+  check::at_least(config.fast_release_ms, 0.0, "fast_release_ms");
+  check::at_least(config.slow_attack_ms, 0.0, "slow_attack_ms");
+  check::at_least(config.slow_release_ms, 0.0, "slow_release_ms");
+  check::at_least(config.sensitivity, 0.0, "sensitivity");
+  check::in_range(config.max_gain_db, 0.0, kMaxFiniteGainDb, "max_gain_db");
+  check::at_least(config.gain_smoothing_ms, 0.0, "gain_smoothing_ms");
+  check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
 }
 
 void TransientShaper::ensure_followers(int num_channels) {

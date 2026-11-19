@@ -9,8 +9,11 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 namespace {
 
 /// Replaces an infinity with the ceiling -- which @c std::clamp already does, with
@@ -153,8 +156,7 @@ void HardClipper::rebuild_adaa() {
 }
 
 void HardClipper::validate_config(const HardClipperConfig& config) {
-  if (!valid_ceiling(config.ceiling))
-    throw SonareException(ErrorCode::InvalidParameter, "hard clipper ceiling must be positive");
+  check::greater_than(config.ceiling, 0.0, "ceiling");
 }
 
 void HardClipper::ensure_state(int num_channels) {

@@ -240,10 +240,10 @@ void require_invalid_parameter(const StereoDelayConfig& config, const std::strin
   try {
     StereoDelay subject(config);
     FAIL("constructed with " << field << " out of range");
-  } catch (const sonare::SonareException& error) {
+  } catch (const sonare::SonareParameterRefusal& error) {
     CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
-    CHECK(std::string(error.what()).find("StereoDelay: " + field + " out of range") !=
-          std::string::npos);
+    CHECK(error.subjects() == std::vector<std::string>{field});
+    CHECK(std::string(error.what()).rfind(field + " must be", 0) == 0);
   }
 }
 

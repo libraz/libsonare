@@ -6,8 +6,12 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
+
+namespace check = sonare::util::check;
+
 namespace {
 
 bool valid_pivot_hz(float pivot_hz) noexcept { return pivot_hz > 0.0f; }
@@ -41,9 +45,7 @@ void TiltEq::set_tilt_db(float tilt_db) {
 }
 
 void TiltEq::set_pivot_hz(float pivot_hz) {
-  if (!valid_pivot_hz(pivot_hz)) {
-    throw SonareException(ErrorCode::InvalidParameter, "pivot_hz must be positive");
-  }
+  check::greater_than(pivot_hz, 0.0, "pivot_hz");
   pivot_hz_ = pivot_hz;
   if (prepared_) {
     update_bands();

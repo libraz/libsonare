@@ -5,6 +5,7 @@
 #include <limits>
 #include <string>
 
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -31,10 +32,10 @@ struct FieldDomain {
 
 // The single definition of each field's domain, shared by validate_config and live automation.
 constexpr FieldDomain kFields[] = {
-    {"carrierHz", &RingModulatorConfig::carrier_hz, 0, 0.0f, kInf},
-    {"dryWet", &RingModulatorConfig::dry_wet, 1, 0.0f, 1.0f},
-    {"phaseDeg", &RingModulatorConfig::phase_deg, 3, 0.0f, kMaxPhaseDeg},
-    {"stereoSpread", &RingModulatorConfig::stereo_spread, 4, 0.0f, 1.0f},
+    {"carrier_hz", &RingModulatorConfig::carrier_hz, 0, 0.0f, kInf},
+    {"dry_wet", &RingModulatorConfig::dry_wet, 1, 0.0f, 1.0f},
+    {"phase_deg", &RingModulatorConfig::phase_deg, 3, 0.0f, kMaxPhaseDeg},
+    {"stereo_spread", &RingModulatorConfig::stereo_spread, 4, 0.0f, 1.0f},
 };
 
 bool in_domain(const FieldDomain& field, float value) noexcept {
@@ -57,11 +58,7 @@ RingModulator::RingModulator(RingModulatorConfig config) : config_(config) {
 void RingModulator::validate_config(const RingModulatorConfig& config) {
   for (const FieldDomain& field : kFields) {
     const float value = config.*field.member;
-    if (in_domain(field, value)) continue;
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string("ring modulator: ") + field.name + " out of range [" +
-                              util::to_text(field.lo) + ", " + util::to_text(field.hi) + "], got " +
-                              util::to_text(value));
+    common::require_in_domain(field.name, value, field.lo, field.hi);
   }
 }
 

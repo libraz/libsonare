@@ -13,10 +13,13 @@
 #include "util/exception.h"
 #include "util/lpc.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/peak.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
+
+namespace check = sonare::util::check;
 namespace {
 
 /// The caps and solver knobs this module hands the shared Janssen interpolator.
@@ -165,24 +168,16 @@ DeclipReport repair_channel(std::vector<float>& samples, const std::vector<ClipR
 
 }  // namespace
 
+float clip_threshold_from_db(float threshold_db, const char* subject) {
+  check::in_range(threshold_db, kMinPositiveGainDb, 0.0, subject);
+  return db_to_linear(threshold_db);
+}
+
 void validate_config(const DeclipConfig& config) {
-  // Two-sided comparisons in this form reject NaN and both infinities on their
-  // own: every comparison against a non-finite value is false.
-  if (!(config.clip_threshold > 0.0f) || !(config.clip_threshold <= 1.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "clip_threshold must be in (0, 1]");
-  }
-  if (config.lpc_order < 0 || config.lpc_order > kDeclipMaxLpcOrder) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "lpc_order must be in [0, " + std::to_string(kDeclipMaxLpcOrder) + "]");
-  }
-  if (config.iterations < 1 || config.iterations > kDeclipMaxIterations) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "iterations must be in [1, " + std::to_string(kDeclipMaxIterations) + "]");
-  }
-  if (!(config.lpc_blend >= 0.0f) || !(config.lpc_blend <= 1.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "lpc_blend must be in [0, 1]");
-  }
+  check::in_interval(config.clip_threshold, 0.0, false, 1.0, true, "clip_threshold");
+  check::integer_in_range(config.lpc_order, 0, kDeclipMaxLpcOrder, "lpc_order");
+  check::integer_in_range(config.iterations, 1, kDeclipMaxIterations, "iterations");
+  check::in_range(config.lpc_blend, 0.0, 1.0, "lpc_blend");
 }
 
 ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate,

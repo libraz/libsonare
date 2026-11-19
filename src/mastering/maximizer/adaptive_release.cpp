@@ -14,8 +14,11 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::maximizer {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
@@ -215,21 +218,21 @@ bool AdaptiveRelease::parameter_is_realtime_safe(unsigned int param_id) const no
 }
 
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
-  for (const float value :
-       {config.lookahead_ms, config.min_release_ms, config.max_release_ms, config.crest_window_ms,
-        config.crest_low, config.crest_high, config.release_smoothing_ms}) {
-    if (!std::isfinite(value)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "adaptive release configuration values must be finite");
-    }
+  check::at_most(config.ceiling_dbtp, 0.0, "ceiling_dbtp");
+  check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
+  check::at_least(config.min_release_ms, 0.0, "min_release_ms");
+  // Finite and implied non-negative by the pair below; the relation carries the order.
+  check::at_least(config.max_release_ms, 0.0, "max_release_ms");
+  if (!(config.max_release_ms >= config.min_release_ms)) {
+    check::refuse_relation({"min_release_ms", "max_release_ms"}, "{0} must be at most {1}");
   }
-  if (!common::valid_ceiling_db(config.ceiling_dbtp) || config.lookahead_ms < 0.0f ||
-      !valid_release_pair(config.min_release_ms, config.max_release_ms) ||
-      !valid_crest_window_ms(config.crest_window_ms) ||
-      !valid_crest_pair(config.crest_low, config.crest_high) ||
-      !valid_time_ms(config.release_smoothing_ms)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid adaptive release configuration");
+  check::greater_than(config.crest_window_ms, 0.0, "crest_window_ms");
+  check::greater_than(config.crest_low, 0.0, "crest_low");
+  check::greater_than(config.crest_high, 0.0, "crest_high");
+  if (!(config.crest_high >= config.crest_low)) {
+    check::refuse_relation({"crest_low", "crest_high"}, "{0} must be at most {1}");
   }
+  check::at_least(config.release_smoothing_ms, 0.0, "release_smoothing_ms");
 }
 
 void AdaptiveRelease::configure_limiter() {

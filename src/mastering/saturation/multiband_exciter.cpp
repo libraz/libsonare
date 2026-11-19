@@ -11,8 +11,11 @@
 #include "mastering/multiband/multiband_common.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 MultibandExciter::MultibandExciter(MultibandExciterConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
@@ -137,7 +140,13 @@ void MultibandExciter::validate_config(const MultibandExciterConfig& config) {
   // The crossover and every band are checked here, so set_config() refuses
   // before it commits anything.
   multiband::Crossover::validate_config(config.crossover);
-  for (const auto& band : config.bands) Exciter::validate_config(band);
+  for (size_t i = 0; i < config.bands.size(); ++i) {
+    try {
+      Exciter::validate_config(config.bands[i]);
+    } catch (const SonareParameterRefusal& e) {
+      check::rethrow_under_member(e, "bands[" + std::to_string(i) + "]");
+    }
+  }
 }
 
 void MultibandExciter::rebuild_band_compensation(int channels) {

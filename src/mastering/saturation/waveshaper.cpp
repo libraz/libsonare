@@ -12,8 +12,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -194,14 +197,9 @@ void Waveshaper::validate_config(const WaveshaperConfig& config) {
   if (!numeric::finite(config.bias)) {
     throw SonareException(ErrorCode::InvalidParameter, "waveshaper bias must be finite");
   }
-  if (!valid_mix(config.mix)) {
-    throw SonareException(ErrorCode::InvalidParameter, "waveshaper mix must be in [0, 1]");
-  }
-  if (!numeric::finite(db_to_linear(config.drive_db)) ||
-      !numeric::finite(db_to_linear(config.output_gain_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "waveshaper drive and output gain must produce finite linear gains");
-  }
+  check::in_range(config.mix, 0.0, 1.0, "mix");
+  check::at_most(config.drive_db, sonare::kMaxFiniteGainDb, "drive_db");
+  check::at_most(config.output_gain_db, sonare::kMaxFiniteGainDb, "output_gain_db");
   // ADAA1 (first-order antiderivative anti-aliasing) is only implemented for the
   // odd Tanh/Arctan curves; the Asymmetric curve has no ADAA antiderivative
   // here and there is no oversampling fallback in this processor. Rather than

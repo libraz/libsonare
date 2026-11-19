@@ -12,8 +12,11 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -171,9 +174,7 @@ void Limiter::set_config(const LimiterConfig& config) {
 }
 
 void Limiter::set_release_ms(float release_ms) {
-  if (!std::isfinite(release_ms) || release_ms < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "limiter release must be non-negative");
-  }
+  check::at_least(release_ms, 0.0, "release_ms");
   config_.release_ms = release_ms;
   // Re-publish so the audio thread picks up the new release time via the
   // standard snapshot path (keeps a single source of truth for derived state).
@@ -241,23 +242,13 @@ std::vector<rt::ParamDescriptor> Limiter::parameter_descriptors() const {
 }
 
 void Limiter::validate_config(const LimiterConfig& config) {
-  if (!valid_time_ms(config.lookahead_ms) || !valid_time_ms(config.release_ms)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "limiter timing values must be finite and non-negative");
-  }
-  if (!std::isfinite(config.threshold_db)) {
-    // A non-finite threshold becomes a non-finite ceiling (db_to_linear) and
-    // poisons every gain in the block; reject it here (matches BrickwallLimiter).
-    throw SonareException(ErrorCode::InvalidParameter, "limiter threshold must be finite");
-  }
-  if (!numeric::finite(config.post_gain_db) ||
-      !numeric::finite(db_to_linear(config.post_gain_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "limiter post gain must produce a finite linear gain");
-  }
-  if (!std::isfinite(config.ratio) || (config.ratio != 0.0f && config.ratio < 1.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "limiter ratio must be 0 or at least 1");
-  }
+  check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  // A non-finite threshold becomes a non-finite ceiling (db_to_linear) and poisons every gain.
+  check::finite_float(config.threshold_db, "threshold_db");
+  check::at_most(config.post_gain_db, kMaxFiniteGainDb, "post_gain_db");
+  // 0 is the brick-wall sentinel; anything else must be a finite ratio of at least 1.
+  if (config.ratio != 0.0f) check::at_least(config.ratio, 1.0, "ratio");
 }
 
 void Limiter::prepare_buffers(int num_channels) {

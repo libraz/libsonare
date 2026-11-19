@@ -12,8 +12,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 
@@ -132,13 +135,9 @@ std::vector<rt::ParamDescriptor> Transformer::parameter_descriptors() const {
 }
 
 void Transformer::validate_config(const TransformerConfig& config) {
-  if (!valid_mix(config.mix) || !valid_asymmetry(config.asymmetry)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid transformer configuration");
-  }
-  if (!numeric::finite(db_to_linear(config.drive_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "transformer drive must produce a finite linear gain");
-  }
+  check::in_range(config.mix, 0.0, 1.0, "mix");
+  check::in_range(config.asymmetry, -1.0, 1.0, "asymmetry");
+  check::at_most(config.drive_db, sonare::kMaxFiniteGainDb, "drive_db");
 }
 
 common::JilesAthertonConfig Transformer::make_ja_config(const TransformerConfig& config) {

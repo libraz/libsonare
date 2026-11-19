@@ -10,8 +10,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -127,13 +130,9 @@ std::vector<rt::ParamDescriptor> SoftClipper::parameter_descriptors() const {
 }
 
 void SoftClipper::validate_config(const SoftClipperConfig& config) {
-  if (!numeric::finite(config.ceiling) || !(config.ceiling > 0.0f) || !valid_mix(config.mix)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid soft clipper configuration");
-  }
-  if (!numeric::finite(db_to_linear(config.drive_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "soft clipper drive must produce a finite linear gain");
-  }
+  check::greater_than(config.ceiling, 0.0, "ceiling");
+  check::in_range(config.mix, 0.0, 1.0, "mix");
+  check::at_most(config.drive_db, sonare::kMaxFiniteGainDb, "drive_db");
   // ADAA2 (second-order antiderivative antialiasing) has no closed-form
   // second antiderivative for tanh, so it is not implemented here. Reject the
   // combination instead of silently behaving like AliasingControl::None.

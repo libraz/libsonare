@@ -107,7 +107,8 @@ void validate_params(const Param* params, std::size_t count) {
     if (!std::isfinite(params[index].value) ||
         std::fabs(params[index].value) > static_cast<double>(std::numeric_limits<float>::max())) {
       throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, params[index].key,
-                                              ::sonare::util::json::schema::kFloatRangePredicate);
+                                              ::sonare::util::json::schema::kFloatRangePredicate)
+          .as_caller_spelled();
     }
   }
 }
@@ -330,8 +331,9 @@ constexpr int kProbeSampleRate = 48000;
 // question and become an error escaping to JavaScript.
 //
 // A parameter that IS out of range still throws, from the branch that read it.
-bool try_configure_processor(const std::string& name, const ParamMap& params, ChannelSet channels,
-                             int sample_rate, ProcessorOutcome& outcome) {
+bool try_configure_processor_in_member_spelling(const std::string& name, const ParamMap& params,
+                                                ChannelSet channels, int sample_rate,
+                                                ProcessorOutcome& outcome) {
   // Alias into the outcome: every value this dispatch computes lands in the
   // one struct the caller copies whole.
   float& applied_gain_db = outcome.applied_gain_db;
@@ -644,6 +646,14 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     return false;
   }
   return true;
+}
+
+// try_configure_processor_in_member_spelling, with a validator's member subjects spelled as keys.
+bool try_configure_processor(const std::string& name, const ParamMap& params, ChannelSet channels,
+                             int sample_rate, ProcessorOutcome& outcome) {
+  return detail::with_caller_keys(params, std::string(), [&] {
+    return try_configure_processor_in_member_spelling(name, params, channels, sample_rate, outcome);
+  });
 }
 
 // Creative streaming effects (the 5 reverbs, modulation, stereo delay,
@@ -1001,8 +1011,7 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
   validate_params(params.data(), params.size());
   // Only the crossfade is defined for planar pairs; reject the rest before copying.
   if (name != "match.abCrossfade") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "unsupported stereo pair processor: " + name);
+    throw SonareException(ErrorCode::NotSupported, "unsupported stereo pair processor: " + name);
   }
   validate_offline_audio_input("apply_named_pair_processor_stereo", "source_left", source_left,
                                source_length, sample_rate);

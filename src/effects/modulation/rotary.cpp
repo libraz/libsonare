@@ -5,6 +5,7 @@
 #include <limits>
 #include <string>
 
+#include "effects/common/field_domain.h"
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -12,6 +13,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::effects::modulation {
 
@@ -37,28 +39,28 @@ constexpr float kInf = std::numeric_limits<float>::infinity();
 
 // The single definition of each field's domain, shared by validate_config and live automation.
 constexpr FieldDomain kFields[] = {
-    {"rateHz", &RotaryConfig::rate_hz, 0, 0.0f, kInf, false},
-    {"depthMs", &RotaryConfig::depth_ms, 1, 0.0f, kMaxDepthMs, false},
+    {"rate_hz", &RotaryConfig::rate_hz, 0, 0.0f, kInf, false},
+    {"depth_ms", &RotaryConfig::depth_ms, 1, 0.0f, kMaxDepthMs, false},
     {"tremolo", &RotaryConfig::tremolo, 2, 0.0f, 1.0f, false},
-    {"dryWet", &RotaryConfig::dry_wet, 3, 0.0f, 1.0f, false},
-    {"drumRateHz", &RotaryConfig::drum_rate_hz, 4, 0.0f, kInf, false},
-    {"hornSlowHz", &RotaryConfig::horn_slow_hz, 5, 0.0f, kInf, false},
-    {"hornFastHz", &RotaryConfig::horn_fast_hz, 6, 0.0f, kInf, false},
-    {"drumSlowHz", &RotaryConfig::drum_slow_hz, 7, 0.0f, kInf, false},
-    {"drumFastHz", &RotaryConfig::drum_fast_hz, 8, 0.0f, kInf, false},
+    {"dry_wet", &RotaryConfig::dry_wet, 3, 0.0f, 1.0f, false},
+    {"drum_rate_hz", &RotaryConfig::drum_rate_hz, 4, 0.0f, kInf, false},
+    {"horn_slow_hz", &RotaryConfig::horn_slow_hz, 5, 0.0f, kInf, false},
+    {"horn_fast_hz", &RotaryConfig::horn_fast_hz, 6, 0.0f, kInf, false},
+    {"drum_slow_hz", &RotaryConfig::drum_slow_hz, 7, 0.0f, kInf, false},
+    {"drum_fast_hz", &RotaryConfig::drum_fast_hz, 8, 0.0f, kInf, false},
     {"speed", &RotaryConfig::speed, 9, -1.0f, 1.0f, false},
-    {"hornLevelDb", &RotaryConfig::horn_level_db, 10, -kInf, kInf, true},
-    {"drumLevelDb", &RotaryConfig::drum_level_db, 11, -kInf, kInf, true},
-    {"stereoSpread", &RotaryConfig::stereo_spread, 14, 0.0f, 1.0f, false},
-    {"accelTauS", &RotaryConfig::accel_tau_s, 15, 0.0f, kInf, false},
-    {"decelTauS", &RotaryConfig::decel_tau_s, 16, 0.0f, kInf, false},
-    {"undershootHz", &RotaryConfig::undershoot_hz, 17, 0.0f, kInf, false},
-    {"drumUndershootHz", &RotaryConfig::drum_undershoot_hz, 18, 0.0f, kInf, false},
+    {"horn_level_db", &RotaryConfig::horn_level_db, 10, -kInf, kInf, true},
+    {"drum_level_db", &RotaryConfig::drum_level_db, 11, -kInf, kInf, true},
+    {"stereo_spread", &RotaryConfig::stereo_spread, 14, 0.0f, 1.0f, false},
+    {"accel_tau_s", &RotaryConfig::accel_tau_s, 15, 0.0f, kInf, false},
+    {"decel_tau_s", &RotaryConfig::decel_tau_s, 16, 0.0f, kInf, false},
+    {"undershoot_hz", &RotaryConfig::undershoot_hz, 17, 0.0f, kInf, false},
+    {"drum_undershoot_hz", &RotaryConfig::drum_undershoot_hz, 18, 0.0f, kInf, false},
 };
 
 bool in_domain(const FieldDomain& field, float value) noexcept {
   if (!std::isfinite(value)) return false;
-  if (field.gain_db) return std::isfinite(db_to_linear(value));
+  if (field.gain_db) return value <= kMaxFiniteGainDb;
   return value >= field.lo && value <= field.hi;
 }
 
@@ -76,13 +78,11 @@ Rotary::Rotary(RotaryConfig config) : config_(config) { validate_config(config_)
 void Rotary::validate_config(const RotaryConfig& config) {
   for (const FieldDomain& field : kFields) {
     const float value = config.*field.member;
-    if (in_domain(field, value)) continue;
-    const std::string bounds =
-        field.gain_db ? "(finite linear gain required)"
-                      : "[" + util::to_text(field.lo) + ", " + util::to_text(field.hi) + "]";
-    throw SonareException(ErrorCode::InvalidParameter, std::string("rotary: ") + field.name +
-                                                           " out of range " + bounds + ", got " +
-                                                           util::to_text(value));
+    if (field.gain_db) {
+      util::check::at_most(value, kMaxFiniteGainDb, field.name);
+      continue;
+    }
+    common::require_in_domain(field.name, value, field.lo, field.hi);
   }
 }
 

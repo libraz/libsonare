@@ -13,17 +13,10 @@ namespace sonare::acoustic {
 namespace {
 constexpr float kInf = std::numeric_limits<float>::infinity();
 
-// Upper bound on a single shoebox dimension (metres). Generous for any real room
-// yet small enough that the pairwise wall areas (<= 1e8 m^2), the volume
-// (<= 1e12 m^3) and their sums stay far inside the finite float range, so no
-// downstream area/volume product can overflow to infinity and poison the
-// synthesized RIR with NaN.
-constexpr float kMaxRoomDimension = 1.0e4f;
-
 bool finite_positive(float v) noexcept { return std::isfinite(v) && v > 0.0f; }
 
 // A dimension that is finite, positive and within the overflow-safe bound.
-bool finite_bounded(float v) noexcept { return finite_positive(v) && v <= kMaxRoomDimension; }
+bool finite_bounded(float v) noexcept { return finite_positive(v) && v <= kMaxRoomDimensionM; }
 
 // Slab test: ray (o + t*d, t>=0) vs AABB. Returns the entry/exit parameters.
 bool ray_aabb(const Aabb& box, const Vec3& o, const Vec3& d, float& t_enter,

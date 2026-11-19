@@ -627,7 +627,7 @@ struct DomainRow {
 
 const DomainRow kDomainRows[] = {
     {"semitones", &PitchShifterConfig::semitones, 0, -24.0f, 24.0f},
-    {"dryWet", &PitchShifterConfig::dry_wet, 1, 0.0f, 1.0f},
+    {"dry_wet", &PitchShifterConfig::dry_wet, 1, 0.0f, 1.0f},
     {"cents", &PitchShifterConfig::cents, 2, -100.0f, 100.0f},
     {"pan", &PitchShifterConfig::pan, 3, -1.0f, 1.0f},
     {"semitones2", &PitchShifterConfig::semitones2, 4, -24.0f, 24.0f},
@@ -636,9 +636,9 @@ const DomainRow kDomainRows[] = {
     {"pan2", &PitchShifterConfig::pan2, 7, -1.0f, 1.0f},
     {"feedback", &PitchShifterConfig::feedback, 8, -sonare::effects::common::kMaxFeedback,
      sonare::effects::common::kMaxFeedback},
-    {"windowMs", &PitchShifterConfig::window_ms, 12, 0.5f, 1000.0f},
-    {"preDelayMs", &PitchShifterConfig::pre_delay_ms, 13, 0.0f, 1000.0f},
-    {"preDelay2Ms", &PitchShifterConfig::pre_delay2_ms, 14, 0.0f, 1000.0f},
+    {"window_ms", &PitchShifterConfig::window_ms, 12, 0.5f, 1000.0f},
+    {"pre_delay_ms", &PitchShifterConfig::pre_delay_ms, 13, 0.0f, 1000.0f},
+    {"pre_delay2_ms", &PitchShifterConfig::pre_delay2_ms, 14, 0.0f, 1000.0f},
 };
 
 std::vector<float> domain_refused(const DomainRow& row) {
@@ -683,9 +683,10 @@ TEST_CASE("PitchShifter construction refuses a value outside a field's domain", 
       try {
         PitchShifter shifter(config);
         FAIL("construction accepted " << row.name);
-      } catch (const SonareException& error) {
+      } catch (const sonare::SonareParameterRefusal& error) {
         CHECK(error.code() == ErrorCode::InvalidParameter);
-        CHECK(std::string(error.what()).find(row.name) != std::string::npos);
+        CHECK(error.subjects() == std::vector<std::string>{row.name});
+        CHECK(std::string(error.what()).rfind(std::string(row.name) + " must be", 0) == 0);
       }
       CHECK_THROWS_AS(PitchShifter::validate_config(config), SonareException);
     }

@@ -22,9 +22,9 @@ constexpr float kMaxDecay = FdnReverbConfig::kMaxDecay;
 }  // namespace
 
 void FdnReverb::validate_config(const FdnReverbConfig& config) {
-  common::require_in_domain("FdnReverb", "decay", config.decay, 0.0f, kMaxDecay);
-  common::require_in_domain("FdnReverb", "hf_damping", config.hf_damping, 0.0f, 1.0f);
-  common::require_in_domain("FdnReverb", "dry_wet", config.dry_wet, 0.0f, 1.0f);
+  common::require_in_domain("decay", config.decay, 0.0f, kMaxDecay);
+  common::require_in_domain("hf_damping", config.hf_damping, 0.0f, 1.0f);
+  common::require_in_domain("dry_wet", config.dry_wet, 0.0f, 1.0f);
 }
 
 FdnReverb::FdnReverb(FdnReverbConfig config) : config_((validate_config(config), config)) {}

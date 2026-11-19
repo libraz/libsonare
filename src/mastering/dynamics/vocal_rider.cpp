@@ -13,8 +13,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -203,17 +206,16 @@ std::vector<rt::ParamDescriptor> VocalRider::parameter_descriptors() const {
 }
 
 void VocalRider::validate_config(const VocalRiderConfig& config) {
-  if (!std::isfinite(config.target_db) || !std::isfinite(config.noise_floor_db) ||
-      !std::isfinite(config.output_gain_db) || !valid_non_negative(config.max_boost_db) ||
-      !valid_non_negative(config.max_cut_db) || !valid_non_negative(config.attack_ms) ||
-      !valid_non_negative(config.release_ms) || !valid_non_negative(config.gain_smoothing_ms)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid vocal rider configuration");
-  }
-  if (!valid_peak_gain(config.max_boost_db, config.output_gain_db)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "vocal rider max boost plus output gain must produce a finite linear gain");
-  }
+  check::finite_float(config.target_db, "target_db");
+  check::finite_float(config.noise_floor_db, "noise_floor_db");
+  check::finite_float(config.output_gain_db, "output_gain_db");
+  check::at_least(config.max_boost_db, 0.0, "max_boost_db");
+  check::at_least(config.max_cut_db, 0.0, "max_cut_db");
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_least(config.gain_smoothing_ms, 0.0, "gain_smoothing_ms");
+  check::sum_at_most(config.max_boost_db, config.output_gain_db, kMaxFiniteGainDb, "max_boost_db",
+                     "output_gain_db");
 }
 
 void VocalRider::ensure_followers(int num_channels) {

@@ -15,8 +15,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -306,21 +309,22 @@ std::vector<rt::ParamDescriptor> Compressor::parameter_descriptors() const {
 }
 
 void Compressor::validate_config(const CompressorConfig& config) {
-  if (!std::isfinite(config.threshold_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "compressor threshold must be finite");
-  }
-  if (!valid_ratio(config.ratio)) {
-    throw SonareException(ErrorCode::InvalidParameter, "compressor ratio must be at least 1");
-  }
-  if (!valid_non_negative(config.attack_ms) || !valid_non_negative(config.release_ms) ||
-      !valid_non_negative(config.knee_db) || !valid_positive(config.sidechain_hpf_hz) ||
-      !valid_non_negative(config.pdr_time_ms) || !valid_release_scale(config.pdr_release_scale)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "compressor timing and knee values must be non-negative");
-  }
-  if (!numeric::finite(db_to_linear(compute_makeup_db(config)))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "compressor makeup gain must produce a finite linear gain");
+  check::finite_float(config.threshold_db, "threshold_db");
+  check::at_least(config.ratio, 1.0, "ratio");
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_least(config.knee_db, 0.0, "knee_db");
+  check::greater_than(config.sidechain_hpf_hz, 0.0, "sidechain_hpf_hz");
+  check::at_least(config.pdr_time_ms, 0.0, "pdr_time_ms");
+  check::at_least(config.pdr_release_scale, 1.0, "pdr_release_scale");
+  // The makeup gain in force is the manual one, or the auto one derived from threshold and ratio.
+  const bool manual_makeup = config.makeup_gain_db != 0.0f || !config.auto_makeup;
+  if (manual_makeup) {
+    check::at_most(config.makeup_gain_db, kMaxFiniteGainDb, "makeup_gain_db");
+  } else if (!(compute_makeup_db(config) <= kMaxFiniteGainDb)) {
+    check::refuse_relation({"threshold_db", "ratio"},
+                           "the automatic makeup gain from {0} and {1} must be at most " +
+                               sonare::util::refusal::bound_text(kMaxFiniteGainDb));
   }
 }
 

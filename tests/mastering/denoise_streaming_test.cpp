@@ -153,14 +153,14 @@ TEST_CASE("StreamingDenoise refuses the quantile estimator and accepts a recursi
     StreamingDenoise refused(config);
   } catch (const SonareException& error) {
     threw = true;
-    CHECK(error.code() == ErrorCode::InvalidParameter);
+    CHECK(error.code() == ErrorCode::NotSupported);
     // The caller has to learn which field to change and what the alternatives
     // are; a message naming neither leaves substitution as the only way out.
     const std::string message = error.what();
     CHECK(message.find("noise_estimator") != std::string::npos);
-    CHECK(message.find("Mcra") != std::string::npos);
-    CHECK(message.find("Imcra") != std::string::npos);
-    CHECK(message.find("Spp") != std::string::npos);
+    CHECK(message.find("mcra") != std::string::npos);
+    CHECK(message.find("imcra") != std::string::npos);
+    CHECK(message.find("spp") != std::string::npos);
   }
   REQUIRE(threw);
 

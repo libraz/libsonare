@@ -1,6 +1,7 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -21,8 +22,11 @@
 #include "util/exception.h"
 #include "util/non_finite_sample.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::maximizer {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
@@ -496,10 +500,7 @@ void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
 }
 
 void TruePeakLimiter::set_release_ms(float release_ms) {
-  if (!valid_release_ms(release_ms)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "true peak limiter release must be non-negative");
-  }
+  check::at_least(release_ms, 0.0, "release_ms");
   config_.release_ms = release_ms;
   update_time_constants();
   limiter_.set_release_ms(release_ms);
@@ -546,13 +547,11 @@ bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const no
 }
 
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
-  if (!common::valid_ceiling_db(config.ceiling_dbtp) || !std::isfinite(config.lookahead_ms) ||
-      !valid_release_ms(config.release_ms) || config.lookahead_ms < 0.0f ||
-      (config.oversample_factor != 1 && config.oversample_factor != 2 &&
-       config.oversample_factor != 4 && config.oversample_factor != 8 &&
-       config.oversample_factor != 16)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid true peak limiter configuration");
-  }
+  check::at_most(config.ceiling_dbtp, 0.0, "ceiling_dbtp");
+  check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  static constexpr std::array<int, 5> kOversampleFactors = {1, 2, 4, 8, 16};
+  check::one_of(config.oversample_factor, kOversampleFactors, "oversample_factor");
 }
 
 int TruePeakLimiter::tail_samples() const noexcept {

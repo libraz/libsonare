@@ -14,8 +14,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_sample.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -140,10 +143,7 @@ void BrickwallLimiter::set_config(const BrickwallLimiterConfig& config) {
 }
 
 void BrickwallLimiter::set_release_ms(float release_ms) {
-  if (!std::isfinite(release_ms) || release_ms < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "brickwall limiter release must be non-negative");
-  }
+  check::at_least(release_ms, 0.0, "release_ms");
   // Through the outer snapshot, never the inner limiter's own: that one still
   // holds the ceiling from the last prepare and would put it back.
   BrickwallLimiterConfig next = config_;
@@ -180,12 +180,9 @@ std::vector<rt::ParamDescriptor> BrickwallLimiter::parameter_descriptors() const
 }
 
 void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {
-  if (!common::valid_ceiling_db(config.ceiling_db) || !valid_time_ms(config.lookahead_ms) ||
-      !valid_time_ms(config.release_ms)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "brickwall limiter ceiling must be finite and <= 0, timing values finite and non-negative");
-  }
+  check::at_most(config.ceiling_db, 0.0, "ceiling_db");
+  check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
 }
 
 void BrickwallLimiter::update_coefficients(const BrickwallLimiterConfig& config) {

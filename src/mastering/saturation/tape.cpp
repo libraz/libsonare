@@ -1,6 +1,7 @@
 #include "mastering/saturation/tape.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -15,8 +16,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 using sonare::constants::kTwoPiD;
@@ -260,21 +264,17 @@ std::vector<rt::ParamDescriptor> Tape::parameter_descriptors() const {
 }
 
 void Tape::validate_config(const TapeConfig& config) {
-  if (!numeric::finite(config.bias) || !valid_unit(config.saturation) ||
-      !valid_unit(config.hysteresis) || !valid_speed_ips(config.speed_ips) ||
-      !valid_head_bump_db(config.head_bump_db) || !valid_unit(config.gap_loss)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid tape configuration");
-  }
-  if (!numeric::finite(db_to_linear(config.drive_db)) ||
-      !numeric::finite(db_to_linear(config.output_gain_db)) ||
-      !numeric::finite(db_to_linear(config.head_bump_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tape drive, output gain and head bump must produce finite linear gains");
-  }
-  if (config.oversample_factor != 1 && config.oversample_factor != 2 &&
-      config.oversample_factor != 4) {
-    throw SonareException(ErrorCode::InvalidParameter, "tape oversample_factor must be 1, 2, or 4");
-  }
+  check::finite_float(config.bias, "bias");
+  check::in_range(config.saturation, 0.0, 1.0, "saturation");
+  check::in_range(config.hysteresis, 0.0, 1.0, "hysteresis");
+  check::greater_than(config.speed_ips, 0.0, "speed_ips");
+  check::at_least(config.head_bump_db, 0.0, "head_bump_db");
+  check::in_range(config.gap_loss, 0.0, 1.0, "gap_loss");
+  check::at_most(config.drive_db, sonare::kMaxFiniteGainDb, "drive_db");
+  check::at_most(config.output_gain_db, sonare::kMaxFiniteGainDb, "output_gain_db");
+  check::at_most(config.head_bump_db, sonare::kMaxFiniteGainDb, "head_bump_db");
+  static constexpr std::array<int, 3> kOversampleFactors = {1, 2, 4};
+  check::one_of(config.oversample_factor, kOversampleFactors, "oversample_factor");
 }
 
 common::JilesAthertonConfig Tape::make_ja_config(const TapeConfig& config) {

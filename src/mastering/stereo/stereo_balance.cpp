@@ -8,8 +8,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -137,13 +140,8 @@ std::vector<rt::ParamDescriptor> StereoBalance::parameter_descriptors() const {
 }
 
 void StereoBalance::validate_config(const StereoBalanceConfig& config) {
-  if (!balance_valid(config.balance)) {
-    throw SonareException(ErrorCode::InvalidParameter, "stereo balance must be in [-1, 1]");
-  }
-  if (!gain_valid(config.gain)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "stereo balance gain must be finite and non-negative");
-  }
+  check::in_range(config.balance, -1.0, 1.0, "balance");
+  check::at_least(config.gain, 0.0, "gain");
 }
 
 void StereoBalance::gains(const StereoBalanceConfig& config, float& left, float& right) {

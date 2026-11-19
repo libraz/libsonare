@@ -598,12 +598,14 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   if (!std::isfinite(value) ||
       std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, full_key,
-                                            ::sonare::util::json::schema::kFloatRangePredicate);
+                                            ::sonare::util::json::schema::kFloatRangePredicate)
+        .as_caller_spelled();
   }
   const float float_value = static_cast<float>(value);
   if (!std::isfinite(float_value)) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, full_key,
-                                            ::sonare::util::json::schema::kFloatRangePredicate);
+                                            ::sonare::util::json::schema::kFloatRangePredicate)
+        .as_caller_spelled();
   }
 
   const auto target = std::find_if(impl_->parameter_targets.begin(), impl_->parameter_targets.end(),

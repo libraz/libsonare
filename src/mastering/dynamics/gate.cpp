@@ -15,8 +15,11 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
@@ -201,13 +204,18 @@ std::vector<rt::ParamDescriptor> Gate::parameter_descriptors() const {
 }
 
 void Gate::validate_config(const GateConfig& config) {
-  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.attack_ms) ||
-      !std::isfinite(config.release_ms) || !std::isfinite(config.hold_ms) ||
-      !std::isfinite(config.close_threshold_db) || !std::isfinite(config.key_hpf_hz) ||
-      !valid_range_db(config.range_db) || !valid_time_ms(config.attack_ms) ||
-      !valid_time_ms(config.release_ms) || config.hold_ms < 0.0f || config.key_hpf_hz < 0.0f ||
-      config.close_threshold_db > config.threshold_db) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid gate configuration");
+  check::finite_float(config.threshold_db, "threshold_db");
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_least(config.hold_ms, 0.0, "hold_ms");
+  check::finite_float(config.close_threshold_db, "close_threshold_db");
+  check::at_least(config.key_hpf_hz, 0.0, "key_hpf_hz");
+  // A range of -inf is a full mute.
+  if (config.range_db != -std::numeric_limits<float>::infinity()) {
+    check::at_most(config.range_db, 0.0, "range_db");
+  }
+  if (config.close_threshold_db > config.threshold_db) {
+    check::refuse_relation({"close_threshold_db", "threshold_db"}, "{0} must be at most {1}");
   }
 }
 

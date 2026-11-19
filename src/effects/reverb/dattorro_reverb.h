@@ -63,6 +63,8 @@ class DattorroReverb : public rt::ProcessorBase {
   /// Pre-delay / modulation depth in DattorroReverbConfig are expressed at this
   /// rate and rescaled to the working sample rate in prepare().
   static constexpr double kReferenceSampleRate = 29761.0;
+  /// Longest configured pre-delay: it sizes the ring at prepare(), so it needs a bound.
+  static constexpr float kMaxConfiguredPreDelayMs = 4000.0f;
   /// Rate at which `damping` states its coefficient: the default working rate, at which the
   /// tank was voiced and its decay measured.
   static constexpr double kDampingReferenceSampleRate = sonare::constants::kDefaultDawSampleRate;

@@ -1,5 +1,6 @@
 #include "effects/reverb/room_reverb.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -362,9 +363,10 @@ TEST_CASE("RoomReverb refuses a receiver pair that leaves the room at constructi
   try {
     RoomReverb reverb(config);
     FAIL("a receiver outside the room was accepted");
-  } catch (const SonareException& error) {
+  } catch (const sonare::SonareParameterRefusal& error) {
     REQUIRE(error.code() == ErrorCode::InvalidParameter);
-    REQUIRE(std::string(error.what()).find("acoustic.receiver_outside_room") != std::string::npos);
+    const std::vector<std::string>& subjects = error.subjects();
+    REQUIRE(std::find(subjects.begin(), subjects.end(), "receiver_spacing_m") != subjects.end());
   }
   // The mono layout never places the pair, so the same listener is accepted there.
   REQUIRE_NOTHROW(RoomReverb(config, sonare::acoustic::ReceiverLayout::Mono));

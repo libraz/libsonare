@@ -10,8 +10,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -107,18 +110,11 @@ std::vector<rt::ParamDescriptor> Expander::parameter_descriptors() const {
 }
 
 void Expander::validate_config(const ExpanderConfig& config) {
-  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
-      !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
-      !std::isfinite(config.range_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid expander configuration");
-  }
-  if (!valid_ratio(config.ratio)) {
-    throw SonareException(ErrorCode::InvalidParameter, "expander ratio must be at least 1");
-  }
-  if (!valid_time_ms(config.attack_ms) || !valid_time_ms(config.release_ms) ||
-      !valid_range_db(config.range_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid expander configuration");
-  }
+  check::finite_float(config.threshold_db, "threshold_db");
+  check::at_least(config.ratio, 1.0, "ratio");
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_most(config.range_db, 0.0, "range_db");
 }
 
 float Expander::gain_reduction_db(float input_db, const ExpanderConfig& config) {

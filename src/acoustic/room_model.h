@@ -30,6 +30,9 @@ inline constexpr SourceListener kDefaultPlacement{{1.0f, 1.0f, 1.2f}, {5.0f, 4.0
 
 /// @brief Default uniform wall absorption of a synthesized or morph-target room.
 inline constexpr float kDefaultWallAbsorption = 0.2f;
+/// Largest shoebox dimension (m) the room model accepts: generous for any real room, yet small
+/// enough that wall areas, volume and their sums stay inside the finite float range.
+inline constexpr float kMaxRoomDimensionM = 1.0e4f;
 
 /// @brief Index of a shoebox wall in `ShoeboxRoom::walls`.
 enum ShoeboxWall {

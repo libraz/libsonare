@@ -169,6 +169,8 @@ class EqualizerProcessor : public rt::ProcessorBase {
   ///         value.
   bool discard_non_finite_dynamic_state() noexcept;
   void update_iir_bands_preserving_state(int num_samples = 0);
+  [[noreturn]] void refuse_mid_side_width() const;
+  [[noreturn]] void refuse_linear_phase_width() const;
   void rebuild_iir(int num_samples = 0);
   /// Returns band @p index's applied dynamic gain: smoothed over @p num_samples while the band
   /// is running, held on a non-process rebuild, seeded at @p target_gain when it has no state.

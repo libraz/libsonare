@@ -13,8 +13,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -220,22 +223,14 @@ std::vector<rt::ParamDescriptor> ParallelComp::parameter_descriptors() const {
 }
 
 void ParallelComp::validate_config(const ParallelCompConfig& config) {
-  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
-      !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
-      !std::isfinite(config.mix) || !std::isfinite(config.makeup_gain_db) ||
-      !valid_ratio(config.ratio) || !valid_time_ms(config.attack_ms) ||
-      !valid_time_ms(config.release_ms) || !valid_mix(config.mix) ||
-      !std::isfinite(config.output_ceiling_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid parallel compressor configuration");
-  }
-  if (!valid_ceiling_db(config.output_ceiling_db)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "parallel compressor ceiling must produce a finite positive linear gain");
-  }
-  if (!valid_makeup_db(config.makeup_gain_db)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "parallel compressor makeup gain must produce a finite linear gain");
-  }
+  check::finite_float(config.threshold_db, "threshold_db");
+  check::at_least(config.ratio, 1.0, "ratio");
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::in_range(config.mix, 0.0, 1.0, "mix");
+  check::at_most(config.makeup_gain_db, kMaxFiniteGainDb, "makeup_gain_db");
+  check::in_range(config.output_ceiling_db, kMinPositiveGainDb, kMaxFiniteGainDb,
+                  "output_ceiling_db");
 }
 
 float ParallelComp::gain_reduction_db(float input_db, const ParallelCompConfig& config) {

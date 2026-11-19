@@ -321,9 +321,11 @@ class ParamsWalker {
       out_.push_back(ChainFlatParam{path, value.as_bool() ? 1.0 : 0.0, true});
       return;
     }
-    // A positive declip threshold names a level above full scale; refused enabled or not.
-    if (path == "repair.declip.clipThresholdDb" && value.as_number() > 0.0) {
-      throw_invalid_json(schema::refusal(params_path(path), "must be at or below 0 dBFS"));
+    // The declip threshold's dB domain, refused enabled or not (repair::clip_threshold_from_db).
+    if (path == "repair.declip.clipThresholdDb" &&
+        !(value.as_number() >= kMinPositiveGainDb && value.as_number() <= 0.0)) {
+      throw_invalid_json(
+          schema::refusal(params_path(path), schema::range_predicate(kMinPositiveGainDb, 0.0)));
     }
     out_.push_back(ChainFlatParam{path, value.as_number(), false});
   }

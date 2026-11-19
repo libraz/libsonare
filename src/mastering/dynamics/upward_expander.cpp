@@ -11,8 +11,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -111,17 +114,11 @@ std::vector<rt::ParamDescriptor> UpwardExpander::parameter_descriptors() const {
 }
 
 void UpwardExpander::validate_config(const UpwardExpanderConfig& config) {
-  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
-      !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
-      !std::isfinite(config.range_db) || !valid_ratio(config.ratio) ||
-      !valid_time_ms(config.attack_ms) || !valid_time_ms(config.release_ms) ||
-      config.range_db < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid upward expander configuration");
-  }
-  if (!valid_range_db(config.range_db)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "upward expander range must produce a finite linear gain");
-  }
+  check::finite_float(config.threshold_db, "threshold_db");
+  check::at_least(config.ratio, 1.0, "ratio");
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::in_range(config.range_db, 0.0, kMaxFiniteGainDb, "range_db");
 }
 
 float UpwardExpander::gain_db(float input_db, const UpwardExpanderConfig& config) {

@@ -5,12 +5,14 @@
 #include <utility>
 
 #include "acoustic/rir_synthesizer.h"
+#include "effects/common/room_field_checks.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::effects::acoustic {
 
@@ -53,6 +55,8 @@ std::vector<float> to_vector(const Audio& audio) {
   return std::vector<float>(audio.begin(), audio.end());
 }
 
+const common::RoomMemberPaths kMorphPaths{"target.dims", "placement.source", "placement.listener"};
+
 // The suppressor runs on at most the two channels the convolver processes.
 constexpr int kMaxSuppressedChannels = 2;
 }  // namespace
@@ -60,17 +64,18 @@ constexpr int kMaxSuppressedChannels = 2;
 void validate_room_morph_config(const RoomMorphConfig& config,
                                 const sonare::acoustic::ShoeboxFieldNames& room_names,
                                 const sonare::acoustic::RirSynthFieldNames& rir_names) {
+  common::check_room_geometry(config.target.dims, config.placement.source,
+                              config.placement.listener, kMorphPaths);
   const std::vector<Diagnostic> geometry =
       sonare::acoustic::validate_shoebox(config.target, config.placement, room_names);
   SONARE_CHECK_MSG(!has_error(geometry), ErrorCode::InvalidParameter,
                    "room morph target is invalid: " + sonare::acoustic::first_error_text(geometry));
-  SONARE_CHECK_MSG(numeric::finite_in_closed_range(config.source_tail_suppression, 0.0f, 1.0f) &&
-                       numeric::finite_in_closed_range(config.wet, 0.0f, 1.0f),
-                   ErrorCode::InvalidParameter,
-                   "room morph wet and source-tail suppression must be within [0,1]");
+  util::check::in_range(config.source_tail_suppression, 0.0, 1.0, "source_tail_suppression");
+  util::check::in_range(config.wet, 0.0, 1.0, "wet");
   // Everything synthesize_rir would refuse, refused here instead: a refused
   // synthesis returns an empty target RIR, which the convolution path renders as
   // dry passthrough rather than as an error.
+  common::check_rir_synth_config(rir_config_from(config));
   const std::vector<Diagnostic> synthesis =
       sonare::acoustic::validate_rir_synth_config(rir_config_from(config), rir_names);
   SONARE_CHECK_MSG(
@@ -83,6 +88,8 @@ RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config,
     : config_(std::move(config)), layout_(layout) {
   validate_room_morph_config(config_);
   if (layout_ == sonare::acoustic::ReceiverLayout::MonoAndPair) {
+    common::check_receiver_pair(config_.target, config_.placement, config_.receiver_spacing_m,
+                                kMorphPaths);
     const std::vector<Diagnostic> pair = sonare::acoustic::validate_receiver_pair(
         config_.target, config_.placement, config_.receiver_spacing_m);
     SONARE_CHECK_MSG(

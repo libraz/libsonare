@@ -15,8 +15,11 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -261,11 +264,9 @@ void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
   validate_band_index(index);
   if (band.enabled) {
     if (!band_frequency_in_range(band.frequency_hz, sample_rate_)) {
-      refuse_band_frequency(band.frequency_hz, sample_rate_);
+      refuse_band_frequency(sample_rate_);
     }
-    if (!band_q_valid(band.q)) {
-      throw SonareException(ErrorCode::InvalidParameter, "EQ band Q must be positive");
-    }
+    check_band_q(band.q);
   }
 
   bands_[index] = band;
@@ -603,21 +604,10 @@ int LinearPhaseEq::active_partition_size() const noexcept {
 }
 
 void LinearPhaseEq::validate_config() const {
-  if (!is_power_of_two(config_.fft_size)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "LinearPhaseEq fft_size must be a power of two");
-  }
-  if (config_.kernel_size <= 0 || config_.kernel_size > config_.fft_size) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "LinearPhaseEq kernel_size must be between 1 and fft_size");
-  }
-  if ((config_.kernel_size % 2) == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "LinearPhaseEq kernel_size must be odd");
-  }
-  if (config_.partition_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "LinearPhaseEq partition_size must be non-negative");
-  }
+  // fft_size has no declared range; every positive int power of two is accepted.
+  check::power_of_two_in_range(config_.fft_size, 1, 1LL << 30, "fft_size");
+  check::odd_integer_in_range(config_.kernel_size, 1, config_.fft_size, "kernel_size");
+  check::at_least(config_.partition_size, 0.0, "partition_size");
 }
 
 void LinearPhaseEq::validate_band_index(size_t index) {

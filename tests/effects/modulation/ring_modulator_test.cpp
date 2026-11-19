@@ -34,10 +34,10 @@ struct DomainRow {
 };
 
 const DomainRow kDomainRows[] = {
-    {"carrierHz", &RingModulatorConfig::carrier_hz, 0, 0.0f, kInf},
-    {"dryWet", &RingModulatorConfig::dry_wet, 1, 0.0f, 1.0f},
-    {"phaseDeg", &RingModulatorConfig::phase_deg, 3, 0.0f, 360.0f},
-    {"stereoSpread", &RingModulatorConfig::stereo_spread, 4, 0.0f, 1.0f},
+    {"carrier_hz", &RingModulatorConfig::carrier_hz, 0, 0.0f, kInf},
+    {"dry_wet", &RingModulatorConfig::dry_wet, 1, 0.0f, 1.0f},
+    {"phase_deg", &RingModulatorConfig::phase_deg, 3, 0.0f, 360.0f},
+    {"stereo_spread", &RingModulatorConfig::stereo_spread, 4, 0.0f, 1.0f},
 };
 
 std::vector<float> refused(const DomainRow& row) {
@@ -83,9 +83,10 @@ TEST_CASE("RingModulator construction refuses a value outside a field's domain",
       try {
         RingModulator modulator(config);
         FAIL("construction accepted " << row.name);
-      } catch (const SonareException& error) {
+      } catch (const sonare::SonareParameterRefusal& error) {
         CHECK(error.code() == ErrorCode::InvalidParameter);
-        CHECK(std::string(error.what()).find(row.name) != std::string::npos);
+        CHECK(error.subjects() == std::vector<std::string>{row.name});
+        CHECK(std::string(error.what()).rfind(std::string(row.name) + " must be", 0) == 0);
       }
       CHECK_THROWS_AS(RingModulator::validate_config(config), SonareException);
     }

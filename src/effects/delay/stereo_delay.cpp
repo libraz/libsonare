@@ -78,8 +78,7 @@ float config_delay_samples(float delay_ms, double sample_rate) noexcept {
 
 void StereoDelay::validate_config(const StereoDelayConfig& config) {
   for (const FieldDomain& domain : kFieldDomains) {
-    common::require_in_domain("StereoDelay", domain.name, config.*domain.member, domain.lo,
-                              domain.hi);
+    common::require_in_domain(domain.name, config.*domain.member, domain.lo, domain.hi);
   }
 }
 

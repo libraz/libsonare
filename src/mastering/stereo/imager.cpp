@@ -13,8 +13,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
+
+namespace check = sonare::util::check;
 
 using sonare::discard_group_if_non_finite;
 using sonare::constants::kPi;
@@ -150,13 +153,9 @@ std::vector<rt::ParamDescriptor> Imager::parameter_descriptors() const {
 }
 
 void Imager::validate_config(const ImagerConfig& config) {
-  if (!width_valid(config.width) || !decorrelation_valid(config.decorrelation_amount)) {
-    throw SonareException(ErrorCode::InvalidParameter, "imager width must be non-negative");
-  }
-  if (!output_gain_valid(config.output_gain_db)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "imager output gain must produce a finite linear gain");
-  }
+  check::at_least(config.width, 0.0, "width");
+  check::in_range(config.decorrelation_amount, 0.0, 1.0, "decorrelation_amount");
+  check::at_most(config.output_gain_db, kMaxFiniteGainDb, "output_gain_db");
 }
 
 }  // namespace sonare::mastering::stereo

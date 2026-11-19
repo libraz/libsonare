@@ -17,8 +17,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::multiband {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -286,19 +289,17 @@ std::vector<rt::ParamDescriptor> MultibandSaturation::parameter_descriptors() co
 
 void MultibandSaturation::validate_config(const MultibandSaturationConfig& config) {
   const size_t expected_bands = config.crossover.cutoffs_hz.size() + 1;
-  if (config.bands.size() != expected_bands) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "multiband saturation band count must match crossover");
-  }
+  check::integer_in_range(static_cast<long long>(config.bands.size()),
+                          static_cast<long long>(expected_bands),
+                          static_cast<long long>(expected_bands), "bands");
   for (const auto& band : config.bands) {
     if (!valid_mix(band.mix)) {
-      throw SonareException(ErrorCode::InvalidParameter, "saturation mix must be in [0, 1]");
+      const std::string subject = "bands[" + std::to_string(&band - config.bands.data()) + "].mix";
+      check::in_range(band.mix, 0.0, 1.0, subject.c_str());
     }
-    if (!numeric::finite(db_to_linear(band.drive_db)) ||
-        !numeric::finite(db_to_linear(band.output_gain_db))) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "saturation drive and output gain must produce finite linear gains");
-    }
+    const std::string prefix = "bands[" + std::to_string(&band - config.bands.data()) + "].";
+    check::at_most(band.drive_db, kMaxFiniteGainDb, (prefix + "drive_db").c_str());
+    check::at_most(band.output_gain_db, kMaxFiniteGainDb, (prefix + "output_gain_db").c_str());
   }
   // The crossover and every band are checked here, so set_config() refuses
   // before it commits anything.

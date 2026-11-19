@@ -94,13 +94,15 @@ float delayed_difference(const std::vector<float>& insert, const Audio& offline,
   return worst;
 }
 
-bool refuses(const std::string& name, const std::string& json) {
+/// The key an insert refuses as not supported, or empty when it builds or refuses otherwise.
+std::string unsupported_key(const std::string& name, const std::string& json) {
   try {
     (void)mastering::api::make_insert(name, json);
-  } catch (const SonareException& e) {
-    return e.code() == ErrorCode::InvalidParameter;
+  } catch (const SonareParameterRefusal& e) {
+    if (e.code() == ErrorCode::NotSupported && e.subjects().size() == 1) return e.subjects()[0];
+  } catch (const SonareException&) {
   }
-  return false;
+  return {};
 }
 
 }  // namespace
@@ -262,16 +264,16 @@ TEST_CASE("dehum insert subtract converges onto the seeded offline pass",
   CHECK(delayed_difference(out[0], offline, 0, 0, kSr / 10) > 0.01f);
 }
 
-TEST_CASE("repair inserts refuse an offline-only setting by name",
+TEST_CASE("repair inserts refuse an offline-only setting as not supported",
           "[mastering][repair][repair-insert]") {
   // Enums travel as their wire value; 1 is the wavelet mode.
-  CHECK(refuses("repair.decrackle", R"({"mode":1})"));
-  CHECK(refuses("repair.dereverbClassical", R"({"wpeEnabled":true})"));
+  CHECK(unsupported_key("repair.decrackle", R"({"mode":1})") == "mode");
+  CHECK(unsupported_key("repair.dereverbClassical", R"({"wpeEnabled":true})") == "wpeEnabled");
   // 0 is the quantile estimator, which ranks a whole signal.
-  CHECK(refuses("repair.denoiseClassical", R"({"noiseEstimator":0})"));
-  CHECK_FALSE(refuses("repair.denoiseClassical", "{}"));
-  CHECK_FALSE(refuses("repair.decrackle", R"({"threshold":0.3})"));
-  CHECK_FALSE(refuses("repair.dehum", R"({"adaptive":true})"));
+  CHECK(unsupported_key("repair.denoiseClassical", R"({"noiseEstimator":0})") == "noiseEstimator");
+  CHECK(unsupported_key("repair.denoiseClassical", "{}").empty());
+  CHECK(unsupported_key("repair.decrackle", R"({"threshold":0.3})").empty());
+  CHECK(unsupported_key("repair.dehum", R"({"adaptive":true})").empty());
   CHECK(mastering::api::insert_timing("repair.dehum", R"({"adaptive":true,"frameSize":1024})", kSr)
             .latency_samples == 1024);
   CHECK(mastering::api::insert_timing("repair.dereverbClassical", R"({"nFft":512})", kSr)

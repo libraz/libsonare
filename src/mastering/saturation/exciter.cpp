@@ -14,8 +14,11 @@
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
+
+namespace check = sonare::util::check;
 
 namespace {
 using sonare::discard_group_if_non_finite;
@@ -196,14 +199,11 @@ void Exciter::set_config(const ExciterConfig& config) {
 }
 
 void Exciter::validate_config(const ExciterConfig& config) {
-  if (!valid_frequency(config.frequency_hz) || !valid_amount(config.amount) || !valid_q(config.q) ||
-      !valid_even_odd_mix(config.even_odd_mix)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid exciter configuration");
-  }
-  if (!numeric::finite(db_to_linear(config.drive_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "exciter drive must produce a finite linear gain");
-  }
+  check::greater_than(config.frequency_hz, 0.0, "frequency_hz");
+  check::at_least(config.amount, 0.0, "amount");
+  check::greater_than(config.q, 0.0, "q");
+  check::in_range(config.even_odd_mix, 0.0, 1.0, "even_odd_mix");
+  check::at_most(config.drive_db, sonare::kMaxFiniteGainDb, "drive_db");
   // Only None and Oversample4x are implemented: the harmonic generator mixes
   // a squaring (even) and a tanh (odd) stage that has no ADAA antiderivative
   // wired up here. Reject Adaa1/Adaa2 instead of silently behaving like None.

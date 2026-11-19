@@ -14,8 +14,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -162,12 +165,13 @@ std::vector<rt::ParamDescriptor> DeEsser::parameter_descriptors() const {
 }
 
 void DeEsser::validate_config(const DeEsserConfig& config) {
-  if (!std::isfinite(config.threshold_db) || !valid_positive(config.frequency_hz) ||
-      !valid_ratio(config.ratio) || !valid_non_negative(config.attack_ms) ||
-      !valid_non_negative(config.release_ms) || !valid_non_negative(config.range_db) ||
-      !valid_positive(config.bandpass_q)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid de-esser configuration");
-  }
+  check::finite_float(config.threshold_db, "threshold_db");
+  check::greater_than(config.frequency_hz, 0.0, "frequency_hz");
+  check::at_least(config.ratio, 1.0, "ratio");
+  check::at_least(config.attack_ms, 0.0, "attack_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_least(config.range_db, 0.0, "range_db");
+  check::greater_than(config.bandpass_q, 0.0, "bandpass_q");
 }
 
 float DeEsser::gain_reduction_db(float input_db, const DeEsserConfig& config) {

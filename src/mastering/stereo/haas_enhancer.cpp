@@ -7,8 +7,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
+
+namespace check = sonare::util::check;
 
 HaasEnhancer::HaasEnhancer(HaasEnhancerConfig config) : config_(config) {
   validate_config(config_);
@@ -108,9 +111,8 @@ bool HaasEnhancer::parameter_is_realtime_safe(unsigned int param_id) const noexc
 }
 
 void HaasEnhancer::validate_config(const HaasEnhancerConfig& config) {
-  if (!delay_valid(config.delay_ms) || !mix_valid(config.mix)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid Haas enhancer configuration");
-  }
+  check::in_range(config.delay_ms, 0.0, kMaxDelayMs, "delay_ms");
+  check::in_range(config.mix, 0.0, 1.0, "mix");
 }
 
 void HaasEnhancer::rebuild_delay() {

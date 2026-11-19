@@ -239,7 +239,8 @@ std::string retired_chain_key_successor(const std::string& key) {
 const std::string& canonical_chain_param_key(const std::string& key, std::string* storage) {
   const std::string successor = retired_chain_key_successor(key);
   if (!successor.empty()) {
-    throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key, successor);
+    throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key, successor)
+        .as_caller_spelled();
   }
   if (internal_multiband_key(key, storage)) return *storage;
   return key;
@@ -291,7 +292,8 @@ void set_sidechain_high_pass(dynamics::CompressorConfig& config, double v, const
   if (!std::isfinite(v) || !std::isfinite(hz) || !(hz > 0.0f)) {
     throw SonareParameterRefusal::predicate(
         ErrorCode::InvalidParameter, key,
-        "must be finite and > 0; leave it out to keep the sidechain high-pass off");
+        "must be finite and > 0; leave it out to keep the sidechain high-pass off")
+        .as_caller_spelled();
   }
   config.sidechain_hpf_enabled = true;
   config.sidechain_hpf_hz = hz;
@@ -347,7 +349,11 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.declip.clipThresholdDb") {
-    cfg.repair.declip.config.clip_threshold = sonare::db_to_linear(vf);
+    try {
+      cfg.repair.declip.config.clip_threshold = repair::clip_threshold_from_db(vf, key.c_str());
+    } catch (const SonareParameterRefusal& refusal) {
+      throw refusal.as_caller_spelled();
+    }
     mark_field(flags.declip);
     return true;
   }
@@ -382,7 +388,8 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     if (mode < static_cast<int>(repair::DecrackleMode::Median) ||
         mode > static_cast<int>(repair::DecrackleMode::WaveletShrinkage)) {
       throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
-                                              "is not a known decrackle mode");
+                                              "is not a known decrackle mode")
+          .as_caller_spelled();
     }
     cfg.repair.decrackle.config.mode = static_cast<repair::DecrackleMode>(mode);
     mark_field(flags.decrackle);
@@ -445,7 +452,8 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     if (mode < static_cast<int>(repair::DehumMode::Subtract) ||
         mode > static_cast<int>(repair::DehumMode::Notch)) {
       throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
-                                              "is not a known dehum mode");
+                                              "is not a known dehum mode")
+          .as_caller_spelled();
     }
     cfg.repair.dehum.config.mode = static_cast<repair::DehumMode>(mode);
     mark_field(flags.dehum);
@@ -528,7 +536,8 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     if (mode < static_cast<int>(repair::DenoiseMode::LogMmse) ||
         mode > static_cast<int>(repair::DenoiseMode::SpectralSubtraction)) {
       throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
-                                              "is not a known denoise mode");
+                                              "is not a known denoise mode")
+          .as_caller_spelled();
     }
     cfg.repair.denoise.config.mode = static_cast<repair::DenoiseMode>(mode);
     mark_field(flags.denoise);
@@ -540,7 +549,8 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     if (estimator < static_cast<int>(repair::DenoiseNoiseEstimator::Quantile) ||
         estimator > static_cast<int>(repair::DenoiseNoiseEstimator::Spp)) {
       throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
-                                              "is not a known denoise noise estimator");
+                                              "is not a known denoise noise estimator")
+          .as_caller_spelled();
     }
     cfg.repair.denoise.config.noise_estimator =
         static_cast<repair::DenoiseNoiseEstimator>(estimator);
@@ -705,7 +715,8 @@ bool apply_multiband_param(MasteringChainConfig& cfg, const std::string& key,
   if (parse_indexed(rest, "cutoff", "Hz", &index)) {
     if (index >= config.crossover.cutoffs_hz.size()) {
       throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, spelled,
-                                              "is past the end of the cutoff list");
+                                              "is past the end of the cutoff list")
+          .as_caller_spelled();
     }
     detail::assign_field(config.crossover.cutoffs_hz[index], v);
     mark_field(flags.multiband_comp);
@@ -716,7 +727,8 @@ bool apply_multiband_param(MasteringChainConfig& cfg, const std::string& key,
   if (field == "sidechainHighPassHz") {
     if (index >= config.bands.size()) {
       throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, spelled,
-                                              "is past the end of the band list");
+                                              "is past the end of the band list")
+          .as_caller_spelled();
     }
     set_sidechain_high_pass(config.bands[index], v, spelled);
     mark_field(flags.multiband_comp);
@@ -726,7 +738,8 @@ bool apply_multiband_param(MasteringChainConfig& cfg, const std::string& key,
   if (field == jkey) {                                                              \
     if (index >= config.bands.size()) {                                             \
       throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, spelled, \
-                                              "is past the end of the band list");  \
+                                              "is past the end of the band list")   \
+          .as_caller_spelled();                                                     \
     }                                                                               \
     detail::assign_field(config.bands[index].member, v);                            \
     mark_field(flags.multiband_comp);                                               \
@@ -872,7 +885,7 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   } catch (const FieldValueRefusal& refusal) {
     rethrow_keyed(refusal, key);
   }
-  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key);
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter, key).as_caller_spelled();
 }
 
 // Two phases so the result never depends on key order: a `crossover.cutoffsHz.<i>` set first
@@ -903,7 +916,8 @@ void apply_chain_params(MasteringChainConfig& cfg, const Param* params, std::siz
       throw SonareParameterRefusal::predicate(
           ErrorCode::InvalidParameter, *scalar_cutoff,
           "cannot be combined with dynamics.multibandComp.crossover.cutoffsHz, which replaces the "
-          "cutoff list");
+          "cutoff list")
+          .as_caller_spelled();
     }
     std::vector<float> cutoffs;
     cutoffs.reserve(cutoff_list.size());
@@ -911,7 +925,8 @@ void apply_chain_params(MasteringChainConfig& cfg, const Param* params, std::siz
       if (index != cutoffs.size()) {
         throw SonareParameterRefusal::predicate(
             ErrorCode::InvalidParameter, params[position].key,
-            "must continue the cutoff list from 0 without a gap");
+            "must continue the cutoff list from 0 without a gap")
+            .as_caller_spelled();
       }
       float cutoff = 0.0f;
       try {

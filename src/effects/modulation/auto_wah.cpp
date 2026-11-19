@@ -29,15 +29,15 @@ constexpr FieldRange kUnit{0.0f, 1.0f};
 AutoWah::AutoWah(AutoWahConfig config) : config_(config) { validate_config(config_); }
 
 void AutoWah::validate_config(const AutoWahConfig& config) {
-  require_in_domain("auto_wah", "sensitivity", config.sensitivity, kNonNegative);
-  require_in_domain("auto_wah", "min_hz", config.min_hz, kSweepHz);
-  require_in_domain("auto_wah", "max_hz", config.max_hz, kSweepHz);
-  require_in_domain("auto_wah", "resonance", config.resonance, kResonance);
-  require_in_domain("auto_wah", "attack_ms", config.attack_ms, kNonNegative);
-  require_in_domain("auto_wah", "release_ms", config.release_ms, kNonNegative);
-  require_in_domain("auto_wah", "dry_wet", config.dry_wet, kUnit);
-  require_in_domain("auto_wah", "lfo_rate_hz", config.lfo_rate_hz, kNonNegative);
-  require_in_domain("auto_wah", "lfo_depth", config.lfo_depth, kUnit);
+  require_in_domain("sensitivity", config.sensitivity, kNonNegative);
+  require_in_domain("min_hz", config.min_hz, kSweepHz);
+  require_in_domain("max_hz", config.max_hz, kSweepHz);
+  require_in_domain("resonance", config.resonance, kResonance);
+  require_in_domain("attack_ms", config.attack_ms, kNonNegative);
+  require_in_domain("release_ms", config.release_ms, kNonNegative);
+  require_in_domain("dry_wet", config.dry_wet, kUnit);
+  require_in_domain("lfo_rate_hz", config.lfo_rate_hz, kNonNegative);
+  require_in_domain("lfo_depth", config.lfo_depth, kUnit);
 }
 
 void AutoWah::prepare(double sample_rate, int) {

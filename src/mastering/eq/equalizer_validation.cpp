@@ -2,23 +2,16 @@
 #include "mastering/eq/equalizer.h"
 #include "util/db.h"
 #include "util/exception.h"
-#include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
+
+namespace check = sonare::util::check;
 
 namespace {
 
 using detail::cut_order;
 using detail::is_cut_band;
-
-// The shelf designs raise 10^(dB/20) in float; past roughly 770 dB that overflows
-// and the design no longer realizes the requested gain. Bound on that
-// realizability condition rather than on an invented dB ceiling.
-bool gain_db_is_realizable(float gain_db) noexcept {
-  return numeric::finite(gain_db) && numeric::finite(db_to_linear(gain_db));
-}
-
-bool valid_time_ms(float ms) noexcept { return numeric::finite(ms) && ms >= 0.0f; }
 
 size_t iir_cut_stage_count(const EqBand& band) {
   if (!is_cut_band(band.type) || band.slope_db_oct == 12) {
@@ -49,10 +42,8 @@ void EqualizerProcessor::validate_supported_band(const EqBand& band, PhaseMode g
   if (!band.enabled) {
     return;
   }
-  if (!gain_db_is_realizable(band.gain_db)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EQ band gain is too large to realize as finite coefficients");
-  }
+  // The shelf designs raise 10^(dB/20) in float, so a gain past kMaxFiniteGainDb overflows.
+  check::at_most(band.gain_db, kMaxFiniteGainDb, "gain_db");
   const PhaseMode resolved_phase = band.phase == PhaseMode::Inherit ? global_phase : band.phase;
   const bool brickwall_cut = is_cut_band(band.type) && band.slope_db_oct == 0;
   if (is_cut_band(band.type)) {
@@ -184,19 +175,18 @@ void EqualizerProcessor::validate_dynamic_params(const DynamicParams& dyn) {
   if (!dyn.enabled) {
     return;
   }
-  if (!(dyn.ratio >= 1.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "dynamic ratio must be at least 1");
-  }
+  check::at_least(dyn.ratio, 1.0, "dyn.ratio");
   // Both reach the biquad as gain: the detector delta is (detector_db -
   // threshold_db) scaled by ratio and clamped to range_db.
-  if (!gain_db_is_realizable(dyn.threshold_db) || !gain_db_is_realizable(dyn.range_db)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "dynamic EQ threshold or range is too large to realize");
-  }
-  if (!(dyn.sidechain_q > 0.0f) || !valid_time_ms(dyn.attack_ms) ||
-      !valid_time_ms(dyn.release_ms) || !valid_time_ms(dyn.detector_delay_ms) ||
-      (dyn.sidechain_freq_hz != -1.0f && dyn.sidechain_freq_hz <= 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dynamic EQ configuration");
+  check::at_most(dyn.threshold_db, kMaxFiniteGainDb, "dyn.threshold_db");
+  check::at_most(dyn.range_db, kMaxFiniteGainDb, "dyn.range_db");
+  check::greater_than(dyn.sidechain_q, 0.0, "dyn.sidechain_q");
+  check::at_least(dyn.attack_ms, 0.0, "dyn.attack_ms");
+  check::at_least(dyn.release_ms, 0.0, "dyn.release_ms");
+  check::at_least(dyn.detector_delay_ms, 0.0, "dyn.detector_delay_ms");
+  // -1 follows the band frequency.
+  if (dyn.sidechain_freq_hz != -1.0f) {
+    check::greater_than(dyn.sidechain_freq_hz, 0.0, "dyn.sidechain_freq_hz");
   }
 }
 }  // namespace sonare::mastering::eq

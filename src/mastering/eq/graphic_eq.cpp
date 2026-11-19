@@ -9,8 +9,12 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::eq {
+
+namespace check = sonare::util::check;
+
 namespace {
 
 constexpr std::array<float, GraphicEq::kNumBands> kCenterFrequencies = {
@@ -53,10 +57,7 @@ void GraphicEq::reset() {
 
 void GraphicEq::set_gain_db(size_t index, float gain_db) {
   validate_index(index);
-  if (!numeric::finite(db_to_linear(gain_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "graphic EQ gain must produce a finite linear gain");
-  }
+  check::at_most(gain_db, kMaxFiniteGainDb, "gain_db");
   const float previous = gains_db_[index];
   gains_db_[index] = gain_db;
   // Recompute only the affected band so existing filter state is preserved.
@@ -97,10 +98,7 @@ std::vector<rt::ParamDescriptor> GraphicEq::parameter_descriptors() const {
 }
 
 void GraphicEq::set_q(float q) {
-  if (!valid_q(q)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "graphic EQ q must be finite and non-negative (0 = gain-derived)");
-  }
+  check::at_least(q, 0.0, "q");  // 0 derives Q from the gain.
   q_ = q;
   for (size_t i = 0; i < kNumBands; ++i) {
     rebuild_band(i);
@@ -127,9 +125,7 @@ float GraphicEq::center_frequency(size_t index) const {
 }
 
 size_t GraphicEq::nearest_band(float frequency_hz) const {
-  if (!(frequency_hz > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
-  }
+  check::greater_than(frequency_hz, 0.0, "frequency_hz");
 
   size_t best_index = 0;
   float best_distance = std::abs(std::log2(frequency_hz / kCenterFrequencies[0]));

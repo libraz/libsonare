@@ -71,12 +71,11 @@ float VelvetReverb::Ring::read_at(int offset) const {
 // --- VelvetReverb ----------------------------------------------------------
 
 void VelvetReverb::validate_config(const VelvetReverbConfig& config) {
-  common::require_in_domain("VelvetReverb", "decay", config.decay, 0.0f, 1.0f);
-  common::require_in_domain("VelvetReverb", "dry_wet", config.dry_wet, 0.0f, 1.0f);
-  common::require_in_domain("VelvetReverb", "reverb_time_s", config.reverb_time_s,
-                            kMinReverbTimeSeconds, VelvetReverbConfig::kMaxReverbTimeSeconds);
-  common::require_in_domain("VelvetReverb", "density_hz", config.density_hz, kMinDensityHz,
-                            kMaxDensityHz);
+  common::require_in_domain("decay", config.decay, 0.0f, 1.0f);
+  common::require_in_domain("dry_wet", config.dry_wet, 0.0f, 1.0f);
+  common::require_in_domain("reverb_time_s", config.reverb_time_s, kMinReverbTimeSeconds,
+                            VelvetReverbConfig::kMaxReverbTimeSeconds);
+  common::require_in_domain("density_hz", config.density_hz, kMinDensityHz, kMaxDensityHz);
 }
 
 VelvetReverb::VelvetReverb(VelvetReverbConfig config)

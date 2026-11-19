@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <random>
+#include <string>
 
 #include "sonare_c_test_helpers.h"
 #include "util/db.h"
@@ -245,10 +246,16 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
     REQUIRE(explicit_default.run_count == at_default.run_count);
   }
 
-  SECTION("refuses a threshold above 0 dBFS or non-finite") {
+  SECTION("refuses a threshold outside [-890, 0] dBFS or non-finite") {
     SonareDeclipConfig config = default_declip_config();
     SonareClipDetection detection{};
     config.clip_threshold_db = 1.0f;
+    REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,
+                                                    &detection) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "clip_threshold_db must be finite and in [-890, 0]");
+    // Below -890 dB the linear threshold can round to 0, outside the (0, 1] it must lie in.
+    config.clip_threshold_db = -1000.0f;
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,
                                                     &detection) == SONARE_ERROR_INVALID_PARAMETER);
     config.clip_threshold_db = std::numeric_limits<float>::quiet_NaN();

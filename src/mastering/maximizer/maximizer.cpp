@@ -9,8 +9,11 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::maximizer {
+
+namespace check = sonare::util::check;
 namespace {
 
 bool valid_time_ms(float ms) noexcept { return std::isfinite(ms) && ms >= 0.0f; }
@@ -97,17 +100,10 @@ bool Maximizer::parameter_is_realtime_safe(unsigned int param_id) const noexcept
 }
 
 void Maximizer::validate_config(const MaximizerConfig& config) {
-  if (!common::valid_ceiling_db(config.ceiling_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "maximizer ceiling must be finite and <= 0");
-  }
-  if (!valid_time_ms(config.lookahead_ms) || !valid_time_ms(config.release_ms)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "maximizer timing values must be finite and non-negative");
-  }
-  if (!numeric::finite(db_to_linear(config.input_gain_db))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "maximizer input gain must produce a finite linear gain");
-  }
+  check::at_most(config.ceiling_db, 0.0, "ceiling_db");
+  check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
+  check::at_least(config.release_ms, 0.0, "release_ms");
+  check::at_most(config.input_gain_db, sonare::kMaxFiniteGainDb, "input_gain_db");
 }
 
 }  // namespace sonare::mastering::maximizer

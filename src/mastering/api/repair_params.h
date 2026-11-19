@@ -41,7 +41,7 @@ inline repair::DeclipConfig declip_config(const ParamMap& params) {
   float threshold_db = sonare::linear_to_db(config.clip_threshold);
   read_field(params, kDeclipThresholdKey, threshold_db, kDeclipThresholdMeta);
   if (params.find(kDeclipThresholdKey) != params.end()) {
-    config.clip_threshold = sonare::db_to_linear(threshold_db);
+    config.clip_threshold = repair::clip_threshold_from_db(threshold_db, "clip_threshold_db");
   }
   repair::validate_config(config);
   return config;
