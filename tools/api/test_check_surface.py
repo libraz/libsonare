@@ -2515,5 +2515,85 @@ class CliAliases(unittest.TestCase):
         self.assertEqual(scan.alias_of, {"target-sr": "target-rate"})
 
 
+class CliFlagLiteralTest(unittest.TestCase):
+    """A CLI flag name is a string literal at its registration, on both front-ends."""
+
+    def _python(self, body: str):
+        import inventory
+
+        with tempfile.TemporaryDirectory() as d:
+            pkg = Path(d) / inventory.PY_PACKAGE
+            pkg.mkdir(parents=True)
+            (pkg / "cli.py").write_text(
+                "import argparse\n"
+                "class P(argparse.ArgumentParser):\n"
+                "    def add_argument(self, *args, **kwargs):\n"
+                "        return super().add_argument(*args, **kwargs)\n"
+                "p = P()\n"
+                "sub = p.add_subparsers()\n"
+                'r = sub.add_parser("resample")\n' + body,
+                encoding="utf-8",
+            )
+            scan = inventory._PyCliScan(Path(d))
+            scan.scan()
+        return scan
+
+    def test_python_literal_flag_is_read(self):
+        scan = self._python('r.add_argument("--target-rate", type=int)\n')
+        self.assertEqual(scan.problems, [])
+        self.assertEqual(scan.registrations, 1)
+
+    def test_python_non_literal_flag_fails(self):
+        scan = self._python('NAME = "--target-rate"\nr.add_argument(NAME, type=int)\n')
+        self.assertEqual(scan.registrations, 1)
+        self.assertEqual(len(scan.problems), 1)
+        self.assertRegex(scan.problems[0], r"cli\.py:9: flag name is not a literal$")
+
+    def _native(self, body: str):
+        import inventory
+
+        with tempfile.TemporaryDirectory() as d:
+            cli = Path(d) / "tools" / "cli"
+            cli.mkdir(parents=True)
+            (cli / "registry.cpp").write_text(
+                "void build(Commands& commands) {\n"
+                "  const auto add_leaf = [&commands](const char* path, Options options) {\n"
+                "    add_command(commands, path, false, std::move(options));\n"
+                "  };\n" + body + "}\n",
+                encoding="utf-8",
+            )
+            return inventory._native_cli(Path(d))
+
+    def test_native_literal_flag_is_read(self):
+        commands, _, registrations, problems = self._native(
+            '  add_command(commands, "resample", true, {int_value("target-rate")});\n'
+            '  for (const char* path : {"bpm", "beats"})\n'
+            "    add_command(commands, path, true, {});\n"
+        )
+        self.assertEqual(problems, [])
+        self.assertEqual(registrations, 1)
+        self.assertEqual(sorted(commands), ["beats", "bpm", "resample"])
+
+    def test_native_non_literal_flag_fails(self):
+        _, _, registrations, problems = self._native(
+            '  add_command(commands, "resample", true, {int_value(kTargetRate)});\n'
+        )
+        self.assertEqual(registrations, 1)
+        self.assertEqual(problems, ["tools/cli/registry.cpp:5: flag name is not a literal"])
+
+    def test_native_unknown_command_shape_fails(self):
+        _, _, _, problems = self._native("  add_command(commands, kNames[0], true, {});\n")
+        self.assertEqual(len(problems), 1)
+        self.assertRegex(problems[0], r"registry\.cpp:5: unknown registration shape")
+
+    def test_zero_registrations_fail(self):
+        import inventory
+
+        self.assertEqual(
+            inventory.zero_registrations({"cli-python": 0, "cli-native": 3}),
+            ["cli-python: 0 flag registrations"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

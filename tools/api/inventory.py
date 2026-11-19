@@ -1371,9 +1371,24 @@ def _native_aliases(call: str) -> dict[str, list[str]]:
     return out
 
 
-def _native_cli(root: Path) -> tuple[dict[str, dict], int]:
-    """Commands and flags of the native CLI registry."""
+def _native_forwarded(text: str, at: int, name: str) -> bool:
+    """Whether `name` at `at` is a `const char*` parameter of the helper the call sits in."""
+    return (
+        re.search(rf"const\s+char\s*\*\s*{re.escape(name)}\b", text[max(0, at - 400) : at])
+        is not None
+    )
+
+
+def _native_cli(root: Path) -> tuple[dict[str, dict], int, int, list[str]]:
+    """Commands and flags of the native CLI registry, its flag registrations and its problems.
+
+    A command name is a string literal, a `for (const char* x : {...})` loop variable, or a
+    helper's own parameter forwarded; a flag name is a string literal. Anything else is a
+    problem, since the registry would hold a name this scan cannot read.
+    """
     commands: dict[str, dict] = {}
+    registrations = 0
+    problems: list[str] = []
     files = sorted((root / "tools/cli").rglob("*.cpp"))
     for path in files:
         raw = path.read_text(encoding="utf-8")
@@ -1384,8 +1399,15 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int]:
                 continue
             close = _balanced(text, m.end() - 1)
             if close < 0:
+                problems.append(f"{rel}:{_line_of(raw, m.start())}: unbalanced {m.group(1)} call")
                 continue
             call = text[m.end() : close]
+            for b in _NATIVE_BUILDER.finditer(call):
+                registrations += 1
+                if not call[b.end() :].lstrip().startswith('"'):
+                    problems.append(
+                        f"{rel}:{_line_of(raw, m.end() + b.start())}: flag name is not a literal"
+                    )
             args = call.split(",", 2)
             if m.group(1) == "add_command":
                 if len(args) < 2:
@@ -1402,6 +1424,13 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int]:
                 lm = _NATIVE_LOOP.search(prev)
                 if lm and lm.group(1) == first:
                     names = re.findall(r'"([^"]+)"', lm.group(2))
+                elif re.fullmatch(r"\w+", first) and _native_forwarded(text, m.start(), first):
+                    continue
+                else:
+                    problems.append(
+                        f"{rel}:{_line_of(raw, m.start())}: unknown registration shape for "
+                        f"{m.group(1)} name {first[:40]!r}"
+                    )
             if not names:
                 continue
             flags = ["json"] + _NATIVE_OPTION.findall(call)
@@ -1430,7 +1459,7 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int]:
                 for fl in flags:
                     if fl not in entry["flags"]:
                         entry["flags"].append(fl)
-    return commands, len(files)
+    return commands, len(files), registrations, problems
 
 
 _PY_SWITCH_ACTIONS = {"store_true", "store_false", "store_const", "count", "BooleanOptionalAction"}
@@ -1451,6 +1480,8 @@ class _PyCliScan:
         self.help: dict[str, list[str]] = collections.defaultdict(list)
         # Every later long spelling of one add_argument, mapped to its first.
         self.alias_of: dict[str, str] = {}
+        self.registrations = 0
+        self.problems: list[str] = []
 
     @staticmethod
     def _loops(tree: ast.AST) -> dict[str, list[str]]:
@@ -1502,11 +1533,19 @@ class _PyCliScan:
     def _scan_switches(self, trees) -> None:
         """Long flags every declaration of which takes no value, and each flag's help texts."""
         switched, valued = set(), set()
-        for _, tree in trees:
+        for path, tree in trees:
             loops = self._loops(tree)
             for c in ast.walk(tree):
                 if not (isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "add_argument"):
                     continue
+                # The parser subclass forwards to argparse; that is not a registration.
+                if _unparse(c.func.value) == "super()":
+                    continue
+                self.registrations += 1
+                head = c.args[0] if c.args else None
+                if not (isinstance(head, ast.Constant) and isinstance(head.value, str)):
+                    rel = path.relative_to(self.root)
+                    self.problems.append(f"{rel}:{c.lineno}: flag name is not a literal")
                 action = next((_unparse(k.value) for k in c.keywords if k.arg == "action"), "")
                 bucket = (
                     switched if action.strip("'\"").split(".")[-1] in _PY_SWITCH_ACTIONS else valued
@@ -1696,6 +1735,11 @@ class _PyCliScan:
                 entry["flags"].append(fl)
 
 
+def zero_registrations(registrations: dict[str, int]) -> list[str]:
+    """A front-end with no flag registration read, which a broken scan and an empty CLI share."""
+    return [f"{s}: 0 flag registrations" for s, n in registrations.items() if n == 0]
+
+
 def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
     scan = _PyCliScan(root)
     scan.scan()
@@ -1706,7 +1750,7 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
         raise InventoryError(
             f"python CLI scan missed commands the parity extractor sees: {missing}"
         )
-    nat_cmds, nat_files = _native_cli(root)
+    nat_cmds, nat_files, nat_regs, nat_problems = _native_cli(root)
     out = []
     for surface, cmds in (("cli-python", py_cmds), ("cli-native", nat_cmds)):
         for name in sorted(cmds):
@@ -1741,7 +1785,14 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
     only = collections.defaultdict(list)
     for cname, spec in contract.get("commands", {}).items():
         only[spec.get("classification", "")].append(cname)
-    meta = {"cli_only": {k: sorted(only.get(k, [])) for k in ("python_only", "native_only")}}
+    registrations = {"cli-python": scan.registrations, "cli-native": nat_regs}
+    problems = scan.problems + nat_problems
+    problems += zero_registrations(registrations)
+    meta = {
+        "cli_only": {k: sorted(only.get(k, [])) for k in ("python_only", "native_only")},
+        "cli_registrations": registrations,
+        "cli_problems": problems,
+    }
     return out, {"cli-python": len(scan.files), "cli-native": nat_files}, meta
 
 
@@ -1796,6 +1847,7 @@ def build(root: Path = ROOT) -> dict:
     files.update(f)
     meta.update(m)
     paths, errors = assign_domains(records)
+    errors += meta.pop("cli_problems", [])
     records.sort(key=lambda r: (r["surface"], r["kind"], r["name"], ",".join(r["entries"])))
     counts = collections.Counter(r["surface"] for r in records)
     return {
@@ -1884,6 +1936,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         for s in SURFACES:
             print(f"{s}: scanned {inv['files'][s]} files, {inv['counts'][s]} records")
+        for s, n in inv["cli_registrations"].items():
+            print(f"{s}: {n} flag registrations")
         print("domain paths: " + ", ".join(f"{k}={v}" for k, v in inv["domain_paths"].items()))
     failures = scan_failures(inv) + inv["errors"]
     for line in failures:
