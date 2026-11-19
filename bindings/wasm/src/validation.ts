@@ -371,8 +371,8 @@ export function assertPercussiveSeparation(options: PercussiveSeparationFields):
 }
 
 export function assertNonNegativeInteger(value: number, argName: string): void {
-  if (!Number.isInteger(value) || value < 0) {
-    throw refuse(`${argName} must be an integer of at least 0`);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw refuse(`${argName} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
   }
 }
 

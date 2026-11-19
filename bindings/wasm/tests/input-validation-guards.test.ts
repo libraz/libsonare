@@ -859,7 +859,7 @@ describe('offline boundary validation always scans the samples', () => {
     for (const value of [2.5, -1]) {
       expect(() =>
         meteringDetectClipping({ samples, sampleRate: 22050, minRegionSamples: value }),
-      ).toThrow(/minRegionSamples must be an integer of at least 0$/);
+      ).toThrow(/minRegionSamples must be an integer in \[0, 9007199254740991\]$/);
     }
   });
 
