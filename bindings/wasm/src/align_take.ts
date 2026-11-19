@@ -48,7 +48,7 @@ import { assertAudioInput, requestObject } from './validation.js';
  *   and is reported rather than answered with a map you cannot use
  *
  * @example
- * ```typescript
+ * ```ts
  * const guide = new Float32Array(sampleRate * 8); // the reference performance, decoded
  * const take = new Float32Array(sampleRate * 8); // the take to align
  * const { anchors } = alignTakeToReference({ reference: guide, take, sampleRate });

@@ -245,7 +245,7 @@ export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
  * Real-time streaming audio analyzer.
  *
  * @example
- * ```typescript
+ * ```ts
  * import { init, StreamAnalyzer } from '@libraz/libsonare';
  *
  * await init();

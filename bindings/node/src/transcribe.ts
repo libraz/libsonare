@@ -24,7 +24,7 @@ import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './val
  * `referenceHz: 'auto'`; the result reports it as `tuningCents`.
  *
  * @example
- * ```typescript
+ * ```ts
  * const { events, noteCount, tempoBpm } = transcribe({
  *   samples,
  *   sampleRate: 48000,

@@ -29,7 +29,7 @@ export type ChordSymbolFields = Required<
  *         `RangeError` naming the field for an unrecognised pitch class or quality.
  *
  * @example
- * ```typescript
+ * ```ts
  * const [chord] = detectChords({ samples, sampleRate }).chords;
  * project.annotateChords([{ startPpq: 0, endPpq: 4, ...chordSymbolFromAnalysis(chord) }]);
  * ```

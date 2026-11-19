@@ -69,7 +69,7 @@ export interface TranscribeRequest extends TranscribeOptions {
  * @throws {SonareError} `NotSupported` when the library was built without the pitch editor
  *
  * @example
- * ```typescript
+ * ```ts
  * const { events, noteCount, tempoBpm } = transcribe({ samples, sampleRate, tempoBpm: 120 });
  * const project = new Project();
  * const { clipId } = project.addMidiClip(0, 16); // 4 bars at 4/4, in quarter notes (PPQ)

@@ -33,7 +33,7 @@ import { assertAudioInput, assertSampleRate, requestObject } from './validation.
  * only: no field makes the call fail.
  *
  * @example
- * ```typescript
+ * ```ts
  * const guide = new Float32Array(48000 * 8); // the reference performance, decoded
  * const comp = new Float32Array(48000 * 8); // the take to align
  * const { anchors, alignment } = alignTakeToReference({

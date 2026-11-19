@@ -254,7 +254,7 @@ export interface DownmixOptions {
  * @throws RangeError for empty input.
  *
  * @example
- * ```typescript
+ * ```ts
  * declare const bytes: Uint8Array; // an encoded audio file
  * const { sampleRate, channels } = decodeChannels(bytes);
  * const stereo = channels.length > 2 ? downmix(channels, 'stereo') : channels;
@@ -405,7 +405,7 @@ const AUDIO_FACTORY_KEY = Symbol('Audio factory');
  * the same method set.
  *
  * @example
- * ```typescript
+ * ```ts
  * import { init, Audio } from '@libraz/libsonare';
  *
  * await init();

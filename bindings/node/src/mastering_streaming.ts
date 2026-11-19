@@ -119,7 +119,7 @@ function optionalIntegerBlockSize(value: unknown): number | undefined {
  * a gated tone they leave the result below the untreated input.
  *
  * @example
- * ```typescript
+ * ```ts
  * const chain = new StreamingMasteringChain({
  *   sampleRate: 44100,
  *   numChannels: 1,
@@ -245,7 +245,7 @@ export class StreamingMasteringChain {
    * only and leaves the count standing. Throws after {@link destroy}.
    *
    * @example
-   * ```typescript
+   * ```ts
    * declare const chain: StreamingMasteringChain;
    * const out = chain.processMono(block);
    * if (chain.nonFiniteSubstitutionCount > 0) {
@@ -281,7 +281,7 @@ export class StreamingMasteringChain {
    * gives two numbers measured from the same point. Throws after {@link destroy}.
    *
    * @example
-   * ```typescript
+   * ```ts
    * declare const chain: StreamingMasteringChain;
    * const out = chain.processMono(block);
    * if (chain.nonFiniteDiscardCount > 0) {
@@ -617,7 +617,7 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
  * estimate (BPM/key/chord/pattern) with {@link stats}.
  *
  * @example
- * ```typescript
+ * ```ts
  * const analyzer = new StreamAnalyzer({ sampleRate: 44100 });
  * analyzer.process(block);
  * const frames = analyzer.readFrames(analyzer.availableFrames);
@@ -872,7 +872,7 @@ const EQ_PHASE_MODES = Object.keys(EQ_PHASE_MODE_ORDINALS) as EqPhaseMode[];
  * {@link processMono}/{@link processStereo} calls.
  *
  * @example
- * ```typescript
+ * ```ts
  * const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
  * eq.setBand(0, { type: 'highShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
  * declare const blockLeft: Float32Array, blockRight: Float32Array;

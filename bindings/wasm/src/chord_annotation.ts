@@ -39,7 +39,7 @@ export interface ChordSymbolFields {
  * @throws {RangeError} naming `root`, `bass` or `quality` for an unrecognised value
  *
  * @example
- * ```typescript
+ * ```ts
  * const { chords } = detectChords(samples, sampleRate);
  * project.annotateChords(
  *   chords.map((c) => ({ startPpq: 0, endPpq: 4, ...chordSymbolFromAnalysis(c) })),

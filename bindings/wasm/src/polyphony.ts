@@ -220,7 +220,7 @@ export class PolyphonicAnalysis {
    * distinction is the usual case rather than an edge one.
    *
    * @example
-   * ```typescript
+   * ```ts
    * const analysis = analyzePolyphonic({ samples, sampleRate, estimateInharmonicity: true });
    * const fitted = analysis.noteInharmonicity();
    * const reached = [...fitted].filter((stretch) => stretch >= 0).length;
@@ -310,7 +310,7 @@ export class PolyphonicAnalysis {
  *   (roughly one `hopLength`, 512 samples at 44100 Hz by default, converted to the input rate)
  *
  * @example
- * ```typescript
+ * ```ts
  * const analysis = analyzePolyphonic({ samples, sampleRate, maxPolyphony: 3 });
  * try {
  *   // Transpose the lowest note of the chord up a semitone.

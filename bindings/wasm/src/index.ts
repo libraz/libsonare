@@ -2,7 +2,7 @@
  * sonare - Audio Analysis Library
  *
  * @example
- * ```typescript
+ * ```ts
  * import { init, detectBpm, detectKey, analyze } from '@libraz/libsonare';
  *
  * await init();

@@ -136,7 +136,7 @@ function optionalIntegerBlockSize(value: unknown): number | undefined {
  * outputs is also the caller's.
  *
  * @example
- * ```typescript
+ * ```ts
  * const chain = new StreamingMasteringChain({
  *   sampleRate: 44100,
  *   numChannels: 1,
@@ -287,7 +287,7 @@ export class StreamingMasteringChain {
    * rebuilding.
    *
    * @example
-   * ```typescript
+   * ```ts
    * declare const chain: StreamingMasteringChain;
    * const previous = chain.nonFiniteSubstitutionCount;
    * chain.processMono(block);
@@ -357,7 +357,7 @@ export class StreamingMasteringChain {
  * object — the embind handle is not garbage-collected automatically.
  *
  * @example
- * ```typescript
+ * ```ts
  * const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
  * try {
  *   eq.setBand(0, { type: 'highShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
