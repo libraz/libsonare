@@ -31,6 +31,9 @@ import check_parity
 import compare
 from model import FunctionSig, RecordShape
 
+# Canonical spellings of the sample rate, which C marks structural.
+_RATE_NAMES = frozenset({"sample_rate", "sr"})
+
 Surface = Literal["node", "wasm", "python"]
 FACADES: tuple[Surface, ...] = ("node", "wasm", "python")
 
@@ -79,6 +82,23 @@ def _param_rows(c_sig: FunctionSig, sig: FunctionSig, surface: Surface) -> list[
                 (bound.raw_name or bound.name) if bound else None,
                 sig.file if bound else c_sig.file,
                 sig.line if bound else c_sig.line,
+            )
+        )
+    # The sample rate is structural on the C side but a named argument on every facade
+    # that takes one, so it is paired whenever the facade has it and never reported unbound.
+    c_rate = next((p for p in c_sig.params if p.structural and p.name in _RATE_NAMES), None)
+    rate = next((p for p in sig.params if p.name in _RATE_NAMES), None)
+    if c_rate is not None and rate is not None:
+        facade.pop(rate.name, None)
+        rows.append(
+            FieldBinding(
+                c_sig.key,
+                c_rate.raw_name or c_rate.name,
+                "param",
+                surface,
+                rate.raw_name or rate.name,
+                sig.file,
+                sig.line,
             )
         )
     for name, p in facade.items():
