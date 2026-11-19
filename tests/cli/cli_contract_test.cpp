@@ -1676,8 +1676,7 @@ struct StatedRow {
   std::string option;
   // Empty only where the command prints nothing the option affects.
   std::string other_value;
-  // Each run pays the CQT chroma's fixed cost (~1.8 s whatever the input length), so the row
-  // runs in the slow tier.
+  // Set where the case runs over about 2 s, so the row runs in the slow tier.
   bool slow = false;
 };
 
@@ -1706,6 +1705,7 @@ struct StatedDefaultTables {
 
 StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
   const std::string to_out = " -o " + p.out + " --json -q";
+  [[maybe_unused]] const std::string speakers_out = " --target 5.1" + to_out;
   // Two recordings of one progression at different tempi, so the alignment has a path to find.
   const std::string takes_arguments =
       p.takes_project + " --reference-source 1 --audio 1=" + p.sine_chords_fast_wav +
@@ -1768,21 +1768,22 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"dynamic-range", p.stepped_wav + " --window-sec 0.5 --json -q", "low-percentile", "0.5"},
       {"dynamic-range", p.stepped_wav + " --window-sec 0.5 --json -q", "high-percentile", "0.5"},
       // Options a steady tone cannot move read a chord, section or glide input built for them.
-      {"analyze", p.tone_wav + " --json -q", "chroma-high-pass-hz", "4000", true},
-      {"analyze", p.tone_wav + " --json -q", "meter-denominator", "8", true},
-      {"key", p.tone_wav + " --json -q", "high-pass-hz", "4000", true},
-      {"key", p.tone_wav + " --json -q", "modes", "all", true},
-      {"key", p.tone_wav + " --json -q", "genre-hint", "edm", true},
-      // A steady tone has no meter to choose; clicks every 0.4 s do.
+      {"analyze", p.tone_wav + " --json -q", "chroma-high-pass-hz", "4000"},
+      {"analyze", p.tone_wav + " --json -q", "meter-denominator", "8"},
+      {"key", p.tone_wav + " --json -q", "high-pass-hz", "4000"},
+      {"key", p.tone_wav + " --json -q", "modes", "all"},
+      {"key", p.tone_wav + " --json -q", "genre-hint", "edm"},
+      // A steady tone has no meter to choose; clicks every 0.4 s do. Three full analyses of the
+      // 6 s track take about 4 s.
       {"analyze", p.click_wav + " --json -q", "meter-candidates", "5,7", true},
-      // Options read past the chroma stage take a cheaper chroma than the CQT one (~1.8 s a run).
+      // Options read past the chroma stage take the cheaper STFT chroma.
       {"chords", p.sine_chords_wav + " --chroma-method stft --json -q", "min-duration-sec", "1.5"},
       {"chords", p.tone_wav + " --chroma-method stft --json -q", "smoothing-window", "0.5"},
       {"chords", p.tone_wav + " --chroma-method stft --json -q", "threshold", "0.99"},
-      {"chords", p.tone_wav + " --json -q", "chroma-method", "stft", true},
+      {"chords", p.tone_wav + " --json -q", "chroma-method", "stft"},
       {"chords", p.harmonic_chords_wav + " --chroma-method stft --json -q", "hmm-beam-width", "1"},
-      {"chords", p.sine_chords_fast_wav + " --key-context --json -q", "key-root", "D", true},
-      {"chords", p.sine_chords_fast_wav + " --key-context --json -q", "key-mode", "minor", true},
+      {"chords", p.sine_chords_fast_wav + " --key-context --json -q", "key-root", "D"},
+      {"chords", p.sine_chords_fast_wav + " --key-context --json -q", "key-mode", "minor"},
       {"sections", p.sections_wav + " --json -q", "min-duration-sec", "1"},
       {"dynamics", p.tone_wav + " --json -q", "window-sec", "0.1"},
       // start-bpm answers only when the estimator finds no tempo, which silence guarantees.
@@ -1867,8 +1868,8 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"cqt", p.tone_wav + " --json -q", "hop-length", "256"},
       {"vqt", p.tone_wav + " --json -q", "hop-length", "256"},
       {"pitch", p.tone_wav + " --json -q", "hop-length", "256"},
-      {"key", p.tone_wav + " --hpss --json -q", "n-fft", "1024", true},
-      {"key", p.tone_wav + " --json -q", "hop-length", "256", true},
+      {"key", p.tone_wav + " --hpss --json -q", "n-fft", "1024"},
+      {"key", p.tone_wav + " --json -q", "hop-length", "256"},
       {"chords", p.sine_chords_wav + " --chroma-method stft --json -q", "n-fft", "1024"},
       {"chords", p.sine_chords_wav + " --chroma-method stft --json -q", "hop-length", "256"},
       {"sections", p.sections_wav + " --min-duration-sec 1 --json -q", "n-fft", "1024"},
@@ -1941,13 +1942,14 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
 #endif
 #ifdef SONARE_WITH_PLAYBACK
       {"playback", p.stereo_wav + to_out, "target", "5.1"},
+      // The rows below render to speakers: preparing the headphone renderer costs most of a run.
       // Auto takes the layout from the channel count; a fixed layout that does not match is
       // refused.
-      {"playback", p.tone_wav + to_out, "input-layout", "stereo"},
-      {"playback", p.stereo_wav + to_out, "night", "0.8"},
+      {"playback", p.tone_wav + speakers_out, "input-layout", "stereo"},
+      {"playback", p.stereo_wav + speakers_out, "night", "0.8"},
       // A stereo input has no centre channel for the dialogue gain to reach.
-      {"playback", p.stereo_wav + to_out, "dialogue-db", ""},
-      {"playback", p.stereo_wav + to_out, "target-lufs", "-14"},
+      {"playback", p.stereo_wav + speakers_out, "dialogue-db", ""},
+      {"playback", p.stereo_wav + speakers_out, "target-lufs", "-14"},
 #endif
   };
   tables.derived = {
@@ -1982,7 +1984,7 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
 #ifdef SONARE_WITH_PLAYBACK
       // Auto renders the input in its own layout: mono on a mono input, stereo on a stereo one,
       // and each of those fixed layouts is refused on the other input.
-      {"playback", to_out, "input-layout", {{p.tone_wav, "mono"}, {p.stereo_wav, "stereo"}}},
+      {"playback", speakers_out, "input-layout", {{p.tone_wav, "mono"}, {p.stereo_wav, "stereo"}}},
 #endif
   };
   tables.prose = {
