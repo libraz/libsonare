@@ -124,7 +124,7 @@ export interface RealtimeVoiceChangerConfig {
   outputGainDb: number;
   /** Dry/wet mix in [0, 1]; 1 is fully processed. */
   wetMix: number;
-  /** Retune pitch shift in semitones. */
+  /** Retune pitch shift in semitones, [-24, 24]. */
   retunePitchSemitones: number;
   /** Retune wet amount in [0, 1]. */
   retuneMix: number;

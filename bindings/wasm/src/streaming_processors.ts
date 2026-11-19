@@ -675,7 +675,7 @@ export class StreamingRetune {
    * re-{@link prepare} at another sample rate re-derives an automatic grain.
    *
    * @throws TypeError for a wrong-typed or unknown key; RangeError for a `grainSizeSamples`
-   *   of 0 or not a multiple of 4 in [4, 8192], or a non-finite control.
+   *   of 0 or not a multiple of 4 in [4, 8192], or a control outside its domain.
    */
   setConfig(config: StreamingRetuneConfig): void {
     this.retune.setConfig(assertRetuneConfig('StreamingRetune.setConfig', config));

@@ -142,9 +142,9 @@ export interface StreamingEqualizerConfig {
 
 /** Configuration for {@link StreamingRetune}. */
 export interface StreamingRetuneConfig {
-  /** Pitch shift in semitones, clamped by the native processor to +/-24. Default 0. */
+  /** Pitch shift in semitones, finite and in [-24, 24]; outside it is refused. Default 0. */
   pitchSemitones?: number;
-  /** Wet/dry mix, clamped by the native processor to 0..1. Default 1. */
+  /** Dry/wet blend in [0, 1]; outside it is refused. Default 1 (fully wet). */
   mix?: number;
   /**
    * Grain size in samples, a multiple of 4 in [4, 8192]. Omitted: the automatic grain, derived
@@ -280,9 +280,9 @@ export interface RealtimeVoiceChangerConfig {
   outputGainDb: number;
   /** Overall wet/dry mix. */
   wetMix: number;
-  /** Retune pitch shift in semitones. */
+  /** Retune pitch shift in semitones, [-24, 24]. */
   retunePitchSemitones: number;
-  /** Wet/dry mix of the retune stage. */
+  /** Retune wet amount in [0, 1]. */
   retuneMix: number;
   /** Retune grain length in samples, a multiple of 4 in [4, 8192]; omitted for the automatic grain. */
   retuneGrainSizeSamples?: number;

@@ -598,9 +598,9 @@ export function realtimeVoiceChangerPresetConfig(
 
 /** Live controls for {@link StreamingRetune}. */
 export interface StreamingRetuneConfig {
-  /** Pitch shift in semitones. Applied value is clamped to +/- 24. Default 0. */
+  /** Pitch shift in semitones, finite and in [-24, 24]; outside it is refused. Default 0. */
   pitchSemitones?: number;
-  /** Dry/wet blend, clamped to [0, 1]. Default 1 (fully wet). */
+  /** Dry/wet blend in [0, 1]; outside it is refused. Default 1 (fully wet). */
   mix?: number;
   /**
    * Grain length in samples, a multiple of 4 in [4, 8192]. Omitted: the automatic grain, roughly
@@ -666,7 +666,7 @@ export class StreamingRetune {
    * at another sample rate re-derives an automatic grain rather than freezing the first rate's.
    *
    * @throws TypeError for a wrong-typed or unknown key; RangeError for a `grainSizeSamples`
-   *   of 0 or not a multiple of 4 in [4, 8192], or a non-finite control.
+   *   of 0 or not a multiple of 4 in [4, 8192], or a control outside its domain.
    */
   setConfig(config: StreamingRetuneConfig): void {
     this.native.setConfig(assertRetuneConfig('StreamingRetune.setConfig', config));
