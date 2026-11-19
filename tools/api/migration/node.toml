@@ -11999,6 +11999,14 @@ domain = "engine"
 rule = "typed-results"
 test = "bindings/node/tests/basic_engine_mixer.test.ts::exposes live non-destructive MIDI FX inserts"
 
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setGraph"
+changed = "an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names"
+domain = "engine"
+rule = "individual"
+test = "bindings/node/tests/request-unknown-keys.test.ts::setGraph refuses an undeclared key by name before reading the graph"
 [[entry]]
 kind = "type"
 old = "JsonResult"
