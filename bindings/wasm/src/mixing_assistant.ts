@@ -177,8 +177,10 @@ const OPTION_KEYS = [
 
 /** Absence is the transport fallback; the C entry's `0` for it is not a value a caller may pass. */
 function assertTempo(value: unknown): void {
-  if (typeof value === 'number' && !(value > 0)) {
-    throw refuse(`tempoBpm must be positive; omit it to use the transport's fallback tempo`);
+  if (typeof value === 'number' && !(Number.isFinite(value) && value > 0)) {
+    throw refuse(
+      `tempoBpm must be finite and greater than 0; omit it to use the transport's fallback tempo`,
+    );
   }
 }
 

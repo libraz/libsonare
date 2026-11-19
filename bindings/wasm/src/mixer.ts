@@ -28,6 +28,7 @@ import {
   assertSampleRate,
   assertString,
   assertSurroundPan,
+  C_INT_MAX,
   requestObject,
   requireBoolean,
   requireToken,
@@ -203,8 +204,8 @@ function maxBlockSizeOf(value: unknown): number | undefined {
   if (value === 0) {
     throw refuse(`maxBlockSize must not be 0 (omit it for the default)`);
   }
-  if (value < 0) {
-    throw refuse(`maxBlockSize must be a positive integer`);
+  if (value < 0 || value > C_INT_MAX) {
+    throw refuse(`maxBlockSize must be an integer in [1, ${C_INT_MAX}]`);
   }
   return value;
 }

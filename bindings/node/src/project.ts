@@ -92,13 +92,12 @@ import type {
 import {
   assertAudioInput,
   assertClosedToken,
-  assertInt32,
-  assertInt64,
   assertProjectMidiEvents,
   assertSampleRate,
   assertSamples,
   assertU7,
   assertU32,
+  C_INT_MAX,
   requestObject,
   resolveOptionalNonNegative,
   sampleOneShot,
@@ -148,21 +147,16 @@ function requireNumber(value: unknown, argName: string): number {
 }
 
 /** An optional field where `0` would mean "the default": absent stays absent, `0` is refused. */
-function optionalNonZero(
-  value: unknown,
-  argName: string,
-  check: (v: number, arg: string) => void,
-): number | undefined {
+function optionalNonZero(value: unknown, argName: string, max: number): number | undefined {
   if (isAbsent(value)) {
     return undefined;
   }
   const number = requireNumber(value, argName);
-  check(number, argName);
   if (number === 0) {
     throw refuse(`${argName} must not be 0 (omit it for the default)`);
   }
-  if (number < 0) {
-    throw refuse(`${argName} must be positive (omit it for the default)`);
+  if (!Number.isInteger(number) || number < 1 || number > max) {
+    throw refuse(`${argName} must be an integer in [1, ${max}]`);
   }
   return number;
 }
@@ -246,9 +240,9 @@ function bounceSettings(
 ): Record<string, unknown> {
   const request = requestObject(requestName, options ?? {}, 'options', true);
   const native: Record<string, unknown> = {};
-  const totalFrames = optionalNonZero(request.totalFrames, 'totalFrames', assertInt64);
-  const blockSize = optionalNonZero(request.blockSize, 'blockSize', assertInt32);
-  const numChannels = optionalNonZero(request.numChannels, 'numChannels', assertInt32);
+  const totalFrames = optionalNonZero(request.totalFrames, 'totalFrames', Number.MAX_SAFE_INTEGER);
+  const blockSize = optionalNonZero(request.blockSize, 'blockSize', C_INT_MAX);
+  const numChannels = optionalNonZero(request.numChannels, 'numChannels', C_INT_MAX);
   if (totalFrames !== undefined) {
     native.totalFrames = totalFrames;
   }

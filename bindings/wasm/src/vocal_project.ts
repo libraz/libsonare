@@ -84,7 +84,7 @@ function positiveSampleCount(value: unknown, field: string): number {
     throw refuseType(`${field} must be a number`);
   }
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw refuse(`${field} must be a positive safe integer`);
+    throw refuse(`${field} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   return value;
 }

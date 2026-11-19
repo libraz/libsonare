@@ -19,7 +19,7 @@ export function midi2Event(
 ): ProjectMidiEvent {
   assertFiniteScalar(ppq, 'ppq');
   if (ppq < 0) {
-    throw refuse(`ppq must be non-negative`);
+    throw refuse(`ppq must be at least 0`);
   }
   const g = assertNibble(group, 'group');
   const ch = assertNibble(channel, 'channel');

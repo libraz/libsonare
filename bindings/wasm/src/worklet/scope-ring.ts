@@ -288,10 +288,10 @@ export function scopeRingFromSharedBuffer(
     ? existingMaxPoints
     : (fallbackMaxPoints ?? SONARE_SCOPE_DEFAULT_MAX_POINTS);
   if (!Number.isSafeInteger(bands) || bands < 1) {
-    throw refuse('scopeBands must be a positive integer');
+    throw refuse(`scopeBands must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   if (!Number.isSafeInteger(maxPoints) || maxPoints < 0) {
-    throw refuse('scopeMaxPoints must be a non-negative integer');
+    throw refuse(`scopeMaxPoints must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
   }
   if (fallbackBands !== undefined && bands !== fallbackBands) {
     throw refuse('scopeBands does not match the shared-buffer descriptor');

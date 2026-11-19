@@ -103,6 +103,7 @@ import type {
 import {
   assertFloatValue,
   assertSurroundPan,
+  C_INT_MAX,
   optionalBoolean,
   requestObject,
   requireBoolean,
@@ -277,8 +278,8 @@ function optionalCount(argName: string, value: unknown): number | undefined {
   if (value === 0) {
     throw refuse(`${argName} must not be 0 (omit it for the default)`);
   }
-  if (value < 0 || !Number.isInteger(value)) {
-    throw refuse(`${argName} must be a positive integer`);
+  if (value < 0 || value > C_INT_MAX || !Number.isInteger(value)) {
+    throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
   }
   return value;
 }
@@ -332,7 +333,7 @@ function normalizeEngineConfig(
     throw refuseType(`sampleRate must be a number`);
   }
   if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
-    throw refuse(`sampleRate must be a positive finite number`);
+    throw refuse(`sampleRate must be finite and greater than 0`);
   }
   return {
     sampleRate,
@@ -418,7 +419,7 @@ function scheduleSampleCount(
     throw refuse(`${where} must not be 0 (omit it for ${meaning})`);
   }
   if (!Number.isInteger(value) || value < 0) {
-    throw refuse(`${where} must be a positive integer`);
+    throw refuse(`${where} must be an integer of at least 1`);
   }
   return value;
 }

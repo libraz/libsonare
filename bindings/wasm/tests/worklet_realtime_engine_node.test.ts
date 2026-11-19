@@ -3872,7 +3872,7 @@ describe('SonareRealtimeEngineNode', () => {
           expect(() => engine.transport.seekSec(seconds)).toThrow(RangeError);
         }
         expect(() => engine.transport.seekSec(-1)).toThrow(
-          new RangeError('SonareEngine.transport.seekSec: timeSec must be non-negative'),
+          new RangeError('SonareEngine.transport.seekSec: timeSec must be finite and at least 0'),
         );
         expect(offline.transportState().samplePosition).toBe(position);
 

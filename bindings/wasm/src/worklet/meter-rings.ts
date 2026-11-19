@@ -539,7 +539,7 @@ export function spectrumRingFromSharedBuffer(
   );
   const bands = existingBands || fallbackBands || 16;
   if (!Number.isSafeInteger(bands) || bands < 1) {
-    throw refuse('spectrumBands must be a positive integer');
+    throw refuse(`spectrumBands must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   if (fallbackBands !== undefined && existingBands !== 0 && existingBands !== fallbackBands) {
     throw refuse('spectrumBands does not match the shared-buffer descriptor');

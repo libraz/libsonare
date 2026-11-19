@@ -117,6 +117,7 @@ import {
   assertSampleRate,
   assertSamples,
   assertU7,
+  C_INT_MAX,
   optionalBoolean,
   requestObject,
   requireBoolean,
@@ -143,7 +144,7 @@ function validateAssistSidecarUint32(value: unknown, field: string): number {
 
 function validateAssistSidecarPpq(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    throw refuse(`${field} must be a finite, non-negative number`);
+    throw refuse(`${field} must be finite and at least 0`);
   }
   return value;
 }
@@ -678,8 +679,8 @@ export class Project {
 
   /** Cap the undo history depth (clamped to >= 1); evicts oldest entries beyond the cap. */
   setMaxUndoDepth(depth: number): void {
-    if (!Number.isInteger(depth) || depth < 1) {
-      throw refuse('depth must be an integer >= 1');
+    if (!Number.isInteger(depth) || depth < 1 || depth > C_INT_MAX) {
+      throw refuse(`depth must be an integer in [1, ${C_INT_MAX}]`);
     }
     this.native.setMaxUndoDepth(depth);
   }
@@ -951,9 +952,13 @@ export class Project {
   private bounceRequest(options: ProjectBounceOptions | undefined): NativeProjectBounceOptions {
     const request = optionsObject('Project.bounce', options);
     const native: NativeProjectBounceOptions = {};
-    const totalFrames = optionalPositiveInt('totalFrames', request.totalFrames);
-    const blockSize = optionalPositiveInt('blockSize', request.blockSize);
-    const numChannels = optionalPositiveInt('numChannels', request.numChannels);
+    const totalFrames = optionalPositiveInt(
+      'totalFrames',
+      request.totalFrames,
+      Number.MAX_SAFE_INTEGER,
+    );
+    const blockSize = optionalPositiveInt('blockSize', request.blockSize, C_INT_MAX);
+    const numChannels = optionalPositiveInt('numChannels', request.numChannels, C_INT_MAX);
     if (totalFrames !== undefined) {
       native.totalFrames = totalFrames;
     }

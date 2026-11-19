@@ -71,6 +71,7 @@ import {
   assertClosedToken,
   assertFiniteSamples,
   assertNonNegativeSafeInteger,
+  C_INT_MAX,
   requestObject,
   requireBoolean,
   resolveRenderFrame,
@@ -130,8 +131,8 @@ function optionalCount(argName: string, value: unknown): number | undefined {
   if (number === 0) {
     throw refuse(`${argName} must not be 0 (omit it for the default)`);
   }
-  if (number < 0 || !Number.isInteger(number)) {
-    throw refuse(`${argName} must be a positive integer`);
+  if (number < 0 || number > C_INT_MAX || !Number.isInteger(number)) {
+    throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
   }
   return number;
 }
@@ -493,7 +494,7 @@ function scheduleSampleCount(
     throw refuse(`${where} must not be 0 (omit it for ${meaning})`);
   }
   if (!Number.isInteger(value) || value < 0) {
-    throw refuse(`${where} must be a positive integer`);
+    throw refuse(`${where} must be an integer of at least 1`);
   }
   return value;
 }
@@ -1811,10 +1812,10 @@ export class RealtimeEngine {
     assertNonNegativeSafeInteger(numChannels, 'numChannels');
     assertNonNegativeSafeInteger(capacityFrames, 'capacityFrames');
     if (numChannels <= 0) {
-      throw refuse(`numChannels must be greater than zero`);
+      throw refuse(`numChannels must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
     }
     if (capacityFrames <= 0) {
-      throw refuse(`capacityFrames must be greater than zero`);
+      throw refuse(`capacityFrames must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
     }
     const source = isAbsent(request.source) ? 'output' : request.source;
     assertClosedToken(source, CAPTURE_SOURCES, 'source');
@@ -1875,7 +1876,7 @@ export class RealtimeEngine {
       if (given === 0) {
         const ppq = requireFinite(request[ppqName], ppqName);
         if (ppq < 0) {
-          throw refuse(`${ppqName} must be non-negative`);
+          throw refuse(`${ppqName} must be at least 0`);
         }
         return Math.round(this.native.sampleAtPpq(ppq));
       }

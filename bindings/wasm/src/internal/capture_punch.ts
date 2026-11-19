@@ -29,7 +29,7 @@ export function capturePunchBound(
     ) as number;
   }
   if (typeof ppq !== 'number' || !Number.isFinite(ppq) || ppq < 0) {
-    throw refuse(`punch.${ppqName} must be a non-negative number`);
+    throw refuse(`punch.${ppqName} must be finite and at least 0`);
   }
   return sampleAtPpq(ppq);
 }

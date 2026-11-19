@@ -205,7 +205,7 @@ describe('Sonare WASM Project edit ops', () => {
       project.clearHistory();
       expect(() => project.undo()).toThrow();
 
-      // Guard rail: depth must be an integer >= 1.
+      // Guard rail: depth must be an integer in [1, 2147483647].
       expect(() => project.setMaxUndoDepth(0)).toThrow();
       expect(() => project.setMaxUndoDepth(1.5)).toThrow();
     } finally {

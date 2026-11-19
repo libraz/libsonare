@@ -253,8 +253,12 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
           'RealtimeEngine.setGraph: nodes[0].numPorts must not be 0 (omit it for the default)',
         ),
       );
-      expect(() => engine.setGraph(graph({}, -1))).toThrow(/numPorts must be a positive integer/);
-      expect(() => engine.setGraph(graph({}, 1.5))).toThrow(/numPorts must be a positive integer/);
+      expect(() => engine.setGraph(graph({}, -1))).toThrow(
+        /numPorts must be an integer in \[1, 2147483647\]/,
+      );
+      expect(() => engine.setGraph(graph({}, 1.5))).toThrow(
+        /numPorts must be an integer in \[1, 2147483647\]/,
+      );
       expect(() => engine.setGraph(graph({ numChannels: 0 }))).toThrow(
         new RangeError(
           'RealtimeEngine.setGraph: numChannels must not be 0 (omit it for the default)',
@@ -353,7 +357,7 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
         for (const bad of [-1, 1.5]) {
           expect(() => engine.setMidiClips([clip({ [field]: bad })] as never)).toThrow(
             new RangeError(
-              `RealtimeEngine.setMidiClips: clips[0].${field} must be a positive integer`,
+              `RealtimeEngine.setMidiClips: clips[0].${field} must be an integer of at least 1`,
             ),
           );
         }

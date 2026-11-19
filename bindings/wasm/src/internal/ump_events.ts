@@ -8,7 +8,7 @@ const MIDI2_U32_MAX = 0xffffffff;
 /** Refuses a ppq that is not a non-negative finite number. */
 export function assertEventPpq(ppq: number): void {
   if (!Number.isFinite(ppq) || ppq < 0) {
-    throw refuse(`ppq must be a non-negative finite number`);
+    throw refuse(`ppq must be finite and at least 0`);
   }
 }
 

@@ -721,7 +721,7 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
       throw refuseType(`${prefix}.word1 must be a number`);
     }
     if (!Number.isFinite(record.ppq) || record.ppq < 0) {
-      throw refuse(`${prefix}.ppq must be a non-negative finite number`);
+      throw refuse(`${prefix}.ppq must be finite and at least 0`);
     }
     assertU32(record.word0, `${prefix}.word0`);
     if (record.word1 !== undefined) {
@@ -887,7 +887,11 @@ export function compSegmentsToNative(segments: unknown): Array<Record<string, un
 }
 
 /** An optional strictly positive integer count: absent is `undefined`, an explicit `0` is refused. */
-export function optionalPositiveInt(argName: string, value: unknown): number | undefined {
+export function optionalPositiveInt(
+  argName: string,
+  value: unknown,
+  max: number,
+): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
@@ -897,8 +901,8 @@ export function optionalPositiveInt(argName: string, value: unknown): number | u
   if (value === 0) {
     throw refuse(`${argName} must not be 0 (omit it for the default)`);
   }
-  if (!Number.isInteger(value) || value < 0) {
-    throw refuse(`${argName} must be a positive integer`);
+  if (!Number.isInteger(value) || value < 0 || value > max) {
+    throw refuse(`${argName} must be an integer in [1, ${max}]`);
   }
   return value;
 }

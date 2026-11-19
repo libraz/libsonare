@@ -212,7 +212,7 @@ function requireFinite(value: number, field: string): number {
 function requireSample(value: number, field: string): number {
   requireFinite(value, field);
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw refuse(`${field} must be a non-negative safe integer`);
+    throw refuse(`${field} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
   }
   return value;
 }
@@ -240,7 +240,7 @@ function requireToken(value: string | undefined, field: string, fallback = '0'):
 function requireCount(value: unknown, field: string): number {
   const count = typeof value === 'string' ? Number(value) : value;
   if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
-    throw refuse(`${field} must be a non-negative safe integer`);
+    throw refuse(`${field} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
   }
   return count;
 }
@@ -510,11 +510,13 @@ function validateCreate(request: VocalCreateRequest): void {
     requireFinite(analysis.frameOriginSample, 'analysis.frameOriginSample');
     requireFinite(analysis.samplesPerFrame, 'analysis.samplesPerFrame');
     if (analysis.samplesPerFrame <= 0) {
-      throw refuse('analysis.samplesPerFrame must be positive');
+      throw refuse('analysis.samplesPerFrame must be greater than 0');
     }
     requireSample(analysis.frameLengthSamples, 'analysis.frameLengthSamples');
     if (analysis.frameLengthSamples === 0) {
-      throw refuse('analysis.frameLengthSamples must be positive');
+      throw refuse(
+        `analysis.frameLengthSamples must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`,
+      );
     }
     if (!(analysis.f0Hz instanceof Float32Array) || !(analysis.voiced instanceof Uint8Array)) {
       throw refuseType('analysis arrays must be Float32Array and Uint8Array');

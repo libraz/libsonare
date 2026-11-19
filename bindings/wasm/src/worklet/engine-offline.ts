@@ -190,8 +190,8 @@ export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineT
     seekSec: (timeSec, renderFrame) =>
       withEntry('SonareEngine.transport.seekSec', () => {
         // A negative position is refused, never clamped onto the start.
-        if (timeSec < 0) {
-          throw refuse('timeSec must be non-negative');
+        if (!Number.isFinite(timeSec) || timeSec < 0) {
+          throw refuse('timeSec must be finite and at least 0');
         }
         const timelineSample = secondsToSampleCount(timeSec, ctx.sampleRate, 'timeSec');
         commitCommand(

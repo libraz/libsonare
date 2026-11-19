@@ -209,14 +209,14 @@ export function requirePositiveCapacity(
     fallbackCapacity !== undefined &&
     (!Number.isSafeInteger(fallbackCapacity) || fallbackCapacity < 1)
   ) {
-    throw refuse(`${name} must be a positive integer`);
+    throw refuse(`${name} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   if (existingCapacity !== 0 && (!Number.isSafeInteger(existingCapacity) || existingCapacity < 1)) {
-    throw refuse(`${name} must be a positive integer`);
+    throw refuse(`${name} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   const capacity = existingCapacity || fallbackCapacity;
   if (capacity === undefined || capacity < 1) {
-    throw refuse(`${name} must be a positive integer`);
+    throw refuse(`${name} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   if (fallbackCapacity !== undefined && existingCapacity !== 0 && capacity !== fallbackCapacity) {
     throw refuse(`${name} does not match the shared-buffer descriptor`);
@@ -280,7 +280,7 @@ export function validateOverwriteViews(
   expectedTrailingBytes = 0,
 ): void {
   if (!Number.isSafeInteger(capacity) || capacity < 1) {
-    throw refuse(`${name} capacity must be a positive integer.`);
+    throw refuse(`${name} capacity must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   const stateOffset = headerBytes + recordBytes * capacity;
   if (

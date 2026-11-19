@@ -599,7 +599,7 @@ function validateRequest(data: unknown): VocalWorkerRequestMessage {
     throw malformed('message must be an object');
   }
   if (!Number.isSafeInteger(data.id) || (data.id as number) <= 0) {
-    throw malformed('id must be a positive safe integer');
+    throw malformed(`id must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   if (typeof data.sessionId !== 'string' || data.sessionId.length === 0) {
     throw malformed('sessionId must be a non-empty string');

@@ -144,8 +144,11 @@ export class ClipPageStreamer {
     if (this.epoch.closed) {
       throw releasedHandleError('ClipPageStreamer');
     }
-    if (source.pageFrames <= 0 || source.numSamples <= 0) {
-      throw refuse('pageFrames and numSamples must be positive');
+    for (const field of ['pageFrames', 'numSamples'] as const) {
+      const value = source[field];
+      if (!Number.isSafeInteger(value) || value < 1) {
+        throw refuse(`${field} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
+      }
     }
     const lastPage = Math.ceil(source.numSamples / source.pageFrames) - 1;
     const previous = this.sources.get(source.clipId);
