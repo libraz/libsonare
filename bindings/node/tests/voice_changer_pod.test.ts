@@ -128,7 +128,11 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     const unreachable = { ...pod, formantMode: 'absolute' as const, retunePitchSemitones: -9 };
     expect(
       () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: unreachable }),
-    ).toThrow(/\[0\.55, 0\.9811\]/);
+    ).toThrow(
+      new RangeError(
+        'RealtimeVoiceChanger: formantFactor must be finite and in [0.55, 0.981] in absolute formant mode at retunePitchSemitones -9 (the warp reaches [0.3271, 0.981] there)',
+      ),
+    );
     expect(
       () =>
         new RealtimeVoiceChanger({

@@ -752,6 +752,8 @@ describe('roomMorphStereo', () => {
       });
     expect(attempt).toThrow(RangeError);
     // The core's receiver-pair check, not the facade's listener reader.
-    expect(attempt).toThrow(/receiver pair is invalid: acoustic\.receiver_outside_room/);
+    expect(attempt).toThrow(
+      /^roomMorphStereo: receiverSpacingM must place both receivers inside the room for /,
+    );
   });
 });

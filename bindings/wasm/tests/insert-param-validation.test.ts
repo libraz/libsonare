@@ -144,13 +144,13 @@ describe('insert param validation (WASM)', () => {
     });
     expect(voice?.latencySamples).toBeGreaterThan(0);
     const voiceParam = (name: string) => voice?.params.find((param) => param.name === name);
-    expect(voiceParam('retuneSemitones')).toMatchObject({
+    expect(voiceParam('retunePitchSemitones')).toMatchObject({
       min: -24,
       max: 24,
       unit: 'semitones',
       rtSafe: true,
     });
-    for (const name of ['retuneGrainSize', 'limiterEnableIspLimiter', 'reverbSeed']) {
+    for (const name of ['retuneGrainSizeSamples', 'limiterEnableIspLimiter', 'reverbSeed']) {
       expect(voiceParam(name)).toMatchObject({ rtSafe: false });
       expect(voiceParam(name)).not.toHaveProperty('id');
     }

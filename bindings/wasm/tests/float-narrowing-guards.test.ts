@@ -107,15 +107,18 @@ function capture(run: () => unknown): unknown {
  * finite, is refused with that domain instead of the float range; only a value
  * inside the domain but past the float range reads the float-range text.
  */
-const FLOORS: Record<string, { text: string; holds: (value: number) => boolean; key?: string }> = {
+const FLOORS: Record<string, { text: string; holds: (value: number) => boolean }> = {
   'masteringDynamicsGate.keyHighPassHz': { text: 'at least 0', holds: (value) => value >= 0 },
   // The facade refuses a non-positive region edge by its path before the float narrowing runs.
   'spectralEdit.highHz': {
     text: 'greater than 0; omit it for Nyquist',
     holds: (value) => value > 0,
-    key: 'ops[0].highHz',
   },
 };
+
+/** spectralEdit refuses a region field by its path inside the ops list. */
+const keyPath = (entry: string, key: string): string =>
+  entry === 'spectralEdit' ? `ops[0].${key}` : key;
 
 function expectRangeRefusal(
   caught: unknown,
@@ -128,8 +131,7 @@ function expectRangeRefusal(
   const floor = FLOORS[`${entry}.${key}`];
   const floored = floor !== undefined && !(Number.isFinite(value) && floor.holds(value));
   const predicate = floored ? `must be finite and ${floor.text}` : RANGE_MESSAGE;
-  const spelled = floored ? (floor.key ?? key) : key;
-  expect(error.message, context).toBe(`${entry}: ${spelled} ${predicate}`);
+  expect(error.message, context).toBe(`${entry}: ${keyPath(entry, key)} ${predicate}`);
 }
 
 const compressorWith = (options: CompressorOptions, samples = tone): Float32Array =>

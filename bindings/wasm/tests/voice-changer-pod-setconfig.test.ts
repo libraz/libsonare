@@ -274,9 +274,10 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
       formantMode: 'absolute',
       retunePitchSemitones: -9,
     };
-    expect(() => make(unreachable)).toThrow(/\[0\.55, 0\.9811\]/);
     expect(() => make(unreachable)).toThrow(
-      /formantFactor must be in \[0\.55, 0\.9811\] in absolute formant mode at retunePitchSemitones -9/,
+      new RangeError(
+        'RealtimeVoiceChanger: formantFactor must be finite and in [0.55, 0.981] in absolute formant mode at retunePitchSemitones -9 (the warp reaches [0.3271, 0.981] there)',
+      ),
     );
   });
 
