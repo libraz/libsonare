@@ -232,3 +232,18 @@ def test_percussive_separation_refuses_zero_where_none_is_the_default(field: str
         match=rf"^render_percussive_events: {field} must be an integer in \[1, ",
     ):
         libsonare.render_percussive_events(tone, SR, [], **{field: 0})
+
+
+@pytest.mark.parametrize(
+    ("field", "zero"), [("onset_wait", 0), ("onset_delta", 0.0), ("max_event_ms", 0.0)]
+)
+def test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default(
+    field: str, zero: float
+) -> None:
+    tone = _tone()
+    assert isinstance(libsonare.extract_percussive_events(tone, SR), list)
+    with pytest.raises(
+        SonareValueError,
+        match=rf"^extract_percussive_events: {field} must not be 0; omit it for the library value$",
+    ):
+        libsonare.extract_percussive_events(tone, SR, **{field: zero})

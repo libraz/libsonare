@@ -12397,3 +12397,27 @@ changed = "an explicit 0 raises SonareValueError instead of reading as the libra
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
+
+[[entry]]
+kind = "option"
+old = "extract_percussive_events(onset_wait)"
+changed = "an explicit 0 raises SonareValueError instead of running at the library default; 0 is a real wait the C configuration cannot yet express, so omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default"
+
+[[entry]]
+kind = "option"
+old = "extract_percussive_events(onset_delta)"
+changed = "an explicit 0 raises SonareValueError instead of running at the library default; 0 is a real offset the C configuration cannot yet express, so omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default"
+
+[[entry]]
+kind = "option"
+old = "extract_percussive_events(max_event_ms)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default"

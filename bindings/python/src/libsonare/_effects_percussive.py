@@ -15,7 +15,7 @@ from ._ffi import (
     SonarePercussiveEventsResult,
     SonarePercussiveRenderConfig,
 )
-from ._narrowing import _narrow_double, _resolve_zero_default
+from ._narrowing import _narrow_double, _narrow_float, _optional_nonzero, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     SonareValueError,
@@ -230,6 +230,22 @@ def _percussive_events_to_c(
     return c_events, count
 
 
+def _onset_wait(onset_wait: int | None) -> int:
+    """The C ``onset_wait``; its 0 means "use the default", so an explicit 0 is refused.
+
+    Narrowed rather than coerced: ``int(0.5)`` is that 0, so a fractional wait
+    would run at the default and report success.
+    """
+    if onset_wait is None:
+        return 0
+    wait = _validate_c_int_field("extract_percussive_events", onset_wait, "onset_wait")
+    if wait == 0:
+        raise SonareValueError(
+            "extract_percussive_events: onset_wait must not be 0; omit it for the library value"
+        )
+    return wait
+
+
 @_guard_buffer("samples")
 def extract_percussive_events(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -272,25 +288,25 @@ def extract_percussive_events(
             time; ``None`` keeps the library default. A longer harmonic kernel calls
             more of a sustained sound harmonic.
         hpss_kernel_percussive: The same, along frequency.
-        onset_wait: Minimum frames between consecutive onsets; ``None`` keeps the
-            default (1). Must be a whole number: 0 is the default's own spelling,
-            so a fractional wait is refused rather than resolved onto it.
+        onset_wait: Minimum frames between consecutive onsets, a positive whole
+            number; ``None`` keeps the library default. An explicit 0 is refused
+            because the C configuration cannot yet tell it from the default.
         onset_delta: Offset added to the detector's adaptive threshold; raising
             it finds fewer, stronger hits and lowering it finds more. ``None``
-            keeps the default (0.06), so exactly 0 is the one value not
-            selectable here -- a negative one is accepted and puts the threshold
-            below the default, which is the direction a caller reaching for 0
-            wanted anyway.
+            keeps the library default. An explicit 0 is refused because the C
+            configuration cannot yet tell it from the default; a negative one is
+            accepted and puts the threshold below the default.
 
             It is in the units of :attr:`PercussiveEvent.strength`, the onset
             envelope's own scale, which is **not** normalised: three isolated
-            hits measured 37 to 51 on one fixture, where the 0.06 default selects
+            hits measured 37 to 51 on one fixture, where the default selects
             nothing at all. Read a useful value off the strengths a default
             extraction returns rather than guessing one -- a number chosen
             assuming the scale is around 1 looks like a knob that does nothing.
-        max_event_ms: Caps a span that no onset follows; ``None`` keeps the
-            default (500). It binds at the end of a phrase and at the end of the
-            track, and nowhere else. A span never runs past the end of the audio
+        max_event_ms: Caps a span that no onset follows, a positive duration;
+            ``None`` keeps the library default and an explicit 0 is refused. It
+            binds at the end of a phrase and at the end of the track, and nowhere
+            else. A span never runs past the end of the audio
             whatever this says.
         min_percussive_ratio: Drops an event whose ``percussive_ratio`` falls
             below this; must be in ``[0, 1]``. ``None`` keeps the default, which
@@ -306,14 +322,13 @@ def extract_percussive_events(
         detected, which is reported rather than raised.
 
     Raises:
-        SonareValueError: If ``samples`` is empty or non-finite, or a framing,
-            kernel size or ``onset_wait`` is not a whole number fitting in a
-            signed 32-bit integer.
+        SonareValueError: If ``samples`` is empty or non-finite, a framing,
+            kernel size or ``onset_wait`` is not a positive whole number fitting
+            in a signed 32-bit integer, or ``onset_delta`` or ``max_event_ms`` is
+            an explicit 0.
         SonareError: If the C call rejects the request (a framing that breaks
-            overlap-add, a negative ``onset_wait``, a negative or non-finite
-            ``max_event_ms``, or a ``min_percussive_ratio`` outside ``[0, 1]``).
-            0 is not rejected for any of these: it is the C ABI's spelling of the
-            default.
+            overlap-add, a negative ``onset_wait``, a negative ``max_event_ms``,
+            or a ``min_percussive_ratio`` outside ``[0, 1]``).
 
     Example:
         >>> events = libsonare.extract_percussive_events(audio, sr)
@@ -334,16 +349,15 @@ def extract_percussive_events(
             hpss_kernel_harmonic,
             hpss_kernel_percussive,
         ),
-        # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
-        # "keep the default", so a fractional wait would run at the default and
-        # report success.
-        onset_wait=(
-            0
-            if onset_wait is None
-            else _validate_c_int_field("extract_percussive_events", onset_wait, "onset_wait")
+        onset_wait=_onset_wait(onset_wait),
+        onset_delta=_narrow_float(
+            _optional_nonzero(onset_delta, "extract_percussive_events: onset_delta"),
+            "extract_percussive_events: onset_delta",
         ),
-        onset_delta=0.0 if onset_delta is None else _narrow_double(onset_delta, "onset_delta"),
-        max_event_ms=0.0 if max_event_ms is None else _narrow_double(max_event_ms, "max_event_ms"),
+        max_event_ms=_narrow_float(
+            _optional_nonzero(max_event_ms, "extract_percussive_events: max_event_ms"),
+            "extract_percussive_events: max_event_ms",
+        ),
         # 0 is this field's own meaning as well as its default, so it is passed
         # through rather than read as "leave the default".
         min_percussive_ratio=(
