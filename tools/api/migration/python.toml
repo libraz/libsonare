@@ -12445,3 +12445,24 @@ changed = "an explicit 0 raises SonareValueError instead of reading as the libra
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default"
+
+[[entry]]
+kind = "option"
+old = "lufs_interleaved(channels)"
+new = "lufs_interleaved(num_channels)"
+domain = "mastering"
+rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "lufs_series_interleaved(channels)"
+new = "lufs_series_interleaved(num_channels)"
+domain = "mastering"
+rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "voice_change_realtime(channels)"
+new = "voice_change_realtime(num_channels)"
+domain = "effects"
+rule = "num-channels"

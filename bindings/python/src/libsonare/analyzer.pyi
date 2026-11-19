@@ -939,7 +939,7 @@ def voice_change_realtime(
     sample_rate: int,
     *,
     config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
-    channels: int = 1,
+    num_channels: int = 1,
 ) -> np.ndarray: ...
 def realtime_voice_changer_preset_names() -> list[str]: ...
 def realtime_voice_changer_preset_config(preset: VoicePresetId) -> RealtimeVoiceChangerConfig: ...
@@ -1440,12 +1440,12 @@ def tuning_to_reference_hz(tuning_cents: float, a4_hz: float = 440.0) -> float: 
 def reference_hz_to_tuning(reference_hz: float, a4_hz: float = 440.0) -> float: ...
 def lufs_interleaved(
     samples: FloatSamples,
-    channels: int,
+    num_channels: int,
     sample_rate: int,
 ) -> LufsResult: ...
 def lufs_series_interleaved(
     samples: FloatSamples,
-    channels: int,
+    num_channels: int,
     sample_rate: int,
 ) -> LufsSeriesResult: ...
 def ebur128_loudness_range_lu(

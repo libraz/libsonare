@@ -172,14 +172,14 @@ def short_term_lufs(
 @_entry("lufs_interleaved")
 def lufs_interleaved(
     samples: Sequence[float] | list[float],
-    channels: int,
+    num_channels: int,
     sample_rate: int,
 ) -> LufsResult:
     """ITU-R BS.1770-4 multi-channel LUFS over an interleaved buffer.
 
     Args:
-        samples: Interleaved input buffer of ``frames * channels`` values.
-        channels: Channel count (an integer in ``[1, 2147483647]``).
+        samples: Interleaved input buffer of ``frames * num_channels`` values.
+        num_channels: Channel count (an integer in ``[1, 2147483647]``).
         sample_rate: Sample rate in Hz; K-weighting depends on it.
 
     Returns:
@@ -187,17 +187,17 @@ def lufs_interleaved(
         loudness range.
     """
     sample_buf = _validate_samples(samples)
-    channels = _narrow_int(channels, "channels", 1, _C_INT_MAX)
+    num_channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
-    if total % channels != 0:
-        raise _refuse("interleaved samples length must be divisible by channels")
-    frames = total // channels
+    if total % num_channels != 0:
+        raise _refuse("samples length must be a multiple of num_channels")
+    frames = total // num_channels
     out = SonareLufsResult()
     rc = lib.sonare_lufs_interleaved(
         c_array,
         _to_c_size_t(frames, "frames"),
-        _to_c_int(channels, "channels"),
+        _to_c_int(num_channels, "num_channels"),
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
@@ -215,7 +215,7 @@ def lufs_interleaved(
 @_entry("lufs_series_interleaved")
 def lufs_series_interleaved(
     samples: Sequence[float] | list[float],
-    channels: int,
+    num_channels: int,
     sample_rate: int,
 ) -> LufsSeriesResult:
     """Momentary and short-term LUFS series for an interleaved multi-channel buffer.
@@ -223,12 +223,12 @@ def lufs_series_interleaved(
     Measured with ITU-R BS.1770-4 channel summing, so this is not recoverable
     from :func:`momentary_lufs` / :func:`short_term_lufs`: the standard sums the
     K-weighted per-channel block energies rather than mixing per-channel loudness
-    in dB. Both series come out of one K-weighting pass. For ``channels == 1``
+    in dB. Both series come out of one K-weighting pass. For ``num_channels == 1``
     they match the mono meters element for element.
 
     Args:
-        samples: Interleaved input buffer of ``frames * channels`` values.
-        channels: Channel count (an integer in ``[1, 2147483647]``).
+        samples: Interleaved input buffer of ``frames * num_channels`` values.
+        num_channels: Channel count (an integer in ``[1, 2147483647]``).
         sample_rate: Sample rate in Hz; K-weighting depends on it.
 
     Returns:
@@ -237,12 +237,12 @@ def lufs_series_interleaved(
         it, not an error.
     """
     sample_buf = _validate_samples(samples)
-    channels = _narrow_int(channels, "channels", 1, _C_INT_MAX)
+    num_channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
-    if total % channels != 0:
-        raise _refuse("interleaved samples length must be divisible by channels")
-    frames = total // channels
+    if total % num_channels != 0:
+        raise _refuse("samples length must be a multiple of num_channels")
+    frames = total // num_channels
     with (
         _out_float_array(lib) as (out_momentary, momentary_length),
         _out_float_array(lib) as (out_short_term, short_term_length),
@@ -250,7 +250,7 @@ def lufs_series_interleaved(
         rc = lib.sonare_lufs_series_interleaved(
             c_array,
             _to_c_size_t(frames, "frames"),
-            _to_c_int(channels, "channels"),
+            _to_c_int(num_channels, "num_channels"),
             _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(out_momentary),
             ctypes.byref(momentary_length),

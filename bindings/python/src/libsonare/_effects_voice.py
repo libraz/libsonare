@@ -625,11 +625,11 @@ def voice_change_realtime(
     sample_rate: int,
     *,
     config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
-    channels: int = 1,
+    num_channels: int = 1,
 ) -> np.ndarray:
     """Apply the realtime voice changer to a buffer offline.
 
-    When ``channels`` > 1 the input must be interleaved (LRLR…) and the
+    When ``num_channels`` is 2 the input must be interleaved (LRLR…) and the
     output is returned interleaved in the same layout.
 
     The chain's processing latency (the engine's own: retune grain plus warp for
@@ -643,11 +643,10 @@ def voice_change_realtime(
     equals ``len(samples)`` so existing length-based assertions keep
     working.
     """
-    if channels < 1 or channels > 2:
-        raise _refuse("channels must be 1 or 2")
+    num_channels = _narrow_int(num_channels, "num_channels", 1, 2)
     in_buf = _validate_samples(samples)
-    if channels == 2 and int(in_buf.shape[0]) % 2 != 0:
-        raise _refuse("interleaved stereo input length must be even")
+    if int(in_buf.shape[0]) % num_channels != 0:
+        raise _refuse("samples length must be a multiple of num_channels")
     lib = _get_lib()
     c_array, length = _to_c_float_array(in_buf)
     with _out_float_array(lib) as (out, out_length):
@@ -657,7 +656,7 @@ def voice_change_realtime(
                 _to_c_size_t(length, "length"),
                 _to_c_int(sample_rate, "sample_rate"),
                 _voice_config_to_json(config),
-                _to_c_int(channels, "channels"),
+                _to_c_int(num_channels, "num_channels"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )

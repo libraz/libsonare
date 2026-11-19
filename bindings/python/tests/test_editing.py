@@ -419,7 +419,7 @@ def test_realtime_voice_changer_stereo_interleaved() -> None:
         interleaved.append(s)
 
     result = libsonare.voice_change_realtime(
-        interleaved, sample_rate=sr, channels=2, config="brightIdol"
+        interleaved, sample_rate=sr, num_channels=2, config="brightIdol"
     )
     assert len(result) == len(interleaved)
     assert all(math.isfinite(x) for x in result)
@@ -430,8 +430,16 @@ def test_realtime_voice_changer_stereo_interleaved() -> None:
 
 
 def test_realtime_voice_changer_rejects_odd_interleaved_stereo_length() -> None:
-    with pytest.raises(ValueError, match="interleaved stereo input length must be even"):
-        libsonare.voice_change_realtime([0.0, 0.1, 0.2], channels=2, sample_rate=48000)
+    with pytest.raises(ValueError, match="samples length must be a multiple of num_channels"):
+        libsonare.voice_change_realtime([0.0, 0.1, 0.2], num_channels=2, sample_rate=48000)
+
+
+@pytest.mark.parametrize("num_channels", [0, 3])
+def test_realtime_voice_changer_refuses_a_channel_count_outside_mono_and_stereo(
+    num_channels: int,
+) -> None:
+    with pytest.raises(ValueError, match=r"num_channels must be an integer in \[1, 2\]"):
+        libsonare.voice_change_realtime([0.0] * 6, num_channels=num_channels, sample_rate=48000)
 
 
 def test_editing_audio_methods() -> None:
