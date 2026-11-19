@@ -288,7 +288,7 @@ export function masteringApplyProcessorStereo<P extends SoloProcessor>(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     if (r.left.length !== r.right.length) {
-      throw refuse('Stereo channel lengths must match.');
+      throw refuse('left and right must have the same length');
     }
     return addon.masteringProcessStereo(
       r.processor,
@@ -375,10 +375,10 @@ export function masteringApplyPairProcessorStereo(
     assertAudioInput(r.referenceLeft, referenceRate, r, 'referenceLeft');
     assertAudioInput(r.referenceRight, referenceRate, r, 'referenceRight');
     if (r.sourceLeft.length !== r.sourceRight.length) {
-      throw refuse('Source left and right channel lengths must match.');
+      throw refuse('sourceLeft and sourceRight must have the same length');
     }
     if (r.referenceLeft.length !== r.referenceRight.length) {
-      throw refuse('Reference left and right channel lengths must match.');
+      throw refuse('referenceLeft and referenceRight must have the same length');
     }
     return addon.masteringPairProcessStereo(
       r.processor,
@@ -493,10 +493,10 @@ export function masteringAbMatchLoudnessStereo(
     assertAudioInput(r.referenceLeft, referenceRate, r, 'referenceLeft');
     assertAudioInput(r.referenceRight, referenceRate, r, 'referenceRight');
     if (r.sourceLeft.length !== r.sourceRight.length) {
-      throw refuse('Source left and right channel lengths must match.');
+      throw refuse('sourceLeft and sourceRight must have the same length');
     }
     if (r.referenceLeft.length !== r.referenceRight.length) {
-      throw refuse('Reference left and right channel lengths must match.');
+      throw refuse('referenceLeft and referenceRight must have the same length');
     }
     return addon.masteringAbMatchLoudnessStereo(
       r.sourceLeft,

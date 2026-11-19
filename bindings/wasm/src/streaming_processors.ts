@@ -215,7 +215,7 @@ export class StreamingMasteringChain {
   processStereo(left: Float32Array, right: Float32Array): StereoBlock {
     try {
       if (left.length !== right.length) {
-        throw refuse('Stereo channel lengths must match.');
+        throw refuse('left and right must have the same length');
       }
     } catch (error) {
       throw nameNativeError(error, 'StreamingMasteringChain.processStereo');
@@ -468,7 +468,7 @@ export class StreamingEqualizer {
   setSidechainStereo(left: Float32Array, right: Float32Array): void {
     try {
       if (left.length !== right.length) {
-        throw refuse('Sidechain channel lengths must match.');
+        throw refuse('left and right must have the same length');
       }
     } catch (error) {
       throw nameNativeError(error, 'StreamingEqualizer.setSidechainStereo');
@@ -536,7 +536,7 @@ export class StreamingEqualizer {
   processStereo(left: Float32Array, right: Float32Array): StereoBlock {
     try {
       if (left.length !== right.length) {
-        throw refuse('Stereo channel lengths must match.');
+        throw refuse('left and right must have the same length');
       }
     } catch (error) {
       throw nameNativeError(error, 'StreamingEqualizer.processStereo');

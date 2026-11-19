@@ -110,7 +110,7 @@ export function streamingLoudnessGainStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     if (r.left.length !== r.right.length) {
-      throw refuse('Stereo channel lengths must match.');
+      throw refuse('left and right must have the same length');
     }
     return streamingGainFromNative(
       addon.masteringStreamingLoudnessGainStereo(
@@ -234,7 +234,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     if (r.left.length !== r.right.length) {
-      throw refuse('Stereo channel lengths must match.');
+      throw refuse('left and right must have the same length');
     }
     if (
       (r.preset === undefined || r.preset === null) &&
@@ -351,7 +351,7 @@ export function masterAudioStereoAsync(
       assertAudioInput(r.left, r.sampleRate, r, 'left');
       assertAudioInput(r.right, r.sampleRate, r, 'right');
       if (r.left.length !== r.right.length) {
-        throw refuse('Stereo channel lengths must match.');
+        throw refuse('left and right must have the same length');
       }
       if (
         (r.preset === undefined || r.preset === null) &&

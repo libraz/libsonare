@@ -152,7 +152,7 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
     assertAudioInput(request.left, request.sampleRate, request, 'left');
     assertAudioInput(request.right, request.sampleRate, request, 'right');
     if (request.left.length !== request.right.length) {
-      throw refuse('Stereo channel lengths must match.');
+      throw refuse('left and right must have the same length');
     }
     const mode = resolveNormalizeMode(request.mode);
     // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
@@ -264,7 +264,7 @@ export function streamingLoudnessGainStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     if (r.left.length !== r.right.length) {
-      throw refuse('Stereo channel lengths must match.');
+      throw refuse('left and right must have the same length');
     }
     return streamingGainFromNative(
       requireModule().masteringStreamingLoudnessGainStereo(
@@ -471,7 +471,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     if (r.left.length !== r.right.length) {
-      throw refuse('Stereo channel lengths must match.');
+      throw refuse('left and right must have the same length');
     }
     if (
       (r.preset === undefined || r.preset === null) &&

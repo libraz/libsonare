@@ -74,13 +74,13 @@ describe('WASM stereo mastering design APIs', () => {
         'match.abCrossfade',
         source,
         short,
-        /^masteringApplyPairProcessorStereo: Source left and right channel lengths must match\.$/,
+        /^masteringApplyPairProcessorStereo: sourceLeft and sourceRight must have the same length$/,
       ],
       [
         'match.abCrossfade',
         short,
         source,
-        /^masteringApplyPairProcessorStereo: Source left and right channel lengths must match\.$/,
+        /^masteringApplyPairProcessorStereo: sourceLeft and sourceRight must have the same length$/,
       ],
       ['match.abSwitch' as StereoPairProcessor, source, source, /abSwitch/],
     ];
@@ -106,7 +106,7 @@ describe('WASM stereo mastering design APIs', () => {
         sampleRate: SAMPLE_RATE,
       }),
     ).toThrow(
-      /^masteringApplyPairProcessorStereo: Reference left and right channel lengths must match\.$/,
+      /^masteringApplyPairProcessorStereo: referenceLeft and referenceRight must have the same length$/,
     );
   });
 

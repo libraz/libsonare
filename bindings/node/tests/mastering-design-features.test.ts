@@ -101,8 +101,8 @@ describe('stereo mastering design APIs', () => {
     const reference = channel(32, 0.4);
     const short = channel(31, 0.2);
     const cases: Array<[StereoPairProcessor, Float32Array, Float32Array, Float32Array, RegExp]> = [
-      ['match.abCrossfade', short, reference, reference, /Source left and right/],
-      ['match.abCrossfade', source, reference, short, /Reference left and right/],
+      ['match.abCrossfade', short, reference, reference, /sourceLeft and sourceRight/],
+      ['match.abCrossfade', source, reference, short, /referenceLeft and referenceRight/],
       ['match.abSwitch' as StereoPairProcessor, source, reference, reference, /abSwitch/],
     ];
     for (const [processor, sourceRight, referenceLeft, referenceRight, message] of cases) {
@@ -143,7 +143,7 @@ describe('stereo mastering design APIs', () => {
       });
     expect(sourceMismatch).toThrow(RangeError);
     expect(sourceMismatch).toThrow(
-      /^masteringApplyPairProcessorStereo: Source left and right channel lengths must match\.$/,
+      /^masteringApplyPairProcessorStereo: sourceLeft and sourceRight must have the same length$/,
     );
     const referenceMismatch = () =>
       masteringApplyPairProcessorStereo({
@@ -156,7 +156,7 @@ describe('stereo mastering design APIs', () => {
       });
     expect(referenceMismatch).toThrow(RangeError);
     expect(referenceMismatch).toThrow(
-      /^masteringApplyPairProcessorStereo: Reference left and right channel lengths must match\.$/,
+      /^masteringApplyPairProcessorStereo: referenceLeft and referenceRight must have the same length$/,
     );
     expect(() =>
       masteringApplyPairProcessorStereo({
