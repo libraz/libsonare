@@ -401,6 +401,16 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
     'configJson',
     () => addon.masteringStreamingLoudnessGainStereo(readerTone, readerTone, 22050, 1),
   ],
+  [
+    'addon.masteringStreamingPreview',
+    'platforms',
+    () => addon.masteringStreamingPreview(readerTone, 22050, 'x'),
+  ],
+  [
+    'addon.masteringStreamingPreviewStereo',
+    'platforms',
+    () => addon.masteringStreamingPreviewStereo(readerTone, readerTone, 22050, 'x'),
+  ],
 ];
 
 /** As {@link NAMED_OPTIONAL_REFUSALS}, for Promise-returning entries, which refuse by rejecting. */

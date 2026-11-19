@@ -100,7 +100,9 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
     expect(validateSchema(old)).toBe(false);
     const refused = realtimeVoiceChangerValidatePresetJson(JSON.stringify(old));
     expect(refused.ok).toBe(false);
-    expect(refused.ok ? '' : refused.error).toContain('schemaVersion 1 is older');
+    expect(refused.ok ? '' : refused.error).toContain(
+      'schemaVersion must be 4, the version this release reads; the document was written for an older schema',
+    );
   });
 
   it('rejects representative schema violations through both validators', () => {
