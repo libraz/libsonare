@@ -176,6 +176,8 @@ const NON_OPTION_SHARED_READERS: ReadonlySet<string> = new Set([
   'FloatArrayProperty',
   // Refuses keys outside a declared list; it reads no value, so it makes no caller an options reader.
   'RefuseUnknownKeys',
+  // Refuses unknown keys of a document element (a graph node or connection) by its path; it reads no value.
+  'RefuseUnknownDocumentKeys',
   'RequiredIntProperty',
   'RequiredInt64Property',
   'RequiredUint32Property',
@@ -1335,14 +1337,6 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       [
         'masteringAssistantSuggestStereo',
         'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
-      ],
-      [
-        'masteringStreamingPreview',
-        'Its only key read is the name of a platforms record whose fields are type-checked as required just above it, so no omitted key reaches a default; covered by request_object_mastering.test.ts.',
-      ],
-      [
-        'masteringStreamingPreviewStereo',
-        'Its only key read is the name of a platforms record whose fields are type-checked as required just above it, so no omitted key reaches a default; covered by request_object_mastering.test.ts.',
       ],
       ['meteringSpectrum', 'Covered by metering-and-scale.test.ts.'],
       ['meteringSpectrumFrame', 'Covered by metering-and-scale.test.ts.'],

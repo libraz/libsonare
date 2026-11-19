@@ -139,14 +139,14 @@ describe('masteringRepairApply', () => {
         sampleRate: SR,
         stages: [{ stage: 'declick' }, { stage: 'declick' }],
       }),
-    ).toThrow(/stage 'declick' appears twice/);
+    ).toThrow(/\[1\]\.stage must not repeat a stage given earlier/);
     expect(() =>
       masteringRepairApply({
         channels,
         sampleRate: SR,
         stages: [{ stage: 'declick', lpcOdrer: 8 } as never],
       }),
-    ).toThrow(/declick: unknown setting 'lpcOdrer'/);
+    ).toThrow(/unknown key \[0\]\.lpcOdrer/);
   });
 
   it('reports progress per stage and stops when cancelled', () => {

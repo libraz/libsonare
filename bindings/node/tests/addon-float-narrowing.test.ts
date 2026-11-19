@@ -1336,7 +1336,7 @@ describe('an object key and an array element are refused rather than saturated',
 const UNCONTROLLED_SITES = ['streaming/stream_analyzer.cpp SetExpectedDuration durationSeconds'];
 
 /**
- * Sites in the required-argument table whose reader is the bail-out
+ * Sites in the required-argument and state tables whose reader is the bail-out
  * `RequiredFiniteFloatValue`, not `node_narrow_finite_float`: driven here for the
  * refusal, but not part of the `node_narrow_finite_float` call-site population.
  */
@@ -1352,6 +1352,10 @@ const BAILOUT_READER_SITES = new Set([
   'analysis/metering.cpp MeteringDynamicRange hopSec',
   'analysis/metering.cpp MeteringDynamicRange lowPercentile',
   'analysis/metering.cpp MeteringDynamicRange highPercentile',
+  'effects/mastering_pair.cpp MasteringStreamingPreview targetLufs',
+  'effects/mastering_pair.cpp MasteringStreamingPreview ceilingDbtp',
+  'effects/mastering_pair.cpp MasteringStreamingPreviewStereo targetLufs',
+  'effects/mastering_pair.cpp MasteringStreamingPreviewStereo ceilingDbtp',
 ]);
 
 /**
@@ -1383,7 +1387,9 @@ describe('the tables cover the whole required-read population', () => {
       ...REQUIRED_FLOAT_ARGUMENTS.map((argument) => argument.site).filter(
         (site) => !BAILOUT_READER_SITES.has(site) && !SHARED_READER_SITES.has(site),
       ),
-      ...REQUIRED_FLOAT_STATE_ARGUMENTS.map((argument) => argument.site),
+      ...REQUIRED_FLOAT_STATE_ARGUMENTS.map((argument) => argument.site).filter(
+        (site) => !BAILOUT_READER_SITES.has(site),
+      ),
       ...UNCONTROLLED_SITES,
     ]);
     expect(sites.size).toBe(calls.length);

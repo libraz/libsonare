@@ -347,7 +347,9 @@ describe('repair: session', () => {
         stages: [{ stage: 'declip', clipThreshold: 0.9 }],
       });
     expect(earlier).toThrow(expect.objectContaining({ code: sonare.ErrorCode.InvalidFormat }));
-    expect(earlier).toThrow(/renamed to clipThresholdDb/);
+    expect(earlier).toThrow(
+      /unknown key \[0\]\.clipThreshold \(renamed to \[0\]\.clipThresholdDb\)/,
+    );
     // @ts-expect-error a misspelt stage setting is a type error
     const _bad: MasteringRepairStage = { stage: 'declick', thresholdd: 1 };
     // @ts-expect-error the stage name is a closed set
