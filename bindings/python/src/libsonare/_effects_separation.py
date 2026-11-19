@@ -869,6 +869,7 @@ def phase_vocoder(
         The time-stretched audio as a 1-D float32 array.
     """
     _validate_samples(samples)
+    n_fft = _validate_stft_n_fft(n_fft)
     hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

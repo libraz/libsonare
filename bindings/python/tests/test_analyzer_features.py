@@ -659,6 +659,16 @@ def test_phase_vocoder_refuses_a_given_hop_below_one(hop_length: int) -> None:
     assert str(caught.value) == "phase_vocoder: hop_length must be an integer in [1, 2147483647]"
 
 
+@pytest.mark.parametrize("n_fft", [3, 2])
+def test_phase_vocoder_refuses_an_n_fft_outside_the_stft_domain(n_fft: int) -> None:
+    # The same STFT-size refusal time_stretch and pitch_shift give, before the core.
+    from libsonare import SonareValueError, phase_vocoder
+
+    with pytest.raises(SonareValueError) as caught:
+        phase_vocoder(_generate_sine(440, 22050, 0.25), 22050, 1.25, n_fft=n_fft)
+    assert str(caught.value) == "phase_vocoder: n_fft must be an even integer in [4, 2147483646]"
+
+
 def test_spectral_rolloff() -> None:
     """spectral_rolloff returns non-empty list."""
     from libsonare import spectral_rolloff
