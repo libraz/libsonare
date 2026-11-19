@@ -14075,28 +14075,28 @@ test = "bindings/node/tests/synth-patch.test.ts::describes each engine section"
 [[entry]]
 kind = "field"
 old = "StreamFramesU8.nMels"
-removed = "the Matrix2D input carries it as rows / cols"
+removed = "derive it as mel.length / nFrames; the arrays are band-major"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesU8.nChroma"
-removed = "the Matrix2D input carries it as rows / cols"
+removed = "derive it as chroma.length / nFrames; the arrays are band-major"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesI16.nMels"
-removed = "the Matrix2D input carries it as rows / cols"
+removed = "derive it as mel.length / nFrames; the arrays are band-major"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesI16.nChroma"
-removed = "the Matrix2D input carries it as rows / cols"
+removed = "derive it as chroma.length / nFrames; the arrays are band-major"
 domain = "analysis"
 rule = "array-results"
 

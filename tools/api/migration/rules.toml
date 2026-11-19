@@ -240,7 +240,7 @@ if (strip.integratedLufs === undefined) skipStrip();
 [[rule]]
 slug = "input-always-scanned"
 title = "Every call scans its input for non-finite values"
-summary = "The per-call `validate` option and the `ValidateOptions` type are removed from Node and WASM. Every call scans its sample and matrix inputs for NaN and infinity and refuses one with a `RangeError` naming the call and the index; a `validate` key is refused as an unknown key. `mixingAssistantSuggest` reports a non-finite track as excluded instead of refusing the call."
+summary = "The per-call `validate` option and the `ValidateOptions` type are removed from Node and WASM. Every call scans its sample and matrix inputs for NaN and infinity and refuses one with a `RangeError` naming the call and the index; a `validate` key is refused as an unknown key. `mixingAssistantSuggest` reports a non-finite track as excluded instead of refusing the call. `validate=` is removed from the Python functions too; every call scans its sample buffers and refuses a NaN or infinity with `SonareValueError` naming the function, the argument and the index, and `validate=` raises `TypeError`."
 [[rule.example]]
 surface = "wasm"
 before = '''
@@ -248,6 +248,14 @@ const result = hpss({ samples, sampleRate: 44100, validate: false });
 '''
 after = '''
 const result = hpss({ samples, sampleRate: 44100 });
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+peak = libsonare.metering_peak_db(samples, 48000, validate=False)
+'''
+after = '''
+peak = libsonare.metering_peak_db(samples, 48000)
 '''
 
 [[rule]]
@@ -316,6 +324,18 @@ const result = masteringPairAnalyze(request);
 slug = "array-results"
 title = "Python arrays are numpy arrays"
 summary = "Python audio is a `float32` ndarray of shape `(n,)` or `(channels, n)` and a matrix is `(rows, cols)`; `list[float]` returns, flat row-major lists and redundant length fields are gone. Inputs accept `npt.ArrayLike` of float dtype, and an integer dtype raises `TypeError`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const frames = analyzer.readFramesU8(64);
+const nMels = frames.nMels;
+const firstFrame = frames.mel.subarray(0, nMels); // frame-major
+'''
+after = '''
+const frames = analyzer.readFramesU8(64);
+const nMels = (frames.mel?.length ?? 0) / frames.nFrames;
+const firstBand = frames.mel?.subarray(0, frames.nFrames); // band-major
+'''
 [[rule.example]]
 surface = "python"
 before = '''
@@ -445,6 +465,15 @@ slug = "librosa-defaults"
 title = "librosa-mirror functions default to librosa's values"
 summary = "Functions that mirror a librosa function take librosa's defaults; `chirp` now defaults to `linear=False`. Pass the old value explicitly to keep 1.x output. Parameters also take librosa's names: `tone(phase=)` is `tone(phi=)` and `clicks(frequency=)` is `clicks(click_freq=)`."
 [[rule.example]]
+surface = "wasm"
+before = '''
+chirp({ fmin: 440, fmax: 880, sampleRate: 22050, duration: 1 }); // linear sweep
+'''
+after = '''
+chirp({ fminHz: 440, fmaxHz: 880, sampleRate: 22050, durationSec: 1 }); // exponential sweep
+chirp({ fminHz: 440, fmaxHz: 880, sampleRate: 22050, durationSec: 1, linear: true }); // 1.x sweep
+'''
+[[rule.example]]
 surface = "python"
 before = '''
 y = chirp(fmin=440.0, fmax=880.0)  # linear sweep
@@ -538,6 +567,14 @@ const program = gmProgramForName('Violin'); // RangeError when unknown
 slug = "options-struct"
 title = "C extends an operation through an Options struct"
 summary = "Each C operation has one entry point with an optional `Sonare<Op>Options` struct whose first field is `struct_size`, initialised by `sonare_<op>_options_init`; `NULL` selects the defaults. The `_ex`, `_ex2`, `_v2`, `_checked`, `_with_options` and `_with_progress` variants are removed."
+[[rule.example]]
+surface = "wasm"
+before = '''
+masteringAssistantSuggest({ samples, sampleRate: 44100, params: { targetLufs: -14 } });
+'''
+after = '''
+masteringAssistantSuggest({ samples, sampleRate: 44100, targetLufs: -14 });
+'''
 [[rule.example]]
 surface = "c"
 before = '''
@@ -934,6 +971,14 @@ slug = "one-input-form"
 title = "Each list input takes one item form"
 summary = "An input item that has a public record class is passed as that record, and a mapping in its place raises TypeError (the repair stages, EngineClip, EngineMidiEvent, EngineMarker already work this way); an item with no record class is a snake_case mapping. Each list-of-items input takes exactly one of those two forms: no tuple form and no descriptor mapping beside it."
 [[rule.example]]
+surface = "wasm"
+before = '''
+renderer.setConfig(JSON.stringify(config));
+'''
+after = '''
+renderer.setConfig(config); // a JSON string is a TypeError
+'''
+[[rule.example]]
 surface = "python"
 before = '''
 engine.set_markers([{"id": 1, "ppq": 0.0, "name": "intro"}])
@@ -1003,6 +1048,18 @@ const latency = engine.graphLatencySamples;
 slug = "vocal-edit-model"
 title = "Vocal editing has one model on Python and JavaScript"
 summary = "Operation and field names agree across surfaces, so `VocalSplitOperation(note_id, source_sample)` in Python is `{ kind: 'split', noteId, sourceSample }` in TypeScript. The worker session has the same shape as the main-thread session (`beginEdit()` returns the draft) and `draft.apply({ operations, expectedGeneration? })` is the one apply call."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const token = await session.beginEdit().result;
+await session.apply({ operations, expectedGeneration: token.generation }).result;
+await session.commit().result;
+'''
+after = '''
+const draft = await session.beginEdit();
+await draft.apply({ operations });
+await draft.commit();
+'''
 [[rule.example]]
 surface = "python"
 before = '''
@@ -1089,7 +1146,7 @@ const send = { destinationBusId: 'reverb', timing: 'preFader' };
 [[rule]]
 slug = "python-public-names"
 title = "Every public Python type imports from libsonare"
-summary = "Types that appear in public signatures (`BoundaryResult`, `Beat`, `MasteringPreset`, `ProgressCallback`, `StripRef`) can be imported from `libsonare` at run time, not only seen in the stubs. Public signatures show literal defaults rather than private constants, and `validate` is available on every function that takes samples."
+summary = "Types that appear in public signatures (`BoundaryResult`, `Beat`, `MasteringPreset`, `ProgressCallback`, `StripRef`) can be imported from `libsonare` at run time, not only seen in the stubs. Public signatures show literal defaults rather than private constants."
 [[rule.example]]
 surface = "python"
 before = '''
