@@ -272,7 +272,8 @@ int RealtimeVoiceChanger::allocate_transform(ChannelState& state) {
 void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel_index,
                                                 const RealtimeVoiceChangerConfig& config) {
   // Sub-component coefficient updates (no buffer resizing); the retune grain only moves at
-  // the stage's next prepare().
+  // the stage's next prepare(). Only a config set_config() validated arrives here, so the retune
+  // check cannot throw on the audio thread and builds no string.
   state.retune.set_config(config.retune);
   if (prepared_engine_ == PitchEngine::Psola) {
     // The grain resampling carries the formant factor, so the colour stage keeps only its tones.

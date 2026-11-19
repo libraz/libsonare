@@ -8,6 +8,31 @@
       { "id": "negative_mels", "n_mels": -1, "cause": "argument", "message": "n_mels must be >= 1" }
     ]
   },
+  "streaming_retune_config": {
+    "accepted": [
+      { "id": "neutral", "semitones": 0, "mix": 1, "grain_size": 0 },
+      { "id": "semitones_low", "semitones": -24, "mix": 1, "grain_size": 0 },
+      { "id": "semitones_high", "semitones": 24, "mix": 1, "grain_size": 0 },
+      { "id": "mix_zero", "semitones": 0, "mix": 0, "grain_size": 0 },
+      { "id": "grain_min", "semitones": 0, "mix": 1, "grain_size": 4 },
+      { "id": "grain_mid", "semitones": 0, "mix": 1, "grain_size": 2232 },
+      { "id": "grain_max", "semitones": 0, "mix": 1, "grain_size": 8192 }
+    ],
+    "refused": [
+      { "id": "semitones_above", "field": "semitones", "semitones": 24.5, "mix": 1, "grain_size": 0, "cause": "argument", "predicate": "must be finite and in [-24, 24]" },
+      { "id": "semitones_below", "field": "semitones", "semitones": -25, "mix": 1, "grain_size": 0, "cause": "argument", "predicate": "must be finite and in [-24, 24]" },
+      { "id": "semitones_nan", "field": "semitones", "semitones": "nan", "mix": 1, "grain_size": 0, "cause": "argument", "predicate": "must be finite and in [-24, 24]" },
+      { "id": "semitones_inf", "field": "semitones", "semitones": "inf", "mix": 1, "grain_size": 0, "cause": "argument", "predicate": "must be finite and in [-24, 24]" },
+      { "id": "mix_below", "field": "mix", "semitones": 0, "mix": -0.01, "grain_size": 0, "cause": "argument", "predicate": "must be finite and in [0, 1]" },
+      { "id": "mix_above", "field": "mix", "semitones": 0, "mix": 1.5, "grain_size": 0, "cause": "argument", "predicate": "must be finite and in [0, 1]" },
+      { "id": "mix_nan", "field": "mix", "semitones": 0, "mix": "nan", "grain_size": 0, "cause": "argument", "predicate": "must be finite and in [0, 1]" },
+      { "id": "grain_one", "field": "grain_size", "semitones": 0, "mix": 1, "grain_size": 1, "cause": "argument", "predicate": "must be a multiple of 4 in [4, 8192]" },
+      { "id": "grain_three", "field": "grain_size", "semitones": 0, "mix": 1, "grain_size": 3, "cause": "argument", "predicate": "must be a multiple of 4 in [4, 8192]" },
+      { "id": "grain_not_multiple", "field": "grain_size", "semitones": 0, "mix": 1, "grain_size": 2230, "cause": "argument", "predicate": "must be a multiple of 4 in [4, 8192]" },
+      { "id": "grain_above", "field": "grain_size", "semitones": 0, "mix": 1, "grain_size": 8196, "cause": "argument", "predicate": "must be a multiple of 4 in [4, 8192]" },
+      { "id": "grain_negative", "field": "grain_size", "semitones": 0, "mix": 1, "grain_size": -4, "cause": "argument", "predicate": "must be a multiple of 4 in [4, 8192]" }
+    ]
+  },
   "streaming_retune_prepare": {
     "accepted": [
       { "id": "min_rate", "sample_rate": 8000, "max_block_size": 512 },

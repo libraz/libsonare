@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <utility>
 
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/realtime/config_ranges.h"
@@ -10,8 +11,8 @@
 namespace sonare::editing::voice_changer {
 namespace detail {
 
-/// Forces @p input into range (non-finite fields take their default); only preset construction and
-/// the tolerant JSON entry point may clamp.
+/// Forces @p input into range (non-finite fields take their default); only preset construction may
+/// clamp, since a preset's values are the library's own and never the caller's.
 RealtimeVoiceChangerConfig normalize_config(const RealtimeVoiceChangerConfig& input) {
   RealtimeVoiceChangerConfig c = input;
   visit_scalar_fields(c, [](const char*, float& v, const Range& r, float fallback) {
@@ -66,13 +67,14 @@ bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& co
       *error = text;
     }
   });
-  if (ok && (config.retune.grain_size < 0 || config.retune.grain_size > kMaxRetuneGrainSize)) {
-    ok = false;
-    if (error) {
-      char text[160];
-      std::snprintf(text, sizeof(text), "retune.grainSizeSamples out of range [0, %d], got %d",
-                    kMaxRetuneGrainSize, config.retune.grain_size);
-      *error = text;
+  if (ok) {
+    // The retune stage states its own domain; the scalars above already passed, so only the grain
+    // can be refused here.
+    std::string problem = streaming_retune_config_problem(
+        config.retune, nullptr, {"retune.pitchSemitones", "retune.mix", "retune.grainSizeSamples"});
+    if (!problem.empty()) {
+      ok = false;
+      if (error) *error = std::move(problem);
     }
   }
   visit_enum_fields(config, [&](const char* name, bool declared) {

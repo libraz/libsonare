@@ -595,9 +595,9 @@ TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
   // set_config() with a *different* requested grain reads back at once, but the grain in use
   // is structural and only re-resolves at the next prepare().
   RealtimeVoiceChangerConfig cfg2 = cfg;
-  cfg2.retune.grain_size = 777;
+  cfg2.retune.grain_size = 776;
   changer.set_config(cfg2);
-  REQUIRE(changer.config().retune.grain_size == 777);
+  REQUIRE(changer.config().retune.grain_size == 776);
   REQUIRE(changer.retune_grain_size() == effective);
 
   // An explicit grain honored at prepare() is reported verbatim (500 is already

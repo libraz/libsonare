@@ -1,6 +1,8 @@
 /// @file voice_changer_realtime_core_test.cpp
 /// @brief Realtime voice changer core behavior tests.
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 #include "editing/voice_changer/voice_changer_insert.h"
 #include "voice_changer_test_helpers.h"
 
@@ -36,19 +38,32 @@ TEST_CASE("RealtimeVoiceChanger processes realtime block sizes and resets determ
   REQUIRE(changer.latency_samples() > 0);
 }
 
-TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[voice_changer]") {
+TEST_CASE("RealtimeVoiceChanger preset JSON ignores unknown keys and refuses out-of-domain values",
+          "[voice_changer]") {
   const auto config = realtime_voice_changer_config_from_json(
       "{\"schemaVersion\":4,\"id\":\"x\",\"unknown\":true,\"dsp\":{\"retune\":{\"pitchSemitones\":"
-      "99},"
-      "\"formant\":{\"factor\":9},\"limiter\":{\"ceilingDb\":3},\"reverb\":{\"mix\":2}}}");
+      "7}}}");
+  REQUIRE(config.retune.semitones == 7.0f);
 
-  REQUIRE(config.retune.semitones == 24.0f);
-  REQUIRE(config.formant.factor == 1.65f);
-  // True-peak headroom: ceiling clamps to -1.0 dBFS, not -0.3 dBFS, to give
-  // the sample-domain limiter ~1 dB of inter-sample headroom. See
-  // validate_dsp_section / normalize for rationale.
-  REQUIRE(config.limiter.ceiling_db == -1.0f);
-  REQUIRE(config.reverb.mix == 0.45f);
+  // A value outside its domain is refused by name, never moved onto the nearest bound.
+  const std::pair<const char*, const char*> refused[] = {
+      {"\"retune\":{\"pitchSemitones\":99}", "retune.pitchSemitones"},
+      {"\"formant\":{\"factor\":9}", "formant.factor"},
+      {"\"limiter\":{\"ceilingDb\":3}", "limiter.ceilingDb"},
+      {"\"reverb\":{\"mix\":2}", "reverb.mix"},
+  };
+  for (const auto& [section, name] : refused) {
+    CAPTURE(section);
+    const std::string document =
+        std::string("{\"schemaVersion\":4,\"id\":\"x\",\"dsp\":{") + section + "}}";
+    try {
+      (void)realtime_voice_changer_config_from_json(document);
+      FAIL("expected a refusal naming " << name);
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK_THAT(std::string(e.what()), Catch::Matchers::ContainsSubstring(name));
+    }
+  }
 
   const std::string json = realtime_voice_changer_config_to_json(config);
   const auto roundtrip = realtime_voice_changer_config_from_json("\n  " + json + "\n");
@@ -516,7 +531,8 @@ TEST_CASE("validate_realtime_voice_changer_config refuses finite out-of-range va
   config = {};
   config.retune.grain_size = 100000;
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  REQUIRE(error.find("retune.grainSizeSamples out of range") != std::string::npos);
+  REQUIRE(error.find("retune.grainSizeSamples must be a multiple of 4 in [4, 8192]") !=
+          std::string::npos);
 
   config = {};
   config.formant_mode = static_cast<FormantMode>(7);

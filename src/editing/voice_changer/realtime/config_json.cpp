@@ -480,6 +480,16 @@ bool validate_optional_section(const sonare::util::json::Value& parent, const ch
   return section == nullptr || validate_range_section(*section, path, fields, error);
 }
 
+bool grain_in_domain(double n) {
+  return n >= kGrainSize.lo && n <= kGrainSize.hi && std::floor(n) == n &&
+         static_cast<int>(n) % kRetuneGrainStep == 0;
+}
+
+std::string grain_domain_text() {
+  return " must be a multiple of " + std::to_string(kRetuneGrainStep) + " in [" +
+         std::to_string(kRetuneGrainStep) + ", " + std::to_string(kMaxRetuneGrainSize) + "]";
+}
+
 // An absent grain is the automatic one; a written 0 is refused by name rather than as out of range.
 bool require_grain(const sonare::util::json::Value& object, const char* key, const char* path,
                    std::string* error) {
@@ -488,6 +498,10 @@ bool require_grain(const sonare::util::json::Value& object, const char* key, con
     if (error) {
       *error = std::string(path) + "." + key + " must not be 0; omit it for the automatic grain";
     }
+    return false;
+  }
+  if (value->is_number() && !grain_in_domain(value->as_number())) {
+    if (error) *error = std::string(path) + "." + key + grain_domain_text();
     return false;
   }
   return require_in(object, key, kGrainSize, path, error, true);
@@ -746,7 +760,7 @@ void refuse_other_schema(const sonare::util::json::Value& root) {
   }
 }
 
-// Parses without range handling; callers decide between clamping and refusing.
+// Parses without range handling; every caller validates the result, and only presets clamp.
 RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& root) {
   RealtimeVoiceChangerConfig c;
   const auto* dsp = root.find("dsp");
@@ -987,15 +1001,24 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
 }  // namespace
 
 RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view text) {
-  return normalize_config(parse_config_json(text));
+  // A value the document wrote is the caller's: it is refused with the strict text, never clamped.
+  RealtimeVoiceChangerConfig config = parse_config_json(text);
+  std::string error;
+  if (!validate_realtime_voice_changer_config(config, nullptr, &error)) {
+    throw SonareException(ErrorCode::InvalidFormat, error);
+  }
+  return config;
 }
 
 std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConfig& config) {
-  const auto c = normalize_config(config);
+  std::string error;
+  if (!validate_realtime_voice_changer_config(config, nullptr, &error)) {
+    throw SonareException(ErrorCode::InvalidParameter, error);
+  }
   std::string out;
-  // A normalized config is also a valid, saveable custom preset with the metadata the strict
-  // preset validator requires.
-  dump_preset_envelope(out, "custom", "Custom", nullptr, "custom", c);
+  // A valid config is also a saveable custom preset with the metadata the strict preset validator
+  // requires.
+  dump_preset_envelope(out, "custom", "Custom", nullptr, "custom", config);
   return out;
 }
 
@@ -1016,10 +1039,9 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     const std::string trimmed = trim_copy(json);
     // Strict parse: a preset document with duplicate keys (e.g. two `"id"`
     // entries) is a user-config bug — fail fast rather than silently keeping
-    // the last value. The lenient `realtime_voice_changer_config_from_json`
-    // path below keeps using `admit` (not `admit_strict`) because it doubles
-    // as the realtime C-API entry point and must stay maximally tolerant of
-    // duplicate keys; both still run under the same resource budget.
+    // the last value. `realtime_voice_changer_config_from_json` keeps `admit`, so it still
+    // accepts duplicate and unknown keys, though it refuses an out-of-domain value like this
+    // reader; both run under the same resource budget.
     auto root = sonare::util::json::admit_strict(trimmed);
     if (!has_allowed_keys(
             root, {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"}, "$",
@@ -1083,7 +1105,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     if (dsp != nullptr && !validate_dsp_section(*dsp, error)) return false;
     RealtimeVoiceChangerConfig macro_config;
     if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
-    const auto config = normalize_config(parse_config_value(root));
+    const auto config = parse_config_value(root);
     // What only the whole configuration can say; the same rule create and set_config apply.
     if (!validate_realtime_voice_changer_config(config, nullptr, error)) return false;
     if (normalized_json) {
@@ -1247,6 +1269,10 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           if (_value.as_number() == 0.0) {
             if (error)
               *error = "$.retuneGrainSizeSamples must not be 0; omit it for the automatic grain";
+            return false;
+          }
+          if (!grain_in_domain(_value.as_number())) {
+            if (error) *error = "$.retuneGrainSizeSamples" + grain_domain_text();
             return false;
           }
           allowed = true;

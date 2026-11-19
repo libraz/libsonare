@@ -1189,7 +1189,7 @@ TEST_CASE("The POD config refuses an out-of-range field and keeps the previous c
 TEST_CASE("sonare_streaming_retune config grain reads back as configured",
           "[voice_changer][capi]") {
   SonareStreamingRetune* retune = nullptr;
-  REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 513, &retune) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 516, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
   REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
 
@@ -1204,10 +1204,10 @@ TEST_CASE("sonare_streaming_retune config grain reads back as configured",
     REQUIRE(grain == in_use);
     REQUIRE(latency == grain);
   };
-  check(513, 516);
-  REQUIRE(sonare_streaming_retune_set_config(retune, 0.0f, 1.0f, 513) == SONARE_OK);
+  check(516, 516);
+  REQUIRE(sonare_streaming_retune_set_config(retune, 0.0f, 1.0f, 516) == SONARE_OK);
   REQUIRE(sonare_streaming_retune_prepare(retune, 96000.0, 256) == SONARE_OK);
-  check(513, 516);
+  check(516, 516);
   sonare_streaming_retune_destroy(retune);
 
   // Automatic: config keeps 0 while the grain in use tracks the rate.

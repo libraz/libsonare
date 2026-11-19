@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 
 #include "streaming/realtime_limits.h"
@@ -19,34 +20,65 @@ using sonare::constants::kTwoPi;
 
 namespace {
 constexpr double kDefaultGrainSeconds = 2048.0 / 44100.0;
-constexpr float kMaxSemitones = 24.0f;  // Clamp shift range to +/- 2 octaves.
 // Source delay the coherent read may drift through before it is re-anchored: the
 // longest a transient can be re-read late, against how often a jump is audible.
 constexpr int kWrapRoomGrains = 2;
 // Jumps correlated side by side in the alignment search.
 constexpr int kSearchLanes = 8;
 
-StreamingRetuneConfig sanitize_config(StreamingRetuneConfig config) noexcept {
-  config.semitones = std::isfinite(config.semitones)
-                         ? std::clamp(config.semitones, -kMaxSemitones, kMaxSemitones)
-                         : 0.0f;
-  config.mix = std::isfinite(config.mix) ? std::clamp(config.mix, 0.0f, 1.0f) : 1.0f;
-  config.grain_size = std::clamp(config.grain_size, 0, kMaxRetuneGrainSize);
-  return config;
+constexpr StreamingRetuneFieldNames kClassFieldNames{"semitones", "mix", "grain_size"};
+
+std::string refusal(const char* fn, const char* name, const std::string& predicate) {
+  std::string message = fn != nullptr ? std::string(fn) + ": " : std::string();
+  return message + name + " " + predicate;
 }
 
+std::string bound_text(double lo, double hi) {
+  char text[64];
+  std::snprintf(text, sizeof(text), "must be finite and in [%g, %g]", lo, hi);
+  return text;
+}
+
+// A requested grain is validated, so only the automatic grain is derived and rounded here.
 int resolve_grain_size(int requested, double sample_rate) noexcept {
-  const int derived =
-      requested > 0 ? requested : static_cast<int>(std::lround(sample_rate * kDefaultGrainSeconds));
-  const int grain = std::clamp(derived, 4, kMaxRetuneGrainSize);
-  return grain + ((4 - grain % 4) % 4);
+  if (requested > 0) return requested;
+  const int derived = static_cast<int>(std::lround(sample_rate * kDefaultGrainSeconds));
+  const int grain = std::clamp(derived, kRetuneGrainStep, kMaxRetuneGrainSize);
+  return grain + ((kRetuneGrainStep - grain % kRetuneGrainStep) % kRetuneGrainStep);
+}
+
+void refuse_if_invalid(const StreamingRetuneConfig& config) {
+  const std::string problem =
+      streaming_retune_config_problem(config, "StreamingRetune", kClassFieldNames);
+  if (!problem.empty()) throw SonareException(ErrorCode::InvalidParameter, problem);
 }
 }  // namespace
+
+std::string streaming_retune_config_problem(const StreamingRetuneConfig& config, const char* fn,
+                                            const StreamingRetuneFieldNames& names) {
+  if (!(std::isfinite(config.semitones) && config.semitones >= -kMaxRetuneSemitones &&
+        config.semitones <= kMaxRetuneSemitones)) {
+    return refusal(fn, names.semitones, bound_text(-kMaxRetuneSemitones, kMaxRetuneSemitones));
+  }
+  if (!(std::isfinite(config.mix) && config.mix >= 0.0f && config.mix <= 1.0f)) {
+    return refusal(fn, names.mix, bound_text(0.0, 1.0));
+  }
+  if (config.grain_size != 0 &&
+      (config.grain_size < kRetuneGrainStep || config.grain_size > kMaxRetuneGrainSize ||
+       config.grain_size % kRetuneGrainStep != 0)) {
+    return refusal(fn, names.grain_size,
+                   "must be a multiple of " + std::to_string(kRetuneGrainStep) + " in [" +
+                       std::to_string(kRetuneGrainStep) + ", " +
+                       std::to_string(kMaxRetuneGrainSize) + "]");
+  }
+  return {};
+}
 
 StreamingRetune::StreamingRetune(StreamingRetuneConfig config) { set_config(config); }
 
 void StreamingRetune::update_ratio() noexcept {
-  const float semis = std::clamp(semitones_smoother_.current(), -kMaxSemitones, kMaxSemitones);
+  const float semis =
+      std::clamp(semitones_smoother_.current(), -kMaxRetuneSemitones, kMaxRetuneSemitones);
   pitch_ratio_ = std::pow(2.0, static_cast<double>(semis) / kSemitonesPerOctave);
 }
 
@@ -71,8 +103,8 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   wrap_room_ = kWrapRoomGrains * grain_size_;
   // The ring holds the widest grain source span, the whole wrap room behind it, and the
   // hop of source the alignment search reads ahead of the previous grain's anchor.
-  const int max_span = static_cast<int>(
-      std::ceil(static_cast<double>(grain_size_) * std::exp2(kMaxSemitones / kSemitonesPerOctave)));
+  const int max_span = static_cast<int>(std::ceil(
+      static_cast<double>(grain_size_) * std::exp2(kMaxRetuneSemitones / kSemitonesPerOctave)));
   ring_cap_ = static_cast<std::size_t>(max_span + wrap_room_ + 2 * hop_a_);
   accum_cap_ = static_cast<std::size_t>(2 * grain_size_);
   // The search spans one hop of reference plus at most hop + 1 jumps, padded to whole lane blocks.
@@ -126,7 +158,8 @@ void StreamingRetune::reset() {
 void StreamingRetune::set_config(const StreamingRetuneConfig& config) {
   // config() keeps the grain as configured (0 = derive). The grain is structural: resizing
   // here would reallocate on the audio thread, so a new size takes effect at the next prepare().
-  config_ = sanitize_config(config);
+  refuse_if_invalid(config);
+  config_ = config;
   semitones_smoother_.set_target(config_.semitones);
   mix_smoother_.set_target(config_.mix);
   // Before prepare() no audio thread is consuming the values, so preserve the

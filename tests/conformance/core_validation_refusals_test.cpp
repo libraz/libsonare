@@ -497,6 +497,86 @@ TEST_CASE("equalizer prepare refusals are owned by the core function",
 #endif  // defined(SONARE_WITH_MASTERING)
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
+namespace {
+
+float corpus_float(const Value& value) {
+  if (value.is_string()) {
+    return value.as_string() == "nan" ? std::numeric_limits<float>::quiet_NaN()
+                                      : std::numeric_limits<float>::infinity();
+  }
+  return static_cast<float>(value.as_number());
+}
+
+sonare::editing::voice_changer::StreamingRetuneConfig retune_config(const Value& item) {
+  sonare::editing::voice_changer::StreamingRetuneConfig config;
+  config.semitones = corpus_float(item["semitones"]);
+  config.mix = corpus_float(item["mix"]);
+  config.grain_size = static_cast<int>(item["grain_size"].as_number());
+  return config;
+}
+
+}  // namespace
+
+TEST_CASE("streaming retune config refusals are owned by the core and named by each C entry",
+          "[conformance][core_validation]") {
+  using sonare::editing::voice_changer::StreamingRetune;
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["streaming_retune_config"];
+
+  for (const auto& item : route["accepted"].as_array()) {
+    INFO(item["id"].as_string());
+    const auto config = retune_config(item);
+    StreamingRetune core(config);
+    // An accepted request is kept as written, never moved onto a nearby value.
+    CHECK(core.config().semitones == config.semitones);
+    CHECK(core.config().mix == config.mix);
+    CHECK(core.config().grain_size == config.grain_size);
+    CHECK_NOTHROW(core.set_config(config));
+    SonareStreamingRetune* handle = nullptr;
+    REQUIRE(sonare_streaming_retune_create(config.semitones, config.mix, config.grain_size,
+                                           &handle) == SONARE_OK);
+    CHECK(sonare_streaming_retune_set_config(handle, config.semitones, config.mix,
+                                             config.grain_size) == SONARE_OK);
+    if (config.grain_size != 0) {
+      REQUIRE(sonare_streaming_retune_prepare(handle, 48000.0, 512) == SONARE_OK);
+      int latency = 0;
+      REQUIRE(sonare_streaming_retune_latency_samples(handle, &latency) == SONARE_OK);
+      CHECK(latency == config.grain_size);
+    }
+    sonare_streaming_retune_destroy(handle);
+  }
+
+  for (const auto& item : route["refused"].as_array()) {
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+    const auto config = retune_config(item);
+    const std::string field = item["field"].as_string();
+    const std::string predicate = item["predicate"].as_string();
+    const std::string c_name = field == "semitones"    ? "pitch_semitones"
+                               : field == "grain_size" ? "grain_size_samples"
+                                                       : field;
+
+    require_argument_refusal([&] { StreamingRetune core(config); },
+                             "StreamingRetune: " + field + " " + predicate);
+    StreamingRetune live;
+    require_argument_refusal([&] { live.set_config(config); },
+                             "StreamingRetune: " + field + " " + predicate);
+    CHECK(live.config().semitones == 0.0f);
+
+    SonareStreamingRetune* handle = nullptr;
+    CHECK(sonare_streaming_retune_create(config.semitones, config.mix, config.grain_size,
+                                         &handle) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(handle == nullptr);
+    CHECK(last_error_message() == "streaming_retune_create: " + c_name + " " + predicate);
+
+    REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &handle) == SONARE_OK);
+    CHECK(sonare_streaming_retune_set_config(handle, config.semitones, config.mix,
+                                             config.grain_size) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error_message() == "streaming_retune_set_config: " + c_name + " " + predicate);
+    sonare_streaming_retune_destroy(handle);
+  }
+}
+
 TEST_CASE("streaming retune prepare refusals are owned by the core function",
           "[conformance][core_validation]") {
   const Value corpus = load_refusal_corpus();

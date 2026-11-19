@@ -633,8 +633,11 @@ constexpr long long kIntegerChoiceScanWidth = 64;
 // The accepted integers of @p key when they are a closed set with holes. An
 // interval is left to the bounds; a set with holes still open at the top of the
 // scan keeps its minimum only, since bisecting it for a maximum lands in a hole.
+// @p stride receives the spacing of such an open set when it is every scanned
+// integer one stride apart from the minimum, and 0 otherwise.
 bool measure_integer_choices(const std::string& name, const std::string& key, double min,
-                             std::vector<detail::EnumChoice>* out, bool* open_with_holes) {
+                             std::vector<detail::EnumChoice>* out, bool* open_with_holes,
+                             long long* stride) {
   const long long first = std::llround(min);
   std::vector<long long> accepted;
   bool top_accepted = false;
@@ -648,12 +651,44 @@ bool measure_integer_choices(const std::string& name, const std::string& key, do
   if (contiguous) return false;
   if (top_accepted) {
     *open_with_holes = true;
+    *stride = accepted.size() > 1 ? accepted[1] - accepted[0] : 0;
+    for (size_t index = 1; index < accepted.size() && *stride > 0; ++index) {
+      if (accepted[index] - accepted[index - 1] != *stride) *stride = 0;
+    }
     return false;
   }
   out->clear();
   for (const long long value : accepted) {
     out->push_back(detail::EnumChoice{std::to_string(value), static_cast<int>(value)});
   }
+  return true;
+}
+
+// The ceiling of an open integer set one @p stride apart from @p base (a grain taking 0 and
+// the multiples of 4), bisected over the stride so no probe lands in a hole. False when the
+// set is still accepted at the probe limit.
+bool measure_strided_ceiling(const std::string& name, const std::string& key, long long base,
+                             long long stride, double* out) {
+  const auto accepts = [&](long long step) {
+    return insert_accepts(name, key, static_cast<double>(base + step * stride));
+  };
+  const long long limit = static_cast<long long>(kBoundProbeLimit) / stride;
+  long long accepted = kIntegerChoiceScanWidth / stride;
+  long long rejected = accepted;
+  while (accepts(rejected)) {
+    accepted = rejected;
+    if (rejected >= limit) return false;
+    rejected = std::min(limit, rejected * 2);
+  }
+  while (rejected - accepted > 1) {
+    const long long middle = accepted + (rejected - accepted) / 2;
+    if (accepts(middle)) {
+      accepted = middle;
+    } else {
+      rejected = middle;
+    }
+  }
+  *out = static_cast<double>(base + accepted * stride);
   return true;
 }
 
@@ -746,7 +781,7 @@ const char* catalog_type(ParamKind kind, bool is_enum) {
 // A bound that is the sibling's default scaled by the declared factor is that dependency read at
 // the sibling's default, not a limit of the key's own; dependsOn carries it live, so it is not
 // published.
-void drop_dependency_bounds(const ParamMap& params, const std::string& key,
+void drop_dependency_bounds(const ParamMap& params, const std::string& key, long long stride,
                             MeasuredBounds* bounds) {
   const auto depends = params.probed_depends().find(key);
   if (depends == params.probed_depends().end()) return;
@@ -757,11 +792,14 @@ void drop_dependency_bounds(const ParamMap& params, const std::string& key,
     const double at_default = dependency.factor * sibling->second.value;
     const bool upper =
         dependency.relation == detail::Relation::Le || dependency.relation == detail::Relation::Lt;
-    if (upper && bounds->has_max && std::fabs(bounds->max - at_default) <= kRestatesTolerance) {
+    // A strided key stops at the last stride inside the sibling's limit, which restates it too.
+    const double reach = static_cast<double>(std::max(stride - 1, 0LL)) + kRestatesTolerance;
+    if (upper && bounds->has_max && bounds->max - at_default <= kRestatesTolerance &&
+        at_default - bounds->max <= reach) {
       bounds->has_max = false;
       bounds->max_exclusive = false;
-    } else if (!upper && bounds->has_min &&
-               std::fabs(bounds->min - at_default) <= kRestatesTolerance) {
+    } else if (!upper && bounds->has_min && at_default - bounds->min <= kRestatesTolerance &&
+               bounds->min - at_default <= reach) {
       bounds->has_min = false;
       bounds->min_exclusive = false;
     }
@@ -822,12 +860,16 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
       has_choices = true;
     } else {
       bounds = measure_bounds(name, key, param_kind == ParamKind::Integer);
+      long long stride = 0;
       if (param_kind == ParamKind::Integer && bounds.has_min) {
         bool open_with_holes = false;
-        has_choices = measure_integer_choices(name, key, bounds.min, &choices, &open_with_holes);
+        has_choices =
+            measure_integer_choices(name, key, bounds.min, &choices, &open_with_holes, &stride);
         if (open_with_holes) {
-          bounds.has_max = false;
           bounds.max_exclusive = false;
+          bounds.has_max =
+              stride > 0 &&
+              measure_strided_ceiling(name, key, std::llround(bounds.min), stride, &bounds.max);
         }
       }
       const auto fallback = defaults.find(key);
@@ -837,7 +879,7 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
             measure_power_of_two_choices(name, key, fallback->second.value,
                                          lower_bounding_siblings_at_one(params, key), &choices);
       }
-      if (!has_choices) drop_dependency_bounds(params, key, &bounds);
+      if (!has_choices) drop_dependency_bounds(params, key, stride, &bounds);
       if (unit_is_hz) bounds.max_follows_nyquist = max_follows_nyquist(name, key, bounds);
       if (bounds.max_follows_nyquist && sample_rate > 0.0) {
         measure_ceiling_at_rate(name, key, sample_rate, &bounds);

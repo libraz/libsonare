@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "editing/voice_changer/control_cadence.h"
@@ -16,13 +17,33 @@ namespace sonare::editing::voice_changer {
 
 /// Largest grain, in samples, a retune accepts or an automatic grain resolves to.
 constexpr int kMaxRetuneGrainSize = 8192;
+/// A grain is a whole multiple of this, so the analysis hop (a quarter grain) is exact.
+constexpr int kRetuneGrainStep = 4;
+/// Largest pitch shift, in semitones either way, a retune accepts.
+constexpr float kMaxRetuneSemitones = 24.0f;
 
 struct StreamingRetuneConfig {
-  float semitones = 0.0f;
-  float mix = 1.0f;
-  int grain_size = 0;  ///< 0 = derive ~46 ms grain from sample rate in prepare(), capped at
-                       ///< @ref kMaxRetuneGrainSize. Structural: only applied by prepare().
+  float semitones = 0.0f;  ///< Finite, in [-24, 24].
+  float mix = 1.0f;        ///< Finite, in [0, 1].
+  int grain_size = 0;      ///< 0 = derive ~46 ms grain from sample rate in prepare(); otherwise a
+                           ///< multiple of 4 in [4, @ref kMaxRetuneGrainSize]. Structural: only
+                           ///< applied by prepare().
 };
+
+/// @brief The caller's spellings of the three fields, quoted by a refusal.
+struct StreamingRetuneFieldNames {
+  const char* semitones;
+  const char* mix;
+  const char* grain_size;
+};
+
+/// @brief Why @p config is refused, or an empty string when it is accepted.
+/// @details The one statement of the retune domain: semitones finite in [-24, 24], mix finite in
+///          [0, 1], grain_size 0 (automatic) or a multiple of 4 in [4, 8192]. A refusal reads
+///          "<fn>: <name> <predicate>"; a null @p fn leaves the subject out. An accepted config
+///          builds no string, so the check is cheap enough for the audio thread.
+std::string streaming_retune_config_problem(const StreamingRetuneConfig& config, const char* fn,
+                                            const StreamingRetuneFieldNames& names);
 
 /// @brief Low-latency streaming pitch shifter with cross-block continuity.
 /// @details Uses fixed-size Hann-windowed grains, overlap-added at the analysis
@@ -48,10 +69,13 @@ struct StreamingRetuneConfig {
 ///          Allocation happens only in prepare().
 class StreamingRetune {
  public:
+  /// @throws SonareException(InvalidParameter) when @p config is outside the retune domain.
   explicit StreamingRetune(StreamingRetuneConfig config = {});
 
   void prepare(double sample_rate, int max_block_size);
   void reset();
+  /// @throws SonareException(InvalidParameter) when @p config is outside the retune domain; an
+  ///         accepted config never throws and never allocates.
   void set_config(const StreamingRetuneConfig& config);
   /// @brief The record as configured; an automatic grain reads back as 0, and
   ///        set_config(config()) leaves behaviour unchanged. The size in use is @ref grain_size().

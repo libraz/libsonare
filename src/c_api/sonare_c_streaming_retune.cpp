@@ -2,8 +2,8 @@
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
 #include <algorithm>
-#include <cmath>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "editing/voice_changer/streaming_retune.h"
@@ -39,13 +39,14 @@ namespace {
 #if defined(SONARE_WITH_VOICE_CHANGER)
 using sonare_c_detail::set_last_error;
 
-// The two live controls are clamped by the core to its documented ranges, but a
-// NON-FINITE value is a caller error rather than a request to clamp: the core
-// substitutes a default for it, which would let a NaN arrive here and leave as
-// a silent 0 semitones. Reject it at this boundary instead, the way every other
-// scalar C entry point does.
-bool finite_controls(float pitch_semitones, float mix) noexcept {
-  return std::isfinite(pitch_semitones) && std::isfinite(mix);
+// Refuses a config outside the retune domain with the entry's own argument names; 0 grain is the
+// C spelling of the automatic grain.
+bool config_accepted(const char* fn, const StreamingRetuneConfig& config) {
+  const std::string problem = sonare::editing::voice_changer::streaming_retune_config_problem(
+      config, fn, {"pitch_semitones", "mix", "grain_size_samples"});
+  if (problem.empty()) return true;
+  set_last_error(SONARE_ERROR_INVALID_PARAMETER, problem.c_str());
+  return false;
 }
 
 #endif
@@ -56,19 +57,18 @@ extern "C" {
 SonareError sonare_streaming_retune_create(float pitch_semitones, float mix, int grain_size_samples,
                                            SonareStreamingRetune** out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-#if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!finite_controls(pitch_semitones, mix)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "streaming retune: pitch_semitones and mix must be finite");
+  if (!out) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "streaming_retune_create: out must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
+  *out = nullptr;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   StreamingRetuneConfig config;
   config.semitones = pitch_semitones;
   config.mix = mix;
   config.grain_size = grain_size_samples;
+  if (!config_accepted("streaming_retune_create", config)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
   auto handle = std::make_unique<SonareStreamingRetune>();
   handle->retune = std::make_unique<StreamingRetune>(config);
   *out = handle.release();
@@ -131,13 +131,19 @@ SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, fl
                                                float mix, int grain_size_samples) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!finite_controls(pitch_semitones, mix)) return SONARE_ERROR_INVALID_PARAMETER;
-  SONARE_C_TRY
+  if (!retune || !retune->retune) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "streaming_retune_set_config: retune must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   StreamingRetuneConfig config;
   config.semitones = pitch_semitones;
   config.mix = mix;
   config.grain_size = grain_size_samples;
+  if (!config_accepted("streaming_retune_set_config", config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
   retune->retune->set_config(config);
   return SONARE_OK;
   SONARE_C_CATCH

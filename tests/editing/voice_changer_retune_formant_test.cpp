@@ -744,16 +744,17 @@ TEST_CASE("StreamingRetune config reports the grain as configured in every state
   REQUIRE(automatic.grain_size() == automatic.latency_samples());
   const int at_48k = automatic.grain_size();
 
-  // An explicit request reads back as given; it runs rounded to a multiple of four.
-  StreamingRetune odd({0.0f, 1.0f, 513});
+  // An explicit request reads back and runs as given; one off the multiple-of-four grid is refused.
+  REQUIRE_THROWS_AS(StreamingRetune({0.0f, 1.0f, 513}), sonare::SonareException);
+  StreamingRetune odd({0.0f, 1.0f, 516});
   odd.prepare(48000.0, 256);
   REQUIRE(odd.grain_size() == 516);
-  REQUIRE(odd.config().grain_size == 513);
+  REQUIRE(odd.config().grain_size == 516);
   REQUIRE(odd.latency_samples() == 516);
 
   // Handing the config back changes nothing, and a re-prepare keeps the explicit grain.
   odd.set_config(odd.config());
-  REQUIRE(odd.config().grain_size == 513);
+  REQUIRE(odd.config().grain_size == 516);
   odd.prepare(96000.0, 256);
   REQUIRE(odd.grain_size() == 516);
 
@@ -788,7 +789,7 @@ TEST_CASE("StreamingRetune bounds the automatic grain to the largest accepted gr
 TEST_CASE("RealtimeVoiceChanger config JSON round-trips the configured grain and latency",
           "[voice_changer]") {
   for (const double rate : {48000.0, 96000.0, 176400.0, 192000.0}) {
-    for (const int requested : {0, 513}) {
+    for (const int requested : {0, 516}) {
       CAPTURE(rate, requested);
       RealtimeVoiceChangerConfig config;
       config.retune.grain_size = requested;

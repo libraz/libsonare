@@ -699,6 +699,9 @@ bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& co
                                             RealtimeVoiceChangerConfig* normalized,
                                             std::string* error);
 
+/// @brief Reads a preset id, a flat POD or a nested document, refusing every out-of-domain value.
+/// @throws SonareException(InvalidFormat) with the text of
+///         @ref validate_realtime_voice_changer_config for a value outside its domain.
 RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view json);
 /// Parses a configuration accepted at public realtime construction/update
 /// boundaries. Preset ids and complete flat PODs are supported for binding
@@ -707,6 +710,8 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
 bool realtime_voice_changer_config_from_input(std::string_view input,
                                               RealtimeVoiceChangerConfig* config,
                                               std::string* error);
+/// @throws SonareException(InvalidParameter) when @ref validate_realtime_voice_changer_config
+///         refuses @p config.
 std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConfig& config);
 std::string realtime_voice_changer_preset_json(VoiceCharacterPreset preset);
 bool validate_realtime_voice_changer_preset_json(std::string_view json,

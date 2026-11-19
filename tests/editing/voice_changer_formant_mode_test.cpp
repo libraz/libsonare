@@ -824,10 +824,18 @@ TEST_CASE("The formant mode round-trips through the JSON documents",
   bad.replace(bad.find("absolute"), 8, "sideways");
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(bad, &parsed, &error));
 
-  // An unreachable document is refused with the range.
+  // An unreachable config is not written, and an unreachable document is refused with the range.
   RealtimeVoiceChangerConfig unreachable = bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute);
-  REQUIRE_FALSE(realtime_voice_changer_config_from_input(
-      realtime_voice_changer_config_to_json(unreachable), &parsed, &error));
+  REQUIRE_THROWS_WITH(realtime_voice_changer_config_to_json(unreachable),
+                      Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
+  const std::string reachable =
+      realtime_voice_changer_config_to_json(bare_chain_config(0.0f, 1.0f, FormantMode::Absolute));
+  const std::string at_zero = "\"pitchSemitones\":0,";
+  const auto shift = reachable.find(at_zero);
+  REQUIRE(shift != std::string::npos);
+  std::string document = reachable;
+  document.replace(shift, at_zero.size(), "\"pitchSemitones\":-9,");
+  REQUIRE_FALSE(realtime_voice_changer_config_from_input(document, &parsed, &error));
   REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
 }
 

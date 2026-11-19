@@ -400,18 +400,15 @@ void sonare_free_stream_frames_i16(SonareStreamFramesI16* frames);
 typedef struct SonareStreamingRetune SonareStreamingRetune;
 
 /// @brief Creates a streaming retune stage. Fails with SONARE_ERROR_INVALID_PARAMETER for a
-///        non-finite @p pitch_semitones / @p mix, and with SONARE_ERROR_NOT_SUPPORTED when the
-///        library was built without the voice changer.
-/// @param pitch_semitones Pitch shift in semitones. Finite; the core clamps the
-///        applied value to +/- 24. A non-finite value is REJECTED, not
-///        substituted, so a NaN reaching the control cannot pass as a request.
-/// @param mix Dry/wet blend. Finite; the core clamps the applied value to
-///        [0, 1]. A non-finite value is REJECTED.
-/// @param grain_size_samples Grain length in samples, or 0 to derive roughly a 46 ms
-///        grain from the sample rate at prepare() time. Structural: it takes
-///        effect at the NEXT prepare(), and re-preparing at a different sample
-///        rate re-derives it when it is 0. Values above the 8192 ceiling are
-///        clamped by the core.
+///        control outside its domain, which is refused by name and never moved onto a nearby
+///        value, and with SONARE_ERROR_NOT_SUPPORTED when the library was built without the
+///        voice changer.
+/// @param pitch_semitones Pitch shift in semitones, finite and in [-24, 24].
+/// @param mix Dry/wet blend, finite and in [0, 1].
+/// @param grain_size_samples Grain length in samples, a multiple of 4 in [4, 8192], or 0 to
+///        derive roughly a 46 ms grain from the sample rate at prepare() time. Structural: it
+///        takes effect at the NEXT prepare(), and re-preparing at a different sample rate
+///        re-derives it when it is 0.
 /// @param out Receives the handle on success, NULL on failure; destroy with
 ///        @ref sonare_streaming_retune_destroy, which is what invalidates it; no other call does.
 /// @return SONARE_OK, or the error code describing the failure.
@@ -436,8 +433,8 @@ SonareError sonare_streaming_retune_reset(SonareStreamingRetune* retune);
 /// @brief Updates the live controls. @p grain_size_samples is remembered but only
 ///        applied by the next prepare() (see create); the size in use, read by
 ///        sonare_streaming_retune_grain_size_samples, stays the prepared one until then.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL handle or a non-finite
-///         @p pitch_semitones / @p mix.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL handle or a control outside the domain
+///         create states; the previous controls stay in force.
 SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, float pitch_semitones,
                                                float mix, int grain_size_samples);
 
