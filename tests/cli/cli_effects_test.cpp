@@ -591,7 +591,8 @@ TEST_CASE("CLI filter applies zero phase to fourth-order filters only when reque
 TEST_CASE("CLI filter takes hp, lp, bp or notch and refuses any other spelling", "[cli]") {
   create_test_wav(TEST_WAV);
   const std::string out = unique_temp_path("_filter_refused.wav");
-  for (const std::string& type : {"highpass", "lowpass", "bandpass"}) {
+  for (const char* spelling : {"highpass", "lowpass", "bandpass"}) {
+    const std::string type = spelling;
     CAPTURE(type);
     auto [code, output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --type " +
                                        type + " --cutoff-hz 1000 -q");
