@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <initializer_list>
 #include <iterator>
 #include <utility>
 
@@ -226,17 +227,32 @@ std::vector<std::string> repair_only_explanation(const std::vector<std::string>&
 /// rebuilt back onto the ceiling they were rescued from, undoing the stage that
 /// was asked for. One gain for the whole file keeps the reconstructed waveform
 /// intact; a per-sample fit would be the clipper again.
-float fit_repair_output_to_full_scale(std::vector<float>& samples) {
+float fit_repair_output_to_full_scale(std::initializer_list<std::vector<float>*> channels) {
   float peak = 0.0f;
-  for (const float sample : samples) {
-    // A non-finite sample would make every comparison below false and leave the
-    // peak at 0, so the scale is skipped rather than turned into a NaN gain.
-    if (std::isfinite(sample)) peak = std::max(peak, std::abs(sample));
+  for (const auto* channel : channels) {
+    for (const float sample : *channel) {
+      // A non-finite sample would make every comparison below false and leave
+      // the peak at 0, so the scale is skipped rather than turned into a NaN gain.
+      if (std::isfinite(sample)) peak = std::max(peak, std::abs(sample));
+    }
   }
   if (peak <= 1.0f) return 0.0f;
+  // One gain across the channels, so the fit leaves the stereo image alone.
   const float gain = 1.0f / peak;
-  for (float& sample : samples) sample *= gain;
+  for (auto* channel : channels) {
+    for (float& sample : *channel) sample *= gain;
+  }
   return 20.0f * std::log10(gain);
+}
+
+/// Interleaves a stereo pair for the profiler's multi-channel entry.
+std::vector<float> interleave_pair(const StereoPlanes& planes) {
+  std::vector<float> interleaved(planes.left.size() * 2);
+  for (std::size_t i = 0; i < planes.left.size(); ++i) {
+    interleaved[2 * i] = planes.left[i];
+    interleaved[2 * i + 1] = planes.right[i];
+  }
+  return interleaved;
 }
 
 }  // namespace
@@ -262,10 +278,25 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
   const std::vector<std::string> stage_list =
       has_stages ? parse_repair_stages(args.get_string("stages")) : std::vector<std::string>{};
 
-  if (detect_only) {
+  // main() probed the channel count; a two-channel input is measured and
+  // repaired as a pair, its detectors run per channel and aggregated.
+  const bool stereo_input = args.source_channels == 2;
+  StereoPlanes planes;
+  std::vector<float> interleaved;
+  if (stereo_input) {
+    planes = load_stereo_planes(args, audio);
+    interleaved = interleave_pair(planes);
+  }
+  const auto measure_defects = [&] {
     mastering::assistant::AudioProfileConfig profile_config;
     profile_config.detect_defects = true;
-    const auto profile = mastering::assistant::analyze_audio_profile(audio, profile_config);
+    if (!stereo_input) return mastering::assistant::analyze_audio_profile(audio, profile_config);
+    return mastering::assistant::analyze_audio_profile_interleaved(
+        interleaved.data(), planes.left.size(), 2, audio.sample_rate(), profile_config);
+  };
+
+  if (detect_only) {
+    const auto profile = measure_defects();
     if (args.json_output) {
       JsonBuilder json;
       json.begin_object().kv("mode", "detect");
@@ -287,9 +318,7 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
     // Exactly the listed stages at the library's defaults; the measurement
     // pass is the report's, as under a preset.
     mode = "stages";
-    mastering::assistant::AudioProfileConfig profile_config;
-    profile_config.detect_defects = true;
-    defects = mastering::assistant::analyze_audio_profile(audio, profile_config).defects;
+    defects = measure_defects().defects;
   } else if (has_preset) {
     preset_name = catalog_token(args.get_string("preset"), mastering::api::preset_names());
     source_config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
@@ -297,13 +326,15 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
     // The report covers every mode, so a named preset pays for its own
     // measurement pass even though nothing here uses the result to choose a
     // stage -- the report is half of what this command is for.
-    mastering::assistant::AudioProfileConfig profile_config;
-    profile_config.detect_defects = true;
-    defects = mastering::assistant::analyze_audio_profile(audio, profile_config).defects;
+    defects = measure_defects().defects;
   } else {
     mastering::assistant::AssistantConfig assistant_config;
     assistant_config.enable_repair = true;
-    const auto suggestion = mastering::assistant::suggest_chain(audio, assistant_config);
+    const auto suggestion =
+        stereo_input
+            ? mastering::assistant::suggest_chain_interleaved(
+                  interleaved.data(), planes.left.size(), 2, audio.sample_rate(), assistant_config)
+            : mastering::assistant::suggest_chain(audio, assistant_config);
     source_config = suggestion.config;
     explanation = repair_only_explanation(suggestion.explanation);
     defects = suggestion.profile.defects;
@@ -322,11 +353,22 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
   }
 
   mastering::api::MasteringChain chain(std::move(repair_config));
-  const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
-  std::vector<float> samples = result.samples;
-  const float applied_gain_db = fit_repair_output_to_full_scale(samples);
-  save_wav(args.output_file, samples.data(), samples.size(), result.sample_rate,
-           args.get_int("bits", 16));
+  std::vector<std::string> stages;
+  float applied_gain_db = 0.0f;
+  if (stereo_input) {
+    auto result = chain.process_stereo(planes.left.data(), planes.right.data(), planes.left.size(),
+                                       audio.sample_rate());
+    applied_gain_db = fit_repair_output_to_full_scale({&result.left, &result.right});
+    save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
+                    args.get_int("bits", 16));
+    stages = result.stages;
+  } else {
+    auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
+    applied_gain_db = fit_repair_output_to_full_scale({&result.samples});
+    save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+             args.get_int("bits", 16));
+    stages = result.stages;
+  }
 
   const bool show_explanation = args.has("explain") && !explanation.empty();
   if (args.json_output) {
@@ -334,7 +376,7 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
     json.begin_object().kv("mode", mode);
     if (!preset_name.empty()) json.kv("preset", preset_name);
     json.key("stages").begin_array();
-    for (const auto& stage : result.stages) json.value(stage);
+    for (const auto& stage : stages) json.value(stage);
     json.end_array();
     if (show_explanation) {
       json.key("explanation").begin_array();
@@ -353,7 +395,7 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
               << color::cyan << color::bold << "Repair" << color::reset << "\n"
               << "  Mode:            " << mode << "\n";
     if (!preset_name.empty()) std::cout << "  Preset:          " << preset_name << "\n";
-    std::cout << "  Stages:          " << result.stages.size() << "\n"
+    std::cout << "  Stages:          " << stages.size() << "\n"
               << "  Output:          " << args.output_file << "\n";
     if (applied_gain_db != 0.0f) {
       std::cout << "  Output gain:     " << applied_gain_db

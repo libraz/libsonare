@@ -1039,7 +1039,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "repair", true,
                 {string_value("preset"), string_value("stages"), string_value("params"),
                  bits_value(), output_value(), flag("detect"), flag("explain")},
-                {}, validate_repair_output);
+                {}, validate_repair_output, 0, /*preserves_stereo_input=*/true);
 #endif
 #ifdef SONARE_WITH_MIXING
     // `mix-strip` is the only spelling for the strip. `mix` names the Python

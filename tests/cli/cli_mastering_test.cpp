@@ -1372,6 +1372,67 @@ TEST_CASE("CLI repair --stages runs exactly the named stages", "[cli][mastering]
   }
   std::remove(input.c_str());
 }
+
+TEST_CASE("CLI repair carries a stereo input through as a stereo pair",
+          "[cli][mastering][repair]") {
+  constexpr size_t kFrames = 11025;
+  constexpr int kRate = 22050;
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  // The left channel is clean and the right one clipped, so a downmix halves the
+  // clipped channel under the detector's bar while a per-channel read finds it.
+  const auto write_pair = [&](const std::string& path, float plateau, float drive) {
+    std::vector<float> interleaved(2 * kFrames);
+    for (size_t frame = 0; frame < kFrames; ++frame) {
+      const float t = static_cast<float>(frame) / kRate;
+      interleaved[2 * frame] = 0.25f * std::sin(two_pi * 330.0f * t);
+      interleaved[2 * frame + 1] =
+          std::clamp(drive * std::sin(two_pi * 220.0f * t), -plateau, plateau);
+    }
+    save_wav_multichannel(path, interleaved.data(), kFrames, 2, ChannelLayout::Stereo, kRate);
+  };
+
+  SECTION("--detect reads each channel of the pair") {
+    const std::string input = unique_temp_path("_repair_pair_detect.wav");
+    write_pair(input, 0.99f, 1.6f);
+    const SplitResult result = exec_command_split(CLI + " repair " + input + " --detect --json");
+    REQUIRE(result.exit_code == 0);
+    CHECK_THAT(result.err, !ContainsSubstring("downmixed to mono"));
+    const auto payload = sonare::util::json::parse_strict(result.out);
+    CHECK(payload["defects"]["clip"]["clipped_samples"].as_number() > 0.0);
+    std::remove(input.c_str());
+  }
+
+  SECTION("--stages declip writes a pair, as the declip processor does on it") {
+    const std::string input = unique_temp_path("_repair_pair.wav");
+    const std::string via_repair = unique_temp_path("_repair_pair_out.wav");
+    const std::string via_processor = unique_temp_path("_repair_pair_processor.wav");
+    // Below full scale, so no rebuilt peak passes it and the fit stays out.
+    write_pair(input, 0.5f, 0.6f);
+    const std::string threshold = "repair.declip.clipThresholdDb=-6.5";
+    const SplitResult result =
+        exec_command_split(CLI + " repair " + input + " --stages declip --params " + threshold +
+                           " -o " + via_repair + " --json");
+    REQUIRE(result.exit_code == 0);
+    CHECK_THAT(result.err, !ContainsSubstring("downmixed to mono"));
+    REQUIRE(sonare::util::json::parse_strict(result.out)["output_gain_db"].as_number() == 0.0);
+
+    auto [processor_code, processor_output] =
+        exec_command(CLI + " mastering-processor " + input +
+                     " --processor repair.declip --params clipThresholdDb=-6.5 -o " +
+                     via_processor + " --json -q");
+    REQUIRE(processor_code == 0);
+    auto [repaired, repaired_rate, repaired_channels] = load_audio_interleaved(via_repair);
+    auto [processed, processed_rate, processed_channels] = load_audio_interleaved(via_processor);
+    auto [source, source_rate, source_channels] = load_audio_interleaved(input);
+    REQUIRE(repaired_channels == 2);
+    // The control: the repair changed the file, so equality is not two copies.
+    CHECK(repaired != source);
+    CHECK(repaired == processed);
+    std::remove(input.c_str());
+    std::remove(via_repair.c_str());
+    std::remove(via_processor.c_str());
+  }
+}
 #endif
 
 #ifdef SONARE_WITH_MIXING

@@ -760,6 +760,14 @@ domain = "mastering"
 rule = "aliases-removed"
 
 [[entry]]
+kind = "command"
+old = "repair"
+changed = "a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono"
+domain = "mastering"
+rule = "stereo-pair"
+test = "tests/cli/cli_mastering_test.cpp::CLI repair carries a stereo input through as a stereo pair"
+
+[[entry]]
 kind = "flag"
 old = "mastering --true-peak-oversample"
 removed = "use mastering-normalize-loudness --true-peak-oversample, or --params loudness.truePeakOversample=N on a mastering chain"

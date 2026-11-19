@@ -1,4 +1,4 @@
-"""CLI tests that stereo inputs stay stereo through master, mastering, mix, normalize and declip."""
+"""CLI tests that stereo inputs stay stereo through the channel-preserving commands."""
 
 from __future__ import annotations
 
@@ -440,3 +440,78 @@ def test_lufs_cli_reports_the_channel_summed_value_master_reports(tmp_path) -> N
     assert json.loads(measured.stdout)["integrated_lufs"] == pytest.approx(
         json.loads(mastered.stdout)["input_lufs"], abs=0.1
     )
+
+
+def _pair_with_one_clipped_channel(path: str, plateau: float, drive: float) -> None:
+    sample_rate = 22050
+    left = [0.25 * math.sin(2.0 * math.pi * 330.0 * i / sample_rate) for i in range(11025)]
+    right = [
+        max(-plateau, min(plateau, drive * math.sin(2.0 * math.pi * 220.0 * i / sample_rate)))
+        for i in range(11025)
+    ]
+    _write_stereo_wav(path, left, right, sample_rate)
+
+
+def test_repair_cli_detects_on_each_channel_of_a_pair(tmp_path) -> None:
+    """The detectors read each channel; a downmix halves the clipped one under the bar."""
+    from libsonare import mastering_audio_profile
+    from libsonare.audio import Audio
+
+    source = tmp_path / "pair.wav"
+    _pair_with_one_clipped_channel(str(source), 0.99, 1.6)
+    result = _run_cli(["repair", str(source), "--detect", "--json"])
+    assert result.returncode == 0, result.stderr
+    assert "downmixed to mono" not in result.stderr
+    assert json.loads(result.stdout)["defects"]["clip"]["clipped_samples"] > 0
+
+    # The control: the same file folded to mono reads as unclipped.
+    with Audio.from_file(str(source)) as mono:
+        folded = mastering_audio_profile(
+            list(mono.data), sample_rate=mono.sample_rate, params={"detectDefects": True}
+        )
+    assert folded.defects.clip.clipped_samples == 0
+
+
+def test_repair_cli_repairs_a_pair_as_the_stereo_declip_does(tmp_path) -> None:
+    """repair --stages declip on a pair writes what the stereo declip entry writes."""
+    from libsonare import mastering_repair_declip_stereo
+    from libsonare._cli_output import _write_channel_output
+    from libsonare.audio import Audio
+
+    source = tmp_path / "pair.wav"
+    via_repair = tmp_path / "repair.wav"
+    via_library = tmp_path / "library.wav"
+    # Below full scale, so no rebuilt peak passes it and the fit stays out.
+    _pair_with_one_clipped_channel(str(source), 0.5, 0.6)
+    detect_at_db = 20.0 * math.log10(0.47)
+    result = _run_cli(
+        [
+            "repair",
+            str(source),
+            "--stages",
+            "declip",
+            "--params",
+            f"repair.declip.clipThresholdDb={detect_at_db}",
+            "-o",
+            str(via_repair),
+            "--json",
+        ]
+    )
+    assert result.returncode == 0, result.stderr
+    assert "downmixed to mono" not in result.stderr
+    assert json.loads(result.stdout)["output_gain_db"] == 0.0
+
+    with (
+        Audio.from_file_channel(str(source), 0) as left,
+        Audio.from_file_channel(str(source), 1) as right,
+    ):
+        pair = mastering_repair_declip_stereo(
+            left.data, right.data, sample_rate=left.sample_rate, clip_threshold_db=detect_at_db
+        )
+        _write_channel_output(str(via_library), [pair.left, pair.right], left.sample_rate)
+    with wave.open(str(via_repair), "rb") as wav:
+        assert wav.getnchannels() == 2
+    assert _side_energy(str(via_repair)) > 0
+    # The control: the repair changed the file, so equality is not two copies.
+    assert via_repair.read_bytes() != source.read_bytes()
+    assert via_repair.read_bytes() == via_library.read_bytes()

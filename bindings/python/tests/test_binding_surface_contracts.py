@@ -145,14 +145,19 @@ def test_cli_mean_abs_matches_the_definition() -> None:
 def test_repair_full_scale_fit_scales_by_one_gain() -> None:
     from libsonare._cli_repair import _fit_repair_output_to_full_scale
 
-    quiet = [0.5, -0.25]
+    quiet = [[0.5, -0.25]]
     same, gain_db = _fit_repair_output_to_full_scale(quiet)
     assert same is quiet and gain_db == 0.0
     loud = np.array([2.0, -1.0, math.nan, 0.5], dtype=np.float32)
-    fitted, gain_db = _fit_repair_output_to_full_scale(loud)
+    (fitted,), gain_db = _fit_repair_output_to_full_scale([loud])
     assert gain_db == pytest.approx(20.0 * math.log10(0.5))
     assert fitted[0] == pytest.approx(1.0) and fitted[1] == pytest.approx(-0.5)
     assert math.isnan(fitted[2])
+    # A pair takes the gain its louder channel needs, on both channels.
+    (left, right), gain_db = _fit_repair_output_to_full_scale([[0.5, 0.25], [4.0, -2.0]])
+    assert gain_db == pytest.approx(20.0 * math.log10(0.25))
+    assert list(left) == pytest.approx([0.125, 0.0625])
+    assert list(right) == pytest.approx([1.0, -0.5])
 
 
 def test_source_span_destination_positions_are_required_and_zero_is_a_position() -> None:

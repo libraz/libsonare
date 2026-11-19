@@ -14,10 +14,6 @@ from ._cli_common import (
     _load_channels_or_downmix,
     _strict_json_dumps,
     _write_channel_output,
-    _write_wav,
-)
-from ._cli_common import (
-    _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _token_of
 from ._cli_options import (
@@ -196,11 +192,12 @@ def _repair_explanation(explanation: list[str]) -> list[str]:
     ]
 
 
-def _fit_repair_output_to_full_scale(samples: Any) -> tuple[Any, float]:
-    """Scale ``samples`` so their peak lands at full scale.
+def _fit_repair_output_to_full_scale(channels: list[Any]) -> tuple[list[Any], float]:
+    """Scale ``channels`` so their joint peak lands at full scale.
 
-    Returns the samples to write and the applied gain in dB (``0.0`` when the
-    peak already fit and nothing was touched).
+    Returns the channels to write and the applied gain in dB (``0.0`` when the
+    peak already fit and nothing was touched). One gain across the channels
+    leaves the stereo image alone.
 
     Declipping reconstructs the peaks a clipper cut off, so its output routinely
     exceeds full scale -- and this command deliberately runs no limiter. The
@@ -211,12 +208,14 @@ def _fit_repair_output_to_full_scale(samples: Any) -> tuple[Any, float]:
     """
     # A non-finite sample would make every comparison false and leave the peak
     # at 0, so the scale is skipped rather than turned into a NaN gain.
-    buffer = np.asarray(samples, dtype=np.float64)
-    peak = float(np.max(np.abs(buffer[np.isfinite(buffer)]), initial=0.0))
+    buffers = [np.asarray(channel, dtype=np.float64) for channel in channels]
+    peak = max(
+        float(np.max(np.abs(buffer[np.isfinite(buffer)]), initial=0.0)) for buffer in buffers
+    )
     if peak <= 1.0:
-        return samples, 0.0
+        return channels, 0.0
     gain = 1.0 / peak
-    return buffer * gain, 20.0 * math.log10(gain)
+    return [buffer * gain for buffer in buffers], 20.0 * math.log10(gain)
 
 
 # Each detector group of the profile's ``defects`` object, with the wire key
@@ -311,8 +310,11 @@ def cmd_repair(args: argparse.Namespace) -> int:
     """
     from . import (
         master_audio,
+        master_audio_stereo,
         mastering_assistant_suggest,
+        mastering_assistant_suggest_stereo,
         mastering_audio_profile,
+        mastering_audio_profile_stereo,
     )
 
     detect_only = bool(getattr(args, "detect", False))
@@ -352,11 +354,36 @@ def cmd_repair(args: argparse.Namespace) -> int:
             "to see why the assistant would pick a stage"
         )
 
-    samples, sr = _load_audio(args.file)
+    # A two-channel input is measured and repaired as a pair, its detectors run
+    # per channel and aggregated.
+    planes, sr = _load_channels_or_downmix(args.file)
+    stereo = len(planes) == 2
+
+    def run_chain(overrides: dict[str, float | str], preset_name: str | None) -> Any:
+        nested = _nest_chain_config(overrides)
+        if stereo:
+            return master_audio_stereo(
+                planes[0],
+                planes[1],
+                sample_rate=sr,
+                preset=cast("MasteringPreset | None", preset_name),
+                overrides=nested,
+            )
+        return master_audio(
+            planes[0],
+            sample_rate=sr,
+            preset=cast("MasteringPreset | None", preset_name),
+            overrides=nested,
+        )
 
     # Every mode reports the detectors, so they always run here -- never only
     # when it happens to be convenient for one mode.
-    profile = mastering_audio_profile(samples, sample_rate=sr, params={"detectDefects": True})
+    profile_params: dict[str, float | int | bool] = {"detectDefects": True}
+    profile = (
+        mastering_audio_profile_stereo(planes[0], planes[1], sample_rate=sr, params=profile_params)
+        if stereo
+        else mastering_audio_profile(planes[0], sample_rate=sr, params=profile_params)
+    )
     # The profile carries no `defects` when no detector ran; so does this report.
     defects = _repair_detection_report(profile.defects)
 
@@ -383,38 +410,37 @@ def cmd_repair(args: argparse.Namespace) -> int:
             f"repair.{stage}.enabled": 1.0 for stage in stage_list
         }
         stage_config.update(params)
-        result = master_audio(
-            samples, sample_rate=sr, preset=None, overrides=_nest_chain_config(stage_config)
-        )
+        result = run_chain(stage_config, None)
         mode = "stages"
     elif preset:
         overrides: dict[str, float | str] = dict(_NON_REPAIR_CHAIN_DISABLE_OVERRIDES)
         overrides.update(params)
-        result = master_audio(
-            samples,
-            sample_rate=sr,
-            preset=cast("MasteringPreset", preset),
-            overrides=_nest_chain_config(overrides),
-        )
+        result = run_chain(overrides, preset)
         mode = "preset"
     else:
-        suggestion = mastering_assistant_suggest(
-            samples, sample_rate=sr, params={"enableRepair": True}
+        suggestion = (
+            mastering_assistant_suggest_stereo(
+                planes[0], planes[1], sample_rate=sr, params={"enableRepair": True}
+            )
+            if stereo
+            else mastering_assistant_suggest(
+                planes[0], sample_rate=sr, params={"enableRepair": True}
+            )
         )
         chain_config = _chain_config_paths(suggestion.chain_config)
         repair_config = {
             key: value for key, value in chain_config.items() if key.startswith("repair.")
         }
         repair_config.update(params)
-        result = master_audio(
-            samples, sample_rate=sr, preset=None, overrides=_nest_chain_config(repair_config)
-        )
+        result = run_chain(repair_config, None)
         mode = "assistant"
         explanation = _repair_explanation(suggestion.explanation)
 
     stages = list(getattr(result, "stages", []))
-    samples, output_gain_db = _fit_repair_output_to_full_scale(result.samples)
-    _write_wav(output, samples, result.sample_rate, bits)
+    rendered, output_gain_db = _fit_repair_output_to_full_scale(
+        [result.left, result.right] if stereo else [result.samples]
+    )
+    _write_channel_output(output, rendered, result.sample_rate, bits)
 
     if getattr(args, "json", False):
         payload: dict[str, object] = {"mode": mode}
