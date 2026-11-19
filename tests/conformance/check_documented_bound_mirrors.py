@@ -95,7 +95,7 @@ CONSTANTS: dict[str, Constant] = {
     "max_meter_numerator": Constant("src/analysis/meter_analyzer.h", "kMaxMeterCandidateNumerator"),
     "max_meter_denominator": Constant("src/analysis/meter_analyzer.h", "kMaxMeterDenominator"),
     "max_grain_size": Constant("src/editing/voice_changer/streaming_retune.h", "kMaxRetuneGrainSize"),
-    "max_retune_semitones": Constant("src/editing/voice_changer/streaming_retune.cpp", "kMaxSemitones"),
+    "max_retune_semitones": Constant("src/editing/voice_changer/streaming_retune.h", "kMaxRetuneSemitones"),
     "max_metronome_click_samples": Constant("src/engine/metronome.h", "kMaxMetronomeClickSamples"),
     "max_salience_harmonics": Constant("src/editing/polyphony/f0_salience.h", "kMaxSalienceHarmonics"),
     "max_note_mask_harmonics": Constant("src/editing/polyphony/note_mask.h", "kMaxNoteMaskHarmonics"),
@@ -260,16 +260,19 @@ CLAIMS: tuple[Claim, ...] = (
         floor=6,
     ),
     Claim(
-        key="retune grain size ceiling",
-        pattern=r"above the\s+(?P<max>\d+)\s+ceiling",
+        key="retune grain size refused bound",
+        pattern=r"multiple of 4 in `?\[4, (?P<max>\d+)\]",
         groups={"max": ("max_grain_size", 0)},
-        floor=1,
+        floor=13,
     ),
     Claim(
-        key="retune semitone clamp",
-        pattern=r"\+/-\s?(?P<max>\d+)",
-        groups={"max": ("max_retune_semitones", 0)},
-        floor=3,
+        key="retune semitone refused bound",
+        pattern=(
+            r"[Pp]itch shift (?:of the retune stage )?in semitones,"
+            r" (?:finite and in )?\[-(?P<low>\d+), (?P<max>\d+)\]"
+        ),
+        groups={"low": ("max_retune_semitones", 0), "max": ("max_retune_semitones", 0)},
+        floor=6,
     ),
     Claim(
         key="explicit metronome click length ceiling",
