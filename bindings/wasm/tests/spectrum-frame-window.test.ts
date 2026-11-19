@@ -81,7 +81,7 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
           startSample: FRAME_OFFSET,
           nFft: N_FFT,
         }),
-      ).toThrow(`meteringSpectrumFrame: samples contains NaN or Inf at index ${badIndex}`);
+      ).toThrow(`meteringSpectrumFrame: samples contains a non-finite sample at index ${badIndex}`);
     },
   );
 
@@ -116,7 +116,7 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
       caught = error;
     }
     expect(caught).toBeDefined();
-    expect(String((caught as Error).message)).not.toContain('NaN or Inf');
+    expect(String((caught as Error).message)).not.toContain('non-finite sample');
   });
 
   it('asks the source for the analysis frame rather than for the whole buffer', () => {

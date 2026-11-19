@@ -138,7 +138,7 @@ describe('alignTakeToReference', () => {
     const withNan = Float32Array.from(reference);
     withNan[100] = Number.NaN;
     expect(() => alignTakeToReference(request({ reference: withNan }))).toThrowError(
-      /reference contains NaN or Inf/,
+      /reference contains a non-finite sample/,
     );
   });
 

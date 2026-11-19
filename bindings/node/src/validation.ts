@@ -27,7 +27,20 @@ export function assertFiniteSamples(
   for (let i = 0; i < samples.length; i++) {
     const v = samples[i] as number;
     if (!Number.isFinite(v)) {
-      throw new RangeError(`${fnName}: ${argName} contains NaN or Inf at index ${i}`);
+      throw new RangeError(`${fnName}: ${argName} contains a non-finite sample at index ${i}`);
+    }
+  }
+}
+
+/** A non-audio array (a feature matrix's data): each element finite, the first offender named by index. */
+export function assertFiniteValues(
+  fnName: string,
+  values: ArrayLike<number>,
+  argName: string,
+): void {
+  for (let i = 0; i < values.length; i++) {
+    if (!Number.isFinite(values[i] as number)) {
+      throw new RangeError(`${fnName}: ${argName} contains a non-finite value at index ${i}`);
     }
   }
 }
@@ -72,7 +85,7 @@ export function assertSamplesInWindow(
   for (let i = start; i < stop; i++) {
     const v = samples[i] as number;
     if (!Number.isFinite(v)) {
-      throw new RangeError(`${fnName}: ${argName} contains NaN or Inf at index ${i}`);
+      throw new RangeError(`${fnName}: ${argName} contains a non-finite sample at index ${i}`);
     }
   }
 }

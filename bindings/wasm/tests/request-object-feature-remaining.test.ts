@@ -186,7 +186,7 @@ describe('remaining feature request-object compatibility', () => {
     const scanned = captureThrow(() =>
       phaseVocoder({ samples: dirty, speedRatio: 1.1, sampleRate }),
     );
-    expect(scanned.message).toMatch(/contains NaN/);
+    expect(scanned.message).toMatch(/contains a non-finite sample/);
     const unknown = captureThrow(() =>
       phaseVocoder({ samples: dirty, speedRatio: 1.1, sampleRate, validate: false } as never),
     );

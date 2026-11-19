@@ -143,7 +143,7 @@ describe('playback renderer (WASM)', () => {
       config: { target: { kind: 'speakers' as const, layout: 'stereo' as const } },
     };
     expect(() => renderPlayback(request)).toThrow(
-      new RangeError('renderPlayback: samples contains NaN or Inf at index 3'),
+      new RangeError('renderPlayback: samples contains a non-finite sample at index 3'),
     );
     expect(() => renderPlayback({ ...request, validate: false } as never)).toThrow(
       new TypeError("renderPlayback: unknown request key 'validate'"),

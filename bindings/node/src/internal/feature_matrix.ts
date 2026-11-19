@@ -1,5 +1,5 @@
 import type { Matrix2D } from '../types_analysis.js';
-import { assertFiniteSamples, assertPositiveInteger } from '../validation.js';
+import { assertFiniteValues, assertPositiveInteger } from '../validation.js';
 
 /**
  * Matrix helpers shared by the `feature_*` modules.
@@ -40,7 +40,9 @@ export function assertMatrix2D(
   if (data.length !== rows * cols) {
     throw new RangeError(`${fnName}: ${argName}.data length must equal rows * cols`);
   }
-  assertFiniteSamples(fnName, data, validate !== false, `${argName}.data`);
+  if (validate !== false) {
+    assertFiniteValues(fnName, data, `${argName}.data`);
+  }
 }
 
 /** The index list shapes the addon reads (`Int32Array` or a plain array); other array-likes are copied. */

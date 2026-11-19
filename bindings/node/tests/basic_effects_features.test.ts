@@ -162,16 +162,16 @@ describe('effects', () => {
     const cleanMatrix = matrix(clean, rows, cols);
 
     expect(() => segmentRecurrenceMatrix({ data: poisonedMatrix })).toThrow(
-      /data\.data contains NaN or Inf at index 30/,
+      /data\.data contains a non-finite value at index 30/,
     );
     expect(() => segmentCrossSimilarity({ x: poisonedMatrix, y: cleanMatrix })).toThrow(
-      /x\.data contains NaN or Inf at index 30/,
+      /x\.data contains a non-finite value at index 30/,
     );
     expect(() =>
       segmentSubsegment({ data: poisonedMatrix, boundaries: new Int32Array([0, 32]) }),
-    ).toThrow(/data\.data contains NaN or Inf at index 30/);
+    ).toThrow(/data\.data contains a non-finite value at index 30/);
     expect(() => segmentAgglomerative({ data: poisonedMatrix, k: 2 })).toThrow(
-      /data\.data contains NaN or Inf at index 30/,
+      /data\.data contains a non-finite value at index 30/,
     );
 
     // The same matrix without the one cell is accepted and every output is a
@@ -184,7 +184,7 @@ describe('effects', () => {
     // there as well instead of being carried into the result.
     expect(() =>
       segmentRecurrenceToLag({ recurrence: matrix(poisoned, 16, 16), pad: false }),
-    ).toThrow(/recurrence\.data contains NaN or Inf at index 30/);
+    ).toThrow(/recurrence\.data contains a non-finite value at index 30/);
   });
 
   it('hpss returns harmonic and percussive', () => {
@@ -568,11 +568,11 @@ describe('features', () => {
     melData[3] = Number.NaN;
     const mel = matrix(melData, 8, 4);
     expect(() => melToStft({ power: mel, sampleRate: SR, nFft: 256 })).toThrow(
-      /melToStft: power\.data contains NaN or Inf at index 3/,
+      /melToStft: power\.data contains a non-finite value at index 3/,
     );
     expect(() =>
       melToAudio({ power: mel, sampleRate: SR, nFft: 256, hopLength: 64, nIter: 2 }),
-    ).toThrow(/melToAudio: power\.data contains NaN or Inf at index 3/);
+    ).toThrow(/melToAudio: power\.data contains a non-finite value at index 3/);
     expect(() =>
       melToStft({ power: mel, sampleRate: SR, nFft: 256, validate: false } as never),
     ).toThrow("melToStft: unknown request key 'validate'");
@@ -581,7 +581,7 @@ describe('features', () => {
     coeffData[7] = Number.POSITIVE_INFINITY;
     const mfccCoeffs = matrix(coeffData, 5, 4);
     expect(() => mfccToMel({ coefficients: mfccCoeffs, nMels: 8 })).toThrow(
-      /mfccToMel: coefficients\.data contains NaN or Inf at index 7/,
+      /mfccToMel: coefficients\.data contains a non-finite value at index 7/,
     );
     expect(() =>
       mfccToAudio({
@@ -592,7 +592,7 @@ describe('features', () => {
         hopLength: 64,
         nIter: 2,
       }),
-    ).toThrow(/mfccToAudio: coefficients\.data contains NaN or Inf at index 7/);
+    ).toThrow(/mfccToAudio: coefficients\.data contains a non-finite value at index 7/);
     expect(() =>
       mfccToMel({ coefficients: mfccCoeffs, nMels: 8, validate: false } as never),
     ).toThrow("mfccToMel: unknown request key 'validate'");
@@ -608,7 +608,7 @@ describe('features', () => {
         nIter: 1,
         momentum: 0,
       }),
-    ).toThrow(/griffinLim: magnitude\.data contains NaN or Inf at index 4/);
+    ).toThrow(/griffinLim: magnitude\.data contains a non-finite value at index 4/);
   });
 
   it('passes the forward lifter back to MFCC inversion', () => {

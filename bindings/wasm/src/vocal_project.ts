@@ -124,7 +124,7 @@ function finiteMono(value: unknown, field: string): Float32Array {
   }
   for (let index = 0; index < value.length; index += 1) {
     if (!Number.isFinite(value[index])) {
-      throw new RangeError(`${field} must contain only finite samples`);
+      throw new RangeError(`${field} contains a non-finite sample at index ${index}`);
     }
   }
   return new Float32Array(value);

@@ -106,28 +106,32 @@ describe('NaN/Inf guards (Node)', () => {
     expect(() => equalizer.match(sine(), withNaN(), { maxBands: 4 })).toThrow();
   });
   it('lufs rejects NaN with index', () => {
-    expect(() => lufs(withNaN(), SR)).toThrow(/lufs: samples contains NaN or Inf at index 100/);
+    expect(() => lufs(withNaN(), SR)).toThrow(
+      /lufs: samples contains a non-finite sample at index 100/,
+    );
   });
   it('lufs rejects Inf with index', () => {
-    expect(() => lufs(withInf(), SR)).toThrow(/lufs: samples contains NaN or Inf at index 200/);
+    expect(() => lufs(withInf(), SR)).toThrow(
+      /lufs: samples contains a non-finite sample at index 200/,
+    );
   });
   it('masteringDynamicsCompressor rejects NaN', () => {
     expect(() => masteringDynamicsCompressor(withNaN(), SR)).toThrow(
-      /masteringDynamicsCompressor: samples contains NaN or Inf at index 100/,
+      /masteringDynamicsCompressor: samples contains a non-finite sample at index 100/,
     );
   });
   it('masteringDynamicsGate rejects Inf', () => {
     expect(() => masteringDynamicsGate(withInf(), SR)).toThrow(
-      /masteringDynamicsGate: samples contains NaN or Inf at index 200/,
+      /masteringDynamicsGate: samples contains a non-finite sample at index 200/,
     );
   });
   it('meteringPeakDb rejects NaN', () => {
     expect(() => meteringPeakDb(withNaN(), SR)).toThrow(
-      /meteringPeakDb: samples contains NaN or Inf at index 100/,
+      /meteringPeakDb: samples contains a non-finite sample at index 100/,
     );
   });
   it('pitchYin rejects NaN', () => {
-    expect(() => pitchYin(withNaN(), SR)).toThrow(/samples contains NaN or Inf/);
+    expect(() => pitchYin(withNaN(), SR)).toThrow(/samples contains a non-finite sample/);
   });
   // pitchPyin is pitchYin's twin and must reject identically — asserting only
   // the pitchYin side is how the two drifted apart in the first place.
@@ -143,11 +147,11 @@ describe('NaN/Inf guards (Node)', () => {
     }
     expect(caught, `${name} should have thrown`).toBeInstanceOf(RangeError);
     expect((caught as Error).message).toMatch(
-      new RegExp(`^${name}: samples contains NaN or Inf at index 100$`),
+      new RegExp(`^${name}: samples contains a non-finite sample at index 100$`),
     );
   });
   it('meteringDcOffset rejects Inf', () => {
-    expect(() => meteringDcOffset(withInf(), SR)).toThrow(/samples contains NaN or Inf/);
+    expect(() => meteringDcOffset(withInf(), SR)).toThrow(/samples contains a non-finite sample/);
   });
 });
 

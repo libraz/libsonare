@@ -149,7 +149,7 @@ function float32Copy(value: unknown, field: string, allowEmpty = false): Float32
   }
   for (let index = 0; index < value.length; index += 1) {
     if (!Number.isFinite(value[index])) {
-      throw new RangeError(`${field} contains NaN or Inf at index ${index}`);
+      throw new RangeError(`${field} contains a non-finite sample at index ${index}`);
     }
   }
   return new Float32Array(value);

@@ -294,7 +294,7 @@ describe('the validate option is refused', () => {
       const poisoned = new Float32Array(128);
       poisoned[5] = Number.NaN;
       expect(() => engine.renderOffline({ channels: [poisoned, block] })).toThrow(
-        new RangeError('renderOffline: channels[0] contains NaN or Inf at index 5'),
+        new RangeError('renderOffline: channels[0] contains a non-finite sample at index 5'),
       );
     } finally {
       engine.destroy();

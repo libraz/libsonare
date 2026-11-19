@@ -87,6 +87,8 @@ describe('masteringAbMatchLoudness', () => {
       masteringAbMatchLoudness({ source, reference: broken, sampleRate: SR }),
     );
     expect(caught).toBeInstanceOf(RangeError);
-    expect((caught as RangeError).message).toMatch(/reference contains NaN or Inf at index 1000/);
+    expect((caught as RangeError).message).toMatch(
+      /reference contains a non-finite sample at index 1000/,
+    );
   });
 });

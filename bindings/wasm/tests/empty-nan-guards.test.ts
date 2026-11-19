@@ -141,7 +141,7 @@ describe('NaN/Inf guards (WASM)', () => {
     expect(() => cyclicTempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow(/NaN|Inf/);
     expect(() =>
       tempogramRatio({ tempogram: { data: withNaN(), rows: 64, cols: 16 }, sampleRate: SR }),
-    ).toThrow(/NaN|Inf/);
+    ).toThrow(/non-finite/);
   });
   it('StreamingEqualizer.match rejects non-finite reference audio', () => {
     const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
@@ -149,29 +149,33 @@ describe('NaN/Inf guards (WASM)', () => {
     equalizer.destroy();
   });
   it('lufs rejects NaN with index', () => {
-    expect(() => lufs(withNaN(), SR)).toThrow(/lufs: samples contains NaN or Inf at index 100/);
+    expect(() => lufs(withNaN(), SR)).toThrow(
+      /lufs: samples contains a non-finite sample at index 100/,
+    );
   });
   it('lufs rejects Inf with index', () => {
-    expect(() => lufs(withInf(), SR)).toThrow(/lufs: samples contains NaN or Inf at index 200/);
+    expect(() => lufs(withInf(), SR)).toThrow(
+      /lufs: samples contains a non-finite sample at index 200/,
+    );
   });
   it('masteringDynamicsCompressor rejects NaN', () => {
     expect(() => masteringDynamicsCompressor(withNaN(), SR)).toThrow(
-      /masteringDynamicsCompressor: samples contains NaN or Inf at index 100/,
+      /masteringDynamicsCompressor: samples contains a non-finite sample at index 100/,
     );
   });
   it('masteringDynamicsGate rejects Inf', () => {
     expect(() => masteringDynamicsGate(withInf(), SR)).toThrow(
-      /masteringDynamicsGate: samples contains NaN or Inf at index 200/,
+      /masteringDynamicsGate: samples contains a non-finite sample at index 200/,
     );
   });
   it('meteringPeakDb rejects NaN', () => {
     expect(() => meteringPeakDb(withNaN(), SR)).toThrow(
-      /meteringPeakDb: samples contains NaN or Inf at index 100/,
+      /meteringPeakDb: samples contains a non-finite sample at index 100/,
     );
   });
   it('detectBpm rejects NaN before native analysis', () => {
     expect(() => detectBpm(withNaN(), SR)).toThrow(
-      /detectBpm: samples contains NaN or Inf at index 100/,
+      /detectBpm: samples contains a non-finite sample at index 100/,
     );
   });
   it('analyzeBpm rejects negative maxCandidates before native analysis', () => {
@@ -188,7 +192,7 @@ describe('NaN/Inf guards (WASM)', () => {
 
 describe('non-finite samples are always refused and validate is not an option (WASM)', () => {
   it('lufs refuses NaN with the indexed message and refuses a validate option', () => {
-    expect(() => lufs(withNaN(), SR)).toThrow(/samples contains NaN or Inf at index/);
+    expect(() => lufs(withNaN(), SR)).toThrow(/samples contains a non-finite sample at index/);
     expect(() => lufs(withNaN(), SR, { validate: false } as never)).toThrow(
       "lufs: unknown option 'validate'",
     );

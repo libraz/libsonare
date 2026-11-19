@@ -632,14 +632,16 @@ describe('Node vocal edit facade', () => {
   it('always scans create and restore input and refuses a validate key', () => {
     const bad = sine();
     bad[10] = Number.NaN;
-    expect(() => createVocalEditSession({ ...request(bad) })).toThrow(/NaN or Inf at index 10/);
+    expect(() => createVocalEditSession({ ...request(bad) })).toThrow(
+      /non-finite sample at index 10/,
+    );
     expect(() =>
       restoreVocalEditSession({
         samples: bad,
         sampleRate: SAMPLE_RATE,
         state: new Uint8Array(8),
       }),
-    ).toThrow(/NaN or Inf at index 10/);
+    ).toThrow(/non-finite sample at index 10/);
     expect(() => createVocalEditSession({ ...request(), validate: false } as never)).toThrow(
       /createVocalEditSession: unknown request key 'validate'/,
     );

@@ -797,6 +797,22 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
       [fn, 2.5, 'mode', 0, 4],
       [fn, 2, 'mode', 0, 4],
     ],
+    assertFiniteValues: [
+      [fn, f32(0, 1.5, -2), 'm.data'],
+      [fn, f32(0, Number.NaN), 'm.data'],
+      [fn, f32(Number.NEGATIVE_INFINITY), 'm.data'],
+      [fn, f32(), 'm.data'],
+    ],
+    assertRetuneGrain: [
+      [fn, 0, 'grain'],
+      [fn, 1, 'grain'],
+      [fn, 6, 'grain'],
+      [fn, 4.5, 'grain'],
+      [fn, 8196, 'grain'],
+      [fn, '512', 'grain'],
+      [fn, 4, 'grain'],
+      [fn, 8192, 'grain'],
+    ],
     assertU7: [
       [fn, 128, 'note'],
       [fn, -1, 'note'],

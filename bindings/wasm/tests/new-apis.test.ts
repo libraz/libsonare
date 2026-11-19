@@ -1647,7 +1647,7 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('guards music feature wrappers before native analysis', () => {
-      expect(() => nnlsChroma(new Float32Array([Number.NaN]), SR)).toThrow(/NaN|Inf/);
+      expect(() => nnlsChroma(new Float32Array([Number.NaN]), SR)).toThrow(/non-finite/);
       expect(() => cqt(signal, 7999)).toThrow(/sampleRate/);
       expect(() => cqt(signal, SR, { hopLength: 0 })).toThrow(/hopLength/);
       // An omitted gamma is the automatic ERB-derived bandwidth; 0 is the
@@ -1673,7 +1673,7 @@ describe('v1.2 feature additions (WASM)', () => {
           onsetEnvelope: new Float32Array([1, Number.POSITIVE_INFINITY]),
           sampleRate: SR,
         }),
-      ).toThrow(/NaN|Inf/);
+      ).toThrow(/non-finite/);
       expect(() =>
         tempogramRatio({
           tempogram: { data: new Float32Array([1, 2]), rows: 0, cols: 2 },
@@ -1683,7 +1683,7 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('guards spectrogram and inverse wrapper shape inputs', () => {
-      expect(() => stft(new Float32Array([0, Number.NaN]), SR)).toThrow(/NaN|Inf/);
+      expect(() => stft(new Float32Array([0, Number.NaN]), SR)).toThrow(/non-finite/);
       expect(() => melSpectrogram(signal, 0)).toThrow(/sampleRate/);
       expect(() =>
         melSpectrogram(signal, SR, {
@@ -1708,7 +1708,7 @@ describe('v1.2 feature additions (WASM)', () => {
           sampleRate: SR,
           nFft: 1024,
         }),
-      ).toThrow(/NaN|Inf/);
+      ).toThrow(/non-finite/);
       expect(() =>
         mfccToMel({ coefficients: { data: new Float32Array(6), rows: 0, cols: 3 }, nMels: 40 }),
       ).toThrow(/rows/);

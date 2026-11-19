@@ -357,7 +357,9 @@ function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
   for (const [plane, channel] of (request.channels ?? []).entries()) {
     for (let i = 0; i < (channel?.length ?? 0); i++) {
       if (!Number.isFinite(channel[i])) {
-        throw new RangeError(`renderOffline: channels[${plane}] contains NaN or Inf at index ${i}`);
+        throw new RangeError(
+          `renderOffline: channels[${plane}] contains a non-finite sample at index ${i}`,
+        );
       }
     }
   }

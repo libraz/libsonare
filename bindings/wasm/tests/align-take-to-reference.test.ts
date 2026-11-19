@@ -178,12 +178,12 @@ describe('WASM alignTakeToReference', () => {
     const nanReference = reference.slice();
     nanReference[1000] = Number.NaN;
     expect(() => alignTakeToReference({ reference: nanReference, take, sampleRate })).toThrow(
-      /reference contains NaN or Inf/,
+      /reference contains a non-finite sample/,
     );
     const nanTake = take.slice();
     nanTake[1000] = Number.POSITIVE_INFINITY;
     expect(() => alignTakeToReference({ reference, take: nanTake, sampleRate })).toThrow(
-      /take contains NaN or Inf/,
+      /take contains a non-finite sample/,
     );
 
     expect(() => alignTakeToReference({ reference, take, sampleRate: 0 })).toThrow(RangeError);
