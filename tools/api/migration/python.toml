@@ -11344,7 +11344,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_griffin_lim_infers
 [[entry]]
 kind = "option"
 old = "griffin_lim(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
@@ -11352,7 +11352,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse
 [[entry]]
 kind = "option"
 old = "mel_to_audio(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
@@ -11360,7 +11360,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse
 [[entry]]
 kind = "option"
 old = "mfcc_to_audio(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"

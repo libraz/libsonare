@@ -560,7 +560,7 @@ def test_griffin_lim_infers_n_fft_from_the_bin_count() -> None:
 
 
 def test_an_omitted_inverse_hop_is_a_quarter_of_n_fft() -> None:
-    """A small n_fft with no hop runs, and equals the explicit n_fft // 4 call."""
+    """A small n_fft with no hop equals the explicit n_fft // 4 call; a hop below 1 is refused."""
     import numpy as np
 
     from libsonare import griffin_lim, mel_to_audio, mfcc_to_audio, stft
@@ -585,6 +585,21 @@ def test_an_omitted_inverse_hop_is_a_quarter_of_n_fft() -> None:
     ]
     for omitted, explicit in pairs:
         np.testing.assert_array_equal(omitted(), explicit())
+    from libsonare import SonareValueError
+
+    refusals = {
+        "mel_to_audio": lambda hop: mel_to_audio(mel, sr=22050, n_fft=256, hop_length=hop),
+        "mfcc_to_audio": lambda hop: mfcc_to_audio(
+            mfcc, n_mels=40, sr=22050, n_fft=256, hop_length=hop
+        ),
+        "griffin_lim": lambda hop: griffin_lim(magnitude, 22050, hop_length=hop),
+    }
+    for name, call in refusals.items():
+        for hop in (0, -1):
+            with pytest.raises(
+                SonareValueError, match=rf"^{name}: hop_length must be an integer in \[1, "
+            ):
+                call(hop)
 
 
 def test_an_omitted_hpss_hop_is_a_quarter_of_n_fft() -> None:

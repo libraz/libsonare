@@ -27,6 +27,7 @@ from ._runtime import (
     _to_c_float_matrix,
     _to_c_int,
     _to_c_size_t,
+    _validate_effect_hop,
 )
 from .types import CqtResult
 
@@ -317,7 +318,12 @@ def mel_to_audio(
             _to_c_int(n_frames, "n_frames"),
             _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
-            _to_c_int(n_fft // 4 if hop_length is None else hop_length, "hop_length"),
+            _to_c_int(
+                n_fft // 4
+                if hop_length is None
+                else _validate_effect_hop("mel_to_audio", hop_length),
+                "hop_length",
+            ),
             _to_c_float(fmin, "fmin"),
             _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
         ),
@@ -349,8 +355,9 @@ def griffin_lim(
         raise SonareValueError(
             f"griffin_lim: n_fft must equal (n_bins - 1) * 2 (got {n_fft} for {n_bins} bins)"
         )
-    if hop_length is None:
-        hop_length = n_fft // 4
+    hop_length = (
+        n_fft // 4 if hop_length is None else _validate_effect_hop("griffin_lim", hop_length)
+    )
     length = n_bins * n_frames
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -453,8 +460,9 @@ def mfcc_to_audio(
     c_array, n_mfcc, n_frames = _to_c_float_matrix(
         "mfcc_to_audio", coefficients, arg_name="coefficients"
     )
-    if hop_length is None:
-        hop_length = n_fft // 4
+    hop_length = (
+        n_fft // 4 if hop_length is None else _validate_effect_hop("mfcc_to_audio", hop_length)
+    )
     if lifter == 0.0:
         return _inverse_audio(
             lib,
