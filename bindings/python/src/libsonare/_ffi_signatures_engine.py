@@ -908,10 +908,9 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         "sonare_midi2_per_note_management": [_u8, ctypes.c_int, ctypes.c_int],
     }
     for _name, _tail in _tails.items():
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [*_head, *_tail, ctypes.POINTER(SonareMidiEventPod)]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [*_head, *_tail, ctypes.POINTER(SonareMidiEventPod)]
     lib.sonare_engine_push_midi_panic.restype = ctypes.c_int32
     lib.sonare_engine_push_midi_panic.argtypes = [
         ctypes.c_void_p,
@@ -1092,17 +1091,16 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         "sonare_engine_push_midi_input_cc",
         "sonare_engine_push_midi_input_poly_pressure",
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [
-                ctypes.c_void_p,
-                ctypes.c_uint8,
-                ctypes.c_uint8,
-                ctypes.c_uint8,
-                ctypes.c_uint8,
-                ctypes.c_int64,
-            ]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int64,
+        ]
     lib.sonare_engine_push_midi_input_pitch_bend.restype = ctypes.c_int32
     lib.sonare_engine_push_midi_input_pitch_bend.argtypes = [
         ctypes.c_void_p,
@@ -1124,18 +1122,17 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         "sonare_engine_push_midi_note_off",
         "sonare_engine_push_midi_poly_pressure",
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [
-                ctypes.c_void_p,
-                ctypes.c_uint32,
-                ctypes.c_uint8,
-                ctypes.c_uint8,
-                ctypes.c_uint8,
-                ctypes.c_uint8,
-                ctypes.c_int64,
-            ]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int64,
+        ]
     lib.sonare_engine_push_midi_pitch_bend.restype = ctypes.c_int32
     lib.sonare_engine_push_midi_pitch_bend.argtypes = [
         ctypes.c_void_p,

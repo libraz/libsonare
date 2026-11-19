@@ -820,9 +820,6 @@ def _configure_sample_bank_signatures(lib: ctypes.CDLL) -> None:
     # Host-supplied PCM for the sample synthesis engine
     # (sonare_c_sample_bank.h). The bank is a standalone handle rather than a
     # project member, so these sit outside the project-ABI gate above.
-    if not hasattr(lib, "sonare_sample_bank_create"):
-        return
-
     lib.sonare_sample_bank_create.restype = ctypes.c_int32
     lib.sonare_sample_bank_create.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
 
