@@ -118,16 +118,14 @@ def mastering_repair_denoise_classical(
     Raises:
         SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved.
         RuntimeError: If the C call rejects the request (e.g. non-power-of-two
-        ``n_fft``, non-positive ``hop_length``, or ``hop_length`` above
+        ``n_fft``, ``hop_length`` below 1, or ``hop_length`` above
         ``n_fft // 2``).
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
-    # Narrowed ahead of the sign check: int() takes 256.7 as 256, a hop nobody asked for.
-    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
-    if hop_length_value <= 0:
-        raise _refuse("hop_length must be positive")
+    # Narrowed, not int()-coerced: int() takes 256.7 as 256, a hop nobody asked for.
+    hop_length_value = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
 
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
@@ -222,16 +220,15 @@ def mastering_repair_detect_noise_floor(
     Raises:
         SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved,
             if ``n_fft`` is not a power of two, if ``hop_length`` is not
-            positive, or if the buffer is empty or carries a non-finite sample.
+            an integer in ``[1, 2147483647]``, or if the buffer is empty or carries a
+            non-finite sample.
         SonareError: If the C call rejects the request, which includes a
             ``hop_length`` above ``n_fft // 2``.
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
-    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
-    if hop_length_value <= 0:
-        raise _refuse("hop_length must be positive")
+    hop_length_value = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
@@ -293,7 +290,7 @@ def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> np.
             rule :func:`mastering_repair_detect_noise_floor` applies to its
             config, so every grid returned here is one that entry can report on
             (default 1024).
-        sample_rate: Sample rate the bins belong to, in Hz; positive.
+        sample_rate: Sample rate the bins belong to, in Hz; greater than 0.
 
     Returns:
         ``int32`` array of 33 bin indices, low to high -- one more than the 32 bands: the first bin
@@ -303,7 +300,7 @@ def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> np.
     Raises:
         SonareValueError: If ``n_fft`` is not a positive power of two.
         SonareError: If the C call rejects the request, which includes a
-            non-positive ``sample_rate``.
+            ``sample_rate`` of 0 or less.
     """
     # The same power-of-two rule the denoise config validator applies; check it
     # eagerly so the message names the argument.
@@ -393,7 +390,7 @@ def mastering_repair_denoise_classical_stereo(
     Raises:
         SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved,
             if ``n_fft`` is not a power of two, if ``hop_length`` is not
-            positive, or if the two channels differ in length.
+            an integer in ``[1, 2147483647]``, or if the two channels differ in length.
         SonareError: If the C call rejects the request, which includes a
             ``hop_length`` above ``n_fft // 2``.
     """
@@ -403,11 +400,9 @@ def mastering_repair_denoise_classical_stereo(
     hop_length_value = _narrow_int(
         hop_length,
         "hop_length",
-        _C_INT_MIN,
+        1,
         _C_INT_MAX,
     )
-    if hop_length_value <= 0:
-        raise _refuse("hop_length must be positive")
 
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
@@ -528,7 +523,7 @@ def mastering_repair_denoise_classical_linked(
     Raises:
         SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved,
             if ``n_fft`` is not a power of two, if ``hop_length`` is not
-            positive, if ``channels`` is empty, if the channels disagree in
+            an integer in ``[1, 2147483647]``, if ``channels`` is empty, if the channels disagree in
             length, or if any channel is empty or carries a non-finite sample.
         SonareError: If the C call rejects the request, which includes a
             ``hop_length`` above ``n_fft // 2``.
@@ -539,11 +534,9 @@ def mastering_repair_denoise_classical_linked(
     hop_length_value = _narrow_int(
         hop_length,
         "hop_length",
-        _C_INT_MIN,
+        1,
         _C_INT_MAX,
     )
-    if hop_length_value <= 0:
-        raise _refuse("hop_length must be positive")
 
     lib = _get_lib()
     symbol = "sonare_mastering_repair_denoise_classical_linked"
@@ -691,7 +684,7 @@ def mastering_repair_detect_hum(
         adaptive: Ignored here -- the estimation path always runs (default False).
         search_range_hz: Tracking search range in Hz (default 2.0).
         adaptation: Tracking step size (default 0.25).
-        frame_size: Analysis frame size, must be >= 16 (default 2048).
+        frame_size: Analysis frame size, must be an integer in [16, 2147483647] (default 2048).
         pll_bandwidth: PLL bandwidth (default 0.01).
         mode: ``"subtract"`` (default) or ``"notch"``.
 
@@ -773,7 +766,7 @@ def mastering_repair_dehum_stereo(
         adaptive: Enable adaptive tracking, shared between channels (default False).
         search_range_hz: Tracking search range in Hz (default 2).
         adaptation: Tracking step size (default 0.25).
-        frame_size: Analysis frame size, must be >= 16 (default 2048).
+        frame_size: Analysis frame size, must be an integer in [16, 2147483647] (default 2048).
         pll_bandwidth: PLL bandwidth (default 0.01).
         mode: ``"subtract"`` (default) or ``"notch"``.
 

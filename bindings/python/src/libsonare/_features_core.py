@@ -238,7 +238,7 @@ def mel_spectrogram(
         fmin_hz: Lower Mel band edge in Hz (default 0.0). Set together with
             ``fmax_hz`` to round-trip with ``mel_to_stft`` / ``mel_to_audio``.
         fmax_hz: Upper Mel band edge in Hz; None (default) is the Nyquist.
-            Must be positive when given.
+            Must be greater than 0 when given.
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
@@ -951,7 +951,7 @@ def reassigned_spectrogram(
     Each field is a float32 array of shape ``(n_bins, n_frames)``.
     """
     if ref_power < 0.0 or not np.isfinite(ref_power):
-        raise _refuse("ref_power must be finite and non-negative")
+        raise _refuse("ref_power must be finite and at least 0")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareReassignedSpectrogramResult()

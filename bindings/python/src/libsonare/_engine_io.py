@@ -42,7 +42,6 @@ from ._ffi_types_core import (
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
-    _C_INT_MIN,
     _INT64_MAX,
     _INT64_MIN,
     ClipPageRequest,
@@ -128,7 +127,7 @@ class _EngineIoMixin:
         if ppq is not None:
             beats = _narrow_double(ppq, f"punch.{edge}_ppq")
             if not beats >= 0.0:
-                raise _refuse(f"punch.{edge}_ppq must be non-negative")
+                raise _refuse(f"punch.{edge}_ppq must be at least 0")
             return self.sample_at_ppq(beats)
         bound = _resolve_sample_bound(
             sample, sec, self._sample_rate, f"punch.{edge}_sample", f"punch.{edge}_sec"
@@ -156,14 +155,9 @@ class _EngineIoMixin:
         capture ungated. The buffer is reallocated only when ``num_channels`` or
         ``capacity_frames`` changes, and reallocating while armed raises ``INVALID_STATE``.
         """
-        # Narrowed before the positivity checks: int(0.5) is a 0 they then refuse
-        # while naming positivity, and int(1024.5) is a buffer one frame short.
-        channel_count = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
-        frame_capacity = _narrow_int(capacity_frames, "capacity_frames", _INT64_MIN, _INT64_MAX)
-        if channel_count <= 0:
-            raise _refuse("num_channels must be positive")
-        if frame_capacity <= 0:
-            raise _refuse("capacity_frames must be positive")
+        # Narrowed, not int()-coerced: int(1024.5) is a buffer one frame short.
+        channel_count = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
+        frame_capacity = _narrow_int(capacity_frames, "capacity_frames", 1, _INT64_MAX)
         source_value = _capture_source_value(source)
         offset = _narrow_int(record_offset_samples, "record_offset_samples", _INT64_MIN, _INT64_MAX)
         monitor = (

@@ -22,7 +22,6 @@ from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_ope
 from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
-    _C_INT_MIN,
     _check,
     _check_realtime,
     _from_c_float_array,
@@ -374,9 +373,7 @@ class PlaybackRenderer:
         inferred from the buffer's shape.
         """
         handle = self._require_handle()
-        ch = _narrow_int(in_channels, "in_channels", _C_INT_MIN, _C_INT_MAX)
-        if ch <= 0:
-            raise _refuse("in_channels must be positive")
+        ch = _narrow_int(in_channels, "in_channels", 1, _C_INT_MAX)
         c_in, total = _to_c_float_array(samples)
         if total % ch != 0:
             raise _refuse("interleaved samples length must be divisible by in_channels")
@@ -412,9 +409,7 @@ class PlaybackRenderer:
         ``frames * num_output_channels()`` samples.
         """
         handle = self._require_handle()
-        ch = _narrow_int(in_channels, "in_channels", _C_INT_MIN, _C_INT_MAX)
-        if ch <= 0:
-            raise _refuse("in_channels must be positive")
+        ch = _narrow_int(in_channels, "in_channels", 1, _C_INT_MAX)
         validated = _validate_samples(samples)
         c_in, total = _to_c_float_array(validated)
         if total % ch != 0:
@@ -464,9 +459,7 @@ def render_playback(
     The renderer latency is removed internally, so the result has the same
     frame count as ``samples`` / ``num_channels``.
     """
-    ch = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
-    if ch <= 0:
-        raise _refuse("num_channels must be positive")
+    ch = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
     c_in, total = _to_c_float_array(samples)
     if total % ch != 0:
         raise _refuse("interleaved samples length must be divisible by num_channels")
@@ -512,9 +505,7 @@ class PlaybackLoudnessMeter:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         _require_playback(self._lib)
-        self._channels = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
-        if self._channels <= 0:
-            raise _refuse("num_channels must be positive")
+        self._channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
         _check(
             self._lib.sonare_playback_loudness_meter_create(
                 _to_c_int(self._channels, "num_channels"),

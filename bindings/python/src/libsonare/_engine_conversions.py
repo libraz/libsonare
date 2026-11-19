@@ -152,9 +152,9 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     try:
         marker_id = operator.index(marker.id)
     except TypeError as exc:
-        raise _refuse("marker id must be a positive uint32 integer") from exc
+        raise _refuse(f"marker id must be an integer in [1, {_UINT32_MAX}]") from exc
     if marker_id <= 0 or marker_id > _UINT32_MAX:
-        raise _refuse("marker id must be a positive uint32 integer")
+        raise _refuse(f"marker id must be an integer in [1, {_UINT32_MAX}]")
     raw = SonareEngineMarker()
     raw.id = marker_id
     # Assigned unconverted so the struct's own narrowing sees each caller value;

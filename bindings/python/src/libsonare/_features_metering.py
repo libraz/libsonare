@@ -22,6 +22,7 @@ from ._ffi import (
     SonareWaveformPeaksResult,
 )
 from ._runtime import (
+    _C_INT_MAX,
     _SIZE_T_MAX,
     _call_float_array_transform,
     _check,
@@ -178,7 +179,7 @@ def lufs_interleaved(
 
     Args:
         samples: Interleaved input buffer of ``frames * channels`` values.
-        channels: Channel count (must be > 0).
+        channels: Channel count (an integer in ``[1, 2147483647]``).
         sample_rate: Sample rate in Hz; K-weighting depends on it.
 
     Returns:
@@ -186,8 +187,7 @@ def lufs_interleaved(
         loudness range.
     """
     sample_buf = _validate_samples(samples)
-    if channels <= 0:
-        raise _refuse("channels must be > 0")
+    channels = _narrow_int(channels, "channels", 1, _C_INT_MAX)
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
     if total % channels != 0:
@@ -228,7 +228,7 @@ def lufs_series_interleaved(
 
     Args:
         samples: Interleaved input buffer of ``frames * channels`` values.
-        channels: Channel count (must be > 0).
+        channels: Channel count (an integer in ``[1, 2147483647]``).
         sample_rate: Sample rate in Hz; K-weighting depends on it.
 
     Returns:
@@ -237,8 +237,7 @@ def lufs_series_interleaved(
         it, not an error.
     """
     sample_buf = _validate_samples(samples)
-    if channels <= 0:
-        raise _refuse("channels must be > 0")
+    channels = _narrow_int(channels, "channels", 1, _C_INT_MAX)
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
     if total % channels != 0:
@@ -581,7 +580,7 @@ def metering_vectorscope(
 ) -> VectorscopeReport:
     """Mid/side point series for a (left, right) stereo pair.
 
-    By default emits one point per input sample. Pass a positive ``max_points``
+    By default emits one point per input sample. Pass a ``max_points`` of at least 1
     to deterministically decimate the point cloud to a display size (matching
     the Node/WASM ``meteringVectorscope`` shape); a value >= the buffer length
     yields full resolution, and 0 or a negative is refused.
@@ -661,7 +660,7 @@ def metering_phase_scope(
 ) -> PhaseScopeReport:
     """Phase-scope point series plus summary stats for a stereo pair.
 
-    By default emits one point per input sample. Pass a positive ``max_points``
+    By default emits one point per input sample. Pass a ``max_points`` of at least 1
     to deterministically decimate the point cloud to a display size (matching
     the Node/WASM ``meteringPhaseScope`` shape); a value >= the buffer length
     yields full resolution, and 0 or a negative is refused. The summary stats
@@ -905,14 +904,14 @@ def waveform_peaks(
 
     Args:
         samples: Interleaved input buffer of ``frames * num_channels`` values.
-        num_channels: Channel count (must be > 0).
+        num_channels: Channel count (an integer in ``[1, 2147483647]``).
         samples_per_bucket: Bucket width in frames (default 512).
     """
     sample_buf = _validate_samples(samples)
-    if num_channels <= 0 or len(sample_buf) % num_channels != 0:
+    num_channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
+    if len(sample_buf) % num_channels != 0:
         raise _refuse("samples length must be a multiple of num_channels")
-    if samples_per_bucket <= 0:
-        raise _refuse("samples_per_bucket must be > 0")
+    samples_per_bucket = _narrow_int(samples_per_bucket, "samples_per_bucket", 1, _SIZE_T_MAX)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareWaveformPeaksResult()
@@ -944,7 +943,7 @@ def waveform_peak_pyramid(
 
     Args:
         samples: Interleaved input buffer of ``frames * num_channels`` values.
-        num_channels: Channel count (must be > 0).
+        num_channels: Channel count (an integer in ``[1, 2147483647]``).
         samples_per_bucket_levels: Bucket widths in frames, one per zoom level
             (default ``(512, 1024, 2048, 4096)``).
     """
@@ -954,16 +953,14 @@ def waveform_peak_pyramid(
     # the one asked for, and a width past the size_t ceiling would reach the core
     # as the 0 that check refuses under someone else's name.
     levels = [
-        _narrow_int(level, f"samples_per_bucket_levels[{index}]", 0, _SIZE_T_MAX)
+        _narrow_int(level, f"samples_per_bucket_levels[{index}]", 1, _SIZE_T_MAX)
         for index, level in enumerate(samples_per_bucket_levels)
     ]
-    if num_channels <= 0 or len(sample_buf) % num_channels != 0:
+    num_channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
+    if len(sample_buf) % num_channels != 0:
         raise _refuse("samples length must be a multiple of num_channels")
     if not levels:
         raise _refuse("samples_per_bucket_levels must be non-empty")
-    for index, level in enumerate(levels):
-        if level <= 0:
-            raise _refuse(f"samples_per_bucket_levels[{index}] must be > 0")
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     c_levels = (ctypes.c_size_t * len(levels))(*levels)

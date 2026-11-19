@@ -103,7 +103,7 @@ def hz_to_note(hz: float) -> str:
     """Convert frequency in Hz to note name (e.g. 'A4').
 
     Raises:
-        SonareValueError: If ``hz`` is not finite and positive.
+        SonareValueError: If ``hz`` is not finite and greater than 0.
     """
     lib = _get_lib()
     return _call_string(lib.sonare_hz_to_note, _to_c_float(hz, "hz"))
@@ -128,17 +128,16 @@ def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float
     """Convert frame count to time in seconds.
 
     Raises:
-        SonareValueError: If ``sr`` or ``hop_length`` is not positive.
+        SonareValueError: If ``sr`` or ``hop_length`` is not an integer in ``[1, 2147483647]``.
     """
     lib = _get_lib()
-    seconds = float(
+    return float(
         lib.sonare_frames_to_time(
-            _to_c_int(frames, "frames"), _to_c_int(sr, "sr"), _to_c_int(hop_length, "hop_length")
+            _to_c_int(frames, "frames"),
+            ctypes.c_int(_narrow_int(sr, "sr", 1, _C_INT_MAX)),
+            ctypes.c_int(_narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)),
         )
     )
-    if math.isnan(seconds):
-        raise _refused_argument("sr and hop_length must be positive")
-    return seconds
 
 
 @_entry("time_to_frames")
@@ -146,20 +145,16 @@ def time_to_frames(time_sec: float, sr: int = 22050, hop_length: int = 512) -> i
     """Convert time in seconds to frame count.
 
     Raises:
-        SonareValueError: If ``sr`` or ``hop_length`` is not positive.
+        SonareValueError: If ``sr`` or ``hop_length`` is not an integer in ``[1, 2147483647]``.
     """
     lib = _get_lib()
-    frames = int(
+    return int(
         lib.sonare_time_to_frames(
             _to_c_float(time_sec, "time_sec"),
-            _to_c_int(sr, "sr"),
-            _to_c_int(hop_length, "hop_length"),
+            ctypes.c_int(_narrow_int(sr, "sr", 1, _C_INT_MAX)),
+            ctypes.c_int(_narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)),
         )
     )
-    # 0 is also a real answer, so the refusal is read from the last error.
-    if frames == 0 and int(lib.sonare_last_error_code()) != 0:
-        raise _refused_argument("sr and hop_length must be positive")
-    return frames
 
 
 @_entry("frames_to_samples")
@@ -924,7 +919,7 @@ def tempogram_ratio(
         factor_values = [_narrow_double(value, "factors") for value in factors]
         for index, factor in enumerate(factor_values):
             if not math.isfinite(factor) or factor <= 0.0:
-                raise _refuse(f"factors[{index}] must be a finite positive number")
+                raise _refuse(f"factors[{index}] must be finite and greater than 0")
         factors_ptr, n_factors = _to_c_float_array(factor_values, arg_name="factors")
     return _call_float_array_transform(
         "sonare_tempogram_ratio",
@@ -958,9 +953,7 @@ def nnls_chroma(
     # One refusal per property, through the shared narrowing rather than a local
     # copy of it: 512.7 is positive and 2 ** 31 is even, so a single message for
     # each argument names a property the offending value already has.
-    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
-    if hop_length_value <= 0:
-        raise _refuse("hop_length must be a positive integer")
+    hop_length_value = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
     stft_blend_n_fft_value = _narrow_int(
         stft_blend_n_fft, "stft_blend_n_fft", _C_INT_MIN, _C_INT_MAX
     )

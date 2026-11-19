@@ -110,7 +110,7 @@ class StreamAnalyzer:
         to, not by ``n_fft // 2 + 1``.
 
         ``fmin_hz`` / ``fmax_hz`` bound the mel bands; an omitted ``fmax_hz`` is
-        Nyquist, and an explicit one must be positive. ``reference_hz`` is the A4
+        Nyquist, and an explicit one must be greater than 0. ``reference_hz`` is the A4
         tuning reference, within 220..880 as :meth:`set_reference_hz` accepts.
         ``compute_mel`` / ``compute_chroma`` / ``compute_onset`` / ``compute_spectral``
         choose the features computed; the chord arrays follow ``compute_chroma``.

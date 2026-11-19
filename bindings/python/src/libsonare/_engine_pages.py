@@ -9,8 +9,9 @@ from typing import BinaryIO
 
 import numpy as np
 
-from ._errors import _entry, _invalid_state, _refuse, _require_open
+from ._errors import _entry, _invalid_state, _require_open
 from ._runtime import (
+    _C_INT_MAX,
     _INT64_MAX,
     _INT64_MIN,
     ClipPageRequest,
@@ -115,8 +116,9 @@ class FileClipPageProvider(ClipPageProvider):
         page_frames: int,
         data_offset_bytes: int = 0,
     ) -> None:
-        if num_channels <= 0 or num_samples <= 0 or page_frames <= 0:
-            raise _refuse("num_channels, num_samples, and page_frames must be positive")
+        _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
+        _narrow_int(num_samples, "num_samples", 1, _INT64_MAX)
+        _narrow_int(page_frames, "page_frames", 1, _INT64_MAX)
         super().__init__(
             num_channels=num_channels, num_samples=num_samples, page_frames=page_frames
         )

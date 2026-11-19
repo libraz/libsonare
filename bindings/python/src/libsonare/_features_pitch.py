@@ -129,7 +129,7 @@ def tuning_to_reference_hz(tuning_cents: float, a4_hz: float = 440.0) -> float:
 
     Args:
         tuning_cents: Finite offset in cents.
-        a4_hz: Finite positive concert pitch the tuning is measured from (default 440).
+        a4_hz: Finite concert pitch, greater than 0, the tuning is measured from (default 440).
 
     Returns:
         The reference frequency in Hz.
@@ -155,8 +155,8 @@ def reference_hz_to_tuning(reference_hz: float, a4_hz: float = 440.0) -> float:
     Inverse of :func:`tuning_to_reference_hz`: ``1200 * log2(reference_hz / a4_hz)``.
 
     Args:
-        reference_hz: Finite positive reference frequency.
-        a4_hz: Finite positive concert pitch (default 440).
+        reference_hz: Finite reference frequency, greater than 0.
+        a4_hz: Finite concert pitch, greater than 0 (default 440).
 
     Returns:
         The tuning in cents.

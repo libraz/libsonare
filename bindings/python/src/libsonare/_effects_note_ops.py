@@ -218,7 +218,7 @@ def extract_notes(
             finite value carries pitch; zero, a negative value, or a non-finite
             value carries no pitch. :func:`pitch_pyin` emits NaN for an
             unvoiced frame by default, which this function accepts as no pitch.
-        frame_rate: F0 frames per second; must be finite and positive.
+        frame_rate: F0 frames per second; must be finite and greater than 0.
         voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
             ``voiced_prob``; pass :func:`pitch_pyin`'s ``voiced_flag`` here.
         voiced_prob: Per-frame voicing probability in ``[0, 1]``, read ONLY when
@@ -452,8 +452,8 @@ def decompose_note_pitch(
             ``f0_hz``. ``None`` makes the C ABI infer voicing from F0 alone;
             when supplied, non-zero is voiced and zero suppresses the F0
             measurement.
-        frame_rate: F0 frames per second; must be finite and positive.
-        median_hz: The note's ``median_hz``: finite and positive, or ``None`` for
+        frame_rate: F0 frames per second; must be finite and greater than 0.
+        median_hz: The note's ``median_hz``: finite and greater than 0, or ``None`` for
             a note with no pitch. Zero or a negative value is a caller bug rather
             than a second way of saying that, and is refused.
         vibrato_cutoff_hz: Boundary between the two curves; ``None`` keeps the
@@ -550,7 +550,7 @@ def split_note(
         samples: Source audio (any sequence convertible to float32).
         sample_rate: Sample rate in Hz.
         f0_hz: Per-frame F0 in Hz, the track the set was extracted from.
-        frame_rate: F0 frames per second; must be finite and positive.
+        frame_rate: F0 frames per second; must be finite and greater than 0.
         notes: The current note set. Each note's ``[frame_start, frame_end)``
             must be non-empty and inside the track.
         index: Note to split.
@@ -575,7 +575,7 @@ def split_note(
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
             the selected voicing array has a different length than ``f0_hz``
             (``voiced``, or ``voiced_prob`` when ``voiced`` is omitted), if ``index`` is not a
-            non-negative integer a ``size_t`` holds, or if a buffer is empty or
+            integer from 0 to the ``size_t`` maximum, or if a buffer is empty or
             non-finite.
         SonareError: If the C call rejects the request (e.g. a frame on or
             outside the note's own boundaries).
@@ -639,7 +639,7 @@ def merge_notes(
         samples: Source audio (any sequence convertible to float32).
         sample_rate: Sample rate in Hz.
         f0_hz: Per-frame F0 in Hz, the track the set was extracted from.
-        frame_rate: F0 frames per second; must be finite and positive.
+        frame_rate: F0 frames per second; must be finite and greater than 0.
         notes: The current note set. Each note's ``[frame_start, frame_end)``
             must be non-empty and inside the track.
         first: Index of the first note to join; must be ``< last``.
@@ -664,7 +664,7 @@ def merge_notes(
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
             the selected voicing array has a different length than ``f0_hz``
             (``voiced``, or ``voiced_prob`` when ``voiced`` is omitted), if ``first`` or
-            ``last`` is not a non-negative integer a ``size_t`` holds, or if a
+            ``last`` is not a integer from 0 to the ``size_t`` maximum, or if a
             buffer is empty. A non-finite ``f0_hz`` frame is read as carrying no
             pitch, not refused.
         SonareError: If the C call rejects the request (e.g. a run that does not

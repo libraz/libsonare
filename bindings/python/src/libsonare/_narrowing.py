@@ -221,7 +221,7 @@ def _resolve_sample_bound(
         value = _narrow_int(sample_value, sample_name, _INT64_MIN, _INT64_MAX)
         name = sample_name
     if not signed and value < 0:
-        raise _refuse(f"{name} must be non-negative")
+        raise _refuse(f"{name} must be at least 0")
     return value
 
 
@@ -281,7 +281,7 @@ def _resolve_optional_non_negative(value: object, name: str) -> int | float:
         return _C_ABSENT
     number = _narrow_double(value, name)
     if number < 0:
-        raise _refuse(f"{name} must be non-negative (use None for the default)")
+        raise _refuse(f"{name} must be at least 0; omit it for the default")
     return value  # type: ignore[return-value]
 
 
@@ -293,13 +293,13 @@ def _resolve_absent_positive(value: object, name: str) -> int | float:
 
     Raises:
         TypeError: If ``value`` is not a number.
-        SonareValueError: If ``value`` is not finite, or is not positive.
+        SonareValueError: If ``value`` is not finite, or is not greater than 0.
     """
     if value is None:
         return _C_ABSENT
     number = _narrow_double(value, name)
     if number <= 0:
-        raise _refuse(f"{name} must be positive (use None for the default)")
+        raise _refuse(f"{name} must be greater than 0; omit it for the default")
     return value  # type: ignore[return-value]
 
 
@@ -311,13 +311,13 @@ def _resolve_zero_default(value: object, name: str) -> int | float:
 
     Raises:
         TypeError: If ``value`` is not a number.
-        SonareValueError: If ``value`` is not finite, or is not positive.
+        SonareValueError: If ``value`` is not finite, or is not greater than 0.
     """
     if value is None:
         return 0
     number = _narrow_double(value, name)
     if number <= 0:
-        raise _refuse(f"{name} must be positive (use None for the default)")
+        raise _refuse(f"{name} must be greater than 0; omit it for the default")
     return value  # type: ignore[return-value]
 
 

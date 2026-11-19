@@ -150,11 +150,9 @@ def test_an_index_only_hpss_argument_past_the_range_is_refused_for_its_range(
 
 
 def test_an_index_only_decompose_count_past_the_range_is_refused_for_its_range(tone) -> None:
-    """The C-int config field names the signed 32-bit range, as the Node and WASM readers do."""
+    """The C-int config field names its closed integer range."""
     message = _refusal(ls.decompose_stems, samples=tone, sample_rate=SR, n_components=Index(2**32))
-    assert (
-        message == "decompose_stems: n_components must be an integer within the signed 32-bit range"
-    )
+    assert message == "decompose_stems: n_components must be an integer in [1, 2147483647]"
 
 
 @pytest.mark.parametrize("keyword", ["frame_length", "hop_length"])

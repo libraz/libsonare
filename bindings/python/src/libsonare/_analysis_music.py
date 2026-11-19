@@ -450,7 +450,7 @@ def detect_boundaries(
         peak_distance_sec: Minimum spacing between peaks, in seconds.
         reference_window_sec: One-sided span in seconds (default 60) over which the
             local novelty maximum that ``threshold`` is measured against is taken.
-            Must be finite and non-negative; 0 makes each frame its own
+            Must be finite and at least 0; 0 makes each frame its own
             reference, which disables the relative threshold. A value at least
             the track length makes the reference whole-track, still with a lone
             dominant event set aside.

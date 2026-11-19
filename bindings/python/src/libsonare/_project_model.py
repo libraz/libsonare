@@ -657,8 +657,8 @@ def _validate_midi_event_word(value: object, label: str) -> int:
 
 def _validate_midi_event_ppq(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise _refuse_type(f"{label} must be a non-negative finite number")
+        raise _refuse_type(f"{label} must be finite and at least 0")
     ppq = float(cast(SupportsFloat, value))
     if not math.isfinite(ppq) or ppq < 0.0:
-        raise _refuse(f"{label} must be a non-negative finite number")
+        raise _refuse(f"{label} must be finite and at least 0")
     return ppq

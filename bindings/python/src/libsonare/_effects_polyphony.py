@@ -499,7 +499,7 @@ class PolyphonicAnalysis:
             ``float32`` ndarray over the note's frame span.
 
         Raises:
-            SonareValueError: If ``note`` is not a non-negative integer.
+            SonareValueError: If ``note`` is not an integer from 0 to the ``size_t`` maximum.
             SonareError: If ``note`` is at or past :meth:`note_count`.
         """
         return self._note_curve("sonare_polyphonic_note_f0", note)
@@ -543,7 +543,7 @@ class PolyphonicAnalysis:
             envelope.
 
         Raises:
-            SonareValueError: If ``note`` is not a non-negative integer.
+            SonareValueError: If ``note`` is not an integer from 0 to the ``size_t`` maximum.
             SonareError: If ``note`` is at or past :meth:`note_count`.
         """
         lib = _get_lib()
@@ -568,14 +568,14 @@ class PolyphonicAnalysis:
         analysis copies, so the caller's array need not outlive the call. It is
         stretched over whatever length the note renders at, so it survives a time
         stretch and need not match the note's frame count; one entry is a
-        constant gain. Every value must be finite and non-negative.
+        constant gain. Every value must be finite and at least 0.
 
         Args:
             note: Index below :meth:`note_count`.
             edit: The new edit, or ``None`` for the identity edit.
 
         Raises:
-            SonareValueError: If ``note`` is not a non-negative integer or the
+            SonareValueError: If ``note`` is not an integer from 0 to the ``size_t`` maximum or the
                 envelope is not one-dimensional.
             SonareError: If ``note`` is at or past :meth:`note_count`.
         """

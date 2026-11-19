@@ -97,17 +97,11 @@ def _int64(value: object, name: str) -> int:
 
 
 def _uint32(value: object, name: str, *, allow_zero: bool = True) -> int:
-    result = _narrow_int(value, name, 0, _UINT32_MAX)
-    if not allow_zero and result == 0:
-        raise _refuse(f"{name} must be positive")
-    return result
+    return _narrow_int(value, name, 0 if allow_zero else 1, _UINT32_MAX)
 
 
 def _uint64(value: object, name: str, *, allow_zero: bool = True) -> int:
-    result = _narrow_int(value, name, 0, _UINT64_MAX)
-    if not allow_zero and result == 0:
-        raise _refuse(f"{name} must be positive")
-    return result
+    return _narrow_int(value, name, 0 if allow_zero else 1, _UINT64_MAX)
 
 
 # SonareVocalOperationKind order; a Python operation is chosen by its class, not a kind.

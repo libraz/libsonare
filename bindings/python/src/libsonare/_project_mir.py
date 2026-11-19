@@ -116,7 +116,7 @@ def align_take_to_reference(
             that bin and the rate it needs -- 24 bins per octave already refuses
             8 kHz.
         take_sample_rate: Sample rate of ``take`` in Hz; ``None`` reads it at
-            ``sample_rate``. Refused like ``sample_rate`` when not positive.
+            ``sample_rate``. Refused like ``sample_rate`` when not greater than 0.
         hop_length: Chroma hop in samples, which sets the time resolution of the
             anchors. ``None`` keeps the library value; a value below 1 is refused.
         bins_per_octave: Chroma bins per octave; ``None`` keeps the library value.

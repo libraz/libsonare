@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import re
 from typing import Any, cast
 
 import pytest
@@ -103,8 +104,8 @@ def test_nnls_chroma_rejects_custom_hop_without_ex2(monkeypatch: pytest.MonkeyPa
     [
         # One row per property, because one message for all of them would name a
         # property the offending value has: 1.5 is positive and 2 ** 31 is even.
-        ({"hop_length": 0}, "hop_length must be a positive integer"),
-        ({"hop_length": 1.5}, "hop_length must be an integer within the signed 32-bit range"),
+        ({"hop_length": 0}, "hop_length must be an integer in [1, 2147483647]"),
+        ({"hop_length": 1.5}, "hop_length must be an integer in [1, 2147483647]"),
         ({"stft_blend_weight": float("nan")}, "stft_blend_weight must be finite"),
         ({"stft_blend_n_fft": 3}, "stft_blend_n_fft must be an even integer"),
         ({"stft_blend_n_fft": 0}, "stft_blend_n_fft must be at least 2"),
@@ -116,7 +117,7 @@ def test_nnls_chroma_rejects_custom_hop_without_ex2(monkeypatch: pytest.MonkeyPa
 )
 def test_nnls_chroma_validates_ex2_parameters(kwargs: dict[str, Any], message: str) -> None:
     """Python rejects values that the ex2 C contract rejects before FFI."""
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(ValueError, match=re.escape(message)):
         _conversions.nnls_chroma([0.0], sample_rate=22050, **kwargs)
 
 
@@ -162,8 +163,8 @@ def test_analyze_impulse_response_rejects_custom_decay_without_ex(
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        ({"min_decay_db": 0.0}, "min_decay_db must be finite and positive"),
-        ({"min_decay_db": float("inf")}, "min_decay_db must be finite and positive"),
+        ({"min_decay_db": 0.0}, "min_decay_db must be finite and greater than 0"),
+        ({"min_decay_db": float("inf")}, "min_decay_db must be finite and greater than 0"),
         ({"n_octave_bands": -1}, r"n_octave_bands must be an integer in \[0, "),
     ],
 )

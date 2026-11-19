@@ -15,8 +15,9 @@ from ._ffi import (
     SonareSpectralEditConfig,
     SonareSpectralRegionOp,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _narrow_int
 from ._runtime import (
+    _C_INT_MAX,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -59,7 +60,7 @@ class SpectralRegionOp:
     low_hz: float = 0.0
     """Region low frequency edge in Hz, clamped to ``[0, nyquist]``."""
     high_hz: float | None = None
-    """Region high frequency edge in Hz, positive; None or ``>= nyquist`` means Nyquist."""
+    """Region high frequency edge in Hz, greater than 0; None or ``>= nyquist`` means Nyquist."""
     gain_db: float = 0.0
     """Gain in dB for ``"gain"`` / ``"attenuate"``; ignored by ``"mute"`` and ``"heal"``."""
     mode: SpectralEditMode = "gain"
@@ -78,7 +79,7 @@ def _spectral_high_hz(value: float | None) -> float:
         return 0.0
     high_hz = _narrow_double(value, "op.high_hz")
     if high_hz <= 0:
-        raise _refuse("op.high_hz must be positive; omit it for Nyquist")
+        raise _refuse("op.high_hz must be greater than 0; omit it for Nyquist")
     return high_hz
 
 
@@ -145,9 +146,7 @@ def spectral_edit(
         if c_hop <= 0 or (c_n_fft and c_hop > c_n_fft // 2):
             raise _refuse("hop_length must satisfy 0 < hop_length <= n_fft / 2")
     if heal_radius_frames is not None:
-        c_heal = _validate_c_int_field(heal_radius_frames, "heal_radius_frames")
-        if c_heal <= 0:
-            raise _refuse("heal_radius_frames must be positive")
+        c_heal = _narrow_int(heal_radius_frames, "heal_radius_frames", 1, _C_INT_MAX)
     window_value = _token_ordinal(window, _WINDOW_TYPES, "window")
 
     lib = _get_lib()

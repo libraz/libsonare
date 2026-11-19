@@ -233,14 +233,14 @@ def _rejections(entry: str) -> list[tuple[str, dict[str, object], str]]:
         ("fixed_velocity_zero", {"fixed_velocity": 0}, f"{entry}: fixed_velocity must be"),
         ("velocity_floor_db", {"velocity_floor_db": 0.0}, f"{entry}: velocity_floor_db must be"),
         ("velocity_floor_positive", {"velocity_floor_db": 6.0}, f"{entry}: velocity_floor_db"),
-        ("f0_min_hz", {"f0_min_hz": 0.0}, f"{entry}: f0_min_hz must be positive"),
+        ("f0_min_hz", {"f0_min_hz": 0.0}, f"{entry}: f0_min_hz must be greater than 0"),
         (
             "f0_min_above_f0_max",
             {"f0_min_hz": 900.0, "f0_max_hz": 200.0},
             f"{entry}: f0_max_hz must be above f0_min_hz",
         ),
         ("reference_hz", {"reference_hz": float("nan")}, f"{entry}: reference_hz must be"),
-        ("min_note_ms", {"min_note_ms": -1.0}, f"{entry}: min_note_ms must be positive"),
+        ("min_note_ms", {"min_note_ms": -1.0}, f"{entry}: min_note_ms must be greater than 0"),
         (
             "min_note_division_zero",
             {"min_note_division": 0},
@@ -340,7 +340,7 @@ def test_transcribe_rejects_out_of_domain_options(
         ),
         pytest.param(
             lambda audio: libsonare.transcribe(audio, SR, tempo_bpm=0.0),
-            "transcribe: tempo_bpm must be positive",
+            "transcribe: tempo_bpm must be greater than 0",
             id="tempo_bpm",
         ),
     ],

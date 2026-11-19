@@ -320,9 +320,9 @@ def test_a_negative_note_index_is_refused_before_it_wraps(
         analysis.note_salience,
         analysis.note_envelope,
     ):
-        with pytest.raises(SonareValueError, match="non-negative"):
+        with pytest.raises(SonareValueError, match=r"must be an integer in \[0, "):
             call(-1)
-    with pytest.raises(SonareValueError, match="non-negative"):
+    with pytest.raises(SonareValueError, match=r"must be an integer in \[0, "):
         analysis.set_note_edit(-1, libsonare.NoteEdit())
 
 

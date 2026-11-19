@@ -24,6 +24,7 @@ from ._project_model import ProjectMidiEvent, _midi_event_from_c
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    _SIZE_T_MAX,
     SonareValueError,
     _check,
     _from_c_float_array,
@@ -306,10 +307,10 @@ def _transcribe_int(value: object, arg_name: str, low: int, high: int) -> int:
 
 
 def _transcribe_positive(value: float, arg_name: str) -> float:
-    """Accept one transcription config float that has to be finite and positive."""
+    """Accept one transcription config float that has to be finite and greater than 0."""
     number = _validate_scalar(value, arg_name)
     if number <= 0.0:
-        raise _refuse(f"{arg_name} must be positive")
+        raise _refuse(f"{arg_name} must be greater than 0")
     return number
 
 
@@ -515,7 +516,7 @@ def _note_pitch_hz(value: float | None, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise _refuse_type(f"{name} must be a number or None")
     if not math.isfinite(value) or value <= 0.0:
-        raise _refuse(f"{name} {value!r} must be finite and positive, or None for no pitch")
+        raise _refuse(f"{name} {value!r} must be finite and greater than 0, or None for no pitch")
     return float(value)
 
 
@@ -616,7 +617,7 @@ def _note_set_index(arg_name: str, value: int) -> int:
         message = f"{arg_name} must be an integer"
         raise _refuse(message) if _is_number(value) else _refuse_type(message)
     if int(value) < 0:
-        raise _refuse(f"{arg_name} must be non-negative")
+        raise _refuse(f"{arg_name} must be an integer in [0, {_SIZE_T_MAX}]")
     return int(value)
 
 

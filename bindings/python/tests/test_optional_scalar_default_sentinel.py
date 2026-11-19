@@ -192,7 +192,7 @@ class TestSegmentNeighbourCount:
     @pytest.mark.parametrize("name", sorted(SEGMENT_NEIGHBOURS))
     @pytest.mark.parametrize("value", [0, -1])
     def test_a_count_below_one_is_refused(self, name: str, value: int) -> None:
-        with pytest.raises(SonareValueError, match="k must be positive"):
+        with pytest.raises(SonareValueError, match="k must be greater than 0"):
             SEGMENT_NEIGHBOURS[name](k=value)
 
 
@@ -210,5 +210,5 @@ class TestPathEnhanceMinRatio:
 
     @pytest.mark.parametrize("value", [0, -1])
     def test_a_ratio_below_one_is_refused(self, value: int) -> None:
-        with pytest.raises(SonareValueError, match="min_ratio must be positive"):
+        with pytest.raises(SonareValueError, match="min_ratio must be greater than 0"):
             self._enhance(min_ratio=value)

@@ -94,11 +94,9 @@ def mastering_repair_declick(
         :class:`~libsonare.types.DeclickResult`: the repaired ``float32``
         samples, the same length as the input, and the pass's report.
     """
-    # Narrowed ahead of the sign check: int() takes 8.7 as 8, a run length nobody asked for.
-    max_click_value = _narrow_int(max_click_samples, "max_click_samples", _C_INT_MIN, _C_INT_MAX)
+    # Narrowed, not int()-coerced: int() takes 8.7 as 8, a run length nobody asked for.
+    max_click_value = _narrow_int(max_click_samples, "max_click_samples", 1, _C_INT_MAX)
     lpc_order_value = _narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX)
-    if max_click_value <= 0:
-        raise _refuse("max_click_samples must be positive")
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
     config = SonareDeclickConfig(  # noqa: F405
@@ -171,19 +169,17 @@ def mastering_repair_detect_clicks(
         :class:`~libsonare.types.ClickDetection`.
 
     Raises:
-        SonareValueError: If ``max_click_samples`` is not positive, or if the
-            buffer is empty or carries a non-finite sample.
+        SonareValueError: If ``max_click_samples`` is not an integer in
+            ``[1, 2147483647]``, or if the buffer is empty or carries a non-finite sample.
         SonareError: If the C call rejects the request.
     """
     max_click_value = _narrow_int(
         max_click_samples,
         "max_click_samples",
-        _C_INT_MIN,
+        1,
         _C_INT_MAX,
     )
     lpc_order_value = _narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX)
-    if max_click_value <= 0:
-        raise _refuse("max_click_samples must be positive")
     config = SonareDeclickConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         neighbor_ratio=_narrow_double(neighbor_ratio, "neighbor_ratio"),
@@ -252,12 +248,10 @@ def mastering_repair_declick_stereo(
     max_click_value = _narrow_int(
         max_click_samples,
         "max_click_samples",
-        _C_INT_MIN,
+        1,
         _C_INT_MAX,
     )
     lpc_order_value = _narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX)
-    if max_click_value <= 0:
-        raise _refuse("max_click_samples must be positive")
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)

@@ -145,7 +145,8 @@ def test_spectral_high_edge_is_none_for_nyquist_and_non_positive_is_refused(
     whole = libsonare.SpectralRegionOp(low_hz=300.0, gain_db=-12.0)
     assert len(libsonare.spectral_edit(tone, SR, [whole])) == len(tone)
     with pytest.raises(
-        SonareValueError, match="^spectral_edit: op.high_hz must be positive; omit it for Nyquist$"
+        SonareValueError,
+        match="^spectral_edit: op.high_hz must be greater than 0; omit it for Nyquist$",
     ):
         libsonare.spectral_edit(
             tone, SR, [libsonare.SpectralRegionOp(low_hz=300.0, high_hz=high_hz)]

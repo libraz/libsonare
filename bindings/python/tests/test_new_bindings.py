@@ -357,7 +357,7 @@ def test_lufs_interleaved_matches_mono_for_dual_mono() -> None:
 def test_lufs_interleaved_rejects_bad_channel_count() -> None:
     x = _tone()
     interleaved = np.stack([x, x], axis=1).reshape(-1)
-    with pytest.raises(ValueError, match="channels must be > 0"):
+    with pytest.raises(ValueError, match=r"channels must be an integer in \[1, 2147483647\]"):
         libsonare.lufs_interleaved(interleaved, 0, SR)
 
 
@@ -426,7 +426,7 @@ def test_lufs_series_interleaved_returns_empty_series_below_a_window() -> None:
 def test_lufs_series_interleaved_rejects_bad_channel_count() -> None:
     x = _tone()
     interleaved = np.stack([x, x], axis=1).reshape(-1)
-    with pytest.raises(ValueError, match="channels must be > 0"):
+    with pytest.raises(ValueError, match=r"channels must be an integer in \[1, 2147483647\]"):
         libsonare.lufs_series_interleaved(interleaved, 0, SR)
 
 

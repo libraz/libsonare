@@ -199,7 +199,7 @@ def analyze(
         adaptive_tempo: Track a locally updated tempo prior through beat
             tracking instead of holding one global tempo.
         tempo_update_interval_beats: Local tempo context length in beats, used
-            only when ``adaptive_tempo`` is true. Must be positive.
+            only when ``adaptive_tempo`` is true. Must be greater than 0.
         compute_tempo_curve: Decode a per-beat local tempo curve into
             ``beat_local_bpm``. Off by default because it is an extra output
             rather than a better analysis — nothing else in the result changes.
@@ -604,9 +604,9 @@ def analyze_impulse_response(
         decay_db = _narrow_double(min_decay_db, "min_decay_db")
         decay_db_c = ctypes.c_float(decay_db).value
     except (TypeError, ValueError, OverflowError) as exc:
-        raise _refuse("min_decay_db must be finite and positive") from exc
+        raise _refuse("min_decay_db must be finite and greater than 0") from exc
     if not math.isfinite(decay_db_c) or decay_db_c <= 0.0:
-        raise _refuse("min_decay_db must be finite and positive")
+        raise _refuse("min_decay_db must be finite and greater than 0")
 
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

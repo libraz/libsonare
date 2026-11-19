@@ -15,11 +15,13 @@ from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._narrowing import (
     _narrow_double,
+    _narrow_int,
     _resolve_absent_positive,
     _resolve_optional_non_negative,
     _resolve_zero_default,
 )
 from ._runtime import (
+    _C_INT_MAX,
     _DEFAULT_EFFECT_N_FFT,
     _call_float_array_transform,
     _check,
@@ -38,7 +40,6 @@ from ._runtime import (
     _token_arg,
     _unsupported_effect_symbol,
     _utf8_arg,
-    _validate_c_int_field,
     _validate_effect_hop,
     _validate_hpss_kernel,
     _validate_samples,
@@ -78,11 +79,11 @@ def decompose(
 
     Args:
         s: Input spectrogram, flattened row-major ``[n_features x n_frames]``.
-        n_features: Feature dimension (rows). Must be > 0.
-        n_frames: Number of time frames. Must be > 0.
-        n_components: Target number of components (k). Must be > 0.
+        n_features: Feature dimension (rows). Must be greater than 0.
+        n_frames: Number of time frames. Must be greater than 0.
+        n_components: Target number of components (k). Must be greater than 0.
         n_iter: Number of multiplicative-update iterations; None takes the
-            library default (50). Must be positive when given.
+            library default (50). Must be greater than 0 when given.
         beta: Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
 
     Returns:
@@ -189,14 +190,12 @@ def _stems_config(
     c_counts = {name: 0 for name in counts}
     for name, value in counts.items():
         if value is not None:
-            c_counts[name] = _validate_c_int_field(value, name)
-            if c_counts[name] <= 0:
-                raise _refuse(f"{name} must be positive")
+            c_counts[name] = _narrow_int(value, name, 1, _C_INT_MAX)
     c_mask_power = 0.0
     if mask_power is not None:
         c_mask_power = _narrow_double(mask_power, "mask_power")
         if c_mask_power < 1.0:
-            raise _refuse("mask_power must be >= 1")
+            raise _refuse("mask_power must be at least 1")
     return SonareDecomposeStemsConfig(
         struct_version=1,
         n_components=c_counts["n_components"],
@@ -254,7 +253,7 @@ def decompose_stems(
 
     Raises:
         SonareValueError: If a given ``n_components``, ``n_iter``, ``n_fft`` or
-            ``hop_length`` is not positive, ``mask_power`` is below 1, or
+            ``hop_length`` is below 1, ``mask_power`` is below 1, or
             ``init`` is not a known token. Leaving a value out is spelled
             ``None``, so 0 is refused rather than read as the C ABI's default.
         SonareError: If the library rejects a value that reaches it, such as a
@@ -354,7 +353,7 @@ def decompose_stems_linked(
     Raises:
         SonareValueError: If ``channels`` is empty or its planes disagree in
             length, if a given ``n_components``, ``n_iter``, ``n_fft`` or
-            ``hop_length`` is not positive, ``mask_power`` is below 1, or
+            ``hop_length`` is below 1, ``mask_power`` is below 1, or
             ``init`` is not a known token.
         SonareError: If the library rejects a value that reaches it, such as a
             non-finite ``beta`` or ``mask_power``, or more than 64 channels.
@@ -421,15 +420,15 @@ def nn_filter(
 
     Args:
         s: Input spectrogram, flattened row-major ``[n_features x n_frames]``.
-        n_features: Feature dimension (rows). Must be > 0.
-        n_frames: Number of time frames. Must be > 0.
+        n_features: Feature dimension (rows). Must be greater than 0.
+        n_frames: Number of time frames. Must be greater than 0.
         aggregate: Aggregator: ``"mean"``, ``"median"``, ``"min"`` or ``"max"``;
             any other string, the empty one included, is refused. Default:
             ``"mean"`` (the library's).
         k: Number of nearest neighbours; None takes the library default (7).
-            Must be positive when given.
+            Must be greater than 0 when given.
         width: Time exclusion half-width; None takes the library default (1).
-            Must be non-negative when given.
+            Must be at least 0 when given.
 
     Returns:
         The smoothed spectrogram as a float32 array of shape
@@ -858,7 +857,7 @@ def phase_vocoder(
         samples: Input audio.
         sample_rate: Sample rate in Hz.
         speed_ratio: Playback speed (< 1.0 slower and longer, > 1.0 faster and
-            shorter); required, > 0. The opposite sense of :func:`note_stretch`'s
+            shorter); required, greater than 0. The opposite sense of :func:`note_stretch`'s
             ``stretch_ratio``, a duration ratio.
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).

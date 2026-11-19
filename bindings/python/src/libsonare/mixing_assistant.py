@@ -25,7 +25,6 @@ from ._narrowing import _narrow_double
 from ._result_records import _fields
 from ._runtime import (
     _C_INT_MAX,
-    _C_INT_MIN,
     _as_float32_buffer,
     _check,
     _get_lib,
@@ -156,11 +155,9 @@ def _build_track_arrays(tracks: Sequence[MixAssistantTrack], sample_rate: int) -
             track_rate = _narrow_int(
                 track.sample_rate,
                 f"tracks[{index}].sample_rate",
-                _C_INT_MIN,
+                1,
                 _C_INT_MAX,
             )
-            if track_rate <= 0:
-                raise _refuse(f"tracks[{index}].sample_rate must be positive")
             sample_rates.append(track_rate)
             any_rate = True
 
@@ -258,11 +255,9 @@ def _suggest(
     # probe for here. _check turns that answer into the same error class every
     # other unsupported call raises.
     lib = _get_lib()
-    # Narrowed ahead of the sign check: int() takes 44100.7 as 44100, a rate the
+    # Narrowed, not int()-coerced: int() takes 44100.7 as 44100, a rate the
     # whole suggestion would then be computed at.
-    sample_rate_value = _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX)
-    if sample_rate_value <= 0:
-        raise _refuse("sample_rate must be positive")
+    sample_rate_value = _narrow_int(sample_rate, "sample_rate", 1, _C_INT_MAX)
     arrays = _build_track_arrays(tracks, sample_rate_value)
     param_array, param_count = _assistant_params(options)
     json_ptr = ctypes.c_char_p()
@@ -441,7 +436,7 @@ def mixing_assistant_suggest(
     """
     # None is the fallback; 0 is the C entry's spelling of it and is not a tempo here.
     if tempo_bpm is not None and tempo_bpm <= 0:
-        raise _refuse("tempo_bpm must be positive")
+        raise _refuse("tempo_bpm must be greater than 0")
     wire = _suggest(
         tracks,
         sample_rate,

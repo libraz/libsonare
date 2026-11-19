@@ -42,7 +42,7 @@ def _high_pass_corner(value: object, name: str, *, positive: bool) -> float:
     """Narrow a given high-pass corner, refusing one outside its domain by name."""
     corner = _narrow_double(value, name)
     if corner < 0 or (positive and corner == 0):
-        bound = "positive" if positive else "non-negative"
+        bound = "greater than 0" if positive else "at least 0"
         raise _refuse(f"{name} must be {bound} (omit it for no high-pass)")
     return corner
 

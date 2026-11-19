@@ -157,10 +157,8 @@ def test_a_fractional_decompose_count_is_refused_rather_than_read_as_the_default
     assert factored(n_components=2) != omitted  # positive control
     assert factored(n_iter=2) != omitted  # positive control
     for field in ("n_components", "n_iter"):
-        # Matched on the narrowing's own wording, not just the field name: this
-        # entry point also refuses a non-positive count, and that message names
-        # the same two fields, so a looser match would be satisfied by the guard
-        # catching the truncated 0 rather than by the value being refused.
+        # Matched on the narrowing's own wording, not just the field name, so a
+        # truncated 0 reaching a later guard would not satisfy it.
         with pytest.raises(SonareValueError, match=f"{field} must be an integer"):
             factored(**{field: 0.5})
     assert factored() == omitted

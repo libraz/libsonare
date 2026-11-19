@@ -469,9 +469,7 @@ class _ProjectEditMixin:
             # Narrowed before the frame count is derived from it, so a fractional
             # channel count is refused rather than silently becoming its floor.
             channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
-        sample_rate = _narrow_int(audio_sample_rate, "audio_sample_rate", _C_INT_MIN, _C_INT_MAX)
-        if sample_rate <= 0:
-            raise _refuse("audio_sample_rate must be positive")
+        sample_rate = _narrow_int(audio_sample_rate, "audio_sample_rate", 1, _C_INT_MAX)
         backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
             raise _refuse("audio length must be a multiple of audio_channels")
