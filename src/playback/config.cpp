@@ -586,8 +586,9 @@ void validate_renderer_config(const RendererConfig& config) {
   check_range(rt.lfe_gain_db, -10.0, 15.0, bass_key("lfeGainDb"));
   if (speakers && bm.enabled) {
     if (bm.subwoofer && p.target_layout == ChannelLayout::Stereo) {
-      fail(schema::refusal(bass_key("subwoofer"),
-                           "must be false on stereo speakers, which have no LFE plane"));
+      fail(schema::refusal(bass_key("subwoofer"), "must be false when " +
+                                                      schema::child_path("target", "layout") +
+                                                      " is stereo, which has no LFE plane"));
     }
     const auto size_of = [&](SpeakerRole role) {
       return p.speakers[static_cast<size_t>(role)].size;
@@ -595,7 +596,8 @@ void validate_renderer_config(const RendererConfig& config) {
     if (!bm.subwoofer && (size_of(SpeakerRole::L) == SpeakerSize::Small ||
                           size_of(SpeakerRole::R) == SpeakerSize::Small)) {
       fail(schema::refusal(bass_key("subwoofer"),
-                           "must be true unless the left and right speakers are large"));
+                           "must be true unless " + speaker_key(SpeakerRole::L, "size") + " and " +
+                               speaker_key(SpeakerRole::R, "size") + " are large"));
     }
   }
 
