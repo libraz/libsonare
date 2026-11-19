@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "mastering/multiband/crossover.h"
+#include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 
 namespace sonare::playback {
@@ -30,10 +31,22 @@ inline int impulse_tail_frames(const std::vector<float>& response) noexcept {
   return 0;
 }
 
+/// Response of @p step (one frame in, one frame out) to a unit impulse over @p length frames.
+/// Denormals are flushed: a recursion decayed past the float range would otherwise idle on
+/// subnormals, which cost orders of magnitude more per operation on x86.
+template <typename Step>
+std::vector<float> unit_impulse_response(size_t length, Step&& step) {
+  rt::ScopedNoDenormals no_denormals;
+  std::vector<float> response(length, 0.0f);
+  for (size_t i = 0; i < length; ++i) response[i] = step(i == 0 ? 1.0f : 0.0f);
+  return response;
+}
+
 /// Lowest band of a crossover built from @p config, driven by a unit impulse for
-/// kImpulseProbeSeconds in blocks of @p max_block.
+/// kImpulseProbeSeconds in blocks of @p max_block, with denormals flushed.
 inline std::vector<float> crossover_low_band_impulse(
     const mastering::multiband::CrossoverConfig& config, double sample_rate, int max_block) {
+  rt::ScopedNoDenormals no_denormals;
   mastering::multiband::Crossover probe(config);
   probe.prepare(sample_rate, max_block, 1);
   mastering::multiband::CrossoverScratch scratch;

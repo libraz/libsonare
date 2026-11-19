@@ -421,12 +421,12 @@ void Upmixer::prepare(double sample_rate, int max_block_size, ChannelLayout outp
 
   // Decay horizons, measured on the prepared filters' impulse responses.
   const auto sim_len = static_cast<size_t>(kImpulseProbeSeconds * sample_rate);
-  std::vector<float> h(sim_len, 0.0f);
   int chain_decay = 0;
   for (const auto* ms : {&kAllpassMsLeft, &kAllpassMsRight}) {
     AllpassChain chain;
     chain.prepare(*ms, sample_rate);
-    for (size_t i = 0; i < sim_len; ++i) h[i] = chain.process(i == 0 ? 1.0f : 0.0f);
+    const std::vector<float> h =
+        unit_impulse_response(sim_len, [&chain](float x) { return chain.process(x); });
     chain_decay = std::max(chain_decay, impulse_tail_frames(h));
   }
   const std::vector<float> lfe_h =

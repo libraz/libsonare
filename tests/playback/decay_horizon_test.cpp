@@ -2,8 +2,11 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
+#include "mastering/multiband/crossover.h"
+#include "playback/impulse_tail.h"
 #include "playback/layout_convert.h"
 #include "playback/upmix.h"
 #include "rt/tail_budget.h"
@@ -27,7 +30,46 @@ double peak_from(const std::vector<std::vector<float>>& planes, int begin) {
   return peak;
 }
 
+/// Number of subnormal samples in @p response.
+int subnormal_count(const std::vector<float>& response) {
+  int count = 0;
+  for (float v : response) count += std::fpclassify(v) == FP_SUBNORMAL ? 1 : 0;
+  return count;
+}
+
 }  // namespace
+
+TEST_CASE("a unit-impulse probe flushes a decayed recursion to zero instead of to subnormals",
+          "[playback][upmix]") {
+  // Halving reaches the smallest normal float at frame 126; gradual underflow would hold
+  // subnormals from frame 127 to 149.
+  volatile float halve = 0.5f;
+  float state = 0.0f;
+  const std::vector<float> response = unit_impulse_response(256, [&](float x) {
+    const float out = state + x;
+    state = out * halve;
+    return out;
+  });
+
+  REQUIRE(response.size() == 256);
+  CHECK(response[0] == 1.0f);
+  CHECK(response[126] == std::numeric_limits<float>::min());
+  CHECK(response[127] == 0.0f);
+  CHECK(subnormal_count(response) == 0);
+}
+
+TEST_CASE("the crossover decay probe leaves no subnormal in its impulse response",
+          "[playback][layout]") {
+  sonare::mastering::multiband::CrossoverConfig config;
+  config.cutoffs_hz = {120.0f};
+  config.slope = sonare::mastering::multiband::CrossoverSlope::LR4;
+  config.mode = sonare::mastering::multiband::CrossoverMode::LinkwitzRiley;
+  const std::vector<float> response = crossover_low_band_impulse(config, kRate, kBlock);
+
+  REQUIRE(response.size() == static_cast<size_t>(kImpulseProbeSeconds * kRate));
+  REQUIRE(impulse_tail_frames(response) > 0);
+  CHECK(subnormal_count(response) == 0);
+}
 
 TEST_CASE("upmix decay_frames ends where a unit impulse's output stays below the tail floor",
           "[playback][upmix]") {
