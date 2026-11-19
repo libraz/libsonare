@@ -1144,7 +1144,10 @@ export class RealtimeEngine {
    * `setClips` entry; a refused clip leaves the published set unchanged.
    *
    * @example
+   * ```ts
+   * declare const engine: RealtimeEngine;
    * engine.upsertClip({ id: 3, channels: [samples], startPpq: 4, gain: 0.5 });
+   * ```
    */
   upsertClip(clip: EngineClip): void {
     this.native.upsertClip(toNativeClip(clip, 'clip'));

@@ -461,11 +461,14 @@ export class Mixer {
    * routed on. The recipe for sending a strip into a submix:
    *
    * @example
+   * ```ts
+   * declare const mixer: Mixer;
    * mixer.addStrip('a');
    * mixer.addBus('sub', 'submix');
    * mixer.setOutputBus('a', 'sub');
    * mixer.setOutputBus('sub', 'master');
    * mixer.compile();
+   * ```
    *
    * @throws RangeError naming the ids (and the path, for a
    *   cycle) for an unknown source or destination, a destination that is not a
