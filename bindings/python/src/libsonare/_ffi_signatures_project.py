@@ -691,10 +691,9 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareMidiEventPod),
         ],
     }.items():
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = _args
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = _args
 
     # MIR.
     lib.sonare_project_auto_tempo.restype = ctypes.c_int32
@@ -843,10 +842,9 @@ def _configure_sample_bank_signatures(lib: ctypes.CDLL) -> None:
     ]
 
     for _name in ("sonare_sample_bank_sample_count", "sonare_sample_bank_set_count"):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
 
 
 def _configure_midi_naming_signatures(lib: ctypes.CDLL) -> None:
@@ -859,29 +857,26 @@ def _configure_midi_naming_signatures(lib: ctypes.CDLL) -> None:
         "sonare_midi_cc_name",
         "sonare_midi_per_note_controller_name",
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_char_p
-            _fn.argtypes = [ctypes.c_int]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_char_p
+        _fn.argtypes = [ctypes.c_int]
 
     for _name in (
         "sonare_midi_gm2_instrument_name",
         "sonare_midi_gm2_drum_name",
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_char_p
-            _fn.argtypes = [ctypes.c_int, ctypes.c_int]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_char_p
+        _fn.argtypes = [ctypes.c_int, ctypes.c_int]
 
     for _name in (
         "sonare_midi_gm_program_for_name",
         "sonare_midi_gm_drum_note_for_name",
         "sonare_midi_cc_index_for_name",
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int
-            _fn.argtypes = [ctypes.c_char_p]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int
+        _fn.argtypes = [ctypes.c_char_p]
 
     lib.sonare_midi_gm_family_first_program.restype = ctypes.c_int
     lib.sonare_midi_gm_family_first_program.argtypes = [ctypes.c_int]
@@ -1027,20 +1022,18 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         ("sonare_project_tempo_segment_by_index", SonareProjectTempoSegment),
         ("sonare_project_time_signature_by_index", SonareProjectTimeSignatureSegment),
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(_struct)]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(_struct)]
 
     for _name in (
         "sonare_project_marker_name_by_index",
         "sonare_project_track_name_by_index",
         "sonare_project_source_name_or_uri_by_index",
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_char_p)]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_char_p)]
 
     lib.sonare_project_get_audio_source_metadata.restype = ctypes.c_int32
     lib.sonare_project_get_audio_source_metadata.argtypes = [
@@ -1068,10 +1061,9 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         ("sonare_project_source_by_index", SonareProjectSource),
         ("sonare_project_unresolved_audio_source_by_index", SonareProjectSource),
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(_struct)]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(_struct)]
 
     lib.sonare_project_set_mixer_scene_json.restype = ctypes.c_int32
     lib.sonare_project_set_mixer_scene_json.argtypes = [
@@ -1101,10 +1093,9 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         "sonare_project_time_signature_count",
         "sonare_project_track_count",
     ):
-        if hasattr(lib, _name):
-            _fn = getattr(lib, _name)
-            _fn.restype = ctypes.c_int32
-            _fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
 
     lib.sonare_project_last_bounce_compile_result.restype = ctypes.c_int32
     lib.sonare_project_last_bounce_compile_result.argtypes = [
