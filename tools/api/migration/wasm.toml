@@ -18035,6 +18035,23 @@ entry = "./analysis"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
 
 [[entry]]
+kind = "option"
+old = "phaseVocoder(hopLength)"
+changed = "an omitted hopLength runs as nFft / 4, rounded down, like the other resynthesizing effects (was a fixed 512); nFft is refused outside the even integers in [4, 2147483646] with 'nFft must be an even integer in [4, 2147483646]' before the core"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/option-extensions.test.ts::runs an omitted phaseVocoder hop as a quarter of nFft"
+
+[[entry]]
+kind = "option"
+old = "phaseVocoder(hopLength)"
+changed = "an omitted hopLength runs as nFft / 4, rounded down, like the other resynthesizing effects (was a fixed 512); nFft is refused outside the even integers in [4, 2147483646] with 'nFft must be an even integer in [4, 2147483646]' before the core"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/option-extensions.test.ts::runs an omitted phaseVocoder hop as a quarter of nFft"
+
+[[entry]]
 kind = "function"
 old = "remix"
 changed = "one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Float32Array"

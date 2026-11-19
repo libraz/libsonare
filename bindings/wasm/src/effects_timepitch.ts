@@ -35,7 +35,7 @@ export interface TimeStretchRequest {
    * `stretchRatio`, which is a duration ratio.
    */
   speedRatio: number;
-  /** FFT size: an even integer >= 4. Default 2048. */
+  /** FFT size: an even integer in `[4, 2147483646]`. Default 2048. */
   nFft?: number;
   /** Hop in samples, in `(0, nFft / 2]`. Default `nFft / 4`, rounded down. */
   hopLength?: number;
@@ -49,7 +49,7 @@ export interface PitchShiftRequest {
   sampleRate: number;
   /** Shift in semitones: +12 is one octave up, -12 one octave down. */
   pitchSemitones: number;
-  /** FFT size: an even integer >= 4. Default 2048. */
+  /** FFT size: an even integer in `[4, 2147483646]`. Default 2048. */
   nFft?: number;
   /** Hop in samples, in `(0, nFft / 2]`. Default `nFft / 4`, rounded down. */
   hopLength?: number;
@@ -86,8 +86,9 @@ export interface AutoTuneRequest extends AutoTuneOptions {
 /**
  * Time-stretch audio without changing pitch.
  *
- * `options.nFft` is an even integer >= 4 (default 2048); `options.hopLength` is
- * in `(0, nFft / 2]` (default `nFft / 4`, rounded down). `speedRatio` is required.
+ * `options.nFft` is an even integer in `[4, 2147483646]` (default 2048);
+ * `options.hopLength` is in `(0, nFft / 2]` (default `nFft / 4`, rounded down).
+ * `speedRatio` is required.
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
@@ -118,8 +119,9 @@ export function timeStretch(...args: unknown[]): Float32Array {
 /**
  * Pitch-shift audio without changing duration.
  *
- * `options.nFft` is an even integer >= 4 (default 2048); `options.hopLength` is
- * in `(0, nFft / 2]` (default `nFft / 4`, rounded down). `pitchSemitones` is required.
+ * `options.nFft` is an even integer in `[4, 2147483646]` (default 2048);
+ * `options.hopLength` is in `(0, nFft / 2]` (default `nFft / 4`, rounded down).
+ * `pitchSemitones` is required.
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz

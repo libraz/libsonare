@@ -99,7 +99,7 @@ export const ROWS: Row[] = [
     fn: sonare.phaseVocoder,
     form: 'sampleOptions',
     params: 'samples sampleRate speedRatio nFft? hopLength?',
-    values: { samples: SIG, sampleRate: ALT_SR, speedRatio: 1.25, nFft: 1024, hopLength: 256 },
+    values: { samples: SIG, sampleRate: ALT_SR, speedRatio: 1.25, nFft: 1024, hopLength: 128 },
     invalid: { speedRatio: Number.NaN },
   },
   {

@@ -4,7 +4,11 @@
  */
 
 import { validatePositiveIntegers } from './internal/feature_validation.js';
-import { resolveFftOptions, resolveResynthesisHop } from './internal/fft_options.js';
+import {
+  resolveEffectFftOptions,
+  resolveFftOptions,
+  resolveResynthesisHop,
+} from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -308,9 +312,9 @@ export interface PhaseVocoderRequest {
    * slower and longer, the opposite sense of a note's `stretchRatio`. Required.
    */
   speedRatio: number;
-  /** FFT size in samples. Default 2048. */
+  /** FFT size: an even integer in `[4, 2147483646]`. Default 2048. */
   nFft?: number;
-  /** Hop in samples. Default 512. */
+  /** Hop in samples, in `(0, nFft / 2]`. Default `nFft / 4`, rounded down. */
   hopLength?: number;
 }
 
@@ -318,7 +322,8 @@ export interface PhaseVocoderRequest {
  * Phase-vocoder time-scale modification by `speedRatio`.
  *
  * @throws {TypeError} when `sampleRate` or `speedRatio` is missing
- * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate` or a non-finite `speedRatio`
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, a non-finite `speedRatio`,
+ *   an `nFft` outside the even integers in `[4, 2147483646]` or a `hopLength` that is not positive
  */
 export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
 export function phaseVocoder(
@@ -335,11 +340,6 @@ export function phaseVocoder(...args: unknown[]): Float32Array {
   // refuses the infinity it becomes.
   assertFiniteScalar('phaseVocoder', r.speedRatio, 'speedRatio');
   assertPositiveFloatValue('phaseVocoder', r.speedRatio, 'speedRatio');
-  return requireModule().phaseVocoder(
-    r.samples,
-    r.sampleRate,
-    r.speedRatio,
-    r.nFft ?? 2048,
-    r.hopLength ?? 512,
-  );
+  const { nFft, hopLength } = resolveEffectFftOptions('phaseVocoder', r.nFft, r.hopLength);
+  return requireModule().phaseVocoder(r.samples, r.sampleRate, r.speedRatio, nFft, hopLength);
 }

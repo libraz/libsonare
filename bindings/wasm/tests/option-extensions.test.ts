@@ -168,7 +168,10 @@ describe('STFT entry points share one nFft rule', () => {
       hpssWithResidual({ samples, sampleRate, nFft, hopLength: 256 }),
     timeStretch: (nFft: number) => timeStretch({ samples, sampleRate, speedRatio: 1.0, nFft }),
     pitchShift: (nFft: number) => pitchShift({ samples, sampleRate, pitchSemitones: 0, nFft }),
+    phaseVocoder: (nFft: number) => phaseVocoder({ samples, sampleRate, speedRatio: 1.0, nFft }),
   };
+  const domain = (name: string) =>
+    new RangeError(`${name}: nFft must be an even integer in [4, 2147483646]`);
 
   it.each(Object.keys(stftEntryPoints))('%s accepts a non-power-of-two even nFft', (name) => {
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](1536)).not.toThrow();
@@ -176,17 +179,33 @@ describe('STFT entry points share one nFft rule', () => {
 
   it.each(Object.keys(stftEntryPoints))('%s rejects a two-point nFft', (name) => {
     // A two-point symmetric Hann synthesis window is all zeros.
-    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](2)).toThrow(RangeError);
-    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](2)).toThrow(
-      /nFft must be an integer in \[4, /,
-    );
+    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](2)).toThrow(domain(name));
   });
 
   it.each(Object.keys(stftEntryPoints))('%s rejects an odd nFft the same way', (name) => {
-    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(RangeError);
-    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(
-      /nFft must be an even integer/,
-    );
+    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(domain(name));
+  });
+
+  it.each(Object.keys(stftEntryPoints))(
+    '%s rejects an nFft past the largest even C int',
+    (name) => {
+      expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](2 ** 31)).toThrow(
+        domain(name),
+      );
+    },
+  );
+
+  it('runs an omitted phaseVocoder hop as a quarter of nFft', () => {
+    const omitted = phaseVocoder({ samples, sampleRate, speedRatio: 1.5, nFft: 1024 });
+    const quarter = phaseVocoder({
+      samples,
+      sampleRate,
+      speedRatio: 1.5,
+      nFft: 1024,
+      hopLength: 256,
+    });
+    expect(Array.from(omitted)).toEqual(Array.from(quarter));
+    expect(() => phaseVocoder({ samples, sampleRate, speedRatio: 1.5, nFft: 8 })).not.toThrow();
   });
 });
 

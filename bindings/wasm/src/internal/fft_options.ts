@@ -32,6 +32,9 @@ export function resolveFftOptions(
   return resolveWithMinimum(fnName, nFft, hopLength, 2);
 }
 
+/** The largest even C `int`, the top of a resynthesizing effect's `nFft` domain. */
+const MAX_EFFECT_N_FFT = 2147483646;
+
 /**
  * The same pair for an effect that resynthesizes audio: the symmetric Hann
  * synthesis window is all zeros at two points, so the smallest size is 4. An
@@ -44,7 +47,9 @@ export function resolveEffectFftOptions(
 ): { nFft: number; hopLength: number } {
   const size = nFft === undefined ? 2048 : nFft;
   assertIntegerValue(fnName, size, 'nFft');
-  assertEvenIntegerAtLeast(fnName, size, 'nFft', 4, 2 ** 30);
+  if (size < 4 || size > MAX_EFFECT_N_FFT || size % 2 !== 0) {
+    throw new RangeError(`${fnName}: nFft must be an even integer in [4, ${MAX_EFFECT_N_FFT}]`);
+  }
   return { nFft: size, hopLength: resolveResynthesisHop(fnName, hopLength) };
 }
 

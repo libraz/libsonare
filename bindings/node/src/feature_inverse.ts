@@ -1,6 +1,6 @@
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
-import { resolveResynthesisHop } from './internal/fft_options.js';
+import { resolveEffectFftOptions, resolveResynthesisHop } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -119,9 +119,9 @@ export interface PhaseVocoderRequest {
    * slower and longer, the opposite sense of a note's `stretchRatio`. Required.
    */
   speedRatio: number;
-  /** FFT size in samples. Default 2048. */
+  /** FFT size: an even integer in `[4, 2147483646]`. Default 2048. */
   nFft?: number;
-  /** Hop in samples. Default 512. */
+  /** Hop in samples, in `(0, nFft / 2]`. Default `nFft / 4`, rounded down. */
   hopLength?: number;
 }
 
@@ -370,7 +370,8 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
  * Phase-vocoder time-scale modification by `speedRatio`.
  *
  * @throws {TypeError} when `sampleRate` or `speedRatio` is missing
- * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate` or a non-finite `speedRatio`
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, a non-finite `speedRatio`,
+ *   an `nFft` outside the even integers in `[4, 2147483646]` or a `hopLength` that is not positive
  */
 export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
 export function phaseVocoder(
@@ -386,14 +387,10 @@ export function phaseVocoder(...args: unknown[]): Float32Array {
   assertFiniteScalar('phaseVocoder', request.speedRatio, 'speedRatio');
   assertPositiveFloatValue('phaseVocoder', request.speedRatio, 'speedRatio');
   assertAudioInput('phaseVocoder', request.samples, request.sampleRate, request);
-  // Positivity only: the analysis geometry is an StftConfig, which requires a
-  // positive size and hop and reports its own size ceiling by name.
-  const nFft = resolvePositiveIntegerOption('phaseVocoder', 'nFft', request.nFft, 2048);
-  const hopLength = resolvePositiveIntegerOption(
+  const { nFft, hopLength } = resolveEffectFftOptions(
     'phaseVocoder',
-    'hopLength',
+    request.nFft,
     request.hopLength,
-    512,
   );
   return addon.phaseVocoder(
     request.samples,

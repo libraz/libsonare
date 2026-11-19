@@ -1089,7 +1089,7 @@ const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: SR,
-      options: { speedRatio: 1.25, nFft: 1024, hopLength: 256 },
+      options: { speedRatio: 1.25, nFft: 1024, hopLength: 128 },
     },
     invalid: { speedRatio: 0 },
     oneOf: [
