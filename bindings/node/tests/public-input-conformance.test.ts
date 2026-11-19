@@ -1161,10 +1161,19 @@ describe('an integer and a float field refuse a wrong type by type and a wrong v
   }
 });
 
+/**
+ * A corpus row this surface does not answer yet, keyed by surface with the reason. It runs as an
+ * expected failure, so the row turns red the moment the surface starts answering and the entry
+ * has to be removed with the fix.
+ */
+type PendingCase = ReaderSplitCase & { pending?: Record<string, string> };
+
+const SURFACE = 'node';
+
 type RetuneSection = {
   entries: ('constructor' | 'set_config')[];
   base: Record<string, unknown>;
-  cases: ReaderSplitCase[];
+  cases: PendingCase[];
 };
 
 /** The corpus spells keys in snake case; this surface spells them in camel case. */
@@ -1181,7 +1190,9 @@ describe('the streaming retune controls answer the shared corpus on construction
   const base = camelRecord(section.base);
   for (const entry of section.entries) {
     for (const testCase of section.cases) {
-      it(`${entry} ${testCase.id}`, () => {
+      const pending = testCase.pending?.[SURFACE];
+      const test = pending ? it.fails : it;
+      test(`${entry} ${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
         const key = camelKey(testCase.key);
         const config = { [key]: corpusValue(testCase.value) };
         const live = entry === 'set_config' ? new StreamingRetune(base as never) : undefined;

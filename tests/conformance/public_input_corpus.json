@@ -342,11 +342,13 @@
       { "id": "pitch_semitones_nan", "key": "pitch_semitones", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in [-24, 24]" },
       { "id": "pitch_semitones_wrong_type", "key": "pitch_semitones", "value": "1", "refused": "type", "predicate": "must be a number" },
       { "id": "pitch_semitones_boolean", "key": "pitch_semitones", "value": true, "refused": "type", "predicate": "must be a number" },
+      { "id": "pitch_semitones_past_float", "key": "pitch_semitones", "value": 1e40, "refused": "range", "predicate": "must be finite and in [-24, 24]", "pending": {"node": "the native float reader narrows by the float range ahead of the core domain", "wasm": "the native float reader narrows by the float range ahead of the core domain"} },
       { "id": "mix_dry", "key": "mix", "value": 0, "accepted": true },
       { "id": "mix_wet", "key": "mix", "value": 1, "accepted": true },
       { "id": "mix_above", "key": "mix", "value": 1.5, "refused": "range", "predicate": "must be finite and in [0, 1]" },
       { "id": "mix_below", "key": "mix", "value": -0.5, "refused": "range", "predicate": "must be finite and in [0, 1]" },
-      { "id": "mix_nan", "key": "mix", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in [0, 1]" }
+      { "id": "mix_nan", "key": "mix", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in [0, 1]" },
+      { "id": "mix_past_float", "key": "mix", "value": 1e40, "refused": "range", "predicate": "must be finite and in [0, 1]", "pending": {"node": "the native float reader narrows by the float range ahead of the core domain", "wasm": "the native float reader narrows by the float range ahead of the core domain"} }
     ]
   }
 }
