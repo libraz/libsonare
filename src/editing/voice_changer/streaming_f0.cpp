@@ -7,8 +7,11 @@
 #include "rt/polyphase_fir.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::voice_changer {
+
+namespace check = sonare::util::check;
 
 using sonare::constants::kCentsPerOctave;
 using sonare::constants::kSqrt2D;
@@ -72,10 +75,7 @@ void StreamingF0Tracker::prepare(double sr, int max_block, float f0_min_hz) {
   if (max_block < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block must be non-negative");
   }
-  if (!std::isfinite(f0_min_hz) || f0_min_hz <= 0.0f ||
-      static_cast<double>(f0_min_hz) >= kMaxF0Hz) {
-    throw SonareException(ErrorCode::InvalidParameter, "f0_min_hz must lie in (0, 1400) Hz");
-  }
+  check::in_interval(f0_min_hz, 0.0, false, kMaxF0Hz, false, "f0_min_hz");
   analysis_rate_ = sr / kDecimation;
   hop_analysis_ = std::max(1, static_cast<int>(std::lround(kHopSeconds * analysis_rate_)));
   hop_input_ = kDecimation * hop_analysis_;

@@ -2,13 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <string>
 
 #include "effects/pitch_shift.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::voice_changer {
+
+namespace check = sonare::util::check;
 
 namespace {
 
@@ -19,9 +21,8 @@ double pitch_ratio(float semitones) { return std::exp2(static_cast<double>(semit
 FormantMode parse_formant_mode(std::string_view name) {
   if (name == "relative") return FormantMode::Relative;
   if (name == "absolute") return FormantMode::Absolute;
-  throw SonareException(
-      ErrorCode::InvalidParameter,
-      "formant mode must be 'relative' or 'absolute', got '" + std::string(name) + "'");
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "formant_mode",
+                                          util::refusal::kDeclaredValuePredicate);
 }
 
 const char* formant_mode_name(FormantMode mode) noexcept {
@@ -45,37 +46,21 @@ Audio VoiceChanger::process(const Audio& audio) const {
   // in the core, so all four surfaces and both CLIs inherit it rather than each
   // growing its own copy. +/-Inf needs no case here: it enters the branch and
   // pitch_shift rejects it.
-  SONARE_CHECK(std::isfinite(config_.pitch_semitones), ErrorCode::InvalidParameter);
+  check::finite_float(config_.pitch_semitones, "pitch_semitones");
 
   // The warp factor is resolved, and an unreachable absolute request refused, before the
   // pitch shift is paid for.
-  SONARE_CHECK_MSG(std::isfinite(config_.formant_factor), ErrorCode::InvalidParameter,
-                   "formant factor must be finite");
+  check::finite_float(config_.formant_factor, "formant_factor");
   float warp_factor = config_.formant_factor;
-  if (config_.formant_mode == FormantMode::Relative &&
-      !formant_factor_in_range(config_.formant_factor)) {
-    char text[160];
-    std::snprintf(text, sizeof(text),
-                  "relative formant mode: formant factor must be in [%.2f, %.2f], got %.4g",
-                  static_cast<double>(kFormantFactorMin), static_cast<double>(kFormantFactorMax),
-                  static_cast<double>(config_.formant_factor));
-    throw SonareException(ErrorCode::InvalidParameter, text);
+  if (config_.formant_mode == FormantMode::Relative) {
+    check::in_range(config_.formant_factor, kFormantFactorMin, kFormantFactorMax, "formant_factor");
   }
   if (config_.formant_mode == FormantMode::Absolute) {
     double lo = 0.0;
     double hi = 0.0;
     reachable_formant_factor_range(config_.pitch_semitones, &lo, &hi);
     const double requested = static_cast<double>(config_.formant_factor);
-    if (!(requested >= lo && requested <= hi)) {
-      char text[240];
-      std::snprintf(text, sizeof(text),
-                    "absolute formant mode: formant factor must be in [%.4g, %.4g] at a pitch "
-                    "shift of %.4g semitones (the formant warp covers [%.2f, %.2f]), got %.4g",
-                    lo, hi, static_cast<double>(config_.pitch_semitones),
-                    static_cast<double>(kFormantFactorMin), static_cast<double>(kFormantFactorMax),
-                    requested);
-      throw SonareException(ErrorCode::InvalidParameter, text);
-    }
+    check::in_computed_range(requested, lo, hi, "formant_factor");
     warp_factor = static_cast<float>(std::clamp(requested / pitch_ratio(config_.pitch_semitones),
                                                 static_cast<double>(kFormantFactorMin),
                                                 static_cast<double>(kFormantFactorMax)));

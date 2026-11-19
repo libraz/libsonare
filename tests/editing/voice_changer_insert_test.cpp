@@ -31,6 +31,7 @@ using sonare::SonareException;
 using sonare::editing::voice_changer::PitchEngine;
 using sonare::editing::voice_changer::RealtimeVoiceChanger;
 using sonare::editing::voice_changer::RealtimeVoiceChangerConfig;
+using sonare::editing::voice_changer::VocoderCarrierSource;
 using sonare::editing::voice_changer::VoiceChangerInsert;
 using sonare::mastering::api::insert_param_info_json;
 using sonare::mastering::api::make_insert;
@@ -414,10 +415,37 @@ TEST_CASE("voice.changer insert construction names the out-of-range field",
   try {
     VoiceChangerInsert insert(config);
     FAIL("expected a refusal");
-  } catch (const SonareException& e) {
+  } catch (const sonare::SonareParameterRefusal& e) {
     CHECK(e.code() == ErrorCode::InvalidParameter);
-    CHECK(std::string(e.what()) ==
-          "voice.changer: formant.factor must be finite and in [0.55, 1.65]");
+    CHECK(e.subjects() == std::vector<std::string>{"formantFactor"});
+    CHECK(std::string(e.what()) == "formantFactor must be finite and in [0.55, 1.65]");
+  }
+}
+
+TEST_CASE("voice.changer insert construction names a harmony step by its scalar key",
+          "[voice_changer][insert]") {
+  RealtimeVoiceChangerConfig config;
+  config.harmony.steps[1] = 99;
+  try {
+    VoiceChangerInsert insert(config);
+    FAIL("expected a refusal");
+  } catch (const sonare::SonareParameterRefusal& e) {
+    CHECK(e.code() == ErrorCode::InvalidParameter);
+    CHECK(e.subjects() == std::vector<std::string>{"harmonyStep2"});
+    CHECK(std::string(e.what()) == "harmonyStep2 must be an integer in [-7, 7]");
+  }
+}
+
+TEST_CASE("voice.changer insert refuses an external vocoder carrier as not supported",
+          "[voice_changer][insert]") {
+  RealtimeVoiceChangerConfig config;
+  config.vocoder.carrier_source = VocoderCarrierSource::External;
+  try {
+    VoiceChangerInsert insert(config);
+    FAIL("expected a refusal");
+  } catch (const sonare::SonareParameterRefusal& e) {
+    CHECK(e.code() == ErrorCode::NotSupported);
+    CHECK(e.subjects() == std::vector<std::string>{"vocoderCarrierSource"});
   }
 }
 
@@ -817,7 +845,7 @@ TEST_CASE("voice.changer refuses an unreachable absolute warp at construction an
     FAIL("expected a refusal");
   } catch (const SonareException& e) {
     CHECK(e.code() == ErrorCode::InvalidParameter);
-    CHECK(std::string(e.what()).find("[0.55, 0.9811]") != std::string::npos);
+    CHECK(std::string(e.what()).find("[0.55, 0.981]") != std::string::npos);
   }
 
   // Automation past the edge is refused, the warp stays reachable and the audio stays finite.

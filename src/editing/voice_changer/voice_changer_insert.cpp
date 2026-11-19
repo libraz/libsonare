@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 #include "util/exception.h"
@@ -85,19 +86,36 @@ constexpr unsigned int kParamCount = 0 SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE
 #undef SONARE_COUNT_PARAM
 
 // The insert carries no carrier input, so an external vocoder carrier has nothing to read.
-bool insert_accepts(const RealtimeVoiceChangerConfig& config, std::string* error) {
-  if (!validate_realtime_voice_changer_config(config, nullptr, error)) return false;
-  if (config.vocoder.carrier_source == VocoderCarrierSource::External) {
-    if (error) *error = "vocoderCarrierSource 'external' needs a carrier input the insert lacks";
-    return false;
+bool insert_accepts(const RealtimeVoiceChangerConfig& config) {
+  return validate_realtime_voice_changer_config(config, nullptr, nullptr,
+                                                ConfigFieldSpelling::FlatPod) &&
+         config.vocoder.carrier_source != VocoderCarrierSource::External;
+}
+
+// The insert's keys are the flat POD's, except the harmony steps, which it takes as three scalars.
+std::string insert_key(const std::string& pod_key) {
+  constexpr std::string_view kSteps = "harmonySteps[";
+  if (pod_key.size() == kSteps.size() + 2 && pod_key.compare(0, kSteps.size(), kSteps) == 0) {
+    return "harmonyStep" + std::to_string(pod_key[kSteps.size()] - '0' + 1);
   }
-  return true;
+  return pod_key;
 }
 
 const RealtimeVoiceChangerConfig& validated(const RealtimeVoiceChangerConfig& config) {
   std::string error;
-  if (!insert_accepts(config, &error)) {
-    throw SonareException(ErrorCode::InvalidParameter, "voice.changer: " + error);
+  if (!validate_realtime_voice_changer_config(config, nullptr, &error,
+                                              ConfigFieldSpelling::FlatPod)) {
+    // The validator writes "<flat POD key> <predicate>".
+    const std::string::size_type space = error.find(' ');
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, insert_key(error.substr(0, space)), error.substr(space + 1))
+        .as_caller_spelled();
+  }
+  if (config.vocoder.carrier_source == VocoderCarrierSource::External) {
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::NotSupported, "vocoderCarrierSource",
+        "external is not supported for the voice changer insert: it has no carrier input")
+        .as_caller_spelled();
   }
   return config;
 }
@@ -201,7 +219,7 @@ bool VoiceChangerInsert::set_parameter_impl(unsigned int param_id, float value) 
   }
   SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE_APPLY_PARAM)
 #undef SONARE_APPLY_PARAM
-  if (!found || !insert_accepts(candidate, nullptr)) return false;
+  if (!found || !insert_accepts(candidate)) return false;
   config_ = candidate;
   changer_.set_config(config_);
   return true;

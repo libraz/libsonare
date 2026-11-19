@@ -307,14 +307,15 @@ TEST_CASE("Absolute mode refuses a factor the warp cannot reach and names the ra
   config.formant_mode = FormantMode::Absolute;
   config.pitch_semitones = 4.0f;
   config.formant_factor = 2.5f;
-  // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079].
+  // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.69296, 2.07887]; each printed
+  // bound is rounded inward to four digits so it is itself accepted.
   try {
     VoiceChanger(config).process(audio);
     FAIL("expected a refusal");
-  } catch (const sonare::SonareException& e) {
+  } catch (const sonare::SonareParameterRefusal& e) {
     REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
-    REQUIRE_THAT(std::string(e.what()), ContainsSubstring("[0.693, 2.079]"));
-    REQUIRE_THAT(std::string(e.what()), ContainsSubstring("4 semitones"));
+    REQUIRE(e.subjects() == std::vector<std::string>{"formant_factor"});
+    REQUIRE(std::string(e.what()) == "formant_factor must be finite and in [0.693, 2.078]");
   }
 
   // Preserving formants (factor 1) at -9 semitones needs a warp of 1.68, past the range.
@@ -348,9 +349,10 @@ TEST_CASE("Both formant modes refuse a factor outside the warp's range instead o
       try {
         (void)VoiceChanger(config).process(audio);
         FAIL("expected a refusal");
-      } catch (const sonare::SonareException& e) {
+      } catch (const sonare::SonareParameterRefusal& e) {
         REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
-        REQUIRE_THAT(std::string(e.what()), ContainsSubstring("formant factor"));
+        REQUIRE(e.subjects() == std::vector<std::string>{"formant_factor"});
+        REQUIRE(std::string(e.what()).rfind("formant_factor must be finite and ", 0) == 0);
       }
     }
     // The range's own ends are applied, not refused.
@@ -428,8 +430,9 @@ TEST_CASE("sonare_voice_change_ex selects the formant mode",
   config.formant_factor = 5.0f;
   std::vector<float> none;
   REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
-  // 2^(3/12) = 1.1892, so the warp range reaches [0.6541, 1.962] at +3 semitones.
-  REQUIRE_THAT(std::string(sonare_last_error_message()), ContainsSubstring("[0.6541, 1.962]"));
+  // 2^(3/12) = 1.1892, so the warp range reaches [0.65406, 1.96219] at +3 semitones.
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          "formant_factor must be finite and in [0.6541, 1.962]");
 
   config.formant_factor = 1.1f;
   config.formant_mode = 2;
@@ -778,8 +781,8 @@ TEST_CASE("Validation refuses an unreachable absolute warp and names the formant
   RealtimeVoiceChangerConfig config = bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute);
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
   // 2^(-9/12) = 0.5946, so the warp range reaches [0.327, 0.9811], which the factor's own
-  // range [0.55, 1.65] narrows to [0.55, 0.9811].
-  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
+  // range [0.55, 1.65] narrows to [0.55, 0.98107], printed inward as [0.55, 0.981].
+  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.981]"));
   REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("at retune.pitchSemitones -9"));
 
   config.formant.factor = 0.8f;
@@ -828,7 +831,7 @@ TEST_CASE("The formant mode round-trips through the JSON documents",
   // An unreachable config is not written, and an unreachable document is refused with the range.
   RealtimeVoiceChangerConfig unreachable = bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute);
   REQUIRE_THROWS_WITH(realtime_voice_changer_config_to_json(unreachable),
-                      Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
+                      Catch::Matchers::ContainsSubstring("[0.55, 0.981]"));
   const std::string reachable =
       realtime_voice_changer_config_to_json(bare_chain_config(0.0f, 1.0f, FormantMode::Absolute));
   const std::string at_zero = "\"pitchSemitones\":0,";
@@ -837,7 +840,7 @@ TEST_CASE("The formant mode round-trips through the JSON documents",
   std::string document = reachable;
   document.replace(shift, at_zero.size(), "\"pitchSemitones\":-9,");
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(document, &parsed, &error));
-  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
+  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.981]"));
 }
 
 TEST_CASE("The realtime chain in absolute mode allocates nothing while processing",

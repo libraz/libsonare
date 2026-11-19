@@ -1134,7 +1134,7 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(handle == nullptr);
   CHECK_THAT(std::string(sonare_last_error_message()),
-             Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
+             Catch::Matchers::ContainsSubstring("[0.55, 0.981]"));
 
   config.retune_pitch_semitones = 0.0f;
   config.formant_mode = 7;

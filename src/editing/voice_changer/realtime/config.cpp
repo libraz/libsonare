@@ -10,6 +10,7 @@
 #include "editing/voice_changer/realtime/config_ranges.h"
 #include "effects/formant_warp.h"
 #include "util/json_schema.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::editing::voice_changer {
 namespace detail {
@@ -181,10 +182,15 @@ bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::st
                     static_cast<double>(kFormantFactorMin), static_cast<double>(kFormantFactorMax));
       *error = schema::refusal(field_path("formant.mode", spelling), text);
     } else {
-      std::snprintf(text, sizeof(text),
-                    "must be in [%.4g, %.4g] in absolute formant mode at %s %.4g (the warp "
-                    "reaches [%.4g, %.4g] there)",
-                    named_lo, named_hi, semitones_path.c_str(), semitones, lo, hi);
+      std::snprintf(
+          text, sizeof(text),
+          "must be in [%s, %s] in absolute formant mode at %s %.4g (the warp "
+          "reaches [%.4g, %.4g] there)",
+          ::sonare::util::refusal::bound_text(named_lo, ::sonare::util::refusal::Inward::Up)
+              .c_str(),
+          ::sonare::util::refusal::bound_text(named_hi, ::sonare::util::refusal::Inward::Down)
+              .c_str(),
+          semitones_path.c_str(), semitones, lo, hi);
       *error = schema::refusal(field_path("formant.factor", spelling), text);
     }
   }
