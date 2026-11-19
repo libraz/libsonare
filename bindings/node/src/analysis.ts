@@ -1002,13 +1002,8 @@ export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStere
       throw refuse('left and right must have the same length');
     }
     const spacing = req.receiverSpacingM;
-    if (spacing !== undefined) {
-      if (typeof spacing !== 'number') {
-        throw refuseType('receiverSpacingM must be a number');
-      }
-      if (!Number.isFinite(spacing) || spacing <= 0 || spacing > 4) {
-        throw refuse('receiverSpacingM must be finite and in (0, 4]');
-      }
+    if (spacing !== undefined && typeof spacing !== 'number') {
+      throw refuseType('receiverSpacingM must be a number');
     }
     return addon.roomMorphStereo(req.left, req.right, req.sampleRate, native);
   });

@@ -1150,8 +1150,8 @@ export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
       throw refuse('left and right must have the same length');
     }
     const spacing = request.receiverSpacingM;
-    if (spacing !== undefined && !(Number.isFinite(spacing) && spacing > 0 && spacing <= 4)) {
-      throw refuse('receiverSpacingM must be finite and in (0, 4]; omit it for 0.5 m');
+    if (spacing !== undefined && typeof spacing !== 'number') {
+      throw refuseType('receiverSpacingM must be a number');
     }
     const native = withEntry('roomMorphStereo', () => nativeRoomOptions(request));
     const morphStereo = module.roomMorphStereo;

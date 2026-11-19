@@ -717,17 +717,32 @@ describe('roomMorphStereo', () => {
     expect(Array.from(a.right)).toEqual(Array.from(b.right));
   });
 
-  it.each([0, -1, 4.5, Number.NaN])('rejects receiverSpacingM %s with a RangeError', (value) => {
+  it.each([0, -1, 4.5, Number.NaN, 1e40])(
+    'rejects receiverSpacingM %s with a RangeError',
+    (value) => {
+      const attempt = () =>
+        roomMorphStereo({
+          left: impulse(),
+          right: impulse(),
+          sampleRate: 48000,
+          ...room,
+          receiverSpacingM: value,
+        });
+      expect(attempt).toThrow(RangeError);
+      expect(attempt).toThrow('roomMorphStereo: receiverSpacingM must be finite and in (0, 4]');
+    },
+  );
+
+  it('refuses a receiverSpacingM that is not a number with a TypeError', () => {
     const attempt = () =>
       roomMorphStereo({
         left: impulse(),
         right: impulse(),
         sampleRate: 48000,
         ...room,
-        receiverSpacingM: value,
+        receiverSpacingM: '0.5' as unknown as number,
       });
-    expect(attempt).toThrow(RangeError);
-    expect(attempt).toThrow(/receiverSpacingM/);
+    expect(attempt).toThrow(new TypeError('roomMorphStereo: receiverSpacingM must be a number'));
   });
 
   it('rejects mismatched channel lengths with a RangeError', () => {
