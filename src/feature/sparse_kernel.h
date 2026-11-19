@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstdint>
+#include <cstring>
 #include <utility>
 #include <vector>
 
@@ -10,57 +12,77 @@
 
 namespace sonare::detail {
 
-/// Append one dense row using librosa-style cumulative L1 sparsification.
+/// @brief Appends one dense row using librosa-style cumulative L1 sparsification.
+/// @details The smallest columns, ranked by (magnitude, column), are discarded while their
+///          running sum fits `sparsity` of the row's L1 norm. Which columns that is does not
+///          depend on the order the discarded ones are summed in: a decision within summation
+///          rounding of the budget is retaken in full ascending order.
 inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::complex<float>* row,
                                          int columns, float sparsity = 0.01f) {
-  // Zero columns are never kept and spend none of the budget, so only the
-  // nonzero ones are ranked, by (magnitude, column).
-  std::vector<std::pair<float, int>> order;
-  order.reserve(static_cast<size_t>(columns));
+  // Magnitudes are binned by their leading bits (eight bins per octave) so that only the
+  // columns near and above the discard boundary are ever ranked.
+  constexpr int kBucketShift = 20;
+  constexpr size_t kBuckets = size_t{1} << (32 - kBucketShift);
+  const auto bucket_of = [](float magnitude) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &magnitude, sizeof(bits));
+    return static_cast<size_t>(bits >> kBucketShift);
+  };
+
+  // Zero columns are never kept and spend none of the budget.
+  std::vector<float> magnitudes(static_cast<size_t>(columns));
+  std::vector<double> bucket_sum(kBuckets, 0.0);
+  size_t n = 0;
   double total = 0.0;
   for (int column = 0; column < columns; ++column) {
     const float magnitude = std::abs(row[column]);
     total += magnitude;
-    if (row[column] != std::complex<float>{}) order.emplace_back(magnitude, column);
+    magnitudes[static_cast<size_t>(column)] = magnitude;
+    if (row[column] != std::complex<float>{}) {
+      ++n;
+      bucket_sum[bucket_of(magnitude)] += magnitude;
+    }
   }
   const double discard_budget = total * std::clamp(sparsity, 0.0f, 1.0f);
 
-  // The smallest columns are discarded while their running sum fits the budget, so
-  // only the kept head and its boundary need ordering. Sorting every column of a
-  // long kernel made the sort most of a cold kernel build.
+  // Whole bins are discarded from the smallest up; the first one that does not fit holds
+  // the boundary, so it and everything above it are ranked.
+  double discarded = 0.0;
+  size_t boundary = 0;
+  while (boundary < kBuckets && discarded + bucket_sum[boundary] <= discard_budget) {
+    discarded += bucket_sum[boundary];
+    ++boundary;
+  }
+  std::vector<std::pair<float, int>> order;
+  for (int column = 0; column < columns; ++column) {
+    const float magnitude = magnitudes[static_cast<size_t>(column)];
+    if (bucket_of(magnitude) >= boundary && row[column] != std::complex<float>{}) {
+      order.emplace_back(magnitude, column);
+    }
+  }
   const auto descending = [](const std::pair<float, int>& a, const std::pair<float, int>& b) {
     return b < a;
   };
-  const size_t n = order.size();
-  size_t head = std::min<size_t>(n, 1024);
-  size_t kept = 0;
-  double discarded = 0.0;
-  while (true) {
-    std::nth_element(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(head), order.end(),
-                     descending);
-    discarded = 0.0;
-    for (size_t i = head; i < n; ++i) discarded += order[i].first;
-    if (discarded > discard_budget && head < n) {
-      head = std::min(n, head * 2);
-      continue;
-    }
-    std::sort(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(head), descending);
-    kept = head;
-    while (kept > 0 && discarded + order[kept - 1].first <= discard_budget) {
-      discarded += order[kept - 1].first;
-      --kept;
-    }
-    break;
+  std::sort(order.begin(), order.end(), descending);
+  size_t kept = order.size();
+  while (kept > 0 && discarded + order[kept - 1].first <= discard_budget) {
+    discarded += order[kept - 1].first;
+    --kept;
   }
 
-  // The tail was summed in nth_element's order, which differs between standard libraries. A
-  // decision within summation rounding of the budget is retaken in full ascending order.
+  // The discarded columns were summed bin by bin, not in rank order.
   const double rounding_margin =
       static_cast<double>(n + 1) * std::ldexp(1.0, -52) * std::max(total, discard_budget);
   const bool near_boundary =
       (kept < n && discard_budget - discarded <= rounding_margin) ||
       (kept > 0 && discarded + order[kept - 1].first - discard_budget <= rounding_margin);
   if (near_boundary) {
+    order.clear();
+    for (int column = 0; column < columns; ++column) {
+      if (row[column] != std::complex<float>{}) {
+        order.emplace_back(magnitudes[static_cast<size_t>(column)], column);
+      }
+    }
     std::sort(order.begin(), order.end());
     double ascending = 0.0;
     size_t discarded_count = 0;
@@ -72,10 +94,10 @@ inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::co
     kept = n - discarded_count;
   }
 
-  std::vector<unsigned char> keep(static_cast<size_t>(columns), 0);
-  for (size_t i = 0; i < kept; ++i) keep[static_cast<size_t>(order[i].second)] = 1;
-  for (int column = 0; column < columns; ++column) {
-    if (keep[static_cast<size_t>(column)] == 0) continue;
+  std::vector<int> kept_columns(kept);
+  for (size_t i = 0; i < kept; ++i) kept_columns[i] = order[i].second;
+  std::sort(kept_columns.begin(), kept_columns.end());
+  for (const int column : kept_columns) {
     out.column_indices.push_back(column);
     out.values.push_back(row[column]);
   }

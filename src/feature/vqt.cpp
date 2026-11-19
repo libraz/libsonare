@@ -192,6 +192,8 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   std::vector<std::complex<float>> complex_freq_kernel(kernel->fft_length_);
 
   const float inv_n_fft = 1.0f / static_cast<float>(kernel->fft_length_);
+  int written_begin = 0;
+  int written_end = 0;
 
   for (int k = 0; k < config.n_bins; ++k) {
     float freq = kernel->frequencies_[k];
@@ -229,10 +231,13 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     // the matched-bin magnitude by a large, frequency-dependent factor
     // (~3.46x for the 440 Hz bin). Centering restores the correct correlation so
     // gamma->0 VQT tracks CQT.
-    std::fill(complex_time_kernel.begin(), complex_time_kernel.end(),
-              std::complex<float>(0.0f, 0.0f));
+    // Only the span the previous row wrote is non-zero.
+    std::fill(complex_time_kernel.begin() + written_begin,
+              complex_time_kernel.begin() + written_end, std::complex<float>(0.0f, 0.0f));
 
     const int slot_offset = (kernel->fft_length_ - length) / 2;
+    written_begin = slot_offset;
+    written_end = slot_offset + length;
     const int phase_start = -(length / 2);
     for (int n = 0; n < length; ++n) {
       float phase = kTwoPi * freq * (phase_start + n) / sr;
@@ -248,10 +253,14 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     // Complex FFT of kernel
     fft.forward_complex(complex_time_kernel.data(), complex_freq_kernel.data());
 
-    // Store a sparsified conjugate row (correlation instead of convolution).
-    for (auto& value : complex_freq_kernel) value = std::conj(value);
+    // Store a sparsified conjugate row (correlation instead of convolution). A column's rank
+    // reads its magnitude, which the conjugate shares, so only the kept ones take it.
+    const size_t row_begin = kernel->kernel_.values.size();
     detail::append_sparsified_kernel_row(kernel->kernel_, complex_freq_kernel.data(),
                                          kernel->fft_length_);
+    for (size_t i = row_begin; i < kernel->kernel_.values.size(); ++i) {
+      kernel->kernel_.values[i] = std::conj(kernel->kernel_.values[i]);
+    }
   }
 
   return kernel;

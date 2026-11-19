@@ -292,6 +292,8 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
   std::vector<std::complex<float>> packed;
   size_t cursor = 0;
   int run_end = 0;
+  int written_begin = 0;
+  int written_end = 0;
   for (int k = 0; k < config.n_bins; ++k) {
     if (reusable(k)) {
       const SparseComplexKernel& from = donor->kernel_;
@@ -333,20 +335,28 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
     const int length = kernel->lengths_[k];
     const int offset = (n_fft_basis - length) / 2 + widen_pad;
     const float scale = raw_lengths[k] / static_cast<float>(n_fft);
-    std::fill(row.begin(), row.end(), std::complex<float>(0.0f, 0.0f));
+    // Only the span the previous row wrote is non-zero.
+    std::fill(row.begin() + written_begin, row.begin() + written_end,
+              std::complex<float>(0.0f, 0.0f));
     for (int i = 0; i < length; ++i) {
       row[static_cast<size_t>(offset + i)] = packed[cursor + static_cast<size_t>(i)] * scale;
     }
+    written_begin = offset;
+    written_end = offset + length;
     cursor += static_cast<size_t>(length);
     fft.forward_complex(row.data(), freq_kernel.data());
+    const size_t row_begin = kernel->kernel_.values.size();
+    detail::append_sparsified_kernel_row(kernel->kernel_, freq_kernel.data(), n_fft);
     // We use the conjugate so that `result = stored_basis * FFT(signal)` evaluates
     // to a true cross-correlation at zero lag (i.e., the standard CQT inner
     // product `<kernel, signal>`). librosa's pipeline uses the convention
     // `fft_basis.dot(D)`, which is equivalent only because the wavelet is
     // single-sided in frequency (energy concentrated at +ω). Storing the
-    // conjugate keeps our existing matmul path unchanged.
-    for (auto& value : freq_kernel) value = std::conj(value);
-    detail::append_sparsified_kernel_row(kernel->kernel_, freq_kernel.data(), n_fft);
+    // conjugate keeps our existing matmul path unchanged. A column's rank reads
+    // its magnitude, which the conjugate shares, so only the kept ones take it.
+    for (size_t i = row_begin; i < kernel->kernel_.values.size(); ++i) {
+      kernel->kernel_.values[i] = std::conj(kernel->kernel_.values[i]);
+    }
   }
   kernel->raw_lengths_ = std::move(raw_lengths);
 
