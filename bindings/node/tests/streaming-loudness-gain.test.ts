@@ -94,7 +94,7 @@ describe('streamingLoudnessGain', () => {
     ).toThrow(
       expect.objectContaining({
         code: ErrorCode.InvalidFormat,
-        message: expect.stringContaining('unknown chain config key: no.such.key'),
+        message: 'streamingLoudnessGain: unknown key params.no.such.key',
       }),
     );
   });

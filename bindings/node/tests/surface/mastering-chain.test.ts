@@ -400,46 +400,50 @@ describe('chain config: nested form only, tokens only', () => {
     [
       'boolean denoise shorthand',
       { repair: { denoise: true } },
-      'unknown chain config key: repair.denoise',
+      'masterAudio: unknown key params.repair.denoise (renamed to params.repair.denoise.enabled)',
     ],
-    ['flat repair.nFft', { repair: { nFft: 1024 } }, '(renamed to repair.denoise.nFft)'],
+    ['flat repair.nFft', { repair: { nFft: 1024 } }, '(renamed to params.repair.denoise.nFft)'],
     [
       'flat repair.hopLength',
       { repair: { hopLength: 256 } },
-      '(renamed to repair.denoise.hopLength)',
+      '(renamed to params.repair.denoise.hopLength)',
     ],
-    ['flat repair.ddAlpha', { repair: { ddAlpha: 0.9 } }, '(renamed to repair.denoise.ddAlpha)'],
+    [
+      'flat repair.ddAlpha',
+      { repair: { ddAlpha: 0.9 } },
+      '(renamed to params.repair.denoise.ddAlpha)',
+    ],
     [
       'flat repair.reductionDb',
       { repair: { reductionDb: 12 } },
-      '(renamed to repair.denoise.reductionDb)',
+      '(renamed to params.repair.denoise.reductionDb)',
     ],
     [
       'flat repair.gainFloor',
       { repair: { gainFloor: 0.2 } },
-      '(renamed to repair.denoise.reductionDb)',
+      '(renamed to params.repair.denoise.reductionDb)',
     ],
     [
       'denoise.gainFloor',
       { repair: { denoise: { gainFloor: 0.2 } } },
-      '(renamed to repair.denoise.reductionDb)',
+      '(renamed to params.repair.denoise.reductionDb)',
     ],
-    ['eq.tiltDb', { eq: { tiltDb: 1 } }, '(renamed to eq.tilt.tiltDb)'],
-    ['eq.pivotHz', { eq: { pivotHz: 1000 } }, '(renamed to eq.tilt.pivotHz)'],
+    ['eq.tiltDb', { eq: { tiltDb: 1 } }, '(renamed to params.eq.tilt.tiltDb)'],
+    ['eq.pivotHz', { eq: { pivotHz: 1000 } }, '(renamed to params.eq.tilt.pivotHz)'],
     [
       'declip.clipThreshold',
       { repair: { declip: { clipThreshold: 0.9 } } },
-      '(renamed to repair.declip.clipThresholdDb)',
+      '(renamed to params.repair.declip.clipThresholdDb)',
     ],
     [
       'band sidechainHpfHz',
       { dynamics: { multibandComp: { bands: [{ sidechainHpfHz: 100 }] } } },
-      '(renamed to dynamics.multibandComp.bands.0.sidechainHighPassHz)',
+      '(renamed to params.dynamics.multibandComp.bands.0.sidechainHighPassHz)',
     ],
     [
       'band sidechainHpfEnabled',
       { dynamics: { multibandComp: { bands: [{ sidechainHpfEnabled: true }] } } },
-      '(renamed to dynamics.multibandComp.bands.0.sidechainHighPassHz)',
+      '(renamed to params.dynamics.multibandComp.bands.0.sidechainHighPassHz)',
     ],
   ])(
     'the core refuses the removed spelling %s, naming its successor',
@@ -481,7 +485,7 @@ describe('chain config: nested form only, tokens only', () => {
             'loudness.targetLufs': -14,
           } as MasteringChainConfig,
         }),
-      'loudness.targetLufs is given twice',
+      'masterAudio: duplicate key params.loudness.targetLufs',
     );
   });
 
@@ -507,7 +511,7 @@ describe('chain config: nested form only, tokens only', () => {
         'maximizer.truePeakLimiter.ceilingDbtp',
       ],
     ] as const) {
-      const message = `unknown chain config key: ${oldKey} (renamed to ${newKey})`;
+      const message = `unknown key params.${oldKey} (renamed to params.${newKey})`;
       expectInvalidFormat(
         () => sonare.masterAudio({ samples: left, sampleRate, overrides: bad as never }),
         message,
@@ -533,7 +537,7 @@ describe('chain config: nested form only, tokens only', () => {
     expectInvalidFormat(() => run(0.5), 'repair.declip.clipThresholdDb must be at or below 0 dBFS');
     expectInvalidFormat(
       () => run(Number.NaN),
-      'repair.declip.clipThresholdDb is null, not a number, boolean or token',
+      'masterAudio: params.repair.declip.clipThresholdDb must be a number, a boolean or a token',
     );
     expectInvalidFormat(
       () => run('-1'),

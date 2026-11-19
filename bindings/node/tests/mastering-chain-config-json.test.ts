@@ -86,27 +86,27 @@ describe('masteringChainConfigFromJson', () => {
     [
       'version 1',
       '{"version":1,"params":{"loudness.targetLufs":-9}}',
-      'unsupported chain config version; write 2 or leave it out',
+      'version must be 2, or left out',
     ],
     [
       'an unsupported version',
       '{"version":3,"params":{"loudness.targetLufs":-9}}',
-      'unsupported chain config version; write 2 or leave it out',
+      'version must be 2, or left out',
     ],
     [
       'an unknown key',
       '{"version":2,"params":{"loudness.bogusKey":1}}',
-      'unknown chain config key: loudness.bogusKey',
+      'unknown key params.loudness.bogusKey',
     ],
     [
       'a retired key, naming its current spelling',
       '{"version":2,"params":{"eq.tiltDb":1}}',
-      'unknown chain config key: eq.tiltDb (renamed to eq.tilt.tiltDb)',
+      'unknown key params.eq.tiltDb (renamed to params.eq.tilt.tiltDb)',
     ],
     [
       'a linear declip threshold, naming its decibel spelling',
       '{"params":{"repair.declip.clipThreshold":0.5}}',
-      'unknown chain config key: repair.declip.clipThreshold (renamed to repair.declip.clipThresholdDb)',
+      'unknown key params.repair.declip.clipThreshold (renamed to params.repair.declip.clipThresholdDb)',
     ],
   ])('refuses %s as InvalidFormat', (_label, document, message) => {
     const error = refusal(() => masteringChainConfigFromJson(document));

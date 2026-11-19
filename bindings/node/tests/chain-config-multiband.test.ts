@@ -174,7 +174,9 @@ describe('typed multiband crossover + bands', () => {
   ] as const)('refuses the retired %s shorthand and names %s', (key, value, current) => {
     const overrides = { dynamics: { multibandComp: { [key]: value } } } as never;
     expect(() => masterAudio({ samples: tone(1), sampleRate: SAMPLE_RATE, overrides })).toThrow(
-      invalidFormat(`unknown chain config key: ${P}.${key} (renamed to ${P}.${current})`),
+      invalidFormat(
+        `masterAudio: unknown key params.${P}.${key} (renamed to params.${P}.${current})`,
+      ),
     );
   });
 
@@ -189,7 +191,7 @@ describe('typed multiband crossover + bands', () => {
 
   it('refuses an empty array by path on every entry point', () => {
     const empty = { dynamics: { multibandComp: { crossover: { cutoffsHz: [] } } } };
-    const message = invalidFormat(`${P}.crossover.cutoffsHz is an empty list`);
+    const message = invalidFormat(`params.${P}.crossover.cutoffsHz must not be an empty list`);
     expect(() =>
       masterAudio({
         samples: tone(1),

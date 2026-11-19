@@ -151,7 +151,9 @@ describe('typed multiband crossover + bands', () => {
   ] as const)('refuses the retired %s shorthand and names %s', (key, value, current) => {
     const overrides = { dynamics: { multibandComp: { [key]: value } } } as never;
     expect(() => masterAudio({ samples: left, sampleRate, overrides })).toThrow(
-      invalidFormat(`unknown chain config key: ${MB}.${key} (renamed to ${MB}.${current})`),
+      invalidFormat(
+        `masterAudio: unknown key params.${MB}.${key} (renamed to params.${MB}.${current})`,
+      ),
     );
   });
 
@@ -159,7 +161,7 @@ describe('typed multiband crossover + bands', () => {
     const empty: MasteringChainConfig = {
       dynamics: { multibandComp: { crossover: { cutoffsHz: [] } } },
     };
-    const message = invalidFormat(`${MB}.crossover.cutoffsHz is an empty list`);
+    const message = invalidFormat(`params.${MB}.crossover.cutoffsHz must not be an empty list`);
     expect(() => masterAudio({ samples: left, sampleRate, overrides: empty })).toThrow(message);
     expect(() => new StreamingMasteringChain({ sampleRate, numChannels: 1, ...empty })).toThrow(
       message,
@@ -170,6 +172,6 @@ describe('typed multiband crossover + bands', () => {
         sampleRate,
         overrides: { dynamics: { multibandComp: { bands: [] } } },
       }),
-    ).toThrow(invalidFormat(`${MB}.bands is an empty list`));
+    ).toThrow(invalidFormat(`masterAudio: params.${MB}.bands must not be an empty list`));
   });
 });
