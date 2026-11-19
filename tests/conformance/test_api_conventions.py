@@ -820,6 +820,12 @@ class PayloadChannelsRule(unittest.TestCase):
         verdict = run("payload-channels", [*self.CLEAN, planted])
         self.assertEqual([f.key for f in verdict.violations], ["python:Import.source_channels"])
 
+    def test_a_leading_num_is_read_past_to_the_payload_word(self) -> None:
+        capacity = keyed_field("python", "Renderer", "num_input_channels")
+        payload = keyed_field("node", "Import", "numSourceChannels")
+        verdict = run("payload-channels", [*self.CLEAN, capacity, payload])
+        self.assertEqual([f.key for f in verdict.violations], ["node:Import.numSourceChannels"])
+
 
 class TypeNamesRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [

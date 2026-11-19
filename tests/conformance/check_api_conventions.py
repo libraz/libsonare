@@ -1001,7 +1001,9 @@ def _payload_channel_records(records: list[dict]) -> list[dict]:
 
 
 def _payload_channel_violation(r: dict) -> str | None:
-    first = re.split(r"(?=[A-Z])|_", r["prefix"])[0].lower()
+    # A leading "num" counts the channels; the payload word follows it (num_input -> input).
+    words = [w.lower() for w in re.split(r"(?=[A-Z])|_", r["prefix"]) if w]
+    first = words[1] if len(words) > 1 and words[0] == "num" else words[0]
     if (
         first in _CAPACITY_PREFIXES
         or r["member"].lower().endswith("numchannels")
