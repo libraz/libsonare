@@ -152,12 +152,6 @@ const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
     'insert',
   ],
   [
-    'mixingAssistantSourceClassFromName',
-    () => sonare.mixingAssistantSourceClassFromName(5 as never),
-    'name',
-  ],
-  ['synthPresetPatch', () => sonare.synthPresetPatch(5 as never), 'name'],
-  [
     'realtimeVoiceChangerValidatePresetJson',
     () => sonare.realtimeVoiceChangerValidatePresetJson(5 as never),
     'json',
@@ -168,6 +162,12 @@ const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
 const CLOSED_NAME_ARGUMENT: Array<[string, () => unknown, string]> = [
   ['masteringInsertParamNames', () => sonare.masteringInsertParamNames(5 as never), 'insert'],
   ['mixingScenePreset', () => sonare.mixingScenePreset(5 as never), 'name'],
+  [
+    'mixingAssistantSourceClassFromName',
+    () => sonare.mixingAssistantSourceClassFromName(5 as never),
+    'name',
+  ],
+  ['synthPresetPatch', () => sonare.synthPresetPatch(5 as never), 'name'],
   [
     'realtimeVoiceChangerPresetJson',
     () => sonare.realtimeVoiceChangerPresetJson(5 as never),

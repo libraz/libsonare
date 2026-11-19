@@ -2,7 +2,7 @@ import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
-import { assertSampleRate, assertString, requestOnly } from './validation.js';
+import { assertClosedToken, assertSampleRate, requestOnly } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -104,7 +104,7 @@ function trackChannels(
     throw refuseType(`${prefix}.channels must be an array of Float32Array`);
   }
   if (channels.length < 1 || channels.length > 2) {
-    throw refuse(`${prefix}.channels must hold 1 or 2 channels, got ${channels.length}`);
+    throw refuse(`${prefix}.channels must hold 1 or 2 channels`);
   }
   channels.forEach((plane, ch) => {
     if (!(plane instanceof Float32Array)) {
@@ -258,11 +258,7 @@ export function mixingAssistantSourceClassNames(): MixSourceClass[] {
  */
 export function mixingAssistantSourceClassFromName(name: MixSourceClass): number {
   return withEntry('mixingAssistantSourceClassFromName', () => {
-    assertString(name, 'name');
-    const index = requireModule().mixingAssistantSourceClassFromName(name);
-    if (index < 0) {
-      throw refuse(`unknown source class '${name}'`);
-    }
-    return index;
+    assertClosedToken(name, mixingAssistantSourceClassNames(), 'name');
+    return requireModule().mixingAssistantSourceClassFromName(name);
   });
 }

@@ -2,7 +2,12 @@ import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './types.js';
-import { assertPositiveInteger, assertSampleRate, requestOnly } from './validation.js';
+import {
+  assertClosedToken,
+  assertPositiveInteger,
+  assertSampleRate,
+  requestOnly,
+} from './validation.js';
 
 /**
  * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional; an omitted field keeps the
@@ -95,7 +100,7 @@ function trackChannels(
     throw refuseType(`${prefix}.channels must be an array of Float32Array`);
   }
   if (channels.length < 1 || channels.length > 2) {
-    throw refuse(`${prefix}.channels must hold 1 or 2 channels, got ${channels.length}`);
+    throw refuse(`${prefix}.channels must hold 1 or 2 channels`);
   }
   channels.forEach((plane, ch) => {
     if (!(plane instanceof Float32Array)) {
@@ -270,13 +275,7 @@ export function mixingAssistantSourceClassNames(): MixSourceClass[] {
  */
 export function mixingAssistantSourceClassFromName(name: MixSourceClass): number {
   return withEntry('mixingAssistantSourceClassFromName', () => {
-    if (typeof name !== 'string') {
-      throw refuseType(`name must be a string`);
-    }
-    const index: number = addon.mixingAssistantSourceClassFromName(name);
-    if (index < 0) {
-      throw refuse(`unknown source class '${name}'`);
-    }
-    return index;
+    assertClosedToken(name, mixingAssistantSourceClassNames(), 'name');
+    return addon.mixingAssistantSourceClassFromName(name) as number;
   });
 }

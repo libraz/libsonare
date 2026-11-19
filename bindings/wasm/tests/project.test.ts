@@ -1426,7 +1426,7 @@ describe('Sonare WASM Project', () => {
       expect(() => gmInstrumentName(-1)).toThrow(RangeError);
       expect(() => gmInstrumentName('0' as never)).toThrow(TypeError);
       expect(() => gmProgramForName('No Such Instrument')).toThrow(
-        new RangeError("gmProgramForName: unknown instrument name 'No Such Instrument'"),
+        new RangeError('gmProgramForName: name must be a General MIDI instrument name'),
       );
       expect(() => gmProgramForName(5 as never)).toThrow(TypeError);
       expect(() => gmFamilyName(16)).toThrow(RangeError);
@@ -1434,6 +1434,12 @@ describe('Sonare WASM Project', () => {
       expect(() => gm2InstrumentName({ bankLsb: 128, program: 0 })).toThrow(RangeError);
       expect(() => gm2InstrumentName({ bankLsb: 1, program: 0.5 })).toThrow(RangeError);
       expect(() => gmDrumName(128)).toThrow(RangeError);
+      expect(() => gmDrumName(0)).toThrow(
+        new RangeError('gmDrumName: note must name a General MIDI drum'),
+      );
+      expect(() => gm2DrumSetName(1)).toThrow(
+        new RangeError('gm2DrumSetName: bankLsb must name a GM2 drum set'),
+      );
       expect(() => gmDrumNoteForName('No Such Drum')).toThrow(RangeError);
       expect(() => gm2DrumSetName(128)).toThrow(RangeError);
       expect(() => gm2DrumName({ bankLsb: 40, note: 128 })).toThrow(RangeError);

@@ -914,7 +914,12 @@ describe('synth parameter descriptors', () => {
     expect(force?.type).toBe('number');
     expect(typeof force?.default).toBe('number');
     expect(typeof force?.unit).toBe('string');
-    expect(() => synthEngineParamInfo('no-such-engine' as never)).toThrow(/synth engine mode/);
+    expect(() => synthEngineParamInfo('no-such-engine' as never)).toThrow(
+      new RangeError(
+        `synthEngineParamInfo: engineMode must be one of ${SYNTH_ENGINE_MODES.join(', ')}`,
+      ),
+    );
+    expect(() => synthEngineParamInfo(3 as never)).toThrow(TypeError);
   });
 
   it('states a gate only where a field has one, and a switch default as a boolean', () => {

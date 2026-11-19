@@ -79,7 +79,7 @@ describe('failure class follows the cause', () => {
     [
       'synthPresetPatch',
       () => synthPresetPatch('definitely-not-a-real-preset'),
-      /^synthPresetPatch: unknown synth preset name$/,
+      /^synthPresetPatch: name must be one of sine, saw, square, /,
     ],
   ];
 

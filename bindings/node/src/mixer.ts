@@ -162,23 +162,9 @@ function requiredBoolean(value: unknown, name: string): boolean {
   return value;
 }
 
-/** A closed token: a non-string is a `TypeError` (a number never selects an ordinal), an unknown string a `RangeError`. */
-function tokenArg(
-  value: unknown,
-  name: string,
-  resolve: (token: string) => number,
-  fallback?: string,
-): number {
-  if (isAbsent(value)) {
-    if (fallback === undefined) {
-      throw refuseType(`${name} must be a string`);
-    }
-    return resolve(fallback);
-  }
-  if (typeof value !== 'string') {
-    throw refuseType(`${name} must be a string`);
-  }
-  return resolve(value);
+/** A closed token: absent takes `fallback` when one is given, and the resolver refuses anything else by listing the set. */
+function tokenArg(value: unknown, resolve: (token: string) => number, fallback?: string): number {
+  return resolve((isAbsent(value) && fallback !== undefined ? fallback : value) as string);
 }
 
 const curveToken = (token: string): number =>
@@ -406,7 +392,7 @@ export class Mixer {
       requiredNumber(bag.paramId, 'paramId'),
       requiredNumber(bag.samplePos, 'samplePos'),
       requiredNumber(bag.value, 'value'),
-      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
+      tokenArg(bag.curve, curveToken, 'linear'),
     );
   }
 
@@ -625,7 +611,7 @@ export class Mixer {
   setPanLaw(strip: StripRef, panLaw: PanLaw): void {
     this.native.setPanLaw(
       strip,
-      tokenArg(panLaw, 'panLaw', (token) => panLawValue(token as PanLaw, 'panLaw')),
+      tokenArg(panLaw, (token) => panLawValue(token as PanLaw, 'panLaw')),
     );
   }
 
@@ -677,12 +663,7 @@ export class Mixer {
       requiredString(bag.id, 'id'),
       requiredString(bag.destinationBusId, 'destinationBusId'),
       optionalNumber(bag.sendDb, 'sendDb', 0),
-      tokenArg(
-        bag.timing,
-        'timing',
-        (token) => sendTimingValue(token as SendTiming, 'timing'),
-        'postFader',
-      ),
+      tokenArg(bag.timing, (token) => sendTimingValue(token as SendTiming, 'timing'), 'postFader'),
     );
   }
 
@@ -714,7 +695,7 @@ export class Mixer {
     }
     return this.native.meterTap(
       strip,
-      tokenArg(tap, 'tap', (token) => meterTapValue(token as MeterTap, 'tap')),
+      tokenArg(tap, (token) => meterTapValue(token as MeterTap, 'tap')),
     );
   }
 
@@ -799,7 +780,7 @@ export class Mixer {
       strip,
       requiredNumber(bag.samplePos, 'samplePos'),
       requiredNumber(bag.faderDb, 'faderDb'),
-      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
+      tokenArg(bag.curve, curveToken, 'linear'),
     );
   }
 
@@ -818,7 +799,7 @@ export class Mixer {
       strip,
       requiredNumber(bag.samplePos, 'samplePos'),
       requiredNumber(bag.pan, 'pan'),
-      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
+      tokenArg(bag.curve, curveToken, 'linear'),
     );
   }
 
@@ -837,7 +818,7 @@ export class Mixer {
       strip,
       requiredNumber(bag.samplePos, 'samplePos'),
       requiredNumber(bag.width, 'width'),
-      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
+      tokenArg(bag.curve, curveToken, 'linear'),
     );
   }
 
@@ -858,7 +839,7 @@ export class Mixer {
       sendIndex,
       requiredNumber(bag.samplePos, 'samplePos'),
       requiredNumber(bag.sendDb, 'sendDb'),
-      tokenArg(bag.curve, 'curve', curveToken, 'linear'),
+      tokenArg(bag.curve, curveToken, 'linear'),
     );
   }
 

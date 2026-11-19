@@ -60,9 +60,10 @@ class ValueEchoTest(unittest.TestCase):
             "throw refuse(`strip must be a track id, got '${ref}'`);\n"
             "throw refuse('index out of range');\n"
             'throw refuseType("mode must be a name, got " + typeof v);\n'
+            "throw refuse(`mode must be one of a, b (got '${mode}')`);\n"
             "throw refuse('gain must be finite');\n"
         )
-        self.assertEqual(counts(text)["value-echo"], 3)
+        self.assertEqual(counts(text)["value-echo"], 4)
 
     def test_ignores_comments_and_code(self) -> None:
         text = (

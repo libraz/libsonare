@@ -366,11 +366,13 @@ describe('mixing assistant source classes', () => {
     ).toEqual(names.map((_, index) => index));
   });
 
-  it('refuses an unknown name with a RangeError', () => {
+  it('refuses an unknown name with a RangeError listing the classes', () => {
+    const domain = `mixingAssistantSourceClassFromName: name must be one of ${mixingAssistantSourceClassNames().join(', ')}`;
     expect(() =>
       mixingAssistantSourceClassFromName('definitelyNotASourceClass' as MixSourceClass),
-    ).toThrow(RangeError);
+    ).toThrow(new RangeError(domain));
     expect(() => mixingAssistantSourceClassFromName('' as MixSourceClass)).toThrow(RangeError);
+    expect(() => mixingAssistantSourceClassFromName(5 as never)).toThrow(new TypeError(domain));
   });
 });
 

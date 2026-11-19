@@ -772,15 +772,13 @@ function tokenCode(
   fallback?: string,
 ): number {
   const token = value === undefined || value === null ? fallback : value;
-  const accepted = Object.keys(table)
-    .map((key) => `'${key}'`)
-    .join(', ');
+  const accepted = Object.keys(table).join(', ');
   if (typeof token !== 'string') {
     throw refuseType(`${argName} must be one of ${accepted}`);
   }
   // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
   if (!Object.prototype.hasOwnProperty.call(table, token)) {
-    throw refuse(`${argName} must be one of ${accepted} (got '${token}')`);
+    throw refuse(`${argName} must be one of ${accepted}`);
   }
   return table[token];
 }

@@ -524,7 +524,10 @@ function found<T>(value: T | null, what: string): T {
 export function gmInstrumentName(program: number): string {
   return withEntry('gmInstrumentName', () => {
     const n = lookupIndex(program, 'program', 127);
-    return found(projectModule().midiGmInstrumentName(n), `no instrument for program ${n}`);
+    return found(
+      projectModule().midiGmInstrumentName(n),
+      'program must name a General MIDI instrument',
+    );
   });
 }
 
@@ -538,7 +541,7 @@ export function gmProgramForName(name: string): number {
     const s = lookupName(name, 'name');
     const program = projectModule().midiGmProgramForName(s);
     if (program < 0) {
-      throw refuse(`unknown instrument name '${s}'`);
+      throw refuse('name must be a General MIDI instrument name');
     }
     return program;
   });
@@ -552,7 +555,7 @@ export function gmProgramForName(name: string): number {
 export function gmFamilyName(family: number): string {
   return withEntry('gmFamilyName', () => {
     const n = lookupIndex(family, 'family', 15);
-    return found(projectModule().midiGmFamilyName(n), `no family ${n}`);
+    return found(projectModule().midiGmFamilyName(n), 'family must name a General MIDI family');
   });
 }
 
@@ -566,7 +569,7 @@ export function gmFamilyFirstProgram(family: number): number {
     const n = lookupIndex(family, 'family', 15);
     const program = projectModule().midiGmFamilyFirstProgram(n);
     if (program < 0) {
-      throw refuse(`no family ${n}`);
+      throw refuse('family must name a General MIDI family');
     }
     return program;
   });
@@ -585,7 +588,7 @@ export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string {
     const program = lookupIndex(r.program, 'program', 127);
     return found(
       projectModule().midiGm2InstrumentName(bankLsb, program),
-      `no GM2 instrument for bankLsb ${bankLsb} program ${program}`,
+      'bankLsb and program must name a GM2 instrument',
     );
   });
 }
@@ -598,7 +601,7 @@ export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string {
 export function gmDrumName(note: number): string {
   return withEntry('gmDrumName', () => {
     const n = lookupIndex(note, 'note', 127);
-    return found(projectModule().midiGmDrumName(n), `no drum for note ${n}`);
+    return found(projectModule().midiGmDrumName(n), 'note must name a General MIDI drum');
   });
 }
 
@@ -612,7 +615,7 @@ export function gmDrumNoteForName(name: string): number {
     const s = lookupName(name, 'name');
     const note = projectModule().midiGmDrumNoteForName(s);
     if (note < 0) {
-      throw refuse(`unknown drum name '${s}'`);
+      throw refuse('name must be a General MIDI drum name');
     }
     return note;
   });
@@ -626,7 +629,7 @@ export function gmDrumNoteForName(name: string): number {
 export function gm2DrumSetName(bankLsb: number): string {
   return withEntry('gm2DrumSetName', () => {
     const n = lookupIndex(bankLsb, 'bankLsb', 127);
-    return found(projectModule().midiGm2DrumSetName(n), `no drum set for bankLsb ${n}`);
+    return found(projectModule().midiGm2DrumSetName(n), 'bankLsb must name a GM2 drum set');
   });
 }
 
@@ -643,7 +646,7 @@ export function gm2DrumName(request: Gm2DrumNameRequest): string {
     const note = lookupIndex(r.note, 'note', 127);
     return found(
       projectModule().midiGm2DrumName(bankLsb, note),
-      `no GM2 drum for bankLsb ${bankLsb} note ${note}`,
+      'bankLsb and note must name a GM2 drum',
     );
   });
 }
@@ -656,7 +659,7 @@ export function gm2DrumName(request: Gm2DrumNameRequest): string {
 export function midiCcName(controller: number): string {
   return withEntry('midiCcName', () => {
     const n = lookupIndex(controller, 'controller', 127);
-    return found(projectModule().midiCcName(n), `no name for controller ${n}`);
+    return found(projectModule().midiCcName(n), 'controller must name a MIDI controller');
   });
 }
 
@@ -670,7 +673,7 @@ export function midiCcIndexForName(name: string): number {
     const s = lookupName(name, 'name');
     const index = projectModule().midiCcIndexForName(s);
     if (index < 0) {
-      throw refuse(`unknown controller name '${s}'`);
+      throw refuse('name must be a MIDI controller name');
     }
     return index;
   });
@@ -686,7 +689,7 @@ export function perNoteControllerName(index: number): string {
     const n = lookupIndex(index, 'index', 255);
     return found(
       projectModule().midiPerNoteControllerName(n),
-      `no name for per-note controller ${n}`,
+      'index must name a per-note controller',
     );
   });
 }

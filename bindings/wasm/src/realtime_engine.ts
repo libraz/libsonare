@@ -238,15 +238,13 @@ function tokenCode(
   value: unknown,
   table: Readonly<Record<string, number>>,
 ): number {
-  const accepted = Object.keys(table)
-    .map((key) => `'${key}'`)
-    .join(', ');
+  const accepted = Object.keys(table).join(', ');
   if (typeof value !== 'string') {
     throw refuseType(`${argName} must be one of ${accepted}`);
   }
   // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
   if (!Object.prototype.hasOwnProperty.call(table, value)) {
-    throw refuse(`${argName} must be one of ${accepted} (got '${value}')`);
+    throw refuse(`${argName} must be one of ${accepted}`);
   }
   return table[value];
 }
@@ -565,7 +563,7 @@ function stripTarget(ref: StripRef): StripTarget {
   if (ref === 'master') {
     return { master: true };
   }
-  throw refuse(`ref must be a track id or 'master' (got '${ref}')`);
+  throw refuse(`ref must be a track id or 'master'`);
 }
 
 function trackOnly(ref: StripRef): number {

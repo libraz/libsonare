@@ -75,7 +75,7 @@ export function resolveTargetId(target: string | number): number {
   const value =
     typeof target === 'number' ? target : target.trim() === '' ? Number.NaN : Number(target);
   if (!Number.isInteger(value)) {
-    throw refuse(`target id must be an integer, got ${JSON.stringify(target)}`);
+    throw refuse(`target id must be an integer`);
   }
   return value;
 }

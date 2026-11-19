@@ -1,6 +1,8 @@
-import { refuseType, withEntry } from './internal/entry.js';
+import { withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type { SynthEngineMode, SynthEnumTables, SynthParamInfo, SynthPatch } from './types.js';
+import { SYNTH_ENGINE_MODES } from './types_instrument.js';
+import { assertClosedToken } from './validation.js';
 
 /**
  * NativeSynth preset catalog names (`'sine'`, `'sawLead'`, `'ePiano'`,
@@ -74,7 +76,15 @@ export function synthGsVariationIsVoicedApart(bank: number, program: number): bo
  * throw.
  */
 export function synthPresetPatch(name: string): SynthPatch {
-  return addon.synthPresetPatch(name);
+  return withEntry('synthPresetPatch', () => {
+    assertClosedToken(presetCatalogName(name), synthPresetNames(), 'name');
+    return addon.synthPresetPatch(name);
+  });
+}
+
+/** The catalog name a preset argument names, with any `"va:"` routing prefix removed. */
+function presetCatalogName(name: unknown): unknown {
+  return typeof name === 'string' && name.startsWith('va:') ? name.slice(3) : name;
 }
 
 /**
@@ -99,9 +109,7 @@ export function synthEnumTables(): SynthEnumTables {
  */
 export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInfo[] {
   return withEntry('synthEngineParamInfo', () => {
-    if (typeof engineMode !== 'string') {
-      throw refuseType(`engineMode must be a name, got ${typeof engineMode}`);
-    }
+    assertClosedToken(engineMode, SYNTH_ENGINE_MODES, 'engineMode');
     return JSON.parse(addon.synthEngineParamInfo(engineMode)) as SynthParamInfo[];
   });
 }

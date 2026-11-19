@@ -383,9 +383,9 @@ function stripTarget(ref: StripRef): StripTarget {
     return { master: true };
   }
   if (typeof ref === 'string') {
-    throw refuse(`strip must be a track id or 'master', got '${ref}'`);
+    throw refuse(`ref must be a track id or 'master'`);
   }
-  throw refuseType(`strip must be a track id (number) or 'master'`);
+  throw refuseType(`ref must be a track id or 'master'`);
 }
 
 /** A strip target for a setter whose native layer has no master form. */

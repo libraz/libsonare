@@ -10,7 +10,7 @@ import { withEntry } from './internal/entry.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { getSonareModule } from './module_state.js';
 import { type ProjectModule, projectModule } from './project_internal.js';
-import { assertString } from './validation.js';
+import { assertClosedToken } from './validation.js';
 
 /**
  * ABI version of the flat project layout in the loaded module. Mirrors the
@@ -119,13 +119,18 @@ export function controllerProfileNames(): string[] {
  */
 export function synthPresetPatch(name: string): SynthPatch {
   return withEntry('synthPresetPatch', () => {
-    assertString(name, 'name');
+    assertClosedToken(presetCatalogName(name), synthPresetNames(), 'name');
     // embind returns a val::object whose constructor is not this realm's Object, so a
     // direct return is not structured-cloneable (breaks postMessage to a Worker).
     // Spreading into a fresh literal re-roots it as a plain Object; modRoutings is
     // already a plain member array.
     return { ...projectModule().synthPresetPatch(name) };
   });
+}
+
+/** The catalog name a preset argument names, with any `"va:"` routing prefix removed. */
+function presetCatalogName(name: unknown): unknown {
+  return typeof name === 'string' && name.startsWith('va:') ? name.slice(3) : name;
 }
 
 /** The descriptor entries of the raw module, which return the C ABI's JSON text. */
