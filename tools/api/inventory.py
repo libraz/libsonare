@@ -439,6 +439,8 @@ class _PyPackage:
             elif p.suffix == ".pyi":
                 self.pyi[p.stem] = _PyModule(p, f"{PY_PACKAGE}/{p.name}")
         self.files = len(self.py) + len(self.pyi)
+        # Function nodes by line, per file of this tree; a tagged tree reuses the relative paths.
+        self.node_index: dict[str, dict[int, ast.AST]] = {}
 
     def resolve(self, stem: str, name: str, depth: int = 0):
         """Follow `from .x import name` chains to (module stem, node, file)."""
@@ -1022,11 +1024,8 @@ def _py_constructor(pkg, name, node, stub, stem, file) -> tuple[list[dict], bool
     return group[1:], kw is not None
 
 
-_NODE_CACHE: dict[str, dict[int, ast.AST]] = {}
-
-
 def _node_at(pkg: _PyPackage, rel: str, line: int):
-    if rel not in _NODE_CACHE:
+    if rel not in pkg.node_index:
         stem = Path(rel).stem
         table = pkg.pyi if rel.endswith(".pyi") else pkg.py
         mod = table.get(stem)
@@ -1035,8 +1034,8 @@ def _node_at(pkg: _PyPackage, rel: str, line: int):
             for n in ast.walk(mod.tree):
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     idx[n.lineno] = n
-        _NODE_CACHE[rel] = idx
-    return _NODE_CACHE[rel].get(line)
+        pkg.node_index[rel] = idx
+    return pkg.node_index[rel].get(line)
 
 
 def _field_doc(cls: ast.ClassDef, node: ast.AST) -> bool:

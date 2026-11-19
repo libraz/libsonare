@@ -2595,5 +2595,29 @@ class CliFlagLiteralTest(unittest.TestCase):
         )
 
 
+class PythonNodeIndexTest(unittest.TestCase):
+    """A function node is looked up in the tree being read, never in one read before it."""
+
+    def _package(self, d: str, source: str):
+        import inventory
+
+        pkg = Path(d) / inventory.PY_PACKAGE
+        pkg.mkdir(parents=True)
+        (pkg / "_pages.py").write_text(source, encoding="utf-8")
+        return inventory._PyPackage(Path(d))
+
+    def test_a_second_tree_does_not_read_the_first_trees_nodes(self):
+        import inventory
+
+        rel = f"{inventory.PY_PACKAGE}/_pages.py"
+        with tempfile.TemporaryDirectory() as old, tempfile.TemporaryDirectory() as new:
+            tagged = self._package(old, "def supply():\n    pass\n")
+            tip = self._package(new, 'X = 1\n\ndef supply():\n    """Make a page resident."""\n')
+            self.assertEqual(inventory._node_at(tagged, rel, 1).name, "supply")
+            self.assertIsNone(inventory._node_at(tip, rel, 1))
+            node = inventory._node_at(tip, rel, 3)
+            self.assertEqual(inventory._docstring_text(node), "Make a page resident.")
+
+
 if __name__ == "__main__":
     unittest.main()
