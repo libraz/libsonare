@@ -10,10 +10,17 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
 namespace {
+
+void require_buffer(const float* data, std::size_t n, const char* subject) {
+  if (n != 0 && data == nullptr) {
+    util::check::refuse_relation({subject, "n"}, "{0} must not be null when {1} is greater than 0");
+  }
+}
 
 float resolve_ref(const float* S, std::size_t n, float ref) {
   if (ref > 0.0f) return ref;
@@ -24,17 +31,11 @@ float resolve_ref(const float* S, std::size_t n, float ref) {
 }  // namespace
 
 std::vector<float> power_to_db(const float* S, std::size_t n, float ref, float amin, float top_db) {
-  SONARE_CHECK_MSG(std::isfinite(ref), ErrorCode::InvalidParameter,
-                   "power_to_db: ref must be finite, got " + util::to_text(ref));
-  SONARE_CHECK_MSG(std::isfinite(amin), ErrorCode::InvalidParameter,
-                   "power_to_db: amin must be finite, got " + util::to_text(amin));
-  SONARE_CHECK_MSG(std::isfinite(top_db), ErrorCode::InvalidParameter,
-                   "power_to_db: top_db must be finite, got " + util::to_text(top_db));
-  // amin is finite here, so `amin > 0` and `!(amin <= 0)` agree.
-  SONARE_CHECK_MSG(amin > 0.0f, ErrorCode::InvalidParameter,
-                   "power_to_db: amin must be > 0, got " + util::to_text(amin));
-  SONARE_CHECK_MSG(n == 0 || S != nullptr, ErrorCode::InvalidParameter,
-                   "power_to_db: S must not be null when n > 0");
+  util::check::finite_float(ref, "ref");
+  // greater_than also refuses a non-finite amin.
+  util::check::greater_than(amin, 0.0, "amin");
+  util::check::finite_float(top_db, "top_db");
+  require_buffer(S, n, "S");
   std::vector<float> out(n);
   if (n == 0) return out;
 
@@ -68,17 +69,11 @@ std::vector<float> power_to_db(const std::vector<float>& S, float ref, float ami
 
 std::vector<float> amplitude_to_db(const float* S, std::size_t n, float ref, float amin,
                                    float top_db) {
-  SONARE_CHECK_MSG(std::isfinite(ref), ErrorCode::InvalidParameter,
-                   "amplitude_to_db: ref must be finite, got " + util::to_text(ref));
-  SONARE_CHECK_MSG(std::isfinite(amin), ErrorCode::InvalidParameter,
-                   "amplitude_to_db: amin must be finite, got " + util::to_text(amin));
-  SONARE_CHECK_MSG(std::isfinite(top_db), ErrorCode::InvalidParameter,
-                   "amplitude_to_db: top_db must be finite, got " + util::to_text(top_db));
-  // amin is finite here, so `amin > 0` and `!(amin <= 0)` agree.
-  SONARE_CHECK_MSG(amin > 0.0f, ErrorCode::InvalidParameter,
-                   "amplitude_to_db: amin must be > 0, got " + util::to_text(amin));
-  SONARE_CHECK_MSG(n == 0 || S != nullptr, ErrorCode::InvalidParameter,
-                   "amplitude_to_db: S must not be null when n > 0");
+  util::check::finite_float(ref, "ref");
+  // greater_than also refuses a non-finite amin.
+  util::check::greater_than(amin, 0.0, "amin");
+  util::check::finite_float(top_db, "top_db");
+  require_buffer(S, n, "S");
   // Mirror librosa: amplitude_to_db(S) == power_to_db(S^2, amin=amin^2, ref=ref^2).
   std::vector<float> power(n);
   for (std::size_t i = 0; i < n; ++i) {
@@ -96,10 +91,8 @@ std::vector<float> amplitude_to_db(const std::vector<float>& S, float ref, float
 }
 
 std::vector<float> db_to_power(const float* S_db, std::size_t n, float ref) {
-  SONARE_CHECK_MSG(std::isfinite(ref), ErrorCode::InvalidParameter,
-                   "db_to_power: ref must be finite, got " + util::to_text(ref));
-  SONARE_CHECK_MSG(n == 0 || S_db != nullptr, ErrorCode::InvalidParameter,
-                   "db_to_power: S_db must not be null when n > 0");
+  util::check::finite_float(ref, "ref");
+  require_buffer(S_db, n, "S_db");
   std::vector<float> out(n);
   for (std::size_t i = 0; i < n; ++i) {
     out[i] = ref * db_to_power_scalar(S_db[i]);
@@ -112,10 +105,8 @@ std::vector<float> db_to_power(const std::vector<float>& S_db, float ref) {
 }
 
 std::vector<float> db_to_amplitude(const float* S_db, std::size_t n, float ref) {
-  SONARE_CHECK_MSG(std::isfinite(ref), ErrorCode::InvalidParameter,
-                   "db_to_amplitude: ref must be finite, got " + util::to_text(ref));
-  SONARE_CHECK_MSG(n == 0 || S_db != nullptr, ErrorCode::InvalidParameter,
-                   "db_to_amplitude: S_db must not be null when n > 0");
+  util::check::finite_float(ref, "ref");
+  require_buffer(S_db, n, "S_db");
   std::vector<float> out(n);
   for (std::size_t i = 0; i < n; ++i) {
     out[i] = ref * db_to_linear(S_db[i]);

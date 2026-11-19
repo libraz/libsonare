@@ -7,7 +7,11 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
+#include <vector>
 
+#include "core/db_convert.h"
+#include "core/synthesis.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -311,4 +315,92 @@ TEST_CASE("time_to_frames floor behavior", "[convert]") {
     float tiny_time = 0.001f;  // ~22 samples at 22050 Hz, less than 512 hop
     REQUIRE(time_to_frames(tiny_time, sr, hop) == 0);
   }
+}
+
+namespace {
+
+template <typename Call>
+std::string refusal_message(const Call& call) {
+  try {
+    call();
+  } catch (const SonareException& error) {
+    REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    return error.what();
+  }
+  return "no refusal";
+}
+
+}  // namespace
+
+TEST_CASE("the synthesis generators refuse in the shared parameter vocabulary",
+          "[convert][refusal]") {
+  const float nan_value = std::numeric_limits<float>::quiet_NaN();
+
+  CHECK(refusal_message([] { (void)tone(440.0f, 0, 1.0f); }) ==
+        "sr must be an integer in [1, 2147483647]");
+  CHECK(refusal_message([&] { (void)tone(440.0f, 22050, nan_value); }) ==
+        "duration must be finite and at least 0");
+  CHECK(refusal_message([] { (void)tone(440.0f, 22050, -1.0f); }) ==
+        "duration must be finite and at least 0");
+  CHECK(refusal_message([] { (void)tone(440.0f, 22050, 1.0e9f); }) ==
+        "duration * sr must be at most 5e8");
+
+  CHECK(refusal_message([] { (void)chirp(100.0f, 200.0f, -1, 1.0f); }) ==
+        "sr must be an integer in [1, 2147483647]");
+  CHECK(refusal_message([&] { (void)chirp(100.0f, 200.0f, 22050, nan_value); }) ==
+        "duration must be finite and at least 0");
+  CHECK(refusal_message([] { (void)chirp(0.0f, 200.0f, 22050, 1.0f, false); }) ==
+        "fmin must be finite and greater than 0");
+  CHECK(refusal_message([] { (void)chirp(100.0f, 0.0f, 22050, 1.0f, false); }) ==
+        "fmax must be finite and greater than 0");
+
+  const std::vector<float> times = {0.5f};
+  CHECK(refusal_message([&] { (void)clicks(times, 0); }) ==
+        "sr must be an integer in [1, 2147483647]");
+  CHECK(refusal_message([&] { (void)clicks(times, 22050, 0, 1000.0f, 0.0f); }) ==
+        "click_duration must be finite and greater than 0");
+  CHECK(refusal_message([&] { (void)clicks(times, 22050, 0, 0.0f); }) ==
+        "frequency must be finite and greater than 0");
+  CHECK(refusal_message([&] { (void)clicks(times, 22050, -1); }) ==
+        "length must be an integer in [0, 5e8]");
+  CHECK(refusal_message([&] { (void)clicks(times, 22050, 0, 1000.0f, 1.0e-6f); }) ==
+        "click_duration * sr must be at least 1");
+  CHECK(refusal_message([&] { (void)clicks({nan_value}, 22050); }) ==
+        "times must be finite and in [-3.4028235e38, 3.4028235e38]");
+  CHECK(refusal_message([&] { (void)clicks({1.0e9f}, 22050); }) ==
+        "times * sr must be at most 5e8");
+}
+
+TEST_CASE("the dB conversions refuse in the shared parameter vocabulary", "[convert][refusal]") {
+  const float nan_value = std::numeric_limits<float>::quiet_NaN();
+  const std::vector<float> values = {1.0f, 2.0f};
+  const std::string finite_float = "must be finite and in [-3.4028235e38, 3.4028235e38]";
+
+  for (const bool amplitude : {false, true}) {
+    CAPTURE(amplitude);
+    const auto convert = [&](float ref, float amin, float top_db) {
+      if (amplitude) return amplitude_to_db(values, ref, amin, top_db);
+      return power_to_db(values, ref, amin, top_db);
+    };
+    CHECK(refusal_message([&] { (void)convert(nan_value, 1e-10f, 80.0f); }) ==
+          "ref " + finite_float);
+    CHECK(refusal_message([&] { (void)convert(1.0f, nan_value, 80.0f); }) ==
+          "amin must be finite and greater than 0");
+    CHECK(refusal_message([&] { (void)convert(1.0f, 0.0f, 80.0f); }) ==
+          "amin must be finite and greater than 0");
+    CHECK(refusal_message([&] { (void)convert(1.0f, 1e-10f, nan_value); }) ==
+          "top_db " + finite_float);
+  }
+  CHECK(refusal_message([] { (void)power_to_db(nullptr, 2, 1.0f, 1e-10f, 80.0f); }) ==
+        "S must not be null when n is greater than 0");
+  CHECK(refusal_message([] { (void)amplitude_to_db(nullptr, 2, 1.0f, 1e-5f, 80.0f); }) ==
+        "S must not be null when n is greater than 0");
+
+  CHECK(refusal_message([&] { (void)db_to_power(values, nan_value); }) == "ref " + finite_float);
+  CHECK(refusal_message([&] { (void)db_to_amplitude(values, nan_value); }) ==
+        "ref " + finite_float);
+  CHECK(refusal_message([] { (void)db_to_power(nullptr, 2, 1.0f); }) ==
+        "S_db must not be null when n is greater than 0");
+  CHECK(refusal_message([] { (void)db_to_amplitude(nullptr, 2, 1.0f); }) ==
+        "S_db must not be null when n is greater than 0");
 }

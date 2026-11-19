@@ -9,6 +9,8 @@
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 #include "util/resource_limits.h"
 
 namespace sonare {
@@ -17,12 +19,14 @@ using constants::kTwoPiD;
 
 namespace {
 
-size_t checked_sample_count(float duration, int sample_rate, const char* name) {
+// @p subject is the duration member's name, so a refusal names the key the caller passed.
+size_t checked_sample_count(float duration, int sample_rate, const char* subject) {
   const double samples = static_cast<double>(duration) * sample_rate;
   if (!std::isfinite(duration) || duration < 0.0f || samples < 0.0 ||
       samples > static_cast<double>(resource::kMaxOfflineAudioSamples)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(name) + ": duration exceeds the offline audio limit");
+    util::check::refuse_relation({subject, "sr"},
+                                 "{0} * {1} must be at most " +
+                                     util::refusal::bound_text(resource::kMaxOfflineAudioSamples));
   }
   return static_cast<size_t>(samples);
 }
@@ -30,15 +34,13 @@ size_t checked_sample_count(float duration, int sample_rate, const char* name) {
 }  // namespace
 
 Audio tone(float frequency, int sr, float duration, float phi, float amplitude) {
-  if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "tone: sr must be positive");
+  util::check::integer_at_least(sr, 1, "sr");
   // Reject non-finite duration explicitly: `duration < 0` is false for NaN, so a
   // NaN (or +Inf) would slip past the sign check and cast to a huge/garbage size_t,
   // triggering a runaway allocation.
-  if (!std::isfinite(duration) || duration < 0.0f)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tone: duration must be finite and non-negative");
+  util::check::at_least(duration, 0.0, "duration");
 
-  const size_t n = checked_sample_count(duration, sr, "tone");
+  const size_t n = checked_sample_count(duration, sr, "duration");
   std::vector<float> y(n);
   const double inv_sr = 1.0 / static_cast<double>(sr);
   const double w = kTwoPiD * static_cast<double>(frequency);
@@ -50,13 +52,11 @@ Audio tone(float frequency, int sr, float duration, float phi, float amplitude) 
 }
 
 Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
-  if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "chirp: sr must be positive");
+  util::check::integer_at_least(sr, 1, "sr");
   // See tone(): NaN/Inf duration must be rejected before the size_t cast.
-  if (!std::isfinite(duration) || duration < 0.0f)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "chirp: duration must be finite and non-negative");
+  util::check::at_least(duration, 0.0, "duration");
 
-  const size_t n = checked_sample_count(duration, sr, "chirp");
+  const size_t n = checked_sample_count(duration, sr, "duration");
   std::vector<float> y(n);
   if (n == 0) return Audio::from_vector(std::move(y), sr);
 
@@ -77,10 +77,9 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
     // Exponential / logarithmic sweep:
     //   f(t) = f0 * (f1/f0) ** (t/d)
     //   phase(t) = 2*pi * f0 * d / ln(f1/f0) * ((f1/f0)**(t/d) - 1)
-    if (!(f0 > 0.0) || !(f1 > 0.0)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "chirp: fmin and fmax must be > 0 for exponential sweep");
-    }
+    // +inf still passes here as before; only NaN and non-positive values are refused.
+    if (!(f0 > 0.0)) util::check::greater_than(f0, 0.0, "fmin");
+    if (!(f1 > 0.0)) util::check::greater_than(f1, 0.0, "fmax");
     const double ratio = f1 / f0;
     if (std::abs(ratio - 1.0) < 1e-12) {
       // Degenerate: pure tone at f0.
@@ -104,25 +103,20 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
 
 Audio clicks(const std::vector<float>& times, int sr, int length, float frequency,
              float click_duration) {
-  if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "clicks: sr must be positive");
-  if (!std::isfinite(click_duration) || !(click_duration > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "clicks: click_duration must be > 0");
-  }
-  if (!std::isfinite(frequency) || !(frequency > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "clicks: frequency must be > 0");
-  }
-  if (length < 0 || static_cast<size_t>(length) > resource::kMaxOfflineAudioSamples)
-    throw SonareException(ErrorCode::InvalidParameter, "clicks: length must be non-negative");
+  util::check::integer_at_least(sr, 1, "sr");
+  util::check::greater_than(click_duration, 0.0, "click_duration");
+  util::check::greater_than(frequency, 0.0, "frequency");
+  util::check::integer_in_range(
+      length, 0, static_cast<long long>(resource::kMaxOfflineAudioSamples), "length");
 
   // Build the click waveform: 2**(0 .. -10) * sin(2*pi*f*n/sr)
-  const size_t click_count = checked_sample_count(click_duration, sr, "clicks");
+  const size_t click_count = checked_sample_count(click_duration, sr, "click_duration");
   if (click_count > static_cast<size_t>(std::numeric_limits<int>::max())) {
     throw SonareException(ErrorCode::InvalidParameter, "clicks: click duration is too long");
   }
   const int click_n = static_cast<int>(click_count);
   if (click_n <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "clicks: click_duration too short for sr (rounds to 0 samples)");
+    util::check::refuse_relation({"click_duration", "sr"}, "{0} * {1} must be at least 1");
   }
   std::vector<float> click(click_n);
   const double w = kTwoPiD * static_cast<double>(frequency) / static_cast<double>(sr);
@@ -146,15 +140,14 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
   std::vector<int> positions;
   positions.reserve(times.size());
   for (float t : times) {
-    if (!std::isfinite(t)) {
-      throw SonareException(ErrorCode::InvalidParameter, "clicks: times must be finite");
-    }
+    util::check::finite_float(t, "times");
     if (t < 0.0f) continue;
     const double rounded = std::round(static_cast<double>(t) * sr);
     if (rounded > static_cast<double>(resource::kMaxOfflineAudioSamples) ||
         rounded > static_cast<double>(std::numeric_limits<int>::max())) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "clicks: time exceeds the offline audio limit");
+      util::check::refuse_relation(
+          {"times", "sr"}, "{0} * {1} must be at most " +
+                               util::refusal::bound_text(resource::kMaxOfflineAudioSamples));
     }
     positions.push_back(static_cast<int>(rounded));
   }
