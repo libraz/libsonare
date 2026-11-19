@@ -82,6 +82,8 @@ const METHOD_SHAPES = [
   'setStripInsertBypassed',
   'setStripInsertParam',
   'setStripSidechain',
+  'setStripSurroundPan',
+  'setSurroundPan',
   'scheduleParam',
   'setTrackSoloMute',
   'transcribeToClip',

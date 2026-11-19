@@ -94,6 +94,8 @@ const methodShapes = [
   'setStripInsertBypassed',
   'setStripInsertParam',
   'setStripSidechain',
+  'setStripSurroundPan',
+  'setSurroundPan',
   'setTrackBuses',
   'setTrackLanes',
   'setTrackSoloMute',
