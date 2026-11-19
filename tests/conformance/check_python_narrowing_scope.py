@@ -294,6 +294,10 @@ class Scan:
         # the population's own size, which a broken declaration reader takes to
         # zero while every check over it stays green.
         self.argument_positions = 0
+        # Positions accepted only because the call is a binding-defined wrapper
+        # whose every return is a shared-reader call or a constant.
+        self.wrapper_positions = 0
+        self.wrappers: frozenset[str] = frozenset()
         self._run()
 
     def _files(self) -> list[Path]:
@@ -302,6 +306,7 @@ class Scan:
     def _run(self) -> None:
         trees = {path: ast.parse(path.read_text(encoding="utf-8")) for path in self._files()}
         self.signatures = _signature_table(trees.values())
+        self.wrappers = _reader_wrappers(trees.values())
 
         for path, tree in trees.items():
             source = path.read_text(encoding="utf-8")
@@ -368,6 +373,9 @@ class Scan:
                 continue
             self.argument_positions += 1
             if id(argument) in inline or _is_checked_argument(argument, checked):
+                continue
+            if _is_wrapper_call(argument, self.wrappers):
+                self.wrapper_positions += 1
                 continue
             self.argument_sites.append(
                 ArgumentSite(
@@ -515,6 +523,79 @@ def _is_shared_reader_call(node: ast.AST | None) -> bool:
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id in SHARED_ARGUMENT_READERS
+    )
+
+
+def _module_constants(trees) -> frozenset[str]:
+    """Module-level names bound to a literal number (``_C_ABSENT = -1``) in some binding file."""
+    names: set[str] = set()
+    for tree in trees:
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and _is_literal(node.value):
+                names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+    return frozenset(names)
+
+
+def _is_literal(node: ast.AST) -> bool:
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        node = node.operand
+    return isinstance(node, ast.Constant) and not isinstance(node.value, str)
+
+
+def _wrapper_return(node: ast.AST | None, constants: frozenset[str]) -> bool | None:
+    """True for a shared-reader call, None for a constant, False for anything else."""
+    if isinstance(node, ast.IfExp):
+        branches = [_wrapper_return(node.body, constants), _wrapper_return(node.orelse, constants)]
+        if False in branches:
+            return False
+        return True if True in branches else None
+    if _is_shared_reader_call(node):
+        return True
+    if node is not None and (
+        _is_literal(node) or (isinstance(node, ast.Name) and node.id in constants)
+    ):
+        return None
+    return False
+
+
+def _reader_wrappers(trees) -> frozenset[str]:
+    """Binding functions whose every return is a direct shared-reader call or a constant.
+
+    Resolved one level: a wrapper returning another wrapper does not count. A name
+    defined more than once counts only when every definition qualifies.
+    """
+    trees = list(trees)
+    constants = _module_constants(trees)
+    verdicts: dict[str, bool] = {}
+    for tree in trees:
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name in SHARED_LOCAL_READERS:
+                continue
+            kinds = [_wrapper_return(r.value, constants) for r in _own_returns(node)]
+            ok = bool(kinds) and False not in kinds and True in kinds
+            verdicts[node.name] = verdicts.get(node.name, True) and ok
+    return frozenset(name for name, ok in verdicts.items() if ok)
+
+
+def _own_returns(function: ast.AST) -> list[ast.Return]:
+    """The function's return statements, not those of a function nested inside it."""
+    found: list[ast.Return] = []
+    stack = list(ast.iter_child_nodes(function))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            continue
+        if isinstance(node, ast.Return):
+            found.append(node)
+        stack.extend(ast.iter_child_nodes(node))
+    return found
+
+
+def _is_wrapper_call(node: ast.AST, wrappers: frozenset[str]) -> bool:
+    return (
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in wrappers
     )
 
 
@@ -986,6 +1067,7 @@ def main() -> int:
     print(f"structs on ctypes.Structure directly: {len(scan.plain_structs)}")
     print(
         f"arguments at a narrowing argtypes position: {scan.argument_positions}, "
+        f"of them through a reader wrapper: {scan.wrapper_positions}, "
         f"of them unchecked: {len(scan.argument_sites)} "
         f"(over {len(scan.signatures)} declared signatures)"
     )

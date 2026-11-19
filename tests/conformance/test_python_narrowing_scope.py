@@ -288,6 +288,52 @@ class FailureClassTest(_SyntheticTree):
         )
         self.assertEqual(self.evaluate(root), [])
 
+    def test_an_argtype_argument_through_a_reader_wrapper_reports_nothing(self) -> None:
+        """Every return of the wrapper is a shared-reader call or a constant."""
+        root = self.tree(
+            "import ctypes\n\n_ABSENT = -1\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_bank.argtypes = [ctypes.c_void_p, ctypes.c_int]\n\n\n"
+            "def _bank(value):\n"
+            "    if value == 0:\n"
+            "        return 0\n"
+            "    return _ABSENT if value is None else _narrow_int(value, 'bank', 0, 16383)\n\n\n"
+            "def f(lib, handle, bank):\n"
+            "    lib.sonare_set_bank(handle, _bank(bank))\n"
+        )
+        scan = scope.Scan(root)
+        self.assertEqual(scan.wrapper_positions, 1)
+        self.assertEqual(self.evaluate(root), [])
+
+    def test_a_wrapper_with_one_unchecked_return_is_reported(self) -> None:
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_bank.argtypes = [ctypes.c_void_p, ctypes.c_int]\n\n\n"
+            "def _bank(value):\n"
+            "    if value is None:\n"
+            "        return int(value)\n"
+            "    return _narrow_int(value, 'bank', 0, 16383)\n\n\n"
+            "def f(lib, handle, bank):\n"
+            "    lib.sonare_set_bank(handle, _bank(bank))\n"
+        )
+        self.assertEqual(scope.Scan(root).wrapper_positions, 0)
+        lines = self.only(self.evaluate(root), "argtypes declares a narrowing C type")
+        self.assertIn("argument 1: c_int) <- _bank(bank)", lines[0])
+
+    def test_a_wrapper_of_a_wrapper_is_reported(self) -> None:
+        """Resolved one level only."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_bank.argtypes = [ctypes.c_void_p, ctypes.c_int]\n\n\n"
+            "def _inner(value):\n"
+            "    return _narrow_int(value, 'bank', 0, 16383)\n\n\n"
+            "def _outer(value):\n"
+            "    return _inner(value)\n\n\n"
+            "def f(lib, handle, bank):\n"
+            "    lib.sonare_set_bank(handle, _outer(bank))\n"
+        )
+        lines = self.only(self.evaluate(root), "argtypes declares a narrowing C type")
+        self.assertIn("<- _outer(bank)", lines[0])
+
     def test_a_local_bound_twice_is_reported(self) -> None:
         """A second binding is a second contract, and this scan does not order them."""
         root = self.tree(
