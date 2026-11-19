@@ -86,33 +86,35 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    BpmAnalyzer analyzer(audio, config);
-    StagedOutput<SonareBpmAnalysisResult, &sonare_free_bpm_analysis_result> staged;
-    staged->bpm = analyzer.bpm();
-    staged->confidence = analyzer.confidence();
+  return run_offline(
+      "analyze_bpm", "samples", samples, length, sample_rate,
+      [&](const Audio& audio) -> SonareError {
+        BpmAnalyzer analyzer(audio, config);
+        StagedOutput<SonareBpmAnalysisResult, &sonare_free_bpm_analysis_result> staged;
+        staged->bpm = analyzer.bpm();
+        staged->confidence = analyzer.confidence();
 
-    std::vector<BpmCandidate> candidates = analyzer.candidates(max_candidates);
-    staged->candidate_count = candidates.size();
-    if (!candidates.empty()) {
-      std::unique_ptr<SonareBpmCandidate[]> cands(new SonareBpmCandidate[candidates.size()]);
-      for (size_t i = 0; i < candidates.size(); ++i) {
-        cands[i].bpm = candidates[i].bpm;
-        cands[i].confidence = candidates[i].confidence;
-      }
-      staged->candidates = release_array(cands);
-    }
+        std::vector<BpmCandidate> candidates = analyzer.candidates(max_candidates);
+        staged->candidate_count = candidates.size();
+        if (!candidates.empty()) {
+          std::unique_ptr<SonareBpmCandidate[]> cands(new SonareBpmCandidate[candidates.size()]);
+          for (size_t i = 0; i < candidates.size(); ++i) {
+            cands[i].bpm = candidates[i].bpm;
+            cands[i].confidence = candidates[i].confidence;
+          }
+          staged->candidates = release_array(cands);
+        }
 
-    const std::vector<float>& autocorr = analyzer.autocorrelation();
-    staged->autocorrelation_count = autocorr.size();
-    staged->autocorrelation = copy_vector(autocorr);
+        const std::vector<float>& autocorr = analyzer.autocorrelation();
+        staged->autocorrelation_count = autocorr.size();
+        staged->autocorrelation = copy_vector(autocorr);
 
-    const std::vector<float>& tempogram = analyzer.tempogram();
-    staged->tempogram_count = tempogram.size();
-    staged->tempogram = copy_vector(tempogram);
-    staged.publish(out);
-    return SONARE_OK;
-  });
+        const std::vector<float>& tempogram = analyzer.tempogram();
+        staged->tempogram_count = tempogram.size();
+        staged->tempogram = copy_vector(tempogram);
+        staged.publish(out);
+        return SONARE_OK;
+      });
 }
 
 SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
@@ -144,10 +146,11 @@ SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t leng
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    fill_acoustic_result(sonare::analyze_impulse_response(audio, config), out);
-    return SONARE_OK;
-  });
+  return run_offline("analyze_impulse_response_ex", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       fill_acoustic_result(sonare::analyze_impulse_response(audio, config), out);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_detect_acoustic(const float* samples, size_t length, int sample_rate,
@@ -176,10 +179,11 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    fill_acoustic_result(sonare::detect_acoustic(audio, config), out);
-    return SONARE_OK;
-  });
+  return run_offline("detect_acoustic", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       fill_acoustic_result(sonare::detect_acoustic(audio, config), out);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
@@ -208,25 +212,26 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    RhythmAnalyzer analyzer(audio, make_config());
-    RhythmFeatures features = analyzer.features();
-    StagedOutput<SonareRhythmResult, &sonare_free_rhythm_result> staged;
-    staged->bpm = analyzer.bpm();
-    staged->time_signature.numerator = features.time_signature.numerator;
-    staged->time_signature.denominator = features.time_signature.denominator;
-    staged->time_signature.confidence = features.time_signature.confidence;
-    staged->groove_type = to_c_groove_type(features.groove_type);
-    staged->syncopation = features.syncopation;
-    staged->pattern_regularity = features.pattern_regularity;
-    staged->tempo_stability = features.tempo_stability;
+  return run_offline("analyze_rhythm", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       RhythmAnalyzer analyzer(audio, make_config());
+                       RhythmFeatures features = analyzer.features();
+                       StagedOutput<SonareRhythmResult, &sonare_free_rhythm_result> staged;
+                       staged->bpm = analyzer.bpm();
+                       staged->time_signature.numerator = features.time_signature.numerator;
+                       staged->time_signature.denominator = features.time_signature.denominator;
+                       staged->time_signature.confidence = features.time_signature.confidence;
+                       staged->groove_type = to_c_groove_type(features.groove_type);
+                       staged->syncopation = features.syncopation;
+                       staged->pattern_regularity = features.pattern_regularity;
+                       staged->tempo_stability = features.tempo_stability;
 
-    const std::vector<float>& intervals = analyzer.beat_intervals();
-    staged->beat_interval_count = intervals.size();
-    staged->beat_intervals = copy_vector(intervals);
-    staged.publish(out);
-    return SONARE_OK;
-  });
+                       const std::vector<float>& intervals = analyzer.beat_intervals();
+                       staged->beat_interval_count = intervals.size();
+                       staged->beat_intervals = copy_vector(intervals);
+                       staged.publish(out);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
@@ -250,29 +255,30 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    DynamicsAnalyzer analyzer(audio, config);
-    const Dynamics& dynamics = analyzer.dynamics();
-    out->dynamic_range_db = dynamics.dynamic_range_db;
-    out->peak_db = dynamics.peak_db;
-    out->rms_db = dynamics.rms_db;
-    out->crest_factor = dynamics.crest_factor;
-    out->loudness_range_lu = dynamics.loudness_range_lu;
-    out->is_compressed = dynamics.is_compressed ? 1 : 0;
+  return run_offline("analyze_dynamics", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       DynamicsAnalyzer analyzer(audio, config);
+                       const Dynamics& dynamics = analyzer.dynamics();
+                       out->dynamic_range_db = dynamics.dynamic_range_db;
+                       out->peak_db = dynamics.peak_db;
+                       out->rms_db = dynamics.rms_db;
+                       out->crest_factor = dynamics.crest_factor;
+                       out->loudness_range_lu = dynamics.loudness_range_lu;
+                       out->is_compressed = dynamics.is_compressed ? 1 : 0;
 
-    const LoudnessCurve& curve = analyzer.loudness_curve();
-    size_t count = std::min(curve.times.size(), curve.rms_db.size());
-    out->loudness_count = count;
-    if (count > 0) {
-      std::unique_ptr<float[]> times(new float[count]);
-      std::unique_ptr<float[]> rms_db(new float[count]);
-      std::memcpy(times.get(), curve.times.data(), count * sizeof(float));
-      std::memcpy(rms_db.get(), curve.rms_db.data(), count * sizeof(float));
-      out->loudness_times_sec = release_array(times);
-      out->loudness_rms_db = release_array(rms_db);
-    }
-    return SONARE_OK;
-  });
+                       const LoudnessCurve& curve = analyzer.loudness_curve();
+                       size_t count = std::min(curve.times.size(), curve.rms_db.size());
+                       out->loudness_count = count;
+                       if (count > 0) {
+                         std::unique_ptr<float[]> times(new float[count]);
+                         std::unique_ptr<float[]> rms_db(new float[count]);
+                         std::memcpy(times.get(), curve.times.data(), count * sizeof(float));
+                         std::memcpy(rms_db.get(), curve.rms_db.data(), count * sizeof(float));
+                         out->loudness_times_sec = release_array(times);
+                         out->loudness_rms_db = release_array(rms_db);
+                       }
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate, int n_fft,
@@ -303,44 +309,46 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    TimbreAnalyzer analyzer(audio, config);
-    const Timbre& timbre = analyzer.timbre();
-    StagedOutput<SonareTimbreResult, &sonare_free_timbre_result> staged;
-    staged->brightness = timbre.brightness;
-    staged->warmth = timbre.warmth;
-    staged->density = timbre.density;
-    staged->roughness = timbre.roughness;
-    staged->complexity = timbre.complexity;
+  return run_offline(
+      "analyze_timbre", "samples", samples, length, sample_rate,
+      [&](const Audio& audio) -> SonareError {
+        TimbreAnalyzer analyzer(audio, config);
+        const Timbre& timbre = analyzer.timbre();
+        StagedOutput<SonareTimbreResult, &sonare_free_timbre_result> staged;
+        staged->brightness = timbre.brightness;
+        staged->warmth = timbre.warmth;
+        staged->density = timbre.density;
+        staged->roughness = timbre.roughness;
+        staged->complexity = timbre.complexity;
 
-    const std::vector<float>& centroid = analyzer.spectral_centroid();
-    staged->spectral_centroid_count = centroid.size();
-    staged->spectral_centroid = copy_vector(centroid);
+        const std::vector<float>& centroid = analyzer.spectral_centroid();
+        staged->spectral_centroid_count = centroid.size();
+        staged->spectral_centroid = copy_vector(centroid);
 
-    const std::vector<float>& flatness = analyzer.spectral_flatness();
-    staged->spectral_flatness_count = flatness.size();
-    staged->spectral_flatness = copy_vector(flatness);
+        const std::vector<float>& flatness = analyzer.spectral_flatness();
+        staged->spectral_flatness_count = flatness.size();
+        staged->spectral_flatness = copy_vector(flatness);
 
-    const std::vector<float>& rolloff = analyzer.spectral_rolloff();
-    staged->spectral_rolloff_count = rolloff.size();
-    staged->spectral_rolloff = copy_vector(rolloff);
+        const std::vector<float>& rolloff = analyzer.spectral_rolloff();
+        staged->spectral_rolloff_count = rolloff.size();
+        staged->spectral_rolloff = copy_vector(rolloff);
 
-    const std::vector<Timbre>& over_time = analyzer.timbre_over_time();
-    staged->timbre_over_time_count = over_time.size();
-    if (!over_time.empty()) {
-      std::unique_ptr<SonareTimbreFrame[]> frames(new SonareTimbreFrame[over_time.size()]);
-      for (size_t i = 0; i < over_time.size(); ++i) {
-        frames[i].brightness = over_time[i].brightness;
-        frames[i].warmth = over_time[i].warmth;
-        frames[i].density = over_time[i].density;
-        frames[i].roughness = over_time[i].roughness;
-        frames[i].complexity = over_time[i].complexity;
-      }
-      staged->timbre_over_time = release_array(frames);
-    }
-    staged.publish(out);
-    return SONARE_OK;
-  });
+        const std::vector<Timbre>& over_time = analyzer.timbre_over_time();
+        staged->timbre_over_time_count = over_time.size();
+        if (!over_time.empty()) {
+          std::unique_ptr<SonareTimbreFrame[]> frames(new SonareTimbreFrame[over_time.size()]);
+          for (size_t i = 0; i < over_time.size(); ++i) {
+            frames[i].brightness = over_time[i].brightness;
+            frames[i].warmth = over_time[i].warmth;
+            frames[i].density = over_time[i].density;
+            frames[i].roughness = over_time[i].roughness;
+            frames[i].complexity = over_time[i].complexity;
+          }
+          staged->timbre_over_time = release_array(frames);
+        }
+        staged.publish(out);
+        return SONARE_OK;
+      });
 }
 
 SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
@@ -369,11 +377,12 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    ChordAnalyzer analyzer(audio, config);
-    fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
-    return SONARE_OK;
-  });
+  return run_offline("detect_chords", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       ChordAnalyzer analyzer(audio, config);
+                       fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
@@ -393,13 +402,14 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    const ChordConfig config = chord_config_from_options(*options);
+  return run_offline("detect_chords_ex", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       const ChordConfig config = chord_config_from_options(*options);
 
-    ChordAnalyzer analyzer(audio, config);
-    fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
-    return SONARE_OK;
-  });
+                       ChordAnalyzer analyzer(audio, config);
+                       fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
+                       return SONARE_OK;
+                     });
 }
 
 namespace {
@@ -472,19 +482,20 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    const ChordConfig config = chord_config_from_options(*options);
+  return run_offline("chord_functional_analysis", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       const ChordConfig config = chord_config_from_options(*options);
 
-    ChordAnalyzer analyzer(audio, config);
-    fill_chord_result(analyzer.chords(), analyzer.tuning(), chords);
-    try {
-      label_chords(analyzer.chords(), label_root, label_mode, roman, functions);
-    } catch (...) {
-      sonare_free_chord_analysis_result(chords);
-      throw;
-    }
-    return SONARE_OK;
-  });
+                       ChordAnalyzer analyzer(audio, config);
+                       fill_chord_result(analyzer.chords(), analyzer.tuning(), chords);
+                       try {
+                         label_chords(analyzer.chords(), label_root, label_mode, roman, functions);
+                       } catch (...) {
+                         sonare_free_chord_analysis_result(chords);
+                         throw;
+                       }
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
@@ -551,24 +562,25 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    SectionAnalyzer analyzer(audio, config);
-    const std::vector<Section>& sections = analyzer.sections();
-    if (!sections.empty()) {
-      auto data = std::make_unique<SonareSection[]>(sections.size());
-      for (size_t i = 0; i < sections.size(); ++i) {
-        data[i].type = static_cast<SonareSectionType>(sections[i].type);
-        data[i].start_sec = sections[i].start;
-        data[i].end_sec = sections[i].end;
-        data[i].energy_level = sections[i].energy_level;
-        data[i].confidence = sections[i].confidence;
-        data[i].group = static_cast<int32_t>(sections[i].group);
-      }
-      out->sections = release_array(data);
-      out->section_count = sections.size();
-    }
-    return SONARE_OK;
-  });
+  return run_offline("analyze_sections", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       SectionAnalyzer analyzer(audio, config);
+                       const std::vector<Section>& sections = analyzer.sections();
+                       if (!sections.empty()) {
+                         auto data = std::make_unique<SonareSection[]>(sections.size());
+                         for (size_t i = 0; i < sections.size(); ++i) {
+                           data[i].type = static_cast<SonareSectionType>(sections[i].type);
+                           data[i].start_sec = sections[i].start;
+                           data[i].end_sec = sections[i].end;
+                           data[i].energy_level = sections[i].energy_level;
+                           data[i].confidence = sections[i].confidence;
+                           data[i].group = static_cast<int32_t>(sections[i].group);
+                         }
+                         out->sections = release_array(data);
+                         out->section_count = sections.size();
+                       }
+                       return SONARE_OK;
+                     });
 }
 
 SonareBoundaryOptions sonare_boundary_options_default(void) {
@@ -625,35 +637,36 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    BoundaryDetector detector(audio, config);
-    const std::vector<Boundary>& boundaries = detector.boundaries();
-    if (!boundaries.empty()) {
-      auto data = std::make_unique<SonareBoundary[]>(boundaries.size());
-      for (size_t i = 0; i < boundaries.size(); ++i) {
-        data[i].time_sec = boundaries[i].time;
-        data[i].frame = boundaries[i].frame;
-        data[i].strength = boundaries[i].strength;
-      }
-      out->boundaries = release_array(data);
-      out->boundary_count = boundaries.size();
-    }
-    const std::vector<float>& novelty = detector.novelty_curve();
-    if (!novelty.empty()) {
-      auto curve = std::make_unique<float[]>(novelty.size());
-      std::copy(novelty.begin(), novelty.end(), curve.get());
-      out->novelty_curve = release_array(curve);
-      out->novelty_length = novelty.size();
-    }
-    out->novelty_peak = detector.novelty_peak();
-    // The analysis rate, not the caller's: input above 22.05 kHz is resampled
-    // before any feature is computed, and `frame` indexes that grid.
-    out->sample_rate = detector.sample_rate();
-    out->hop_length = detector.hop_length();
-    out->n_frames = detector.n_frames();
-    out->frame_stride = detector.frame_stride();
-    return SONARE_OK;
-  });
+  return run_offline("detect_boundaries", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       BoundaryDetector detector(audio, config);
+                       const std::vector<Boundary>& boundaries = detector.boundaries();
+                       if (!boundaries.empty()) {
+                         auto data = std::make_unique<SonareBoundary[]>(boundaries.size());
+                         for (size_t i = 0; i < boundaries.size(); ++i) {
+                           data[i].time_sec = boundaries[i].time;
+                           data[i].frame = boundaries[i].frame;
+                           data[i].strength = boundaries[i].strength;
+                         }
+                         out->boundaries = release_array(data);
+                         out->boundary_count = boundaries.size();
+                       }
+                       const std::vector<float>& novelty = detector.novelty_curve();
+                       if (!novelty.empty()) {
+                         auto curve = std::make_unique<float[]>(novelty.size());
+                         std::copy(novelty.begin(), novelty.end(), curve.get());
+                         out->novelty_curve = release_array(curve);
+                         out->novelty_length = novelty.size();
+                       }
+                       out->novelty_peak = detector.novelty_peak();
+                       // The analysis rate, not the caller's: input above 22.05 kHz is resampled
+                       // before any feature is computed, and `frame` indexes that grid.
+                       out->sample_rate = detector.sample_rate();
+                       out->hop_length = detector.hop_length();
+                       out->n_frames = detector.n_frames();
+                       out->frame_stride = detector.frame_stride();
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate,
@@ -690,23 +703,24 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    MelodyAnalyzer analyzer(audio, config);
-    const MelodyContour& contour = analyzer.contour();
-    out->pitch_range_octaves = contour.pitch_range_octaves;
-    out->pitch_stability = contour.pitch_stability;
-    out->mean_frequency_hz = contour.mean_frequency;
-    out->vibrato_rate_hz = contour.vibrato_rate;
-    if (!contour.pitches.empty()) {
-      auto data = std::make_unique<SonareMelodyPoint[]>(contour.pitches.size());
-      for (size_t i = 0; i < contour.pitches.size(); ++i) {
-        data[i].time_sec = contour.pitches[i].time;
-        data[i].frequency_hz = contour.pitches[i].frequency;
-        data[i].confidence = contour.pitches[i].confidence;
-      }
-      out->points = release_array(data);
-      out->point_count = contour.pitches.size();
-    }
-    return SONARE_OK;
-  });
+  return run_offline("analyze_melody_ex", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       MelodyAnalyzer analyzer(audio, config);
+                       const MelodyContour& contour = analyzer.contour();
+                       out->pitch_range_octaves = contour.pitch_range_octaves;
+                       out->pitch_stability = contour.pitch_stability;
+                       out->mean_frequency_hz = contour.mean_frequency;
+                       out->vibrato_rate_hz = contour.vibrato_rate;
+                       if (!contour.pitches.empty()) {
+                         auto data = std::make_unique<SonareMelodyPoint[]>(contour.pitches.size());
+                         for (size_t i = 0; i < contour.pitches.size(); ++i) {
+                           data[i].time_sec = contour.pitches[i].time;
+                           data[i].frequency_hz = contour.pitches[i].frequency;
+                           data[i].confidence = contour.pitches[i].confidence;
+                         }
+                         out->points = release_array(data);
+                         out->point_count = contour.pitches.size();
+                       }
+                       return SONARE_OK;
+                     });
 }

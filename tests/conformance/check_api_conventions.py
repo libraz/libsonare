@@ -1364,6 +1364,45 @@ def _c_error_path_files(root: Path) -> list[dict]:
     return out
 
 
+# A validator call naming its refusal: a literal function name, then a literal argument name.
+_C_NAMED_CALL = re.compile(r'\b[A-Za-z_]\w*\s*(?:<[^;()]*>)?\(\s*"([A-Za-z_][\w:]*)"\s*,\s*"')
+_C_FORWARD = re.compile(r"\breturn\s+(sonare_\w+)\s*\(")
+
+
+def _c_entry_name_sites(root: Path) -> list[dict]:
+    """Named validator calls inside C-ABI entries, and the entries that forward to another."""
+    out: list[dict] = []
+    for path in sorted((root / "src" / "c_api").glob("*.cpp")):
+        raw = path.read_text(encoding="utf-8")
+        rel = path.relative_to(root).as_posix()
+        for entry, offset, body in _c_entry_bodies(_c_blank(raw)):
+            text = raw[offset : offset + len(body)]
+            for m in _C_NAMED_CALL.finditer(text):
+                line = raw.count("\n", 0, offset + m.start()) + 1
+                out.append(
+                    {
+                        "surface": "c",
+                        "kind": "c-entry-name",
+                        "name": f"{rel}:{line}",
+                        "entry": entry,
+                        "literal": m.group(1),
+                    }
+                )
+            callees = sorted(set(_C_FORWARD.findall(body)) - {entry})
+            if callees:
+                out.append(
+                    {"surface": "c", "kind": "c-entry-forward", "name": entry, "callees": callees}
+                )
+    return out
+
+
+def _c_entry_name_violation(r: dict) -> str | None:
+    want = r["entry"].removeprefix("sonare_")
+    if r["literal"] != want:
+        return f"refusal names {r['literal']!r}; the enclosing entry {r['entry']} says {want!r}"
+    return None
+
+
 def _c_error_path_violation(r: dict) -> str | None:
     if r["unset"]:
         return f"{len(r['unset'])} non-OK returns set no error message, first {r['unset'][0]}"
@@ -1398,7 +1437,7 @@ _C_ERROR_PATH_PENDING: dict[str, int] = {
     "src/c_api/project_vocal_edit.cpp": 7,
     "src/c_api/sonare_c_acoustic.cpp": 7,
     "src/c_api/sonare_c_assist.cpp": 2,
-    "src/c_api/sonare_c_compat.cpp": 35,
+    "src/c_api/sonare_c_compat.cpp": 29,
     "src/c_api/sonare_c_daw.cpp": 44,
     "src/c_api/sonare_c_editing.cpp": 41,
     "src/c_api/sonare_c_effects.cpp": 40,
@@ -1726,6 +1765,20 @@ RULES: list[Rule] = [
             for path in _C_ERROR_PATH_PENDING
         },
         pending_size={f"c:{path}": n for path, n in _C_ERROR_PATH_PENDING.items()},
+    ),
+    Rule(
+        name="c-entry-name",
+        summary="a C-ABI refusal names its enclosing entry without the sonare_ prefix",
+        population=lambda r: r["kind"] == "c-entry-name",
+        violation=_c_entry_name_violation,
+        scan=_c_entry_name_sites,
+    ),
+    Rule(
+        name="c-entry-forward",
+        summary="count only: an entry returning another entry's result refuses under the callee's name",
+        population=lambda r: r["kind"] == "c-entry-forward",
+        violation=lambda r: None,
+        scan=_c_entry_name_sites,
     ),
 ]
 

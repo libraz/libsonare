@@ -84,7 +84,7 @@ SonareError sonare_master_audio(const char* preset, const float* samples, size_t
   if (!out || !preset) return SONARE_ERROR_INVALID_PARAMETER;
   clear_chain_result(out, sample_rate);
 
-  SonareError err = validate_audio_params(samples, length, sample_rate);
+  SonareError err = validate_audio_params("master_audio", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -108,7 +108,8 @@ SonareError sonare_master_audio_stereo(const char* preset, const float* left, co
 
   // Match the mono paths: reject non-finite samples and out-of-range
   // sample_rate/length, not just null pointers.
-  SonareError verr = validate_stereo_audio_params(left, right, length, sample_rate);
+  SonareError verr = validate_stereo_audio_params("master_audio_stereo", "left", "right", left,
+                                                  right, length, sample_rate);
   if (verr != SONARE_OK) return verr;
   if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -131,7 +132,8 @@ SonareError sonare_master_audio_with_progress_ex(
   if (!out || !preset) return SONARE_ERROR_INVALID_PARAMETER;
   clear_chain_result(out, sample_rate);
 
-  SonareError err = validate_audio_params(samples, length, sample_rate);
+  SonareError err = validate_audio_params("master_audio_with_progress_ex", "samples", samples,
+                                          length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -160,7 +162,8 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
 
   // Match the mono paths: reject non-finite samples and out-of-range
   // sample_rate/length, not just null pointers.
-  SonareError verr = validate_stereo_audio_params(left, right, length, sample_rate);
+  SonareError verr = validate_stereo_audio_params("master_audio_stereo_with_progress_ex", "left",
+                                                  "right", left, right, length, sample_rate);
   if (verr != SONARE_OK) return verr;
   if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 

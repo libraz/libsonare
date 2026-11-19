@@ -20,7 +20,7 @@ void requireInputCountWithinStrips(size_t input_count, size_t strip_count) {
 
 // A C INVALID_PARAMETER from the mixer is an argument refusal, not object state.
 [[noreturn]] void throwMixerProcessError(SonareError err) {
-  const std::string message = std::string("mixer process failed: ") + sonare_error_message(err);
+  const std::string message = cErrorMessage(err, "mixer process failed");
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
     throw WasmRangeError(message);
   }
@@ -238,9 +238,8 @@ int MixerWasm::tailSamples() {
   int out = 0;
   SonareError err = sonare_mixer_tail_samples(mixer_, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to read mixer tail samples: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to read mixer tail samples"));
   }
   return out;
 }
@@ -251,9 +250,8 @@ int MixerWasm::latencySamples() {
   int out = 0;
   SonareError err = sonare_mixer_latency_samples(mixer_, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to read mixer latency samples: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to read mixer latency samples"));
   }
   return out;
 }
@@ -262,9 +260,8 @@ int MixerWasm::maxBlockSize() {
   int out = 0;
   SonareError err = sonare_mixer_max_block_size(mixer_, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to read mixer max block size: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to read mixer max block size"));
   }
   return out;
 }
@@ -281,9 +278,8 @@ val MixerWasm::drainTailStereo(double num_samples) {
   SonareError err =
       sonare_mixer_drain_tail_stereo(mixer_, out_left.data(), out_right.data(), count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("mixer drain tail failed: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "mixer drain tail failed"));
   }
   val out = val::object();
   out.set("left", vectorToFloat32Array(out_left));
@@ -298,9 +294,8 @@ val MixerWasm::drainTailStereo(double num_samples) {
 void MixerWasm::flushMeters() {
   const SonareError err = sonare_mixer_flush_meters(mixer_);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("mixer meter flush failed: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "mixer meter flush failed"));
   }
 }
 

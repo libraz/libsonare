@@ -61,8 +61,10 @@ void ValidateRirShapeAndTiming(const sonare::acoustic::RirSynthConfig& cfg) {
 }
 
 // Refuses a buffer under the shared offline-input policy, as the C ABI and WASM entries do.
-bool ValidateAcousticInput(const Napi::Env& env, const float* data, size_t length, int sr) {
-  if (const char* problem = sonare::offline_audio_input_problem(data, length, sr)) {
+bool ValidateAcousticInput(const Napi::Env& env, const char* fn, const char* name,
+                           const float* data, size_t length, int sr) {
+  const std::string problem = sonare::offline_audio_input_problem(fn, name, data, length, sr);
+  if (!problem.empty()) {
     Napi::RangeError::New(env, problem).ThrowAsJavaScriptException();
     return false;
   }
@@ -244,7 +246,8 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
   if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
-  if (!ValidateAcousticInput(env, typed.Data(), typed.ElementLength(), sample_rate))
+  if (!ValidateAcousticInput(env, "estimate_room", "samples", typed.Data(), typed.ElementLength(),
+                             sample_rate))
     return env.Undefined();
   const sonare::Audio audio =
       sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate);
@@ -398,7 +401,8 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sr");
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
-  if (!ValidateAcousticInput(env, typed.Data(), typed.ElementLength(), sr)) return env.Undefined();
+  if (!ValidateAcousticInput(env, "room_morph", "samples", typed.Data(), typed.ElementLength(), sr))
+    return env.Undefined();
   const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   Napi::Object opts = info[2].As<Napi::Object>();
   RefuseUnknownKeys(opts, "roomMorph", RoomKeys(),
@@ -434,8 +438,12 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
   auto right = info[1].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[2], "sr");
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
-  if (!ValidateAcousticInput(env, left.Data(), left.ElementLength(), sr)) return env.Undefined();
-  if (!ValidateAcousticInput(env, right.Data(), right.ElementLength(), sr)) return env.Undefined();
+  if (!ValidateAcousticInput(env, "room_morph_stereo", "left", left.Data(), left.ElementLength(),
+                             sr))
+    return env.Undefined();
+  if (!ValidateAcousticInput(env, "room_morph_stereo", "right", right.Data(), right.ElementLength(),
+                             sr))
+    return env.Undefined();
   if (left.ElementLength() != right.ElementLength()) {
     Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();

@@ -556,7 +556,8 @@ Napi::Value StreamingEqualizerWrap::SetSidechainMono(const Napi::CallbackInfo& i
     ClearSidechainStorage();
     return env.Undefined();
   }
-  sonare::validate_offline_audio_input(staged.data(), staged.size(),
+  sonare::validate_offline_audio_input("EqualizerProcessor::set_sidechain", "samples",
+                                       staged.data(), staged.size(),
                                        static_cast<int>(std::lround(sample_rate_)));
 
   sidechain_left_.swap(staged);
@@ -592,8 +593,10 @@ Napi::Value StreamingEqualizerWrap::SetSidechainStereo(const Napi::CallbackInfo&
     return env.Undefined();
   }
   const int sr = static_cast<int>(std::lround(sample_rate_));
-  sonare::validate_offline_audio_input(staged_left.data(), staged_left.size(), sr);
-  sonare::validate_offline_audio_input(staged_right.data(), staged_right.size(), sr);
+  sonare::validate_offline_audio_input("EqualizerProcessor::set_sidechain", "left",
+                                       staged_left.data(), staged_left.size(), sr);
+  sonare::validate_offline_audio_input("EqualizerProcessor::set_sidechain", "right",
+                                       staged_right.data(), staged_right.size(), sr);
 
   sidechain_left_.swap(staged_left);
   sidechain_right_.swap(staged_right);
@@ -793,8 +796,10 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   }
   Napi::Float32Array source = info[0].As<Napi::Float32Array>();
   Napi::Float32Array reference = info[1].As<Napi::Float32Array>();
-  sonare::validate_offline_audio_input(source.Data(), source.ElementLength(), sample_rate);
-  sonare::validate_offline_audio_input(reference.Data(), reference.ElementLength(),
+  sonare::validate_offline_audio_input("configure_equalizer_from_audio", "source", source.Data(),
+                                       source.ElementLength(), sample_rate);
+  sonare::validate_offline_audio_input("configure_equalizer_from_audio", "reference",
+                                       reference.Data(), reference.ElementLength(),
                                        reference_sample_rate);
   if (max_bands == 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

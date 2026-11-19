@@ -456,6 +456,12 @@ describe('embedded NUL refusal, scan', () => {
       reason: 'error-subject label built from a literal key and an axis name',
     },
     {
+      file: 'common/common.cpp',
+      text: 'channel_name.c_str()',
+      count: 1,
+      reason: 'refusal name built from the caller-supplied literal name and a channel index',
+    },
+    {
       file: 'effects/realtime_voice_changer.cpp',
       text: '(path + "[" + std::to_string(i) + "]").c_str()',
       count: 1,

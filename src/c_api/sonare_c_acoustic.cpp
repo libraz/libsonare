@@ -321,54 +321,56 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    sonare::RoomEstimateConfig cfg;
-    // Same "0 selects the library value" rule as the RIR-synth config above,
-    // applied to EVERY float in the struct rather than field by field. An
-    // exception here is not a small one: the Eyring volume scales with the cube
-    // of the absorption prior, so a literal 0 clamped to the analyzer's 0.01
-    // floor reports a 36.7 m^3 room as 0.0087 m^3.
-    cfg.aspect_hint_lw =
-        sonare::ZeroIsDefault(config->aspect_hint_lw).or_default(cfg.aspect_hint_lw);
-    cfg.aspect_hint_lh =
-        sonare::ZeroIsDefault(config->aspect_hint_lh).or_default(cfg.aspect_hint_lh);
-    cfg.reference_absorption =
-        sonare::ZeroIsDefault(config->reference_absorption).or_default(cfg.reference_absorption);
-    cfg.prefer_eyring = config->prefer_eyring != 0;
-    if (config->n_octave_bands != 0) cfg.acoustic.n_octave_bands = config->n_octave_bands;
-    cfg.acoustic.min_decay_db =
-        sonare::ZeroIsDefault(config->min_decay_db).or_default(cfg.acoustic.min_decay_db);
-    cfg.acoustic.noise_floor_margin_db = sonare::ZeroIsDefault(config->noise_floor_margin_db)
-                                             .or_default(cfg.acoustic.noise_floor_margin_db);
-    cfg.acoustic.mode = mode;
+  return run_offline(
+      "estimate_room", "samples", samples, length, sample_rate,
+      [&](const Audio& audio) -> SonareError {
+        sonare::RoomEstimateConfig cfg;
+        // Same "0 selects the library value" rule as the RIR-synth config above,
+        // applied to EVERY float in the struct rather than field by field. An
+        // exception here is not a small one: the Eyring volume scales with the cube
+        // of the absorption prior, so a literal 0 clamped to the analyzer's 0.01
+        // floor reports a 36.7 m^3 room as 0.0087 m^3.
+        cfg.aspect_hint_lw =
+            sonare::ZeroIsDefault(config->aspect_hint_lw).or_default(cfg.aspect_hint_lw);
+        cfg.aspect_hint_lh =
+            sonare::ZeroIsDefault(config->aspect_hint_lh).or_default(cfg.aspect_hint_lh);
+        cfg.reference_absorption = sonare::ZeroIsDefault(config->reference_absorption)
+                                       .or_default(cfg.reference_absorption);
+        cfg.prefer_eyring = config->prefer_eyring != 0;
+        if (config->n_octave_bands != 0) cfg.acoustic.n_octave_bands = config->n_octave_bands;
+        cfg.acoustic.min_decay_db =
+            sonare::ZeroIsDefault(config->min_decay_db).or_default(cfg.acoustic.min_decay_db);
+        cfg.acoustic.noise_floor_margin_db = sonare::ZeroIsDefault(config->noise_floor_margin_db)
+                                                 .or_default(cfg.acoustic.noise_floor_margin_db);
+        cfg.acoustic.mode = mode;
 
-    const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
-    SonareRoomEstimate staged{};
-    staged.volume = est.volume;
-    staged.length_m = est.dims.length;
-    staged.width_m = est.dims.width;
-    staged.height_m = est.dims.height;
-    staged.drr_db = est.drr_db;
-    staged.confidence = est.confidence;
-    // The two band vectors are independent estimates (absorption from the
-    // inverse problem, RT60 from the decay fit) and either can legitimately
-    // fail to converge on its own. band_count is documented as the length of
-    // BOTH arrays, so truncating to the shorter one silently dropped a
-    // fully-computed array whenever its sibling failed — exactly when a
-    // caller most wants the surviving data. Pad the shorter side with NaN
-    // instead so both arrays reach band_count and neither is ever discarded
-    // because the other came back empty.
-    const size_t max_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
-    std::unique_ptr<float[]> staged_absorption(
-        sonare_c_detail::copy_float_vector_padded(est.absorption_bands, max_count));
-    std::unique_ptr<float[]> staged_rt60(
-        sonare_c_detail::copy_float_vector_padded(est.rt60_bands, max_count));
-    staged.absorption_bands = staged_absorption.release();
-    staged.rt60_bands = staged_rt60.release();
-    staged.band_count = max_count;
-    *out = staged;
-    return SONARE_OK;
-  });
+        const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
+        SonareRoomEstimate staged{};
+        staged.volume = est.volume;
+        staged.length_m = est.dims.length;
+        staged.width_m = est.dims.width;
+        staged.height_m = est.dims.height;
+        staged.drr_db = est.drr_db;
+        staged.confidence = est.confidence;
+        // The two band vectors are independent estimates (absorption from the
+        // inverse problem, RT60 from the decay fit) and either can legitimately
+        // fail to converge on its own. band_count is documented as the length of
+        // BOTH arrays, so truncating to the shorter one silently dropped a
+        // fully-computed array whenever its sibling failed — exactly when a
+        // caller most wants the surviving data. Pad the shorter side with NaN
+        // instead so both arrays reach band_count and neither is ever discarded
+        // because the other came back empty.
+        const size_t max_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
+        std::unique_ptr<float[]> staged_absorption(
+            sonare_c_detail::copy_float_vector_padded(est.absorption_bands, max_count));
+        std::unique_ptr<float[]> staged_rt60(
+            sonare_c_detail::copy_float_vector_padded(est.rt60_bands, max_count));
+        staged.absorption_bands = staged_absorption.release();
+        staged.rt60_bands = staged_rt60.release();
+        staged.band_count = max_count;
+        *out = staged;
+        return SONARE_OK;
+      });
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);
@@ -453,16 +455,17 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
   if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
-  return run_mono_offline(
-      samples, length, sample_rate, out, out_length, [&](const Audio& audio) -> Audio {
-        sonare::effects::acoustic::RoomMorphResult result =
-            sonare::effects::acoustic::room_morph(audio, room_morph_config_from(*config));
-        // Published the way synthesize_rir publishes its own: the target RIR is
-        // synthesized by the same code, and a clamp there means this morph used a
-        // room the caller did not request.
-        publish_rir_diagnostics(result.diagnostics);
-        return std::move(result.audio);
-      });
+  return run_mono_offline("room_morph", "samples", samples, length, sample_rate, out, out_length,
+                          [&](const Audio& audio) -> Audio {
+                            sonare::effects::acoustic::RoomMorphResult result =
+                                sonare::effects::acoustic::room_morph(
+                                    audio, room_morph_config_from(*config));
+                            // Published the way synthesize_rir publishes its own: the target RIR is
+                            // synthesized by the same code, and a clamp there means this morph used
+                            // a room the caller did not request.
+                            publish_rir_diagnostics(result.diagnostics);
+                            return std::move(result.audio);
+                          });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);
 #endif
@@ -478,9 +481,11 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
   if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = sonare_c_detail::validate_audio_params(left, length, sample_rate);
+  SonareError err = sonare_c_detail::validate_audio_params("room_morph_stereo", "left", left,
+                                                           length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = sonare_c_detail::validate_audio_params(right, length, sample_rate);
+  err = sonare_c_detail::validate_audio_params("room_morph_stereo", "right", right, length,
+                                               sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY

@@ -195,21 +195,23 @@ std::vector<float> float32ArrayToVector(val arr) {
   return result;
 }
 
-static Audio validatedAudioFromVector(std::vector<float> data, int sample_rate) {
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+static Audio validatedAudioFromVector(const char* fn, const char* name, std::vector<float> data,
+                                      int sample_rate) {
+  validate_offline_audio_input(fn, name, data.data(), data.size(), sample_rate);
   return Audio::from_vector(std::move(data), sample_rate);
 }
 
-Audio loadValidatedAudio(val samples, int sample_rate) {
-  return validatedAudioFromVector(float32ArrayToVector(samples), sample_rate);
+Audio loadValidatedAudio(const char* fn, const char* name, val samples, int sample_rate) {
+  return validatedAudioFromVector(fn, name, float32ArrayToVector(samples), sample_rate);
 }
 
-std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
-                                           const char* entry) {
-  return loadChannelSet(channels, sample_rate, entry, ChannelSetValidation::Offline);
+std::vector<Audio> loadValidatedChannelSet(const char* fn, const char* name, const val& channels,
+                                           int sample_rate, const char* entry) {
+  return loadChannelSet(fn, name, channels, sample_rate, entry, ChannelSetValidation::Offline);
 }
 
-std::vector<Audio> loadChannelSet(const val& channels, int sample_rate, const char* entry,
+std::vector<Audio> loadChannelSet(const char* fn, const char* name, const val& channels,
+                                  int sample_rate, const char* entry,
                                   ChannelSetValidation validation) {
   const std::string subject(entry);
   if (channels.isUndefined() || channels.isNull()) {
@@ -238,7 +240,8 @@ std::vector<Audio> loadChannelSet(const val& channels, int sample_rate, const ch
       throw WasmRangeError(subject + ": channel lengths must match");
     }
     if (validation == ChannelSetValidation::Offline) {
-      loaded.push_back(loadValidatedAudio(channel, sample_rate));
+      const std::string channel_name = std::string(name) + "[" + std::to_string(index) + "]";
+      loaded.push_back(loadValidatedAudio(fn, channel_name.c_str(), channel, sample_rate));
     } else {
       loaded.push_back(Audio::from_vector(float32ArrayToVector(channel), sample_rate));
     }
@@ -272,30 +275,30 @@ std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::s
   return result;
 }
 
-Audio loadValidatedAudioWindow(val samples, int sample_rate, std::size_t scan_offset,
-                               std::size_t scan_count) {
+Audio loadValidatedAudioWindow(const char* fn, const char* name, val samples, int sample_rate,
+                               std::size_t scan_offset, std::size_t scan_count) {
   const std::size_t length = wasmFloat32ArrayLength(samples);
   // The extent rules are asked about the whole buffer, as they are on the C ABI;
   // only the finiteness scan -- and the copy that feeds it -- narrows.
-  validate_offline_audio_extent(length, sample_rate);
+  validate_offline_audio_extent(fn, name, length, sample_rate);
   const std::size_t begin = std::min(scan_offset, length);
   const std::size_t count = std::min(scan_count, length - begin);
   std::vector<float> window = float32ArrayWindowToVector(samples, begin, count);
   // An offset at or past the end leaves no sample to read, which the core
   // answers with a zero-padded frame rather than a refusal.
   if (count != 0) {
-    validate_offline_audio_window(window.data(), count, sample_rate, 0, count);
+    validate_offline_audio_samples(fn, name, window.data(), count, begin);
   }
   return Audio::from_vector(std::move(window), sample_rate);
 }
 
-std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,
-                                            size_t* frames) {
+std::vector<float> loadValidatedInterleaved(const char* fn, const char* name, val samples,
+                                            int channels, int sample_rate, size_t* frames) {
   if (channels <= 0) {
     throw WasmRangeError("channels must be positive");
   }
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  validate_offline_audio_input(fn, name, data.data(), data.size(), sample_rate);
   if (data.size() % static_cast<size_t>(channels) != 0) {
     throw WasmRangeError("interleaved sample count must be a whole number of frames");
   }

@@ -456,7 +456,7 @@ val js_onset_envelope(val samples, const val& sample_rate_val, const val& n_fft_
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("compute_onset_strength", "samples", samples, sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
   mel_config.hop_length = hop_length;
@@ -472,7 +472,7 @@ val js_onset_strength_multi(val samples, const val& sample_rate_val, const val& 
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int n_bands = checkedIntFromVal(n_bands_val, "nBands");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("onset_strength_multi", "samples", samples, sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
   mel_config.hop_length = hop_length;

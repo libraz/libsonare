@@ -31,9 +31,10 @@ inline ChromaCqtConfig& chroma_cqt_base(ChromaCqtConfig& config) { return config
 inline ChromaCqtConfig& chroma_cqt_base(ChromaCensConfig& config) { return config.base; }
 
 template <typename Config, typename Transform>
-SonareError run_chroma_cqt_family(const float* samples, size_t length, int sample_rate,
-                                  int hop_length, int n_chroma, int bins_per_octave,
-                                  SonareChromaResult* out, Transform&& transform) {
+SonareError run_chroma_cqt_family(const char* fn, const char* name, const float* samples,
+                                  size_t length, int sample_rate, int hop_length, int n_chroma,
+                                  int bins_per_octave, SonareChromaResult* out,
+                                  Transform&& transform) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
@@ -45,10 +46,11 @@ SonareError run_chroma_cqt_family(const float* samples, size_t length, int sampl
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Chroma chroma = transform(audio, config);
-    return fill_chroma_result(chroma, out);
-  });
+  return run_offline(fn, name, samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       Chroma chroma = transform(audio, config);
+                       return fill_chroma_result(chroma, out);
+                     });
 }
 
 }  // namespace
@@ -61,15 +63,17 @@ SonareError sonare_onset_strength(const float* samples, size_t length, int sampl
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    MelConfig mel_config;
-    mel_config.n_fft = n_fft;
-    mel_config.hop_length = hop_length;
-    mel_config.n_mels = n_mels;
-    std::vector<float> env = compute_onset_strength(audio, mel_config, OnsetConfig());
+  return run_offline("onset_strength", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       MelConfig mel_config;
+                       mel_config.n_fft = n_fft;
+                       mel_config.hop_length = hop_length;
+                       mel_config.n_mels = n_mels;
+                       std::vector<float> env =
+                           compute_onset_strength(audio, mel_config, OnsetConfig());
 
-    return copy_vector(env, out, out_length);
-  });
+                       return copy_vector(env, out, out_length);
+                     });
 }
 
 SonareError sonare_onset_strength_multi(const float* samples, size_t length, int sample_rate,
@@ -82,17 +86,18 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
   *out_n_frames = 0;
   if (n_bands <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    MelConfig mel_config;
-    mel_config.n_fft = n_fft;
-    mel_config.hop_length = hop_length;
-    mel_config.n_mels = n_mels;
-    MelSpectrogram mel = MelSpectrogram::compute(audio, mel_config);
-    std::vector<float> env = onset_strength_multi(mel, n_bands, OnsetConfig());
+  return run_offline("onset_strength_multi", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       MelConfig mel_config;
+                       mel_config.n_fft = n_fft;
+                       mel_config.hop_length = hop_length;
+                       mel_config.n_mels = n_mels;
+                       MelSpectrogram mel = MelSpectrogram::compute(audio, mel_config);
+                       std::vector<float> env = onset_strength_multi(mel, n_bands, OnsetConfig());
 
-    *out_n_frames = mel.n_frames();
-    return copy_vector(env, out, out_length);
-  });
+                       *out_n_frames = mel.n_frames();
+                       return copy_vector(env, out, out_length);
+                     });
 }
 
 // Features - Chroma
@@ -105,14 +110,15 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
 
   *out = {};
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    ChromaConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Chroma chroma = Chroma::compute(audio, config);
+  return run_offline("chroma", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       ChromaConfig config;
+                       config.n_fft = n_fft;
+                       config.hop_length = hop_length;
+                       Chroma chroma = Chroma::compute(audio, config);
 
-    return fill_chroma_result(chroma, out);
-  });
+                       return fill_chroma_result(chroma, out);
+                     });
 }
 
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
@@ -126,8 +132,8 @@ SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sampl
                                   SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
   return run_chroma_cqt_family<ChromaCensConfig>(
-      samples, length, sample_rate, hop_length, n_chroma, bins_per_octave, out,
-      [](const Audio& audio, const ChromaCensConfig& config) {
+      "chroma_cens_ex", "samples", samples, length, sample_rate, hop_length, n_chroma,
+      bins_per_octave, out, [](const Audio& audio, const ChromaCensConfig& config) {
         return chroma_cens(audio, config);
       });
 }
@@ -143,7 +149,8 @@ SonareError sonare_chroma_cqt_ex(const float* samples, size_t length, int sample
                                  SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
   return run_chroma_cqt_family<ChromaCqtConfig>(
-      samples, length, sample_rate, hop_length, n_chroma, bins_per_octave, out,
+      "chroma_cqt_ex", "samples", samples, length, sample_rate, hop_length, n_chroma,
+      bins_per_octave, out,
       [](const Audio& audio, const ChromaCqtConfig& config) { return chroma_cqt(audio, config); });
 }
 
@@ -154,13 +161,14 @@ SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_r
   *out = {};
   if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    BassChromaConfig config;
-    config.cqt.hop_length = hop_length;
-    config.n_chroma = n_chroma;
-    Chroma chroma = bass_chroma(audio, config);
-    return fill_chroma_result(chroma, out);
-  });
+  return run_offline("bass_chroma", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       BassChromaConfig config;
+                       config.cqt.hop_length = hop_length;
+                       config.n_chroma = n_chroma;
+                       Chroma chroma = bass_chroma(audio, config);
+                       return fill_chroma_result(chroma, out);
+                     });
 }
 
 SonareError sonare_nnls_chroma_ex(const float* samples, size_t length, int sample_rate,
@@ -194,18 +202,19 @@ SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int samp
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Chroma chroma = nnls_chroma(audio, config);
+  return run_offline("nnls_chroma_ex2", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       Chroma chroma = nnls_chroma(audio, config);
 
-    *out_n_frames = chroma.n_frames();
-    size_t total = static_cast<size_t>(chroma.n_chroma()) * chroma.n_frames();
-    *out_length = total;
-    if (total == 0) return SONARE_OK;
-    std::unique_ptr<float[]> features(new float[total]);
-    std::memcpy(features.get(), chroma.data(), total * sizeof(float));
-    *out = release_array(features);
-    return SONARE_OK;
-  });
+                       *out_n_frames = chroma.n_frames();
+                       size_t total = static_cast<size_t>(chroma.n_chroma()) * chroma.n_frames();
+                       *out_length = total;
+                       if (total == 0) return SONARE_OK;
+                       std::unique_ptr<float[]> features(new float[total]);
+                       std::memcpy(features.get(), chroma.data(), total * sizeof(float));
+                       *out = release_array(features);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_nnls_chroma(const float* samples, size_t length, int sample_rate, float** out,

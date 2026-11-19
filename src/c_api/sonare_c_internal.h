@@ -153,7 +153,11 @@ SonareError record_current_exception() noexcept;
 ///          (sonare_audio_from_buffer) and use the handle-based analysis entry
 ///          points (sonare_audio_* in sonare_c_types.h), which validate the
 ///          buffer at construction time and never re-scan per analysis.
-SonareError validate_audio_params(const float* samples, size_t length, int sample_rate) noexcept;
+///
+///          @p fn names the core function the buffer feeds and @p name the entry's
+///          parameter; the refusal is recorded as "<fn>: <name> <predicate>".
+SonareError validate_audio_params(const char* fn, const char* name, const float* samples,
+                                  size_t length, int sample_rate) noexcept;
 
 /// @brief validate_audio_params for an entry point that reads one window of the buffer.
 /// @details Same policy, except that the non-finite scan covers only
@@ -161,8 +165,9 @@ SonareError validate_audio_params(const float* samples, size_t length, int sampl
 ///          actually reads -- so its cost is the window's, not the buffer's. For a
 ///          per-frame entry point polled over a long buffer that is the difference
 ///          between O(window) and O(length) per call.
-SonareError validate_audio_params_window(const float* samples, size_t length, int sample_rate,
-                                         size_t scan_offset, size_t scan_count) noexcept;
+SonareError validate_audio_params_window(const char* fn, const char* name, const float* samples,
+                                         size_t length, int sample_rate, size_t scan_offset,
+                                         size_t scan_count) noexcept;
 SonareGrooveType to_c_groove_type(const std::string& groove);
 SonareChordQuality to_c_chord_quality(ChordQuality quality);
 
@@ -437,6 +442,8 @@ namespace sonare_c_detail {
 ///          every offline effects wrapper shares, inside the entry guard. The
 ///          callable receives the wrapped Audio and returns an Audio whose samples
 ///          are copied into a fresh array the caller frees with sonare_free_floats.
+/// @param fn            Core function the buffer feeds, the refusal's prefix.
+/// @param name          The entry's name for @p samples.
 /// @param samples       Caller-owned input buffer (validated for null / NaN /
 ///                      Inf / sample_rate by validate_audio_params).
 /// @param length        Number of samples in @p samples.
@@ -446,13 +453,13 @@ namespace sonare_c_detail {
 /// @param out_length    Receives the output array length.
 /// @param process       Callable taking a const Audio& and returning an Audio.
 template <typename Fn>
-SonareError run_mono_offline(const float* samples, size_t length, int sample_rate, float** out,
-                             size_t* out_length, Fn process) {
+SonareError run_mono_offline(const char* fn, const char* name, const float* samples, size_t length,
+                             int sample_rate, float** out, size_t* out_length, Fn process) {
   SONARE_C_TRY
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;
-  const SonareError err = validate_audio_params(samples, length, sample_rate);
+  const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   Audio result = process(audio);
@@ -484,9 +491,10 @@ SonareError run_prevalidated_offline(const float* samples, size_t length, int sa
 ///          still happen at the call site BEFORE invoking this (they early-return
 ///          without constructing an Audio). @p body must return SonareError.
 template <typename Fn>
-SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn body) {
+SonareError run_offline(const char* fn, const char* name, const float* samples, size_t length,
+                        int sample_rate, Fn body) {
   SONARE_C_TRY
-  const SonareError err = validate_audio_params(samples, length, sample_rate);
+  const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   return body(audio);

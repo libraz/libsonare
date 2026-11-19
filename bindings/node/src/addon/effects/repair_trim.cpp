@@ -92,7 +92,8 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("trim_silence", "samples", typed.Data(),
+                                       typed.ElementLength(), sr);
   sonare::mastering::repair::TrimSilenceConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();

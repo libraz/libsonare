@@ -1142,6 +1142,39 @@ class CErrorPathRule(unittest.TestCase):
         self.assertTrue(verdict.failed)
 
 
+class CEntryNameRule(unittest.TestCase):
+    SOURCE = (
+        "SonareError sonare_stft(const float* samples, size_t length, int sample_rate) {\n"
+        '  return run_offline("{name}", "samples", samples, length, sample_rate);\n'
+        "}\n"
+        "SonareError sonare_stft_compat(const float* samples, size_t length, int sample_rate) {\n"
+        "  return sonare_stft(samples, length, sample_rate);\n"
+        "}\n"
+    )
+
+    def judge(self, rule_name: str, name: str):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "src" / "c_api").mkdir(parents=True)
+            (root / "src" / "c_api" / "a.cpp").write_text(self.SOURCE.replace("{name}", name))
+            r = rule(rule_name)
+            return check.judge(r, r.scan(root))
+
+    def test_the_entry_name_passes(self) -> None:
+        verdict = self.judge("c-entry-name", "stft")
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
+    def test_a_class_method_name_fails(self) -> None:
+        verdict = self.judge("c-entry-name", "Spectrogram::compute")
+        self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/a.cpp:2"])
+
+    def test_a_forwarding_entry_is_counted(self) -> None:
+        verdict = self.judge("c-entry-forward", "stft")
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

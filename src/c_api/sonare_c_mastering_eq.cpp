@@ -102,9 +102,11 @@ SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_
   if (!eq || max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SonareError err = validate_audio_params(source, source_length, sample_rate);
+  SonareError err =
+      validate_audio_params("eq_match_ex", "source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params(reference, reference_length, reference_sample_rate);
+  err = validate_audio_params("eq_match_ex", "reference", reference, reference_length,
+                              reference_sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY

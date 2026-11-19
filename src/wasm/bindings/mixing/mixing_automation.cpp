@@ -30,9 +30,8 @@ void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& 
   SonareError err = sonare_strip_schedule_insert_automation(
       strip, insert_index, param_id, static_cast<int64_t>(sample_pos), value, curve);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to schedule insert automation: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to schedule insert automation"));
   }
 }
 

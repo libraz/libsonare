@@ -100,14 +100,15 @@ json::Value parse_request(const std::string& text, const char* subject) {
   }
 }
 
-void validate_channel_set(const float* const* channels, std::size_t channel_count,
-                          std::size_t length, int sample_rate) {
+void validate_channel_set(const char* fn, const char* name, const float* const* channels,
+                          std::size_t channel_count, std::size_t length, int sample_rate) {
   if (channels == nullptr || channel_count == 0) refuse("channels must not be empty");
   if (length == 0) refuse("audio must not be empty");
   if (sample_rate <= 0) refuse("sample_rate must be positive");
   for (std::size_t c = 0; c < channel_count; ++c) {
     if (channels[c] == nullptr) refuse("channel " + std::to_string(c) + " must not be null");
-    validate_offline_audio_input(channels[c], length, sample_rate);
+    const std::string channel_name = std::string(name) + "[" + std::to_string(c) + "]";
+    validate_offline_audio_input(fn, channel_name.c_str(), channels[c], length, sample_rate);
   }
 }
 
@@ -461,7 +462,8 @@ json::Array recommended_stages(const api::RepairChainConfig& repair) {
 std::string repair_analyze_json(const float* const* channels, std::size_t channel_count,
                                 std::size_t length, int sample_rate,
                                 const std::string& request_json) {
-  validate_channel_set(channels, channel_count, length, sample_rate);
+  validate_channel_set("repair_analyze_json", "channels", channels, channel_count, length,
+                       sample_rate);
   const AssistantConfig config = read_analyze_request(request_json);
 
   const ChannelSetDefects defects =
@@ -508,7 +510,8 @@ bool repair_apply_json(const float* const* channels, std::size_t channel_count, 
                        int sample_rate, const std::string& stages_json, float* const* out_channels,
                        std::string* reports_json, const RepairProgressCallback& progress,
                        const RepairCancelCallback& cancel) {
-  validate_channel_set(channels, channel_count, length, sample_rate);
+  validate_channel_set("repair_apply_json", "channels", channels, channel_count, length,
+                       sample_rate);
   if (out_channels == nullptr) refuse("output channels must not be null");
   for (std::size_t c = 0; c < channel_count; ++c) {
     if (out_channels[c] == nullptr)

@@ -104,7 +104,8 @@ bool ReadStereoPairShape(const Napi::CallbackInfo& info, size_t left_index, size
 // The analysis entry points take an interleaved buffer so BS.1770 channel
 // summing sees the program rather than a downmix; the JS surface keeps the
 // planar left/right shape the rest of the stereo mastering API uses.
-bool ReadStereoPair(const Napi::CallbackInfo& info, const char* usage,
+bool ReadStereoPair(const char* fn, const char* left_name, const char* right_name,
+                    const Napi::CallbackInfo& info, const char* usage,
                     std::vector<float>* interleaved, size_t* frames, int* sample_rate) {
   Napi::Env env = info.Env();
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
@@ -121,8 +122,10 @@ bool ReadStereoPair(const Napi::CallbackInfo& info, const char* usage,
   }
   *sample_rate = node_narrow_int(env, info[2], node_arg_label(2).c_str());
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), *sample_rate);
-  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), *sample_rate);
+  sonare::validate_offline_audio_input(fn, left_name, left.Data(), left.ElementLength(),
+                                       *sample_rate);
+  sonare::validate_offline_audio_input(fn, right_name, right.Data(), right.ElementLength(),
+                                       *sample_rate);
 
   *frames = left.ElementLength();
   interleaved->resize(*frames * 2);
@@ -193,8 +196,10 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   // validated at its own.
   const int sr = node_narrow_int(env, info[3], "sr");
   const int reference_sr = node_narrow_int(env, info[4], "referenceSampleRate");
-  sonare::validate_offline_audio_input(source.Data(), source.ElementLength(), sr);
-  sonare::validate_offline_audio_input(reference.Data(), reference.ElementLength(), reference_sr);
+  sonare::validate_offline_audio_input("apply_named_pair_processor", "source", source.Data(),
+                                       source.ElementLength(), sr);
+  sonare::validate_offline_audio_input("apply_named_pair_processor", "reference", reference.Data(),
+                                       reference.ElementLength(), reference_sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 6 && info[5].IsObject())
     params = ParamsFromObject(info[5].As<Napi::Object>());
@@ -292,13 +297,17 @@ Napi::Value SonareWrap::MasteringPairProcessStereo(const Napi::CallbackInfo& inf
   }
   const int sample_rate = node_narrow_int(env, info[5], "sampleRate");
   const int reference_sample_rate = node_narrow_int(env, info[6], "referenceSampleRate");
-  sonare::validate_offline_audio_input(source_left.Data(), source_left.ElementLength(),
+  sonare::validate_offline_audio_input("apply_named_pair_processor_stereo", "source_left",
+                                       source_left.Data(), source_left.ElementLength(),
                                        sample_rate);
-  sonare::validate_offline_audio_input(source_right.Data(), source_right.ElementLength(),
+  sonare::validate_offline_audio_input("apply_named_pair_processor_stereo", "source_right",
+                                       source_right.Data(), source_right.ElementLength(),
                                        sample_rate);
-  sonare::validate_offline_audio_input(reference_left.Data(), reference_left.ElementLength(),
+  sonare::validate_offline_audio_input("apply_named_pair_processor_stereo", "reference_left",
+                                       reference_left.Data(), reference_left.ElementLength(),
                                        reference_sample_rate);
-  sonare::validate_offline_audio_input(reference_right.Data(), reference_right.ElementLength(),
+  sonare::validate_offline_audio_input("apply_named_pair_processor_stereo", "reference_right",
+                                       reference_right.Data(), reference_right.ElementLength(),
                                        reference_sample_rate);
 
   std::vector<sonare::mastering::api::Param> params;
@@ -357,13 +366,17 @@ Napi::Value SonareWrap::MasteringAbMatchLoudnessStereo(const Napi::CallbackInfo&
   }
   const int sample_rate = node_narrow_int(env, info[4], "sampleRate");
   const int reference_sample_rate = node_narrow_int(env, info[5], "referenceSampleRate");
-  sonare::validate_offline_audio_input(source_left.Data(), source_left.ElementLength(),
+  sonare::validate_offline_audio_input("ab_match_loudness_stereo", "source_left",
+                                       source_left.Data(), source_left.ElementLength(),
                                        sample_rate);
-  sonare::validate_offline_audio_input(source_right.Data(), source_right.ElementLength(),
+  sonare::validate_offline_audio_input("ab_match_loudness_stereo", "source_right",
+                                       source_right.Data(), source_right.ElementLength(),
                                        sample_rate);
-  sonare::validate_offline_audio_input(reference_left.Data(), reference_left.ElementLength(),
+  sonare::validate_offline_audio_input("ab_match_loudness_stereo", "reference_left",
+                                       reference_left.Data(), reference_left.ElementLength(),
                                        reference_sample_rate);
-  sonare::validate_offline_audio_input(reference_right.Data(), reference_right.ElementLength(),
+  sonare::validate_offline_audio_input("ab_match_loudness_stereo", "reference_right",
+                                       reference_right.Data(), reference_right.ElementLength(),
                                        reference_sample_rate);
 
   SonareMasteringStereoResult result{};
@@ -398,8 +411,10 @@ Napi::Value SonareWrap::MasteringPairAnalyze(const Napi::CallbackInfo& info) {
   // validated at its own.
   const int sr = node_narrow_int(env, info[3], "sr");
   const int reference_sr = node_narrow_int(env, info[4], "referenceSampleRate");
-  sonare::validate_offline_audio_input(source.Data(), source.ElementLength(), sr);
-  sonare::validate_offline_audio_input(reference.Data(), reference.ElementLength(), reference_sr);
+  sonare::validate_offline_audio_input("analyze_named_pair", "source", source.Data(),
+                                       source.ElementLength(), sr);
+  sonare::validate_offline_audio_input("analyze_named_pair", "reference", reference.Data(),
+                                       reference.ElementLength(), reference_sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 6 && info[5].IsObject())
     params = ParamsFromObject(info[5].As<Napi::Object>());
@@ -428,8 +443,10 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
   }
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   const int sr = node_narrow_int(env, info[3], "sr");
-  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
-  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
+  sonare::validate_offline_audio_input("analyze_named_stereo", "left", left.Data(),
+                                       left.ElementLength(), sr);
+  sonare::validate_offline_audio_input("analyze_named_stereo", "right", right.Data(),
+                                       right.ElementLength(), sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject())
     params = ParamsFromObject(info[4].As<Napi::Object>());
@@ -450,7 +467,8 @@ Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
+  sonare::validate_offline_audio_input("suggest_chain", "samples", samples.Data(),
+                                       samples.ElementLength(),
                                        node_narrow_int(env, info[1], node_arg_label(1).c_str()));
   const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 2);
   const auto result = sonare::mastering::assistant::suggest_chain(
@@ -470,7 +488,8 @@ Napi::Value SonareWrap::MasteringAssistantSuggestChain(const Napi::CallbackInfo&
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
+  sonare::validate_offline_audio_input("suggest_chain", "samples", samples.Data(),
+                                       samples.ElementLength(),
                                        node_narrow_int(env, info[1], node_arg_label(1).c_str()));
   const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 2);
   const auto result = sonare::mastering::assistant::suggest_chain(
@@ -532,7 +551,8 @@ Napi::Value SonareWrap::MasteringAudioProfile(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
+  sonare::validate_offline_audio_input("analyze_audio_profile", "samples", samples.Data(),
+                                       samples.ElementLength(),
                                        node_narrow_int(env, info[1], node_arg_label(1).c_str()));
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 3 && info[2].IsObject())
@@ -556,7 +576,8 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
+  sonare::validate_offline_audio_input("streaming_preview", "samples", samples.Data(),
+                                       samples.ElementLength(),
                                        node_narrow_int(env, info[1], node_arg_label(1).c_str()));
   std::vector<sonare::mastering::maximizer::StreamingPlatform> platforms;
   const bool has_platforms = info.Length() >= 3 && !info[2].IsUndefined() && !info[2].IsNull();
@@ -601,7 +622,8 @@ Napi::Value SonareWrap::MasteringAssistantSuggestStereo(const Napi::CallbackInfo
   std::vector<float> interleaved;
   size_t frames = 0;
   int sample_rate = 0;
-  if (!ReadStereoPair(info, "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
+  if (!ReadStereoPair("suggest_chain_interleaved", "left", "right", info,
+                      "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
                       &sample_rate)) {
     return env.Undefined();
   }
@@ -618,7 +640,8 @@ Napi::Value SonareWrap::MasteringAssistantSuggestChainStereo(const Napi::Callbac
   std::vector<float> interleaved;
   size_t frames = 0;
   int sample_rate = 0;
-  if (!ReadStereoPair(info, "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
+  if (!ReadStereoPair("suggest_chain_interleaved", "left", "right", info,
+                      "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
                       &sample_rate)) {
     return env.Undefined();
   }
@@ -635,7 +658,8 @@ Napi::Value SonareWrap::MasteringAudioProfileStereo(const Napi::CallbackInfo& in
   std::vector<float> interleaved;
   size_t frames = 0;
   int sample_rate = 0;
-  if (!ReadStereoPair(info, "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
+  if (!ReadStereoPair("analyze_audio_profile_interleaved", "left", "right", info,
+                      "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
                       &sample_rate)) {
     return env.Undefined();
   }
@@ -656,7 +680,8 @@ Napi::Value SonareWrap::MasteringStreamingPreviewStereo(const Napi::CallbackInfo
   std::vector<float> interleaved;
   size_t frames = 0;
   int sample_rate = 0;
-  if (!ReadStereoPair(info, "Expected (left, right, sampleRate, platforms?)", &interleaved, &frames,
+  if (!ReadStereoPair("streaming_preview_interleaved", "left", "right", info,
+                      "Expected (left, right, sampleRate, platforms?)", &interleaved, &frames,
                       &sample_rate)) {
     return env.Undefined();
   }
@@ -698,8 +723,8 @@ Napi::Value SonareWrap::MeteringCrestFactorDbStereo(const Napi::CallbackInfo& in
   std::vector<float> interleaved;
   size_t frames = 0;
   int sample_rate = 0;
-  if (!ReadStereoPair(info, "Expected (left, right, sampleRate)", &interleaved, &frames,
-                      &sample_rate)) {
+  if (!ReadStereoPair("crest_factor_db_interleaved", "left", "right", info,
+                      "Expected (left, right, sampleRate)", &interleaved, &frames, &sample_rate)) {
     return env.Undefined();
   }
   return Napi::Number::New(

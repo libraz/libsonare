@@ -108,7 +108,7 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
   // it is assigned unconditionally rather than read as "leave the default".
   config.min_percussive_ratio = min_percussive_ratio;
 
-  Audio audio = loadValidatedAudio(samples, rate);
+  Audio audio = loadValidatedAudio("extract_percussive_events", "samples", samples, rate);
   val out = val::array();
   for (const PercussiveEvent& event :
        editing::event_model::extract_percussive_events(audio, config)) {
@@ -134,7 +134,7 @@ val js_render_percussive_events(val samples, const val& sample_rate, val events,
     core_events.push_back(renderablePercussiveEventFromVal(events[i]));
   }
 
-  Audio audio = loadValidatedAudio(samples, rate);
+  Audio audio = loadValidatedAudio("render_percussive_events", "samples", samples, rate);
   Audio result = editing::event_model::render_percussive_events(audio, core_events, config);
   return vectorToFloat32Array(result.data(), result.size());
 }

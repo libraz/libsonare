@@ -138,7 +138,9 @@ void split_track_entry(const std::string& entry, std::string* id, std::string* p
 /// as every other decoded input is: an unusable rate is a malformed container,
 /// any other refusal (a non-finite sample included) a failed decode.
 void require_decoded_plane(const std::vector<float>& plane, int sample_rate) {
-  if (const char* problem = offline_audio_input_problem(plane.data(), plane.size(), sample_rate)) {
+  const std::string problem =
+      offline_audio_input_problem("load_audio", "input", plane.data(), plane.size(), sample_rate);
+  if (!problem.empty()) {
     throw SonareException(
         is_supported_sample_rate(sample_rate) ? ErrorCode::DecodeFailed : ErrorCode::InvalidFormat,
         problem);

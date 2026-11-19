@@ -184,7 +184,8 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("declick", "samples", typed.Data(), typed.ElementLength(),
+                                       sr);
   sonare::mastering::repair::DeclickConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -279,7 +280,8 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("declip", "samples", typed.Data(), typed.ElementLength(),
+                                       sr);
   sonare::mastering::repair::DeclipConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -371,7 +373,8 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("decrackle", "samples", typed.Data(), typed.ElementLength(),
+                                       sr);
   sonare::mastering::repair::DecrackleConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();

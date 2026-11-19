@@ -195,8 +195,9 @@ TEST_CASE("Audio decoded from memory obeys the offline-analysis policy", "[audio
 
     // The buffer entry point refuses the same samples, which is the agreement
     // that was missing: one rejected, the other returned a usable handle.
-    REQUIRE_THROWS_AS(validate_offline_audio_input(poisoned.data(), poisoned.size(), 22050),
-                      SonareException);
+    REQUIRE_THROWS_AS(
+        validate_offline_audio_input("decode", "samples", poisoned.data(), poisoned.size(), 22050),
+        SonareException);
   }
 
   SECTION("a declared sample rate outside the supported range is refused") {
@@ -351,7 +352,7 @@ TEST_CASE("Audio from_file_channel keeps the channels apart", "[audio]") {
 TEST_CASE("offline_audio_input_problem reports what validate_offline_audio_input throws",
           "[audio][offline_audio_input_problem]") {
   const std::vector<float> valid(64, 0.25f);
-  REQUIRE(offline_audio_input_problem(valid.data(), valid.size(), 22050) == nullptr);
+  REQUIRE(offline_audio_input_problem("fn", "samples", valid.data(), valid.size(), 22050).empty());
 
   std::vector<float> nan_buffer = valid;
   nan_buffer[10] = std::numeric_limits<float>::quiet_NaN();
@@ -370,14 +371,46 @@ TEST_CASE("offline_audio_input_problem reports what validate_offline_audio_input
                         {nan_buffer.data(), nan_buffer.size(), 22050},
                         {inf_buffer.data(), inf_buffer.size(), 22050}};
   for (const Case& c : cases) {
-    const char* problem = offline_audio_input_problem(c.samples, c.length, c.sample_rate);
-    REQUIRE(problem != nullptr);
+    const std::string problem =
+        offline_audio_input_problem("fn", "samples", c.samples, c.length, c.sample_rate);
+    REQUIRE_FALSE(problem.empty());
     std::string thrown;
     try {
-      validate_offline_audio_input(c.samples, c.length, c.sample_rate);
+      validate_offline_audio_input("fn", "samples", c.samples, c.length, c.sample_rate);
     } catch (const SonareException& e) {
       thrown = e.what();
     }
     REQUIRE(thrown.find(problem) != std::string::npos);
   }
+}
+
+TEST_CASE("the offline-input validators name the function, the buffer and the sample index",
+          "[audio][offline_audio_input_problem]") {
+  std::vector<float> samples(64, 0.25f);
+  samples[17] = std::numeric_limits<float>::quiet_NaN();
+  const auto message = [](auto&& validate) {
+    try {
+      validate();
+    } catch (const SonareException& e) {
+      return std::string(e.what());
+    }
+    return std::string();
+  };
+  CHECK(message([&] {
+          validate_offline_audio_input("detect_bpm", "samples", samples.data(), samples.size(),
+                                       22050);
+        }) == "detect_bpm: samples contains a non-finite sample at index 17");
+  CHECK(message([&] {
+          validate_offline_audio_window("spectrum_frame", "samples", samples.data(), samples.size(),
+                                        22050, 16, 8);
+        }) == "spectrum_frame: samples contains a non-finite sample at index 17");
+  // A scanned copy reports the index in the caller's buffer, not in the copy.
+  CHECK(message([&] {
+          validate_offline_audio_samples("spectrum_frame", "samples", samples.data() + 16, 8, 16);
+        }) == "spectrum_frame: samples contains a non-finite sample at index 17");
+  CHECK(message([&] {
+          validate_offline_audio_input("detect_bpm", "samples", nullptr, 0, 22050);
+        }) == "detect_bpm: samples must be a non-empty buffer");
+  CHECK(offline_audio_input_problem("detect_bpm", "left", samples.data(), samples.size(), 1) ==
+        "detect_bpm: sample_rate is out of the supported range");
 }

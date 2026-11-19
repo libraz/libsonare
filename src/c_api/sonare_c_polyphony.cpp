@@ -214,12 +214,14 @@ SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int s
   const SonareError config_error = resolve_config(config, resolved);
   if (config_error != SONARE_OK) return config_error;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    auto handle = std::make_unique<SonarePolyphonicAnalysis>();
-    handle->analysis = sonare::editing::polyphony::analyze_polyphonic(audio, resolved);
-    *out = handle.release();
-    return SONARE_OK;
-  });
+  return run_offline("polyphonic_analyze", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       auto handle = std::make_unique<SonarePolyphonicAnalysis>();
+                       handle->analysis =
+                           sonare::editing::polyphony::analyze_polyphonic(audio, resolved);
+                       *out = handle.release();
+                       return SONARE_OK;
+                     });
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);

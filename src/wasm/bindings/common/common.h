@@ -323,17 +323,20 @@ std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::s
 /// validation (rejects null/empty, an out-of-range sampleRate, an oversized
 /// buffer, and any non-finite sample). Mirrors the C ABI validate_audio_params
 /// so the WASM surface rejects the same inputs even though it bypasses the
-/// C-ABI translation unit. @throws WasmArgumentError.
-Audio loadValidatedAudio(val samples, int sample_rate);
+/// C-ABI translation unit. @p fn and @p name prefix the refusal as on the C ABI.
+/// @throws WasmArgumentError.
+Audio loadValidatedAudio(const char* fn, const char* name, val samples, int sample_rate);
 /// @brief Loads a JS array of equal-length Float32Array channels, running
 /// loadValidatedAudio over EVERY channel. A linked core entry guards channels[0]
 /// alone and takes one shared length, so this is the whole non-finite and length
 /// guard on the set. @p entry names the caller in each message.
 /// @throws WasmArgumentError.
-std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate, const char* entry);
+std::vector<Audio> loadValidatedChannelSet(const char* fn, const char* name, const val& channels,
+                                           int sample_rate, const char* entry);
 
 enum class ChannelSetValidation { Offline, StructureOnly };
-std::vector<Audio> loadChannelSet(const val& channels, int sample_rate, const char* entry,
+std::vector<Audio> loadChannelSet(const char* fn, const char* name, const val& channels,
+                                  int sample_rate, const char* entry,
                                   ChannelSetValidation validation);
 
 /// @brief loadValidatedAudio for an entry point that reads one window of the
@@ -343,15 +346,15 @@ std::vector<Audio> loadChannelSet(const val& channels, int sample_rate, const ch
 /// sample outside that window is never read, so its value is not a precondition
 /// -- the contract the C ABI states for its windowed calls.
 /// @throws WasmArgumentError.
-Audio loadValidatedAudioWindow(val samples, int sample_rate, std::size_t scan_offset,
-                               std::size_t scan_count);
+Audio loadValidatedAudioWindow(const char* fn, const char* name, val samples, int sample_rate,
+                               std::size_t scan_offset, std::size_t scan_count);
 /// @brief Interleaved sibling for the (samples, channels, sampleRate) facade.
 /// Validates channels > 0, the shared offline-input rules over the whole buffer,
 /// and that the length is a whole number of frames (no silent truncation of a
 /// trailing partial frame). Writes the per-channel frame count to @p frames and
 /// returns the copied samples. @throws WasmArgumentError.
-std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,
-                                            size_t* frames);
+std::vector<float> loadValidatedInterleaved(const char* fn, const char* name, val samples,
+                                            int channels, int sample_rate, size_t* frames);
 std::vector<int32_t> int32ArrayToVector(val arr);
 std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);

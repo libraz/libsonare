@@ -157,7 +157,7 @@ class EqualizerWrapper {
     validateBlockLength(length, "sidechain");
     std::vector<float> staged_left = float32ArrayToVector(samples);
     if (staged_left.empty()) return clearSidechain();
-    validateSidechainBuffer(staged_left);
+    validateSidechainBuffer("EqualizerProcessor::set_sidechain", "samples", staged_left);
 
     // The wrapper preflight covers every core rejection condition. Commit the
     // owned storage first, then lend the core only the member pointer array.
@@ -181,8 +181,8 @@ class EqualizerWrapper {
 
     std::vector<float> staged_left = float32ArrayToVector(left_samples);
     std::vector<float> staged_right = float32ArrayToVector(right_samples);
-    validateSidechainBuffer(staged_left);
-    validateSidechainBuffer(staged_right);
+    validateSidechainBuffer("EqualizerProcessor::set_sidechain", "left", staged_left);
+    validateSidechainBuffer("EqualizerProcessor::set_sidechain", "right", staged_right);
     sidechain_left_.swap(staged_left);
     sidechain_right_.swap(staged_right);
     sidechain_channels_ = {sidechain_left_.data(), sidechain_right_.data()};
@@ -288,8 +288,10 @@ class EqualizerWrapper {
     // An omitted reference rate is the source's.
     const int reference_sample_rate = intProperty(options, "referenceSampleRate", sample_rate);
     const int max_bands = intProperty(options, "maxBands", 8);
-    validate_offline_audio_input(src.data(), src.size(), sample_rate);
-    validate_offline_audio_input(ref.data(), ref.size(), reference_sample_rate);
+    validate_offline_audio_input("configure_equalizer_from_audio", "samples", src.data(),
+                                 src.size(), sample_rate);
+    validate_offline_audio_input("configure_equalizer_from_audio", "ref", ref.data(), ref.size(),
+                                 reference_sample_rate);
     if (max_bands <= 0) {
       throw WasmRangeError("StreamingEqualizer.match: maxBands must be positive");
     }
@@ -307,8 +309,9 @@ class EqualizerWrapper {
     }
   }
 
-  void validateSidechainBuffer(const std::vector<float>& samples) const {
-    validate_offline_audio_input(samples.data(), samples.size(),
+  void validateSidechainBuffer(const char* fn, const char* name,
+                               const std::vector<float>& samples) const {
+    validate_offline_audio_input(fn, name, samples.data(), samples.size(),
                                  static_cast<int>(std::lround(sample_rate_)));
   }
 

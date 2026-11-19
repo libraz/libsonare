@@ -52,7 +52,7 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("hpss", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
 
   sonare::HpssConfig config;
@@ -97,7 +97,7 @@ Napi::Value SonareWrap::Harmonic(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sr");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("harmonic", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::harmonic(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -120,7 +120,7 @@ Napi::Value SonareWrap::Percussive(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sr");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("percussive", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::percussive(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -149,7 +149,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 4, "hopLength", 512, &hop_length)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("time_stretch", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::TimeStretchConfig config;
   config.n_fft = n_fft;
@@ -182,7 +182,7 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 4, "hopLength", 512, &hop_length)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("pitch_shift", "samples", data, length, sr);
   sonare::PitchShiftPlan plan;
   if (!sonare::make_pitch_shift_plan(length, sr, semitones, &plan)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -217,7 +217,8 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   float current_midi = node_narrow_finite_float(env, info[2], "currentMidi");
   float target_midi = node_narrow_finite_float(env, info[3], "targetMidi");
 
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("PitchCorrector::correct_to_midi", "samples", data, length,
+                                       sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::PitchCorrector corrector;
   sonare::Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
@@ -283,7 +284,8 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("PitchCorrector::correct_to_midi_timevarying", "samples",
+                                       data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::PitchCorrector corrector;
   sonare::Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
@@ -477,7 +479,7 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   float stretch_ratio = node_narrow_finite_float(env, info[4], "stretchRatio");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("NoteEditor::stretch_note", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::NoteRegion region;
   region.onset_sample = onset_sample;
@@ -505,7 +507,7 @@ Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sr");
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("NoteEditor::move_note", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::NoteRegion region;
   region.onset_sample = node_narrow_int(env, info[2], node_arg_label(2).c_str());
@@ -542,7 +544,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("VoiceChanger::process", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
@@ -634,7 +636,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("trim_absolute", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::trim_absolute(audio, threshold_db, frame_length, hop_length);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -669,7 +671,7 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::validate_offline_audio_input("normalize", "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = mode == "rms" ? sonare::normalize_rms(audio, target_db, true)
                                        : sonare::normalize(audio, target_db);
@@ -704,8 +706,10 @@ Napi::Value SonareWrap::NormalizeStereo(const Napi::CallbackInfo& info) {
 
   // Re-apply the C-ABI input validation these direct core calls would otherwise
   // bypass. Per channel, because each carries its own samples.
-  sonare::validate_offline_audio_input(left_typed.Data(), left_typed.ElementLength(), sr);
-  sonare::validate_offline_audio_input(right_typed.Data(), right_typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("normalize_stereo", "left_typed", left_typed.Data(),
+                                       left_typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("normalize_stereo", "right_typed", right_typed.Data(),
+                                       right_typed.ElementLength(), sr);
   sonare::Audio left =
       sonare::Audio::from_buffer(left_typed.Data(), left_typed.ElementLength(), sr);
   sonare::Audio right =

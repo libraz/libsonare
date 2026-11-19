@@ -110,9 +110,11 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
 
 // The config is resolved before the samples are copied, the way the C entry point
 // resolves it before run_offline.
-editing::polyphony::PolyphonicAnalysis analyzeFromVal(val samples, int sample_rate, val config) {
+editing::polyphony::PolyphonicAnalysis analyzeFromVal(const char* fn, const char* name, val samples,
+                                                      int sample_rate, val config) {
   const editing::polyphony::PolyphonicEditConfig resolved = configFromVal(config);
-  return editing::polyphony::analyze_polyphonic(loadValidatedAudio(samples, sample_rate), resolved);
+  return editing::polyphony::analyze_polyphonic(loadValidatedAudio(fn, name, samples, sample_rate),
+                                                resolved);
 }
 
 }  // namespace
@@ -120,7 +122,7 @@ editing::polyphony::PolyphonicAnalysis analyzeFromVal(val samples, int sample_ra
 class PolyphonicAnalysisWasm {
  public:
   PolyphonicAnalysisWasm(val samples, int sample_rate, val config)
-      : analysis_(analyzeFromVal(samples, sample_rate, config)) {}
+      : analysis_(analyzeFromVal("analyze_polyphonic", "samples", samples, sample_rate, config)) {}
 
   // A count crosses as a double: every other count on this surface does, and a
   // host sizes nothing from it -- the accessors below return whole arrays.

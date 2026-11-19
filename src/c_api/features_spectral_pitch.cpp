@@ -56,14 +56,15 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
   if (out) *out = nullptr;
   if (out_count) *out_count = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = spectral_centroid(spec, audio.sample_rate());
-    return copy_vector(result, out, out_count);
-  });
+  return run_offline("spectral_centroid", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       StftConfig config;
+                       config.n_fft = n_fft;
+                       config.hop_length = hop_length;
+                       Spectrogram spec = Spectrogram::compute(audio, config);
+                       std::vector<float> result = spectral_centroid(spec, audio.sample_rate());
+                       return copy_vector(result, out, out_count);
+                     });
 }
 
 SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
@@ -82,14 +83,15 @@ SonareError sonare_spectral_bandwidth_ex(const float* samples, size_t length, in
   if (out_count) *out_count = 0;
   if (!std::isfinite(p) || p <= 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = spectral_bandwidth(spec, audio.sample_rate(), p);
-    return copy_vector(result, out, out_count);
-  });
+  return run_offline("spectral_bandwidth_ex", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       StftConfig config;
+                       config.n_fft = n_fft;
+                       config.hop_length = hop_length;
+                       Spectrogram spec = Spectrogram::compute(audio, config);
+                       std::vector<float> result = spectral_bandwidth(spec, audio.sample_rate(), p);
+                       return copy_vector(result, out, out_count);
+                     });
 }
 
 SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sample_rate, int n_fft,
@@ -100,14 +102,16 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
   if (out) *out = nullptr;
   if (out_count) *out_count = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = spectral_rolloff(spec, audio.sample_rate(), roll_percent);
-    return copy_vector(result, out, out_count);
-  });
+  return run_offline("spectral_rolloff", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       StftConfig config;
+                       config.n_fft = n_fft;
+                       config.hop_length = hop_length;
+                       Spectrogram spec = Spectrogram::compute(audio, config);
+                       std::vector<float> result =
+                           spectral_rolloff(spec, audio.sample_rate(), roll_percent);
+                       return copy_vector(result, out, out_count);
+                     });
 }
 
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
@@ -117,14 +121,15 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
   *out = nullptr;
   *out_count = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = spectral_flatness(spec);
-    return copy_vector(result, out, out_count);
-  });
+  return run_offline("spectral_flatness", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       StftConfig config;
+                       config.n_fft = n_fft;
+                       config.hop_length = hop_length;
+                       Spectrogram spec = Spectrogram::compute(audio, config);
+                       std::vector<float> result = spectral_flatness(spec);
+                       return copy_vector(result, out, out_count);
+                     });
 }
 
 SonareError sonare_spectral_flux(const float* samples, size_t length, int sample_rate, int n_fft,
@@ -134,13 +139,15 @@ SonareError sonare_spectral_flux(const float* samples, size_t length, int sample
   *out = nullptr;
   *out_count = 0;
   if (lag < 1) return SONARE_ERROR_INVALID_PARAMETER;
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    const std::vector<float> result = spectral_flux(Spectrogram::compute(audio, config), lag);
-    return copy_vector(result, out, out_count);
-  });
+  return run_offline("spectral_flux", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       StftConfig config;
+                       config.n_fft = n_fft;
+                       config.hop_length = hop_length;
+                       const std::vector<float> result =
+                           spectral_flux(Spectrogram::compute(audio, config), lag);
+                       return copy_vector(result, out, out_count);
+                     });
 }
 
 SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int sample_rate,
@@ -151,10 +158,12 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
   *out = nullptr;
   *out_count = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    std::vector<float> result = zero_crossing_rate(audio, frame_length, hop_length);
-    return copy_vector(result, out, out_count);
-  });
+  return run_offline("zero_crossing_rate", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       std::vector<float> result =
+                           zero_crossing_rate(audio, frame_length, hop_length);
+                       return copy_vector(result, out, out_count);
+                     });
 }
 
 SonareError sonare_rms_energy(const float* samples, size_t length, int sample_rate,
@@ -165,10 +174,11 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
   *out = nullptr;
   *out_count = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    std::vector<float> result = rms_energy(audio, frame_length, hop_length);
-    return copy_vector(result, out, out_count);
-  });
+  return run_offline("rms_energy", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       std::vector<float> result = rms_energy(audio, frame_length, hop_length);
+                       return copy_vector(result, out, out_count);
+                     });
 }
 
 SonareError sonare_spectral_contrast(const float* samples, size_t length, int sample_rate,
@@ -180,22 +190,23 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
   *out_rows = 0;
   *out_cols = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result =
-        spectral_contrast(spec, audio.sample_rate(), n_bands, fmin_hz, quantile);
-    int rows = n_bands + 1;
-    int cols = spec.n_frames();
-    *out_rows = rows;
-    *out_cols = cols;
-    std::unique_ptr<float[]> tmp(new float[result.size()]);
-    std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
-    *out = release_array(tmp);
-    return SONARE_OK;
-  });
+  return run_offline("spectral_contrast", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       StftConfig config;
+                       config.n_fft = n_fft;
+                       config.hop_length = hop_length;
+                       Spectrogram spec = Spectrogram::compute(audio, config);
+                       std::vector<float> result =
+                           spectral_contrast(spec, audio.sample_rate(), n_bands, fmin_hz, quantile);
+                       int rows = n_bands + 1;
+                       int cols = spec.n_frames();
+                       *out_rows = rows;
+                       *out_cols = cols;
+                       std::unique_ptr<float[]> tmp(new float[result.size()]);
+                       std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
+                       *out = release_array(tmp);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_poly_features(const float* samples, size_t length, int sample_rate, int n_fft,
@@ -207,21 +218,22 @@ SonareError sonare_poly_features(const float* samples, size_t length, int sample
   *out_rows = 0;
   *out_cols = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = poly_features(spec, audio.sample_rate(), order);
-    int rows = order + 1;
-    int cols = spec.n_frames();
-    *out_rows = rows;
-    *out_cols = cols;
-    std::unique_ptr<float[]> tmp(new float[result.size()]);
-    std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
-    *out = release_array(tmp);
-    return SONARE_OK;
-  });
+  return run_offline("poly_features", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       StftConfig config;
+                       config.n_fft = n_fft;
+                       config.hop_length = hop_length;
+                       Spectrogram spec = Spectrogram::compute(audio, config);
+                       std::vector<float> result = poly_features(spec, audio.sample_rate(), order);
+                       int rows = order + 1;
+                       int cols = spec.n_frames();
+                       *out_rows = rows;
+                       *out_cols = cols;
+                       std::unique_ptr<float[]> tmp(new float[result.size()]);
+                       std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
+                       *out = release_array(tmp);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_zero_crossings(const float* samples, size_t length, float threshold,
@@ -320,10 +332,12 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    *out_tuning = estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
-    return SONARE_OK;
-  });
+  return run_offline("estimate_tuning", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       *out_tuning =
+                           estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_tuning_to_reference_hz(float tuning_cents, float a4_hz, float* out_hz) {
@@ -368,22 +382,23 @@ SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate
   *out_pitches = nullptr;
   *out_magnitudes = nullptr;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin_hz, fmax_hz, threshold);
-    const size_t total = result.pitches.size();
-    if (result.magnitudes.size() != total) return SONARE_ERROR_UNKNOWN;
-    std::unique_ptr<float[]> pitches(total ? new float[total] : nullptr);
-    std::unique_ptr<float[]> magnitudes(total ? new float[total] : nullptr);
-    if (total) {
-      std::memcpy(pitches.get(), result.pitches.data(), total * sizeof(float));
-      std::memcpy(magnitudes.get(), result.magnitudes.data(), total * sizeof(float));
-    }
-    *out_n_bins = result.n_bins;
-    *out_n_frames = result.n_frames;
-    *out_pitches = release_array(pitches);
-    *out_magnitudes = release_array(magnitudes);
-    return SONARE_OK;
-  });
+  return run_offline(
+      "piptrack", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin_hz, fmax_hz, threshold);
+        const size_t total = result.pitches.size();
+        if (result.magnitudes.size() != total) return SONARE_ERROR_UNKNOWN;
+        std::unique_ptr<float[]> pitches(total ? new float[total] : nullptr);
+        std::unique_ptr<float[]> magnitudes(total ? new float[total] : nullptr);
+        if (total) {
+          std::memcpy(pitches.get(), result.pitches.data(), total * sizeof(float));
+          std::memcpy(magnitudes.get(), result.magnitudes.data(), total * sizeof(float));
+        }
+        *out_n_bins = result.n_bins;
+        *out_n_frames = result.n_frames;
+        *out_pitches = release_array(pitches);
+        *out_magnitudes = release_array(magnitudes);
+        return SONARE_OK;
+      });
 }
 
 SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, int sample_rate,
@@ -400,39 +415,44 @@ SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, i
       n_fft <= 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    ReassignedSpectrogram result = reassigned_spectrogram(audio, config, ref_power, fill_nan != 0);
-    if (result.times.size() != result.magnitude.size() ||
-        result.frequencies.size() != result.magnitude.size()) {
-      return SONARE_ERROR_UNKNOWN;
-    }
-    const int n_bins = n_fft / 2 + 1;
-    if (n_bins <= 0 || result.magnitude.size() % static_cast<size_t>(n_bins) != 0) {
-      return SONARE_ERROR_UNKNOWN;
-    }
-    const int n_frames = static_cast<int>(result.magnitude.size() / static_cast<size_t>(n_bins));
-    std::unique_ptr<float[]> magnitude(
-        result.magnitude.empty() ? nullptr : new float[result.magnitude.size()]);
-    std::unique_ptr<float[]> times(result.times.empty() ? nullptr : new float[result.times.size()]);
-    std::unique_ptr<float[]> frequencies(
-        result.frequencies.empty() ? nullptr : new float[result.frequencies.size()]);
-    if (!result.magnitude.empty()) {
-      std::memcpy(magnitude.get(), result.magnitude.data(),
-                  result.magnitude.size() * sizeof(float));
-      std::memcpy(times.get(), result.times.data(), result.times.size() * sizeof(float));
-      std::memcpy(frequencies.get(), result.frequencies.data(),
-                  result.frequencies.size() * sizeof(float));
-    }
-    out->n_bins = n_bins;
-    out->n_frames = n_frames;
-    out->magnitude = release_array(magnitude);
-    out->times = release_array(times);
-    out->frequencies = release_array(frequencies);
-    return SONARE_OK;
-  });
+  return run_offline(
+      "reassigned_spectrogram", "samples", samples, length, sample_rate,
+      [&](const Audio& audio) -> SonareError {
+        StftConfig config;
+        config.n_fft = n_fft;
+        config.hop_length = hop_length;
+        ReassignedSpectrogram result =
+            reassigned_spectrogram(audio, config, ref_power, fill_nan != 0);
+        if (result.times.size() != result.magnitude.size() ||
+            result.frequencies.size() != result.magnitude.size()) {
+          return SONARE_ERROR_UNKNOWN;
+        }
+        const int n_bins = n_fft / 2 + 1;
+        if (n_bins <= 0 || result.magnitude.size() % static_cast<size_t>(n_bins) != 0) {
+          return SONARE_ERROR_UNKNOWN;
+        }
+        const int n_frames =
+            static_cast<int>(result.magnitude.size() / static_cast<size_t>(n_bins));
+        std::unique_ptr<float[]> magnitude(
+            result.magnitude.empty() ? nullptr : new float[result.magnitude.size()]);
+        std::unique_ptr<float[]> times(result.times.empty() ? nullptr
+                                                            : new float[result.times.size()]);
+        std::unique_ptr<float[]> frequencies(
+            result.frequencies.empty() ? nullptr : new float[result.frequencies.size()]);
+        if (!result.magnitude.empty()) {
+          std::memcpy(magnitude.get(), result.magnitude.data(),
+                      result.magnitude.size() * sizeof(float));
+          std::memcpy(times.get(), result.times.data(), result.times.size() * sizeof(float));
+          std::memcpy(frequencies.get(), result.frequencies.data(),
+                      result.frequencies.size() * sizeof(float));
+        }
+        out->n_bins = n_bins;
+        out->n_frames = n_frames;
+        out->magnitude = release_array(magnitude);
+        out->times = release_array(times);
+        out->frequencies = release_array(frequencies);
+        return SONARE_OK;
+      });
 }
 
 void sonare_free_reassigned_spectrogram_result(SonareReassignedSpectrogramResult* result) {
@@ -446,20 +466,22 @@ void sonare_free_reassigned_spectrogram_result(SonareReassignedSpectrogramResult
 namespace {
 
 template <typename PitchFn>
-SonareError run_pitch_track(const float* samples, size_t length, int sample_rate, int frame_length,
-                            int hop_length, float fmin, float fmax, float threshold, int fill_na,
-                            SonarePitchResult* out, PitchFn pitch) {
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    PitchConfig config;
-    config.frame_length = frame_length;
-    config.hop_length = hop_length;
-    config.fmin = fmin;
-    config.fmax = fmax;
-    config.threshold = threshold;
-    config.fill_na = fill_na != 0;
-    PitchResult result = pitch(audio, config);
-    return fill_pitch_result(result, out);
-  });
+SonareError run_pitch_track(const char* fn, const char* name, const float* samples, size_t length,
+                            int sample_rate, int frame_length, int hop_length, float fmin,
+                            float fmax, float threshold, int fill_na, SonarePitchResult* out,
+                            PitchFn pitch) {
+  return run_offline(fn, name, samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       PitchConfig config;
+                       config.frame_length = frame_length;
+                       config.hop_length = hop_length;
+                       config.fmin = fmin;
+                       config.fmax = fmax;
+                       config.threshold = threshold;
+                       config.fill_na = fill_na != 0;
+                       PitchResult result = pitch(audio, config);
+                       return fill_pitch_result(result, out);
+                     });
 }
 
 }  // namespace
@@ -474,10 +496,11 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
   out->voiced_prob = nullptr;
   out->voiced_flag = nullptr;
 
-  return run_pitch_track(
-      samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold,
-      /*fill_na=*/0, out,
-      [](const Audio& audio, const PitchConfig& config) { return yin_track(audio, config); });
+  return run_pitch_track("pitch_yin", "samples", samples, length, sample_rate, frame_length,
+                         hop_length, f0_min_hz, f0_max_hz, threshold,
+                         /*fill_na=*/0, out, [](const Audio& audio, const PitchConfig& config) {
+                           return yin_track(audio, config);
+                         });
 }
 
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
@@ -491,8 +514,8 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
   out->voiced_flag = nullptr;
 
   return run_pitch_track(
-      samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold,
-      fill_na, out,
+      "pitch_pyin", "samples", samples, length, sample_rate, frame_length, hop_length, f0_min_hz,
+      f0_max_hz, threshold, fill_na, out,
       [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 

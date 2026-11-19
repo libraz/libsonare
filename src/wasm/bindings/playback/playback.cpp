@@ -59,7 +59,8 @@ void checkPlayback(SonareError err, const char* context) {
 // shape and matching channel lengths -- and leaves content (emptiness,
 // finiteness) to the renderer, matching processInterleaved's own contract.
 std::vector<Audio> loadPlaybackChannelSet(const val& channels, int sample_rate, const char* entry) {
-  return loadChannelSet(channels, sample_rate, entry, ChannelSetValidation::StructureOnly);
+  return loadChannelSet(entry, "channels", channels, sample_rate, entry,
+                        ChannelSetValidation::StructureOnly);
 }
 
 // Structural sibling of the channel loader above, for the offline (interleaved) render

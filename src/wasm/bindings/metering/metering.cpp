@@ -14,7 +14,7 @@
 
 val js_lufs(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("lufs", "samples", samples, sample_rate);
   metering::LufsResult result = metering::lufs(audio);
   val out = val::object();
   out.set("integratedLufs", result.integrated_lufs);
@@ -28,13 +28,13 @@ val js_lufs(val samples, const val& sample_rate_val) {
 
 val js_momentary_lufs(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("momentary_lufs", "samples", samples, sample_rate);
   return vectorToFloat32Array(metering::momentary_lufs(audio));
 }
 
 val js_short_term_lufs(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("short_term_lufs", "samples", samples, sample_rate);
   return vectorToFloat32Array(metering::short_term_lufs(audio));
 }
 
@@ -50,7 +50,8 @@ val js_lufs_interleaved(val samples, const val& channels_val, const val& sample_
   // shared helper validates the buffer and rejects a length that is not a whole
   // number of frames (the C ABI takes frames explicitly, so it cannot truncate).
   size_t frames = 0;
-  std::vector<float> data = loadValidatedInterleaved(samples, channels, sample_rate, &frames);
+  std::vector<float> data = loadValidatedInterleaved("lufs_interleaved", "samples", samples,
+                                                     channels, sample_rate, &frames);
   metering::LufsResult result =
       metering::lufs_interleaved(data.data(), frames, channels, sample_rate);
   val out = val::object();
@@ -72,7 +73,8 @@ val js_lufs_series_interleaved(val samples, const val& channels_val, const val& 
   const int channels = checkedIntFromVal(channels_val, "channels");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   size_t frames = 0;
-  std::vector<float> data = loadValidatedInterleaved(samples, channels, sample_rate, &frames);
+  std::vector<float> data = loadValidatedInterleaved("lufs_interleaved", "samples", samples,
+                                                     channels, sample_rate, &frames);
   std::vector<float> momentary;
   std::vector<float> short_term;
   metering::lufs_interleaved(data.data(), frames, channels, sample_rate, {}, &momentary,
@@ -87,7 +89,7 @@ val js_lufs_series_interleaved(val samples, const val& channels_val, const val& 
 // the C ABI sonare_ebur128_loudness_range_lu.
 float js_ebur128_loudness_range_lu(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("ebur128_loudness_range_lu", "samples", samples, sample_rate);
   return metering::ebur128_loudness_range_lu(audio);
 }
 
@@ -97,13 +99,13 @@ float js_ebur128_loudness_range_lu(val samples, const val& sample_rate_val) {
 
 float js_metering_peak_db(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("peak_db", "samples", samples, sample_rate);
   return metering::peak_db(audio);
 }
 
 float js_metering_rms_db(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("rms_db", "samples", samples, sample_rate);
   return metering::rms_db(audio);
 }
 
@@ -114,13 +116,13 @@ float js_metering_silence_ratio(val samples, const val& sample_rate_val,
   const float threshold_db = checkedFloatFromVal(threshold_db_val, "thresholdDb");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("silence_ratio", "samples", samples, sample_rate);
   return metering::silence_ratio(audio, threshold_db, frame_length, hop_length);
 }
 
 float js_metering_crest_factor_db(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("crest_factor_db", "samples", samples, sample_rate);
   return metering::crest_factor_db(audio);
 }
 
@@ -131,8 +133,10 @@ float js_metering_crest_factor_db_stereo(val left_samples, val right_samples,
                                "meteringCrestFactorDbStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  validate_offline_audio_input(left.data(), left.size(), sample_rate);
-  validate_offline_audio_input(right.data(), right.size(), sample_rate);
+  validate_offline_audio_input("crest_factor_db_interleaved", "left", left.data(), left.size(),
+                               sample_rate);
+  validate_offline_audio_input("crest_factor_db_interleaved", "right", right.data(), right.size(),
+                               sample_rate);
   std::vector<float> interleaved(left.size() * 2);
   for (size_t index = 0; index < left.size(); ++index) {
     interleaved[2 * index] = left[index];
@@ -143,7 +147,7 @@ float js_metering_crest_factor_db_stereo(val left_samples, val right_samples,
 
 float js_metering_dc_offset(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("dc_offset", "samples", samples, sample_rate);
   return metering::dc_offset(audio);
 }
 
@@ -151,7 +155,7 @@ float js_metering_true_peak_db(val samples, const val& sample_rate_val,
                                const val& oversample_factor_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int oversample_factor = checkedIntFromVal(oversample_factor_val, "oversampleFactor");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("true_peak_db", "samples", samples, sample_rate);
   const int factor = oversample_factor == 0 ? 4 : oversample_factor;
   if (factor < 1 || factor > 16 || (factor & (factor - 1)) != 0) {
     throw WasmRangeError("oversample must be 0 or a power of two from 1 to 16");
@@ -164,7 +168,7 @@ val js_metering_detect_clipping(val samples, const val& sample_rate_val, const v
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   const int min_region_samples = checkedIntFromVal(min_region_samples_val, "minRegionSamples");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("detect_clipping", "samples", samples, sample_rate);
   if (min_region_samples < 0) {
     throw WasmRangeError("minRegionSamples must be non-negative");
   }
@@ -199,7 +203,7 @@ val js_metering_dynamic_range(val samples, const val& sample_rate_val, const val
   const float hop_sec = checkedFloatFromVal(hop_sec_val, "hopSec");
   const float low_percentile = checkedFloatFromVal(low_percentile_val, "lowPercentile");
   const float high_percentile = checkedFloatFromVal(high_percentile_val, "highPercentile");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("dynamic_range", "samples", samples, sample_rate);
   const metering::DynamicRangeConfig cfg = metering::dynamic_range_config_from_public(
       window_sec, hop_sec, low_percentile, high_percentile);
   metering::DynamicRangeResult result = metering::dynamic_range(audio, cfg);
@@ -217,7 +221,8 @@ val js_metering_dynamic_range(val samples, const val& sample_rate_val, const val
 
 namespace {
 
-void ensureStereoPair(const val& left, const val& right, int sample_rate, const char* fn_label,
+void ensureStereoPair(const char* fn, const char* left_name, const char* right_name,
+                      const val& left, const val& right, int sample_rate, const char* fn_label,
                       std::vector<float>* out_left, std::vector<float>* out_right) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
     throw WasmRangeError(std::string(fn_label) + ": sampleRate is out of range");
@@ -230,8 +235,8 @@ void ensureStereoPair(const val& left, const val& right, int sample_rate, const 
   }
   *out_left = float32ArrayToVector(left);
   *out_right = float32ArrayToVector(right);
-  validate_offline_audio_input(out_left->data(), out_left->size(), sample_rate);
-  validate_offline_audio_input(out_right->data(), out_right->size(), sample_rate);
+  validate_offline_audio_input(fn, left_name, out_left->data(), out_left->size(), sample_rate);
+  validate_offline_audio_input(fn, right_name, out_right->data(), out_right->size(), sample_rate);
 }
 
 val phaseScopeToVal(const metering::PhaseScopeResult& result) {
@@ -262,7 +267,8 @@ float js_metering_stereo_correlation(val left, val right, const val& sample_rate
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> l;
   std::vector<float> r;
-  ensureStereoPair(left, right, sample_rate, "meteringStereoCorrelation", &l, &r);
+  ensureStereoPair("correlation", "left", "right", left, right, sample_rate,
+                   "meteringStereoCorrelation", &l, &r);
   return metering::correlation(l.data(), r.data(), l.size());
 }
 
@@ -270,7 +276,8 @@ float js_metering_stereo_width(val left, val right, const val& sample_rate_val) 
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> l;
   std::vector<float> r;
-  ensureStereoPair(left, right, sample_rate, "meteringStereoWidth", &l, &r);
+  ensureStereoPair("stereo_width", "left", "right", left, right, sample_rate, "meteringStereoWidth",
+                   &l, &r);
   return metering::stereo_width(l.data(), r.data(), l.size());
 }
 
@@ -278,7 +285,8 @@ val js_metering_vectorscope(val left, val right, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> l;
   std::vector<float> r;
-  ensureStereoPair(left, right, sample_rate, "meteringVectorscope", &l, &r);
+  ensureStereoPair("vectorscope", "left", "right", left, right, sample_rate, "meteringVectorscope",
+                   &l, &r);
   std::vector<metering::VectorscopePoint> points =
       metering::vectorscope(l.data(), r.data(), l.size());
   std::vector<float> mid(points.size());
@@ -303,7 +311,8 @@ val js_metering_vectorscope_decimated(val left, val right, const val& sample_rat
       static_cast<std::size_t>(checkedUintFromVal(max_points_val, "maxPoints"));
   std::vector<float> l;
   std::vector<float> r;
-  ensureStereoPair(left, right, sample_rate, "meteringVectorscopeDecimated", &l, &r);
+  ensureStereoPair("vectorscope", "left", "right", left, right, sample_rate,
+                   "meteringVectorscopeDecimated", &l, &r);
   std::vector<metering::VectorscopePoint> points =
       metering::vectorscope(l.data(), r.data(), l.size(), max_points);
   std::vector<float> mid(points.size());
@@ -322,7 +331,8 @@ val js_metering_phase_scope(val left, val right, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> l;
   std::vector<float> r;
-  ensureStereoPair(left, right, sample_rate, "meteringPhaseScope", &l, &r);
+  ensureStereoPair("phase_scope", "left", "right", left, right, sample_rate, "meteringPhaseScope",
+                   &l, &r);
   metering::PhaseScopeResult result = metering::phase_scope(l.data(), r.data(), l.size());
   return phaseScopeToVal(result);
 }
@@ -338,7 +348,8 @@ val js_metering_phase_scope_decimated(val left, val right, const val& sample_rat
       static_cast<std::size_t>(checkedUintFromVal(max_points_val, "maxPoints"));
   std::vector<float> l;
   std::vector<float> r;
-  ensureStereoPair(left, right, sample_rate, "meteringPhaseScopeDecimated", &l, &r);
+  ensureStereoPair("phase_scope", "left", "right", left, right, sample_rate,
+                   "meteringPhaseScopeDecimated", &l, &r);
   metering::PhaseScopeResult result =
       metering::phase_scope(l.data(), r.data(), l.size(), max_points);
   return phaseScopeToVal(result);
@@ -346,7 +357,7 @@ val js_metering_phase_scope_decimated(val left, val right, const val& sample_rat
 
 val js_metering_spectrum(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("spectrum", "samples", samples, sample_rate);
   metering::SpectrumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "nFft")) {
@@ -443,8 +454,8 @@ val js_metering_spectrum_frame(val samples, const val& sample_rate_val, double f
   }
   // The loader hands back the frame alone, clamped, so the frame starts at 0 of
   // what it returned -- the same shape the C ABI passes to its prevalidated call.
-  Audio audio = loadValidatedAudioWindow(samples, sample_rate, frame_offset,
-                                         static_cast<std::size_t>(cfg.n_fft));
+  Audio audio = loadValidatedAudioWindow("spectrum_frame", "samples", samples, sample_rate,
+                                         frame_offset, static_cast<std::size_t>(cfg.n_fft));
   metering::SpectrumResult result = metering::spectrum_frame(audio, 0, cfg);
   val out = val::object();
   out.set("frequencies", vectorToFloat32Array(result.frequencies));

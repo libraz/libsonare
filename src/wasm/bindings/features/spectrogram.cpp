@@ -57,7 +57,7 @@ val js_stft(val samples, const val& sample_rate_val, const val& n_fft_val,
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("Spectrogram::compute", "samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -82,7 +82,7 @@ val js_stft_db(val samples, const val& sample_rate_val, const val& n_fft_val,
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("Spectrogram::compute", "samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -112,7 +112,7 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   validate_mel_bounds(fmin, fmax);
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("MelSpectrogram::compute", "samples", samples, sample_rate);
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -157,7 +157,7 @@ val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   validate_mel_bounds(fmin, fmax);
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("MelSpectrogram::mfcc", "samples", samples, sample_rate);
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -206,7 +206,7 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float ref_power = checkedFloatFromVal(ref_power_val, "refPower");
-  const Audio audio = loadValidatedAudio(samples, sample_rate);
+  const Audio audio = loadValidatedAudio("reassigned_spectrogram", "samples", samples, sample_rate);
   validate_positive("reassignedSpectrogram", n_fft, "n_fft");
   validate_positive("reassignedSpectrogram", hop_length, "hop_length");
   if (ref_power < 0.0f) {

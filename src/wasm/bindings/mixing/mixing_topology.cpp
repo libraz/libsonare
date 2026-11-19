@@ -62,9 +62,8 @@ size_t MixerWasm::busCount() const {
   size_t count = 0;
   SonareError err = sonare_mixer_bus_count(mixer_, &count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to read bus count: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to read bus count"));
   }
   return count;
 }
@@ -90,18 +89,16 @@ void MixerWasm::addVcaGroup(std::string id, const val& gain_db_val, val members)
                                                member_ptrs.empty() ? nullptr : member_ptrs.data(),
                                                member_ptrs.size());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to add VCA group: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to add VCA group"));
   }
 }
 
 void MixerWasm::removeVcaGroup(std::string id) {
   SonareError err = sonare_mixer_remove_vca_group(mixer_, wasmCString(id, "id"));
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to remove VCA group: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to remove VCA group"));
   }
 }
 
@@ -109,9 +106,8 @@ void MixerWasm::setVcaGroupGainDb(std::string id, const val& gain_db_val) {
   const float gain_db = checkedFloatFromVal(gain_db_val, "gainDb");
   SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, wasmCString(id, "id"), gain_db);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to set VCA group gain: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to set VCA group gain"));
   }
 }
 
@@ -127,9 +123,8 @@ void MixerWasm::setVcaGroupMembers(std::string id, val members) {
       mixer_, wasmCString(id, "id"), member_ptrs.empty() ? nullptr : member_ptrs.data(),
       member_ptrs.size());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to set VCA group members: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to set VCA group members"));
   }
 }
 
@@ -137,9 +132,8 @@ size_t MixerWasm::vcaGroupCount() const {
   size_t count = 0;
   SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to read VCA group count: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to read VCA group count"));
   }
   return count;
 }
@@ -148,9 +142,8 @@ std::string MixerWasm::toSceneJson() const {
   char* json = nullptr;
   SonareError err = sonare_mixer_to_scene_json(mixer_, &json);
   if (err != SONARE_OK || json == nullptr) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to serialize mixer scene: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to serialize mixer scene"));
   }
   std::string out(json);
   sonare_free_string(json);

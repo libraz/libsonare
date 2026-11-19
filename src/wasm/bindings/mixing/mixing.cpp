@@ -109,9 +109,8 @@ std::string MixerWasm::presetJson(std::string name) {
 void MixerWasm::compile() {
   SonareError err = sonare_mixer_compile(mixer_);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to compile mixer graph: ") + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  cErrorMessage(err, "failed to compile mixer graph"));
   }
   ensureScratchBuffers();
 }
@@ -151,7 +150,7 @@ void MixerWasm::checkStripError(SonareError err, const char* what) {
 
 void MixerWasm::checkStripValueError(SonareError err, const char* what) {
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    throw WasmRangeError(std::string(what) + ": " + sonare_error_message(err));
+    throw WasmRangeError(cErrorMessage(err, what));
   }
   checkStripError(err, what);
 }
@@ -299,8 +298,7 @@ int panModeOrdinalFromVal(val value) {
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 void checkOneShotSetter(SonareError err, const char* what) {
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(what) + ": " + sonare_error_message(err));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, cErrorMessage(err, what));
   }
 }
 
@@ -422,16 +420,14 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
                                                   static_cast<size_t>(count), out_left.data(),
                                                   out_right.data(), length);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidState,
-          std::string("mixer process failed: ") + sonare_error_message(err));
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    cErrorMessage(err, "mixer process failed"));
     }
     // The whole signal was one block: fold the meters' pending group delay in.
     err = sonare_mixer_flush_meters(mixer);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidState,
-          std::string("mixer meter flush failed: ") + sonare_error_message(err));
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    cErrorMessage(err, "mixer meter flush failed"));
     }
     // The per-strip meter snapshots reflect only this single one-shot block.
     // The LUFS fields (momentaryLufs/shortTermLufs/integratedLufs) are

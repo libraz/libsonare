@@ -97,7 +97,8 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
   SONARE_C_API_ENTRY;
   if (out_latency_samples) *out_latency_samples = 0;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
+  SonareError err = validate_audio_params("mastering_dynamics_compressor", "samples", samples,
+                                          length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -114,7 +115,8 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
   SONARE_C_API_ENTRY;
   if (out_latency_samples) *out_latency_samples = 0;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
+  SonareError err =
+      validate_audio_params("mastering_dynamics_gate", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -133,7 +135,8 @@ SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, siz
   SONARE_C_API_ENTRY;
   if (out_latency_samples) *out_latency_samples = 0;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
+  SonareError err = validate_audio_params("mastering_dynamics_transient_shaper", "samples", samples,
+                                          length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY

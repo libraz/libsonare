@@ -131,7 +131,7 @@ val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames
 // listenable. Returns { components: Float32Array[], w, h }.
 val js_decompose_stems(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("decompose_stems", "samples", samples, sample_rate);
   const DecomposeStemsConfig config = readDecomposeStemsConfig("decomposeStems", options);
 
   DecomposeStemsResult result = decompose_stems(audio.data(), audio.size(), sample_rate, config);
@@ -158,8 +158,8 @@ val js_decompose_stems(val samples, const val& sample_rate_val, val options) {
 // component k's signal on channel c.
 val js_decompose_stems_linked(val channels, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const std::vector<Audio> loaded =
-      loadValidatedChannelSet(channels, sample_rate, "decomposeStemsLinked");
+  const std::vector<Audio> loaded = loadValidatedChannelSet(
+      "decompose_stems_linked", "channels", channels, sample_rate, "decomposeStemsLinked");
   const DecomposeStemsConfig config = readDecomposeStemsConfig("decomposeStemsLinked", options);
 
   std::vector<const float*> pointers;
@@ -228,7 +228,8 @@ val js_remix(val samples, val intervals, const val& sample_rate, const val& alig
   // Validate finite samples, non-empty input, and the sample-rate range up front
   // so js_remix rejects exactly what the C ABI's run_offline (sonare_remix) does,
   // rather than copying NaN/Inf through or silently accepting a bad rate.
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("remix", "samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Sample indices must survive as exact integers: converting through float32
   // would round any boundary above 2^24 (16,777,216) and silently misalign the
   // slice. Read the Int32Array straight into int32 storage instead.
@@ -252,7 +253,8 @@ val js_remix(val samples, val intervals, const val& sample_rate, const val& alig
 val js_remix_aligned_intervals(val samples, val intervals, const val& sample_rate,
                                const val& align_zeros_val) {
   const bool align_zeros = alignZerosFromVal(align_zeros_val);
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("align_remix_intervals", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
   if (interval_ints.size() % 2 != 0) {
     throw WasmRangeError("remix intervals must be (start, end) pairs");

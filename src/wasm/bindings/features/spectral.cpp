@@ -48,7 +48,7 @@ val js_spectral_centroid(val samples, const val& sample_rate_val, const val& n_f
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("spectral_centroid", "samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -66,7 +66,7 @@ val js_spectral_bandwidth(val samples, const val& sample_rate_val, const val& n_
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float p = checkedFloatFromVal(p_val, "p");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("spectral_bandwidth", "samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -84,7 +84,7 @@ val js_spectral_rolloff(val samples, const val& sample_rate_val, const val& n_ff
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float roll_percent = checkedFloatFromVal(roll_percent_val, "rollPercent");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("spectral_rolloff", "samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -101,7 +101,7 @@ val js_spectral_flatness(val samples, const val& sample_rate_val, const val& n_f
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("spectral_flatness", "samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -119,7 +119,7 @@ val js_spectral_flux(val samples, const val& sample_rate_val, const val& n_fft_v
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int lag = checkedIntFromVal(lag_val, "lag");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("spectral_flux", "samples", samples, sample_rate);
   StftConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -131,7 +131,7 @@ val js_zero_crossing_rate(val samples, const val& sample_rate_val, const val& fr
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("zero_crossing_rate", "samples", samples, sample_rate);
   std::vector<float> zcr = zero_crossing_rate(audio, frame_length, hop_length);
   return vectorToFloat32Array(zcr);
 }
@@ -141,7 +141,7 @@ val js_rms_energy(val samples, const val& sample_rate_val, const val& frame_leng
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("rms_energy", "samples", samples, sample_rate);
   std::vector<float> rms = rms_energy(audio, frame_length, hop_length);
   return vectorToFloat32Array(rms);
 }
@@ -159,7 +159,7 @@ val js_spectral_contrast(val samples, const val& sample_rate_val, const val& n_f
   const int n_bands = checkedIntFromVal(n_bands_val, "nBands");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float quantile = checkedFloatFromVal(quantile_val, "quantile");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("spectral_contrast", "samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -188,7 +188,7 @@ val js_poly_features(val samples, const val& sample_rate_val, const val& n_fft_v
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int order = checkedIntFromVal(order_val, "order");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("poly_features", "samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;

@@ -505,7 +505,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_free_mastering_stereo_result(&stereo);
   }
 
-  SECTION("audio validation failures clear stale detailed error messages") {
+  SECTION("an audio validation failure replaces a stale detailed error message") {
     auto samples = generate_sine(440.0f, 22050, 0.5f);
     SonareMasteringParam params[] = {{"width", 3.5}};
     SonareMasteringStereoResult stereo{};
@@ -518,7 +518,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     SonareMasteringResult mono{};
     REQUIRE(sonare_mastering_apply_processor("dynamics.compressor", nullptr, samples.size(), 22050,
                                              nullptr, 0, &mono) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(std::string(sonare_last_error_message()).empty());
+    const std::string message = sonare_last_error_message();
+    CHECK(message.find("width") == std::string::npos);
+    CHECK_THAT(message, Catch::Matchers::EndsWith(": samples must be a non-empty buffer"));
   }
 
   SECTION("applies pair processors and analyses") {

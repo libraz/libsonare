@@ -64,7 +64,8 @@ WindowType parseSpectralEditWindow(val window) {
 // optional config bag { nFft, hopLength, window, healRadiusFrames }. Returns the
 // edited audio (same length/sample rate as the input) as a Float32Array.
 val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("spectral_edit", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
 
   SpectralEditConfig config;
   if (!options.isUndefined() && !options.isNull()) {

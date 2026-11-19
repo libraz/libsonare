@@ -309,13 +309,13 @@ float js_detect_bpm(val samples, const val& sample_rate_val, const val& bpm_min_
   if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.bpm_min = *v;
   if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.bpm_max = *v;
   validate_bpm_config(config);
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("detect_bpm", "samples", samples, sample_rate);
   return quick::detect_bpm(audio.data(), audio.size(), sample_rate, config);
 }
 
 val js_detect_key(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("detect_key", "samples", samples, sample_rate);
   Key key = quick::detect_key(audio.data(), audio.size(), sample_rate);
 
   val result = val::object();
@@ -391,7 +391,7 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("detect_key", "samples", samples, sample_rate);
   KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
                                    modes, profile_type, genre_hint);
   config.tuning = tuningFromVal(tuning_val, "tuningCents").value();
@@ -417,7 +417,7 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("detect_key_candidates", "samples", samples, sample_rate);
   KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
                                    modes, profile_type, genre_hint);
   config.tuning = tuningFromVal(tuning_val, "tuningCents").value();
@@ -441,7 +441,7 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
 
 val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("detect_onsets", "samples", samples, sample_rate);
   OnsetDetectConfig config;
   config.n_fft = intProperty(options, "nFft", config.n_fft);
   config.hop_length = intProperty(options, "hopLength", config.hop_length);
@@ -477,14 +477,14 @@ val js_detect_beats(val samples, const val& sample_rate_val, const val& bpm_min_
   BeatConfig config;
   config.bpm_min = tempo.bpm_min;
   config.bpm_max = tempo.bpm_max;
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("detect_beats", "samples", samples, sample_rate);
   std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(), sample_rate, config);
   return vectorToFloat32Array(beats);
 }
 
 val js_detect_downbeats(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("detect_downbeats", "samples", samples, sample_rate);
   std::vector<float> downbeats = quick::detect_downbeats(audio.data(), audio.size(), sample_rate);
   return vectorToFloat32Array(downbeats);
 }
@@ -553,7 +553,7 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
     validateKey(key_root, key_mode);
   }
 
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("ChordAnalyzer", "samples", samples, sample_rate);
 
   const ChordConfig config =
       makeChordConfig(min_duration, smoothing_window, threshold, use_triads_only, n_fft, hop_length,
@@ -593,7 +593,7 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   validateChromaMethod(chroma_method);
   validateKey(key_root, key_mode);
 
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("ChordAnalyzer", "samples", samples, sample_rate);
 
   const ChordConfig config =
       makeChordConfig(min_duration, smoothing_window, threshold, use_triads_only, n_fft, hop_length,
@@ -709,7 +709,7 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
 
 val js_analyze(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("MusicAnalyzer::analyze", "samples", samples, sample_rate);
   const MusicAnalyzerConfig config = musicAnalyzerConfigFromVal(options);
   MusicAnalyzer analyzer(audio, config);
   AnalysisResult result = analyzer.analyze();
@@ -841,7 +841,7 @@ val js_chord_functions(val chords, const val& key_root_val, const val& key_mode_
 val js_analyze_with_progress(val samples, const val& sample_rate_val, val options,
                              val progress_callback, val cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("MusicAnalyzer::analyze", "samples", samples, sample_rate);
   MusicAnalyzer analyzer(audio, musicAnalyzerConfigFromVal(options));
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
     analyzer.set_progress_callback([progress_callback](float progress, const char* stage) {

@@ -277,7 +277,7 @@ val js_extract_notes(val samples, const val& sample_rate_val, val f0_hz, val voi
       noteTrackFromVal(samples, sample_rate, f0_hz, voiced_prob, voiced, frame_rate,
                        config.voiced_threshold, "extractNotes", &cumulative_count);
 
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("extract_notes", "samples", samples, sample_rate);
   return noteObjectsToVal(editing::note_model::extract_notes(audio, track, config));
 }
 
@@ -324,7 +324,7 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
         renderableNoteFromVal(notes[i], f0, frame_rate, has_track, &cumulative_count));
   }
 
-  Audio audio = loadValidatedAudio(samples, rate);
+  Audio audio = loadValidatedAudio("render_notes", "samples", samples, rate);
   Audio result = editing::note_model::render_notes(audio, core_notes, config);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -384,7 +384,7 @@ val js_split_note(val samples, const val& sample_rate_val, val f0_hz, val voiced
     throw WasmRangeError("splitNote: index is outside the note set");
   }
 
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("split_note", "samples", samples, sample_rate);
   const std::vector<editing::note_model::NoteObject> core_notes =
       deriveNoteSet(audio, track, entries, config);
   return noteObjectsToVal(
@@ -408,7 +408,7 @@ val js_merge_notes(val samples, const val& sample_rate_val, val f0_hz, val voice
     throw WasmRangeError("mergeNotes: first and last must be an ascending run inside the set");
   }
 
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("merge_notes", "samples", samples, sample_rate);
   const std::vector<editing::note_model::NoteObject> core_notes =
       deriveNoteSet(audio, track, entries, config);
   return noteObjectsToVal(

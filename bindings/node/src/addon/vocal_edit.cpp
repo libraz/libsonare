@@ -629,7 +629,7 @@ Napi::Object RenderResultToObject(Napi::Env env, const SonareVocalRenderResult& 
 
 Napi::Error MakeVocalError(Napi::Env env, SonareError error,
                            const SonareVocalErrorDetail* detail = nullptr) {
-  const char* message = sonare_error_message(error);
+  const char* message = sonare_node::ErrorMessageForCode(error);
   Napi::Error js_error =
       sonare_node::MakeSonareError(env, error, message == nullptr ? "libsonare error" : message);
   Napi::Object object = js_error.Value();
@@ -947,9 +947,10 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
     const SonareError error = sonare_vocal_render_job_finalize(
         job_, &VocalRenderAsyncWorker::CancelCallback, cancelled_.get(), &result_);
     if (error != SONARE_OK) {
+      // Capture first: the message is this worker thread's last error.
+      CaptureError(error);
       sonare_free_vocal_render_result(&result_);
       result_initialized_ = false;
-      CaptureError(error);
       return;
     }
   }
@@ -999,8 +1000,9 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
     error_code_ = error;
     sonare_vocal_error_detail_init(&detail_);
     sonare_vocal_last_error_detail(&detail_);
-    SetError(sonare_error_message(error) == nullptr ? "vocal render failed"
-                                                    : sonare_error_message(error));
+    // Runs on the render worker thread, whose thread-local holds the refusal's detail.
+    const char* message = sonare_node::ErrorMessageForCode(error);
+    SetError(message == nullptr ? "vocal render failed" : message);
   }
 
   void DetachSignal() {

@@ -74,13 +74,14 @@ struct StereoInput {
   Audio right;
 };
 
-StereoInput loadStereoInput(val left_samples, val right_samples, const val& sample_rate_val,
+StereoInput loadStereoInput(const char* fn, const char* left_name, const char* right_name,
+                            val left_samples, val right_samples, const val& sample_rate_val,
                             const char* entry) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                (std::string(entry) + " input").c_str(), true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  Audio left = loadValidatedAudio(fn, left_name, left_samples, sample_rate);
+  Audio right = loadValidatedAudio(fn, right_name, right_samples, sample_rate);
   return {std::move(left), std::move(right)};
 }
 
@@ -160,7 +161,8 @@ val declickReportToVal(const mastering::repair::DeclickReport& report) {
 }  // namespace
 
 val js_mastering_repair_declick(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("declick", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DeclickConfig cfg =
       readMasteringRepairDeclick(options, "masteringRepairDeclick");
   mastering::repair::DeclickReport report;
@@ -179,7 +181,8 @@ val js_mastering_repair_declick(val samples, const val& sample_rate, val options
 val js_mastering_repair_declick_stereo(val left_samples, val right_samples,
                                        const val& sample_rate_val, val options) {
   const StereoInput in =
-      loadStereoInput(left_samples, right_samples, sample_rate_val, "masteringRepairDeclickStereo");
+      loadStereoInput("declick_stereo", "left", "right", left_samples, right_samples,
+                      sample_rate_val, "masteringRepairDeclickStereo");
   const mastering::repair::DeclickConfig cfg =
       readMasteringRepairDeclick(options, "masteringRepairDeclickStereo");
   mastering::repair::DeclickStereoResult result =
@@ -332,7 +335,8 @@ val denoiseReportToVal(const mastering::repair::DenoiseReport& report) {
 }  // namespace
 
 val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("denoise_classical", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DenoiseClassicalConfig cfg =
       validatedDenoiseConfig(options, "masteringRepairDenoiseClassical");
   mastering::repair::DenoiseReport report;
@@ -350,8 +354,9 @@ val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, v
 // binding sources.
 val js_mastering_repair_denoise_classical_stereo(val left_samples, val right_samples,
                                                  const val& sample_rate_val, val options) {
-  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
-                                         "masteringRepairDenoiseClassicalStereo");
+  const StereoInput in =
+      loadStereoInput("denoise_classical_stereo", "left", "right", left_samples, right_samples,
+                      sample_rate_val, "masteringRepairDenoiseClassicalStereo");
   const mastering::repair::DenoiseClassicalConfig cfg =
       validatedDenoiseConfig(options, "masteringRepairDenoiseClassicalStereo");
   mastering::repair::DenoiseStereoResult result =
@@ -374,7 +379,8 @@ val js_mastering_repair_denoise_classical_linked(val channels, const val& sample
                                                  val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<Audio> loaded =
-      loadValidatedChannelSet(channels, sample_rate, "masteringRepairDenoiseClassicalLinked");
+      loadValidatedChannelSet("denoise_classical_linked", "channels", channels, sample_rate,
+                              "masteringRepairDenoiseClassicalLinked");
   const mastering::repair::DenoiseClassicalConfig cfg =
       validatedDenoiseConfig(options, "masteringRepairDenoiseClassicalLinked");
   const std::vector<const Audio*> pointers = channelSetPointers(loaded);
@@ -392,8 +398,8 @@ val js_mastering_repair_denoise_classical_linked(val channels, const val& sample
 std::string js_mastering_repair_analyze(val channels, const val& sample_rate_val,
                                         const std::string& request_json) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const std::vector<Audio> loaded =
-      loadValidatedChannelSet(channels, sample_rate, "masteringRepairAnalyze");
+  const std::vector<Audio> loaded = loadValidatedChannelSet(
+      "repair_analyze_json", "channels", channels, sample_rate, "masteringRepairAnalyze");
   std::vector<const float*> planes;
   for (const Audio& channel : loaded) planes.push_back(channel.data());
   return mastering::assistant::repair_analyze_json(
@@ -405,8 +411,8 @@ val js_mastering_repair_apply(val channels, const val& sample_rate_val,
                               const std::string& stages_json, val progress_callback,
                               val cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const std::vector<Audio> loaded =
-      loadValidatedChannelSet(channels, sample_rate, "masteringRepairApply");
+  const std::vector<Audio> loaded = loadValidatedChannelSet(
+      "repair_apply_json", "channels", channels, sample_rate, "masteringRepairApply");
   const std::size_t length = loaded.front().size();
   std::vector<const float*> planes;
   std::vector<std::vector<float>> outputs(loaded.size(), std::vector<float>(length));
@@ -469,7 +475,8 @@ val declipReportToVal(const mastering::repair::DeclipReport& report) {
 }  // namespace
 
 val js_mastering_repair_declip(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("declip", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DeclipConfig cfg =
       readMasteringRepairDeclip(options, "masteringRepairDeclip");
   mastering::repair::DeclipReport report;
@@ -488,7 +495,8 @@ val js_mastering_repair_declip(val samples, const val& sample_rate, val options)
 val js_mastering_repair_declip_stereo(val left_samples, val right_samples,
                                       const val& sample_rate_val, val options) {
   const StereoInput in =
-      loadStereoInput(left_samples, right_samples, sample_rate_val, "masteringRepairDeclipStereo");
+      loadStereoInput("declip_stereo", "left", "right", left_samples, right_samples,
+                      sample_rate_val, "masteringRepairDeclipStereo");
   const mastering::repair::DeclipConfig cfg =
       readMasteringRepairDeclip(options, "masteringRepairDeclipStereo");
   mastering::repair::DeclipStereoResult result =
@@ -589,7 +597,8 @@ val decrackleReportToVal(const mastering::repair::DecrackleReport& report) {
 }  // namespace
 
 val js_mastering_repair_decrackle(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("decrackle", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
   mastering::repair::DecrackleReport report;
   Audio result = mastering::repair::decrackle(audio, cfg, &report);
@@ -605,8 +614,9 @@ val js_mastering_repair_decrackle(val samples, const val& sample_rate, val optio
 // WASM binding sources.
 val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
                                          const val& sample_rate_val, val options) {
-  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
-                                         "masteringRepairDecrackleStereo");
+  const StereoInput in =
+      loadStereoInput("decrackle_stereo", "left", "right", left_samples, right_samples,
+                      sample_rate_val, "masteringRepairDecrackleStereo");
   const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
   mastering::repair::DecrackleStereoResult result =
       mastering::repair::decrackle_stereo(in.left, in.right, cfg);
@@ -641,7 +651,8 @@ val dehumReportToVal(const mastering::repair::DehumReport& report) {
 }  // namespace
 
 val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("dehum", "samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
   mastering::repair::DehumReport report;
   Audio result = mastering::repair::dehum(audio, cfg, &report);
@@ -661,7 +672,8 @@ val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) 
 val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
                                      const val& sample_rate_val, val options) {
   const StereoInput in =
-      loadStereoInput(left_samples, right_samples, sample_rate_val, "masteringRepairDehumStereo");
+      loadStereoInput("dehum_stereo", "left", "right", left_samples, right_samples, sample_rate_val,
+                      "masteringRepairDehumStereo");
   const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
   mastering::repair::DehumStereoResult result =
       mastering::repair::dehum_stereo(in.left, in.right, cfg);
@@ -692,7 +704,8 @@ val dereverbReportToVal(const mastering::repair::DereverbReport& report) {
 }  // namespace
 
 val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("dereverb_classical", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DereverbClassicalConfig cfg =
       validatedDereverbConfig(options, "masteringRepairDereverbClassical");
   mastering::repair::DereverbReport report;
@@ -711,8 +724,9 @@ val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, 
 // sources.
 val js_mastering_repair_dereverb_classical_stereo(val left_samples, val right_samples,
                                                   const val& sample_rate_val, val options) {
-  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
-                                         "masteringRepairDereverbClassicalStereo");
+  const StereoInput in =
+      loadStereoInput("dereverb_classical_stereo", "left", "right", left_samples, right_samples,
+                      sample_rate_val, "masteringRepairDereverbClassicalStereo");
   const mastering::repair::DereverbClassicalConfig cfg =
       validatedDereverbConfig(options, "masteringRepairDereverbClassicalStereo");
   mastering::repair::DereverbStereoResult result =
@@ -736,7 +750,8 @@ val js_mastering_repair_dereverb_classical_linked(val channels, const val& sampl
                                                   val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<Audio> loaded =
-      loadValidatedChannelSet(channels, sample_rate, "masteringRepairDereverbClassicalLinked");
+      loadValidatedChannelSet("dereverb_classical_linked", "channels", channels, sample_rate,
+                              "masteringRepairDereverbClassicalLinked");
   const mastering::repair::DereverbClassicalConfig cfg =
       validatedDereverbConfig(options, "masteringRepairDereverbClassicalLinked");
   const std::vector<const Audio*> pointers = channelSetPointers(loaded);
@@ -809,7 +824,8 @@ val trimReportToVal(const mastering::repair::TrimReport& report) {
 }  // namespace
 
 val js_mastering_repair_trim_silence(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("trim_silence", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
       options, mastering::repair::TrimSilenceConfig{}, "masteringRepairTrimSilence");
   mastering::repair::TrimReport report;
@@ -823,8 +839,9 @@ val js_mastering_repair_trim_silence(val samples, const val& sample_rate, val op
 // this file does -- sonare_c_mastering_repair.cpp is not a WASM binding source.
 val js_mastering_repair_trim_silence_stereo(val left_samples, val right_samples,
                                             const val& sample_rate_val, val options) {
-  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
-                                         "masteringRepairTrimSilenceStereo");
+  const StereoInput in =
+      loadStereoInput("trim_silence_stereo", "left", "right", left_samples, right_samples,
+                      sample_rate_val, "masteringRepairTrimSilenceStereo");
   const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
       options, mastering::repair::TrimSilenceConfig{}, "masteringRepairTrimSilenceStereo");
   mastering::repair::TrimSilenceStereoResult result =
@@ -849,7 +866,8 @@ val js_mastering_repair_trim_silence_stereo(val left_samples, val right_samples,
 // ============================================================================
 
 val js_mastering_repair_detect_clicks(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("detect_clicks", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DeclickConfig cfg =
       readMasteringRepairDeclick(options, "masteringRepairDetectClicks");
   return declickDetectionToVal(
@@ -858,7 +876,8 @@ val js_mastering_repair_detect_clicks(val samples, const val& sample_rate, val o
 
 // Pads a buffer shorter than nFft, as the repair does.
 val js_mastering_repair_detect_noise_floor(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("detect_noise_floor", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DenoiseClassicalConfig cfg =
       validatedDenoiseConfig(options, "masteringRepairDetectNoiseFloor");
   return noiseDetectionToVal(
@@ -885,7 +904,8 @@ val js_mastering_repair_noise_band_bins(const val& n_fft_val, const val& sample_
 // clipThresholdDb is the only field that reaches the result; the rest are read so
 // the same config validation runs here as at the repair.
 val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("detect_clipping", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DeclipConfig cfg =
       readMasteringRepairDeclip(options, "masteringRepairDetectClipping");
   return declipDetectionToVal(
@@ -895,7 +915,8 @@ val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val
 // Measured by the median criterion whatever `mode` says: wavelet shrinkage
 // removes crackle without ever deciding a sample is crackle.
 val js_mastering_repair_detect_crackle(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("detect_crackle", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
   return crackleDetectionToVal(
       mastering::repair::detect_crackle(audio.data(), audio.size(), audio.sample_rate(), cfg));
@@ -904,7 +925,8 @@ val js_mastering_repair_detect_crackle(val samples, const val& sample_rate, val 
 // Always runs the estimation path, whatever `adaptive` says: the fixed path
 // notches the configured frequency without ever looking for hum.
 val js_mastering_repair_detect_hum(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("detect_hum", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
   return humDetectionToVal(
       mastering::repair::detect_hum(audio.data(), audio.size(), audio.sample_rate(), cfg));
@@ -912,7 +934,8 @@ val js_mastering_repair_detect_hum(val samples, const val& sample_rate, val opti
 
 // Pads a buffer shorter than nFft, as the repair does.
 val js_mastering_repair_detect_reverb(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("detect_reverb", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DereverbClassicalConfig cfg =
       validatedDereverbConfig(options, "masteringRepairDetectReverb");
   return reverbDetectionToVal(
@@ -922,7 +945,8 @@ val js_mastering_repair_detect_reverb(val samples, const val& sample_rate, val o
 // The range the repair would cut to, paddingSamples already inside it; a buffer
 // with nothing above the threshold reports (length, length).
 val js_mastering_repair_detect_trim_range(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio = loadValidatedAudio("detect_trim_range", "samples", samples,
+                                   checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
       options, mastering::repair::TrimSilenceConfig{}, "masteringRepairDetectTrimRange");
   return trimRangeToVal(
@@ -934,8 +958,9 @@ val js_mastering_repair_detect_trim_range(val samples, const val& sample_rate, v
 // it is rather than widening it to the buffer end.
 val js_mastering_repair_detect_trim_range_stereo(val left_samples, val right_samples,
                                                  const val& sample_rate_val, val options) {
-  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
-                                         "masteringRepairDetectTrimRangeStereo");
+  const StereoInput in =
+      loadStereoInput("detect_trim_range_stereo", "left", "right", left_samples, right_samples,
+                      sample_rate_val, "masteringRepairDetectTrimRangeStereo");
   const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
       options, mastering::repair::TrimSilenceConfig{}, "masteringRepairDetectTrimRangeStereo");
   return trimRangeToVal(mastering::repair::detect_trim_range_stereo(

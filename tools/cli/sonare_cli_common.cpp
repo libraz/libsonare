@@ -215,7 +215,8 @@ Audio load_reference_audio_impl(const CliArgs& args, std::optional<int> expected
   if (expected_size && samples.size() != *expected_size) {
     throw std::invalid_argument("reference length must match input length");
   }
-  validate_offline_audio_input(samples.data(), samples.size(), sample_rate);
+  validate_offline_audio_input("load_audio", "reference", samples.data(), samples.size(),
+                               sample_rate);
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 

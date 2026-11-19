@@ -166,12 +166,18 @@ inline constexpr std::size_t kMaxAudioBufferSize = resource::kMaxOfflineAudioSam
 ///          be asked about the whole length, and only the finiteness scan
 ///          narrows. Both validators below are expressed in terms of this, so
 ///          there is one statement of the policy rather than a second copy.
+///
+///          Every refusal in this group reads "<fn>: <name> <predicate>": @p fn is
+///          the core function the buffer feeds, @p name the caller's parameter.
 /// @throws SonareException(InvalidParameter) for an empty buffer, a
 ///         @p sample_rate outside [kMinAudioSampleRate, kMaxAudioSampleRate], or
 ///         a @p length above kMaxAudioBufferSize.
-void validate_offline_audio_extent(std::size_t length, int sample_rate);
+void validate_offline_audio_extent(const char* fn, const char* name, std::size_t length,
+                                   int sample_rate);
 
 /// @brief Validates an offline-analysis audio buffer (single source of truth).
+/// @param fn            Core function the buffer feeds, the refusal's prefix.
+/// @param name          The caller's name for the buffer.
 /// @param samples       Pointer to mono/interleaved float sample data.
 /// @param length        Number of float samples.
 /// @param sample_rate   Sample rate in Hz.
@@ -179,16 +185,19 @@ void validate_offline_audio_extent(std::size_t length, int sample_rate);
 ///         @p sample_rate outside [kMinAudioSampleRate, kMaxAudioSampleRate], a
 ///         @p length above kMaxAudioBufferSize, or any non-finite sample. Empty
 ///         audio is never a valid zero-length analysis, matching the C ABI.
-void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate);
+void validate_offline_audio_input(const char* fn, const char* name, const float* samples,
+                                  std::size_t length, int sample_rate);
 
 /// @brief The rules of @ref validate_offline_audio_input, reported instead of thrown.
-/// @return nullptr when the buffer satisfies the policy, otherwise the message the
-///         validator would throw with. For a surface that maps the refusal to its own
+/// @return An empty string when the buffer satisfies the policy, otherwise the message
+///         the validator would throw with. For a surface that maps the refusal to its own
 ///         error class.
-const char* offline_audio_input_problem(const float* samples, std::size_t length,
-                                        int sample_rate) noexcept;
+std::string offline_audio_input_problem(const char* fn, const char* name, const float* samples,
+                                        std::size_t length, int sample_rate);
 
 /// @brief Validates an offline-analysis buffer whose analysis reads one window of it.
+/// @param fn            Core function the buffer feeds, the refusal's prefix.
+/// @param name          The caller's name for the buffer.
 /// @param samples       Pointer to mono/interleaved float sample data.
 /// @param length        Number of float samples in the whole buffer.
 /// @param sample_rate   Sample rate in Hz.
@@ -199,8 +208,16 @@ const char* offline_audio_input_problem(const float* samples, std::size_t length
 ///         non-finite sample within [@p scan_offset, @p scan_offset + @p scan_count).
 ///         Samples outside that window are not read, so their value is not a
 ///         precondition of the call.
-void validate_offline_audio_window(const float* samples, std::size_t length, int sample_rate,
-                                   std::size_t scan_offset, std::size_t scan_count);
+void validate_offline_audio_window(const char* fn, const char* name, const float* samples,
+                                   std::size_t length, int sample_rate, std::size_t scan_offset,
+                                   std::size_t scan_count);
+
+/// @brief The finiteness half of the policy, over a copy of part of a buffer.
+/// @param first_index   Index in the caller's buffer of @p samples[0], so the refusal
+///                      names the caller's index rather than the copy's.
+/// @throws SonareException(InvalidParameter) on a non-finite sample.
+void validate_offline_audio_samples(const char* fn, const char* name, const float* samples,
+                                    std::size_t count, std::size_t first_index);
 /// @}
 
 }  // namespace sonare

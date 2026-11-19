@@ -31,16 +31,16 @@ val pitch_result_to_val(const PitchResult& result) {
 }
 
 template <typename PitchFn>
-val run_pitch_track(val samples, const val& sample_rate_val, const val& frame_length_val,
-                    const val& hop_length_val, const val& fmin_val, const val& fmax_val,
-                    const val& threshold_val, bool fill_na, PitchFn pitch) {
+val run_pitch_track(const char* fn, const char* name, val samples, const val& sample_rate_val,
+                    const val& frame_length_val, const val& hop_length_val, const val& fmin_val,
+                    const val& fmax_val, const val& threshold_val, bool fill_na, PitchFn pitch) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio(fn, name, samples, sample_rate);
 
   PitchConfig config;
   config.frame_length = frame_length;
@@ -59,18 +59,20 @@ val run_pitch_track(val samples, const val& sample_rate_val, const val& frame_le
 val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_length_val,
                  const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                  const val& threshold_val) {
-  return run_pitch_track(
-      samples, sample_rate_val, frame_length_val, hop_length_val, fmin_val, fmax_val, threshold_val,
-      /*fill_na=*/false,
-      [](const Audio& audio, const PitchConfig& config) { return yin_track(audio, config); });
+  return run_pitch_track("yin_track", "samples", samples, sample_rate_val, frame_length_val,
+                         hop_length_val, fmin_val, fmax_val, threshold_val,
+                         /*fill_na=*/false, [](const Audio& audio, const PitchConfig& config) {
+                           return yin_track(audio, config);
+                         });
 }
 
 val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_length_val,
                   const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                   const val& threshold_val, bool fill_na) {
   return run_pitch_track(
-      samples, sample_rate_val, frame_length_val, hop_length_val, fmin_val, fmax_val, threshold_val,
-      fill_na, [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
+      "pyin", "samples", samples, sample_rate_val, frame_length_val, hop_length_val, fmin_val,
+      fmax_val, threshold_val, fill_na,
+      [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
 // Exactly one of `voiced_prob` (Float32Array) and `voiced_flags` (Uint8Array) is given.
@@ -146,7 +148,7 @@ float js_estimate_tuning(val samples, const val& sample_rate_val, const val& n_f
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   const float resolution = checkedFloatFromVal(resolution_val, "resolution");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("estimate_tuning", "samples", samples, sample_rate);
   return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 
@@ -183,7 +185,7 @@ val js_piptrack(val samples, const val& sample_rate_val, const val& n_fft_val,
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
-  const Audio audio = loadValidatedAudio(samples, sample_rate);
+  const Audio audio = loadValidatedAudio("piptrack", "samples", samples, sample_rate);
   const PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin, fmax, threshold);
   val out = val::object();
   out.set("nBins", result.n_bins);

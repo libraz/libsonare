@@ -61,10 +61,12 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    *out_bpm = quick::detect_bpm(audio.data(), audio.size(), audio.sample_rate(), config);
-    return SONARE_OK;
-  });
+  return run_offline("detect_bpm", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       *out_bpm = quick::detect_bpm(audio.data(), audio.size(), audio.sample_rate(),
+                                                    config);
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
@@ -72,13 +74,14 @@ SonareError sonare_detect_key(const float* samples, size_t length, int sample_ra
   SONARE_C_API_ENTRY;
   if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate());
-    out_key->root = static_cast<SonarePitchClass>(key.root);
-    out_key->mode = static_cast<SonareMode>(key.mode);
-    out_key->confidence = key.confidence;
-    return SONARE_OK;
-  });
+  return run_offline("detect_key", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate());
+                       out_key->root = static_cast<SonarePitchClass>(key.root);
+                       out_key->mode = static_cast<SonareMode>(key.mode);
+                       out_key->confidence = key.confidence;
+                       return SONARE_OK;
+                     });
 }
 
 SonareError sonare_detect_key_with_options(const float* samples, size_t length, int sample_rate,
@@ -130,21 +133,23 @@ SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, i
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    KeyConfig config;
-    if (!make_key_config(n_fft, hop_length, use_hpss, loudness_weighted, chroma_high_pass_hz, modes,
-                         mode_count, profile_type, genre_hint, &config)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    config.tuning = tuning_from_c(tuning_cents, tuning_auto);
-    float used = 0.0f;
-    Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate(), config, &used);
-    out_key->root = static_cast<SonarePitchClass>(key.root);
-    out_key->mode = static_cast<SonareMode>(key.mode);
-    out_key->confidence = key.confidence;
-    if (out_tuning_cents != nullptr) *out_tuning_cents = tuning_to_cents(used);
-    return SONARE_OK;
-  });
+  return run_offline(
+      "detect_key_with_tuning", "samples", samples, length, sample_rate,
+      [&](const Audio& audio) -> SonareError {
+        KeyConfig config;
+        if (!make_key_config(n_fft, hop_length, use_hpss, loudness_weighted, chroma_high_pass_hz,
+                             modes, mode_count, profile_type, genre_hint, &config)) {
+          return SONARE_ERROR_INVALID_PARAMETER;
+        }
+        config.tuning = tuning_from_c(tuning_cents, tuning_auto);
+        float used = 0.0f;
+        Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate(), config, &used);
+        out_key->root = static_cast<SonarePitchClass>(key.root);
+        out_key->mode = static_cast<SonareMode>(key.mode);
+        out_key->confidence = key.confidence;
+        if (out_tuning_cents != nullptr) *out_tuning_cents = tuning_to_cents(used);
+        return SONARE_OK;
+      });
 }
 
 SonareError sonare_detect_key_candidates(const float* samples, size_t length, int sample_rate,
@@ -196,34 +201,36 @@ SonareError sonare_detect_key_candidates_with_tuning(
     return err;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    KeyConfig config;
-    if (!make_key_config(n_fft, hop_length, use_hpss, loudness_weighted, chroma_high_pass_hz, modes,
-                         mode_count, profile_type, genre_hint, &config)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    // Resolved here so the value used can be reported; measure_tuning reads the analysis rate.
-    config.tuning = tuning_auto != 0 ? measure_tuning(audio) : tuning_from_cents(tuning_cents);
+  return run_offline(
+      "detect_key_candidates_with_tuning", "samples", samples, length, sample_rate,
+      [&](const Audio& audio) -> SonareError {
+        KeyConfig config;
+        if (!make_key_config(n_fft, hop_length, use_hpss, loudness_weighted, chroma_high_pass_hz,
+                             modes, mode_count, profile_type, genre_hint, &config)) {
+          return SONARE_ERROR_INVALID_PARAMETER;
+        }
+        // Resolved here so the value used can be reported; measure_tuning reads the analysis rate.
+        config.tuning = tuning_auto != 0 ? measure_tuning(audio) : tuning_from_cents(tuning_cents);
 
-    const auto candidates =
-        quick::detect_key_candidates(audio.data(), audio.size(), audio.sample_rate(), config);
-    if (out_tuning_cents != nullptr) *out_tuning_cents = tuning_to_cents(*config.tuning);
-    if (candidates.empty()) {
-      return SONARE_OK;
-    }
+        const auto candidates =
+            quick::detect_key_candidates(audio.data(), audio.size(), audio.sample_rate(), config);
+        if (out_tuning_cents != nullptr) *out_tuning_cents = tuning_to_cents(*config.tuning);
+        if (candidates.empty()) {
+          return SONARE_OK;
+        }
 
-    // The count is published with the array, never ahead of an allocation that can throw.
-    std::unique_ptr<SonareKeyCandidate[]> out(new SonareKeyCandidate[candidates.size()]);
-    for (size_t i = 0; i < candidates.size(); ++i) {
-      out[i].key.root = static_cast<SonarePitchClass>(candidates[i].key.root);
-      out[i].key.mode = static_cast<SonareMode>(candidates[i].key.mode);
-      out[i].key.confidence = candidates[i].key.confidence;
-      out[i].correlation = candidates[i].correlation;
-    }
-    *out_candidates = out.release();
-    *out_count = candidates.size();
-    return SONARE_OK;
-  });
+        // The count is published with the array, never ahead of an allocation that can throw.
+        std::unique_ptr<SonareKeyCandidate[]> out(new SonareKeyCandidate[candidates.size()]);
+        for (size_t i = 0; i < candidates.size(); ++i) {
+          out[i].key.root = static_cast<SonarePitchClass>(candidates[i].key.root);
+          out[i].key.mode = static_cast<SonareMode>(candidates[i].key.mode);
+          out[i].key.confidence = candidates[i].key.confidence;
+          out[i].correlation = candidates[i].correlation;
+        }
+        *out_candidates = out.release();
+        *out_count = candidates.size();
+        return SONARE_OK;
+      });
 }
 
 SonareError sonare_detect_beats(const float* samples, size_t length, int sample_rate, float bpm_min,
@@ -243,11 +250,12 @@ SonareError sonare_detect_beats(const float* samples, size_t length, int sample_
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    std::vector<float> beats =
-        quick::detect_beats(audio.data(), audio.size(), audio.sample_rate(), config);
-    return copy_vector(beats, out_times, out_count);
-  });
+  return run_offline("detect_beats", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(),
+                                                                      audio.sample_rate(), config);
+                       return copy_vector(beats, out_times, out_count);
+                     });
 }
 
 SonareError sonare_detect_downbeats(const float* samples, size_t length, int sample_rate,
@@ -257,11 +265,12 @@ SonareError sonare_detect_downbeats(const float* samples, size_t length, int sam
   *out_times = nullptr;
   *out_count = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    std::vector<float> downbeats =
-        quick::detect_downbeats(audio.data(), audio.size(), audio.sample_rate());
-    return copy_vector(downbeats, out_times, out_count);
-  });
+  return run_offline("detect_downbeats", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       std::vector<float> downbeats =
+                           quick::detect_downbeats(audio.data(), audio.size(), audio.sample_rate());
+                       return copy_vector(downbeats, out_times, out_count);
+                     });
 }
 
 SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
@@ -271,11 +280,12 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
   *out_times = nullptr;
   *out_count = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    std::vector<float> onsets =
-        quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate());
-    return copy_vector(onsets, out_times, out_count);
-  });
+  return run_offline("detect_onsets", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       std::vector<float> onsets =
+                           quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate());
+                       return copy_vector(onsets, out_times, out_count);
+                     });
 }
 
 SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sample_rate,
@@ -305,14 +315,15 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
       err != SONARE_OK) {
     return err;
   }
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    // Through quick:: rather than the core, so this differs from
-    // sonare_detect_onsets only in the configuration. Going direct also dropped
-    // the resample, which reinterprets every frame-counted field in the config.
-    std::vector<float> onsets =
-        quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate(), native);
-    return copy_vector(onsets, out_times, out_count);
-  });
+  return run_offline("detect_onsets_ex", "samples", samples, length, sample_rate,
+                     [&](const Audio& audio) -> SonareError {
+                       // Through quick:: rather than the core, so this differs from
+                       // sonare_detect_onsets only in the configuration. Going direct also dropped
+                       // the resample, which reinterprets every frame-counted field in the config.
+                       std::vector<float> onsets = quick::detect_onsets(
+                           audio.data(), audio.size(), audio.sample_rate(), native);
+                       return copy_vector(onsets, out_times, out_count);
+                     });
 }
 
 // Full quick analysis. Although SonareAnalysisResult is a flat C struct, it
@@ -330,11 +341,12 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
   // garbage beat_count) pair (matches sonare_analyze_melody).
   *out = {};
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    AnalysisResult result = quick::analyze(audio.data(), audio.size(), audio.sample_rate());
+  return run_offline(
+      "analyze", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        AnalysisResult result = quick::analyze(audio.data(), audio.size(), audio.sample_rate());
 
-    return fill_analysis_result(result, out);
-  });
+        return fill_analysis_result(result, out);
+      });
 }
 
 // Full analysis serialized to a camelCase JSON object (chords, sections,
@@ -442,25 +454,27 @@ SonareError sonare_analyze_json_ex_with_progress(
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    MusicAnalyzer analyzer(audio, music_analyzer_config_from_options(*options));
-    if (callback != nullptr) {
-      analyzer.set_progress_callback([callback, user_data](float progress, const char* stage) {
-        callback(progress, stage, user_data);
+  return run_offline(
+      "analyze_json_ex_with_progress", "samples", samples, length, sample_rate,
+      [&](const Audio& audio) -> SonareError {
+        MusicAnalyzer analyzer(audio, music_analyzer_config_from_options(*options));
+        if (callback != nullptr) {
+          analyzer.set_progress_callback([callback, user_data](float progress, const char* stage) {
+            callback(progress, stage, user_data);
+          });
+        }
+        if (cancel_cb != nullptr) {
+          analyzer.set_cancel_callback(
+              [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
+          auto result = analyzer.analyze_cancellable();
+          if (!result) return SONARE_ERROR_CANCELLED;
+          *out_json = copy_string(analysis_result_to_json(*result));
+        } else {
+          AnalysisResult result = analyzer.analyze();
+          *out_json = copy_string(analysis_result_to_json(result));
+        }
+        return SONARE_OK;
       });
-    }
-    if (cancel_cb != nullptr) {
-      analyzer.set_cancel_callback(
-          [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
-      auto result = analyzer.analyze_cancellable();
-      if (!result) return SONARE_ERROR_CANCELLED;
-      *out_json = copy_string(analysis_result_to_json(*result));
-    } else {
-      AnalysisResult result = analyzer.analyze();
-      *out_json = copy_string(analysis_result_to_json(result));
-    }
-    return SONARE_OK;
-  });
 }
 
 SonareMeterOptions sonare_meter_options_default(void) {

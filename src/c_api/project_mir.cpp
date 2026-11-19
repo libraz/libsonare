@@ -98,7 +98,8 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
   if (out_count) *out_count = 0;
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   if (capacity > 0 && !candidates) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(audio, len, sample_rate);
+  SonareError err =
+      validate_audio_params("project_analyze_tempo", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =
@@ -129,7 +130,8 @@ SonareError sonare_project_analyze_tempo_with_options(const SonareProject* proje
   const SonareProjectTempoOptions resolved =
       options ? *options : sonare_project_tempo_options_default();
   if (!tempo_options_valid(resolved)) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(audio, len, sample_rate);
+  SonareError err =
+      validate_audio_params("project_analyze_tempo_with_options", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =
@@ -159,7 +161,8 @@ SonareError sonare_project_auto_tempo_with_options(SonareProject* project, const
   const SonareProjectTempoOptions resolved =
       options ? *options : sonare_project_tempo_options_default();
   if (!tempo_options_valid(resolved)) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(audio, len, sample_rate);
+  SonareError err =
+      validate_audio_params("project_auto_tempo_with_options", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =
@@ -193,7 +196,8 @@ SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* au
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bpm) *out_bpm = 0.0f;
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(audio, len, sample_rate);
+  SonareError err =
+      validate_audio_params("project_auto_tempo_ex", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =

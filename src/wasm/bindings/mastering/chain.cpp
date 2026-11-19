@@ -17,7 +17,7 @@ val js_mastering(val samples, const val& sample_rate_val, const val& target_lufs
   const float target_lufs = checkedFloatFromVal(target_lufs_val, "targetLufs");
   const float ceiling_dbtp = checkedFloatFromVal(ceiling_dbtp_val, "ceilingDbtp");
   const float release_ms = checkedFloatFromVal(release_ms_val, "releaseMs");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio audio = loadValidatedAudio("loudness_optimize", "samples", samples, sample_rate);
 
   mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs = target_lufs;
@@ -61,7 +61,8 @@ mastering::api::MasteringChainConfig masteringChainConfigFromDocument(const val&
 val js_mastering_chain(val samples, const val& sample_rate_val, val config) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  validate_offline_audio_input("MasteringChain::process_mono", "samples", data.data(), data.size(),
+                               sample_rate);
   mastering::api::MasteringChain chain(masteringChainConfigFromDocument(config));
   return masteringMonoResultToVal(chain.process_mono(data.data(), data.size(), sample_rate));
 }
@@ -73,8 +74,10 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, const val& sa
                                "masteringChainStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  validate_offline_audio_input(left.data(), left.size(), sample_rate);
-  validate_offline_audio_input(right.data(), right.size(), sample_rate);
+  validate_offline_audio_input("MasteringChain::process_stereo", "left", left.data(), left.size(),
+                               sample_rate);
+  validate_offline_audio_input("MasteringChain::process_stereo", "right", right.data(),
+                               right.size(), sample_rate);
 
   mastering::api::MasteringChain chain(masteringChainConfigFromDocument(config));
   return masteringStereoResultToVal(
@@ -92,7 +95,8 @@ val streamingLoudnessGainToVal(const mastering::api::StreamingLoudnessGain& gain
 val js_mastering_streaming_loudness_gain(val samples, const val& sample_rate_val, val config) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  validate_offline_audio_input("streaming_loudness_gain_mono", "samples", data.data(), data.size(),
+                               sample_rate);
   return streamingLoudnessGainToVal(mastering::api::streaming_loudness_gain_mono(
       masteringChainConfigFromDocument(config, true), data.data(), data.size(), sample_rate));
 }
@@ -104,8 +108,10 @@ val js_mastering_streaming_loudness_gain_stereo(val left_samples, val right_samp
                                "streamingLoudnessGainStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  validate_offline_audio_input(left.data(), left.size(), sample_rate);
-  validate_offline_audio_input(right.data(), right.size(), sample_rate);
+  validate_offline_audio_input("streaming_loudness_gain_stereo", "left", left.data(), left.size(),
+                               sample_rate);
+  validate_offline_audio_input("streaming_loudness_gain_stereo", "right", right.data(),
+                               right.size(), sample_rate);
   return streamingLoudnessGainToVal(mastering::api::streaming_loudness_gain_stereo(
       masteringChainConfigFromDocument(config, true), left.data(), right.data(), left.size(),
       sample_rate));
@@ -116,7 +122,8 @@ val js_mastering_chain_with_progress(val samples, const val& sample_rate_val, va
                                      val progress_callback, val cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  validate_offline_audio_input("MasteringChain::process_mono", "samples", data.data(), data.size(),
+                               sample_rate);
   mastering::api::MasteringChain chain(masteringChainConfigFromDocument(config));
   installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result = chain.process_mono_cancellable(data.data(), data.size(), sample_rate);
@@ -136,8 +143,10 @@ val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples,
                                "masteringChainStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  validate_offline_audio_input(left.data(), left.size(), sample_rate);
-  validate_offline_audio_input(right.data(), right.size(), sample_rate);
+  validate_offline_audio_input("MasteringChain::process_stereo", "left", left.data(), left.size(),
+                               sample_rate);
+  validate_offline_audio_input("MasteringChain::process_stereo", "right", right.data(),
+                               right.size(), sample_rate);
 
   mastering::api::MasteringChain chain(masteringChainConfigFromDocument(config));
   installMasteringChainCallbacks(chain, progress_callback, cancel_callback);

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "core/audio_io.h"
 #include "core/audio_io_detail.h"
@@ -17,64 +18,80 @@ Audio::Audio(std::shared_ptr<const std::vector<float>> buffer, size_t offset, si
 
 namespace {
 
-const char* extent_problem(std::size_t length, int sample_rate) noexcept {
-  if (length == 0) return "audio input must be a non-empty buffer";
-  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
-    return "sample_rate is out of the supported range";
-  }
-  if (length > kMaxAudioBufferSize) return "audio buffer is too large";
-  return nullptr;
+std::string refusal(const char* fn, const char* name, const char* predicate) {
+  return std::string(fn) + ": " + name + " " + predicate;
 }
 
-const char* finite_range_problem(const float* samples, std::size_t begin,
-                                 std::size_t end) noexcept {
-  for (std::size_t i = begin; i < end; ++i) {
-    if (!std::isfinite(samples[i])) return "audio buffer contains a non-finite sample";
+std::string extent_problem(const char* fn, const char* name, std::size_t length, int sample_rate) {
+  if (length == 0) return refusal(fn, name, "must be a non-empty buffer");
+  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
+    return refusal(fn, "sample_rate", "is out of the supported range");
   }
-  return nullptr;
+  if (length > kMaxAudioBufferSize) return refusal(fn, name, "is too large");
+  return {};
+}
+
+// first_index is the caller's index of samples[0], so a scanned copy reports the caller's index.
+std::string finite_range_problem(const char* fn, const char* name, const float* samples,
+                                 std::size_t begin, std::size_t end, std::size_t first_index) {
+  for (std::size_t i = begin; i < end; ++i) {
+    if (!std::isfinite(samples[i])) {
+      return refusal(fn, name, "contains a non-finite sample at index ") +
+             std::to_string(first_index + i);
+    }
+  }
+  return {};
+}
+
+[[noreturn]] void refuse(const std::string& problem) {
+  throw SonareException(ErrorCode::InvalidParameter, problem);
 }
 
 // The O(1) preconditions, which describe the buffer as a whole and so are
 // identical for a whole-buffer and a windowed validation.
-void check_offline_audio_bounds(const float* samples, std::size_t length, int sample_rate) {
-  SONARE_CHECK_MSG(samples != nullptr, ErrorCode::InvalidParameter,
-                   "audio input must be a non-empty buffer");
-  validate_offline_audio_extent(length, sample_rate);
-}
-
-void check_finite_range(const float* samples, std::size_t begin, std::size_t end) {
-  if (const char* problem = finite_range_problem(samples, begin, end)) {
-    SONARE_CHECK_MSG(false, ErrorCode::InvalidParameter, problem);
-  }
+void check_offline_audio_bounds(const char* fn, const char* name, const float* samples,
+                                std::size_t length, int sample_rate) {
+  if (samples == nullptr) refuse(refusal(fn, name, "must be a non-empty buffer"));
+  validate_offline_audio_extent(fn, name, length, sample_rate);
 }
 
 }  // namespace
 
-void validate_offline_audio_extent(std::size_t length, int sample_rate) {
-  if (const char* problem = extent_problem(length, sample_rate)) {
-    SONARE_CHECK_MSG(false, ErrorCode::InvalidParameter, problem);
-  }
+void validate_offline_audio_extent(const char* fn, const char* name, std::size_t length,
+                                   int sample_rate) {
+  const std::string problem = extent_problem(fn, name, length, sample_rate);
+  if (!problem.empty()) refuse(problem);
 }
 
-const char* offline_audio_input_problem(const float* samples, std::size_t length,
-                                        int sample_rate) noexcept {
-  if (samples == nullptr) return "audio input must be a non-empty buffer";
-  if (const char* problem = extent_problem(length, sample_rate)) return problem;
-  return finite_range_problem(samples, 0, length);
+std::string offline_audio_input_problem(const char* fn, const char* name, const float* samples,
+                                        std::size_t length, int sample_rate) {
+  if (samples == nullptr) return refusal(fn, name, "must be a non-empty buffer");
+  std::string problem = extent_problem(fn, name, length, sample_rate);
+  if (!problem.empty()) return problem;
+  return finite_range_problem(fn, name, samples, 0, length, 0);
 }
 
-void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate) {
-  check_offline_audio_bounds(samples, length, sample_rate);
-  check_finite_range(samples, 0, length);
+void validate_offline_audio_input(const char* fn, const char* name, const float* samples,
+                                  std::size_t length, int sample_rate) {
+  check_offline_audio_bounds(fn, name, samples, length, sample_rate);
+  validate_offline_audio_samples(fn, name, samples, length, 0);
 }
 
-void validate_offline_audio_window(const float* samples, std::size_t length, int sample_rate,
-                                   std::size_t scan_offset, std::size_t scan_count) {
-  check_offline_audio_bounds(samples, length, sample_rate);
+void validate_offline_audio_window(const char* fn, const char* name, const float* samples,
+                                   std::size_t length, int sample_rate, std::size_t scan_offset,
+                                   std::size_t scan_count) {
+  check_offline_audio_bounds(fn, name, samples, length, sample_rate);
   // Clamp rather than add: scan_offset + scan_count overflows on a caller-supplied offset.
   const std::size_t begin = std::min(scan_offset, length);
   const std::size_t end = begin + std::min(scan_count, length - begin);
-  check_finite_range(samples, begin, end);
+  const std::string problem = finite_range_problem(fn, name, samples, begin, end, 0);
+  if (!problem.empty()) refuse(problem);
+}
+
+void validate_offline_audio_samples(const char* fn, const char* name, const float* samples,
+                                    std::size_t count, std::size_t first_index) {
+  const std::string problem = finite_range_problem(fn, name, samples, 0, count, first_index);
+  if (!problem.empty()) refuse(problem);
 }
 
 Audio Audio::from_buffer(const float* samples, size_t size, int sample_rate) {
