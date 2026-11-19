@@ -7,8 +7,11 @@ check that consumes them is ``cli_contract_manifest.validate_manifest``.
 
 from __future__ import annotations
 
+import ast
+import functools
 import math
 import re
+from pathlib import Path
 from typing import Any
 
 _TOP_LEVEL_KEYS = {
@@ -32,6 +35,18 @@ _STATUSES = {"active", "pending", "native_only", "python_only", "intentional_var
 # expires with the port, the way an allowlist entry expires with its drift.
 _REASON_KINDS = {"by_design", "unported"}
 _MIN_REASON_LENGTH = 24
+# A reason pointing a caller at a library function names it as ``libsonare.<name>()``
+# and the name must be exported by the Python package, so a renamed or invented
+# entry point fails here instead of reading as a route that exists.
+_PYTHON_PACKAGE_INIT = (
+    Path(__file__).resolve().parents[2]
+    / "bindings"
+    / "python"
+    / "src"
+    / "libsonare"
+    / "__init__.py"
+)
+_CITED_CALL = re.compile(r"(?<![\w.])((?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*)\(\)")
 # Build options that decide whether the native binary answers a command at all.
 # Spelled as the capability descriptor spells them (``doctor --json`` ->
 # ``features``), because that descriptor is what the checker asks a binary about
@@ -280,6 +295,39 @@ def _validate_command_reason(
             f"{label}.reason: expected a sentence of at least "
             f"{_MIN_REASON_LENGTH} characters saying why"
         )
+        return
+    exports = _python_package_exports()
+    for cited in _CITED_CALL.findall(reason):
+        module, _, name = cited.rpartition(".")
+        if module != "libsonare":
+            errors.append(
+                f"{label}.reason: cites {cited}(); write a library entry point as libsonare.<name>()"
+            )
+        elif name not in exports:
+            errors.append(
+                f"{label}.reason: cites {cited}(), which the Python package does not export"
+            )
+
+
+@functools.cache
+def _python_package_exports() -> frozenset[str]:
+    """The names ``libsonare.__all__`` lists, read from the source without importing it."""
+    tree = ast.parse(_PYTHON_PACKAGE_INIT.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Add):
+            targets, value = [node.target], node.value
+        else:
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == "__all__" for t in targets):
+            continue
+        # literal_eval refuses a computed element rather than silently skipping an export.
+        names.update(ast.literal_eval(value))
+    if not names:
+        raise RuntimeError(f"{_PYTHON_PACKAGE_INIT}: no __all__ found")
+    return frozenset(names)
 
 
 def _exact(value: Any, keys: set[str], label: str, errors: list[str]) -> bool:

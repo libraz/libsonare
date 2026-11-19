@@ -5882,7 +5882,7 @@
       "status": "native_only",
       "option_status": "pending",
       "reason_kind": "by_design",
-      "reason": "a convenience bundle over metering_peak_db(), metering_rms_db() and metering_crest_factor_db(), each already a Python entry point"
+      "reason": "a convenience bundle over libsonare.metering_peak_db(), libsonare.metering_rms_db() and libsonare.metering_crest_factor_db(), each already a Python entry point"
     },
     "clipping": {
       "classification": "native_only",
@@ -5903,7 +5903,7 @@
       "status": "native_only",
       "option_status": "pending",
       "reason_kind": "by_design",
-      "reason": "the two figures are Python entry points already, libsonare.metering_stereo_correlation() and metering_stereo_width()"
+      "reason": "the two figures are Python entry points already, libsonare.metering_stereo_correlation() and libsonare.metering_stereo_width()"
     },
     "phase": {
       "classification": "native_only",

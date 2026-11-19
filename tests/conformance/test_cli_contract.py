@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import re
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -820,6 +822,45 @@ class CliContractSelfTest(unittest.TestCase):
         candidate["commands"]["cqt"]["reason"] = "TODO"
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(any("commands.cqt.reason" in error for error in errors), errors)
+
+    def test_a_reason_citing_a_function_the_package_does_not_export_is_rejected(self) -> None:
+        """A route a reason sends the caller down must exist on the Python side."""
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["onset-env"]["reason"] = (
+            "a librosa-style primitive; a Python caller reaches it as libsonare.onset_envelope()"
+        )
+        errors = CHECKER.validate_manifest(candidate)
+        self.assertIn(
+            "manifest.commands.onset-env.reason: cites libsonare.onset_envelope(), "
+            "which the Python package does not export",
+            errors,
+        )
+
+    def test_a_reason_cites_a_function_through_the_package_name(self) -> None:
+        """A bare name cannot be resolved, so it cannot be checked either."""
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["onset-env"]["reason"] = (
+            "a librosa-style primitive; a Python caller reaches it as onset_strength()"
+        )
+        errors = CHECKER.validate_manifest(candidate)
+        self.assertIn(
+            "manifest.commands.onset-env.reason: cites onset_strength(); "
+            "write a library entry point as libsonare.<name>()",
+            errors,
+        )
+
+    def test_every_function_a_reason_cites_is_resolved(self) -> None:
+        """With nothing exported, every citation the ledger carries must fail."""
+        schema = sys.modules["cli_contract_schema"]
+        cited = sum(
+            len(re.findall(r"libsonare\.\w+\(\)", record.get("reason", "")))
+            for record in self.manifest["commands"].values()
+        )
+        self.assertGreater(cited, 30)
+        with mock.patch.object(schema, "_python_package_exports", return_value=frozenset()):
+            errors = CHECKER.validate_manifest(copy.deepcopy(self.manifest))
+        unresolved = [e for e in errors if "which the Python package does not export" in e]
+        self.assertEqual(len(unresolved), cited, errors)
 
     def test_a_requires_entry_names_a_build_feature_the_binary_can_report(self) -> None:
         """A gate the capability descriptor cannot name is one nothing can satisfy.
