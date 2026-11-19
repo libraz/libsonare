@@ -557,17 +557,14 @@ class Mixer:
         strip: StripRef,
         *,
         azimuth: float = 0.0,
-        elevation: float = 0.0,
         divergence: float = 0.0,
         lfe: float = 0.0,
-        distance: float = 1.0,
     ) -> None:
         """Set a strip's surround pan position (used when feeding a >2-channel bus).
 
-        Phase 1 honors ``azimuth`` (-180..180 deg, 0 = front-center),
-        ``divergence`` (0 = point source, 1 = spread across the front) and
-        ``lfe`` (0..1 send into the LFE plane); ``elevation``/``distance`` are
-        reserved. Applied when the engine's track mixer renders this strip's
+        ``azimuth`` is -180..180 deg (0 = front-center), ``divergence`` runs
+        from 0 (point source) to 1 (spread across the front) and ``lfe`` is the
+        0..1 send into the LFE plane. Applied when the engine's track mixer renders this strip's
         lane into a destination with more than two channels; the stereo-only
         :class:`Mixer` block entry points ignore it.
 
@@ -579,10 +576,10 @@ class Mixer:
         handle = self._strip_handle(strip)
         pan = SonareSurroundPan(
             azimuth=_to_c_float(azimuth, "azimuth"),
-            elevation=_to_c_float(elevation, "elevation"),
+            elevation=0.0,
             divergence=_to_c_float(divergence, "divergence"),
             lfe=_to_c_float(lfe, "lfe"),
-            distance=_to_c_float(distance, "distance"),
+            distance=1.0,
         )
         _check(_get_lib().sonare_strip_set_surround_pan(handle, ctypes.byref(pan)))
 

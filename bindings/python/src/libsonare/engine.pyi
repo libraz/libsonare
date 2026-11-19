@@ -281,10 +281,8 @@ class RealtimeEngine:
         ref: StripRef,
         *,
         azimuth: float = ...,
-        elevation: float = ...,
         divergence: float = ...,
         lfe: float = ...,
-        distance: float = ...,
     ) -> None:
         """Set a track strip's surround pan position; a non-finite or out-of-range value raises
         SonareValueError."""

@@ -149,7 +149,7 @@ def test_mix_stereo_short_option_arrays_leave_defaults_and_long_ones_are_refused
 
 
 @needs_lib
-@pytest.mark.parametrize("field", ["azimuth", "elevation", "divergence", "lfe", "distance"])
+@pytest.mark.parametrize("field", ["azimuth", "divergence", "lfe"])
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), 1e40, True, "1"])
 def test_mixer_surround_pan_names_the_refused_field(field: str, bad: object) -> None:
     import libsonare

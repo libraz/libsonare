@@ -4425,6 +4425,34 @@ rule = "individual"
 
 [[entry]]
 kind = "option"
+old = "Mixer.set_surround_pan(elevation)"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "Mixer.set_surround_pan(distance)"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_surround_pan(elevation)"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_surround_pan(distance)"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "option"
 old = "pitch_pyin(fmin)"
 new = "pitch_pyin(f0_min_hz)"
 domain = "analysis"

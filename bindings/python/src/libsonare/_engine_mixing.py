@@ -686,25 +686,23 @@ class _EngineMixingMixin:
         ref: StripRef,
         *,
         azimuth: float = 0.0,
-        elevation: float = 0.0,
         divergence: float = 0.0,
         lfe: float = 0.0,
-        distance: float = 1.0,
     ) -> None:
         """Set a track strip's surround pan position without a graph rebuild.
 
-        Fields as in :meth:`Mixer.set_surround_pan`; a ``distance`` of 0 or less
-        means the default of 1. Applied when the lane feeds a bus with more than
-        two channels; non-finite or out-of-range ``azimuth`` / ``divergence`` /
-        ``lfe`` raise :class:`SonareValueError` rather than being clamped.
+        Fields as in :meth:`Mixer.set_surround_pan`. Applied when the lane feeds
+        a bus with more than two channels; non-finite or out-of-range
+        ``azimuth`` / ``divergence`` / ``lfe`` raise :class:`SonareValueError`
+        rather than being clamped.
         """
         track_id = _track_only("set_strip_surround_pan", ref)
         pan = SonareSurroundPan(
             azimuth=_to_c_float(azimuth, "azimuth"),
-            elevation=_to_c_float(elevation, "elevation"),
+            elevation=0.0,
             divergence=_to_c_float(divergence, "divergence"),
             lfe=_to_c_float(lfe, "lfe"),
-            distance=_to_c_float(distance, "distance"),
+            distance=1.0,
         )
         _check(
             _get_lib().sonare_engine_set_track_strip_surround_pan(
