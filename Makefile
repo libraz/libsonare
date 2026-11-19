@@ -945,6 +945,8 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_zero_sentinel_filter.py
 	$(CHECK) python3 tests/conformance/check_facade_refusal_ratchet.py
 	$(CHECK) python3 -m unittest tests/conformance/test_facade_refusal_ratchet.py
+	$(CHECK) python3 tests/conformance/check_c_abi_bare_refusals.py
+	$(CHECK) python3 -m unittest tests/conformance/test_c_abi_bare_refusals.py
 	$(CHECK) node tests/conformance/native_entries.cjs --check
 	$(CHECK) node tests/conformance/shared_type_shapes.cjs --check
 	$(CHECK) python3 tests/conformance/check_goniometer_capacity_mirrors.py
