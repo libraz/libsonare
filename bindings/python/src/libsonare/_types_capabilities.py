@@ -46,6 +46,7 @@ MasteringInsertParamUnit = Literal[
     "count",
     "N",
     "midiNote",
+    "bpm",
     "none",
 ]
 """Unit of a mastering insert parameter value."""

@@ -220,10 +220,10 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     assert voice.causal is True
     assert voice.latency_samples > 0
     voice_params = {p.name: p for p in voice.params}
-    semitones = voice_params["retuneSemitones"]
+    semitones = voice_params["retunePitchSemitones"]
     assert (semitones.min, semitones.max, semitones.unit) == (-24, 24, "semitones")
     assert semitones.rt_safe is True
-    for name in ("retuneGrainSize", "limiterEnableIspLimiter", "reverbSeed"):
+    for name in ("retuneGrainSizeSamples", "limiterEnableIspLimiter", "reverbSeed"):
         assert voice_params[name].id is None
         assert voice_params[name].rt_safe is False
 

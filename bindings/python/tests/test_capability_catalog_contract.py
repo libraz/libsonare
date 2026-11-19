@@ -6,7 +6,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 from runpy import run_path
-from typing import Any
+from typing import Any, Literal, get_args, get_origin, get_type_hints
 
 import pytest
 
@@ -135,3 +135,61 @@ def test_an_unbounded_parameter_stays_valid() -> None:
     parameter["min"] = None
     parameter["max"] = None
     validate_catalog(catalog)
+
+
+def _literal_tokens(annotation: object) -> set[object]:
+    """Tokens of a ``Literal`` alias, ``None`` included when the alias is optional."""
+    tokens: set[object] = set()
+    for arg in get_args(annotation):
+        if arg is type(None):
+            tokens.add(None)
+        elif get_origin(arg) is Literal:
+            tokens.update(get_args(arg))
+        else:
+            tokens.add(arg)
+    return tokens
+
+
+def _hints(cls: type) -> dict[str, object]:
+    # Public records report ``libsonare`` as their module, so resolve against the defining one.
+    from libsonare import _types_capabilities
+
+    return get_type_hints(cls, vars(_types_capabilities))
+
+
+def test_python_token_literals_match_the_schema_enums() -> None:
+    """Each catalog token literal names exactly the values the schema enumerates."""
+    from libsonare import (
+        MasteringInsertParamDependency,
+        MasteringInsertParamInfo,
+        MasteringInsertSlot,
+        MasteringPresetCatalogEntry,
+        MasteringProcessorCatalogEntry,
+    )
+
+    schema = json.loads(
+        (ROOT / "schemas/capability-catalog.schema.json").read_text(encoding="utf-8")
+    )
+    processor = schema["properties"]["processors"]["items"]["properties"]
+    parameter = schema["$defs"]["parameter"]["properties"]
+    slot = processor["slots"]["items"]["properties"]
+    preset = schema["properties"]["masteringPresets"]["items"]["properties"]
+    entry = _hints(MasteringProcessorCatalogEntry)
+    info = _hints(MasteringInsertParamInfo)
+    pairs = {
+        "processor.kind": (processor["kind"], entry["kind"]),
+        "processor.realtimeCost": (processor["realtimeCost"], entry["realtime_cost"]),
+        "processor.channelPolicy": (processor["channelPolicy"], entry["channel_policy"]),
+        "slot.activation": (slot["activation"], _hints(MasteringInsertSlot)["activation"]),
+        "parameter.type": (parameter["type"], info["type"]),
+        "parameter.maxRelativeTo": (parameter["maxRelativeTo"], info["max_relative_to"]),
+        "parameter.unit": (parameter["unit"], info["unit"]),
+        "parameter.scale": (parameter["scale"], info["scale"]),
+        "dependsOn.relation": (
+            parameter["dependsOn"]["items"]["properties"]["relation"],
+            _hints(MasteringInsertParamDependency)["relation"],
+        ),
+        "preset.kind": (preset["kind"], _hints(MasteringPresetCatalogEntry)["kind"]),
+    }
+    for where, (node, annotation) in pairs.items():
+        assert set(node["enum"]) == _literal_tokens(annotation), where
