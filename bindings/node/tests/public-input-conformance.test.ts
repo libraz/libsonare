@@ -14,6 +14,10 @@ import {
   masterAudioAsync,
   masterAudioStereo,
   masterAudioStereoAsync,
+  masteringRepairDetectTrimRange,
+  masteringRepairDetectTrimRangeStereo,
+  masteringRepairTrimSilence,
+  masteringRepairTrimSilenceStereo,
   midiBankProgram,
   midiCc,
   midiCcLearn,
@@ -31,6 +35,7 @@ import {
   perNoteControllerName,
   pitchCorrectTimevarying,
   RealtimeEngine,
+  roomMorphStereo,
   StreamingRetune,
   spectralEdit,
   trim,
@@ -1217,5 +1222,104 @@ describe('the streaming retune controls answer the shared corpus on construction
         }
       });
     }
+  }
+});
+
+type TrimSection = {
+  entries: string[];
+  sample_rate: number;
+  mode: Record<string, string>;
+  cases: PendingCase[];
+};
+
+describe('the trim detector fields answer the shared corpus on every trim entry', () => {
+  const section = (corpus as unknown as { trim_detector: TrimSection }).trim_detector;
+  const signal = () => {
+    const x = new Float32Array(4800);
+    for (let i = 1000; i < 3000; i++) {
+      x[i] = 0.5 * Math.sin(i * 0.1);
+    }
+    return x;
+  };
+  const calls: Record<string, (options: Record<string, unknown>) => unknown> = {
+    mastering_repair_trim_silence: (o) =>
+      masteringRepairTrimSilence({
+        samples: signal(),
+        sampleRate: section.sample_rate,
+        ...o,
+      } as never),
+    mastering_repair_trim_silence_stereo: (o) =>
+      masteringRepairTrimSilenceStereo({
+        left: signal(),
+        right: signal(),
+        sampleRate: section.sample_rate,
+        ...o,
+      } as never),
+    mastering_repair_detect_trim_range: (o) =>
+      masteringRepairDetectTrimRange({
+        samples: signal(),
+        sampleRate: section.sample_rate,
+        ...o,
+      } as never),
+    mastering_repair_detect_trim_range_stereo: (o) =>
+      masteringRepairDetectTrimRangeStereo({
+        left: signal(),
+        right: signal(),
+        sampleRate: section.sample_rate,
+        ...o,
+      } as never),
+  };
+  for (const entry of section.entries) {
+    for (const testCase of section.cases) {
+      const pending = testCase.pending?.[SURFACE];
+      const test = pending ? it.fails : it;
+      test(`${entry} ${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
+        const key = camelKey(testCase.key);
+        const call = () =>
+          calls[entry]({ mode: section.mode[testCase.key], [key]: corpusValue(testCase.value) });
+        if (testCase.accepted) {
+          expect(call).not.toThrow();
+          return;
+        }
+        const refusal = `${camelKey(entry)}: ${key} ${testCase.predicate}`;
+        expect(call).toThrow(
+          testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
+        );
+      });
+    }
+  }
+});
+
+type RoomMorphSection = { fn: string; room: Record<string, unknown>; cases: PendingCase[] };
+
+describe('the room morph receiver spacing answers the shared corpus', () => {
+  const section = (corpus as unknown as { room_morph_stereo: RoomMorphSection }).room_morph_stereo;
+  const room = camelRecord(section.room);
+  const impulse = () => {
+    const x = new Float32Array(2000);
+    x[0] = 1;
+    return x;
+  };
+  for (const testCase of section.cases) {
+    const pending = testCase.pending?.[SURFACE];
+    const test = pending ? it.fails : it;
+    test(`${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
+      const key = camelKey(testCase.key);
+      const call = () =>
+        roomMorphStereo({
+          left: impulse(),
+          right: impulse(),
+          ...room,
+          [key]: corpusValue(testCase.value),
+        } as never);
+      if (testCase.accepted) {
+        expect(call).not.toThrow();
+        return;
+      }
+      const refusal = `${camelKey(section.fn)}: ${key} ${testCase.predicate}`;
+      expect(call).toThrow(
+        testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
+      );
+    });
   }
 });

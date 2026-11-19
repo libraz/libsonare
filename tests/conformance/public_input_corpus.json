@@ -351,4 +351,50 @@
       { "id": "mix_past_float", "key": "mix", "value": 1e40, "refused": "range", "predicate": "must be finite and in [0, 1]", "pending": {"node": "the native float reader narrows by the float range ahead of the core domain", "wasm": "the native float reader narrows by the float range ahead of the core domain"} }
     ]
   }
+,
+  "trim_detector": {
+    "entries": ["mastering_repair_trim_silence", "mastering_repair_trim_silence_stereo", "mastering_repair_detect_trim_range", "mastering_repair_detect_trim_range_stereo"],
+    "sample_rate": 48000,
+    "mode": {"threshold_db": "peak", "gate_lufs": "lufsGated", "window_ms": "lufsGated"},
+    "cases": [
+      { "id": "threshold_db_top", "key": "threshold_db", "value": 0, "accepted": true },
+      { "id": "threshold_db_bottom", "key": "threshold_db", "value": -890, "accepted": true },
+      { "id": "threshold_db_below", "key": "threshold_db", "value": -891, "refused": "range", "predicate": "must be finite and in [-890, 0]", "pending": {"node": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain", "wasm": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain"} },
+      { "id": "threshold_db_above", "key": "threshold_db", "value": 1, "refused": "range", "predicate": "must be finite and in [-890, 0]", "pending": {"node": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain", "wasm": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain"} },
+      { "id": "threshold_db_nan", "key": "threshold_db", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in [-890, 0]", "pending": {"node": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain", "wasm": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain"} },
+      { "id": "threshold_db_infinite", "key": "threshold_db", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and in [-890, 0]", "pending": {"node": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain", "wasm": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain"} },
+      { "id": "threshold_db_past_float", "key": "threshold_db", "value": 1e40, "refused": "range", "predicate": "must be finite and in [-890, 0]", "pending": {"node": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain", "wasm": "the binding reads thresholdDb through its own bound and dB-to-linear conversion ahead of the core domain"} },
+      { "id": "threshold_db_wrong_type", "key": "threshold_db", "value": "-60", "refused": "type", "predicate": "must be a number" },
+      { "id": "gate_lufs_top", "key": "gate_lufs", "value": 0, "accepted": true },
+      { "id": "gate_lufs_bottom", "key": "gate_lufs", "value": -144, "accepted": true },
+      { "id": "gate_lufs_below", "key": "gate_lufs", "value": -145, "refused": "range", "predicate": "must be finite and in [-144, 0]", "pending": {"node": "the core refusal reaches the surface with its snake_case key, not respelled to the request member", "wasm": "the core refusal reaches the surface with its snake_case key, not respelled to the request member"} },
+      { "id": "gate_lufs_above", "key": "gate_lufs", "value": 1, "refused": "range", "predicate": "must be finite and in [-144, 0]", "pending": {"node": "the core refusal reaches the surface with its snake_case key, not respelled to the request member", "wasm": "the core refusal reaches the surface with its snake_case key, not respelled to the request member"} },
+      { "id": "gate_lufs_nan", "key": "gate_lufs", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in [-144, 0]", "pending": {"node": "the core refusal reaches the surface with its snake_case key, not respelled to the request member", "wasm": "the native float reader narrows by the float range ahead of the core domain"} },
+      { "id": "gate_lufs_infinite", "key": "gate_lufs", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and in [-144, 0]", "pending": {"node": "the core refusal reaches the surface with its snake_case key, not respelled to the request member", "wasm": "the native float reader narrows by the float range ahead of the core domain"} },
+      { "id": "gate_lufs_past_float", "key": "gate_lufs", "value": 1e40, "refused": "range", "predicate": "must be finite and in [-144, 0]", "pending": {"node": "the native float reader narrows by the float range ahead of the core domain", "wasm": "the native float reader narrows by the float range ahead of the core domain"} },
+      { "id": "gate_lufs_wrong_type", "key": "gate_lufs", "value": "-60", "refused": "type", "predicate": "must be a number" },
+      { "id": "window_ms_top", "key": "window_ms", "value": 10000, "accepted": true },
+      { "id": "window_ms_small", "key": "window_ms", "value": 0.5, "accepted": true },
+      { "id": "window_ms_zero", "key": "window_ms", "value": 0, "refused": "range", "predicate": "must be finite and in (0, 10000]", "pending": {"node": "the core refusal reaches the surface with its snake_case key, not respelled to the request member", "wasm": "the core refusal reaches the surface with its snake_case key, not respelled to the request member"} },
+      { "id": "window_ms_above", "key": "window_ms", "value": 10001, "refused": "range", "predicate": "must be finite and in (0, 10000]", "pending": {"node": "the core refusal reaches the surface with its snake_case key, not respelled to the request member", "wasm": "the core refusal reaches the surface with its snake_case key, not respelled to the request member"} },
+      { "id": "window_ms_nan", "key": "window_ms", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in (0, 10000]", "pending": {"node": "the core refusal reaches the surface with its snake_case key, not respelled to the request member", "wasm": "the native float reader narrows by the float range ahead of the core domain"} },
+      { "id": "window_ms_infinite", "key": "window_ms", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and in (0, 10000]", "pending": {"node": "the core refusal reaches the surface with its snake_case key, not respelled to the request member", "wasm": "the native float reader narrows by the float range ahead of the core domain"} },
+      { "id": "window_ms_past_float", "key": "window_ms", "value": 1e40, "refused": "range", "predicate": "must be finite and in (0, 10000]", "pending": {"node": "the native float reader narrows by the float range ahead of the core domain", "wasm": "the native float reader narrows by the float range ahead of the core domain"} },
+      { "id": "window_ms_wrong_type", "key": "window_ms", "value": "400", "refused": "type", "predicate": "must be a number" }
+    ]
+  },
+  "room_morph_stereo": {
+    "fn": "room_morph_stereo",
+    "room": {"sample_rate": 48000, "length_m": 8, "width_m": 6, "height_m": 3, "absorption": 0.3, "wet": 1, "max_sec": 0.3},
+    "cases": [
+      { "id": "receiver_spacing_m_top", "key": "receiver_spacing_m", "value": 4, "accepted": true },
+      { "id": "receiver_spacing_m_small", "key": "receiver_spacing_m", "value": 0.01, "accepted": true },
+      { "id": "receiver_spacing_m_zero", "key": "receiver_spacing_m", "value": 0, "refused": "range", "predicate": "must be finite and in (0, 4]", "pending": {"wasm": "the binding keeps its own receiverSpacingM bound and text ahead of the core domain"} },
+      { "id": "receiver_spacing_m_above", "key": "receiver_spacing_m", "value": 4.5, "refused": "range", "predicate": "must be finite and in (0, 4]", "pending": {"wasm": "the binding keeps its own receiverSpacingM bound and text ahead of the core domain"} },
+      { "id": "receiver_spacing_m_nan", "key": "receiver_spacing_m", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in (0, 4]", "pending": {"wasm": "the binding keeps its own receiverSpacingM bound and text ahead of the core domain"} },
+      { "id": "receiver_spacing_m_infinite", "key": "receiver_spacing_m", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and in (0, 4]", "pending": {"wasm": "the binding keeps its own receiverSpacingM bound and text ahead of the core domain"} },
+      { "id": "receiver_spacing_m_past_float", "key": "receiver_spacing_m", "value": 1e40, "refused": "range", "predicate": "must be finite and in (0, 4]", "pending": {"wasm": "the binding keeps its own receiverSpacingM bound and text ahead of the core domain"} },
+      { "id": "receiver_spacing_m_wrong_type", "key": "receiver_spacing_m", "value": "0.5", "refused": "type", "predicate": "must be a number", "pending": {"wasm": "the binding keeps its own receiverSpacingM bound and text ahead of the core domain"} }
+    ]
+  }
 }
