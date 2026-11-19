@@ -10187,6 +10187,38 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::refuses a missing sa
 
 [[entry]]
 kind = "option"
+old = "detectKey(modes)"
+changed = "an empty modes list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit it for the default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/empty-list-refusals.test.ts::refuses an empty modes list on the request and positional forms"
+
+[[entry]]
+kind = "option"
+old = "detectKeyCandidates(modes)"
+changed = "an empty modes list is refused with RangeError 'modes must not be empty' (was read as the default mode set); omit it for the default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/empty-list-refusals.test.ts::refuses an empty modes list on the request and positional forms"
+
+[[entry]]
+kind = "option"
+old = "masteringStreamingPreview(platforms)"
+changed = "an empty platforms list is refused with RangeError 'platforms must not be empty' (was read as the built-in set); an entry missing a typed name, targetLufs or ceilingDbtp is a TypeError naming the field; omit the list for the built-in set"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/empty-list-refusals.test.ts::refuses an empty platforms list on the mono and stereo entries"
+
+[[entry]]
+kind = "option"
+old = "masteringStreamingPreviewStereo(platforms)"
+changed = "an empty platforms list is refused with RangeError 'platforms must not be empty' (was read as the built-in set); an entry missing a typed name, targetLufs or ceilingDbtp is a TypeError naming the field; omit the list for the built-in set"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/empty-list-refusals.test.ts::refuses an empty platforms list on the mono and stereo entries"
+
+[[entry]]
+kind = "option"
 old = "detectOnsets(sampleRate)"
 changed = "required second argument (was optional / later position)"
 domain = "analysis"

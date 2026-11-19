@@ -123,7 +123,10 @@ function sectionTypeToken(ordinal: number): Section['type'] {
 
 const ALL_MODE_ORDINALS = [0, 1, 2, 3, 4, 5, 6];
 
-export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {
+export function keyModeValues(
+  fnName: string,
+  modes: KeyDetectionOptions['modes'] | undefined,
+): number[] {
   if (modes === undefined || modes === null) {
     return [];
   }
@@ -135,11 +138,14 @@ export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): 
       return ALL_MODE_ORDINALS;
     }
     throw new RangeError(
-      `modes must be an array of mode names, 'majorMinor', 'all' or 'modal', got '${modes}'`,
+      `${fnName}: modes must be an array of mode names, 'majorMinor', 'all' or 'modal', got '${modes}'`,
     );
   }
   if (!Array.isArray(modes)) {
-    throw new TypeError('modes must be an array or mode-set string');
+    throw new TypeError(`${fnName}: modes must be an array or mode-set string`);
+  }
+  if (modes.length === 0) {
+    throw new RangeError(`${fnName}: modes must not be empty; omit it for the default mode set`);
   }
   return modes.map((mode) => keyModeOrdinal(mode, 'key mode'));
 }

@@ -644,6 +644,9 @@ function nativeKeyOptions(fnName: string, request: KeyDetectionOptions): Record<
   if (modes === 'majorMinor') {
     nativeModes = 'major-minor';
   } else if (Array.isArray(modes)) {
+    if (modes.length === 0) {
+      throw new RangeError(`${fnName}: modes must not be empty; omit it for the default mode set`);
+    }
     modes.forEach((mode, i) => {
       assertClosedToken(fnName, mode, KEY_MODES, `modes[${i}]`);
     });

@@ -104,6 +104,35 @@ export interface MasteringStreamingPreviewRequest {
   platforms?: StreamingPlatform[];
 }
 
+/** The preview targets in the native spelling: absent is the built-in set, an empty list is refused. */
+function previewPlatforms(fnName: string, platforms: unknown): StreamingPlatform[] {
+  if (platforms === undefined || platforms === null) {
+    return [];
+  }
+  if (!Array.isArray(platforms)) {
+    throw new TypeError(`${fnName}: platforms must be an array`);
+  }
+  if (platforms.length === 0) {
+    throw new RangeError(`${fnName}: platforms must not be empty; omit it for the built-in set`);
+  }
+  platforms.forEach((platform, i) => {
+    if (typeof platform !== 'object' || platform === null || Array.isArray(platform)) {
+      throw new TypeError(`${fnName}: platforms[${i}] must be an object`);
+    }
+    const { name, targetLufs, ceilingDbtp } = platform as Record<string, unknown>;
+    if (typeof name !== 'string') {
+      throw new TypeError(`${fnName}: platforms[${i}].name must be a string`);
+    }
+    if (typeof targetLufs !== 'number') {
+      throw new TypeError(`${fnName}: platforms[${i}].targetLufs must be a number`);
+    }
+    if (typeof ceilingDbtp !== 'number') {
+      throw new TypeError(`${fnName}: platforms[${i}].ceilingDbtp must be a number`);
+    }
+  });
+  return platforms as StreamingPlatform[];
+}
+
 /** Request form of {@link masteringStreamingPreviewStereo}. */
 export interface MasteringStreamingPreviewStereoRequest {
   /** Left channel samples. */
@@ -112,7 +141,7 @@ export interface MasteringStreamingPreviewStereoRequest {
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
-  /** Streaming platforms to preview. */
+  /** Delivery targets to preview; absent: the built-in set. */
   platforms?: StreamingPlatform[];
 }
 
@@ -293,7 +322,11 @@ export function masteringStreamingPreview(...args: unknown[]): MasteringStreamin
   const r = sampleOneShot<MasteringStreamingPreviewRequest>('masteringStreamingPreview', args);
   assertAudioInput('masteringStreamingPreview', r.samples, r.sampleRate, r);
   return previewFromNative(
-    addon.masteringStreamingPreview(r.samples, r.sampleRate, r.platforms ?? []),
+    addon.masteringStreamingPreview(
+      r.samples,
+      r.sampleRate,
+      previewPlatforms('masteringStreamingPreview', r.platforms),
+    ),
   );
 }
 
@@ -395,6 +428,11 @@ export function masteringStreamingPreviewStereo(
   assertAudioInput('masteringStreamingPreviewStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringStreamingPreviewStereo', r.right, r.sampleRate, r, 'right');
   return previewFromNative(
-    addon.masteringStreamingPreviewStereo(r.left, r.right, r.sampleRate, r.platforms ?? []),
+    addon.masteringStreamingPreviewStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      previewPlatforms('masteringStreamingPreviewStereo', r.platforms),
+    ),
   );
 }
