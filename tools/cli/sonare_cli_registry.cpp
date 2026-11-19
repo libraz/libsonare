@@ -663,8 +663,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {library_default(with_domain(number_value("min-duration-sec"),
                                              at_least(0.0, CliOptionDomainStage::Parameter)),
                                  "4.0"),
-                 with_domain(number_value("threshold", sonare::kSectionBoundaryThreshold),
-                             at_least(0.0, CliOptionDomainStage::Parameter)),
+                 library_default(with_domain(number_value("threshold"),
+                                             at_least(0.0, CliOptionDomainStage::Parameter)),
+                                 sonare::kSectionBoundaryThreshold),
                  library_default(global_int("n-fft"), "2048"),
                  library_default(global_int("hop-length"), "512")});
     // DynamicsAnalyzer floors a tiny or negative window to avoid a 0/0 rather

@@ -39,8 +39,10 @@ TEST_CASE("CLI JSON numbers keep a dot decimal separator under any host locale",
 TEST_CASE("CLI sections threshold registry follows the core default", "[cli][sections]") {
   const auto* threshold = cli_option_spec_for_command("sections", "threshold");
   REQUIRE(threshold != nullptr);
-  REQUIRE(threshold->default_value.kind == CliOptionDefaultKind::Number);
-  CHECK(threshold->default_value.number_value == kSectionBoundaryThreshold);
+  // Left to the library when absent, so the help states the core value rather than passing it.
+  REQUIRE(threshold->default_value.kind == CliOptionDefaultKind::Null);
+  CHECK(threshold->stated_default == "0.22");
+  CHECK(std::stof(threshold->stated_default) == kSectionBoundaryThreshold);
 }
 
 // Native-only commands have no cross-surface contract, so the conformance
@@ -1784,6 +1786,7 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"chords", p.sine_chords_fast_wav + " --key-context --json -q", "key-root", "D"},
       {"chords", p.sine_chords_fast_wav + " --key-context --json -q", "key-mode", "minor"},
       {"sections", p.sections_wav + " --json -q", "min-duration-sec", "1"},
+      {"sections", p.sections_wav + " --min-duration-sec 1 --json -q", "threshold", "0.9"},
       {"dynamics", p.tone_wav + " --json -q", "window-sec", "0.1"},
       // start-bpm answers only when the estimator finds no tempo, which silence guarantees.
       {"rhythm", p.silent_wav + " --json -q", "start-bpm", "80"},
