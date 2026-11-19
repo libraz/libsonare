@@ -294,15 +294,14 @@ describe('mixing assistant (WASM)', () => {
   });
 
   describe('input validation', () => {
-    it('refuses a zero or negative tempo by name instead of reading it as the fallback', () => {
-      for (const tempoBpm of [0, -120]) {
+    it('refuses a zero, negative or non-finite tempo by name instead of reading it as the fallback', () => {
+      for (const tempoBpm of [0, -120, Number.NaN, Number.POSITIVE_INFINITY]) {
         expect(() =>
           mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: SR, tempoBpm }),
         ).toThrow(
-          expect.objectContaining({
-            name: 'RangeError',
-            message: expect.stringMatching(/tempoBpm/),
-          }),
+          new RangeError(
+            "mixingAssistantSuggest: tempoBpm must be finite and greater than 0; omit it to use the transport's fallback tempo",
+          ),
         );
       }
     });

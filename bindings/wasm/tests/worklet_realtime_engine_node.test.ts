@@ -3869,11 +3869,10 @@ describe('SonareRealtimeEngineNode', () => {
         const position = offline.transportState().samplePosition;
         expect(position).toBe(48000);
         for (const seconds of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
-          expect(() => engine.transport.seekSec(seconds)).toThrow(RangeError);
+          expect(() => engine.transport.seekSec(seconds)).toThrow(
+            new RangeError('SonareEngine.transport.seekSec: timeSec must be finite and at least 0'),
+          );
         }
-        expect(() => engine.transport.seekSec(-1)).toThrow(
-          new RangeError('SonareEngine.transport.seekSec: timeSec must be finite and at least 0'),
-        );
         expect(offline.transportState().samplePosition).toBe(position);
 
         // A refused bus gain leaves the cached bus, so a later mixer sync does not replay it.

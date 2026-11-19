@@ -340,4 +340,33 @@ describe('ClipPageStreamer', () => {
       new TypeError("ClipPageStreamer: unknown request key 'readAhead'"),
     );
   });
+
+  it('refuses each addSource page size out of [1, MAX_SAFE_INTEGER] by name', () => {
+    const streamer = new ClipPageStreamer({ engine: fakeEngine([]) });
+    for (const field of ['pageFrames', 'numSamples'] as const) {
+      for (const value of [0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+        const source = { clipId: 1, binding: {} as never, pageFrames: 4, numSamples: 4000 };
+        expect(() => streamer.addSource({ ...source, [field]: value })).toThrow(
+          new RangeError(
+            `ClipPageStreamer.addSource: ${field} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`,
+          ),
+        );
+      }
+    }
+    streamer.destroy();
+  });
+
+  it('refuses a page count of the wrong type as TypeError and out of range as RangeError', () => {
+    const engine = fakeEngine([]);
+    for (const field of ['readAheadPages', 'retainBehindPages'] as const) {
+      expect(() => new ClipPageStreamer({ engine, [field]: '1' } as never)).toThrow(TypeError);
+      for (const value of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+        expect(() => new ClipPageStreamer({ engine, [field]: value })).toThrow(
+          new RangeError(
+            `ClipPageStreamer: ${field} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`,
+          ),
+        );
+      }
+    }
+  });
 });
