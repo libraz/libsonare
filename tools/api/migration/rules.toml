@@ -922,10 +922,10 @@ compressor = {"sidechain_high_pass_hz": 120.0}
 [[rule.example]]
 surface = "cli"
 before = '''
-sonare chroma song.wav --chroma-highpass 100
+sonare analyze song.wav --chroma-highpass 100
 '''
 after = '''
-sonare chroma song.wav --chroma-high-pass-hz 100
+sonare analyze song.wav --chroma-high-pass-hz 100
 '''
 
 [[rule]]

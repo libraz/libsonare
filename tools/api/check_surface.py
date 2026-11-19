@@ -30,6 +30,7 @@ import fnmatch
 import importlib.util
 import json
 import re
+import shlex
 import sys
 import tomllib
 from dataclasses import dataclass, field
@@ -197,6 +198,74 @@ def load_rules(path: Path, problems: list[str]) -> list[dict]:
         if n > 1:
             problems.append(f"rules.toml: slug {slug} is defined {n} times")
     return rules
+
+
+def _cli_tables(records: list[dict]) -> tuple[set[str], dict[str, set[str]]]:
+    """Commands and long flags of both CLI front-ends, unioned: an example may use either."""
+    cmds = {r["name"] for r in records if r["surface"] in CLI and r["kind"] == "command"}
+    flags: dict[str, set[str]] = collections.defaultdict(set)
+    for r in records:
+        if r["surface"] in CLI and r["kind"] == "flag":
+            flags[r["owner"]].add(r["member"])
+    return cmds, flags
+
+
+def _cli_short_aliases(contract: dict) -> dict[str, set[str]]:
+    """Single-letter aliases per command, which only the contract's option table records."""
+    table = contract.get("inventory", {}).get("expected_options", {})
+    return {
+        c: {a for o in opts for a in o.get("aliases", []) if len(a) == 1}
+        for c, opts in table.items()
+    }
+
+
+def cli_example_problems(
+    rules: list[dict], records: list[dict], base_records: list[dict] | None, contract: dict
+) -> tuple[list[str], list[str]]:
+    """Each CLI example names a command that exists and only flags that command takes.
+
+    `after` is read against the current tree, `before` against the baseline release. A
+    single-letter flag is checked against the contract's alias table, which lists only the
+    commands whose options it records; the rest are reported as not compared.
+    """
+    problems: list[str] = []
+    skipped: list[str] = []
+    short = _cli_short_aliases(contract)
+    sides = [("after", "the current CLI", _cli_tables(records), short)]
+    if base_records is not None:
+        sides.append(("before", BASELINE_TAG, _cli_tables(base_records), None))
+    else:
+        skipped.append(f"rules.toml CLI example before lines against {BASELINE_TAG} (no baseline)")
+    for i, r in enumerate(rules, 1):
+        slug = r.get("slug", "")
+        for ex in r.get("example", []):
+            if ex.get("surface") != "cli":
+                continue
+            for key, label, (cmds, flags), aliases in sides:
+                for line in str(ex.get(key, "")).splitlines():
+                    line = line.split(" #", 1)[0].strip()
+                    if not line.startswith("sonare "):
+                        continue
+                    words = shlex.split(line)[1:]
+                    name = words[0] if words else ""
+                    if len(words) > 1 and f"{words[0]}.{words[1]}" in cmds:
+                        name = f"{words[0]}.{words[1]}"
+                    where = f"rules.toml rule {i} ({slug}): {key} example `{line}`"
+                    if name not in cmds:
+                        problems.append(f"{where}: {label} has no command {name!r}")
+                        continue
+                    for w in words:
+                        if re.fullmatch(r"-\d[\d.]*", w) or not w.startswith("-"):
+                            continue
+                        flag = w.split("=", 1)[0]
+                        if flag.startswith("--"):
+                            if flag[2:] not in flags.get(name, set()):
+                                problems.append(f"{where}: {label} {name} has no {flag}")
+                        elif aliases is None or name not in aliases:
+                            skipped.append(f"{where}: {flag} (no alias table for {name})")
+                        elif flag[1:] not in aliases[name]:
+                            problems.append(f"{where}: {label} {name} has no {flag}")
+    return problems, skipped
 
 
 MIRROR_EVIDENCE = ("in-tree", "recalled")
@@ -2372,6 +2441,14 @@ def run(args) -> tuple[int, list[str], dict]:
 
     problems: list[str] = list(inv.get("errors", []))
     rules = load_rules(args.rules_file, problems)
+    contract_path = root / "tests" / "conformance" / "cli_contract_v2.json"
+    example_problems, example_skipped = cli_example_problems(
+        rules,
+        records,
+        base_inv["records"] if base_inv else None,
+        json.loads(contract_path.read_text(encoding="utf-8")) if contract_path.is_file() else {},
+    )
+    problems += example_problems
     slugs = {r.get("slug") for r in rules}
     mirrors = load_mirrors(args.mirrors_file, problems)
     allow = load_allowlist(args.allowlist_file, problems, CHECK_IDS)
@@ -2431,6 +2508,7 @@ def run(args) -> tuple[int, list[str], dict]:
 
     out.append(f"Validation problems: {len(problems)}")
     out += [f"  {p}" for p in problems]
+    out += [f"  not compared: {s}" for s in example_skipped]
     failed |= bool(problems)
 
     def keep_entry(le):

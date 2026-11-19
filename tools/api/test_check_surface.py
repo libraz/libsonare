@@ -13,6 +13,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -886,6 +887,105 @@ class CliFrontEnds(CheckerCase):
                 _, lines = self.run_check("--surface", "cli-native", "--check", "unit-in-name")
                 bad = [x.strip().split(":")[0] for x in lines if "names a physical quantity" in x]
                 self.assertEqual(bad, expected)
+
+
+class CliExamples(unittest.TestCase):
+    """A rules.toml CLI example names a command that exists and only flags it takes."""
+
+    CURRENT = (
+        _rec("cli-native", "command", "analyze"),
+        _rec(
+            "cli-native",
+            "flag",
+            "analyze --chroma-high-pass-hz",
+            owner="analyze",
+            member="chroma-high-pass-hz",
+        ),
+        _rec("cli-python", "command", "chroma"),
+        _rec("cli-python", "flag", "chroma --n-fft", owner="chroma", member="n-fft"),
+        _rec("cli-native", "command", "project.import-smf"),
+        _rec(
+            "cli-native",
+            "flag",
+            "project.import-smf --output",
+            owner="project.import-smf",
+            member="output",
+        ),
+    )
+    BASE = (
+        _rec("cli-python", "command", "analyze"),
+        _rec(
+            "cli-python",
+            "flag",
+            "analyze --chroma-highpass",
+            owner="analyze",
+            member="chroma-highpass",
+        ),
+    )
+    CONTRACT = types.MappingProxyType(
+        {
+            "inventory": {
+                "expected_options": {"project.import-smf": [{"name": "output", "aliases": ["o"]}]}
+            }
+        }
+    )
+
+    def run_examples(self, before, after, base=BASE):
+        rules = [
+            {"slug": "high-pass", "example": [{"surface": "cli", "before": before, "after": after}]}
+        ]
+        return check_surface.cli_example_problems(
+            rules, list(self.CURRENT), list(base) if base is not None else None, dict(self.CONTRACT)
+        )
+
+    def test_a_flag_on_the_command_that_takes_it_passes(self):
+        problems, skipped = self.run_examples(
+            "sonare analyze song.wav --chroma-highpass 100\n",
+            "sonare analyze song.wav --chroma-high-pass-hz 100  # comment\n",
+        )
+        self.assertEqual((problems, skipped), ([], []))
+
+    def test_a_flag_on_a_sibling_command_fails_on_both_sides(self):
+        problems, _ = self.run_examples(
+            "sonare chroma song.wav --chroma-highpass 100\n",
+            "sonare chroma song.wav --chroma-high-pass-hz 100\n",
+        )
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "rules.toml rule 1 (high-pass): after example `sonare chroma song.wav"
+                    " --chroma-high-pass-hz 100`: the current CLI chroma has no"
+                    " --chroma-high-pass-hz"
+                ),
+                (
+                    "rules.toml rule 1 (high-pass): before example `sonare chroma song.wav"
+                    " --chroma-highpass 100`: v1.10.0 has no command 'chroma'"
+                ),
+            ],
+        )
+
+    def test_a_group_command_short_alias_and_negative_value(self):
+        problems, skipped = self.run_examples(
+            "", "sonare project import-smf song.mid -o p.json\nsonare project import-smf -x -14\n"
+        )
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "rules.toml rule 1 (high-pass): after example `sonare project import-smf"
+                    " -x -14`: the current CLI project.import-smf has no -x"
+                )
+            ],
+        )
+        self.assertEqual(skipped, [])
+
+    def test_without_a_baseline_the_before_side_is_reported_not_compared(self):
+        problems, skipped = self.run_examples("sonare nothing\n", "sonare analyze\n", base=None)
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            skipped, ["rules.toml CLI example before lines against v1.10.0 (no baseline)"]
+        )
 
 
 class CliHelpSentinel(CheckerCase):
