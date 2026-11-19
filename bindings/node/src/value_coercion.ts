@@ -44,15 +44,16 @@ export const CHANNEL_LAYOUT_VALUES: Readonly<Record<ChannelLayout, number>> = {
 export function resolveEnumOrdinal(
   value: unknown,
   values: Readonly<Record<string, number>>,
-  enumName: string,
+  key: string,
 ): number {
+  const allowed = Object.keys(values).join(', ');
   if (typeof value !== 'string') {
-    throw refuseType(`${enumName} must be a name, got ${typeof value}`);
+    throw refuseType(`${key} must be one of ${allowed}`);
   }
   if (Object.hasOwn(values, value)) {
     return values[value] as number;
   }
-  throw refuse(`Invalid ${enumName}: ${value}`);
+  throw refuse(`${key} must be one of ${allowed}`);
 }
 
 /**
@@ -145,24 +146,24 @@ const SEND_TIMING_VALUES: Record<SendTiming, number> = {
   preFader: 1,
 };
 
-export function automationCurveValue(curve: AutomationCurve): number {
-  return resolveEnumOrdinal(curve, AUTOMATION_CURVE_VALUES, 'automation curve');
+export function automationCurveValue(curve: AutomationCurve, key: string): number {
+  return resolveEnumOrdinal(curve, AUTOMATION_CURVE_VALUES, key);
 }
 
-export function panLawValue(panLaw: PanLaw): number {
-  return resolveEnumOrdinal(panLaw, PAN_LAW_VALUES, 'pan law');
+export function panLawValue(panLaw: PanLaw, key: string): number {
+  return resolveEnumOrdinal(panLaw, PAN_LAW_VALUES, key);
 }
 
-export function panModeValue(panMode: PanMode): number {
-  return resolveEnumOrdinal(panMode, PAN_MODE_VALUES, 'pan mode');
+export function panModeValue(panMode: PanMode, key: string): number {
+  return resolveEnumOrdinal(panMode, PAN_MODE_VALUES, key);
 }
 
-export function meterTapValue(tap: MeterTap): number {
-  return resolveEnumOrdinal(tap, METER_TAP_VALUES, 'meter tap');
+export function meterTapValue(tap: MeterTap, key: string): number {
+  return resolveEnumOrdinal(tap, METER_TAP_VALUES, key);
 }
 
-export function sendTimingValue(timing: SendTiming): number {
-  return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, 'send timing');
+export function sendTimingValue(timing: SendTiming, key: string): number {
+  return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, key);
 }
 
 /**

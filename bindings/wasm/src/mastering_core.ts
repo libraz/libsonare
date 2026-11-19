@@ -4,9 +4,10 @@ import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
-import { masteringPlatformNames, masteringPresetNames } from './mastering_chain.js';
+import { masteringPlatformNames } from './mastering_chain.js';
 import { getSonareModule } from './module_state.js';
 import type {
+  CapabilityCatalog,
   LoudnessMatchResult,
   LoudnessMatchStereoResult,
   MasteringAssistantResult,
@@ -43,6 +44,7 @@ import type {
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertClosedToken,
   assertFloatValue,
   assertIntegerValue,
   assertPositiveFloatValue,
@@ -51,7 +53,6 @@ import {
   assertString,
   optionalBoolean,
   requestOnly,
-  requireToken,
   sampleOneShot,
 } from './validation.js';
 
@@ -445,10 +446,11 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
   insert: N,
 ): (keyof MasteringProcessorParams<N> & string)[] {
   return withEntry('masteringInsertParamNames', () => {
-    assertString(insert, 'insert');
-    if (!withEntry('masteringInsertParamNames', () => masteringInsertNames()).includes(insert)) {
-      throw refuse(`unknown insert '${insert}'`);
-    }
+    assertClosedToken(
+      insert,
+      withEntry('masteringInsertParamNames', () => masteringInsertNames()),
+      'insert',
+    );
     return Array.from(
       requireModule().masteringInsertParamNames(insert),
     ) as (keyof MasteringProcessorParams<N> & string)[];
@@ -909,6 +911,14 @@ function profileParams(
   return params;
 }
 
+/** The presets the assistant starts from: every mastering preset, no restoration one. */
+function assistantPresetNames(): MasteringPreset[] {
+  const catalog = parseRecordJson(getSonareModule().capabilityCatalog()) as CapabilityCatalog;
+  return catalog.masteringPresets
+    .filter((entry) => entry.kind === 'mastering')
+    .map((entry) => entry.name as MasteringPreset);
+}
+
 /** Native params of an assistant request, with the two name-valued fields checked against the library's tables. */
 function assistantParams(r: MasteringAssistantSettings): Record<string, number | boolean | string> {
   const params: Record<string, number | boolean | string> = {};
@@ -928,15 +938,12 @@ function assistantParams(r: MasteringAssistantSettings): Record<string, number |
     }
   }
   if (r.targetPlatform !== undefined && r.targetPlatform !== null) {
-    params.targetPlatform = requireToken(
-      r.targetPlatform,
-      'targetPlatform',
-      masteringPlatformNames(),
-      'streaming',
-    );
+    assertClosedToken(r.targetPlatform, masteringPlatformNames(), 'targetPlatform');
+    params.targetPlatform = r.targetPlatform;
   }
   if (r.preset !== undefined && r.preset !== null) {
-    params.preset = requireToken(r.preset, 'preset', masteringPresetNames(), 'streaming');
+    assertClosedToken(r.preset, assistantPresetNames(), 'preset');
+    params.preset = r.preset;
   }
   return params;
 }

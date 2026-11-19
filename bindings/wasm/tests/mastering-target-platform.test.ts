@@ -71,6 +71,9 @@ describe('WASM mastering assistant target platform', () => {
     expect(() =>
       masteringAssistantSuggest({ samples, sampleRate, targetPlatform: 'vinyl' as never }),
     ).toThrow(RangeError);
+    expect(() =>
+      masteringAssistantSuggest({ samples, sampleRate, targetPlatform: 'vinyl' as never }),
+    ).toThrow(/^masteringAssistantSuggest: targetPlatform must be one of /);
   });
 
   it('rejects a numeric target: the index is a C-ABI transport detail', () => {

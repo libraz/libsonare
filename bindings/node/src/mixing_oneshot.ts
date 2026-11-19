@@ -31,10 +31,10 @@ export function mixingScenePresetNames(): MixScenePreset[] {
  */
 export function mixingScenePreset(name: MixScenePreset): MixSceneDocument {
   return withEntry('mixingScenePreset', () => {
-    if (typeof name !== 'string') {
-      throw refuseType('name must be a string');
-    }
     const names = withEntry('mixingScenePreset', () => mixingScenePresetNames());
+    if (typeof name !== 'string') {
+      throw refuseType(`name must be one of ${names.join(', ')}`);
+    }
     if (!names.includes(name)) {
       throw refuse(`name must be one of ${names.join(', ')}`);
     }

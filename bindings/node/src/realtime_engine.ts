@@ -446,14 +446,14 @@ function panLawOf(panLaw: PanLaw): number {
   if (typeof panLaw !== 'string') {
     throw refuseType(`panLaw must be a string`);
   }
-  return panLawValue(panLaw);
+  return panLawValue(panLaw, 'panLaw');
 }
 
 function panModeOf(panMode: PanMode): number {
   if (typeof panMode !== 'string') {
     throw refuseType(`panMode must be a string`);
   }
-  return panModeValue(panMode);
+  return panModeValue(panMode, 'panMode');
 }
 
 function curveName(ordinal: number): AutomationCurve {
@@ -465,7 +465,7 @@ function curveOrdinal(curve: unknown, argName: string): number {
     throw refuseType(`${argName} must be an automation curve name`);
   }
   assertClosedToken(curve, Object.keys(AUTOMATION_CURVE_VALUES), argName);
-  return automationCurveValue(curve as AutomationCurve);
+  return automationCurveValue(curve as AutomationCurve, argName);
 }
 
 function automationPointToNative(point: EngineAutomationPoint): EngineAutomationPoint {

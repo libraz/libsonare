@@ -364,7 +364,7 @@ export function assertClosedToken<T extends string>(
     throw refuseType(`${argName} must be one of ${allowed.join(', ')}`);
   }
   if (!allowed.includes(value as T)) {
-    throw refuse(`${argName} must be one of ${allowed.join(', ')}, got '${value}'`);
+    throw refuse(`${argName} must be one of ${allowed.join(', ')}`);
   }
 }
 
@@ -567,7 +567,9 @@ export function secondsToSampleCount(seconds: number, sampleRate: number, argNam
   assertFiniteScalar(seconds, argName);
   const samples = Math.round(seconds * sampleRate);
   if (!Number.isSafeInteger(samples)) {
-    throw refuse(`${argName} is out of range at ${sampleRate} Hz`);
+    throw refuse(
+      `${argName} must be at most ${Number.MAX_SAFE_INTEGER} samples in magnitude at ${sampleRate} Hz`,
+    );
   }
   return samples;
 }

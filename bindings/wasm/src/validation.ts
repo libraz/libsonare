@@ -546,7 +546,9 @@ export function secondsToSampleCount(seconds: number, sampleRate: number, argNam
   assertFiniteScalar(seconds, argName);
   const samples = Math.round(seconds * sampleRate);
   if (!Number.isSafeInteger(samples)) {
-    throw refuse(`${argName} is out of range at ${sampleRate} Hz`);
+    throw refuse(
+      `${argName} must be at most ${Number.MAX_SAFE_INTEGER} samples in magnitude at ${sampleRate} Hz`,
+    );
   }
   return samples;
 }
@@ -778,6 +780,20 @@ export function requireToken<T extends string>(
   return optionalToken(value, argName, tokens) ?? fallback;
 }
 
+/** A member of a closed string set: `TypeError` unless a string, `RangeError` for an unknown token. */
+export function assertClosedToken<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  argName: string,
+): asserts value is T {
+  if (typeof value !== 'string') {
+    throw refuseType(`${argName} must be one of ${allowed.join(', ')}`);
+  }
+  if (!(allowed as readonly string[]).includes(value)) {
+    throw refuse(`${argName} must be one of ${allowed.join(', ')}`);
+  }
+}
+
 /** {@link requireToken} for a field whose default the library owns: absent stays `undefined`. */
 export function optionalToken<T extends string>(
   value: unknown,
@@ -787,8 +803,10 @@ export function optionalToken<T extends string>(
   if (value === undefined || value === null) {
     return undefined;
   }
-  assertString(value, argName);
-  if (!(tokens as readonly string[]).includes(value as string)) {
+  if (typeof value !== 'string') {
+    throw refuseType(`${argName} must be one of ${tokens.join(', ')}`);
+  }
+  if (!(tokens as readonly string[]).includes(value)) {
     throw refuse(`${argName} must be one of ${tokens.join(', ')}`);
   }
   return value as T;

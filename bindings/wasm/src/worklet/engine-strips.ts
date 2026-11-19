@@ -311,7 +311,7 @@ export function setStripPanLaw(
   panLaw: PanLaw,
 ): void {
   const trackId = trackTarget(ctx, target);
-  const code = panLawCode(panLaw);
+  const code = panLawCode(panLaw, 'panLaw');
   commitSync(
     ctx,
     (offline) => offline.setStripPanLaw(trackId, panLaw),
@@ -330,7 +330,7 @@ export function setStripPanMode(
   panMode: PanMode,
 ): void {
   const trackId = trackTarget(ctx, target);
-  const code = panModeCode(panMode);
+  const code = panModeCode(panMode, 'panMode');
   commitSync(
     ctx,
     (offline) => offline.setStripPanMode(trackId, panMode),
@@ -433,7 +433,7 @@ export function setBusPan(ctx: EngineStripContext, busId: number, pan: number): 
 }
 
 export function setBusPanLaw(ctx: EngineStripContext, busId: number, panLaw: PanLaw): void {
-  const code = panLawCode(panLaw);
+  const code = panLawCode(panLaw, 'panLaw');
   commitSync(
     ctx,
     (offline) => offline.setBusPanLaw(busId, panLaw),
@@ -447,7 +447,7 @@ export function setBusPanLaw(ctx: EngineStripContext, busId: number, panLaw: Pan
 }
 
 export function setBusPanMode(ctx: EngineStripContext, busId: number, panMode: PanMode): void {
-  const code = panModeCode(panMode);
+  const code = panModeCode(panMode, 'panMode');
   commitSync(
     ctx,
     (offline) => offline.setBusPanMode(busId, panMode),

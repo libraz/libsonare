@@ -194,7 +194,8 @@ function tokenArg(
   return resolve(value as string);
 }
 
-const curveToken = (token: string): number => automationCurveCode(token as AutomationCurve);
+const curveToken = (token: string): number =>
+  automationCurveCode(token as AutomationCurve, 'curve');
 
 function maxBlockSizeOf(value: unknown): number | undefined {
   if (isAbsent(value)) {
@@ -694,7 +695,7 @@ export class Mixer {
    */
   setPan(strip: StripRef, pan: number, panMode?: PanMode): void {
     // SONARE_PAN_MODE_KEEP (-1) = keep the strip's current pan mode.
-    const mode = panMode === undefined ? -1 : panModeCode(panMode);
+    const mode = panMode === undefined ? -1 : panModeCode(panMode, 'panMode');
     this.mixer.setPan(this.stripIndex(strip), pan, mode);
   }
 
@@ -775,7 +776,7 @@ export class Mixer {
   setPanLaw(strip: StripRef, panLaw: PanLaw): void {
     this.mixer.setPanLaw(
       this.stripIndex(strip),
-      tokenArg(panLaw, 'panLaw', (token) => panLawCode(token as PanLaw)),
+      tokenArg(panLaw, 'panLaw', (token) => panLawCode(token as PanLaw, 'panLaw')),
     );
   }
 
@@ -830,7 +831,12 @@ export class Mixer {
       bag.id as string,
       bag.destinationBusId as string,
       optionalNumber(bag.sendDb, 'sendDb', 0),
-      tokenArg(bag.timing, 'timing', (token) => sendTimingCode(token as SendTiming), 'postFader'),
+      tokenArg(
+        bag.timing,
+        'timing',
+        (token) => sendTimingCode(token as SendTiming, 'timing'),
+        'postFader',
+      ),
     );
   }
 
@@ -869,7 +875,7 @@ export class Mixer {
     }
     return this.mixer.meterTap(
       index,
-      tokenArg(tap, 'tap', (token) => meterTapCode(token as MeterTap)),
+      tokenArg(tap, 'tap', (token) => meterTapCode(token as MeterTap, 'tap')),
     );
   }
 

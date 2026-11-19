@@ -2,12 +2,12 @@
   "node": {
     "raw-error": 0,
     "fn-name-param": 0,
-    "value-echo": 11
+    "value-echo": 8
   },
   "wasm": {
     "raw-error": 0,
     "fn-name-param": 0,
-    "value-echo": 8
+    "value-echo": 2
   },
   "native": {
     "value-echo": 34

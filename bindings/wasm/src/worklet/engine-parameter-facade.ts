@@ -72,7 +72,7 @@ export function setTrackMonitorMode(
   if (typeof mode === 'number') {
     throw refuseType("mode must be 'off', 'pfl' or 'afl', not a number");
   }
-  const modeOrdinal = trackMonitorModeCode(mode);
+  const modeOrdinal = trackMonitorModeCode(mode, 'mode');
   const laneIndex = ctx.ensureTrackLane(target);
   commitCommand(
     ctx,

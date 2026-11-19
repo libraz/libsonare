@@ -734,7 +734,7 @@ function sidechainKey(method: RequestFn, source: SidechainSource): { kind: numbe
   if (source.id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
   }
-  return { kind: sidechainSourceKindCode(source.kind), id: source.id };
+  return { kind: sidechainSourceKindCode(source.kind, 'source.kind'), id: source.id };
 }
 
 /**

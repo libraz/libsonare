@@ -23,7 +23,7 @@ export function resolveProcessorParams(
     }
     const number = addon.masteringEnumValue(processor, key, value) as number | null;
     if (number === null) {
-      throw refuseType(`Parameter '${key}' must be a number or boolean (got a string).`);
+      throw refuseType(`${key} must be a number or a boolean`);
     }
     resolved ??= { ...params } as Record<string, number | boolean>;
     resolved[key] = number;

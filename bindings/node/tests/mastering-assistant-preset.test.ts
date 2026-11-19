@@ -51,10 +51,17 @@ describe('mastering assistant preset', () => {
     expect(() =>
       // biome-ignore lint/suspicious/noExplicitAny: deliberately passing an unknown name.
       masteringAssistantSuggest({ samples, sampleRate, preset: 'notAPreset' as any }),
-    ).toThrow(/notAPreset/);
-    expect(() => masteringAssistantSuggest({ samples, sampleRate, preset: 'vinyl' })).toThrow(
-      /vinyl/,
-    );
+    ).toThrow(/^masteringAssistantSuggest: preset must be one of pop, /);
+    let message = '';
+    try {
+      masteringAssistantSuggest({ samples, sampleRate, preset: 'vinyl' });
+    } catch (error) {
+      expect(error).toBeInstanceOf(RangeError);
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/^masteringAssistantSuggest: preset must be one of pop, /);
+    expect(message).toContain('gameOst');
+    expect(message).not.toContain('vinyl');
   });
 
   it('rejects a numeric preset: the index is a C-ABI transport detail', () => {

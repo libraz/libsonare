@@ -581,7 +581,7 @@ describe('named selectors and estimate-to-geometry', () => {
       TypeError,
     );
     expect(() => synthesizeRir({ sampleRate: 48000, materialPreset: 2 as never })).toThrow(
-      /'none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'/,
+      'materialPreset must be one of none, concrete, wood, curtain, carpet, glass',
     );
     expect(() => roomMorph(new Float32Array(100), 48000, { materialPreset: 1 as never })).toThrow(
       TypeError,
@@ -590,7 +590,7 @@ describe('named selectors and estimate-to-geometry', () => {
       TypeError,
     );
     expect(() => estimateRoom(new Float32Array(1000), 48000, { mode: 1 as never })).toThrow(
-      /'auto', 'blind', 'impulseResponse'/,
+      'mode must be one of auto, blind, impulseResponse',
     );
   });
 
@@ -599,13 +599,13 @@ describe('named selectors and estimate-to-geometry', () => {
       RangeError,
     );
     expect(() => synthesizeRir({ sampleRate: 48000, materialPreset: 'marble' as never })).toThrow(
-      /'none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'/,
+      'materialPreset must be one of none, concrete, wood, curtain, carpet, glass',
     );
     expect(() =>
       roomMorph(new Float32Array(100), 48000, { materialPreset: 'Concrete' as never }),
     ).toThrow(RangeError);
     expect(() => estimateRoom(new Float32Array(1000), 48000, { mode: 'blinds' as never })).toThrow(
-      /'auto', 'blind', 'impulseResponse'/,
+      'mode must be one of auto, blind, impulseResponse',
     );
   });
 

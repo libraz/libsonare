@@ -34,7 +34,7 @@ const PRESET_IDS: readonly VoicePresetId[] = [
 ];
 function presetOrdinal(id: unknown, argName = 'preset'): number {
   if (typeof id !== 'string') {
-    throw refuseType(`${argName} must be a string`);
+    throw refuseType(`${argName} must be one of ${PRESET_IDS.join(', ')}`);
   }
   const ordinal = PRESET_IDS.indexOf(id as VoicePresetId);
   if (ordinal < 0) {

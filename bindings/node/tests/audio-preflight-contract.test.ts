@@ -922,6 +922,13 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
       [fn, null, 'processor'],
       [fn, 1, 'processor'],
     ],
+    assertClosedToken: [
+      [fn, 'zero', ['zero', 'minimum'], 'mode'],
+      [fn, 'linear', ['zero', 'minimum'], 'mode'],
+      [fn, '', ['zero', 'minimum'], 'mode'],
+      [fn, undefined, ['zero', 'minimum'], 'mode'],
+      [fn, 1, ['zero', 'minimum'], 'mode'],
+    ],
   };
 
   type Answer = { value: unknown } | { error: string; message: string; code: unknown };

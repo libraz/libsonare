@@ -843,7 +843,7 @@ function checkedEqPlacement(value: unknown): EqStereoPlacement {
     return 'stereo';
   }
   if (typeof value !== 'string') {
-    throw refuseType(`placement must be a string`);
+    throw refuseType(`placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`);
   }
   if (!Object.hasOwn(EQ_PLACEMENT_ORDINALS, value)) {
     throw refuse(`placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`);

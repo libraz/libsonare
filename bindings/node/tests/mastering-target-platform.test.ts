@@ -77,7 +77,7 @@ describe('mastering assistant target platform', () => {
   it('rejects an unknown target instead of silently keeping the default', () => {
     expect(() =>
       masteringAssistantSuggest({ samples, sampleRate, targetPlatform: 'vinyl' as never }),
-    ).toThrow(/vinyl/);
+    ).toThrow(/^masteringAssistantSuggest: targetPlatform must be one of /);
   });
 
   it('rejects a numeric target: the index is a C-ABI transport detail', () => {

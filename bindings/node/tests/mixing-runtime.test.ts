@@ -359,9 +359,9 @@ describe('Mixer argument validation', () => {
 
   it('throws on invalid string-union arguments', () => {
     // @ts-expect-error invalid pan law string is rejected at runtime
-    expect(() => mixer.setPanLaw('host', 'bogusLaw')).toThrow(/pan law/i);
+    expect(() => mixer.setPanLaw('host', 'bogusLaw')).toThrow(/panLaw must be one of /);
     // @ts-expect-error invalid meter tap string is rejected at runtime
-    expect(() => mixer.stripMeter('host', 'bogusTap')).toThrow(/meter tap/i);
+    expect(() => mixer.stripMeter('host', 'bogusTap')).toThrow(/tap must be one of /);
     expect(() =>
       mixer.scheduleFaderAutomation('host', {
         samplePos: 0,
@@ -369,7 +369,7 @@ describe('Mixer argument validation', () => {
         // @ts-expect-error invalid automation curve string is rejected at runtime
         curve: 'bogusCurve',
       }),
-    ).toThrow(/automation curve/i);
+    ).toThrow(/curve must be one of /);
   });
 
   it('throws on out-of-range strip indices', () => {

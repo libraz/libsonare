@@ -21,7 +21,7 @@ type Loose = Record<string, unknown>;
 
 function tokenOrdinal(value: unknown, argName: string, tokens: readonly string[]): number {
   if (typeof value !== 'string') {
-    throw refuseType(`${argName} must be a string`);
+    throw refuseType(`${argName} must be one of ${tokens.join(', ')}`);
   }
   const ordinal = tokens.indexOf(value);
   if (ordinal < 0) {

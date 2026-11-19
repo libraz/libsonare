@@ -210,7 +210,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
 /** A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them. */
 function assertGriffinLimFftSize(nBins: number, nFft: number): void {
   if (nFft !== (nBins - 1) * 2) {
-    throw refuse(`nFft must equal (nBins - 1) * 2 (got ${nFft} for ${nBins} bins)`);
+    throw refuse(`nFft must equal (magnitude.rows - 1) * 2, which is ${(nBins - 1) * 2}`);
   }
 }
 

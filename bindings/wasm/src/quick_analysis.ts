@@ -80,10 +80,10 @@ function nativeTuning(cents: number | 'auto' | undefined | null): number | 'auto
     return 'auto';
   }
   if (typeof cents === 'string') {
-    throw refuse(`tuningCents must be a number of cents or 'auto', got '${cents}'`);
+    throw refuse('tuningCents must be a number of cents or auto');
   }
   if (typeof cents !== 'number') {
-    throw refuseType("tuningCents must be a number of cents or 'auto'");
+    throw refuseType('tuningCents must be a number of cents or auto');
   }
   return cents;
 }
@@ -165,13 +165,12 @@ function nativeRoomOptions<T extends object>(options: T): NamedSelectors<T> {
     const tables = requireModule().acousticSelectorNames();
     const resolve = (key: 'materialPreset' | 'mode', value: unknown) => {
       const names = tables[key];
-      const valid = names.map((name: string) => `'${name}'`).join(', ');
       if (typeof value !== 'string') {
-        throw refuseType(`${key} must be one of ${valid} (a name, not a number)`);
+        throw refuseType(`${key} must be one of ${names.join(', ')}`);
       }
       const index = names.indexOf(value);
       if (index < 0) {
-        throw refuse(`${key} must be one of ${valid}, got '${value}'`);
+        throw refuse(`${key} must be one of ${names.join(', ')}`);
       }
       return index;
     };
@@ -1140,13 +1139,11 @@ export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
     assertAudioInput(request.left, request.sampleRate, request, 'left');
     assertAudioInput(request.right, request.sampleRate, request, 'right');
     if (request.left.length !== request.right.length) {
-      throw refuse('Stereo channel lengths must match.');
+      throw refuse('left and right must have the same length');
     }
     const spacing = request.receiverSpacingM;
     if (spacing !== undefined && !(Number.isFinite(spacing) && spacing > 0 && spacing <= 4)) {
-      throw refuse(
-        `receiverSpacingM must be a finite number in (0, 4] metres; omitted = 0.5 (got ${spacing})`,
-      );
+      throw refuse('receiverSpacingM must be finite and in (0, 4]; omit it for 0.5 m');
     }
     const native = withEntry('roomMorphStereo', () => nativeRoomOptions(request));
     const morphStereo = module.roomMorphStereo;

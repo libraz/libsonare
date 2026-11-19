@@ -73,13 +73,11 @@ export function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate 
 
 function closedSetOrdinal(value: unknown, tokens: readonly string[], field: string): number {
   if (typeof value !== 'string') {
-    throw refuseType(`${field} must be one of ${tokens.map((t) => `'${t}'`).join(', ')}`);
+    throw refuseType(`${field} must be one of ${tokens.join(', ')}`);
   }
   const ordinal = tokens.indexOf(value);
   if (ordinal < 0) {
-    throw refuse(
-      `${field} must be one of ${tokens.map((t) => `'${t}'`).join(', ')}, got '${value}'`,
-    );
+    throw refuse(`${field} must be one of ${tokens.join(', ')}`);
   }
   return ordinal;
 }
@@ -135,9 +133,7 @@ export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): 
     if (modes === 'all' || modes === 'modal') {
       return ALL_MODE_ORDINALS;
     }
-    throw refuse(
-      `modes must be an array of mode names, 'majorMinor', 'all' or 'modal', got '${modes}'`,
-    );
+    throw refuse('modes must be majorMinor, all, modal or an array of mode names');
   }
   if (!Array.isArray(modes)) {
     throw refuseType(`modes must be an array or mode-set string`);
@@ -162,7 +158,7 @@ export function keyProfileValue(profile: KeyDetectionOptions['profile'] | undefi
   if (profile === undefined || profile === null) {
     return -1;
   }
-  return closedSetOrdinal(profile, KEY_PROFILE_TOKENS, 'key profile');
+  return closedSetOrdinal(profile, KEY_PROFILE_TOKENS, 'profile');
 }
 
 const GENRE_HINTS = ['auto', 'edm', 'electronic', 'dance', 'pop', 'classical', 'jazz'] as const;

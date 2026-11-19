@@ -2,9 +2,10 @@ import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_c
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
-import { masteringPlatformNames, masteringPresetNames } from './mastering_catalog.js';
+import { masteringPlatformNames } from './mastering_catalog.js';
 import { addon } from './native.js';
 import type {
+  CapabilityCatalog,
   MasteringAssistantResult,
   MasteringAudioProfile,
   MasteringChainConfig,
@@ -75,6 +76,14 @@ export interface MasteringAssistantSettings {
   targetPlatform?: MasteringPlatform;
   /** Mastering preset the suggestion starts from; restoration presets are refused. */
   preset?: MasteringPreset;
+}
+
+/** The presets the assistant starts from: every mastering preset, no restoration one. */
+function assistantPresetNames(): MasteringPreset[] {
+  const catalog = parseRecordJson(addon.capabilityCatalog()) as CapabilityCatalog;
+  return catalog.masteringPresets
+    .filter((entry) => entry.kind === 'mastering')
+    .map((entry) => entry.name as MasteringPreset);
 }
 
 /** Request form of {@link masteringAssistantSuggest} and {@link masteringAssistantSuggestChain}. */
@@ -214,7 +223,7 @@ function assistantParams(r: MasteringAssistantSettings): Record<string, number |
     params.targetPlatform = r.targetPlatform;
   }
   if (r.preset !== undefined && r.preset !== null) {
-    assertClosedToken(r.preset, masteringPresetNames(), 'preset');
+    assertClosedToken(r.preset, assistantPresetNames(), 'preset');
     params.preset = r.preset;
   }
   return params;

@@ -141,7 +141,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
 /** [entry point, call that hands a number where a string belongs, argument name]. */
 const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
   ['noteToHz', () => sonare.noteToHz(5 as never), 'note'],
-  ['masteringInsertParamNames', () => sonare.masteringInsertParamNames(5 as never), 'insert'],
   [
     'masteringInsertParamInfo',
     () => sonare.masteringInsertParamInfo({ insert: 5 as never }),
@@ -157,13 +156,18 @@ const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
     () => sonare.mixingAssistantSourceClassFromName(5 as never),
     'name',
   ],
-  ['mixingScenePreset', () => sonare.mixingScenePreset(5 as never), 'name'],
   ['synthPresetPatch', () => sonare.synthPresetPatch(5 as never), 'name'],
   [
     'realtimeVoiceChangerValidatePresetJson',
     () => sonare.realtimeVoiceChangerValidatePresetJson(5 as never),
     'json',
   ],
+];
+
+/** A closed name set refuses a wrong type by naming its members, as it refuses an unknown name. */
+const CLOSED_NAME_ARGUMENT: Array<[string, () => unknown, string]> = [
+  ['masteringInsertParamNames', () => sonare.masteringInsertParamNames(5 as never), 'insert'],
+  ['mixingScenePreset', () => sonare.mixingScenePreset(5 as never), 'name'],
   [
     'realtimeVoiceChangerPresetJson',
     () => sonare.realtimeVoiceChangerPresetJson(5 as never),
@@ -312,6 +316,11 @@ describe('wrong-typed string argument', () => {
   it.each(STRING_ARGUMENT)('%s refuses a number as a TypeError', (name, call, argName) => {
     expect(call).toThrow(TypeError);
     expect(call).toThrow(`${name}: ${argName} must be a string`);
+  });
+
+  it.each(CLOSED_NAME_ARGUMENT)('%s refuses a number as a TypeError', (name, call, argName) => {
+    expect(call).toThrow(TypeError);
+    expect(call).toThrow(`${name}: ${argName} must be one of `);
   });
 });
 

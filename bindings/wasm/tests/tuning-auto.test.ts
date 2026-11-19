@@ -108,7 +108,7 @@ describe("tuningCents: 'auto'", () => {
 
   it('refuses a tuning that is neither a number nor auto, by name', () => {
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 'other' as never })).toThrow(
-      /tuningCents must be a number of cents or 'auto'/,
+      'detectKey: tuningCents must be a number of cents or auto',
     );
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow();
   });

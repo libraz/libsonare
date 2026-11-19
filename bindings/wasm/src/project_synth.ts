@@ -148,7 +148,7 @@ export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInf
     const ordinal = resolveEnumOrdinal(
       engineMode,
       Object.fromEntries(SYNTH_ENGINE_MODES.map((name, index) => [name, index])),
-      'synth engine mode',
+      'engineMode',
     );
     return JSON.parse(synthInfoModule().synthEngineParamInfo(ordinal)) as SynthParamInfo[];
   });

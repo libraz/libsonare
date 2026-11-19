@@ -181,7 +181,8 @@ function tokenArg(
   return resolve(value);
 }
 
-const curveToken = (token: string): number => automationCurveValue(token as AutomationCurve);
+const curveToken = (token: string): number =>
+  automationCurveValue(token as AutomationCurve, 'curve');
 
 /** An omitted block size stays undefined, which the addon passes on as the library default. */
 function maxBlockSizeOf(value: unknown): number | undefined {
@@ -551,7 +552,7 @@ export class Mixer {
     if (panMode === undefined) {
       this.native.setPan(strip, pan);
     } else {
-      this.native.setPan(strip, pan, panModeValue(panMode));
+      this.native.setPan(strip, pan, panModeValue(panMode, 'panMode'));
     }
   }
 
@@ -624,7 +625,7 @@ export class Mixer {
   setPanLaw(strip: StripRef, panLaw: PanLaw): void {
     this.native.setPanLaw(
       strip,
-      tokenArg(panLaw, 'panLaw', (token) => panLawValue(token as PanLaw)),
+      tokenArg(panLaw, 'panLaw', (token) => panLawValue(token as PanLaw, 'panLaw')),
     );
   }
 
@@ -676,7 +677,12 @@ export class Mixer {
       requiredString(bag.id, 'id'),
       requiredString(bag.destinationBusId, 'destinationBusId'),
       optionalNumber(bag.sendDb, 'sendDb', 0),
-      tokenArg(bag.timing, 'timing', (token) => sendTimingValue(token as SendTiming), 'postFader'),
+      tokenArg(
+        bag.timing,
+        'timing',
+        (token) => sendTimingValue(token as SendTiming, 'timing'),
+        'postFader',
+      ),
     );
   }
 
@@ -708,7 +714,7 @@ export class Mixer {
     }
     return this.native.meterTap(
       strip,
-      tokenArg(tap, 'tap', (token) => meterTapValue(token as MeterTap)),
+      tokenArg(tap, 'tap', (token) => meterTapValue(token as MeterTap, 'tap')),
     );
   }
 

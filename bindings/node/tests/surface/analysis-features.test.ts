@@ -581,7 +581,7 @@ describe('Matrix2D results and inputs', () => {
       }),
     ).toThrow(
       new RangeError(
-        `griffinLim: nFft must equal (nBins - 1) * 2 (got 1024 for ${stftResult.magnitude.rows} bins)`,
+        `griffinLim: nFft must equal (magnitude.rows - 1) * 2, which is ${(stftResult.magnitude.rows - 1) * 2}`,
       ),
     );
     expect(

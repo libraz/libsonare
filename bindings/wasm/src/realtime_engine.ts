@@ -489,7 +489,7 @@ function nativeAutomationPoint(point: EngineAutomationPoint) {
   const { curveToNext, ...rest } = point;
   return curveToNext === undefined
     ? rest
-    : { ...rest, curveToNext: automationCurveCode(curveToNext) };
+    : { ...rest, curveToNext: automationCurveCode(curveToNext, 'curveToNext') };
 }
 
 function parameterInfoFromNative(info: {
@@ -592,7 +592,7 @@ function sidechainSourceArg(
   if (source.id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
   }
-  return { kind: sidechainSourceKindCode(source.kind), id: source.id };
+  return { kind: sidechainSourceKindCode(source.kind, 'source.kind'), id: source.id };
 }
 
 function bypassState(
@@ -823,7 +823,7 @@ export class RealtimeEngine {
     noOrdinal('mode', mode);
     this.native.setTrackMonitorMode(
       this.laneIndexOf(trackId),
-      trackMonitorModeCode(mode),
+      trackMonitorModeCode(mode, 'mode'),
       resolveRenderFrame(renderFrame),
     );
   }
@@ -1736,7 +1736,7 @@ export class RealtimeEngine {
     this.native.addParameter(
       defaultCurve === undefined
         ? rest
-        : { ...rest, defaultCurve: automationCurveCode(defaultCurve) },
+        : { ...rest, defaultCurve: automationCurveCode(defaultCurve, 'defaultCurve') },
     );
   }
 
@@ -1980,7 +1980,9 @@ export class RealtimeEngine {
     return sends.map((send) => {
       noOrdinal('sendTiming', send.sendTiming);
       const { sendTiming, ...rest } = send;
-      return sendTiming === undefined ? rest : { ...rest, sendTiming: sendTimingCode(sendTiming) };
+      return sendTiming === undefined
+        ? rest
+        : { ...rest, sendTiming: sendTimingCode(sendTiming, 'sendTiming') };
     });
   }
 
@@ -2452,14 +2454,14 @@ export class RealtimeEngine {
   setStripPanLaw(ref: StripRef, panLaw: PanLaw): void {
     const trackId = trackOnly(ref);
     noOrdinal('panLaw', panLaw);
-    this.native.setTrackStripPanLaw(trackId, panLawCode(panLaw));
+    this.native.setTrackStripPanLaw(trackId, panLawCode(panLaw, 'panLaw'));
   }
 
   /** Sets a track strip's pan mode in realtime; an ordinal is a `TypeError`. */
   setStripPanMode(ref: StripRef, panMode: PanMode): void {
     const trackId = trackOnly(ref);
     noOrdinal('panMode', panMode);
-    this.native.setTrackStripPanMode(trackId, panModeCode(panMode));
+    this.native.setTrackStripPanMode(trackId, panModeCode(panMode, 'panMode'));
   }
 
   /** Sets a track strip's dual-pan left/right positions in realtime. */
@@ -2502,13 +2504,13 @@ export class RealtimeEngine {
   /** Sets a bus strip's pan law in realtime; an ordinal is a `TypeError`. */
   setBusPanLaw(busId: number, panLaw: PanLaw): void {
     noOrdinal('panLaw', panLaw);
-    this.native.setBusStripPanLaw(busId, panLawCode(panLaw));
+    this.native.setBusStripPanLaw(busId, panLawCode(panLaw, 'panLaw'));
   }
 
   /** Sets a bus strip's pan mode in realtime; an ordinal is a `TypeError`. */
   setBusPanMode(busId: number, panMode: PanMode): void {
     noOrdinal('panMode', panMode);
-    this.native.setBusStripPanMode(busId, panModeCode(panMode));
+    this.native.setBusStripPanMode(busId, panModeCode(panMode, 'panMode'));
   }
 
   /** Sets a bus strip's dual-pan left/right positions in realtime. */

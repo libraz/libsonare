@@ -39,9 +39,16 @@ describe('WASM mastering assistant preset', () => {
     expect(() =>
       masteringAssistantSuggest({ samples, sampleRate, preset: 'notAPreset' as never }),
     ).toThrow(RangeError);
-    expect(() =>
-      masteringAssistantSuggest({ samples, sampleRate, preset: 'vinyl' as never }),
-    ).toThrow(RangeError);
+    let message = '';
+    try {
+      masteringAssistantSuggest({ samples, sampleRate, preset: 'vinyl' as never });
+    } catch (error) {
+      expect(error).toBeInstanceOf(RangeError);
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/^masteringAssistantSuggest: preset must be one of pop, /);
+    expect(message).toContain('gameOst');
+    expect(message).not.toContain('vinyl');
   });
 
   it('rejects a numeric preset: the index is a C-ABI transport detail', () => {

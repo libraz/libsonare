@@ -500,7 +500,7 @@ describe('analysis features: inverse transforms', () => {
     expect(() =>
       griffinLim({ magnitude: stft(samples, sr).magnitude, sampleRate: sr, nFft: 1024, nIter: 2 }),
     ).toThrow(
-      new RangeError('griffinLim: nFft must equal (nBins - 1) * 2 (got 1024 for 1025 bins)'),
+      new RangeError('griffinLim: nFft must equal (magnitude.rows - 1) * 2, which is 2048'),
     );
   });
 

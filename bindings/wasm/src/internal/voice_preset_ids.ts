@@ -24,7 +24,7 @@ export const VOICE_PRESET_IDS: readonly VoicePresetId[] = [
  */
 export function voicePresetOrdinal(id: unknown, argName = 'preset'): number {
   if (typeof id !== 'string') {
-    throw refuseType(`${argName} must be a string`);
+    throw refuseType(`${argName} must be one of ${VOICE_PRESET_IDS.join(', ')}`);
   }
   const ordinal = VOICE_PRESET_IDS.indexOf(id as VoicePresetId);
   if (ordinal < 0) {

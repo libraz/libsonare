@@ -39,7 +39,7 @@ function eqPlacementOrdinal(value: unknown): number {
     return EQ_PLACEMENT_ORDINALS.stereo;
   }
   if (typeof value !== 'string') {
-    throw refuseType(`placement must be a string`);
+    throw refuseType(`placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`);
   }
   if (!Object.keys(EQ_PLACEMENT_ORDINALS).includes(value)) {
     throw refuse(`placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`);

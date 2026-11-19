@@ -152,11 +152,16 @@ describe('spectralEdit framing and heal radius', () => {
   const base = { samples: EDIT_INPUT, sampleRate: SR, ops: muteOps };
 
   it('refuses a fractional nFft rather than transforming at the default size', () => {
-    expectSentinelRefused((nFft) => spectralEdit({ ...base, nFft }), digest, 1024);
+    expectSentinelRefused((nFft) => spectralEdit({ ...base, nFft }), digest, 1024, 'refused');
   });
 
   it('refuses a fractional hopLength rather than framing at the default hop', () => {
-    expectSentinelRefused((hopLength) => spectralEdit({ ...base, hopLength }), digest, 256);
+    expectSentinelRefused(
+      (hopLength) => spectralEdit({ ...base, hopLength }),
+      digest,
+      256,
+      'refused',
+    );
   });
 
   it('refuses a fractional healRadiusFrames rather than healing over two frames', () => {
@@ -164,6 +169,7 @@ describe('spectralEdit framing and heal radius', () => {
       (healRadiusFrames) => spectralEdit({ ...base, ops: healOps, healRadiusFrames }),
       digest,
       9,
+      'refused',
     );
   });
 });
