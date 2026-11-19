@@ -12473,3 +12473,17 @@ old = "Project.set_source_audio(channels)"
 new = "Project.set_source_audio(num_channels)"
 domain = "project"
 rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "PlaybackRenderer.process_interleaved(in_channels)"
+new = "PlaybackRenderer.process_interleaved(num_input_channels)"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "PlaybackRenderer.render_offline(in_channels)"
+new = "PlaybackRenderer.render_offline(num_input_channels)"
+domain = "engine"
+rule = "num-channels"

@@ -144,7 +144,7 @@ _SCALAR_ARGS: dict[str, Any] = {
     "delta": 0.1,
     "wait": 1,
     "start_sample": 0,
-    "in_channels": 1,
+    "num_input_channels": 1,
     # The nested playback config document; {} takes every schema default, the
     # cheapest value that opens the same code path a real one would.
     "config": {},

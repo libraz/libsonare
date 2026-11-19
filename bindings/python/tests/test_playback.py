@@ -93,7 +93,7 @@ def test_process_planar_switches_auto_input_layout() -> None:
 def test_process_interleaved_renders_finite_output() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         samples = np.array(_sine(BLOCK * 2), dtype=np.float32)
-        out = renderer.process_interleaved(samples, in_channels=2)
+        out = renderer.process_interleaved(samples, num_input_channels=2)
         assert out.shape == (BLOCK * 6,)
         assert out.dtype == np.float32
         assert np.isfinite(out).all()
@@ -102,17 +102,19 @@ def test_process_interleaved_renders_finite_output() -> None:
 def test_process_interleaved_rejects_indivisible_length() -> None:
     with (
         PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer,
-        pytest.raises(SonareValueError),
+        pytest.raises(
+            SonareValueError, match="samples length must be a multiple of num_input_channels"
+        ),
     ):
-        renderer.process_interleaved([0.0] * 7, in_channels=2)
+        renderer.process_interleaved([0.0] * 7, num_input_channels=2)
 
 
 def test_process_interleaved_rejects_nonpositive_channels() -> None:
     with (
         PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer,
-        pytest.raises(SonareValueError),
+        pytest.raises(SonareValueError, match=r"num_input_channels must be an integer in \["),
     ):
-        renderer.process_interleaved([0.0] * 8, in_channels=0)
+        renderer.process_interleaved([0.0] * 8, num_input_channels=0)
 
 
 def test_non_finite_input_is_discarded_and_counted() -> None:
@@ -120,7 +122,7 @@ def test_non_finite_input_is_discarded_and_counted() -> None:
         assert renderer.non_finite_discard_count == 0
         samples = np.zeros(BLOCK * 2, dtype=np.float32)
         samples[3] = float("nan")
-        out = renderer.process_interleaved(samples, in_channels=2)
+        out = renderer.process_interleaved(samples, num_input_channels=2)
         assert np.isfinite(out).all()
         assert renderer.non_finite_discard_count == 1
 

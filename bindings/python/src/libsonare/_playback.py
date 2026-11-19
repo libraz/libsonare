@@ -336,9 +336,9 @@ class PlaybackRenderer:
             self._lib.sonare_playback_renderer_process_planar(
                 handle,
                 in_ptrs,
-                _to_c_int(len(in_arrays), "in_channels"),
+                _to_c_int(len(in_arrays), "num_input_channels"),
                 out_ptrs,
-                _to_c_int(out_channels, "out_channels"),
+                _to_c_int(out_channels, "num_output_channels"),
                 _to_c_int(frames, "frames"),
             )
         )
@@ -346,18 +346,18 @@ class PlaybackRenderer:
 
     @_entry("PlaybackRenderer.process_interleaved")
     def process_interleaved(
-        self, samples: Sequence[float] | list[float] | np.ndarray, in_channels: int
+        self, samples: Sequence[float] | list[float] | np.ndarray, num_input_channels: int
     ) -> np.ndarray:
         """Render one interleaved block; returns an interleaved ``float32`` array.
 
-        Unlike :meth:`process_planar`, ``in_channels`` is explicit rather than
+        Unlike :meth:`process_planar`, ``num_input_channels`` is explicit rather than
         inferred from the buffer's shape.
         """
         handle = self._require_handle()
-        ch = _narrow_int(in_channels, "in_channels", 1, _C_INT_MAX)
+        ch = _narrow_int(num_input_channels, "num_input_channels", 1, _C_INT_MAX)
         c_in, total = _to_c_float_array(samples)
         if total % ch != 0:
-            raise _refuse("interleaved samples length must be divisible by in_channels")
+            raise _refuse("samples length must be a multiple of num_input_channels")
         frames = total // ch
         out_channels = self.num_output_channels
         out_len = frames * out_channels
@@ -369,9 +369,9 @@ class PlaybackRenderer:
             self._lib.sonare_playback_renderer_process_interleaved(
                 handle,
                 c_in,
-                _to_c_int(ch, "in_channels"),
+                _to_c_int(ch, "num_input_channels"),
                 c_out,
-                _to_c_int(out_channels, "out_channels"),
+                _to_c_int(out_channels, "num_output_channels"),
                 _to_c_int(frames, "frames"),
             )
         )
@@ -379,7 +379,7 @@ class PlaybackRenderer:
 
     @_entry("PlaybackRenderer.render_offline")
     def render_offline(
-        self, samples: Sequence[float] | list[float] | np.ndarray, in_channels: int
+        self, samples: Sequence[float] | list[float] | np.ndarray, num_input_channels: int
     ) -> np.ndarray:
         """Render a whole interleaved buffer offline; returns an interleaved ``float32`` array.
 
@@ -390,11 +390,11 @@ class PlaybackRenderer:
         ``frames * num_output_channels()`` samples.
         """
         handle = self._require_handle()
-        ch = _narrow_int(in_channels, "in_channels", 1, _C_INT_MAX)
+        ch = _narrow_int(num_input_channels, "num_input_channels", 1, _C_INT_MAX)
         validated = _validate_samples(samples)
         c_in, total = _to_c_float_array(validated)
         if total % ch != 0:
-            raise _refuse("interleaved samples length must be divisible by in_channels")
+            raise _refuse("samples length must be a multiple of num_input_channels")
         out_ptr = ctypes.POINTER(ctypes.c_float)()
         out_frames = ctypes.c_size_t()
         out_channels = ctypes.c_int()
@@ -403,7 +403,7 @@ class PlaybackRenderer:
                 handle,
                 c_in,
                 _to_c_size_t(total // ch, "frames"),
-                _to_c_int(ch, "in_channels"),
+                _to_c_int(ch, "num_input_channels"),
                 ctypes.byref(out_ptr),
                 ctypes.byref(out_frames),
                 ctypes.byref(out_channels),
