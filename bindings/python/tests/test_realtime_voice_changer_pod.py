@@ -12,6 +12,9 @@ import ctypes
 import dataclasses
 import json
 import math
+import re
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -336,5 +339,50 @@ def test_set_config_keeps_a_retune_grain_inside_its_domain(grain: int) -> None:
     try:
         changer.set_config(dataclasses.replace(changer.config, retune_grain_size_samples=grain))
         assert changer.config.retune_grain_size_samples == grain
+    finally:
+        changer.close()
+
+
+# The key list the Node and WASM suites read: the record config returns is one shape everywhere.
+_SHARED_KEYS = json.loads(
+    (
+        Path(__file__).resolve().parents[3]
+        / "tests/conformance/realtime_voice_changer_config_keys.json"
+    ).read_text()
+)
+
+
+def _snake(key: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
+
+
+def test_record_fields_are_the_shared_config_keys() -> None:
+    # The facade copies the record to and from the struct mirror by its field names.
+    struct_fields = {
+        name for name, *_ in SonareRealtimeVoiceChangerConfig._fields_ if name != "struct_version"
+    }
+    shared = _SHARED_KEYS["keys"] + _SHARED_KEYS["optional_keys"]
+    assert len(shared) == len(set(shared))
+    assert struct_fields == {_snake(key) for key in shared}
+
+
+@pytest.mark.parametrize("name", libsonare.realtime_voice_changer_preset_names())
+def test_a_preset_reads_back_the_optional_keys_as_none(name: Any) -> None:
+    changer = libsonare.RealtimeVoiceChanger(44100, num_channels=1, config=name)
+    try:
+        record = changer.config
+        for optional in _SHARED_KEYS["optional_keys"]:
+            assert getattr(record, _snake(optional)) is None
+        for key in _SHARED_KEYS["keys"]:
+            assert getattr(record, _snake(key)) is not None, key
+    finally:
+        changer.close()
+
+
+def test_an_explicit_grain_reads_back_as_given() -> None:
+    changer = libsonare.RealtimeVoiceChanger(44100, num_channels=1, config="brightIdol")
+    try:
+        changer.set_config(dataclasses.replace(changer.config, retune_grain_size_samples=1024))
+        assert changer.config.retune_grain_size_samples == 1024
     finally:
         changer.close()
