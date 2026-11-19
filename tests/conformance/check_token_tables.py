@@ -702,7 +702,11 @@ FAMILY_EXEMPT: typing.Mapping[tuple[str, str], str] = types.MappingProxyType(
         },
         **{
             (path, "EngineDither"): "an omitted dither means none, so the bounce options spell no 'none' token"
-            for path in ("bindings/node/src/types_engine.ts", "bindings/wasm/src/public_types_engine.ts")
+            for path in (
+                "bindings/node/src/types_engine.ts",
+                "bindings/wasm/src/public_types_engine.ts",
+                "bindings/python/src/libsonare/_types_engine.py",
+            )
         },
     }
 )
