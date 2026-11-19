@@ -172,7 +172,6 @@ Napi::Value StreamAnalyzerConfigDefault(const Napi::CallbackInfo& info) {
   out.Set("computeOnset", Napi::Boolean::New(env, config.compute_onset != 0));
   out.Set("computeSpectral", Napi::Boolean::New(env, config.compute_spectral != 0));
   out.Set("emitEveryNFrames", Napi::Number::New(env, config.emit_every_n_frames));
-  out.Set("magnitudeDownsample", Napi::Number::New(env, config.magnitude_downsample));
   out.Set("maxPendingFrames",
           Napi::Number::New(env, static_cast<double>(config.max_pending_frames)));
   out.Set("keyUpdateIntervalSec", Napi::Number::New(env, config.key_update_interval_sec));
@@ -257,9 +256,6 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       config.compute_spectral = BoolProperty(opts, "computeSpectral", config.compute_spectral);
       config.emit_every_n_frames = CheckedConfigInt(
           DoubleProperty(opts, "emitEveryNFrames", config.emit_every_n_frames), "emitEveryNFrames");
-      config.magnitude_downsample =
-          CheckedConfigInt(DoubleProperty(opts, "magnitudeDownsample", config.magnitude_downsample),
-                           "magnitudeDownsample");
       const double max_pending_frames =
           DoubleProperty(opts, "maxPendingFrames", config.max_pending_frames);
       if (!sonare::numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {

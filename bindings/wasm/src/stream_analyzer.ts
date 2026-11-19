@@ -340,7 +340,6 @@ export class StreamAnalyzer {
       config.computeOnset ?? defaults.computeOnset,
       config.computeSpectral ?? defaults.computeSpectral,
       config.emitEveryNFrames ?? defaults.emitEveryNFrames,
-      defaults.magnitudeDownsample,
       config.maxPendingFrames ?? defaults.maxPendingFrames,
       config.maxProgressionEntries ?? defaults.maxProgressionEntries,
       config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,

@@ -86,7 +86,6 @@ val js_stream_analyzer_config_default() {
   out.set("computeOnset", defaults.compute_onset);
   out.set("computeSpectral", defaults.compute_spectral);
   out.set("emitEveryNFrames", defaults.emit_every_n_frames);
-  out.set("magnitudeDownsample", defaults.magnitude_downsample);
   out.set("maxPendingFrames", defaults.max_pending_frames);
   out.set("maxProgressionEntries", defaults.max_progression_entries);
   out.set("keyUpdateIntervalSec", defaults.key_update_interval_sec);
@@ -103,9 +102,8 @@ class StreamAnalyzerWrapper {
                         const val& n_mels_val, const val& fmin_val, const val& fmax_val,
                         const val& tuning_ref_hz_val, bool compute_magnitude, bool compute_mel,
                         bool compute_chroma, bool compute_onset, bool compute_spectral,
-                        const val& emit_every_n_frames_val, const val& magnitude_downsample_val,
-                        double max_pending_frames, double max_progression_entries,
-                        const val& key_update_interval_sec_val,
+                        const val& emit_every_n_frames_val, double max_pending_frames,
+                        double max_progression_entries, const val& key_update_interval_sec_val,
                         const val& bpm_update_interval_sec_val, const val& window_val,
                         const val& output_format_val) {
     // The narrow integers arrive as val because embind's integer glue wraps, so
@@ -115,8 +113,6 @@ class StreamAnalyzerWrapper {
     const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
     const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
     const int emit_every_n_frames = checkedIntFromVal(emit_every_n_frames_val, "emitEveryNFrames");
-    const int magnitude_downsample =
-        checkedIntFromVal(magnitude_downsample_val, "magnitudeDownsample");
     const int window = checkedIntFromVal(window_val, "window");
     const int output_format = checkedIntFromVal(output_format_val, "outputFormat");
     const float fmin = checkedFloatFromVal(fmin_val, "fmin");
@@ -153,7 +149,6 @@ class StreamAnalyzerWrapper {
     config.compute_onset = compute_onset;
     config.compute_spectral = compute_spectral;
     config.emit_every_n_frames = emit_every_n_frames;
-    config.magnitude_downsample = magnitude_downsample;
     if (!numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
       throw WasmRangeError("maxPendingFrames must be an integer of at least 0");
     }
@@ -406,8 +401,8 @@ void registerStreamAnalyzerBindings() {
   function("streamAnalyzerConfigDefault", &js_stream_analyzer_config_default);
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
       .constructor<const val&, const val&, const val&, const val&, const val&, const val&,
-                   const val&, bool, bool, bool, bool, bool, const val&, const val&, double, double,
-                   const val&, const val&, const val&, const val&>()
+                   const val&, bool, bool, bool, bool, bool, const val&, double, double, const val&,
+                   const val&, const val&, const val&>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("finalize", &StreamAnalyzerWrapper::finalize)

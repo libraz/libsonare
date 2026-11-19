@@ -304,7 +304,6 @@ export interface WasmStreamConfigDefaults {
   computeOnset: boolean;
   computeSpectral: boolean;
   emitEveryNFrames: number;
-  magnitudeDownsample: number;
   maxPendingFrames: number;
   maxProgressionEntries: number;
   keyUpdateIntervalSec: number;
@@ -3737,7 +3736,6 @@ export interface SonareModule {
     computeOnset: boolean,
     computeSpectral: boolean,
     emitEveryNFrames: number,
-    magnitudeDownsample: number,
     maxPendingFrames: number,
     maxProgressionEntries: number,
     keyUpdateIntervalSec: number,
