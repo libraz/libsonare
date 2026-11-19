@@ -284,11 +284,14 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   util::check::integer_at_least(n_bins, 1, "n_bins");
   util::check::integer_at_least(n_frames, 1, "n_frames");
   util::check::integer_at_least(n_fft, 1, "n_fft");
-  SONARE_CHECK_MSG(!magnitude.empty(), ErrorCode::InvalidParameter,
-                   "spec magnitude must not be empty");
-  SONARE_CHECK_MSG(magnitude.size() >= static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames),
-                   ErrorCode::InvalidParameter,
-                   "spec magnitude must hold at least n_bins * n_frames values");
+  if (magnitude.empty()) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "magnitude",
+                                            "must not be empty");
+  }
+  if (magnitude.size() < static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames)) {
+    util::check::refuse_relation({"magnitude", "n_bins", "n_frames"},
+                                 "{0} must hold at least {1} * {2} values");
+  }
 
   float nyquist = 0.5f * static_cast<float>(sr);
   if (!(fmin * std::pow(2.0f, static_cast<float>(n_bands - 1)) < nyquist)) {
@@ -316,8 +319,11 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
       }
     }
 
-    SONARE_CHECK_MSG(!band_indices.empty(), ErrorCode::InvalidParameter,
-                     "fmin and n_bands leave a contrast band with no FFT bins");
+    if (band_indices.empty()) {
+      util::check::refuse_relation({"fmin", "n_bands", "n_fft", "sr"},
+                                   "{0} and {1} must leave every contrast band at least one bin "
+                                   "of {2} at {3}");
+    }
 
     if (b > 0 && band_indices.front() > 0) {
       band_indices.insert(band_indices.begin(), band_indices.front() - 1);

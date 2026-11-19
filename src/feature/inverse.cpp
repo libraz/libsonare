@@ -47,13 +47,6 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
   constexpr int kMaxInverseFrames = 4096;
   util::check::integer_in_range(n_frames, 1, kMaxInverseFrames, "n_frames");
   util::check::integer_in_range(mel_config.n_fft, 1, 8192, "n_fft");
-  size_t output_elements = 0;
-  if (!numeric::checked_size_product(static_cast<size_t>(mel_config.n_fft / 2 + 1),
-                                     static_cast<size_t>(n_frames), kMaxAudioBufferSize,
-                                     &output_elements)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mel_to_stft: output exceeds the offline resource limit");
-  }
   const int n_freq = mel_config.n_fft / 2 + 1;
   MelFilterConfig fcfg = mel_config.to_mel_filter_config();
   std::shared_ptr<const std::vector<float>> filterbank =
@@ -119,9 +112,8 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
       lift[k] = 1.0f + (lifter / 2.0f) * std::sin(kPi * static_cast<float>(k + 1) / lifter);
       // A window that reaches zero cannot be divided back out of the coefficient it zeroed.
       if (std::abs(lift[k]) < kMinLift) {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "mfcc_to_mel: lifter zeroes the lift window at a coefficient "
-                              "below n_mfcc and cannot be inverted");
+        util::check::refuse_relation({"lifter", "n_mfcc"},
+                                     "{0} must not zero the lift window below {1}");
       }
     }
   }

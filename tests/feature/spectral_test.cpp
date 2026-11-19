@@ -1080,6 +1080,14 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
   const Spectrogram spec = Spectrogram::compute(generate_sine_audio(440.0f), stft);
   CHECK_THROWS_WITH(spectral_contrast(spec, 22050, 8, 200.0f, 0.02f),
                     "fmin * 2^(n_bands - 1) must be less than sr / 2");
+  // Over 16 points one bin spans 1378 Hz, so a 200 Hz first band holds no bin past the trim.
+  StftConfig tiny;
+  tiny.n_fft = 16;
+  tiny.hop_length = 8;
+  const Spectrogram coarse = Spectrogram::compute(generate_sine_audio(440.0f), tiny);
+  CHECK_THROWS_WITH(spectral_contrast(coarse, 22050, 6, 20.0f, 0.02f),
+                    "fmin and n_bands must leave every contrast band at least one bin of n_fft "
+                    "at sr");
 
   const std::vector<float> samples(8, 0.5f);
   CHECK_THROWS_WITH(zero_crossing_rate(samples.data(), samples.size(), 0, 4),
@@ -1121,6 +1129,13 @@ TEST_CASE("rhythm features refuse a bad parameter by its core name", "[spectral]
                     "hop_length must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(fourier_tempogram(std::vector<float>{1.0f, nan}, 22050, TempogramConfig()),
                     "onset_envelope contains a non-finite sample at index 1");
+  TempogramConfig uncentered;
+  uncentered.center = false;
+  uncentered.win_length = 128;
+  CHECK_THROWS_WITH(tempogram(env, 22050, uncentered),
+                    "onset_envelope must hold at least win_length values when center is false");
+  CHECK_THROWS_WITH(fourier_tempogram(env, 22050, uncentered),
+                    "onset_envelope must hold at least win_length values when center is false");
 
   const TempogramConfig ok;
   CHECK_THROWS_WITH(cyclic_tempogram(env, 0, ok, 30.0f, 12),
@@ -1209,4 +1224,8 @@ TEST_CASE("inverse features refuse a bad parameter by its core name", "[spectral
   mfcc_nan[3] = nan;
   CHECK_THROWS_WITH(mfcc_to_mel(mfcc_nan.data(), 2, 4, 8, 0.0f),
                     "mfcc contains a non-finite sample at index 3");
+  // lifter 2 gives lift[2] = 1 + sin(3 * pi / 2) = 0.
+  const std::vector<float> mfcc3(12, 1.0f);
+  CHECK_THROWS_WITH(mfcc_to_mel(mfcc3.data(), 3, 4, 8, 2.0f),
+                    "lifter must not zero the lift window below n_mfcc");
 }

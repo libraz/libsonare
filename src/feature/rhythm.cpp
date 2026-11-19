@@ -47,13 +47,11 @@ std::vector<float> pad_envelope_constant(const std::vector<float>& env, int pad,
 
 /// @brief Frames a tempogram of @p env_size onset frames holds: one per envelope frame when
 ///        centered, else one per full window (librosa framing, hop 1).
-int tempogram_frame_count(std::size_t env_size, int win, bool center, const char* name) {
+int tempogram_frame_count(std::size_t env_size, int win, bool center) {
   if (center) return static_cast<int>(env_size);
   if (env_size < static_cast<std::size_t>(win)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(name) +
-                              ": onset envelope is shorter than win_length with "
-                              "center disabled");
+    util::check::refuse_relation({"onset_envelope", "win_length", "center"},
+                                 "{0} must hold at least {1} values when {2} is false");
   }
   return static_cast<int>(env_size) - win + 1;
 }
@@ -69,8 +67,7 @@ std::vector<std::complex<float>> fourier_tempogram_complex(const std::vector<flo
   const int n_bins = win / 2 + 1;
   const int half = win / 2;
   const auto padded = pad_envelope_constant(onset_envelope, half, config.center);
-  const int n_frames =
-      tempogram_frame_count(onset_envelope.size(), win, config.center, "fourier_tempogram");
+  const int n_frames = tempogram_frame_count(onset_envelope.size(), win, config.center);
   const auto window = create_window(config.window, win);
 
   // Use kissfft via core/fft.h.
@@ -111,8 +108,7 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
   const int win = config.win_length;
   const int half = win / 2;
   const auto padded = pad_envelope_linear_ramp(onset_envelope, half, config.center);
-  const int n_frames =
-      tempogram_frame_count(onset_envelope.size(), win, config.center, "tempogram");
+  const int n_frames = tempogram_frame_count(onset_envelope.size(), win, config.center);
   const auto window = create_window(config.window, win);
 
   std::vector<float> tg(static_cast<std::size_t>(win) * static_cast<std::size_t>(n_frames), 0.0f);
