@@ -1305,7 +1305,7 @@ def _mode_values(modes: Sequence[KeyMode] | str | None) -> list[int]:
         return [_mode_value(cast(KeyMode, modes))]
     values = [_mode_value(mode) for mode in modes]
     if not values:
-        raise _refuse("modes must not be empty")
+        raise _refuse("modes must not be empty; omit it for the default mode set")
     return values
 
 

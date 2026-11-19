@@ -143,7 +143,10 @@ def test_an_empty_modes_set_is_refused_rather_than_read_as_the_default(
     fn_name: str, empty: list[KeyMode] | tuple[KeyMode, ...]
 ) -> None:
     fn = getattr(libsonare, fn_name)
-    with pytest.raises(SonareValueError, match=f"^{fn_name}: modes must not be empty$"):
+    with pytest.raises(
+        SonareValueError,
+        match=f"^{fn_name}: modes must not be empty; omit it for the default mode set$",
+    ):
         fn(_chord_tone(0.5), SR, modes=empty)
 
 

@@ -34,12 +34,15 @@ def test_streaming_preview_refuses_an_empty_platform_list() -> None:
     tone = _tone()
     assert libsonare.mastering_streaming_preview(tone, SR, platforms=None) is not None
     with pytest.raises(
-        SonareValueError, match="^mastering_streaming_preview: platforms must not be empty$"
+        SonareValueError,
+        match="^mastering_streaming_preview: platforms must not be empty; "
+        "omit it for the built-in set$",
     ):
         libsonare.mastering_streaming_preview(tone, SR, platforms=[])
     with pytest.raises(
         SonareValueError,
-        match="^mastering_streaming_preview_stereo: platforms must not be empty$",
+        match="^mastering_streaming_preview_stereo: platforms must not be empty; "
+        "omit it for the built-in set$",
     ):
         libsonare.mastering_streaming_preview_stereo(tone, tone, SR, platforms=[])
 

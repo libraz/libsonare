@@ -487,7 +487,7 @@ def _streaming_platforms(
         return None, 0, []
     fields = [_platform_fields(platform) for platform in platforms]
     if not fields:
-        raise _refuse("platforms must not be empty")
+        raise _refuse("platforms must not be empty; omit it for the built-in set")
     array_type = SonareStreamingPlatform * len(fields)
     platform_buffers = [_utf8_arg(name, "name") for name, _, _ in fields]
     platform_array = array_type(
