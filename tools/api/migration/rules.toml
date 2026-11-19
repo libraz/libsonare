@@ -675,6 +675,14 @@ after = '''
 with pytest.raises(libsonare.SonareValueError, match="^hpss: hop_length must be"):
     libsonare.hpss(samples, 22050, hop_length=0)
 '''
+[[rule.example]]
+surface = "wasm"
+before = '''
+audio.analyze({ hopLength: 2 ** 32 }); // RangeError: analyze: hopLength must be ...
+'''
+after = '''
+audio.analyze({ hopLength: 2 ** 32 }); // RangeError: Audio.analyze: hopLength must be ...
+'''
 
 [[rule]]
 slug = "getters"
