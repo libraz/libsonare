@@ -102,7 +102,8 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
   // Validate the transform shape at the boundary rather than relying on the
   // core's precondition throw, so every _ex entry point rejects it identically
   // and before any input is decoded.
-  if (n_fft <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // A hop of 0 is absent: the core runs a quarter of n_fft.
+  if (n_fft <= 0 || hop_length < 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(
       "hpss_ex", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -639,7 +640,7 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
   // ops may be NULL iff there are no ops (identity transform).
   if (ops == nullptr && n_ops != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
-  SpectralEditConfig core_config;  // n_fft=2048, hop=512, Hann, heal_radius=2
+  SpectralEditConfig core_config;  // n_fft=2048, hop a quarter of n_fft, Hann, heal_radius=2
   if (config != nullptr) {
     if (config->n_fft != 0) core_config.n_fft = config->n_fft;
     if (config->hop_length != 0) core_config.hop_length = config->hop_length;

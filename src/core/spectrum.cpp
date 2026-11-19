@@ -598,6 +598,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter);
+  hop_length = resolve_resynthesis_hop(hop_length, n_fft);
   // This is an overlap-add reconstruction, so it owes the same geometry the other
   // reconstructing paths check: past nFft/2 the windows stop summing to a constant
   // and the result comes back amplitude-modulated at the frame rate.

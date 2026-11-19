@@ -24,7 +24,7 @@ using sonare::constants::kHalfPi;
 StftConfig stft_for(const PercussiveSeparationConfig& separation) {
   StftConfig stft;
   stft.n_fft = separation.n_fft;
-  stft.hop_length = separation.hop_length;
+  stft.hop_length = resolve_resynthesis_hop(separation.hop_length, separation.n_fft);
   return stft;
 }
 
@@ -69,7 +69,8 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
   SONARE_CHECK(std::isfinite(config.fade_ms) && config.fade_ms > 0.0f, ErrorCode::InvalidParameter);
   // Checked here rather than left to the HPSS call, which the identity path
   // never reaches: an unusable framing is an error on every set.
-  validate_cola_geometry(config.separation.n_fft, config.separation.hop_length);
+  const StftConfig framing = stft_for(config.separation);
+  validate_cola_geometry(framing.n_fft, framing.hop_length);
 
   const int sample_rate = audio.sample_rate();
   const int64_t n_samples = static_cast<int64_t>(audio.size());
@@ -94,8 +95,7 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
 
   // Only the percussive component is read below, so the separation reconstructs
   // that one instead of running a second inverse transform and discarding it.
-  const Audio separated_percussive =
-      percussive(audio, config.separation.hpss, stft_for(config.separation));
+  const Audio separated_percussive = percussive(audio, config.separation.hpss, framing);
   std::vector<float> output(audio.begin(), audio.end());
 
   for (const PercussiveEvent& event : events) {

@@ -97,6 +97,7 @@ add_executable(sonare_tests
   effects/hpss_test.cpp
   effects/time_stretch_test.cpp
   effects/spectral_edit_test.cpp
+  effects/resynthesis_hop_test.cpp
   effects/pitch_shift_test.cpp
   effects/phase_vocoder_test.cpp
   effects/phase_vocoder_synthesis_test.cpp

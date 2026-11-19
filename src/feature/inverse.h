@@ -38,7 +38,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 /// @param M Mel power spectrogram [n_mels x n_frames] row-major.
 /// @param n_mels Number of Mel bands.
 /// @param n_frames Number of time frames.
-/// @param mel_config Mel configuration that produced @p M.
+/// @param mel_config Mel configuration that produced @p M; a hop of 0 derives max(1, n_fft / 4).
 /// @param n_iter Griffin-Lim iterations (default 32).
 /// @param sr Sample rate of the original audio (Hz). Used for both the Mel
 ///        filterbank inversion and the Griffin-Lim STFT timing.
@@ -47,7 +47,8 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 ///        mel_to_stft rejects, including a non-finite element of @p M, plus
 ///        anything @ref griffin_lim rejects in the reconstructed magnitudes.
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
-                   int n_iter = 32, int sr = constants::kDefaultSampleRate);
+                   int n_iter = constants::kDefaultGriffinLimIterations,
+                   int sr = constants::kDefaultSampleRate);
 
 /// @brief Inverts MFCC coefficients back to a Mel power spectrogram.
 /// @param mfcc MFCC matrix [n_mfcc x n_frames] row-major.
@@ -80,6 +81,7 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
 ///        mfcc_to_mel rejects, including a non-finite element of @p mfcc, plus
 ///        anything @ref mel_to_audio rejects in the reconstructed Mel bands.
 Audio mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, const MelConfig& mel_config,
-                    int n_iter = 32, int sr = constants::kDefaultSampleRate, float lifter = 0.0f);
+                    int n_iter = constants::kDefaultGriffinLimIterations,
+                    int sr = constants::kDefaultSampleRate, float lifter = 0.0f);
 
 }  // namespace sonare

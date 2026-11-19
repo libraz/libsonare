@@ -69,7 +69,7 @@ float band_energy(const Audio& audio, float low_hz, float high_hz, int n_fft = 2
 }
 
 SpectralEditConfig default_config() {
-  SpectralEditConfig cfg;  // n_fft=2048, hop=512, Hann, heal_radius=2
+  SpectralEditConfig cfg;  // n_fft=2048, hop derived as 512, Hann, heal_radius=2
   return cfg;
 }
 
@@ -197,8 +197,9 @@ TEST_CASE("spectral_edit heal removes a transient click", "[spectral_edit]") {
   Audio passthrough = spectral_edit(clicked_audio, cfg, nullptr, 0);
 
   SpectralRegionOp op;
-  op.start_sample = click_center - cfg.hop_length * 3;
-  op.end_sample = click_center + cfg.hop_length * 3;
+  const int hop = resolve_resynthesis_hop(cfg.hop_length, cfg.n_fft);
+  op.start_sample = click_center - hop * 3;
+  op.end_sample = click_center + hop * 3;
   op.low_hz = 0.0f;
   op.high_hz = 0.0f;  // full band
   op.mode = SpectralEditMode::Heal;

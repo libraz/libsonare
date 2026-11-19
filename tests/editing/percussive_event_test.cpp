@@ -346,15 +346,15 @@ struct Framing {
 
 /// @brief Framings that break constant overlap-add.
 /// @details The rule is n_fft even and at least 2, and hop_length in
-///          (0, n_fft / 2]. Each row below is on the far side of exactly one
-///          bound, so a rejection cannot come from a second defect in the row.
+///          (0, n_fft / 2], a hop of 0 being absent (a quarter of n_fft). Each
+///          row below is on the far side of exactly one bound, so a rejection
+///          cannot come from a second defect in the row.
 constexpr Framing kBrokenFramings[] = {
     {2047, 512},   // odd
     {1023, 256},   // odd, at another size
     {1, 1},        // odd and below the minimum
     {0, 512},      // no window at all
     {-2048, 512},  // negative
-    {2048, 0},     // no advance
     {2048, -512},  // negative advance
     {2048, 1025},  // one sample past half the window
     {1024, 513},   // the same bound at another size
@@ -366,6 +366,7 @@ constexpr Framing kBrokenFramings[] = {
 ///          biting and not "any hop that is not the default".
 constexpr Framing kValidFramings[] = {
     {2048, 512},   // the default
+    {2048, 0},     // absent: a quarter of n_fft
     {2048, 1024},  // exactly half the window
     {1024, 512},   // the same boundary at another size
 };

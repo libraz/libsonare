@@ -23,7 +23,7 @@ namespace sonare::editing::event_model {
 struct PercussiveSeparationConfig {
   HpssConfig hpss{};
   int n_fft = 2048;
-  int hop_length = 512;
+  int hop_length = 0;  ///< 0 derives max(1, n_fft / 4).
 };
 
 /// @brief Onset defaults this model needs, which differ from the detector's own

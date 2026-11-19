@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 
+#include "core/spectrum.h"
 #include "effects/native_spectral_stretch.h"
 #include "effects/phase_vocoder.h"
 #include "util/exception.h"
@@ -19,15 +20,16 @@ Audio time_stretch(const Audio& audio, float rate, const TimeStretchConfig& conf
       numeric::checked_projected_count(audio.size(), rate, kMaxOutputSamples, &expected_size),
       ErrorCode::InvalidParameter);
 
+  const int hop_length = resolve_resynthesis_hop(config.hop_length, config.n_fft);
   if (config.backend == StretchBackend::NativeSpectral) {
-    return native_spectral_time_stretch(audio, rate, config.n_fft, config.hop_length);
+    return native_spectral_time_stretch(audio, rate, config.n_fft, hop_length);
   }
 
-  Spectrogram spec = phase_vocoder_analysis(audio, config.n_fft, config.hop_length);
+  Spectrogram spec = phase_vocoder_analysis(audio, config.n_fft, hop_length);
 
   /// Apply phase vocoder
   PhaseVocoderConfig pv_config;
-  pv_config.hop_length = config.hop_length;
+  pv_config.hop_length = hop_length;
 
   Spectrogram stretched = phase_vocoder(spec, rate, pv_config);
 

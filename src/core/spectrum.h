@@ -137,6 +137,14 @@ void validate_cola_geometry(int n_fft, int hop_length);
 /// @throws SonareException(InvalidParameter) if any rule is violated.
 void validate_cola_geometry(int n_fft, int hop_length, WindowType window, int win_length);
 
+/// @brief The hop a resynthesizing call runs at: @p hop_length when given, else a quarter of
+///        @p n_fft and at least 1.
+/// @details 0 means "not given" (no hop is validly 0); a negative value passes through so the
+///          call's geometry check refuses it. Analysis-only transforms keep their own fixed hop.
+inline int resolve_resynthesis_hop(int hop_length, int n_fft) noexcept {
+  return hop_length != 0 ? hop_length : std::max(1, n_fft / 4);
+}
+
 /// @brief Builds an StftConfig with the given FFT and hop sizes.
 /// @details Convenience helper for the common case where callers only need to
 /// override @p n_fft and @p hop_length. All other fields (window, win_length,
@@ -168,7 +176,7 @@ int stft_frame_count(std::size_t signal_length, const StftConfig& config);
 /// @details Griffin-Lim iteratively estimates phase from magnitude spectrogram.
 ///          Momentum accelerates convergence but may cause instability if too high.
 struct GriffinLimConfig {
-  int n_iter = 32;         ///< Number of iterations (typically 16-64)
+  int n_iter = constants::kDefaultGriffinLimIterations;  ///< Number of iterations (typically 16-64)
   float momentum = 0.99f;  ///< Momentum factor [0.0, 1.0). 0 disables, 0.99 is typical.
                            ///< Higher values converge faster but may oscillate.
 };
@@ -433,7 +441,7 @@ MagPhase magphase(const Spectrogram& spec, float power = 1.0f);
 /// @param n_bins Number of frequency bins
 /// @param n_frames Number of time frames
 /// @param n_fft FFT size
-/// @param hop_length Hop length
+/// @param hop_length Hop length; 0 derives max(1, n_fft / 4)
 /// @param sample_rate Sample rate
 /// @param config Griffin-Lim configuration
 /// @return Reconstructed audio
@@ -449,7 +457,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
 /// @brief Reconstructs audio from magnitude spectrogram using Griffin-Lim algorithm.
 /// @param magnitude Magnitude values as vector
 /// @param n_fft FFT size
-/// @param hop_length Hop length
+/// @param hop_length Hop length; 0 derives max(1, n_fft / 4)
 /// @param sample_rate Sample rate
 /// @param config Griffin-Lim configuration
 /// @return Reconstructed audio

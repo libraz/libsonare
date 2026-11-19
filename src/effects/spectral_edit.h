@@ -46,8 +46,8 @@ inline constexpr int kSpectralEditMaxNFft = 262144;
 
 /// @brief STFT + heal parameters for a spectral edit pass.
 struct SpectralEditConfig {
-  int n_fft = 2048;      ///< FFT size; a power of two in [4, @ref kSpectralEditMaxNFft].
-  int hop_length = 512;  ///< Hop length; must satisfy 0 < hop <= n_fft/2 (COLA).
+  int n_fft = 2048;    ///< FFT size; a power of two in [4, @ref kSpectralEditMaxNFft].
+  int hop_length = 0;  ///< Hop length, 0 < hop <= n_fft/2 (COLA); 0 derives max(1, n_fft / 4).
   WindowType window = WindowType::Hann;  ///< Analysis + synthesis window.
   int heal_radius_frames = 2;            ///< Neighbour frames each side used by Heal (>= 1).
 };

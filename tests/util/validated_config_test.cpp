@@ -176,7 +176,7 @@ TEST_CASE("Validated<DecomposeStemsConfig> rejects out-of-range fields", "[util]
 
   rejects([](DecomposeStemsConfig& c) { c.n_components = 0; });
   rejects([](DecomposeStemsConfig& c) { c.n_fft = 0; });
-  rejects([](DecomposeStemsConfig& c) { c.hop_length = 0; });
+  rejects([](DecomposeStemsConfig& c) { c.hop_length = -1; });
   rejects([](DecomposeStemsConfig& c) { c.n_iter = 0; });
   rejects([](DecomposeStemsConfig& c) { c.beta = std::nanf(""); });
   rejects([](DecomposeStemsConfig& c) { c.mask_power = 0.5f; });

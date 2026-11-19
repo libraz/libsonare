@@ -205,14 +205,15 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
       ErrorCode::InvalidParameter,
       "SpectralEditConfig: nFft must be a power of two in [4, " +
           std::to_string(kSpectralEditMaxNFft) + "], got " + std::to_string(config.n_fft));
-  validate_cola_geometry(config.n_fft, config.hop_length);
+  const int hop_length = resolve_resynthesis_hop(config.hop_length, config.n_fft);
+  validate_cola_geometry(config.n_fft, hop_length);
   SONARE_CHECK(config.heal_radius_frames >= 1, ErrorCode::InvalidParameter);
   SONARE_CHECK(ops != nullptr || n_ops == 0, ErrorCode::InvalidParameter);
   for (std::size_t i = 0; i < n_ops; ++i) validate_spectral_region_op(ops[i]);
 
   StftConfig stft_config;
   stft_config.n_fft = config.n_fft;
-  stft_config.hop_length = config.hop_length;
+  stft_config.hop_length = hop_length;
   stft_config.window = config.window;
   stft_config.center = true;
 
@@ -230,16 +231,15 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
       spec.complex_data(), spec.complex_data() + static_cast<size_t>(n_bins) * n_frames);
 
   for (std::size_t i = 0; i < n_ops; ++i) {
-    const RegionWindow w = resolve_window(ops[i], n_bins, n_frames, config.n_fft, config.hop_length,
-                                          sample_rate, length);
+    const RegionWindow w =
+        resolve_window(ops[i], n_bins, n_frames, config.n_fft, hop_length, sample_rate, length);
     if (!w.empty) {
-      apply_op(buf, n_frames, config.n_fft, config.hop_length, w, ops[i],
-               config.heal_radius_frames);
+      apply_op(buf, n_frames, config.n_fft, hop_length, w, ops[i], config.heal_radius_frames);
     }
   }
 
   Spectrogram edited = Spectrogram::from_complex(buf.data(), n_bins, n_frames, config.n_fft,
-                                                 config.hop_length, sample_rate, config.window,
+                                                 hop_length, sample_rate, config.window,
                                                  /*center=*/true, spec.win_length());
   Audio out = edited.to_audio(static_cast<int>(audio.size()));
   // A finite gain can still carry a loud bin past the float range.

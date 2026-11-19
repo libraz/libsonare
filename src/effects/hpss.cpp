@@ -421,6 +421,15 @@ Spectrogram hpss_component(const Spectrogram& spec, const HpssConfig& config, Hp
   return masked_spectrogram(spec, mask);
 }
 
+/// The framing an audio-level separation runs at: an absent hop derived from n_fft, checked
+/// for overlap-add because every component is resynthesized.
+StftConfig resynthesis_framing(StftConfig config) {
+  config.hop_length = resolve_resynthesis_hop(config.hop_length, config.n_fft);
+  validate_cola_geometry(config.n_fft, config.hop_length, config.window,
+                         config.actual_win_length());
+  return config;
+}
+
 }  // namespace
 
 HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
@@ -444,10 +453,9 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
   return result;
 }
 
-HpssAudioResult hpss(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
+HpssAudioResult hpss(const Audio& audio, const HpssConfig& config, const StftConfig& requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
-                         stft_config.actual_win_length());
+  const StftConfig stft_config = resynthesis_framing(requested);
 
   /// Compute the STFT and separate it. The analysis spectrogram is passed as a
   /// temporary so it and its magnitude cache are released when this statement
@@ -470,20 +478,18 @@ Spectrogram percussive(const Spectrogram& spec, const HpssConfig& config) {
   return hpss_component(spec, config, HpssComponent::kPercussive);
 }
 
-Audio harmonic(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
+Audio harmonic(const Audio& audio, const HpssConfig& config, const StftConfig& requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
-                         stft_config.actual_win_length());
+  const StftConfig stft_config = resynthesis_framing(requested);
 
   const Spectrogram spec = Spectrogram::compute(audio, stft_config);
   return hpss_component(spec, config, HpssComponent::kHarmonic)
       .to_audio(static_cast<int>(audio.size()));
 }
 
-Audio percussive(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
+Audio percussive(const Audio& audio, const HpssConfig& config, const StftConfig& requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
-                         stft_config.actual_win_length());
+  const StftConfig stft_config = resynthesis_framing(requested);
 
   const Spectrogram spec = Spectrogram::compute(audio, stft_config);
   return hpss_component(spec, config, HpssComponent::kPercussive)
@@ -562,10 +568,9 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
 }
 
 HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssConfig& config,
-                                               const StftConfig& stft_config) {
+                                               const StftConfig& requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
-                         stft_config.actual_win_length());
+  const StftConfig stft_config = resynthesis_framing(requested);
 
   /// Compute the STFT and separate it. Passing the analysis spectrogram as a
   /// temporary releases it and its magnitude cache when this statement ends,
@@ -582,10 +587,9 @@ HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssCon
   return result;
 }
 
-Audio residual(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
+Audio residual(const Audio& audio, const HpssConfig& config, const StftConfig& requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
-                         stft_config.actual_win_length());
+  const StftConfig stft_config = resynthesis_framing(requested);
 
   /// Only the residual is reconstructed. Routing through the audio-level
   /// hpss_with_residual ran three inverse transforms and discarded two of them.

@@ -16,7 +16,7 @@ namespace {
 StftConfig stft_for(const PercussiveSeparationConfig& separation) {
   StftConfig stft;
   stft.n_fft = separation.n_fft;
-  stft.hop_length = separation.hop_length;
+  stft.hop_length = resolve_resynthesis_hop(separation.hop_length, separation.n_fft);
   return stft;
 }
 
@@ -64,21 +64,21 @@ std::vector<PercussiveEvent> extract_percussive_events(
     const Audio& audio, const PercussiveEventExtractorConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   // The separation inverts an STFT, so its framing has to overlap-add.
-  validate_cola_geometry(config.separation.n_fft, config.separation.hop_length);
+  const StftConfig framing = stft_for(config.separation);
+  validate_cola_geometry(framing.n_fft, framing.hop_length);
   SONARE_CHECK(std::isfinite(config.max_event_ms) && config.max_event_ms > 0.0f,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(config.min_percussive_ratio >= 0.0f && config.min_percussive_ratio <= 1.0f,
                ErrorCode::InvalidParameter);
 
-  const HpssAudioResult separated =
-      hpss(audio, config.separation.hpss, stft_for(config.separation));
+  const HpssAudioResult separated = hpss(audio, config.separation.hpss, framing);
 
   // The detector runs on the percussive component and on the separation's own
   // framing, so a harmonic attack is attenuated before it is seen rather than
   // filtered out afterwards.
   OnsetDetectConfig onset_config = config.onset;
-  onset_config.n_fft = config.separation.n_fft;
-  onset_config.hop_length = config.separation.hop_length;
+  onset_config.n_fft = framing.n_fft;
+  onset_config.hop_length = framing.hop_length;
   const OnsetAnalyzer analyzer(separated.percussive, onset_config, OnsetFraming::kNative);
   const std::vector<Onset>& onsets = analyzer.onsets();
 

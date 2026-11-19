@@ -41,7 +41,8 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 ///                   same rule.
 /// @param n_fft      FFT size: an even integer >= 4. Any even size is accepted;
 ///                   the FFT is mixed-radix, not power-of-two only.
-/// @param hop_length Hop in samples, in (0, n_fft/2]. The result is
+/// @param hop_length Hop in samples, in (0, n_fft/2], or 0 for a quarter of
+///                   @p n_fft (at least 1). The result is
 ///                   resynthesized by overlap-add and the phase-coherent
 ///                   spectral paths require at least half-window overlap; a
 ///                   sparser hop is rejected with
@@ -64,7 +65,7 @@ SonareError sonare_time_stretch(const float* samples, size_t length, int sample_
                                 float speed_ratio, float** out, size_t* out_length);
 /// @brief Native spectral time stretch with explicit FFT/hop configuration.
 /// @details @p n_fft must be an even integer >= 4 and @p hop_length must lie in
-///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
+///          (0, n_fft/2], or be 0 for a quarter of @p n_fft; see @ref sonare_hpss_ex.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate,
                                    float speed_ratio, int n_fft, int hop_length, float** out,
@@ -74,7 +75,7 @@ SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_r
                                float pitch_semitones, float** out, size_t* out_length);
 /// @brief Native spectral pitch shift with explicit FFT/hop configuration.
 /// @details @p n_fft must be an even integer >= 4 and @p hop_length must lie in
-///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
+///          (0, n_fft/2], or be 0 for a quarter of @p n_fft; see @ref sonare_hpss_ex.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
                                   float pitch_semitones, int n_fft, int hop_length, float** out,
@@ -693,7 +694,7 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
 // ============================================================================
 
 /// @brief Versioned configuration for @ref sonare_extract_percussive_events.
-/// @details Zero-initialize for the defaults (2048-point FFT, 512 hop, 31-frame
+/// @details Zero-initialize for the defaults (2048-point FFT, a hop of a quarter of it, 31-frame
 ///          median kernels, onset delta 0.06, one frame of minimum spacing, a
 ///          500 ms span cap and no ratio filter). @c struct_version 0 and 1 both
 ///          select the version-1 layout. Every field takes its default at 0, so
@@ -703,7 +704,8 @@ typedef struct {
   int32_t struct_version;
   /// FFT size and hop the separation and the onset detector share. They cannot
   /// be set apart: an event measured on one framing and lifted out on another is
-  /// not the same signal. 0 keeps 2048 and 512. The pair must overlap-add --
+  /// not the same signal. An n_fft of 0 keeps 2048 and a hop of 0 is a quarter of the
+  /// n_fft in use. The pair must overlap-add --
   /// @c n_fft even and at least 2, @c hop_length no more than half of it --
   /// because the separation inverts an STFT. A negative value is rejected on its
   /// own, before the zero-is-default rule could swallow it.
@@ -747,7 +749,7 @@ typedef struct {
 } SonarePercussiveEventConfig;
 
 /// @brief Versioned configuration for @ref sonare_render_percussive_events.
-/// @details Zero-initialize for the defaults (2048-point FFT, 512 hop, 31-frame
+/// @details Zero-initialize for the defaults (2048-point FFT, a hop of a quarter of it, 31-frame
 ///          median kernels, 5 ms fade). @c struct_version 0 and 1 both select
 ///          the version-1 layout.
 typedef struct {
@@ -1086,7 +1088,7 @@ typedef struct {
   int struct_version;  ///< Layout version; 0 and 1 both select version 1.
   int n_components;    ///< Number of NMF components (stems); 0 selects 4.
   int n_fft;           ///< STFT size in samples; 0 selects 2048.
-  int hop_length;      ///< STFT hop in samples; 0 selects 512.
+  int hop_length;      ///< STFT hop in samples; 0 is a quarter of n_fft.
   int n_iter;          ///< Multiplicative-update iterations; 0 selects 100.
   float beta;          ///< Beta divergence; 0 selects 2 (Frobenius), 1 is KL, tiny is IS.
   const char* init;    ///< Initialiser "random" or "nndsvd"; NULL selects "random".
@@ -1302,8 +1304,8 @@ typedef enum SONARE_ENUM_BASE {
 ///          documented default so a memset(0) config is the all-defaults case.
 typedef struct {
   int n_fft;  ///< STFT size in samples; 0 selects 2048, otherwise a power of two in [4, 262144].
-  int hop_length;          ///< STFT hop in samples; 0 selects 512, otherwise 0 < hop <= n_fft/2.
-  int window;              ///< A @ref SonareWindowType (sonare_c_streaming.h); 0 is Hann.
+  int hop_length;  ///< STFT hop in samples; 0 is a quarter of n_fft, otherwise 0 < hop <= n_fft/2.
+  int window;      ///< A @ref SonareWindowType (sonare_c_streaming.h); 0 is Hann.
   int heal_radius_frames;  ///< Neighbour frames on each side that heal reads; 0 selects 2.
 } SonareSpectralEditConfig;
 

@@ -120,7 +120,7 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config = VqtConfig(),
 ///        of @p magnitude. The finiteness precondition lives here so every
 ///        surface reports it identically.
 Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const VqtConfig& config,
-                     int sr, int n_iter = 32);
+                     int sr, int n_iter = constants::kDefaultGriffinLimIterations);
 
 /// @brief Reconstructs audio from a VQT result via Griffin-Lim.
 /// @param vqt_result VQT coefficients (only the magnitude is used).
@@ -129,7 +129,8 @@ Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const Vqt
 /// @return Reconstructed audio using the legacy CQT-equivalent gamma=0 path.
 /// @details A VqtResult is an alias of CqtResult and does not retain VQT-only
 ///          configuration. Use the config overload below to preserve gamma.
-Audio griffinlim_vqt(const VqtResult& vqt_result, int sr, int n_iter = 32);
+Audio griffinlim_vqt(const VqtResult& vqt_result, int sr,
+                     int n_iter = constants::kDefaultGriffinLimIterations);
 
 /// @brief Reconstructs a VQT result with its original configuration.
 /// @param vqt_result VQT coefficients (only the magnitude is used).
@@ -137,7 +138,8 @@ Audio griffinlim_vqt(const VqtResult& vqt_result, int sr, int n_iter = 32);
 /// @param sr Sample rate of the original signal.
 /// @param n_iter Number of Griffin-Lim iterations.
 /// @return Reconstructed audio using the supplied VQT bandwidth configuration.
-Audio griffinlim_vqt(const VqtResult& vqt_result, const VqtConfig& config, int sr, int n_iter = 32);
+Audio griffinlim_vqt(const VqtResult& vqt_result, const VqtConfig& config, int sr,
+                     int n_iter = constants::kDefaultGriffinLimIterations);
 
 /// @brief Computes pseudo-inverse VQT (reconstruction).
 /// @param vqt_result VQT coefficients

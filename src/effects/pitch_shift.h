@@ -12,8 +12,8 @@ namespace sonare {
 
 /// @brief Configuration for pitch shifting.
 struct PitchShiftConfig {
-  int n_fft = 2048;      ///< FFT size for time stretch (used by both backends)
-  int hop_length = 512;  ///< Hop length for time stretch (used by both backends)
+  int n_fft = 2048;    ///< FFT size for time stretch (used by both backends)
+  int hop_length = 0;  ///< Hop length (both backends); 0 derives max(1, n_fft / 4)
   StretchBackend backend = StretchBackend::NativeSpectral;
 };
 

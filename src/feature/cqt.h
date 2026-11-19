@@ -258,7 +258,7 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config = CqtConfig());
 ///        of @p magnitude. The finiteness precondition lives here so every
 ///        surface reports it identically.
 Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const CqtConfig& config,
-                     int sr, int n_iter = 32);
+                     int sr, int n_iter = constants::kDefaultGriffinLimIterations);
 
 /// @brief Converts CQT to chroma features.
 /// @param cqt_result CQT result

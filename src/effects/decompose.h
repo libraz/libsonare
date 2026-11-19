@@ -53,7 +53,7 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
 struct DecomposeStemsConfig {
   int n_components = 4;                ///< Number of NMF components (k).
   int n_fft = 2048;                    ///< STFT size.
-  int hop_length = 512;                ///< STFT hop.
+  int hop_length = 0;                  ///< STFT hop; 0 derives max(1, n_fft / 4).
   int n_iter = 100;                    ///< NMF multiplicative-update iterations.
   float beta = kDecomposeDefaultBeta;  ///< Beta divergence: 2 = Frobenius, 1 = KL, 0 = IS.
   std::string init = "random";         ///< NMF initialisation ("random" or "nndsvd").

@@ -88,6 +88,8 @@ inline constexpr int kDefaultSampleRate = 22050;
 inline constexpr int kDefaultNFft = 2048;
 inline constexpr int kDefaultHopLength = 512;
 inline constexpr int kDefaultNMels = 128;
+/// Griffin-Lim phase-reconstruction iterations when a caller gives none (librosa's 32).
+inline constexpr int kDefaultGriffinLimIterations = 32;
 
 // ============================================================
 // DAW / transport defaults

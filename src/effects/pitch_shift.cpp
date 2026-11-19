@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/resample.h"
+#include "core/spectrum.h"
 #include "effects/native_spectral_stretch.h"
 #include "effects/time_stretch.h"
 #include "util/constants.h"
@@ -72,8 +73,9 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   SONARE_CHECK_MSG(make_pitch_shift_ratio_plan(audio.size(), audio.sample_rate(), ratio, &plan),
                    ErrorCode::InvalidParameter, kPitchShiftPlanError);
 
+  const int hop_length = resolve_resynthesis_hop(config.hop_length, config.n_fft);
   if (config.backend == StretchBackend::NativeSpectral) {
-    return native_spectral_pitch_shift_ratio(audio, ratio, config.n_fft, config.hop_length);
+    return native_spectral_pitch_shift_ratio(audio, ratio, config.n_fft, hop_length);
   }
 
   /// @details Pitch shifting = time stretch + resample (librosa-compatible:
@@ -85,7 +87,7 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   /// Time stretch configuration
   TimeStretchConfig ts_config;
   ts_config.n_fft = config.n_fft;
-  ts_config.hop_length = config.hop_length;
+  ts_config.hop_length = hop_length;
   ts_config.backend = StretchBackend::PhaseVocoder;
 
   /// Step 1: Time stretch longer by 1/ratio (preserves pitch).

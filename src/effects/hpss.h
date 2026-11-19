@@ -127,7 +127,7 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config = H
 /// @brief Performs HPSS on audio and returns separated audio signals.
 /// @param audio Input audio
 /// @param config HPSS configuration
-/// @param stft_config STFT configuration for analysis/synthesis
+/// @param stft_config STFT configuration; a hop of 0 derives max(1, n_fft / 4)
 /// @return Harmonic and percussive audio signals
 HpssAudioResult hpss(const Audio& audio, const HpssConfig& config = HpssConfig(),
                      const StftConfig& stft_config = StftConfig());
@@ -150,7 +150,7 @@ Spectrogram percussive(const Spectrogram& spec, const HpssConfig& config = HpssC
 /// @brief Extracts only harmonic component from audio.
 /// @param audio Input audio
 /// @param config HPSS configuration
-/// @param stft_config STFT configuration
+/// @param stft_config STFT configuration; a hop of 0 derives max(1, n_fft / 4)
 /// @return Harmonic audio
 Audio harmonic(const Audio& audio, const HpssConfig& config = HpssConfig(),
                const StftConfig& stft_config = StftConfig());
@@ -158,7 +158,7 @@ Audio harmonic(const Audio& audio, const HpssConfig& config = HpssConfig(),
 /// @brief Extracts only percussive component from audio.
 /// @param audio Input audio
 /// @param config HPSS configuration
-/// @param stft_config STFT configuration
+/// @param stft_config STFT configuration; a hop of 0 derives max(1, n_fft / 4)
 /// @return Percussive audio
 Audio percussive(const Audio& audio, const HpssConfig& config = HpssConfig(),
                  const StftConfig& stft_config = StftConfig());
@@ -185,7 +185,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
 /// @brief Performs HPSS with residual component on audio.
 /// @param audio Input audio
 /// @param config HPSS configuration
-/// @param stft_config STFT configuration
+/// @param stft_config STFT configuration; a hop of 0 derives max(1, n_fft / 4)
 /// @return Harmonic, percussive, and residual audio signals
 /// @details Under the spectrogram overload's contract, including that a soft
 ///   mask at the default margins returns an empty residual.
@@ -196,7 +196,7 @@ HpssAudioResultWithResidual hpss_with_residual(const Audio& audio,
 /// @brief Extracts residual component from audio (what remains after H+P removal).
 /// @param audio Input audio
 /// @param config HPSS configuration
-/// @param stft_config STFT configuration
+/// @param stft_config STFT configuration; a hop of 0 derives max(1, n_fft / 4)
 /// @return Residual audio, which is silent under the default config -- see
 ///   @ref hpss_with_residual for what leaves a residual and what it measures.
 Audio residual(const Audio& audio, const HpssConfig& config = HpssConfig(),

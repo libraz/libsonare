@@ -455,8 +455,8 @@ void validate_config(const DecomposeStemsConfig& config) {
                    "DecomposeStemsConfig: nComponents must be positive");
   SONARE_CHECK_MSG(config.n_fft > 0, ErrorCode::InvalidParameter,
                    "DecomposeStemsConfig: nFft must be positive");
-  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter,
-                   "DecomposeStemsConfig: hopLength must be positive");
+  SONARE_CHECK_MSG(config.hop_length >= 0, ErrorCode::InvalidParameter,
+                   "DecomposeStemsConfig: hopLength must be positive, or 0 for a quarter of nFft");
   SONARE_CHECK_MSG(config.n_iter > 0, ErrorCode::InvalidParameter,
                    "DecomposeStemsConfig: nIter must be positive");
   SONARE_CHECK_MSG(numeric::finite(config.beta), ErrorCode::InvalidParameter,
@@ -466,7 +466,8 @@ void validate_config(const DecomposeStemsConfig& config) {
                    "DecomposeStemsConfig: maskPower must be finite and at least 1");
   // The components are resynthesised, so the analysis has to overlap-add back
   // to the input under the same rule every other resynthesising effect applies.
-  const StftConfig stft = make_stft_config(config.n_fft, config.hop_length);
+  const StftConfig stft =
+      make_stft_config(config.n_fft, resolve_resynthesis_hop(config.hop_length, config.n_fft));
   validate_cola_geometry(stft.n_fft, stft.hop_length, stft.window, stft.actual_win_length());
 }
 
@@ -474,7 +475,8 @@ DecomposeStemsLinkedResult decompose_stems_linked(const float* const* channels,
                                                   std::size_t channel_count, std::size_t n,
                                                   int sample_rate,
                                                   const DecomposeStemsConfig& config) {
-  const DecomposeStemsConfig checked = Validated<DecomposeStemsConfig>::make(config).get();
+  DecomposeStemsConfig checked = Validated<DecomposeStemsConfig>::make(config).get();
+  checked.hop_length = resolve_resynthesis_hop(checked.hop_length, checked.n_fft);
   SONARE_CHECK(channels != nullptr && channel_count > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(channel_count <= kMaxDecomposeStemsLinkedChannels, ErrorCode::InvalidParameter);
   for (std::size_t c = 0; c < channel_count; ++c) {
