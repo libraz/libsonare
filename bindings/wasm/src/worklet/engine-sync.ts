@@ -8,6 +8,7 @@ import type {
 } from '../index.js';
 import { refuse } from '../internal/entry.js';
 import type { SonareEngineSyncTempoMessage } from '../internal/worklet_messages.js';
+import { assertU32 } from '../validation.js';
 
 /**
  * Builds the ordered mixer-lane descriptors for a sync message.
@@ -74,9 +75,7 @@ export function resolveTargetId(target: string | number): number {
   // reads it as.
   const value =
     typeof target === 'number' ? target : target.trim() === '' ? Number.NaN : Number(target);
-  if (!Number.isInteger(value)) {
-    throw refuse(`target id must be an integer`);
-  }
+  assertU32(value, 'target id');
   return value;
 }
 

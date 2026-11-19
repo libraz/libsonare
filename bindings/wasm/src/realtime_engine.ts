@@ -277,15 +277,12 @@ function optionalCount(argName: string, value: unknown): number | undefined {
     return undefined;
   }
   if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
-  }
-  if (!Number.isFinite(value)) {
-    throw refuse(`${argName} must be a finite number`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (value === 0) {
     throw refuse(`${argName} must not be 0; omit it for the default`);
   }
-  if (value < 0 || value > C_INT_MAX || !Number.isInteger(value)) {
+  if (!Number.isInteger(value) || value < 1 || value > C_INT_MAX) {
     throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
   }
   return value;
@@ -2821,7 +2818,7 @@ export class RealtimeEngine {
         throw refuse(`${name} must not be 0; omit it for the default`);
       }
       if (typeof value === 'number' && !Number.isFinite(value)) {
-        throw refuse(`${name} must be a finite number`);
+        throw refuse(`${name} must be finite`);
       }
     }
     const { dither, ...rest } = options;

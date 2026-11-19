@@ -91,10 +91,10 @@ describe('RealtimeEngine live program change', () => {
     }
     expect(() =>
       midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 128, lsb: 0 } }),
-    ).toThrow(new RangeError('midi2Program: bank.msb must be in [0, 127]'));
+    ).toThrow(new RangeError('midi2Program: bank.msb must be an integer in [0, 127]'));
     expect(() =>
       midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 0, lsb: 1.5 } }),
-    ).toThrow(TypeError);
+    ).toThrow(new RangeError('midi2Program: bank.lsb must be an integer in [0, 127]'));
     expect(() =>
       midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 8, lsb: 1 } }),
     ).not.toThrow();

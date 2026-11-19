@@ -14,6 +14,7 @@ import {
   midiCcLearn,
   midiCcName,
   midiCcToBreakpoint,
+  midiNoteOn,
   midiParamToCc,
   mixStereo,
   perNoteControllerName,
@@ -274,6 +275,50 @@ describe('GM lookups answer the shared corpus with a name, absence or a domain r
       } else {
         expect(call()).toBe(testCase.name ?? testCase.value);
       }
+    });
+  }
+});
+
+type ReaderSplitCase = {
+  id: string;
+  key: string;
+  value: unknown;
+  accepted?: boolean;
+  refused?: 'range' | 'type';
+  predicate?: string;
+};
+
+/** A corpus value: JSON has no NaN or infinity, so those arrive as `{ "$number": "nan" | "inf" }`. */
+function corpusValue(value: unknown): unknown {
+  if (typeof value === 'object' && value !== null && '$number' in value) {
+    const spelled = (value as { $number: string }).$number;
+    return spelled === 'nan'
+      ? Number.NaN
+      : spelled === '-inf'
+        ? Number.NEGATIVE_INFINITY
+        : Number.POSITIVE_INFINITY;
+  }
+  return value;
+}
+
+describe('an integer and a float field refuse a wrong type by type and a wrong value by domain', () => {
+  const split = (
+    corpus as unknown as {
+      number_reader_split: { base: Record<string, unknown>; cases: ReaderSplitCase[] };
+    }
+  ).number_reader_split;
+  for (const testCase of split.cases) {
+    it(testCase.id, () => {
+      const call = () =>
+        midiNoteOn({ ...split.base, [testCase.key]: corpusValue(testCase.value) } as never);
+      if (testCase.accepted) {
+        expect(call).not.toThrow();
+        return;
+      }
+      const refusal = `midiNoteOn: ${testCase.key} ${testCase.predicate}`;
+      expect(call).toThrow(
+        testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
+      );
     });
   }
 });

@@ -304,5 +304,24 @@
       { "id": "per_note_unnamed_upper_half", "lookup": "per_note_controller_name", "args": {"index": 200}, "absent": true },
       { "id": "per_note_above_domain", "lookup": "per_note_controller_name", "args": {"index": 256}, "refused": "range", "key": "index", "predicate": "must be an integer in [0, 255]" }
     ]
+  },
+  "number_reader_split": {
+    "fn": "midi_note_on",
+    "base": {"ppq": 0, "group": 0, "channel": 0, "note": 60, "velocity": 100},
+    "cases": [
+      { "id": "note_accepted", "key": "note", "value": 60, "accepted": true },
+      { "id": "note_wrong_type", "key": "note", "value": "60", "refused": "type", "predicate": "must be an integer" },
+      { "id": "note_boolean", "key": "note", "value": true, "refused": "type", "predicate": "must be an integer" },
+      { "id": "note_fraction", "key": "note", "value": 60.5, "refused": "range", "predicate": "must be an integer in [0, 127]" },
+      { "id": "note_above_domain", "key": "note", "value": 128, "refused": "range", "predicate": "must be an integer in [0, 127]" },
+      { "id": "note_negative", "key": "note", "value": -1, "refused": "range", "predicate": "must be an integer in [0, 127]" },
+      { "id": "note_not_finite", "key": "note", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be an integer in [0, 127]" },
+      { "id": "ppq_accepted", "key": "ppq", "value": 0.5, "accepted": true },
+      { "id": "ppq_wrong_type", "key": "ppq", "value": "0", "refused": "type", "predicate": "must be a number" },
+      { "id": "ppq_boolean", "key": "ppq", "value": false, "refused": "type", "predicate": "must be a number" },
+      { "id": "ppq_negative", "key": "ppq", "value": -1, "refused": "range", "predicate": "must be finite and at least 0" },
+      { "id": "ppq_nan", "key": "ppq", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and at least 0" },
+      { "id": "ppq_infinite", "key": "ppq", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and at least 0" }
+    ]
   }
 }

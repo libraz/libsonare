@@ -1,14 +1,10 @@
-import { refuse, refuseType } from './entry.js';
+import { assertBoundedInteger } from '../validation.js';
+import { refuse } from './entry.js';
 
-/** Integer in `[0, max]`, worded like the shared live-push rule; a non-integer is a TypeError. */
-function programArg(value: number, argName: string, max: number): number {
-  if (!Number.isInteger(value)) {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (value < 0 || value > max) {
-    throw refuse(`${argName} must be in [0, ${max}]`);
-  }
-  return value;
+/** An integer in `[0, max]`: a non-number is a `TypeError`, anything else outside a `RangeError`. */
+function programArg(value: unknown, argName: string, max: number): number {
+  assertBoundedInteger(value, argName, 0, max);
+  return value as number;
 }
 
 /**
@@ -27,8 +23,8 @@ export function packMidi2Program(
   const g = programArg(group, 'group', 15);
   const ch = programArg(channel, 'channel', 15);
   const p = programArg(program, 'program', 127);
-  const msb = programArg(bankMsb, 'bank_msb', 127);
-  const lsb = programArg(bankLsb, 'bank_lsb', 127);
+  const msb = programArg(bankMsb, 'bank.msb', 127);
+  const lsb = programArg(bankLsb, 'bank.lsb', 127);
   if (!bankValid && (msb !== 0 || lsb !== 0)) {
     throw refuse(`bank MSB and LSB must be 0 when bank-valid is false`);
   }

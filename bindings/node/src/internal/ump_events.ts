@@ -1,6 +1,6 @@
 import type { ProjectMidiEvent } from '../types.js';
-import { assertBoundedInteger, assertFiniteScalar, assertNibble } from '../validation.js';
-import { refuse, refuseType } from './entry.js';
+import { assertBoundedInteger, assertNibble } from '../validation.js';
+import { refuse } from './entry.js';
 
 const MIDI2_U16_MAX = 0xffff;
 const MIDI2_U32_MAX = 0xffffffff;
@@ -17,9 +17,8 @@ export function midi2Event(
   byte3: number,
   word1: number,
 ): ProjectMidiEvent {
-  assertFiniteScalar(ppq, 'ppq');
-  if (ppq < 0) {
-    throw refuse(`ppq must be at least 0`);
+  if (!Number.isFinite(ppq) || ppq < 0) {
+    throw refuse(`ppq must be finite and at least 0`);
   }
   const g = assertNibble(group, 'group');
   const ch = assertNibble(channel, 'channel');
@@ -28,33 +27,28 @@ export function midi2Event(
   return { ppq, word0, word1: word1 >>> 0 };
 }
 
-/** Integer in `[0, max]` worded like the shared live-push rule; a non-integer is a TypeError. */
-export function programArg(value: number, argName: string, max: number): number {
-  if (!Number.isInteger(value)) {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (value < 0 || value > max) {
-    throw refuse(`${argName} must be in [0, ${max}]`);
-  }
-  return value;
+/** An integer in `[0, max]`: a non-number is a `TypeError`, anything else outside a `RangeError`. */
+export function programArg(value: unknown, argName: string, max: number): number {
+  assertBoundedInteger(value, argName, 0, max);
+  return value as number;
 }
 
-export function midi2U32(value: number, argName: string): number {
+export function midi2U32(value: unknown, argName: string): number {
   assertBoundedInteger(value, argName, 0, MIDI2_U32_MAX);
-  return value;
+  return value as number;
 }
 
-export function midi2U16(value: number, argName: string): number {
+export function midi2U16(value: unknown, argName: string): number {
   assertBoundedInteger(value, argName, 0, MIDI2_U16_MAX);
-  return value;
+  return value as number;
 }
 
-export function midi2I32(value: number, argName: string): number {
+export function midi2I32(value: unknown, argName: string): number {
   assertBoundedInteger(value, argName, -0x80000000, 0x7fffffff);
-  return value;
+  return value as number;
 }
 
-export function midi2Byte(value: number, argName: string): number {
+export function midi2Byte(value: unknown, argName: string): number {
   assertBoundedInteger(value, argName, 0, 0xff);
-  return value;
+  return value as number;
 }

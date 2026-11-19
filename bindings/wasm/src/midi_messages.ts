@@ -53,7 +53,7 @@ import type {
   MidiProgramRequest,
   MidiRouteEventsRequest,
 } from './public_types_midi_messages.js';
-import { assertBoundedInteger, assertU7, optionalBoolean, requestObject } from './validation.js';
+import { assertBoundedInteger, optionalBoolean, requestObject } from './validation.js';
 
 /** A required number field: anything else is a `TypeError`. */
 function num(value: unknown, name: string): number {
@@ -63,9 +63,15 @@ function num(value: unknown, name: string): number {
   return value;
 }
 
-/** An optional number field: absent (`undefined`/`null`) takes the fallback. */
-function numOr(value: unknown, name: string, fallback: number): number {
-  return value === undefined || value === null ? fallback : num(value, name);
+/** An integer in `[0, max]`: a non-number is a `TypeError`, anything else outside a `RangeError`. */
+function boundedInt(value: unknown, argName: string, max: number): number {
+  assertBoundedInteger(value, argName, 0, max);
+  return value as number;
+}
+
+/** An optional {@link boundedInt}: absent (`undefined`/`null`) takes the fallback. */
+function boundedIntOr(value: unknown, argName: string, max: number, fallback: number): number {
+  return value === undefined || value === null ? fallback : boundedInt(value, argName, max);
 }
 
 /** A bank object `{ msb, lsb }`, each 0..127. */
@@ -80,8 +86,8 @@ function bankPair(value: unknown): MidiBank {
     }
   }
   return {
-    msb: assertU7(num(msb, 'bank.msb'), 'bank.msb'),
-    lsb: assertU7(num(lsb, 'bank.lsb'), 'bank.lsb'),
+    msb: boundedInt(msb, 'bank.msb', 127),
+    lsb: boundedInt(lsb, 'bank.lsb', 127),
   };
 }
 
@@ -96,11 +102,11 @@ function midi1(
   const r = requestObject(requestName, request, 'request', true) as Record<string, unknown>;
   return projectMidi1Event(
     num(r.ppq, 'ppq'),
-    num(r.group, 'group'),
+    boundedInt(r.group, 'group', 15),
     status,
-    num(r.channel, 'channel'),
-    num(r[data1], data1),
-    data2 === undefined ? 0 : num(r[data2], data2),
+    boundedInt(r.channel, 'channel', 15),
+    boundedInt(r[data1], data1, 127),
+    data2 === undefined ? 0 : boundedInt(r[data2], data2, 127),
   );
 }
 
@@ -126,11 +132,11 @@ export function midiNoteOff(request: MidiNoteOffRequest): ProjectMidiEvent {
     const r = requestObject(fn, request, 'request', true);
     return projectMidi1Event(
       num(r.ppq, 'ppq'),
-      num(r.group, 'group'),
+      boundedInt(r.group, 'group', 15),
       0x8,
-      num(r.channel, 'channel'),
-      num(r.note, 'note'),
-      numOr(r.velocity, 'velocity', 0),
+      boundedInt(r.channel, 'channel', 15),
+      boundedInt(r.note, 'note', 127),
+      boundedIntOr(r.velocity, 'velocity', 127, 0),
     );
   });
 }
@@ -188,13 +194,12 @@ export function midiPitchBend(request: MidiPitchBendRequest): ProjectMidiEvent {
   return withEntry('midiPitchBend', () => {
     const fn = 'midiPitchBend';
     const r = requestObject(fn, request, 'request', true);
-    const bend = num(r.bend, 'bend');
-    assertBoundedInteger(bend, 'bend', 0, 0x3fff);
+    const bend = boundedInt(r.bend, 'bend', 0x3fff);
     return projectMidi1Event(
       num(r.ppq, 'ppq'),
-      num(r.group, 'group'),
+      boundedInt(r.group, 'group', 15),
       0xe,
-      num(r.channel, 'channel'),
+      boundedInt(r.channel, 'channel', 15),
       bend & 0x7f,
       bend >> 7,
     );
@@ -212,12 +217,12 @@ export function midi2NoteOn(request: Midi2NoteOnRequest): ProjectMidiEvent {
     const fn = 'midi2NoteOn';
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
-    const group = num(r.group, 'group');
-    const channel = num(r.channel, 'channel');
-    const note = assertU7(num(r.note, 'note'), 'note');
-    const vel = midi2U16(num(r.velocity16, 'velocity16'), 'velocity16');
-    const type = midi2Byte(numOr(r.attributeType, 'attributeType', 0), 'attributeType');
-    const data = midi2U16(numOr(r.attributeData, 'attributeData', 0), 'attributeData');
+    const group = boundedInt(r.group, 'group', 15);
+    const channel = boundedInt(r.channel, 'channel', 15);
+    const note = boundedInt(r.note, 'note', 127);
+    const vel = midi2U16(r.velocity16, 'velocity16');
+    const type = midi2Byte(r.attributeType ?? 0, 'attributeType');
+    const data = midi2U16(r.attributeData ?? 0, 'attributeData');
     return midi2Event(ppq, group, 0x9, channel, note, type, ((vel << 16) | data) >>> 0);
   });
 }
@@ -232,10 +237,10 @@ export function midi2NoteOff(request: Midi2NoteOffRequest): ProjectMidiEvent {
     const fn = 'midi2NoteOff';
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
-    const group = num(r.group, 'group');
-    const channel = num(r.channel, 'channel');
-    const note = assertU7(num(r.note, 'note'), 'note');
-    const vel = midi2U16(numOr(r.velocity16, 'velocity16', 0), 'velocity16');
+    const group = boundedInt(r.group, 'group', 15);
+    const channel = boundedInt(r.channel, 'channel', 15);
+    const note = boundedInt(r.note, 'note', 127);
+    const vel = midi2U16(r.velocity16 ?? 0, 'velocity16');
     return midi2Event(ppq, group, 0x8, channel, note, 0, (vel << 16) >>> 0);
   });
 }
@@ -250,10 +255,10 @@ export function midi2Cc(request: Midi2CcRequest): ProjectMidiEvent {
     const fn = 'midi2Cc';
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
-    const group = num(r.group, 'group');
-    const channel = num(r.channel, 'channel');
-    const controller = assertU7(num(r.controller, 'controller'), 'controller');
-    const value = midi2U32(num(r.value32, 'value32'), 'value32');
+    const group = boundedInt(r.group, 'group', 15);
+    const channel = boundedInt(r.channel, 'channel', 15);
+    const controller = boundedInt(r.controller, 'controller', 127);
+    const value = midi2U32(r.value32, 'value32');
     return midi2Event(ppq, group, 0xb, channel, controller, 0, value);
   });
 }
@@ -268,10 +273,10 @@ export function midi2PolyPressure(request: Midi2PolyPressureRequest): ProjectMid
     const fn = 'midi2PolyPressure';
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
-    const group = num(r.group, 'group');
-    const channel = num(r.channel, 'channel');
-    const note = assertU7(num(r.note, 'note'), 'note');
-    const pressure = midi2U32(num(r.pressure32, 'pressure32'), 'pressure32');
+    const group = boundedInt(r.group, 'group', 15);
+    const channel = boundedInt(r.channel, 'channel', 15);
+    const note = boundedInt(r.note, 'note', 127);
+    const pressure = midi2U32(r.pressure32, 'pressure32');
     return midi2Event(ppq, group, 0xa, channel, note, 0, pressure);
   });
 }
@@ -286,9 +291,9 @@ export function midi2ChannelPressure(request: Midi2ChannelPressureRequest): Proj
     const fn = 'midi2ChannelPressure';
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
-    const group = num(r.group, 'group');
-    const channel = num(r.channel, 'channel');
-    const pressure = midi2U32(num(r.pressure32, 'pressure32'), 'pressure32');
+    const group = boundedInt(r.group, 'group', 15);
+    const channel = boundedInt(r.channel, 'channel', 15);
+    const pressure = midi2U32(r.pressure32, 'pressure32');
     return midi2Event(ppq, group, 0xd, channel, 0, 0, pressure);
   });
 }
@@ -303,9 +308,9 @@ export function midi2PitchBend(request: Midi2PitchBendRequest): ProjectMidiEvent
     const fn = 'midi2PitchBend';
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
-    const group = num(r.group, 'group');
-    const channel = num(r.channel, 'channel');
-    const bend = midi2U32(num(r.bend32, 'bend32'), 'bend32');
+    const group = boundedInt(r.group, 'group', 15);
+    const channel = boundedInt(r.channel, 'channel', 15);
+    const bend = midi2U32(r.bend32, 'bend32');
     return midi2Event(ppq, group, 0xe, channel, 0, 0, bend);
   });
 }
@@ -324,9 +329,9 @@ export function midi2Program(request: Midi2ProgramRequest): ProjectMidiEvent {
     assertEventPpq(ppq);
     const bank = r.bank === undefined || r.bank === null ? undefined : bankPair(r.bank);
     const [word0, word1] = packMidi2Program(
-      num(r.group, 'group'),
-      num(r.channel, 'channel'),
-      num(r.program, 'program'),
+      boundedInt(r.group, 'group', 15),
+      boundedInt(r.channel, 'channel', 15),
+      boundedInt(r.program, 'program', 127),
       bank !== undefined,
       bank?.msb ?? 0,
       bank?.lsb ?? 0,
@@ -348,11 +353,11 @@ function bankController(
 ): ProjectMidiEvent {
   const r = requestObject(requestName, request, 'request', true) as Record<string, unknown>;
   const ppq = num(r.ppq, 'ppq');
-  const group = num(r.group, 'group');
-  const channel = num(r.channel, 'channel');
-  const bank = assertU7(num(r.bank, 'bank'), 'bank');
-  const index = assertU7(num(r.index, 'index'), 'index');
-  const raw = num(r[valueName], valueName);
+  const group = boundedInt(r.group, 'group', 15);
+  const channel = boundedInt(r.channel, 'channel', 15);
+  const bank = boundedInt(r.bank, 'bank', 127);
+  const index = boundedInt(r.index, 'index', 127);
+  const raw = r[valueName];
   const word = valueName === 'delta32' ? midi2I32(raw, valueName) : midi2U32(raw, valueName);
   return midi2Event(ppq, group, opcode, channel, bank, index, word);
 }
@@ -417,11 +422,11 @@ function perNoteController(
 ): ProjectMidiEvent {
   const r = requestObject(requestName, request, 'request', true) as Record<string, unknown>;
   const ppq = num(r.ppq, 'ppq');
-  const group = num(r.group, 'group');
-  const channel = num(r.channel, 'channel');
-  const note = assertU7(num(r.note, 'note'), 'note');
-  const index = midi2Byte(num(r.index, 'index'), 'index');
-  const value = midi2U32(num(r.value32, 'value32'), 'value32');
+  const group = boundedInt(r.group, 'group', 15);
+  const channel = boundedInt(r.channel, 'channel', 15);
+  const note = boundedInt(r.note, 'note', 127);
+  const index = midi2Byte(r.index, 'index');
+  const value = midi2U32(r.value32, 'value32');
   return midi2Event(ppq, group, opcode, channel, note, index, value);
 }
 
@@ -461,10 +466,10 @@ export function midi2PerNotePitchBend(request: Midi2PerNotePitchBendRequest): Pr
     const fn = 'midi2PerNotePitchBend';
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
-    const group = num(r.group, 'group');
-    const channel = num(r.channel, 'channel');
-    const note = assertU7(num(r.note, 'note'), 'note');
-    const bend = midi2U32(num(r.bend32, 'bend32'), 'bend32');
+    const group = boundedInt(r.group, 'group', 15);
+    const channel = boundedInt(r.channel, 'channel', 15);
+    const note = boundedInt(r.note, 'note', 127);
+    const bend = midi2U32(r.bend32, 'bend32');
     return midi2Event(ppq, group, 0x6, channel, note, 0, bend);
   });
 }
@@ -481,26 +486,14 @@ export function midi2PerNoteManagement(request: Midi2PerNoteManagementRequest): 
     const fn = 'midi2PerNoteManagement';
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
-    const group = num(r.group, 'group');
-    const channel = num(r.channel, 'channel');
-    const note = assertU7(num(r.note, 'note'), 'note');
+    const group = boundedInt(r.group, 'group', 15);
+    const channel = boundedInt(r.channel, 'channel', 15);
+    const note = boundedInt(r.note, 'note', 127);
     const detach = optionalBoolean(r.detach, 'detach', false);
     const reset = optionalBoolean(r.reset, 'reset', false);
     const flags = (detach ? 0x02 : 0) | (reset ? 0x01 : 0);
     return midi2Event(ppq, group, 0xf, channel, note, flags, 0);
   });
-}
-
-/** An integer argument in `[0, max]`: a non-number is a `TypeError`, anything else out of range a `RangeError`. */
-function lookupIndex(value: unknown, argName: string, max: number): number {
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  const n = value;
-  if (!Number.isInteger(n) || n < 0 || n > max) {
-    throw refuse(`${argName} must be an integer in [0, ${max}]`);
-  }
-  return n;
 }
 
 /** A string argument: anything else is a `TypeError`. */
@@ -526,7 +519,7 @@ function found<T>(value: T | null, what: string): T {
  */
 export function gmInstrumentName(program: number): string {
   return withEntry('gmInstrumentName', () => {
-    const n = lookupIndex(program, 'program', 127);
+    const n = boundedInt(program, 'program', 127);
     return found(projectModule().midiGmInstrumentName(n), 'program must be an integer in [0, 127]');
   });
 }
@@ -554,7 +547,7 @@ export function gmProgramForName(name: string): number {
  */
 export function gmFamilyName(family: number): string {
   return withEntry('gmFamilyName', () => {
-    const n = lookupIndex(family, 'family', 15);
+    const n = boundedInt(family, 'family', 15);
     return found(projectModule().midiGmFamilyName(n), 'family must be an integer in [0, 15]');
   });
 }
@@ -566,7 +559,7 @@ export function gmFamilyName(family: number): string {
  */
 export function gmFamilyFirstProgram(family: number): number {
   return withEntry('gmFamilyFirstProgram', () => {
-    const n = lookupIndex(family, 'family', 15);
+    const n = boundedInt(family, 'family', 15);
     const program = projectModule().midiGmFamilyFirstProgram(n);
     if (program < 0) {
       throw refuse('family must be an integer in [0, 15]');
@@ -585,8 +578,8 @@ export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string | u
   return withEntry('gm2InstrumentName', () => {
     const fn = 'gm2InstrumentName';
     const r = requestObject(fn, request, 'request', true);
-    const bankLsb = lookupIndex(r.bankLsb, 'bankLsb', 127);
-    const program = lookupIndex(r.program, 'program', 127);
+    const bankLsb = boundedInt(r.bankLsb, 'bankLsb', 127);
+    const program = boundedInt(r.program, 'program', 127);
     return projectModule().midiGm2InstrumentName(bankLsb, program) ?? undefined;
   });
 }
@@ -599,7 +592,7 @@ export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string | u
  */
 export function gmDrumName(note: number): string | undefined {
   return withEntry('gmDrumName', () => {
-    const n = lookupIndex(note, 'note', 127);
+    const n = boundedInt(note, 'note', 127);
     return projectModule().midiGmDrumName(n) ?? undefined;
   });
 }
@@ -628,7 +621,7 @@ export function gmDrumNoteForName(name: string): number {
  */
 export function gm2DrumSetName(bankLsb: number): string | undefined {
   return withEntry('gm2DrumSetName', () => {
-    const n = lookupIndex(bankLsb, 'bankLsb', 127);
+    const n = boundedInt(bankLsb, 'bankLsb', 127);
     return projectModule().midiGm2DrumSetName(n) ?? undefined;
   });
 }
@@ -643,8 +636,8 @@ export function gm2DrumName(request: Gm2DrumNameRequest): string | undefined {
   return withEntry('gm2DrumName', () => {
     const fn = 'gm2DrumName';
     const r = requestObject(fn, request, 'request', true);
-    const bankLsb = lookupIndex(r.bankLsb, 'bankLsb', 127);
-    const note = lookupIndex(r.note, 'note', 127);
+    const bankLsb = boundedInt(r.bankLsb, 'bankLsb', 127);
+    const note = boundedInt(r.note, 'note', 127);
     return projectModule().midiGm2DrumName(bankLsb, note) ?? undefined;
   });
 }
@@ -657,7 +650,7 @@ export function gm2DrumName(request: Gm2DrumNameRequest): string | undefined {
  */
 export function midiCcName(controller: number): string | undefined {
   return withEntry('midiCcName', () => {
-    const n = lookupIndex(controller, 'controller', 127);
+    const n = boundedInt(controller, 'controller', 127);
     return projectModule().midiCcName(n) ?? undefined;
   });
 }
@@ -686,7 +679,7 @@ export function midiCcIndexForName(name: string): number {
  */
 export function perNoteControllerName(index: number): string | undefined {
   return withEntry('perNoteControllerName', () => {
-    const n = lookupIndex(index, 'index', 255);
+    const n = boundedInt(index, 'index', 255);
     return projectModule().midiPerNoteControllerName(n) ?? undefined;
   });
 }
@@ -703,11 +696,11 @@ export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEve
     const bank = bankPair(r.bank);
     return projectModule().midiBankProgram(
       num(r.ppq, 'ppq'),
-      num(r.group, 'group'),
-      num(r.channel, 'channel'),
+      boundedInt(r.group, 'group', 15),
+      boundedInt(r.channel, 'channel', 15),
       bank.msb,
       bank.lsb,
-      num(r.program, 'program'),
+      boundedInt(r.program, 'program', 127),
     );
   });
 }
@@ -773,10 +766,10 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
     assertMidiCcBindingListBytes(r.bindings);
     return projectModule().midiParamToCc(
       r.bindings,
-      num(r.paramId, 'paramId'),
+      boundedInt(r.paramId, 'paramId', 0xffffffff),
       num(r.unitValue, 'unitValue'),
-      num(r.group, 'group'),
-      numOr(r.ppq, 'ppq', 0),
+      boundedInt(r.group, 'group', 15),
+      r.ppq === undefined || r.ppq === null ? 0 : num(r.ppq, 'ppq'),
     );
   });
 }

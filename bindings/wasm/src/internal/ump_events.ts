@@ -51,22 +51,22 @@ export function midi2Event(
   return { ppq, word0, word1: word1 >>> 0 };
 }
 
-export function midi2U32(value: number, argName: string): number {
+export function midi2U32(value: unknown, argName: string): number {
   assertBoundedInteger(value, argName, 0, MIDI2_U32_MAX);
-  return value;
+  return value as number;
 }
 
-export function midi2U16(value: number, argName: string): number {
+export function midi2U16(value: unknown, argName: string): number {
   assertBoundedInteger(value, argName, 0, MIDI2_U16_MAX);
-  return value;
+  return value as number;
 }
 
-export function midi2I32(value: number, argName: string): number {
+export function midi2I32(value: unknown, argName: string): number {
   assertBoundedInteger(value, argName, -0x80000000, 0x7fffffff);
-  return value;
+  return value as number;
 }
 
-export function midi2Byte(value: number, argName: string): number {
+export function midi2Byte(value: unknown, argName: string): number {
   assertBoundedInteger(value, argName, 0, 0xff);
-  return value;
+  return value as number;
 }

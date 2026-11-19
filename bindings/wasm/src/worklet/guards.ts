@@ -545,7 +545,10 @@ export function requireIntegerOption(
   name: string,
   minimum: number,
 ): number {
-  const resolved = value ?? fallback;
+  const resolved: unknown = value ?? fallback;
+  if (typeof resolved !== 'number') {
+    throw refuseType(`${name} must be an integer`);
+  }
   if (!Number.isSafeInteger(resolved) || resolved < minimum) {
     throw refuse(`${name} must be an integer in [${minimum}, ${Number.MAX_SAFE_INTEGER}]`);
   }
@@ -566,9 +569,14 @@ export function resolveScopeBandCount(
 
 /** As {@link requireIntegerOption}, for a field whose domain admits either sign. */
 export function requireInteger(value: number | undefined, fallback: number, name: string): number {
-  const resolved = value ?? fallback;
+  const resolved: unknown = value ?? fallback;
+  if (typeof resolved !== 'number') {
+    throw refuseType(`${name} must be an integer`);
+  }
   if (!Number.isSafeInteger(resolved)) {
-    throw refuse(`${name} must be an integer`);
+    throw refuse(
+      `${name} must be an integer in [${Number.MIN_SAFE_INTEGER}, ${Number.MAX_SAFE_INTEGER}]`,
+    );
   }
   return resolved;
 }

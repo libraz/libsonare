@@ -57,7 +57,7 @@ function finiteNumber(value: unknown, field: string): number {
     throw refuseType(`${field} must be a number`);
   }
   if (!Number.isFinite(value)) {
-    throw refuse(`${field} must be a finite number`);
+    throw refuse(`${field} must be finite`);
   }
   return value;
 }
