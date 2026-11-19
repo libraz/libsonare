@@ -2,7 +2,7 @@
  * Broadband and tonal noise repair: denoise and dehum, with their detectors.
  */
 
-import { refuseType, withEntry } from './internal/entry.js';
+import { withEntry } from './internal/entry.js';
 import {
   assertRepairGeometry,
   dehumReport,
@@ -423,9 +423,6 @@ export function masteringRepairNoiseBandBins(...args: unknown[]): Int32Array {
       args,
     );
     // Geometry only, no audio read: the core requires sample_rate > 0, not the audio-analysis range.
-    if (typeof r.sampleRate !== 'number') {
-      throw refuseType('sampleRate must be a number');
-    }
     assertPositiveInteger(r.sampleRate, 'sampleRate');
     assertRepairGeometry(r);
     return addon.masteringRepairNoiseBandBins({ nFft: r.nFft, sampleRate: r.sampleRate });

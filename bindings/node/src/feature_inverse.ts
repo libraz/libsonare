@@ -456,9 +456,6 @@ export function clicks(...args: unknown[]): Float32Array {
     // The native 0 means "derive from the last click"; the facade spells that as absence.
     let length = 0;
     if (r.length !== undefined && r.length !== null) {
-      if (typeof r.length !== 'number') {
-        throw refuseType('length must be a number');
-      }
       assertPositiveInteger(r.length, 'length');
       length = r.length;
     }

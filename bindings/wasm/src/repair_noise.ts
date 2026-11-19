@@ -2,7 +2,7 @@
  * Broadband and tonal noise repair: denoise and dehum, with their detectors.
  */
 
-import { refuseType, withEntry } from './internal/entry.js';
+import { withEntry } from './internal/entry.js';
 import { pairedResult, repairNativeOptions, sharedReportResult } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -417,9 +417,6 @@ export function masteringRepairNoiseBandBins(...args: unknown[]): Int32Array {
       args,
     );
     // Geometry only: the core needs a positive rate, not the audio-analysis range.
-    if (typeof r.sampleRate !== 'number') {
-      throw refuseType('sampleRate must be a number');
-    }
     assertPositiveInteger(r.sampleRate, 'sampleRate');
     return requireModule().masteringRepairNoiseBandBins(r.nFft ?? 1024, r.sampleRate);
   });
