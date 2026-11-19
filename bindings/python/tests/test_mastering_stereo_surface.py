@@ -192,7 +192,7 @@ def test_streaming_set_parameter_rejects_nonfinite() -> None:
     )
     with pytest.raises(SonareValueError, match="key must not be empty"):
         chain.set_parameter("", 3.0)
-    with pytest.raises(SonareValueError, match="value must be a finite number"):
+    with pytest.raises(SonareValueError, match="value must be finite"):
         chain.set_parameter("eq.tilt.tiltDb", math.inf)
     chain.set_parameter("eq.tilt.tiltDb", 3.0)
     chain.close()

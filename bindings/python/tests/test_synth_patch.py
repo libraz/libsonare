@@ -605,7 +605,7 @@ def test_synth_patch_float_beyond_float32_is_refused_as_narrowing(field: str) ->
         SynthPatch(**{field: 1e40})._to_c()
     with pytest.raises(SonareValueError, match=rf"{field} must be finite and in "):
         SynthPatch(**{field: -1e40})._to_c()
-    with pytest.raises(TypeError, match=rf"{field} must be finite and in "):
+    with pytest.raises(TypeError, match=rf"{field} must be a number$"):
         SynthPatch(**{field: True})._to_c()
 
 

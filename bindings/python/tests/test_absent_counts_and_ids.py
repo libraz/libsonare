@@ -164,7 +164,7 @@ def test_spectral_region_refusals_name_the_op_index(field: str) -> None:
     nan: dict[str, Any] = {field: math.nan}
     ops = [libsonare.SpectralRegionOp(), libsonare.SpectralRegionOp(**nan)]
     with pytest.raises(
-        SonareValueError, match=rf"^spectral_edit: ops\[1\]\.{field} must be a finite number$"
+        SonareValueError, match=rf"^spectral_edit: ops\[1\]\.{field} must be finite$"
     ):
         libsonare.spectral_edit(_tone(), SR, ops)
 

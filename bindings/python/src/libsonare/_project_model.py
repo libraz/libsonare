@@ -261,15 +261,8 @@ def _automation_target_kind_value(value: object, key: str) -> int:
 
 
 def _automation_target_param_id_value(value: object) -> int:
-    """Validate a non-zero uint32 automation target parameter id."""
-    if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise _refuse("target_param_id must be a finite integer in [1, 4294967295]")
-    target = float(cast(SupportsFloat, value))
-    if not math.isfinite(target) or not target.is_integer() or target < 1.0 or target > _UINT32_MAX:
-        if math.isfinite(target) and target == 0.0:
-            raise _refuse("target_param_id must be non-zero")
-        raise _refuse("target_param_id must be a finite integer in [1, 4294967295]")
-    return int(target)
+    """Validate a non-zero uint32 automation target parameter id; 0 is the unset id."""
+    return _narrow_int(value, "target_param_id", 1, _UINT32_MAX)
 
 
 def _fade_curve_value(curve: ProjectFadeCurve, key: str) -> int:

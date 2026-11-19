@@ -663,7 +663,7 @@ def test_an_interval_boundary_is_refused_rather_than_folded_onto_a_legal_index()
         ls.remix(signal, [[0, 1000.7]])
     with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be an integer within")):
         ls.remix(signal, [[0, 2**31]])
-    with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be a finite integer")):
+    with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be an integer") + "$"):
         ls.remix(signal, [[0, float("nan")]])
 
     # A whole-valued float array is not a fraction and stays accepted, so the

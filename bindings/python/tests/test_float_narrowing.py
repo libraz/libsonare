@@ -382,7 +382,5 @@ def test_a_non_number_for_a_double_is_refused_by_type_alone(given: object) -> No
 
 @pytest.mark.parametrize("given", [float("nan"), float("inf"), 10**400])
 def test_a_non_finite_double_is_refused_by_its_value_predicate(given: float) -> None:
-    with pytest.raises(
-        ls.SonareValueError, match=r"^scale_quantize_midi: midi must be a finite number$"
-    ):
+    with pytest.raises(ls.SonareValueError, match=r"^scale_quantize_midi: midi must be finite$"):
         ls.scale_quantize_midi(0, 0b101010110101, given)

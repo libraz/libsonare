@@ -244,7 +244,9 @@ def test_automation_lane_add_edit_remove() -> None:
 def test_automation_lane_rejects_zero_as_reserved_target_id() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
-    with pytest.raises(ValueError, match="target_param_id must be non-zero"):
+    with pytest.raises(
+        ValueError, match=r"target_param_id must be an integer in \[1, 4294967295\]$"
+    ):
         p.add_automation_lane(track, 0, [AutomationPoint(0.0, 0.0, "linear")])
     assert p.to_json() == before
 
@@ -368,7 +370,8 @@ def test_automation_lane_rejects_nonintegral_target_without_mutation() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
     for invalid in (1.5, float("nan"), float("inf"), True, "1"):
-        with pytest.raises(ValueError):
+        refused = isinstance(invalid, (bool, str))
+        with pytest.raises(TypeError if refused else ValueError, match="target_param_id"):
             p.add_automation_lane(track, invalid, [AutomationPoint(0.0, 0.0, "linear")])
         assert p.to_json() == before
 

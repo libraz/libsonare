@@ -163,7 +163,7 @@ def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error(
             project.add_automation_lane(track, 8, [{"ppq": 0.0, "value": 0.5}])  # type: ignore[list-item]
         with pytest.raises(TypeError, match="AutomationPoint"):
             project.edit_automation_lane(track, 7, [{"ppq": 0.0, "value": 0.5}])  # type: ignore[list-item]
-        with pytest.raises(SonareValueError, match="target_param_id"):
+        with pytest.raises(TypeError, match="target_param_id must be an integer$"):
             project.add_automation_lane(track, {"target_param_id": 9, "points": [point]})  # type: ignore[arg-type]
         with pytest.raises(TypeError):
             project.set_tempo_segments([(0.0, 120.0)])  # type: ignore[list-item]

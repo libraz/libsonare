@@ -236,7 +236,7 @@ def _assistant_params(options: dict[str, float | int | bool | None]) -> tuple[An
             continue
         number = _narrow_double(value, f"{name}")
         if not np.isfinite(number):
-            raise _refuse(f"{name} must be a finite number")
+            raise _refuse(f"{name} must be finite")
         params[_PARAM_KEYS[name]] = number
     return _mastering_params(params)
 

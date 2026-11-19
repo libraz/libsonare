@@ -506,7 +506,7 @@ def _unsigned(value: int, name: str, limit: int) -> int:
 def _finite(value: float, name: str) -> float:
     v = _narrow_double(value, name)
     if not np.isfinite(v):
-        raise _refuse(f"{name} must be a finite number")
+        raise _refuse(f"{name} must be finite")
     return v
 
 

@@ -166,7 +166,7 @@ def _insert_params(
             out[key] = value
         elif isinstance(value, int | float):
             if not math.isfinite(value):
-                raise _refuse(f"params.{key} must be a finite number")
+                raise _refuse(f"params.{key} must be finite")
             out[key] = float(value)
         else:
             raise _refuse_type(f"params.{key} must be a number, bool or enum name")

@@ -131,7 +131,7 @@ def test_add_sample_rejects_bad_buffers_and_out_of_range_fields() -> None:
             bank.add_sample(_tone(), loop_start=-1)
         with pytest.raises(ValueError, match="root_key must be an integer"):
             bank.add_sample(_tone(), root_key=60.5)  # type: ignore[arg-type]
-        with pytest.raises(ValueError, match="source_rate must be a finite number"):
+        with pytest.raises(ValueError, match="source_rate must be finite"):
             bank.add_sample(_tone(), source_rate=float("inf"))
         with pytest.raises(
             ValueError,
@@ -146,7 +146,7 @@ def test_add_zone_rejects_what_the_binding_and_the_core_each_reject() -> None:
         index = bank.add_sample(_tone())
         with pytest.raises(ValueError, match=r"key_hi must be in \[0, 255\]"):
             bank.add_zone(0, sample_index=index, key_hi=256)
-        with pytest.raises(ValueError, match="pan_units must be a finite number"):
+        with pytest.raises(ValueError, match="pan_units must be finite"):
             bank.add_zone(0, sample_index=index, pan_units=float("nan"))
         with pytest.raises(ValueError, match=r"set_index must be in \[0, "):
             bank.add_zone(-1, sample_index=index)

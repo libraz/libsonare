@@ -790,7 +790,7 @@ def _reject_unrepresentable_int32(values: np.ndarray, name: str) -> None:
     if values.dtype.kind == "f":
         unusable = ~np.isfinite(values)
         if unusable.any():
-            raise _refuse(f"{name}[{int(np.argmax(unusable))}] must be a finite integer")
+            raise _refuse(f"{name}[{int(np.argmax(unusable))}] must be an integer")
         fractional = values != np.trunc(values)
         if fractional.any():
             raise _refuse(f"{name}[{int(np.argmax(fractional))}] must be an integer")

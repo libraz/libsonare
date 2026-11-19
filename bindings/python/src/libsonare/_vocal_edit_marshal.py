@@ -84,11 +84,11 @@ def _finite_float(value: object, name: str) -> float:
     try:
         result = float(cast(SupportsFloat, value))
     except OverflowError as exc:
-        raise _refuse(f"{name} must be a finite number") from exc
+        raise _refuse(f"{name} must be finite") from exc
     except (TypeError, ValueError) as exc:
         raise _refuse_type(f"{name} must be a number") from exc
     if not math.isfinite(result):
-        raise _refuse(f"{name} must be a finite number")
+        raise _refuse(f"{name} must be finite")
     return result
 
 

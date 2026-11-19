@@ -173,13 +173,13 @@ def _narrow_double(value: object, name: str) -> float:
         try:
             number = float(value)
         except OverflowError:
-            raise _refuse(f"{name} must be a finite number") from None
+            raise _refuse(f"{name} must be finite") from None
         except (TypeError, ValueError):
             pass
         else:
             if math.isfinite(number):
                 return number
-            raise _refuse(f"{name} must be a finite number")
+            raise _refuse(f"{name} must be finite")
     raise _refuse_type(f"{name} must be a number")
 
 
