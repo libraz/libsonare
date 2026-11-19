@@ -76,7 +76,7 @@ describe('WASM Project vocal input number errors', () => {
     expect(() => apply({ takeId: null })).toThrow(reached);
     expect(() => apply({ takeId: 1 })).toThrow(reached);
     expect(() => apply({ takeId: 0 })).toThrow(
-      new RangeError('takeId must not be 0 (omit it for the base source)'),
+      new RangeError('takeId must not be 0; omit it for the base source'),
     );
     expect(() => apply({ takeId: '1' })).toThrow(new TypeError('takeId must be a number'));
   });

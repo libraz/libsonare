@@ -199,13 +199,11 @@ describe('a take id is required and 0 is refused by name', () => {
       );
       expect(() => project.setClipTakes(clipId, [{ id: 1, sourceId: 0 }])).toThrow(
         new RangeError(
-          "Project.setClipTakes: takes[0].sourceId must not be 0 (omit it for the clip's source)",
+          "Project.setClipTakes: takes[0].sourceId must not be 0; omit it for the clip's source",
         ),
       );
       expect(() => project.setClipTakes(clipId, [{ id: 1 }], { activeTakeId: 0 })).toThrow(
-        new RangeError(
-          'Project.setClipTakes: activeTakeId must not be 0 (omit it for the default)',
-        ),
+        new RangeError('Project.setClipTakes: activeTakeId must not be 0; omit it for the default'),
       );
       project.setClipTakes(clipId, [{ id: 1, sourceId: null as never }], {
         activeTakeId: null as never,
@@ -214,7 +212,7 @@ describe('a take id is required and 0 is refused by name', () => {
         project.setClipCompSegments(clipId, [{ startPpq: 0, endPpq: 1, takeId: 0 }]),
       ).toThrow(
         new RangeError(
-          'Project.setClipCompSegments: segments[0].takeId must not be 0 (omit it for the active take)',
+          'Project.setClipCompSegments: segments[0].takeId must not be 0; omit it for the active take',
         ),
       );
       project.setClipCompSegments(clipId, [{ startPpq: 0, endPpq: 1, takeId: null as never }]);
@@ -229,7 +227,7 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
         new RangeError('Project.addClip: trackId must not be 0; a clip needs an existing track'),
       );
       expect(() => project.moveClip(clipId, 1, { trackId: 0 })).toThrow(
-        new RangeError('Project.moveClip: trackId must not be 0 (omit it to keep the track)'),
+        new RangeError('Project.moveClip: trackId must not be 0; omit it to keep the track'),
       );
       project.moveClip(clipId, 1, { trackId: null as never });
       project.moveClip(clipId, 2, { trackId });
@@ -250,7 +248,7 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
       });
       expect(() => engine.setGraph(graph({}, 0))).toThrow(
         new RangeError(
-          'RealtimeEngine.setGraph: nodes[0].numPorts must not be 0 (omit it for the default)',
+          'RealtimeEngine.setGraph: nodes[0].numPorts must not be 0; omit it for the default',
         ),
       );
       expect(() => engine.setGraph(graph({}, -1))).toThrow(
@@ -261,14 +259,14 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
       );
       expect(() => engine.setGraph(graph({ numChannels: 0 }))).toThrow(
         new RangeError(
-          'RealtimeEngine.setGraph: numChannels must not be 0 (omit it for the default)',
+          'RealtimeEngine.setGraph: numChannels must not be 0; omit it for the default',
         ),
       );
       engine.setGraph(graph({ numChannels: null }, undefined));
       expect(engine.graphNodeCount).toBe(2);
       expect(() => engine.setBuiltinInstrument(0, { polyphony: 0 })).toThrow(
         new RangeError(
-          'RealtimeEngine.setBuiltinInstrument: polyphony must not be 0 (omit it for the default)',
+          'RealtimeEngine.setBuiltinInstrument: polyphony must not be 0; omit it for the default',
         ),
       );
     });
@@ -304,7 +302,7 @@ describe('an omitted id is the default and an explicit 0 is refused', () => {
     withEngine((engine) => {
       expect(() => engine.freezeOffline({ totalFrames: 128, numChannels: 2, clipId: 0 })).toThrow(
         new RangeError(
-          'RealtimeEngine.freezeOffline: clipId must not be 0 (omit it for the default)',
+          'RealtimeEngine.freezeOffline: clipId must not be 0; omit it for the default',
         ),
       );
       expect(
@@ -349,9 +347,9 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
       for (const field of ['lengthSamples', 'loopLengthSamples']) {
         expect(() => engine.setMidiClips([clip({ [field]: 0 })] as never)).toThrow(
           new RangeError(
-            `RealtimeEngine.setMidiClips: clips[0].${field} must not be 0 (omit it for ${
+            `RealtimeEngine.setMidiClips: clips[0].${field} must not be 0; omit it for ${
               field === 'lengthSamples' ? 'open-ended' : 'no loop length'
-            })`,
+            }`,
           ),
         );
         for (const bad of [-1, 1.5]) {

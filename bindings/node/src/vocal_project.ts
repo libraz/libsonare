@@ -115,7 +115,7 @@ function requestTakeId(value: unknown): number {
     throw refuseType('takeId must be a number');
   }
   if (value === 0) {
-    throw refuse('takeId must not be 0 (omit it for the base source)');
+    throw refuse('takeId must not be 0; omit it for the base source');
   }
   return requestProjectId(value, 'request.takeId');
 }

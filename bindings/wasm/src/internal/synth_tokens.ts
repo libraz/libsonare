@@ -63,7 +63,7 @@ export function refuseBuiltinSynthOrdinals(config: unknown): void {
 export function refuseBuiltinPolyphonyZero(config: unknown): void {
   if (typeof config === 'object' && config !== null) {
     if ((config as Record<string, unknown>).polyphony === 0) {
-      throw refuse(`polyphony must not be 0 (omit it for the default)`);
+      throw refuse(`polyphony must not be 0; omit it for the default`);
     }
   }
 }

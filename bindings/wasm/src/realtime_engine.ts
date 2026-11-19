@@ -278,7 +278,7 @@ function optionalCount(argName: string, value: unknown): number | undefined {
     throw refuse(`${argName} must be a finite number`);
   }
   if (value === 0) {
-    throw refuse(`${argName} must not be 0 (omit it for the default)`);
+    throw refuse(`${argName} must not be 0; omit it for the default`);
   }
   if (value < 0 || value > C_INT_MAX || !Number.isInteger(value)) {
     throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
@@ -305,7 +305,7 @@ function optionalBusId(argName: string, value: unknown): number {
     throw refuseType(`${argName} must be a number`);
   }
   if (value === 0) {
-    throw refuse(`${argName} must not be 0 (omit it to route to the master mix)`);
+    throw refuse(`${argName} must not be 0; omit it to route to the master mix`);
   }
   return value;
 }
@@ -418,7 +418,7 @@ function scheduleSampleCount(
     throw refuseType(`${where} must be a number`);
   }
   if (value === 0) {
-    throw refuse(`${where} must not be 0 (omit it for ${meaning})`);
+    throw refuse(`${where} must not be 0; omit it for ${meaning}`);
   }
   if (!Number.isSafeInteger(value) || value < 0) {
     throw refuse(`${where} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
@@ -1842,7 +1842,7 @@ export class RealtimeEngine {
       ['clickSec', clickSec],
     ] as const) {
       if (value === 0) {
-        throw refuse(`${name} must not be 0 (omit it for the default)`);
+        throw refuse(`${name} must not be 0; omit it for the default`);
       }
     }
     if (hasSamples && hasSec) {
@@ -2807,7 +2807,7 @@ export class RealtimeEngine {
         continue;
       }
       if (typeof value === 'number' && value === 0) {
-        throw refuse(`${name} must not be 0 (omit it for the default)`);
+        throw refuse(`${name} must not be 0; omit it for the default`);
       }
       if (typeof value === 'number' && !Number.isFinite(value)) {
         throw refuse(`${name} must be a finite number`);

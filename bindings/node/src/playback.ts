@@ -117,7 +117,7 @@ export class PlaybackRenderer {
         throw refuseType(`maxBlockSize must be a number`);
       }
       if (maxBlockSize === 0) {
-        throw refuse(`maxBlockSize must not be 0 (omit it for the default)`);
+        throw refuse(`maxBlockSize must not be 0; omit it for the default`);
       }
       assertPositiveInteger(maxBlockSize, 'maxBlockSize');
     }

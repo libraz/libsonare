@@ -817,7 +817,7 @@ export function optionalId(
     throw refuseType(`${argName} must be a number`);
   }
   if (value === 0 && !allowZero) {
-    throw refuse(`${argName} must not be 0 (omit it ${hint})`);
+    throw refuse(`${argName} must not be 0; omit it ${hint}`);
   }
   if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
     throw refuse(`${argName} must be an integer in [${allowZero ? 0 : 1}, 4294967295]`);
@@ -899,7 +899,7 @@ export function optionalPositiveInt(
     throw refuseType(`${argName} must be a number`);
   }
   if (value === 0) {
-    throw refuse(`${argName} must not be 0 (omit it for the default)`);
+    throw refuse(`${argName} must not be 0; omit it for the default`);
   }
   if (!Number.isInteger(value) || value < 0 || value > max) {
     throw refuse(`${argName} must be an integer in [1, ${max}]`);

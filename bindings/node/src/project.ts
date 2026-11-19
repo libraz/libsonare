@@ -153,7 +153,7 @@ function optionalNonZero(value: unknown, argName: string, max: number): number |
   }
   const number = requireNumber(value, argName);
   if (number === 0) {
-    throw refuse(`${argName} must not be 0 (omit it for the default)`);
+    throw refuse(`${argName} must not be 0; omit it for the default`);
   }
   if (!Number.isInteger(number) || number < 1 || number > max) {
     throw refuse(`${argName} must be an integer in [1, ${max}]`);
@@ -172,7 +172,7 @@ function optionalId(argName: string, value: unknown, hint = 'for the default'): 
   const number = requireNumber(value, argName);
   assertU32(number, argName);
   if (number === 0) {
-    throw refuse(`${argName} must not be 0 (omit it ${hint})`);
+    throw refuse(`${argName} must not be 0; omit it ${hint}`);
   }
   return number;
 }

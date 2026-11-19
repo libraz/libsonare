@@ -118,7 +118,7 @@ function optionalNonZero(value: unknown, argName: string): number | undefined {
   }
   const number = requireFinite(value, argName);
   if (number === 0) {
-    throw refuse(`${argName} must not be 0 (omit it for the default)`);
+    throw refuse(`${argName} must not be 0; omit it for the default`);
   }
   return number;
 }
@@ -130,7 +130,7 @@ function optionalId(argName: string, value: unknown): number | undefined {
   }
   const number = requireFinite(value, argName);
   if (number === 0) {
-    throw refuse(`${argName} must not be 0 (omit it for the default)`);
+    throw refuse(`${argName} must not be 0; omit it for the default`);
   }
   if (!Number.isInteger(number) || number < 1 || number > 0xffffffff) {
     throw refuse(`${argName} must be an integer in [1, 4294967295]`);
@@ -145,7 +145,7 @@ function optionalCount(argName: string, value: unknown): number | undefined {
   }
   const number = requireFinite(value, argName);
   if (number === 0) {
-    throw refuse(`${argName} must not be 0 (omit it for the default)`);
+    throw refuse(`${argName} must not be 0; omit it for the default`);
   }
   if (number < 0 || number > C_INT_MAX || !Number.isInteger(number)) {
     throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
@@ -507,7 +507,7 @@ function scheduleSampleCount(
     throw refuseType(`${where} must be a number`);
   }
   if (value === 0) {
-    throw refuse(`${where} must not be 0 (omit it for ${meaning})`);
+    throw refuse(`${where} must not be 0; omit it for ${meaning}`);
   }
   if (!Number.isSafeInteger(value) || value < 0) {
     throw refuse(`${where} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
@@ -664,7 +664,7 @@ function bounceToNative(options: EngineBounceOptions): Record<string, unknown> {
   } else {
     const lufs = requireFinite(request.targetLufs, 'targetLufs');
     if (lufs === 0) {
-      throw refuse(`targetLufs must not be 0 (omit it for -14 LUFS)`);
+      throw refuse(`targetLufs must not be 0; omit it for -14 LUFS`);
     }
   }
   if (!isAbsent(request.dither)) {
