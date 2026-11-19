@@ -353,6 +353,11 @@ TEST_CASE("the synthesis generators refuse in the shared parameter vocabulary",
         "fmin must be finite and greater than 0");
   CHECK(refusal_message([] { (void)chirp(100.0f, 0.0f, 22050, 1.0f, false); }) ==
         "fmax must be finite and greater than 0");
+  const float inf_value = std::numeric_limits<float>::infinity();
+  CHECK(refusal_message([&] { (void)chirp(inf_value, 200.0f, 22050, 1.0f, false); }) ==
+        "fmin must be finite and greater than 0");
+  CHECK(refusal_message([&] { (void)chirp(100.0f, inf_value, 22050, 1.0f, false); }) ==
+        "fmax must be finite and greater than 0");
 
   const std::vector<float> times = {0.5f};
   CHECK(refusal_message([&] { (void)clicks(times, 0); }) ==

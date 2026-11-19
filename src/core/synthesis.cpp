@@ -77,9 +77,8 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
     // Exponential / logarithmic sweep:
     //   f(t) = f0 * (f1/f0) ** (t/d)
     //   phase(t) = 2*pi * f0 * d / ln(f1/f0) * ((f1/f0)**(t/d) - 1)
-    // +inf still passes here as before; only NaN and non-positive values are refused.
-    if (!(f0 > 0.0)) util::check::greater_than(f0, 0.0, "fmin");
-    if (!(f1 > 0.0)) util::check::greater_than(f1, 0.0, "fmax");
+    util::check::greater_than(f0, 0.0, "fmin");
+    util::check::greater_than(f1, 0.0, "fmax");
     const double ratio = f1 / f0;
     if (std::abs(ratio - 1.0) < 1e-12) {
       // Degenerate: pure tone at f0.

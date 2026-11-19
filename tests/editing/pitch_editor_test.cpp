@@ -894,6 +894,16 @@ TEST_CASE("PitchCorrector names the field and frame of a malformed F0 track", "[
   track.f0_hz[5] = std::numeric_limits<float>::infinity();
   CHECK(message_of(track) == "f0_hz[5] must be finite and in (0, 11025]");
 
+  // An unvoiced frame takes NaN, its marker, and refuses a value outside [0, Nyquist].
+  track = constant_track(440.0f, sample_rate, 256, 16);
+  track.voiced[5] = false;
+  track.f0_hz[5] = std::numeric_limits<float>::quiet_NaN();
+  CHECK(message_of(track).empty());
+  track.f0_hz[5] = std::numeric_limits<float>::infinity();
+  CHECK(message_of(track) == "f0_hz[5] must be NaN or in [0, 11025]");
+  track.f0_hz[5] = -1.0f;
+  CHECK(message_of(track) == "f0_hz[5] must be NaN or in [0, 11025]");
+
   track = constant_track(440.0f, sample_rate, 256, 16);
   track.hop_length = 0;
   CHECK(message_of(track) == "hop_length must be an integer in [1, 2147483647]");
@@ -975,7 +985,7 @@ TEST_CASE("PitchCorrector refuses each parameter under its own core name", "[pit
   track.voiced[2] = false;
   track.f0_hz[2] = -1.0f;
   CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
-        "f0_hz[2] must be finite and in [0, 11025]");
+        "f0_hz[2] must be NaN or in [0, 11025]");
 
   const std::vector<float> deltas(16, 0.0f);
   CHECK(text_of([&] { corrector.resynthesize(audio, good, deltas, 0.0, 0.5); }) ==

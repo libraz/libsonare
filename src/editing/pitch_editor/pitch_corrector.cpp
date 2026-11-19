@@ -13,6 +13,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::editing::pitch_editor {
 
@@ -72,10 +73,11 @@ void validate_f0_track(const Audio& audio, const F0Track& track) {
     const std::string subject = "f0_hz[" + std::to_string(i) + "]";
     if (track.voiced[i]) {
       check::in_interval(f0, 0.0, false, nyquist, true, subject.c_str());
-    } else if (!std::isnan(f0)) {
-      // pYIN uses NaN for unvoiced F0. A finite non-negative value is also
-      // accepted for host-supplied tracks because voiced[] is authoritative.
-      check::in_range(f0, 0.0, nyquist, subject.c_str());
+    } else if (!std::isnan(f0) && !(f0 >= 0.0f && f0 <= nyquist)) {
+      // pYIN marks an unvoiced frame with NaN; a host may also send a value in range.
+      throw SonareParameterRefusal::predicate(
+          ErrorCode::InvalidParameter, subject,
+          "must be NaN or in [0, " + util::refusal::bound_text(nyquist) + "]");
     }
   }
   for (size_t i = 0; i < track.voiced_prob.size(); ++i) {
