@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cmath>
 #include <cstdlib>
 #include <limits>
@@ -41,45 +42,118 @@ int cli_exit_code_for_error(sonare::ErrorCode error) noexcept {
   }
 }
 
-// Every numeric CLI value converts here, so a rejection always reads the same
-// way. std::stof / std::stoi report two different failures for one option:
-// a value with a numeric prefix ("1.5x") returns a partial conversion, while a
-// value with none ("abc") throws from the standard library itself. Letting the
-// second escape produced raw text such as "stoi: no conversion", with no option
-// name and no rejected value, for the same option that reported properly on the
-// first. Both are caught here and rephrased identically.
-float parse_float_strict(const std::string& option, const std::string& value) {
-  size_t consumed = 0;
-  float parsed = 0.0f;
-  try {
-    parsed = std::stof(value, &consumed);
-  } catch (const std::exception&) {
-    throw std::invalid_argument("invalid float value for --" + option + ": " + value);
+namespace {
+
+bool is_ascii_space(char c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
+
+bool is_ascii_digit(char c) { return c >= '0' && c <= '9'; }
+
+size_t skip_ascii_space(const std::string& text) {
+  size_t i = 0;
+  while (i < text.size() && is_ascii_space(text[i])) ++i;
+  return i;
+}
+
+// Leading ASCII space, an optional sign, decimal digits, and nothing after them.
+bool is_integer_text(const std::string& text) {
+  size_t i = skip_ascii_space(text);
+  if (i < text.size() && (text[i] == '+' || text[i] == '-')) ++i;
+  const size_t digits = i;
+  while (i < text.size() && is_ascii_digit(text[i])) ++i;
+  return i > digits && i == text.size();
+}
+
+// The integer grammar's decimal-number sibling: digits with an optional point and
+// exponent, or inf / infinity / nan in any letter case. No hex, no separators,
+// no trailing text -- the set the Python front-end reads as well.
+bool is_number_text(const std::string& text) {
+  size_t i = skip_ascii_space(text);
+  if (i < text.size() && (text[i] == '+' || text[i] == '-')) ++i;
+  std::string word = text.substr(i);
+  std::transform(word.begin(), word.end(), word.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (word == "inf" || word == "infinity" || word == "nan") return true;
+  size_t mantissa_digits = 0;
+  while (i < text.size() && is_ascii_digit(text[i])) ++i, ++mantissa_digits;
+  if (i < text.size() && text[i] == '.') {
+    ++i;
+    while (i < text.size() && is_ascii_digit(text[i])) ++i, ++mantissa_digits;
   }
-  if (consumed != value.size()) {
-    throw std::invalid_argument("invalid float value for --" + option + ": " + value);
+  if (mantissa_digits == 0) return false;
+  if (i < text.size() && (text[i] == 'e' || text[i] == 'E')) {
+    ++i;
+    if (i < text.size() && (text[i] == '+' || text[i] == '-')) ++i;
+    const size_t exponent = i;
+    while (i < text.size() && is_ascii_digit(text[i])) ++i;
+    if (i == exponent) return false;
   }
-  if (!std::isfinite(parsed)) {
-    throw std::invalid_argument("numeric value for --" + option + " must be finite: " + value);
-  }
+  return i == text.size();
+}
+
+[[noreturn]] void refuse_value(const std::string& subject, const char* requirement) {
+  throw std::invalid_argument(subject + " " + requirement);
+}
+
+template <typename Int>
+[[noreturn]] void refuse_integer_range(const std::string& subject) {
+  throw std::invalid_argument(subject + " must be an integer in [" +
+                              std::to_string(std::numeric_limits<Int>::min()) + ", " +
+                              std::to_string(std::numeric_limits<Int>::max()) + "]");
+}
+
+long long read_integer_text(const std::string& subject, const std::string& value, bool* overflow) {
+  if (!is_integer_text(value)) refuse_value(subject, "must be an integer");
+  errno = 0;
+  const long long parsed = std::strtoll(value.c_str(), nullptr, 10);
+  *overflow = errno == ERANGE;
   return parsed;
 }
 
-int parse_int_strict(const std::string& option, const std::string& value) {
-  size_t consumed = 0;
-  int parsed = 0;
-  try {
-    parsed = std::stoi(value, &consumed);
-  } catch (const std::out_of_range&) {
-    throw std::invalid_argument("value out of range for --" + option + ": " + value +
-                                " (expected a signed 32-bit integer)");
-  } catch (const std::exception&) {
-    throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
-  }
-  if (consumed != value.size()) {
-    throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
-  }
+}  // namespace
+
+std::string option_subject(const std::string& option) { return "argument --" + option + ":"; }
+
+double parse_double_text(const std::string& subject, const std::string& value) {
+  if (!is_number_text(value)) refuse_value(subject, "must be a number");
+  const double parsed = std::strtod(value.c_str(), nullptr);
+  if (!std::isfinite(parsed)) refuse_value(subject, "must be finite");
   return parsed;
+}
+
+float parse_float_text(const std::string& subject, const std::string& value) {
+  const double parsed = parse_double_text(subject, value);
+  // The library's own bound for a float argument; an underflow to 0 is a number.
+  if (std::fabs(parsed) > static_cast<double>(std::numeric_limits<float>::max())) {
+    refuse_value(subject, "must be finite");
+  }
+  return std::strtof(value.c_str(), nullptr);
+}
+
+int parse_int_text(const std::string& subject, const std::string& value) {
+  bool overflow = false;
+  const long long parsed = read_integer_text(subject, value, &overflow);
+  if (overflow || parsed < std::numeric_limits<int>::min() ||
+      parsed > std::numeric_limits<int>::max()) {
+    refuse_integer_range<int>(subject);
+  }
+  return static_cast<int>(parsed);
+}
+
+long long parse_int64_text(const std::string& subject, const std::string& value) {
+  bool overflow = false;
+  const long long parsed = read_integer_text(subject, value, &overflow);
+  if (overflow) refuse_integer_range<long long>(subject);
+  return parsed;
+}
+
+float parse_float_strict(const std::string& option, const std::string& value) {
+  return parse_float_text(option_subject(option), value);
+}
+
+int parse_int_strict(const std::string& option, const std::string& value) {
+  return parse_int_text(option_subject(option), value);
 }
 
 std::optional<std::string> find_cli_token(std::string_view value,
@@ -97,17 +171,44 @@ std::optional<std::string> find_cli_token(std::string_view value,
   return std::nullopt;
 }
 
+namespace {
+
+// The CLI's mode-name table, in the order a refusal lists it.
+struct CliModeName {
+  const char* name;
+  sonare::Mode mode;
+};
+constexpr CliModeName kCliModeNames[] = {
+    {"major", sonare::Mode::Major},
+    {"maj", sonare::Mode::Major},
+    {"minor", sonare::Mode::Minor},
+    {"min", sonare::Mode::Minor},
+    {"m", sonare::Mode::Minor},
+    {"dorian", sonare::Mode::Dorian},
+    {"phrygian", sonare::Mode::Phrygian},
+    {"lydian", sonare::Mode::Lydian},
+    {"mixolydian", sonare::Mode::Mixolydian},
+    {"locrian", sonare::Mode::Locrian},
+};
+
+std::string cli_mode_name_list() {
+  std::string list;
+  for (const auto& entry : kCliModeNames) {
+    if (!list.empty()) list += ", ";
+    list += entry.name;
+  }
+  return list;
+}
+
+}  // namespace
+
 sonare::Mode parse_mode_option(const std::string& value) {
   std::string key = value;
   std::transform(key.begin(), key.end(), key.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (key == "major" || key == "maj") return sonare::Mode::Major;
-  if (key == "minor" || key == "min" || key == "m") return sonare::Mode::Minor;
-  if (key == "dorian") return sonare::Mode::Dorian;
-  if (key == "phrygian") return sonare::Mode::Phrygian;
-  if (key == "lydian") return sonare::Mode::Lydian;
-  if (key == "mixolydian") return sonare::Mode::Mixolydian;
-  if (key == "locrian") return sonare::Mode::Locrian;
+  for (const auto& entry : kCliModeNames) {
+    if (key == entry.name) return entry.mode;
+  }
   throw std::invalid_argument("invalid mode: " + value);
 }
 
@@ -186,42 +287,17 @@ int parse_mode_mask_option(const std::string& option, const std::string& value) 
   try {
     return static_cast<int>(sonare::scale_mask_for_mode(parse_mode_option(value)));
   } catch (const std::invalid_argument&) {
-    throw std::invalid_argument(
-        "invalid value for --" + option + ": " + value +
-        " (expected an integer mask or a mode name: major, minor, dorian, phrygian, lydian, "
-        "mixolydian, locrian)");
+    throw std::invalid_argument(option_subject(option) + " must be an integer mask or one of " +
+                                cli_mode_name_list());
   }
 }
 
 double parse_double_strict(const std::string& option, const std::string& value) {
-  size_t consumed = 0;
-  double parsed = 0.0;
-  try {
-    parsed = std::stod(value, &consumed);
-  } catch (const std::exception&) {
-    throw std::invalid_argument("invalid float value for --" + option + ": " + value);
-  }
-  if (consumed != value.size()) {
-    throw std::invalid_argument("invalid float value for --" + option + ": " + value);
-  }
-  if (!std::isfinite(parsed)) {
-    throw std::invalid_argument("numeric value for --" + option + " must be finite: " + value);
-  }
-  return parsed;
+  return parse_double_text(option_subject(option), value);
 }
 
 long long parse_int64_strict(const std::string& option, const std::string& value) {
-  size_t consumed = 0;
-  long long parsed = 0;
-  try {
-    parsed = std::stoll(value, &consumed);
-  } catch (const std::exception&) {
-    throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
-  }
-  if (consumed != value.size()) {
-    throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
-  }
-  return parsed;
+  return parse_int64_text(option_subject(option), value);
 }
 
 namespace {
@@ -547,32 +623,28 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
     }
   }
 
-  try {
-    switch (spec->scalar_type) {
-      case CliOptionScalarType::Integer: {
-        const int parsed = parse_int_strict(spec->name, value);
-        if (spec->name == "n-fft") {
-          args.n_fft = parsed;
-        } else if (spec->name == "hop-length") {
-          args.hop_length = parsed;
-        } else if (spec->name == "n-mels") {
-          args.n_mels = parsed;
-        }
-        break;
+  switch (spec->scalar_type) {
+    case CliOptionScalarType::Integer: {
+      const int parsed = parse_int_strict(spec->name, value);
+      if (spec->name == "n-fft") {
+        args.n_fft = parsed;
+      } else if (spec->name == "hop-length") {
+        args.hop_length = parsed;
+      } else if (spec->name == "n-mels") {
+        args.n_mels = parsed;
       }
-      case CliOptionScalarType::Number:
-        if (spec->name == "fmin-hz") args.fmin = parse_float_strict(spec->name, value);
-        if (spec->name == "fmax-hz") args.fmax = parse_float_strict(spec->name, value);
-        break;
-      case CliOptionScalarType::Path:
-        args.output_file = value;
-        break;
-      case CliOptionScalarType::Boolean:
-      case CliOptionScalarType::String:
-        break;
+      break;
     }
-  } catch (const std::out_of_range&) {
-    throw std::invalid_argument("value out of range for " + spelling + ": " + value);
+    case CliOptionScalarType::Number:
+      if (spec->name == "fmin-hz") args.fmin = parse_float_strict(spec->name, value);
+      if (spec->name == "fmax-hz") args.fmax = parse_float_strict(spec->name, value);
+      break;
+    case CliOptionScalarType::Path:
+      args.output_file = value;
+      break;
+    case CliOptionScalarType::Boolean:
+    case CliOptionScalarType::String:
+      break;
   }
   // A global option is projected into a dedicated field above, but it also has
   // to land in the generic option map: everything downstream -- has(),

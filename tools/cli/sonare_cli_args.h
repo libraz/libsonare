@@ -165,8 +165,21 @@ class CliUsageError final : public std::invalid_argument {
   explicit CliUsageError(const std::string& message) : std::invalid_argument(message) {}
 };
 
-/// Declared here rather than kept file-local because the registry's value
-/// checks parse a candidate value the same way the accessors above do.
+/// "argument --<option>:", the subject every refusal of an option's value starts with.
+std::string option_subject(const std::string& option);
+/// The CLI's one numeric reader. Every refusal reads "<subject> must be a number",
+/// "must be finite", "must be an integer" or "must be an integer in [lo, hi]",
+/// without the typed text; the accepted grammar is decimal (no hex, no digit
+/// separators, nothing after the number), the set the Python front-end reads.
+/// @throws std::invalid_argument naming @p subject.
+float parse_float_text(const std::string& subject, const std::string& value);
+double parse_double_text(const std::string& subject, const std::string& value);
+int parse_int_text(const std::string& subject, const std::string& value);
+long long parse_int64_text(const std::string& subject, const std::string& value);
+
+/// The readers above with an option's subject. Declared here rather than kept
+/// file-local because the registry's value checks parse a candidate value the
+/// same way the accessors do.
 float parse_float_strict(const std::string& option, const std::string& value);
 int parse_int_strict(const std::string& option, const std::string& value);
 /// Widest integer the CLI parses. `parse_int_strict` refuses anything `int`

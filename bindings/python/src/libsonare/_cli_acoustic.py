@@ -32,6 +32,7 @@ from ._cli_options import (
     _ContractArgumentParser,
     _finite_float,
     _given,
+    _int64,
     _positive_finite_float,
     _positive_int,
 )
@@ -390,7 +391,10 @@ def register_acoustic_parsers(
         # range is closed at both ends rather than refusing only a negative.
         _cli_domain(
             p.add_argument(
-                "--seed", type=int, default=None, help="Deterministic late-tail seed (default: 1)"
+                "--seed",
+                type=_int64,
+                default=None,
+                help="Deterministic late-tail seed (default: 1)",
             ),
             minimum=0,
             maximum=0xFFFFFFFF,

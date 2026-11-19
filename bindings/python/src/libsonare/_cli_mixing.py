@@ -38,6 +38,7 @@ from ._cli_options import (
     SharedParsers,
     _c_int,
     _ContractArgumentParser,
+    _finite_float,
     _library_catalog,
     _tempo_bpm,
 )
@@ -628,10 +629,14 @@ def register_mixing_parsers(
             "input because a duplicated mono pair carries no side signal to widen."
         ),
     )
-    mix_strip_p.add_argument("--input-trim-db", type=float, default=0.0, help="Input trim in dB")
-    mix_strip_p.add_argument("--fader-db", type=float, default=0.0, help="Fader in dB")
+    mix_strip_p.add_argument(
+        "--input-trim-db", type=_finite_float, default=0.0, help="Input trim in dB"
+    )
+    mix_strip_p.add_argument("--fader-db", type=_finite_float, default=0.0, help="Fader in dB")
     _cli_domain(
-        mix_strip_p.add_argument("--pan", type=float, default=0.0, help="Pan position, -1 to 1"),
+        mix_strip_p.add_argument(
+            "--pan", type=_finite_float, default=0.0, help="Pan position, -1 to 1"
+        ),
         minimum=-1.0,
         maximum=1.0,
         reject_exit="invalid_parameter",
@@ -646,7 +651,9 @@ def register_mixing_parsers(
         reject_exit="invalid_parameter",
     )
     _cli_domain(
-        mix_strip_p.add_argument("--width", type=float, default=1.0, help="Stereo width, 0 to 2"),
+        mix_strip_p.add_argument(
+            "--width", type=_finite_float, default=1.0, help="Stereo width, 0 to 2"
+        ),
         minimum=0.0,
         maximum=2.0,
         reject_exit="invalid_parameter",

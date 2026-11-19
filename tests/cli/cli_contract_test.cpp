@@ -82,21 +82,22 @@ TEST_CASE("CLI numeric option validation", "[cli]") {
 
   SECTION("the same option rejects every unparsable value the same way") {
     // A value with a numeric prefix and a value with none take different paths
-    // through the standard library's conversion, and the second used to escape
-    // as "stoi: no conversion" with no option name and no rejected value.
+    // through the standard library's conversion; both read as the requirement,
+    // naming the option and not echoing the text.
     auto [partial_code, partial_output] =
         exec_command(CLI + " pad-center --values 1,2,3 --size 1.5x");
     auto [none_code, none_output] = exec_command(CLI + " pad-center --values 1,2,3 --size abc");
     REQUIRE(partial_code == none_code);
-    REQUIRE_THAT(partial_output, ContainsSubstring("invalid integer value for --size: 1.5x"));
-    REQUIRE_THAT(none_output, ContainsSubstring("invalid integer value for --size: abc"));
-    // A number past the C int range is a range refusal in the option formatter's wording.
+    REQUIRE_THAT(partial_output, ContainsSubstring("argument --size: must be an integer"));
+    REQUIRE_THAT(none_output, ContainsSubstring("argument --size: must be an integer"));
+    REQUIRE_THAT(none_output, !ContainsSubstring("abc"));
+    // A number past the C int range names the range it has to fit.
     auto [wide_code, wide_output] =
         exec_command(CLI + " pad-center --values 1,2,3 --size 99999999999");
     REQUIRE(wide_code == none_code);
-    REQUIRE_THAT(wide_output,
-                 ContainsSubstring("value out of range for --size: 99999999999 (expected a "
-                                   "signed 32-bit integer)"));
+    REQUIRE_THAT(
+        wide_output,
+        ContainsSubstring("argument --size: must be an integer in [-2147483648, 2147483647]"));
   }
 
   SECTION("a list element names the option and the element that failed") {

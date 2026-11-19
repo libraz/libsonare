@@ -1018,8 +1018,11 @@ TEST_CASE("CLI scale-quantize reads a mode name where it reads a mask", "[cli][s
   SECTION("an unknown name is a usage error that names the flag") {
     const auto [code, output] = quantize("--mode-mask bogus");
     REQUIRE(code == 2);
-    REQUIRE_THAT(output, ContainsSubstring("--mode-mask"));
-    REQUIRE_THAT(output, ContainsSubstring("bogus"));
+    REQUIRE_THAT(output,
+                 ContainsSubstring("argument --mode-mask: must be an integer mask or one of "
+                                   "major, maj, minor, min, m, dorian, phrygian, lydian, "
+                                   "mixolydian, locrian"));
+    REQUIRE_THAT(output, !ContainsSubstring("bogus"));
   }
 
   SECTION("an integer outside the twelve-bit range stays an invalid parameter") {

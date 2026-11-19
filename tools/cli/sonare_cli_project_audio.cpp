@@ -161,7 +161,8 @@ void parse_audio_binding(const std::string& assignment, uint32_t* out_source_id,
   if (separator == 0 || separator == std::string::npos || separator + 1 >= assignment.size()) {
     throw std::invalid_argument("--audio expects <source_id>=FILE, got '" + assignment + "'");
   }
-  const long long source_id = parse_int64_strict("audio", assignment.substr(0, separator));
+  const long long source_id =
+      parse_int64_text("argument --audio: <source_id>", assignment.substr(0, separator));
   if (source_id <= 0 || source_id > static_cast<long long>(UINT32_MAX)) {
     throw std::invalid_argument("--audio source id out of range: " +
                                 assignment.substr(0, separator));

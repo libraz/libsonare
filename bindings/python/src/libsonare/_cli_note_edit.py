@@ -31,14 +31,16 @@ from ._cli_options import (
     _finite_float,
     _given,
     _mode_mask,
+    _NumericTextError,
     _pitch_threshold,
     _positive_finite_float,
     _positive_int,
+    _read_integer_text,
+    _read_number_text,
 )
 from ._effects_note_ops import _UNMATCHED_POLICIES
 from ._errors import SonareValueError
 from ._narrowing import _resolve_sample_bound
-from ._runtime import _C_INT_MAX, _C_INT_MIN
 
 if TYPE_CHECKING:
     from .analyzer import NoteEdit
@@ -292,51 +294,24 @@ _POLYPHONIC_EDIT_ATTRIBUTES = {
 }
 
 
-def _edit_value_consumed_whole(value: str) -> bool:
-    """Whether the native numeric parsers would read ``value`` to its end.
+def _parse_polyphonic_edit_float(field: str, value: str) -> float:
+    """Read one ``--edit`` value with the CLI's numeric reader, the field as the subject."""
+    try:
+        return _read_number_text(value)
+    except _NumericTextError as exc:
+        raise ValueError(f"argument --edit: {field} {exc}") from None
 
-    They skip leading whitespace and then require the conversion to reach the end
-    of the string, so a PEP 515 underscore and a trailing space are refusals there
-    rather than 10 and 3.
+
+def _parse_polyphonic_edit_int(subject: str, value: str) -> int:
+    """Read one ``--edit`` integer, bounded to a C ``int``.
+
+    That is the whole reachable range: the chain refuses audio longer than an
+    int can index, so a wider offset only ever moves a note off the end.
     """
-    return "_" not in value and value == value.rstrip()
-
-
-def _parse_polyphonic_edit_float(value: str) -> float:
-    """Read one ``--edit`` value as a finite float, refusing anything else."""
-    parsed = None
-    if _edit_value_consumed_whole(value):
-        try:
-            parsed = float(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid float value for --edit: {value}") from exc
-    if parsed is None:
-        raise ValueError(f"invalid float value for --edit: {value}")
-    if not math.isfinite(parsed):
-        raise ValueError(f"numeric value for --edit must be finite: {value}")
-    return parsed
-
-
-def _parse_polyphonic_edit_int(value: str) -> int:
-    """Read one ``--edit`` value as an integer, refusing anything else.
-
-    Bounded to a C ``int``, which is the whole reachable range: the chain refuses
-    audio longer than an int can index, so a wider offset only ever moves a note
-    off the end.
-    """
-    parsed = None
-    if _edit_value_consumed_whole(value):
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid integer value for --edit: {value}") from exc
-    if parsed is None:
-        raise ValueError(f"invalid integer value for --edit: {value}")
-    if not _C_INT_MIN <= parsed <= _C_INT_MAX:
-        raise ValueError(
-            f"value out of range for --edit: {value} (expected a signed 32-bit integer)"
-        )
-    return parsed
+    try:
+        return _read_integer_text(value)
+    except _NumericTextError as exc:
+        raise ValueError(f"argument --edit: {subject} {exc}") from None
 
 
 def _parse_polyphonic_edit_bool(field: str, value: str) -> bool:
@@ -364,21 +339,21 @@ def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
     index_text, dot, field = path.rpartition(".")
     if not dot or not index_text or not field:
         raise ValueError(f"--edit path must be NOTE.FIELD: {assignment}")
-    index = _parse_polyphonic_edit_int(index_text)
+    index = _parse_polyphonic_edit_int("NOTE", index_text)
     if index < 0 or index >= len(edits):
         raise ValueError(
             f"--edit note index out of range: {index_text} (the analysis found {len(edits)} notes)"
         )
     edit = edits[index]
     if field == "time_offset_samples":
-        edit.time_offset_samples = _parse_polyphonic_edit_int(value)
+        edit.time_offset_samples = _parse_polyphonic_edit_int(field, value)
     elif field == "muted":
         edit.muted = _parse_polyphonic_edit_bool(field, value)
     elif field in _POLYPHONIC_EDIT_FLOAT_FIELDS:
         setattr(
             edit,
             _POLYPHONIC_EDIT_ATTRIBUTES.get(field, field),
-            _parse_polyphonic_edit_float(value),
+            _parse_polyphonic_edit_float(field, value),
         )
     else:
         # The accepted set is named at the refusal because the help carries no

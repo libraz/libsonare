@@ -154,18 +154,15 @@ double required_positional_number(const CliArgs& args, const char* name) {
     throw CliUsageError(std::string("Missing required argument '") + name + "'");
   }
   const std::string& text = args.positionals.front();
-  const CliUsageError rejected(std::string("argument ") + name + ": must be a finite number");
-  size_t consumed = 0;
-  double value = 0.0;
+  const std::string subject = std::string("argument ") + name + ":";
   try {
-    value = std::stod(text, &consumed);
-  } catch (const std::exception&) {
-    throw rejected;
+    // Held to the float range the quantizer reads, as an option value is; the
+    // payload echoes the double the caller wrote.
+    (void)parse_float_text(subject, text);
+    return parse_double_text(subject, text);
+  } catch (const std::invalid_argument& error) {
+    throw CliUsageError(error.what());
   }
-  // stod stops at the first character it cannot read, so a trailing tail is a
-  // value the caller misspelled rather than one this accepts a prefix of.
-  if (consumed != text.size() || !std::isfinite(value)) throw rejected;
-  return value;
 }
 
 // The mask arrives as an integer or a mode name; the registry has already
@@ -380,7 +377,7 @@ void apply_polyphonic_note_edit(std::vector<editing::note_model::NoteObject>& no
     throw std::invalid_argument("--edit path must be NOTE.FIELD: " + assignment);
   }
   const std::string index_text = path.substr(0, dot);
-  const int index = parse_int_strict("edit", index_text);
+  const int index = parse_int_text("argument --edit: NOTE", index_text);
   if (index < 0 || static_cast<size_t>(index) >= notes.size()) {
     throw std::invalid_argument("--edit note index out of range: " + index_text +
                                 " (the analysis found " + std::to_string(notes.size()) + " notes)");
@@ -388,21 +385,22 @@ void apply_polyphonic_note_edit(std::vector<editing::note_model::NoteObject>& no
   const std::string field = path.substr(dot + 1);
   auto& edit = notes[static_cast<size_t>(index)].edit;
   if (field == "pitch_shift_semitones") {
-    edit.pitch_shift_semitones = parse_float_strict("edit", value);
+    edit.pitch_shift_semitones = parse_float_text("argument --edit: pitch_shift_semitones", value);
   } else if (field == "gain_db") {
-    edit.gain_db = parse_float_strict("edit", value);
+    edit.gain_db = parse_float_text("argument --edit: gain_db", value);
   } else if (field == "time_offset_samples") {
     // An int is the whole reachable range: the chain refuses audio longer than
     // an int can index, so a wider offset only ever moves a note off the end.
-    edit.time_offset_samples = parse_int_strict("edit", value);
+    edit.time_offset_samples = parse_int_text("argument --edit: time_offset_samples", value);
   } else if (field == "time_stretch_ratio") {
-    edit.time_stretch_ratio = parse_float_strict("edit", value);
+    edit.time_stretch_ratio = parse_float_text("argument --edit: time_stretch_ratio", value);
   } else if (field == "formant_shift_semitones") {
-    edit.formant_shift_semitones = parse_float_strict("edit", value);
+    edit.formant_shift_semitones =
+        parse_float_text("argument --edit: formant_shift_semitones", value);
   } else if (field == "vibrato_depth_change") {
-    edit.vibrato_depth_change = parse_float_strict("edit", value);
+    edit.vibrato_depth_change = parse_float_text("argument --edit: vibrato_depth_change", value);
   } else if (field == "drift_change") {
-    edit.drift_change = parse_float_strict("edit", value);
+    edit.drift_change = parse_float_text("argument --edit: drift_change", value);
   } else if (field == "muted") {
     edit.muted = parse_edit_bool(field, value);
   } else {

@@ -896,6 +896,18 @@ def _section_type_label(section_type: SectionType) -> str:
     return "pre-chorus" if section_type == "preChorus" else section_type
 
 
+def _cli_mode_names() -> list[str]:
+    """Every mode name the CLI reads, each mode followed by its aliases, as a refusal lists them."""
+    return [
+        spelling
+        for mode in get_args(KeyMode)
+        for spelling in (
+            mode,
+            *(alias for alias, target in _CLI_MODE_ALIASES.items() if target == mode),
+        )
+    ]
+
+
 def _parse_mode(value: str) -> KeyMode:
     key = value.lower()
     key = _CLI_MODE_ALIASES.get(key, key)

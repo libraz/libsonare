@@ -41,6 +41,7 @@ from cli_contract_inventory import (
     _validate_inventory,
 )
 from cli_contract_manifest import validate_manifest
+from cli_contract_numeric import run_numeric_refusals
 from cli_contract_payload import (
     _compare_payloads,
     _compare_values,
@@ -961,6 +962,10 @@ def main(argv: list[str] | None = None) -> int:
             report,
             python_disabled,
         )
+        compared = run_numeric_refusals(
+            _run, native_executable, python_executable, Path(temporary), args.timeout, report
+        )
+        print(f"numeric texts: {compared} rows compared")
         if native_inventory is not None and python_inventory is not None:
             compared, not_compared = run_domain_refusals(
                 _run,

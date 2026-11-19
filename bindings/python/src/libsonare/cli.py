@@ -171,9 +171,6 @@ from ._cli_options import (
     _add_wav_bits_argument as _add_wav_bits_argument,
 )
 from ._cli_options import (
-    _c_int_option as _c_int_option,
-)
-from ._cli_options import (
     _candidate_count as _candidate_count,
 )
 from ._cli_options import (

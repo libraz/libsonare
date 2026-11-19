@@ -27,12 +27,17 @@ from ._cli_common import (
 )
 from ._cli_inventory import _cli_domain
 from ._cli_options import (
+    _INT64_MAX,
+    _INT64_MIN,
     SharedParsers,
     _c_int,
     _ContractArgumentParser,
     _finite_float,
     _given,
+    _int64,
+    _NumericTextError,
     _positive_int,
+    _read_integer_text,
     _tempo_bpm,
 )
 from ._runtime import ErrorCode, SonareError
@@ -98,9 +103,9 @@ def _parse_audio_binding(assignment: str) -> tuple[int, str]:
     if not separator or not path:
         raise ValueError(f"--audio expects <source_id>=FILE, got {assignment!r}")
     try:
-        source_id = int(source_id_text.strip(), 10)
-    except ValueError:
-        raise ValueError(f"--audio source id must be an integer, got {source_id_text!r}") from None
+        source_id = _read_integer_text(source_id_text, _INT64_MIN, _INT64_MAX)
+    except _NumericTextError as exc:
+        raise ValueError(f"argument --audio: <source_id> {exc}") from None
     if source_id <= 0:
         raise ValueError(f"--audio source id must be positive, got {source_id}")
     return source_id, path
@@ -860,7 +865,7 @@ def register_project_parsers(
     _cli_domain(
         palign.add_argument(
             "--reference-source",
-            type=int,
+            type=_int64,
             required=True,
             help="Audio source id whose timeline every take is aligned to",
         ),

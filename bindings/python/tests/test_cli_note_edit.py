@@ -157,13 +157,14 @@ def test_polyphonic_render_cli_applies_one_edit_per_occurrence() -> None:
     [
         ("0.no_such_field=1", "unknown --edit field: no_such_field"),
         ("9.gain_db=-3", "--edit note index out of range: 9"),
-        ("0.gain_db=nan", "numeric value for --edit must be finite: nan"),
+        ("0.gain_db=nan", "argument --edit: gain_db must be finite"),
         # The native parsers read a value whole and an offset is a C int, so
         # neither an underscore separator nor a wider offset is a number here.
-        ("0.gain_db=1_0", "invalid float value for --edit: 1_0"),
+        ("0.gain_db=1_0", "argument --edit: gain_db must be a number"),
+        ("x.gain_db=1", "argument --edit: NOTE must be an integer"),
         (
             "0.time_offset_samples=99999999999",
-            "value out of range for --edit: 99999999999 (expected a signed 32-bit integer)",
+            "argument --edit: time_offset_samples must be an integer in [-2147483648, 2147483647]",
         ),
     ],
 )
@@ -604,8 +605,11 @@ def test_pitch_correct_timevarying_cli_reads_a_mode_name_and_an_explicit_zero_an
             ["pitch-correct-timevarying", source, "-o", "x.wav", "--scale-mode-mask", "bogus"]
         )
         assert result.returncode == 2
-        assert "--scale-mode-mask" in result.stderr
-        assert "bogus" in result.stderr
+        assert (
+            "argument --scale-mode-mask: must be an integer mask or one of major, maj, minor, "
+            "min, m, dorian, phrygian, lydian, mixolydian, locrian" in result.stderr
+        )
+        assert "bogus" not in result.stderr
 
 
 def test_pitch_correct_timevarying_help_says_the_scale_target_is_chosen_per_frame() -> None:

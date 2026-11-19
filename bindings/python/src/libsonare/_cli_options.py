@@ -15,11 +15,12 @@ import dataclasses
 import importlib
 import inspect
 import math
+import re
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, NoReturn, cast
 
-from ._cli_common import EXIT_USAGE
+from ._cli_common import EXIT_USAGE, _cli_mode_names, _parse_mode
 from ._cli_inventory import (
     _action_domain,
     _canonical_option_string,
@@ -30,22 +31,45 @@ from ._cli_inventory import (
     _stated_default,
     _token_of,
 )
-from ._errors import SonareValueError
 from ._narrowing import _FLOAT32_MAX
-from ._runtime import _C_INT_MAX, _C_INT_MIN, _narrow_int
-from ._types_enums import KeyMode
+from ._runtime import _C_INT_MAX, _C_INT_MIN
+
+# The native CLI's numeric grammar: leading ASCII space, a sign, decimal digits
+# with an optional point and exponent (or inf / infinity / nan), nothing after.
+# Python's own int() and float() also read digit separators, trailing space and
+# non-ASCII digits, which the native reader refuses.
+_NUMBER_TEXT = re.compile(
+    r"[ \t\n\v\f\r]*[+-]?(?:(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?|inf|infinity|nan)",
+    re.ASCII | re.IGNORECASE,
+)
+_INTEGER_TEXT = re.compile(r"[ \t\n\v\f\r]*[+-]?\d+", re.ASCII)
+_INT64_MIN = -(2**63)
+_INT64_MAX = 2**63 - 1
 
 
-class _OutOfRangeError(Exception):
-    """A value the option's type parsed but cannot hold, refused in the CLI's range wording.
+class _NumericTextError(ValueError):
+    """A numeric value refused by requirement alone ("must be a number"), never echoing the text."""
 
-    Not an ``ArgumentTypeError``: argparse would word that itself before the parser could name
-    the option.
-    """
 
-    def __init__(self, expected: str) -> None:
-        super().__init__(expected)
-        self.expected = expected
+def _read_number_text(value: str) -> float:
+    """Read ``value`` as a finite number a 32-bit float holds, as the native reader does."""
+    if not _NUMBER_TEXT.fullmatch(value):
+        raise _NumericTextError("must be a number")
+    parsed = float(value)
+    # The library's own bound for a float argument: finite, and no larger than FLT_MAX.
+    if not math.isfinite(parsed) or abs(parsed) > _FLOAT32_MAX:
+        raise _NumericTextError("must be finite")
+    return parsed
+
+
+def _read_integer_text(value: str, minimum: int = _C_INT_MIN, maximum: int = _C_INT_MAX) -> int:
+    """Read ``value`` as a decimal integer in ``[minimum, maximum]``."""
+    if not _INTEGER_TEXT.fullmatch(value):
+        raise _NumericTextError("must be an integer")
+    parsed = int(value)
+    if not minimum <= parsed <= maximum:
+        raise _NumericTextError(f"must be an integer in [{minimum}, {maximum}]")
+    return parsed
 
 
 class _ContractArgumentParser(argparse.ArgumentParser):
@@ -104,10 +128,10 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         option = _canonical_option_string(action) if action.option_strings else action.dest
         try:
             value = super()._get_value(action, arg_string)
-        except _OutOfRangeError as exc:
-            raise argparse.ArgumentError(
-                None, f"value out of range for {option}: {arg_string} (expected {exc.expected})"
-            ) from exc
+        except argparse.ArgumentError as exc:
+            # argparse names an aliased option by every spelling; the CLI names one.
+            subject = option if action.option_strings else (action.metavar or action.dest)
+            raise argparse.ArgumentError(None, f"argument {subject}: {exc.message}") from exc
         domain = _action_domain(action)
         refusal = None if domain is None else _domain_refusal(domain, value)
         if refusal is None:
@@ -277,12 +301,9 @@ def _number_or_none(value: object) -> float | None:
 
 def _finite_float(value: str) -> float:
     try:
-        parsed = float(value)
-    except (TypeError, ValueError) as exc:
-        raise argparse.ArgumentTypeError("must be a finite number") from exc
-    if not math.isfinite(parsed) or abs(parsed) > _FLOAT32_MAX:
-        raise argparse.ArgumentTypeError("must be a finite number")
-    return parsed
+        return _read_number_text(value)
+    except _NumericTextError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 # The domain-carrying converters below parse only: the accepted set is the record
@@ -349,29 +370,24 @@ def _pitch_threshold(value: str) -> float:
     return _finite_float(value)
 
 
-def _c_int_option(value: str, requirement: str) -> int:
-    """Read an option value as a C ``int``, refusing in the type argparse expects.
-
-    The native CLI parses every integer option through ``std::stoi`` before
-    dispatch, so a value past the signed range is a usage error on both surfaces.
-    """
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise argparse.ArgumentTypeError(requirement) from exc
-    try:
-        return _narrow_int(parsed, "value", _C_INT_MIN, _C_INT_MAX)
-    except SonareValueError as exc:
-        raise _OutOfRangeError("a signed 32-bit integer") from exc
-
-
 def _c_int(value: str) -> int:
-    """Parse an integer option that has no further domain of its own."""
-    return _c_int_option(value, "must be an integer")
+    """Parse an integer option the native CLI reads as a C ``int``."""
+    try:
+        return _read_integer_text(value)
+    except _NumericTextError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def _int64(value: str) -> int:
+    """Parse an integer option whose domain reaches past a C ``int``; the domain bounds it."""
+    try:
+        return _read_integer_text(value, _INT64_MIN, _INT64_MAX)
+    except _NumericTextError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 def _positive_int(value: str) -> int:
-    return _c_int_option(value, "must be an integer")
+    return _c_int(value)
 
 
 def _candidate_count(value: str) -> int:
@@ -382,14 +398,14 @@ def _candidate_count(value: str) -> int:
     """
     if value == "true":
         return 5
-    return _c_int_option(value, "must be an integer or 'true'")
+    return _c_int(value)
 
 
 def _mode_mask(value: str) -> int:
     """Parse a scale mask given as an integer or as a mode name.
 
-    A name resolves through ``scale_mask_for_mode``, the facade's own mode-name
-    table over the C ABI, so no second table exists here.
+    A name is read through the CLI's mode table (aliases included) and resolves
+    through ``scale_mask_for_mode``, the facade's own mask table over the C ABI.
     """
     try:
         return int(value, 0)
@@ -397,14 +413,13 @@ def _mode_mask(value: str) -> int:
         pass
     from ._features_metering import scale_mask_for_mode
 
-    # The library's mode tokens are exact; the command line reads a mode name in any case.
     try:
-        return scale_mask_for_mode(0, cast(KeyMode, value.lower()))
-    except SonareValueError as exc:
+        mode = _parse_mode(value)
+    except ValueError:
         raise argparse.ArgumentTypeError(
-            f"{value!r} is neither an integer mask nor a mode name "
-            "(major, minor, dorian, phrygian, lydian, mixolydian, locrian)"
-        ) from exc
+            f"must be an integer mask or one of {', '.join(_cli_mode_names())}"
+        ) from None
+    return scale_mask_for_mode(0, mode)
 
 
 # The contract type of a ``type=`` callable that stands in for a builtin. Left
@@ -420,6 +435,7 @@ _cli_scalar_type(_pitch_threshold, "number")
 _cli_scalar_type(_nonnegative_finite_float, "number")
 _cli_scalar_type(_positive_pitch_frequency, "number")
 _cli_scalar_type(_c_int, "integer")
+_cli_scalar_type(_int64, "integer")
 _cli_scalar_type(_positive_int, "integer")
 
 # The accepted value set each of the checkers above enforces, in the shape the
