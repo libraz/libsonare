@@ -1941,7 +1941,9 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
 #endif
 #ifdef SONARE_WITH_PLAYBACK
       {"playback", p.stereo_wav + to_out, "target", "5.1"},
-      {"playback", p.stereo_wav + to_out, "input-layout", "mono"},
+      // Auto takes the layout from the channel count; a fixed layout that does not match is
+      // refused.
+      {"playback", p.tone_wav + to_out, "input-layout", "stereo"},
       {"playback", p.stereo_wav + to_out, "night", "0.8"},
       // A stereo input has no centre channel for the dialogue gain to reach.
       {"playback", p.stereo_wav + to_out, "dialogue-db", ""},
@@ -2099,12 +2101,18 @@ class StatedDefaultFixtures {
 
   // stdout plus the written file, if any, so a generator is compared by what it rendered.
   std::string rendered(const std::string& invocation) {
+    auto [code, text] = outcome(invocation);
+    REQUIRE(code == 0);
+    return text;
+  }
+
+  // The exit code and what the run produced; a value the library refuses moves the result too.
+  std::pair<int, std::string> outcome(const std::string& invocation) {
     const std::string& out = path_of("@out@");
     std::remove(out.c_str());
     auto [code, output] = exec_command(CLI + " " + invocation);
-    REQUIRE(code == 0);
     std::ifstream file(out, std::ios::binary);
-    return output + std::string(std::istreambuf_iterator<char>(file), {});
+    return {code, output + std::string(std::istreambuf_iterator<char>(file), {})};
   }
 
  private:
@@ -2140,7 +2148,8 @@ void run_stated_row(std::size_t index) {
   const std::string omitted = fixtures.rendered(base);
   CHECK(omitted == fixtures.rendered(base + " --" + row.option + " " + spec->stated_default));
   if (!row.other_value.empty()) {
-    CHECK(omitted != fixtures.rendered(base + " --" + row.option + " " + row.other_value));
+    CHECK(std::make_pair(0, omitted) !=
+          fixtures.outcome(base + " --" + row.option + " " + row.other_value));
   }
 }
 
@@ -2157,7 +2166,8 @@ void run_derived_row(std::size_t index) {
     for (const auto& [other_setting, other_value] : row.cases) {
       if (other_value == value) continue;
       CAPTURE(other_value);
-      CHECK(omitted != fixtures.rendered(base + " --" + row.option + " " + other_value));
+      CHECK(std::make_pair(0, omitted) !=
+            fixtures.outcome(base + " --" + row.option + " " + other_value));
     }
   }
 }

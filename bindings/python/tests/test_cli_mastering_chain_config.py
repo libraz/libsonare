@@ -569,4 +569,4 @@ def test_a_version_1_document_is_refused_with_the_librarys_message(tmp_path) -> 
         text=True,
     )
     assert result.returncode == 5, result.stderr
-    assert "unsupported chain config version; write 2 or leave it out" in result.stderr
+    assert "version must be 2, or left out" in result.stderr

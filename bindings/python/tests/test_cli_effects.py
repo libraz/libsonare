@@ -198,7 +198,7 @@ def test_voice_preset_validate_set_delivers_a_json_value_containing_commas() -> 
         assert rejected.returncode == 3
         payload = json.loads(rejected.stdout)
         assert payload["ok"] is False
-        assert payload["error"] == "field must be numeric: macros.pitch"
+        assert payload["error"] == "macros.pitch must be a number"
 
 
 def test_normalize_cli_reports_target_db_end_to_end() -> None:
@@ -883,7 +883,10 @@ def test_voice_preset_validate_refuses_an_earlier_schema_version() -> None:
     assert refused.returncode == 3
     report = json.loads(refused.stdout)
     assert report["ok"] is False
-    assert "schemaVersion 3 is older than the version this release reads (4)" in report["error"]
+    assert report["error"] == (
+        "schemaVersion must be 4, the version this release reads; "
+        "the document was written for an older schema"
+    )
 
 
 def test_voice_preset_validate_accepts_native_preset_json_alias() -> None:

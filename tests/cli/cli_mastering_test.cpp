@@ -588,9 +588,10 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a numb
       exec_command(run + " --preset pop -o " + unique_temp_path("_enum_by_number.wav") +
                    " --params repair.denoise.enabled=1,repair.denoise.noiseEstimator=1 -q 2>&1");
   CHECK(number_code == 5);
-  CHECK_THAT(number_output,
-             ContainsSubstring("Error: repair.denoise.noiseEstimator takes a token, not a number "
-                               "(valid names: quantile, mcra, imcra, spp)\n"));
+  CHECK_THAT(
+      number_output,
+      ContainsSubstring("Error: params.repair.denoise.noiseEstimator takes a token, not a number "
+                        "(valid names: quantile, mcra, imcra, spp)\n"));
 
   // --chain-config: the same name inside the JSON file.
   const std::string config_path = unique_temp_path("_enum_chain.json");
@@ -616,8 +617,9 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a numb
   auto [number_key_code, number_key_output] =
       exec_command(run + " --preset pop --params loudness.targetLufs=loud -q 2>&1");
   CHECK(number_key_code == 5);
-  CHECK_THAT(number_key_output,
-             ContainsSubstring("Error: loudness.targetLufs is a string, but takes no token\n"));
+  CHECK_THAT(
+      number_key_output,
+      ContainsSubstring("Error: params.loudness.targetLufs is a string, but takes no token\n"));
   std::remove(by_name_out.c_str());
   std::remove(config_path.c_str());
   std::remove(config_out.c_str());

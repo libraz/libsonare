@@ -7133,7 +7133,7 @@
           "artifact": "none",
           "stdout": "json",
           "stdout_contains": [
-            "field must be numeric: macros.pitch"
+            "macros.pitch must be a number"
           ]
         },
         {
@@ -7200,7 +7200,7 @@
           "artifact": "none",
           "stdout": "json",
           "stdout_contains": [
-            "preset schemaVersion 3 is older than the version this release reads (4)"
+            "schemaVersion must be 4, the version this release reads; the document was written for an older schema"
           ]
         }
       ],
@@ -7516,7 +7516,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "preset schemaVersion 3 is older than the version this release reads (4)"
+            "schemaVersion must be 4, the version this release reads; the document was written for an older schema"
           ]
         },
         {
@@ -8161,7 +8161,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "unsupported chain config version; write 2 or leave it out"
+            "version must be 2, or left out"
           ]
         },
         {
@@ -19047,7 +19047,7 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty",
-          "stderr_contains": ["unknown key: outputLimiter.ceilingDbtp"]
+          "stderr_contains": ["unknown key outputLimiter.ceilingDbtp"]
         },
         {
           "id": "config_null_value_refused",
