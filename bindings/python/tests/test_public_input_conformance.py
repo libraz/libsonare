@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+import libsonare
 from libsonare import (
     EngineMarker,
     MidiCcBinding,
@@ -417,3 +418,42 @@ def test_streaming_retune_controls_follow_the_corpus(case: dict[str, Any], entry
                 base["pitch_semitones"],
                 base["mix"],
             )
+
+
+_TRIM = _CORPUS["trim_detector"]
+_TRIM_SIGNAL = [0.0] * 480 + [0.5] * 480 + [0.0] * 480
+
+
+def _trim_call(entry: str, **kwargs: object) -> object:
+    fn = getattr(libsonare, entry)
+    channels = (_TRIM_SIGNAL, _TRIM_SIGNAL) if entry.endswith("_stereo") else (_TRIM_SIGNAL,)
+    return fn(*channels, _TRIM["sample_rate"], **kwargs)
+
+
+@pytest.mark.parametrize("entry", _TRIM["entries"])
+@pytest.mark.parametrize("case", _TRIM["cases"], ids=lambda case: case["id"])
+def test_trim_detector_controls_follow_the_corpus(case: dict[str, Any], entry: str) -> None:
+    kwargs = {"mode": _TRIM["mode"][case["key"]], case["key"]: _corpus_number(case["value"])}
+    if case.get("accepted"):
+        _trim_call(entry, **kwargs)
+        return
+    text = f"{entry}: {case['key']} {case['predicate']}"
+    with pytest.raises(_GM_REFUSALS[case["refused"]], match=rf"^{re.escape(text)}$"):
+        _trim_call(entry, **kwargs)
+
+
+_ROOM = _CORPUS["room_morph_stereo"]
+_ROOM_IMPULSE = [1.0] + [0.0] * 1999
+
+
+@pytest.mark.parametrize("case", _ROOM["cases"], ids=lambda case: case["id"])
+def test_room_morph_stereo_spacing_follows_the_corpus(case: dict[str, Any]) -> None:
+    fn = getattr(libsonare, _ROOM["fn"])
+    kwargs = {**_ROOM["room"], case["key"]: _corpus_number(case["value"])}
+    if case.get("accepted"):
+        result = fn(_ROOM_IMPULSE, _ROOM_IMPULSE, **kwargs)
+        assert len(result.left) == len(result.right) > 0
+        return
+    text = f"{_ROOM['fn']}: {case['key']} {case['predicate']}"
+    with pytest.raises(_GM_REFUSALS[case["refused"]], match=rf"^{re.escape(text)}$"):
+        fn(_ROOM_IMPULSE, _ROOM_IMPULSE, **kwargs)
