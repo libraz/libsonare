@@ -15101,10 +15101,10 @@ test = "bindings/node/tests/surface/core-audio.test.ts::requires the sample rate
 kind = "field"
 old = "MixAssistantOptions.tempoBpm"
 to = "MixingAssistantSuggestRequest.tempoBpm"
-changed = "0 or a negative tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it)"
+changed = "0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it)"
 domain = "mastering"
 rule = "absent-not-sentinel"
-test = "bindings/node/tests/mixing_assistant.test.ts::refuses a zero or negative tempo by name instead of reading it as the fallback"
+test = "bindings/node/tests/mixing_assistant.test.ts::refuses a zero, negative or non-finite tempo by name instead of reading it as the fallback"
 
 [[entry]]
 kind = "field"

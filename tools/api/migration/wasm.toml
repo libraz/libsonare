@@ -547,6 +547,14 @@ rule = "teardown"
 
 [[entry]]
 kind = "method"
+old = "ClipPageStreamer.addSource"
+changed = "pageFrames and numSamples are each refused by name unless an integer in [1, 9007199254740991]; a fractional size used to pass"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/clip_page_streamer.test.ts::refuses each addSource page size out of [1, MAX_SAFE_INTEGER] by name"
+
+[[entry]]
+kind = "method"
 old = "ClipPageStreamer.delete"
 removed = "call destroy()"
 domain = "project"
@@ -16028,9 +16036,11 @@ entry = "./worklet"
 [[entry]]
 kind = "option"
 old = "SonareEngineTransportFacade.seekSeconds(seconds)"
-new = "SonareEngineTransportFacade.seekSec(timeSec)"
+to = "SonareEngineTransportFacade.seekSec(timeSec)"
+changed = "a negative, NaN or infinite position is refused with RangeError instead of being posted to the worklet"
 domain = "engine"
 rule = "seconds-suffix"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::commits a control edit to the offline mirror only when the live engine takes it"
 entry = "./worklet"
 
 [[entry]]
@@ -27461,10 +27471,10 @@ test = "bindings/wasm/tests/surface/core-audio.test.ts::requires the sample rate
 kind = "field"
 old = "MixAssistantOptions.tempoBpm"
 to = "MixingAssistantSuggestRequest.tempoBpm"
-changed = "0 or a negative tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it)"
+changed = "0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it)"
 domain = "mastering"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/mixing-assistant.test.ts::refuses a zero or negative tempo by name instead of reading it as the fallback"
+test = "bindings/wasm/tests/mixing-assistant.test.ts::refuses a zero, negative or non-finite tempo by name instead of reading it as the fallback"
 
 [[entry]]
 kind = "field"
