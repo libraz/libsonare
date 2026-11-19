@@ -20,7 +20,7 @@ from ._ffi import (
     SonareRealtimeVoiceChangerConfig,
     SonareVoiceChangeConfig,
 )
-from ._narrowing import _is_number, _resolve_zero_default
+from ._narrowing import _domain_checked_float, _is_number, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -140,7 +140,7 @@ def voice_change(
             ``"absolute"``, a relative ``formant_factor`` is non-finite or
             outside [0.55, 1.65], or an absolute request needs a warp outside
             [0.55, 1.65]. The message names the reachable ``formant_factor``
-            range; the request is refused, not clamped.
+            range.
     """
     _validate_samples(samples)
     if not isinstance(formant_mode, str) or formant_mode not in _FORMANT_MODES:
@@ -814,7 +814,7 @@ class RealtimeVoiceChangerConfig:
     An out-of-range entry is refused by
     :meth:`RealtimeVoiceChanger.set_config` with a ``SonareValueError`` and
     at creation with a coded ``SonareError`` (``INVALID_FORMAT``, the creation
-    document being a JSON entry point); nothing is clamped.
+    document being a JSON entry point).
 
     ``formant_mode`` is ``"relative"`` (default) or ``"absolute"`` and is fixed
     when the changer is created: :meth:`RealtimeVoiceChanger.set_config`
@@ -845,7 +845,7 @@ class RealtimeVoiceChangerConfig:
     retune_pitch_semitones: float = dataclasses.field(
         default_factory=_neutral_default("retune_pitch_semitones")
     )
-    """Retune pitch shift in semitones."""
+    """Retune pitch shift in semitones; outside finite [-24, 24] it is refused."""
     retune_mix: float = dataclasses.field(default_factory=_neutral_default("retune_mix"))
     """Retune wet amount in [0, 1]."""
     retune_grain_size_samples: int | None = dataclasses.field(
@@ -853,7 +853,8 @@ class RealtimeVoiceChangerConfig:
     )
     """Retune grain length in samples as configured; ``None`` derives it from the sample rate.
 
-    An explicit ``0`` is refused; the grain in use is resolved at ``prepare``.
+    An explicit grain must be a multiple of 4 in [4, 8192] and ``0`` is refused;
+    the grain in use is resolved at ``prepare``.
     """
     formant_factor: float = dataclasses.field(default_factory=_neutral_default("formant_factor"))
     """Formant scale factor, [0.55, 1.65]; 1 leaves the formants alone. See ``formant_mode``."""
@@ -1146,13 +1147,15 @@ class StreamingRetune:
     across :meth:`process_mono` calls, so consecutive blocks of a live stream
     join without a seam. Call :meth:`prepare` before processing.
 
-    A non-finite ``pitch_semitones`` / ``mix`` is rejected rather than substituted,
-    and a block holding a non-finite sample is rejected rather than zeroed:
-    either would otherwise enter the grain history and persist into every
-    later block with nothing to tell the caller its input had been altered.
+    ``pitch_semitones`` must be finite and in [-24, 24] and ``mix`` finite and in
+    [0, 1]; a value outside either raises :class:`SonareValueError`, and a
+    refused :meth:`set_config` keeps the previous controls.
+    A block holding a non-finite sample is rejected rather than zeroed, since it
+    would otherwise enter the grain history and persist into every later block.
 
     ``grain_size_samples=None`` derives the grain from the sample rate at
-    :meth:`prepare`; an explicit ``0`` is refused rather than read as that.
+    :meth:`prepare`; an explicit value must be a multiple of 4 in [4, 8192], and
+    ``0`` is refused rather than read as automatic.
     """
 
     # Declared on the class so close() reads it even when __init__ never ran.
@@ -1173,8 +1176,8 @@ class StreamingRetune:
         requested_grain_size = _grain_size_request(grain_size_samples, "grain_size_samples")
         handle = ctypes.c_void_p()
         rc = self._lib.sonare_streaming_retune_create(
-            _to_c_float(pitch_semitones, "pitch_semitones"),
-            _to_c_float(mix, "mix"),
+            ctypes.c_float(_domain_checked_float(pitch_semitones, "pitch_semitones")),
+            ctypes.c_float(_domain_checked_float(mix, "mix")),
             _to_c_int(requested_grain_size, "grain_size_samples"),
             ctypes.byref(handle),
         )
@@ -1229,6 +1232,9 @@ class StreamingRetune:
     ) -> None:
         """Update the live controls; omitted keywords keep their current value.
 
+        ``pitch_semitones`` must be finite and in [-24, 24], ``mix`` finite and in
+        [0, 1], and an explicit ``grain_size_samples`` a multiple of 4 in [4, 8192]
+        (``0`` is refused); a refused update keeps the previous controls.
         ``grain_size_samples`` is structural: :meth:`config` reports it at once, and
         the grain in use (:attr:`grain_size_samples`) follows at the next
         :meth:`prepare`. An omitted ``grain_size_samples`` keeps the configured
@@ -1244,11 +1250,13 @@ class StreamingRetune:
         _check(
             self._lib.sonare_streaming_retune_set_config(
                 self._require_handle(),
-                _to_c_float(
-                    current_pitch if pitch_semitones is None else pitch_semitones,
-                    "pitch_semitones",
+                ctypes.c_float(
+                    _domain_checked_float(
+                        current_pitch if pitch_semitones is None else pitch_semitones,
+                        "pitch_semitones",
+                    )
                 ),
-                _to_c_float(current_mix if mix is None else mix, "mix"),
+                ctypes.c_float(_domain_checked_float(current_mix if mix is None else mix, "mix")),
                 _to_c_int(requested_grain_size, "grain_size_samples"),
             )
         )

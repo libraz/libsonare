@@ -37,6 +37,7 @@ _STRETCH = _CORPUS["native_spectral_stretch"]
 _CHAIN = _CORPUS["streaming_mastering_chain_prepare"]
 _EQ = _CORPUS["equalizer_prepare"]
 _RETUNE = _CORPUS["streaming_retune_prepare"]
+_RETUNE_CONFIG = _CORPUS["streaming_retune_config"]
 _RESAMPLE = _CORPUS["resample"]
 _ZERO_CROSSINGS = _CORPUS["zero_crossings"]
 _MASTER = _CORPUS["master_audio"]
@@ -247,6 +248,46 @@ def test_streaming_retune_prepare_refuses(case: dict) -> None:
         pytest.raises(error_class, match=re.escape(case["message"])),
     ):
         retune.prepare(case["sample_rate"], case["max_block_size"])
+
+
+_RETUNE_KEYWORD = {
+    "semitones": "pitch_semitones",
+    "mix": "mix",
+    "grain_size": "grain_size_samples",
+}
+
+
+def _retune_controls(case: dict) -> dict[str, float | int | None]:
+    """The corpus row as keywords; grain 0 is the C spelling of an omitted grain."""
+    grain = case["grain_size"]
+    return {
+        "pitch_semitones": float(case["semitones"]),
+        "mix": float(case["mix"]),
+        "grain_size_samples": None if grain == 0 else grain,
+    }
+
+
+@pytest.mark.parametrize("case", _RETUNE_CONFIG["accepted"], ids=lambda case: case["id"])
+def test_streaming_retune_config_accepts(case: dict) -> None:
+    controls = _retune_controls(case)
+    with libsonare.StreamingRetune(**controls) as retune:  # type: ignore[arg-type]
+        assert retune.config() == pytest.approx(controls)
+        retune.set_config(**controls)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("case", _RETUNE_CONFIG["refused"], ids=lambda case: case["id"])
+def test_streaming_retune_config_refuses(case: dict) -> None:
+    """The constructor and set_config refuse by name, and a refused update changes nothing."""
+    controls = _retune_controls(case)
+    message = f"{_RETUNE_KEYWORD[case['field']]} {case['predicate']}"
+    error_class = _ERROR_CLASS[case["cause"]]
+    with pytest.raises(error_class, match=re.escape(f"StreamingRetune: {message}")):
+        libsonare.StreamingRetune(**controls)  # type: ignore[arg-type]
+    with libsonare.StreamingRetune(pitch_semitones=3.0, mix=0.5) as retune:
+        before = retune.config()
+        with pytest.raises(error_class, match=re.escape(f"StreamingRetune.set_config: {message}")):
+            retune.set_config(**controls)  # type: ignore[arg-type]
+        assert retune.config() == before
 
 
 def _resample_input(case: dict) -> np.ndarray:

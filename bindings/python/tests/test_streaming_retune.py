@@ -176,6 +176,14 @@ def test_streaming_retune_refuses_a_grain_that_is_not_a_number() -> None:
     assert str(caught.value) == "StreamingRetune: grain_size_samples must be a number"
 
 
+@pytest.mark.parametrize("field", ["pitch_semitones", "mix"])
+@pytest.mark.parametrize("value", ["1", True, None])
+def test_streaming_retune_refuses_a_control_that_is_not_a_number(field: str, value: object) -> None:
+    with pytest.raises(TypeError) as caught:
+        StreamingRetune(**{field: value})  # type: ignore[arg-type]
+    assert str(caught.value) == f"StreamingRetune: {field} must be a number"
+
+
 @pytest.mark.parametrize("grain", [4, 8192])
 def test_streaming_retune_runs_at_the_grain_it_was_given(grain: int) -> None:
     with StreamingRetune(grain_size_samples=grain) as retune:

@@ -122,6 +122,24 @@ def _float_narrowing_error(name: str) -> str:
     return f"{name} must be finite and in [-3.4028235e38, 3.4028235e38]"
 
 
+def _domain_checked_float(value: object, name: str) -> float:
+    """Return ``value`` as a ``float`` for a C entry that refuses its own finite domain.
+
+    Only a non-number is refused here. A NaN, an infinity or a value past the
+    float range reaches the core, whose refusal states the argument's domain
+    rather than the float range.
+    """
+    if not isinstance(value, bool) and isinstance(value, SupportsFloat):
+        try:
+            return float(value)
+        except OverflowError:
+            # Only an int too wide for a double overflows; its sign survives.
+            return math.inf if isinstance(value, int) and value > 0 else -math.inf
+        except (TypeError, ValueError):
+            pass
+    raise _refuse_type(f"{name} must be a number")
+
+
 def _narrow_double(value: object, name: str) -> float:
     """Return ``value`` as a plain ``float``, or refuse what ``c_double`` would change.
 
