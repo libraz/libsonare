@@ -7,7 +7,6 @@
 # run fails once it binds.
 [pending]
 "metering_detect_clipping.threshold" = "unit split: retires on the C rename to threshold_db"
-"voice_change_realtime.preset" = "Python config: retires when the parity facts carry facade bag names"
 
 [params]
 "align_take_to_reference.reference_len" = "derived length: reference.length"

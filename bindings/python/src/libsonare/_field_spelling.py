@@ -59,6 +59,7 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("tone", "phase"): "phi",
     ("tone", "sample_rate"): "sr",
     ("voice_change_realtime", "channels"): "num_channels",
+    ("voice_change_realtime", "preset"): "config",
     ("vqt", "fmin_hz"): "fmin",
     ("vqt", "sample_rate"): "sr",
     ("waveform_peak_pyramid", "channels"): "num_channels",

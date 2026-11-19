@@ -16,7 +16,7 @@ preset = "config"
 bytes = "data"
 mel = "power"
 
-# The librosa-mirror keywords.
+# The librosa-mirror keywords, then the folded preset.
 [python]
 fmin_hz = "fmin"
 fmax_hz = "fmax"
@@ -29,3 +29,4 @@ bpm_max = "tempo_max"
 bytes = "data"
 # Retires when the C argument is renamed num_channels.
 channels = "num_channels"
+preset = "config"
