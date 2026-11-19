@@ -89,3 +89,30 @@ TEST_CASE("a finite-only float member refuses a non-finite value", "[util][refus
         "bias must be finite and in [-3.4028235e38, 3.4028235e38]");
   CHECK(refusal_text([] { check::finite_float(-1.0e30f, "bias"); }).empty());
 }
+
+TEST_CASE("a double past the float range saturates to the infinity of its sign",
+          "[util][refusal]") {
+  CHECK(check::saturated_float(1.0e40) == INFINITY);
+  CHECK(check::saturated_float(-1.0e40) == -INFINITY);
+  CHECK(std::isnan(check::saturated_float(NAN)));
+  CHECK(check::saturated_float(0.25) == 0.25f);
+  CHECK(check::saturated_float(3.4028234663852886e38) == 3.4028234663852886e38f);
+  CHECK(refusal_text([] { check::in_range(check::saturated_float(1.0e40), 0.0, 1.0, "mix"); }) ==
+        "mix must be finite and in [0, 1]");
+}
+
+TEST_CASE("a refusal is respelled into request keys, camel case unless renamed",
+          "[util][refusal]") {
+  constexpr std::array<check::MemberKey, 1> kRenamed{{{"max_seconds", "maxSec"}}};
+  CHECK(refusal_text([&] {
+          check::with_camel_paths([] { check::in_range(700.0f, 0.0, 600.0, "max_seconds"); },
+                                  kRenamed);
+        }) == "maxSec must be finite and in [0, 600]");
+  CHECK(refusal_text([&] {
+          check::with_camel_paths(
+              [] { check::in_range(200.0f, 0.0, 100.0, "air.humidity_percent"); }, kRenamed);
+        }) == "air.humidityPercent must be finite and in [0, 100]");
+  CHECK(refusal_text([] {
+          check::with_camel_paths([] { check::in_range(2.0f, 0.0, 1.0, "gate_lufs"); });
+        }) == "gateLufs must be finite and in [0, 1]");
+}

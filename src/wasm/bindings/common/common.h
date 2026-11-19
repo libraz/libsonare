@@ -373,6 +373,12 @@ void refuseUnknownDocumentKeys(const val& object, const std::string& path,
 ///          this contract: absent is the only way to ask for the default.
 /// @throws WasmArgumentError naming @p key.
 float floatProperty(val object, const char* key, float default_value);
+
+/// @brief Type-only sibling of @ref floatProperty, for a field whose core check states its domain.
+/// @details NaN and the infinities pass, and a finite value past the float range saturates to an
+///          infinity, so the core refuses all of them in its own domain text.
+/// @throws WasmArgumentError naming @p key for a non-number.
+float domainFloatProperty(val object, const char* key, float default_value);
 /// @brief Fallback float reader: a field that is absent, or present but not a
 ///        finite number, takes @p default_value. A wrong-typed value, and a
 ///        finite value outside the 32-bit float range, are refused rather than
@@ -544,10 +550,9 @@ std::string stringFromVal(const val& value, const char* key);
 ///         number, or is one the 32-bit float cannot hold.
 std::optional<float> optionalNumber(const val& v, const char* key);
 /// @brief Optional number reader for a field whose consumer states the domain: type-checked only.
-/// @details A non-finite value travels on, so the consumer's "<key> must be finite and in
-///          [lo, hi]" is the refusal for NaN and infinity, as on the Node addon's float reader.
-/// @throws WasmArgumentError naming @p key when @p v is present and not a number, or is a
-///         finite number the 32-bit float cannot hold.
+/// @details NaN and the infinities travel on, and a finite value past the float range saturates
+///          to an infinity, so the consumer's "<key> must be finite and in [lo, hi]" refuses all.
+/// @throws WasmArgumentError naming @p key when @p v is present and not a number.
 std::optional<float> optionalDomainNumber(const val& v, const char* key);
 /// @brief Boolean sibling of optionalNumber.
 /// @throws WasmArgumentError naming @p key when @p v is present

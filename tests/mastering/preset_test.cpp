@@ -431,6 +431,9 @@ TEST_CASE("a chain document refuses what it cannot mean, naming the path",
   refused(R"({"params":{"dynamics.multibandComp.highCutoffHz":2000}})",
           "renamed to params.dynamics.multibandComp.crossover.cutoffsHz.1");
   refused(R"({"params":{"loudness":{"ceilingDb":-1}}})", "renamed to params.loudness.ceilingDbtp");
+  refused(R"({"params":{"dynamics.deesser.bandpassQ":2}})",
+          "unknown key params.dynamics.deesser.bandpassQ (renamed to "
+          "params.dynamics.deesser.bandPassQ)");
   refused(R"({"params":{"maximizer.truePeakLimiter.ceilingDb":-1}})",
           "renamed to params.maximizer.truePeakLimiter.ceilingDbtp");
   refused(R"({"params":{},"extra":1})", "unknown key extra");

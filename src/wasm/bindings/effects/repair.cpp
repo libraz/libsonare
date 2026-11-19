@@ -7,6 +7,9 @@
 
 #include "mastering/assistant/repair_session.h"
 #include "mastering/common/noise_profile.h"
+#include "mastering/repair/declip.h"
+#include "mastering/repair/trim_silence.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -25,12 +28,6 @@ bool repairEnumOption(const val& options, const char* key, std::string* name) {
   *name = value.as<std::string>();
   wasmRefuseEmbeddedNul(*name, key);
   return true;
-}
-
-// Converts a dBFS threshold read from @p key into the linear amplitude the core config holds.
-float linearFromDbfs(float db, const char* key) {
-  if (db > 0.0f) throw WasmRangeError(std::string(key) + " must be at most 0 dBFS");
-  return db_to_linear(db);
 }
 
 // Read a dereverb options bag over `config`, leaving absent keys alone.
@@ -124,8 +121,8 @@ mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options) {
   refuseUnknownKeys(options, {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
   // An absent key leaves the library default untouched rather than round-tripping it through dB.
   if (hasProperty(options, "clipThresholdDb")) {
-    cfg.clip_threshold =
-        linearFromDbfs(floatProperty(options, "clipThresholdDb", 0.0f), "clipThresholdDb");
+    cfg.clip_threshold = mastering::repair::clip_threshold_from_db(
+        domainFloatProperty(options, "clipThresholdDb", 0.0f), "clipThresholdDb");
   }
   cfg.lpc_order = intProperty(options, "lpcOrder", cfg.lpc_order);
   cfg.iterations = intProperty(options, "iterations", cfg.iterations);
@@ -533,7 +530,8 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
   if (options.isUndefined() || options.isNull()) return config;
   refuseUnknownKeys(options, {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
   if (hasProperty(options, "thresholdDb")) {
-    config.threshold = linearFromDbfs(floatProperty(options, "thresholdDb", 0.0f), "thresholdDb");
+    config.threshold = mastering::repair::trim_threshold_from_db(
+        domainFloatProperty(options, "thresholdDb", 0.0f), "thresholdDb");
   }
   if (hasProperty(options, "paddingSamples")) {
     const int v = intProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
@@ -546,8 +544,10 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
   if (repairEnumOption(options, "mode", &mode_name)) {
     config.mode = parseTrimSilenceMode(mode_name);
   }
-  config.gate_lufs = floatProperty(options, "gateLufs", config.gate_lufs);
-  config.window_ms = floatProperty(options, "windowMs", config.window_ms);
+  config.gate_lufs = domainFloatProperty(options, "gateLufs", config.gate_lufs);
+  config.window_ms = domainFloatProperty(options, "windowMs", config.window_ms);
+  // Validated here, inside the respelling, so the core's refusal names the request's keys.
+  sonare::util::check::with_camel_paths([&] { mastering::repair::validate_config(config); });
   return config;
 }
 

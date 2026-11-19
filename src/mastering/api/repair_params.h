@@ -79,14 +79,12 @@ inline repair::DereverbClassicalConfig dereverb_classical_config(const ParamMap&
 
 /// The trim threshold's key: dBFS peak on the wire, linear in `TrimSilenceConfig::threshold`.
 inline constexpr const char* kTrimThresholdKey = "thresholdDb";
-/// Its default, the linear 0.001 the config holds when the key is absent.
-inline constexpr float kTrimThresholdDefaultDb = -60.0f;
 inline constexpr ParamMeta kTrimThresholdMeta = display_range(kDbfs, -144, -20);
 
 inline repair::TrimSilenceConfig trim_silence_config(const ParamMap& params) {
   repair::TrimSilenceConfig config;
   SONARE_FIELDS_TRIM_SILENCE(SONARE_READ_FIELD)
-  float threshold_db = kTrimThresholdDefaultDb;
+  float threshold_db = repair::kTrimThresholdDefaultDb;
   read_field(params, kTrimThresholdKey, threshold_db, kTrimThresholdMeta);
   if (params.find(kTrimThresholdKey) != params.end()) {
     config.threshold = repair::trim_threshold_from_db(threshold_db, kTrimThresholdKey);

@@ -46,37 +46,27 @@ static_assert(std::is_nothrow_move_assignable<MasteringChainConfig>::value,
 // it can be approximated with a precomputed static gain (see the
 // options-taking constructor below).
 void reject_non_streaming_repair(const MasteringChainConfig& config) {
-  if (config.repair.declick.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.declick");
-  }
-  if (config.repair.declip.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.declip");
-  }
-  if (config.repair.decrackle.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.decrackle");
-  }
-  if (config.repair.dehum.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.dehum");
-  }
-  if (config.repair.dereverb.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.dereverb");
-  }
-  // denoise is the one repair stage that does run block by block, but only for
-  // the estimators that are recursive in time. The default ranks every frame of
-  // the whole signal by energy, which a stream has no way to do, so it is refused
-  // by name rather than swapped for a streaming one behind the caller's back.
+  const auto refuse_stage = [](bool enabled, const char* stage) {
+    if (!enabled) return;
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::NotSupported, stage,
+        "is not supported for a streaming chain: it needs the whole signal")
+        .as_caller_spelled();
+  };
+  refuse_stage(config.repair.declick.enabled, "repair.declick");
+  refuse_stage(config.repair.declip.enabled, "repair.declip");
+  refuse_stage(config.repair.decrackle.enabled, "repair.decrackle");
+  refuse_stage(config.repair.dehum.enabled, "repair.dehum");
+  refuse_stage(config.repair.dereverb.enabled, "repair.dereverb");
+  // denoise runs block by block only with an estimator that is recursive in time; the default
+  // ranks the whole signal, so it is refused by name rather than swapped behind the caller's back.
   if (config.repair.denoise.enabled &&
       config.repair.denoise.config.noise_estimator == repair::DenoiseNoiseEstimator::Quantile) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "StreamingMasteringChain does not support repair.denoise with the quantile noise "
-        "estimator, which ranks the whole signal's frames; set repair.denoise.noiseEstimator to "
-        "mcra, imcra or spp");
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::NotSupported, "repair.denoise.noiseEstimator",
+        "quantile is not supported for a streaming chain: it ranks every frame of the whole "
+        "signal by energy; spp, mcra and imcra track recursively")
+        .as_caller_spelled();
   }
 }
 

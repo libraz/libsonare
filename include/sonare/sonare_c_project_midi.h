@@ -332,6 +332,8 @@ const char* sonare_midi_cc_name(int controller);
 /// @brief Reverse standard MIDI CC lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_cc_index_for_name(const char* name);
 /// @brief Returns a MIDI 2.0 registered per-note controller name, or NULL.
+/// @param index Per-note controller index, [0, 255]: the 8-bit index field of the MIDI 2.0
+///        message. Outside that range the answer is NULL.
 /// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
 ///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
 ///          entry for the argument -- out of range, or in range and unnamed -- OR this build has

@@ -291,7 +291,8 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
     Napi::Object options = info[2].As<Napi::Object>();
     RefuseUnknownKeys(options, "options",
                       {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
-    config.clip_threshold = DbfsAsLinearProperty(options, "clipThresholdDb", config.clip_threshold);
+    config.clip_threshold = DbfsAsLinearProperty(options, "clipThresholdDb", config.clip_threshold,
+                                                 sonare::mastering::repair::clip_threshold_from_db);
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
     config.iterations = IntProperty(options, "iterations", config.iterations);
     config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);

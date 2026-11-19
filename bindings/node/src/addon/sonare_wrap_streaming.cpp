@@ -821,8 +821,8 @@ void ReadRetuneConfig(const Napi::Value& value, float* pitch_semitones, float* m
   if (!value.IsObject()) return;
   const Napi::Object object = value.As<Napi::Object>();
   RefuseUnknownKeys(object, "options", {"pitchSemitones", "mix", "grainSizeSamples"});
-  *pitch_semitones = FloatProperty(object, "pitchSemitones", *pitch_semitones);
-  *mix = FloatProperty(object, "mix", *mix);
+  *pitch_semitones = DomainFloatProperty(object, "pitchSemitones", *pitch_semitones);
+  *mix = DomainFloatProperty(object, "mix", *mix);
   const int grain = IntProperty(object, "grainSizeSamples", *grain_size_samples);
   const Napi::Value given = object.Get("grainSizeSamples");
   if (!given.IsUndefined() && !given.IsNull() && grain == 0) {

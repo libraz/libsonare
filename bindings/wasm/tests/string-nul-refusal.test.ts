@@ -492,6 +492,12 @@ describe('embedded NUL refusal, scan', () => {
       count: 1,
       reason: 'error-subject label built from a literal path and an index',
     },
+    {
+      file: 'effects/spectral_edit.cpp',
+      text: 'path.c_str()',
+      count: 1,
+      reason: 'error-subject label built from the op index and a literal member name',
+    },
   ];
 
   /** Every `.c_str()` call outside comments, as file:line plus the source text. */

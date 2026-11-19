@@ -176,7 +176,7 @@ json::Object settings_of(const repair::DereverbClassicalConfig& config) {
 /// Refuses an unknown setting, with the current key as a path when the catalog renamed it.
 [[noreturn]] void refuse_unknown_setting(const std::string& stage_path, const std::string& key) {
   const std::string path = schema::child_path(stage_path, key);
-  const std::string note = api::detail::renamed_param_note(key);
+  const std::string note = api::detail::renamed_param_note("", key);
   constexpr std::string_view kLead = " (renamed to ";
   if (note.size() <= kLead.size() + 1) {
     throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, path);

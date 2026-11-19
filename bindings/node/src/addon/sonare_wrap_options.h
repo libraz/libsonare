@@ -24,8 +24,8 @@
 #include <utility>
 #include <vector>
 
-#include "util/db.h"
 #include "util/json_schema.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_node {
 
@@ -487,17 +487,27 @@ inline float FiniteFloatProperty(const Napi::Object& obj, const char* key, float
   return node_narrow_finite_float(obj.Env(), value, key);
 }
 
+/// @brief Type-only float property read, for a field whose core check states its domain.
+/// @details NaN and the infinities pass, and a finite value past the float range saturates to an
+///   infinity, so the core refuses all of them in its own domain text. A wrong type is refused by
+///   name; absent returns @p fallback.
+inline float DomainFloatProperty(const Napi::Object& obj, const char* key, float fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  return sonare::util::check::saturated_float(value.As<Napi::Number>().DoubleValue());
+}
+
 /// @brief Read a dBFS level property as the linear amplitude a core config holds.
 /// @details An absent key returns @p linear_fallback untouched, so a library default is not
-///   round-tripped through decibels. A level above 0 dBFS is refused by name.
-inline float DbfsAsLinearProperty(const Napi::Object& obj, const char* key, float linear_fallback) {
+///   round-tripped through decibels. The read is type-only: @p to_linear is the core's own
+///   conversion, which owns the domain and refuses by @p key.
+template <typename ToLinear>
+inline float DbfsAsLinearProperty(const Napi::Object& obj, const char* key, float linear_fallback,
+                                  ToLinear&& to_linear) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return linear_fallback;
-  const float db = FiniteFloatProperty(obj, key, 0.0f);
-  if (db > 0.0f) {
-    throw Napi::RangeError::New(obj.Env(), std::string(key) + " must be at most 0 dBFS");
-  }
-  return sonare::db_to_linear(db);
+  return to_linear(DomainFloatProperty(obj, key, 0.0f), key);
 }
 
 /// @brief Read a `{ x, y, z }` property of three finite numbers.

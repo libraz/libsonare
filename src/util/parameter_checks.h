@@ -7,7 +7,11 @@
 ///          refusal_predicates.h. A layer that read the member from a caller's key respells the
 ///          subject (mastering/api/param_map.h, with_caller_keys).
 
+#include <array>
+#include <cctype>
 #include <cmath>
+#include <cstddef>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -143,6 +147,56 @@ inline void sum_at_most(double a, double b, double bound, const char* subject_a,
                                               const std::string& parent) {
   throw e.respelled(
       e.code(), [&parent](const std::string& subject) { return parent + "." + subject; }, false);
+}
+
+/// @brief @p number as the float a domain check reads: a finite value past the float range
+///        becomes the infinity of its sign, so the check refuses it by its domain.
+inline float saturated_float(double number) {
+  constexpr double kMax = static_cast<double>(std::numeric_limits<float>::max());
+  if (number > kMax) return std::numeric_limits<float>::infinity();
+  if (number < -kMax) return -std::numeric_limits<float>::infinity();
+  return static_cast<float>(number);
+}
+
+/// @brief @p path with each dot-separated segment in camel case: "receiver_spacing_m" ->
+///        "receiverSpacingM", "air.temperature_c" -> "air.temperatureC".
+inline std::string camel_path(const std::string& path) {
+  std::string out;
+  bool upper = false;
+  for (const char c : path) {
+    if (c == '_') {
+      upper = !out.empty() && out.back() != '.';
+      continue;
+    }
+    out += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c;
+    upper = false;
+  }
+  return out;
+}
+
+/// @brief A core member path and the request key that spells it where @ref camel_path does not.
+using MemberKey = std::pair<const char*, const char*>;
+
+/// @brief Runs @p call, rethrowing a refusal not yet in the caller's spelling with each subject
+///        in @ref camel_path spelling, the member spelling of a JS request object, or as the key
+///        @p renamed lists for it.
+template <typename Call, std::size_t N = 0>
+auto with_camel_paths(Call&& call,
+                      const std::array<MemberKey, N>& renamed = {}) -> decltype(call()) {
+  try {
+    return call();
+  } catch (const SonareParameterRefusal& e) {
+    if (e.caller_spelled()) throw;
+    throw e.respelled(
+        e.code(),
+        [&renamed](const std::string& subject) {
+          for (const MemberKey& row : renamed) {
+            if (subject == row.first) return std::string(row.second);
+          }
+          return camel_path(subject);
+        },
+        true);
+  }
 }
 
 }  // namespace sonare::util::check

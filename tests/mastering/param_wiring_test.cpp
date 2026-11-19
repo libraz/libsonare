@@ -1404,6 +1404,41 @@ TEST_CASE("a renamed processor parameter is refused naming its successor",
     CHECK(message.find("clipThresholdDb") != std::string::npos);
   }
 
+  SECTION("an insert key renamed for 2.0 names its successor on that insert only") {
+    const std::vector<std::vector<std::string>> rows = {
+        {"dynamics.deesser", "bandpassQ", "bandPassQ"},
+        {"effects.acoustic.roomMorph", "maxSeconds", "maxSec"},
+        {"effects.reverb.room", "maxSeconds", "maxSec"},
+        {"effects.modulation.pitchShifter", "semitones", "pitchSemitones"},
+        {"effects.modulation.pitchShifter", "semitones2", "pitchSemitones2"},
+        {"effects.modulation.pitchShifter", "cents", "pitchCents"},
+        {"effects.modulation.pitchShifter", "cents2", "pitchCents2"},
+        {"effects.modulation.rotary", "accelTauS", "accelTauSec"},
+        {"effects.modulation.rotary", "decelTauS", "decelTauSec"},
+        {"effects.reverb.velvet", "reverbTimeS", "reverbTimeSec"},
+        {"voice.changer", "eqHighpassHz", "eqHighPassHz"},
+        {"voice.changer", "retuneSemitones", "retunePitchSemitones"},
+        {"voice.changer", "retuneGrainSize", "retuneGrainSizeSamples"},
+    };
+    for (const auto& row : rows) {
+      CAPTURE(row[0], row[1]);
+      const std::string message =
+          refusal_of([&] { (void)api::insert_timing(row[0], "{\"" + row[1] + "\":1}", 48000.0); });
+      CHECK(names_unread_key(message, row[1] + " (renamed to " + row[2] + ")"));
+    }
+    // The old spelling is a live key elsewhere, so another insert gives no hint.
+    const std::string elsewhere = refusal_of(
+        [&] { (void)api::insert_timing("effects.reverb.velvet", "{\"semitones\":1}", 48000.0); });
+    CHECK(names_unread_key(elsewhere, "semitones"));
+    CHECK(elsewhere.find("renamed") == std::string::npos);
+
+    const std::string trim = refusal_of([&] {
+      api::apply_named_processor("repair.trimSilence", samples.data(), samples.size(), 48000,
+                                 {{"threshold", 0.001}});
+    });
+    CHECK(names_unread_key(trim, "threshold (renamed to thresholdDb)"));
+  }
+
   SECTION("the true-peak ceilings are named in dBTP") {
     for (const char* processor :
          {"maximizer.truePeakLimiter", "maximizer.adaptiveRelease", "maximizer.loudnessOptimize"}) {

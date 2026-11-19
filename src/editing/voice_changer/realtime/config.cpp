@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <cstdio>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -171,27 +170,24 @@ bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::st
   const double named_lo = std::max(lo, static_cast<double>(kFormantFactorMin));
   const double named_hi = std::min(hi, static_cast<double>(kFormantFactorMax));
   if (error) {
-    char text[360];
-    const double semitones = static_cast<double>(config.retune.semitones);
-    const std::string semitones_path = field_path("retune.pitchSemitones", spelling);
+    using ::sonare::util::refusal::bound_text;
+    using ::sonare::util::refusal::Inward;
+    const std::string at = " in absolute formant mode at " +
+                           field_path("retune.pitchSemitones", spelling) + " " +
+                           bound_text(static_cast<double>(config.retune.semitones));
+    const std::string reach = "the warp reaches [" + bound_text(lo, Inward::Up) + ", " +
+                              bound_text(hi, Inward::Down) + "] there";
     if (named_lo > named_hi) {
-      std::snprintf(text, sizeof(text),
-                    "must be 'relative': no formant factor is reachable in absolute mode at %s "
-                    "%.4g (the warp reaches [%.4g, %.4g] there, outside [%.4g, %.4g])",
-                    semitones_path.c_str(), semitones, lo, hi,
-                    static_cast<double>(kFormantFactorMin), static_cast<double>(kFormantFactorMax));
-      *error = schema::refusal(field_path("formant.mode", spelling), text);
+      *error =
+          schema::refusal(field_path("formant.mode", spelling),
+                          "must be relative: no formant factor is reachable" + at + " (" + reach +
+                              ", outside [" + bound_text(static_cast<double>(kFormantFactorMin)) +
+                              ", " + bound_text(static_cast<double>(kFormantFactorMax)) + "])");
     } else {
-      std::snprintf(
-          text, sizeof(text),
-          "must be in [%s, %s] in absolute formant mode at %s %.4g (the warp "
-          "reaches [%.4g, %.4g] there)",
-          ::sonare::util::refusal::bound_text(named_lo, ::sonare::util::refusal::Inward::Up)
-              .c_str(),
-          ::sonare::util::refusal::bound_text(named_hi, ::sonare::util::refusal::Inward::Down)
-              .c_str(),
-          semitones_path.c_str(), semitones, lo, hi);
-      *error = schema::refusal(field_path("formant.factor", spelling), text);
+      *error =
+          schema::refusal(field_path("formant.factor", spelling),
+                          "must be finite and in [" + bound_text(named_lo, Inward::Up) + ", " +
+                              bound_text(named_hi, Inward::Down) + "]" + at + " (" + reach + ")");
     }
   }
   return false;

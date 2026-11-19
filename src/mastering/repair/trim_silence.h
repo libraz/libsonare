@@ -25,6 +25,9 @@ struct TrimSilenceConfig {
 /// wrapping, which a negative count that crossed a language boundary would otherwise reach.
 inline constexpr size_t kMaxTrimPaddingSamples = 960000;
 
+/// The default threshold in dBFS, the 0.001 linear TrimSilenceConfig::threshold holds.
+inline constexpr float kTrimThresholdDefaultDb = -60.0f;
+
 /// @brief Largest accepted @c TrimSilenceConfig::window_ms; the gate window defaults to 400 ms.
 inline constexpr float kMaxTrimWindowMs = 10000.0f;
 

@@ -15,6 +15,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/parameter_checks.h"
 #include "util/zero_is_default.h"
 
 using namespace sonare_node;
@@ -369,20 +370,21 @@ sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(const Napi
   cfg.target = RoomFromOptions(opts, sonare::acoustic::kDefaultWallAbsorption);
   cfg.placement = PlacementFromOptions(opts);
   cfg.source_tail_suppression =
-      FiniteFloatProperty(opts, "sourceTailSuppression", cfg.source_tail_suppression);
-  cfg.wet = FiniteFloatProperty(opts, "wet", cfg.wet);
+      DomainFloatProperty(opts, "sourceTailSuppression", cfg.source_tail_suppression);
+  cfg.wet = DomainFloatProperty(opts, "wet", cfg.wet);
   cfg.ism_order = IntProperty(opts, "ismOrder", cfg.ism_order);
   cfg.seed = Uint32Property(opts, "seed", cfg.seed);
-  cfg.max_seconds = FiniteFloatProperty(opts, "maxSec", cfg.max_seconds);
+  cfg.max_seconds = DomainFloatProperty(opts, "maxSec", cfg.max_seconds);
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
-  cfg.mixing_time_ms = FiniteFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
+  cfg.mixing_time_ms = DomainFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
   // The morph core validates crossfade and climate, throwing on an implausible value.
-  cfg.crossfade_ms = FiniteFloatProperty(opts, "crossfadeMs", cfg.crossfade_ms);
+  cfg.crossfade_ms = DomainFloatProperty(opts, "crossfadeMs", cfg.crossfade_ms);
   cfg.air_absorption_enabled =
       BoolProperty(opts, "airAbsorptionEnabled", cfg.air_absorption_enabled);
-  cfg.air.temperature_c = FloatProperty(opts, "airTemperatureC", cfg.air.temperature_c);
-  cfg.air.humidity_percent = FloatProperty(opts, "airHumidityPercent", cfg.air.humidity_percent);
+  cfg.air.temperature_c = DomainFloatProperty(opts, "airTemperatureC", cfg.air.temperature_c);
+  cfg.air.humidity_percent =
+      DomainFloatProperty(opts, "airHumidityPercent", cfg.air.humidity_percent);
   return cfg;
 }
 
@@ -408,7 +410,9 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
 
   const sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
 
-  const auto result = sonare::effects::acoustic::room_morph(audio, cfg);
+  const auto result = sonare::util::check::with_camel_paths(
+      [&] { return sonare::effects::acoustic::room_morph(audio, cfg); },
+      sonare::effects::acoustic::kRoomMorphRenamedKeys);
   std::vector<float> morphed = AudioToVector(result.audio);
 
   // Shaped like SynthesizeRir's result rather than a bare buffer: the same
@@ -456,9 +460,11 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
       {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right", "sampleRate"});
 
   sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
-  cfg.receiver_spacing_m = FiniteFloatProperty(opts, "receiverSpacingM", cfg.receiver_spacing_m);
+  cfg.receiver_spacing_m = DomainFloatProperty(opts, "receiverSpacingM", cfg.receiver_spacing_m);
 
-  const auto result = sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, cfg);
+  const auto result = sonare::util::check::with_camel_paths(
+      [&] { return sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, cfg); },
+      sonare::effects::acoustic::kRoomMorphRenamedKeys);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, AudioToVector(result.left)));

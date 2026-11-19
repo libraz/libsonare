@@ -186,6 +186,7 @@ std::string retired_chain_key_successor(const std::string& key) {
       {"repair.declip.clipThreshold", "repair.declip.clipThresholdDb"},
       {"dynamics.compressor.sidechainHpfEnabled", "dynamics.compressor.sidechainHighPassHz"},
       {"dynamics.compressor.sidechainHpfHz", "dynamics.compressor.sidechainHighPassHz"},
+      {"dynamics.deesser.bandpassQ", "dynamics.deesser.bandPassQ"},
       {"eq.tiltDb", "eq.tilt.tiltDb"},
       {"eq.pivotHz", "eq.tilt.pivotHz"},
       {"dynamics.multibandComp.lowCutoffHz", "dynamics.multibandComp.crossover.cutoffsHz.0"},

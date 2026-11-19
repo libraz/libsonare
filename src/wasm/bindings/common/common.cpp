@@ -16,6 +16,7 @@
 #include "midi/live_push_args.h"
 #include "util/json_schema.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 // ============================================================================
 // Helper functions
@@ -435,6 +436,12 @@ float floatProperty(val object, const char* key, float default_value) {
   return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
 }
 
+float domainFloatProperty(val object, const char* key, float default_value) {
+  val value = typedPropertyValue(object, key, "number");
+  if (value.isUndefined()) return default_value;
+  return sonare::util::check::saturated_float(numberFromVal(value, key));
+}
+
 float floatOption(val object, const char* key, float default_value) {
   val value = objectProperty(object, key);
   if (value.isUndefined()) return default_value;
@@ -726,12 +733,7 @@ std::optional<float> optionalNumber(const val& v, const char* key) {
 
 std::optional<float> optionalDomainNumber(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
-  const double number = numberFromVal(v, key);
-  if (std::isfinite(number) &&
-      std::fabs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw WasmRangeError(std::string(key) + " must be finite and in [-3.4028235e38, 3.4028235e38]");
-  }
-  return static_cast<float>(number);
+  return sonare::util::check::saturated_float(numberFromVal(v, key));
 }
 
 std::optional<bool> optionalBool(const val& v, const char* key) {

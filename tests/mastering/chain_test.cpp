@@ -2676,16 +2676,46 @@ TEST_CASE("MasteringChain applies new dynamics stages", "[mastering][chain]") {
           result.stages.end());
 }
 
-TEST_CASE("StreamingMasteringChain rejects declick", "[mastering][chain][streaming]") {
-  MasteringChainConfig config;
-  config.repair.declick.enabled = true;
-  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
-}
-
-TEST_CASE("StreamingMasteringChain rejects dereverb", "[mastering][chain][streaming]") {
-  MasteringChainConfig config;
-  config.repair.dereverb.enabled = true;
-  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
+TEST_CASE("StreamingMasteringChain refuses a whole-signal repair stage as not supported, keyed",
+          "[mastering][chain][streaming]") {
+  const auto refusal_of = [](MasteringChainConfig config) {
+    try {
+      StreamingMasteringChain chain(std::move(config));
+    } catch (const sonare::SonareException& e) {
+      return std::make_pair(e.code(), std::string(e.what()));
+    }
+    return std::make_pair(sonare::ErrorCode::Ok, std::string());
+  };
+  const std::string reason = " is not supported for a streaming chain: it needs the whole signal";
+  MasteringChainConfig declick;
+  declick.repair.declick.enabled = true;
+  CHECK(refusal_of(declick) ==
+        std::make_pair(sonare::ErrorCode::NotSupported, "repair.declick" + reason));
+  MasteringChainConfig declip;
+  declip.repair.declip.enabled = true;
+  CHECK(refusal_of(declip) ==
+        std::make_pair(sonare::ErrorCode::NotSupported, "repair.declip" + reason));
+  MasteringChainConfig decrackle;
+  decrackle.repair.decrackle.enabled = true;
+  CHECK(refusal_of(decrackle) ==
+        std::make_pair(sonare::ErrorCode::NotSupported, "repair.decrackle" + reason));
+  MasteringChainConfig dehum;
+  dehum.repair.dehum.enabled = true;
+  CHECK(refusal_of(dehum) ==
+        std::make_pair(sonare::ErrorCode::NotSupported, "repair.dehum" + reason));
+  MasteringChainConfig dereverb;
+  dereverb.repair.dereverb.enabled = true;
+  CHECK(refusal_of(dereverb) ==
+        std::make_pair(sonare::ErrorCode::NotSupported, "repair.dereverb" + reason));
+  MasteringChainConfig denoise;
+  denoise.repair.denoise.enabled = true;
+  denoise.repair.denoise.config.noise_estimator =
+      sonare::mastering::repair::DenoiseNoiseEstimator::Quantile;
+  CHECK(refusal_of(denoise) ==
+        std::make_pair(sonare::ErrorCode::NotSupported,
+                       std::string("repair.denoise.noiseEstimator quantile is not supported for a "
+                                   "streaming chain: it ranks every frame of the whole signal by "
+                                   "energy; spp, mcra and imcra track recursively")));
 }
 
 TEST_CASE("StreamingMasteringChain supports new dynamics stages", "[mastering][chain][streaming]") {

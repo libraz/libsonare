@@ -191,7 +191,7 @@ InsertTiming insert_timing(const std::string& name, const std::string& json_para
     std::string keys;
     for (const std::string& key : unknown) {
       if (!keys.empty()) keys += ", ";
-      keys += key + detail::renamed_param_note(key);
+      keys += key + detail::renamed_param_note(name, key);
     }
     throw SonareException(ErrorCode::InvalidParameter,
                           name + " does not read parameter(s): " + keys);

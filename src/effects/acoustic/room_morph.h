@@ -21,6 +21,8 @@
 /// new room more convincingly than it removes the old one), which is the
 /// honest scope of a no-dereverb design.
 
+#include <array>
+#include <utility>
 #include <vector>
 
 #include "acoustic/late_reverb.h"      // ReverbModel
@@ -33,6 +35,14 @@
 #include "rt/tail_budget.h"
 
 namespace sonare::effects::acoustic {
+
+/// @brief The config members whose request key camel case does not derive (`maxSec`, the flat
+///        climate keys), for respelling a refusal into a JS request's keys.
+inline constexpr std::array<std::pair<const char*, const char*>, 3> kRoomMorphRenamedKeys{{
+    {"max_seconds", "maxSec"},
+    {"air.temperature_c", "airTemperatureC"},
+    {"air.humidity_percent", "airHumidityPercent"},
+}};
 
 /// @brief Configuration for the room-character morph.
 struct RoomMorphConfig {

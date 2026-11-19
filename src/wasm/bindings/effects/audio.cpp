@@ -15,6 +15,7 @@
 #include "editing/pitch_editor/note_segmenter.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -370,8 +371,10 @@ val js_voice_change(val samples, const val& sample_rate, const val& pitch_semito
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
   config.formant_mode = editing::voice_changer::parse_formant_mode(formant_mode);
-  editing::voice_changer::VoiceChanger changer(config);
-  Audio result = changer.process(audio);
+  const Audio result = util::check::with_camel_paths([&] {
+    editing::voice_changer::VoiceChanger changer(config);
+    return changer.process(audio);
+  });
   return vectorToFloat32Array(result.data(), result.size());
 }
 

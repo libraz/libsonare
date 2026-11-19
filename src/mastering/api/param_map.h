@@ -345,16 +345,38 @@ inline ParamMap make_map(const std::vector<Param>& params) {
   return map;
 }
 
-/// @brief `" (renamed to <key>)"` for a processor parameter that was renamed, else empty.
-inline std::string renamed_param_note(const std::string& key) {
-  static const std::pair<const char*, const char*> kRenamed[] = {
-      {"clipThreshold", "clipThresholdDb"},
-      {"sidechainHpfEnabled", "sidechainHighPassEnabled"},
-      {"sidechainHpfHz", "sidechainHighPassHz"},
-      {"ceilingDb", "ceilingDbtp"},
+/// @brief `" (renamed to <key>)"` for a parameter of @p owner that was renamed, else empty.
+/// @details A row with an empty owner holds for every processor; the rest only for the one named,
+///   since an old spelling such as `semitones` is a live key elsewhere.
+inline std::string renamed_param_note(const std::string& owner, const std::string& key) {
+  struct Renamed {
+    const char* owner;
+    const char* old_key;
+    const char* new_key;
   };
-  for (const auto& [old_key, new_key] : kRenamed) {
-    if (key == old_key) return std::string(" (renamed to ") + new_key + ")";
+  static const Renamed kRenamed[] = {
+      {"", "clipThreshold", "clipThresholdDb"},
+      {"", "sidechainHpfEnabled", "sidechainHighPassEnabled"},
+      {"", "sidechainHpfHz", "sidechainHighPassHz"},
+      {"", "ceilingDb", "ceilingDbtp"},
+      {"dynamics.deesser", "bandpassQ", "bandPassQ"},
+      {"effects.acoustic.roomMorph", "maxSeconds", "maxSec"},
+      {"effects.reverb.room", "maxSeconds", "maxSec"},
+      {"effects.modulation.pitchShifter", "semitones", "pitchSemitones"},
+      {"effects.modulation.pitchShifter", "semitones2", "pitchSemitones2"},
+      {"effects.modulation.pitchShifter", "cents", "pitchCents"},
+      {"effects.modulation.pitchShifter", "cents2", "pitchCents2"},
+      {"effects.modulation.rotary", "accelTauS", "accelTauSec"},
+      {"effects.modulation.rotary", "decelTauS", "decelTauSec"},
+      {"effects.reverb.velvet", "reverbTimeS", "reverbTimeSec"},
+      {"repair.trimSilence", "threshold", "thresholdDb"},
+      {"voice.changer", "eqHighpassHz", "eqHighPassHz"},
+      {"voice.changer", "retuneSemitones", "retunePitchSemitones"},
+      {"voice.changer", "retuneGrainSize", "retuneGrainSizeSamples"},
+  };
+  for (const Renamed& row : kRenamed) {
+    const bool applies = row.owner[0] == '\0' || owner == row.owner;
+    if (applies && key == row.old_key) return std::string(" (renamed to ") + row.new_key + ")";
   }
   return std::string();
 }
@@ -365,7 +387,7 @@ inline void refuse_unread_params(const std::string& name, const std::vector<std:
   std::string joined;
   for (const std::string& key : keys) {
     if (!joined.empty()) joined += ", ";
-    joined += key + renamed_param_note(key);
+    joined += key + renamed_param_note(name, key);
   }
   throw SonareException(ErrorCode::InvalidParameter,
                         name + " does not read parameter(s): " + joined);

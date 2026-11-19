@@ -780,10 +780,11 @@ TEST_CASE("Validation refuses an unreachable absolute warp and names the formant
 
   RealtimeVoiceChangerConfig config = bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute);
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  // 2^(-9/12) = 0.5946, so the warp range reaches [0.327, 0.9811], which the factor's own
-  // range [0.55, 1.65] narrows to [0.55, 0.98107], printed inward as [0.55, 0.981].
-  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.981]"));
-  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("at retune.pitchSemitones -9"));
+  // 2^(-9/12) = 0.5946: the warp reaches [0.32703, 0.98107], which the factor's own range
+  // [0.55, 1.65] narrows to [0.55, 0.98107]. Every bound is printed inward at four digits.
+  REQUIRE(error ==
+          "formant.factor must be finite and in [0.55, 0.981] in absolute formant mode at "
+          "retune.pitchSemitones -9 (the warp reaches [0.3271, 0.981] there)");
 
   config.formant.factor = 0.8f;
   REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));

@@ -509,7 +509,7 @@ int sonare_midi_cc_index_for_name(const char* name) {
 
 const char* sonare_midi_per_note_controller_name(int index) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (index < 0 || index > 127) return nullptr;
+  if (index < 0 || index > 255) return nullptr;
   return view_to_cstr(sonare::midi::per_note_controller_name(static_cast<uint8_t>(index)));
 #else
   (void)index;

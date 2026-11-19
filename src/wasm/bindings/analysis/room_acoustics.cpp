@@ -12,6 +12,7 @@
 #include "acoustic/material.h"
 #include "acoustic/selector_names.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
 
@@ -319,22 +320,22 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opt
   config.target = roomFromVal(opts, sonare::acoustic::kDefaultWallAbsorption);
   config.placement = placementFromVal(opts);
   config.source_tail_suppression =
-      floatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
-  config.wet = floatProperty(opts, "wet", config.wet);
+      domainFloatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
+  config.wet = domainFloatProperty(opts, "wet", config.wet);
   config.ism_order = intProperty(opts, "ismOrder", config.ism_order);
   config.seed = uintProperty(opts, "seed", config.seed);
-  config.max_seconds = floatProperty(opts, "maxSec", config.max_seconds);
+  config.max_seconds = domainFloatProperty(opts, "maxSec", config.max_seconds);
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
-  config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
-  config.crossfade_ms = floatProperty(opts, "crossfadeMs", config.crossfade_ms);
+  config.mixing_time_ms = domainFloatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
+  config.crossfade_ms = domainFloatProperty(opts, "crossfadeMs", config.crossfade_ms);
   // An implausible climate throws here (the morph core validates rather than diagnosing).
   config.air_absorption_enabled =
       boolProperty(opts, "airAbsorptionEnabled", config.air_absorption_enabled);
-  config.air.temperature_c = floatProperty(opts, "airTemperatureC", config.air.temperature_c);
+  config.air.temperature_c = domainFloatProperty(opts, "airTemperatureC", config.air.temperature_c);
   config.air.humidity_percent =
-      floatProperty(opts, "airHumidityPercent", config.air.humidity_percent);
+      domainFloatProperty(opts, "airHumidityPercent", config.air.humidity_percent);
   sonare::effects::acoustic::validate_room_morph_config(
       config, sonare::acoustic::kShoeboxJsFieldNames, sonare::acoustic::kRirSynthJsFieldNames);
   return config;
@@ -345,9 +346,13 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
   validateAcousticSampleRate(sample_rate);
   refuseUnknownKeys(opts, roomKeys(), {"wet", "sourceTailSuppression", "samples", "sampleRate"});
   Audio audio = loadAcousticAudio("samples", samples, sample_rate);
-  const auto config = roomMorphConfigFromVal(opts);
-
-  const auto result = sonare::effects::acoustic::room_morph(audio, config);
+  // The config's own validation runs inside the respelling, so it refuses in the request's keys.
+  const auto result = sonare::util::check::with_camel_paths(
+      [&] {
+        const auto config = roomMorphConfigFromVal(opts);
+        return sonare::effects::acoustic::room_morph(audio, config);
+      },
+      sonare::effects::acoustic::kRoomMorphRenamedKeys);
 
   // Shaped like js_synthesize_rir's result rather than a bare buffer: the same
   // synthesis runs underneath and its warnings describe a room the caller did
@@ -372,10 +377,14 @@ val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val op
   }
   Audio left_audio = acousticAudioFromVector("left", std::move(left_data), sample_rate);
   Audio right_audio = acousticAudioFromVector("right", std::move(right_data), sample_rate);
-  auto config = roomMorphConfigFromVal(opts);
-  config.receiver_spacing_m = floatProperty(opts, "receiverSpacingM", config.receiver_spacing_m);
-
-  const auto result = sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, config);
+  const auto result = sonare::util::check::with_camel_paths(
+      [&] {
+        auto config = roomMorphConfigFromVal(opts);
+        config.receiver_spacing_m =
+            domainFloatProperty(opts, "receiverSpacingM", config.receiver_spacing_m);
+        return sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, config);
+      },
+      sonare::effects::acoustic::kRoomMorphRenamedKeys);
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
   out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
