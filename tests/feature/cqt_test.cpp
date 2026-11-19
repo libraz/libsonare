@@ -1358,3 +1358,51 @@ TEST_CASE("a CQT kernel built row by row equals one built from the dense padded 
     CHECK(kernel->kernel().values == want.values);
   }
 }
+
+TEST_CASE("a CQT kernel built from a donor equals one built alone", "[cqt][sparse_kernel]") {
+  struct Grid {
+    int sr;
+    float fmin;
+    int n_bins;
+    int hop_length;
+    float filter_scale;
+    WindowType window;
+  };
+  const auto build = [](const Grid& g, const CqtKernel* donor) {
+    CqtConfig config;
+    config.fmin = g.fmin;
+    config.n_bins = g.n_bins;
+    config.hop_length = g.hop_length;
+    config.filter_scale = g.filter_scale;
+    config.window = g.window;
+    return CqtKernel::create(g.sr, config, donor);
+  };
+  const Grid wanted{22050, 110.0f, 48, 256, 1.0f, WindowType::Hann};
+  const auto alone = build(wanted, nullptr);
+
+  // Each donor shares a different set of rows with the wanted grid: a prefix short of the
+  // wanted grid's last bin, a prefix short of the donor's own last bin, every row, and none.
+  for (const Grid& g : {Grid{22050, 110.0f, 60, 256, 1.0f, WindowType::Hann},
+                        Grid{22050, 110.0f, 36, 256, 1.0f, WindowType::Hann},
+                        Grid{22050, 110.0f, 2, 256, 1.0f, WindowType::Hann},
+                        Grid{22050, 110.0f, 48, 512, 1.0f, WindowType::Hann},
+                        Grid{22050, 110.0f, 48, 8192, 1.0f, WindowType::Hann},
+                        Grid{22050, 116.54f, 48, 256, 1.0f, WindowType::Hann},
+                        Grid{16000, 110.0f, 48, 256, 1.0f, WindowType::Hann},
+                        Grid{22050, 110.0f, 48, 256, 0.5f, WindowType::Hann},
+                        Grid{22050, 110.0f, 48, 256, 1.0f, WindowType::Hamming}}) {
+    const auto donor = build(g, nullptr);
+    const auto kernel = build(wanted, donor.get());
+    INFO("donor sr " << g.sr << " fmin " << g.fmin << " bins " << g.n_bins << " hop "
+                     << g.hop_length << " filter_scale " << g.filter_scale);
+    CHECK(kernel->fft_length() == alone->fft_length());
+    CHECK(kernel->frequencies() == alone->frequencies());
+    CHECK(kernel->lengths() == alone->lengths());
+    CHECK(kernel->raw_lengths() == alone->raw_lengths());
+    CHECK(kernel->kernel().rows == alone->kernel().rows);
+    CHECK(kernel->kernel().cols == alone->kernel().cols);
+    CHECK(kernel->kernel().row_offsets == alone->kernel().row_offsets);
+    CHECK(kernel->kernel().column_indices == alone->kernel().column_indices);
+    CHECK(kernel->kernel().values == alone->kernel().values);
+  }
+}

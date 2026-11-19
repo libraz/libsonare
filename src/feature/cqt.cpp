@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <mutex>
+#include <utility>
+#include <vector>
 
 #include "core/convert.h"
 #include "core/fft.h"
@@ -76,6 +79,51 @@ constexpr size_t kMaxCqtCacheSize = 4;
 constexpr size_t kMaxCqtKernelElements = 32 * 1024 * 1024;
 constexpr int kMaxCqtFftLength = 131072;
 
+/// @brief Kernels a later build may copy rows from; weak, so the cache alone decides lifetime.
+struct RowDonors {
+  std::mutex mutex;
+  std::vector<std::pair<CqtKernelCacheKey, std::weak_ptr<const CqtKernel>>> kernels;
+};
+
+RowDonors& row_donors() {
+  static RowDonors donors;
+  return donors;
+}
+
+/// @brief Live kernel on the same grid as @p key sharing the most rows with it, or null.
+/// @details Bins of one (fmin, bins_per_octave, filter_scale) grid agree row for row except
+///          at a kernel's last bin, whose length has no upper neighbour to be set by.
+std::shared_ptr<const CqtKernel> find_row_donor(const CqtKernelCacheKey& key) {
+  RowDonors& donors = row_donors();
+  std::lock_guard<std::mutex> lock(donors.mutex);
+  std::shared_ptr<const CqtKernel> best;
+  int best_rows = 0;
+  for (const auto& [other, weak] : donors.kernels) {
+    if (other.sample_rate != key.sample_rate || other.fmin != key.fmin ||
+        other.bins_per_octave != key.bins_per_octave || other.filter_scale != key.filter_scale ||
+        other.window != key.window) {
+      continue;
+    }
+    const int rows = std::min(other.n_bins, key.n_bins);
+    if (rows <= best_rows) continue;
+    if (std::shared_ptr<const CqtKernel> kernel = weak.lock()) {
+      best = std::move(kernel);
+      best_rows = rows;
+    }
+  }
+  return best;
+}
+
+void remember_row_donor(const CqtKernelCacheKey& key, const std::shared_ptr<CqtKernel>& kernel) {
+  RowDonors& donors = row_donors();
+  std::lock_guard<std::mutex> lock(donors.mutex);
+  auto& kernels = donors.kernels;
+  kernels.erase(std::remove_if(kernels.begin(), kernels.end(),
+                               [](const auto& entry) { return entry.second.expired(); }),
+                kernels.end());
+  kernels.emplace_back(key, kernel);
+}
+
 /// @brief Get or create a cached sparse CQT kernel.
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   CqtKernelCacheKey key = make_key(sr, config);
@@ -85,7 +133,9 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   static LruCache<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> cache(
       kMaxCqtCacheSize);
   return cache.get_or_build(key, [&]() -> CachedCqtKernel {
-    std::shared_ptr<CqtKernel> kernel = CqtKernel::create(sr, config);
+    const std::shared_ptr<const CqtKernel> donor = find_row_donor(key);
+    std::shared_ptr<CqtKernel> kernel = CqtKernel::create(sr, config, donor.get());
+    remember_row_donor(key, kernel);
 
     return CachedCqtKernel{std::move(kernel)};
   });
@@ -150,6 +200,11 @@ void validate_cqt_fmin(float fmin) {
 
 // CqtKernel implementation
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
+  return create(sr, config, nullptr);
+}
+
+std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
+                                             const CqtKernel* donor) {
   validate_cqt_fmin(config.fmin);
   SONARE_CHECK(sr > 0 && config.hop_length > 0 && config.hop_length <= kMaxCqtFftLength / 2 &&
                    config.n_bins > 0 && config.bins_per_octave > 0 && std::isfinite(config.fmin) &&
@@ -188,24 +243,16 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
                                                  kMaxCqtKernelElements, &predicted_elements),
                ErrorCode::InvalidParameter);
 
-  // Time-domain wavelets (selected periodic window * complex sinusoid, L1-normalised),
-  // packed back to back. Each is centred in its own n_fft row only while that row is
-  // transformed: a dense n_bins x n_fft basis is hundreds of MB at 44.1 kHz.
-  const std::vector<std::complex<float>> packed =
-      detail::wavelet_with_window(kernel->frequencies_, sr, config.filter_scale,
-                                  /*is_cqt=*/true, /*pad_fft=*/false, /*Q=*/0.0f, config.window);
-
   // Effective integer lengths, librosa's index range n in [floor(-ilen/2), floor(ilen/2)).
-  kernel->lengths_.resize(config.n_bins);
-  size_t packed_total = 0;
-  for (int k = 0; k < config.n_bins; ++k) {
-    const float ilen = raw_lengths[k];
+  const auto effective_length = [](float ilen) {
     const int s = static_cast<int>(std::floor(-ilen * 0.5f));
     const int e = static_cast<int>(std::floor(ilen * 0.5f));
-    kernel->lengths_[k] = e - s;
-    packed_total += static_cast<size_t>(kernel->lengths_[k]);
+    return e - s;
+  };
+  kernel->lengths_.resize(config.n_bins);
+  for (int k = 0; k < config.n_bins; ++k) {
+    kernel->lengths_[k] = effective_length(raw_lengths[k]);
   }
-  SONARE_CHECK(packed_total == packed.size(), ErrorCode::InvalidState);
 
   // librosa pads every wavelet to next_pow2(ceil(longest)), then widens n_fft when it
   // is shorter than 2 * next_pow2(hop_length), centring each padded row again.
@@ -214,6 +261,21 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
   if (config.hop_length > 0) n_fft = std::max(n_fft, 2 * next_power_of_2(config.hop_length));
   const int widen_pad = (n_fft - n_fft_basis) / 2;
   kernel->fft_length_ = n_fft;
+  kernel->fft_basis_length_ = n_fft_basis;
+  kernel->sample_rate_ = sr;
+  kernel->window_ = config.window;
+
+  // Every row costs a transform and a ranking of n_fft columns however short its wavelet is,
+  // so a row the donor holds is copied.
+  const std::vector<float>& freqs = kernel->frequencies_;
+  const bool donor_fits = donor != nullptr && donor->sample_rate_ == sr &&
+                          donor->window_ == config.window &&
+                          donor->fft_basis_length_ == n_fft_basis && donor->fft_length_ == n_fft;
+  const auto reusable = [&](int k) {
+    return donor_fits && k < donor->n_bins_ &&
+           donor->frequencies_[static_cast<size_t>(k)] == freqs[static_cast<size_t>(k)] &&
+           donor->raw_lengths_[static_cast<size_t>(k)] == raw_lengths[static_cast<size_t>(k)];
+  };
 
   // Scale each row by raw_length / n_fft (librosa.__vqt_filter_fft step), then FFT it.
   FFT fft(n_fft);
@@ -221,10 +283,53 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
   kernel->kernel_.cols = n_fft;
   kernel->kernel_.row_offsets.reserve(static_cast<size_t>(config.n_bins) + 1);
   kernel->kernel_.row_offsets.push_back(0);
-  std::vector<std::complex<float>> row(static_cast<size_t>(n_fft));
-  std::vector<std::complex<float>> freq_kernel(static_cast<size_t>(n_fft));
+  std::vector<std::complex<float>> row;
+  std::vector<std::complex<float>> freq_kernel;
+  // Time-domain wavelets (selected periodic window * complex sinusoid, L1-normalised) of
+  // the current run of built rows, packed back to back. Each is centred in its own n_fft
+  // row only while that row is transformed: a dense n_bins x n_fft basis is hundreds of
+  // MB at 44.1 kHz.
+  std::vector<std::complex<float>> packed;
   size_t cursor = 0;
+  int run_end = 0;
   for (int k = 0; k < config.n_bins; ++k) {
+    if (reusable(k)) {
+      const SparseComplexKernel& from = donor->kernel_;
+      const int begin = from.row_offsets[static_cast<size_t>(k)];
+      const int end = from.row_offsets[static_cast<size_t>(k) + 1];
+      kernel->kernel_.column_indices.insert(kernel->kernel_.column_indices.end(),
+                                            from.column_indices.begin() + begin,
+                                            from.column_indices.begin() + end);
+      kernel->kernel_.values.insert(kernel->kernel_.values.end(), from.values.begin() + begin,
+                                    from.values.begin() + end);
+      kernel->kernel_.row_offsets.push_back(static_cast<int>(kernel->kernel_.values.size()));
+      continue;
+    }
+    if (k >= run_end) {
+      run_end = k + 1;
+      while (run_end < config.n_bins && !reusable(run_end)) ++run_end;
+      // A length is set by a bin's neighbours, so the run takes one bin on each side that
+      // has one and leaves the grid's own edge bins as the edges of the sublist.
+      const int first = k > 0 ? k - 1 : 0;
+      const int last = run_end < config.n_bins ? run_end : run_end - 1;
+      const std::vector<float> run_freqs(freqs.begin() + first, freqs.begin() + last + 1);
+      const std::vector<float> run_lengths = wavelet_lengths(run_freqs, sr, config.filter_scale);
+      packed = detail::wavelet_with_window(run_freqs, sr, config.filter_scale, /*is_cqt=*/true,
+                                           /*pad_fft=*/false, /*Q=*/0.0f, config.window);
+      size_t packed_total = 0;
+      for (int g = first; g <= last; ++g) {
+        const float length = run_lengths[static_cast<size_t>(g - first)];
+        SONARE_CHECK(g < k || g >= run_end || length == raw_lengths[static_cast<size_t>(g)],
+                     ErrorCode::InvalidState);
+        packed_total += static_cast<size_t>(effective_length(length));
+      }
+      SONARE_CHECK(packed_total == packed.size(), ErrorCode::InvalidState);
+      cursor = first < k ? static_cast<size_t>(effective_length(run_lengths.front())) : 0;
+      if (row.empty()) {
+        row.resize(static_cast<size_t>(n_fft));
+        freq_kernel.resize(static_cast<size_t>(n_fft));
+      }
+    }
     const int length = kernel->lengths_[k];
     const int offset = (n_fft_basis - length) / 2 + widen_pad;
     const float scale = raw_lengths[k] / static_cast<float>(n_fft);

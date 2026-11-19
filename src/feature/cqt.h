@@ -117,6 +117,14 @@ class CqtKernel {
   /// @param config CQT configuration
   static std::unique_ptr<CqtKernel> create(int sr, const CqtConfig& config);
 
+  /// @brief Creates the same kernel as create(sr, config), copying the rows @p donor already holds.
+  /// @details A row is a function of its centre frequency, its raw length, the sample rate, the
+  ///          window and the FFT geometry; a donor row equal in all of them is copied rather than
+  ///          rebuilt. Rows the donor cannot supply are built as usual, so any donor (or none)
+  ///          yields an identical kernel.
+  /// @param donor Kernel to take matching rows from, or nullptr
+  static std::unique_ptr<CqtKernel> create(int sr, const CqtConfig& config, const CqtKernel* donor);
+
   /// @brief Returns FFT length used by kernel.
   int fft_length() const { return fft_length_; }
 
@@ -139,6 +147,9 @@ class CqtKernel {
   CqtKernel() = default;
 
   int fft_length_ = 0;
+  int fft_basis_length_ = 0;  ///< FFT length before widening for the hop
+  int sample_rate_ = 0;
+  WindowType window_ = WindowType::Hann;
   int n_bins_ = 0;
   std::vector<float> frequencies_;
   SparseComplexKernel kernel_;
