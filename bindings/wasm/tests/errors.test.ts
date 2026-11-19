@@ -80,7 +80,9 @@ describe('SonareError', () => {
     }
     expect(caught).toBeInstanceOf(RangeError);
     expect(isSonareError(caught)).toBe(false);
-    expect((caught as Error).message).toContain('preset');
+    expect((caught as Error).message).toMatch(
+      /^synthPresetPatch: name must be one of sine, saw, square, /,
+    );
 
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     let wrongType: unknown;

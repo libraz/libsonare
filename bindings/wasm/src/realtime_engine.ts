@@ -385,13 +385,13 @@ export function engineCapabilities(): EngineCapabilities {
 }
 
 /** The clip shape the embind layer reads: the warp mode travels as its ordinal, a page provider as its embind instance. */
-function nativeClip(clip: EngineClip): WasmEngineClip {
+function nativeClip(clip: EngineClip, label: string): WasmEngineClip {
   const { warpMode, pageProvider, ...rest } = clip;
   return {
     ...rest,
     ...(warpMode === undefined
       ? {}
-      : { warpMode: tokenCode('warpMode', warpMode, WARP_MODES) as 0 | 1 | 2 | 3 }),
+      : { warpMode: tokenCode(`${label}.warpMode`, warpMode, WARP_MODES) as 0 | 1 | 2 | 3 }),
     ...(pageProvider === undefined
       ? {}
       : { pageProvider: nativeClipPageProviderOf(pageProvider) as WasmEngineClip['pageProvider'] }),
@@ -449,13 +449,15 @@ function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknow
   });
 }
 
-function nativeMarker(marker: EngineMarker): Record<string, unknown> {
+function nativeMarker(marker: EngineMarker, i: number): Record<string, unknown> {
   const { kind, name, ...rest } = marker;
   if (name === '') {
-    throw refuse('marker name must not be empty; omit it for an unnamed marker');
+    throw refuse(`markers[${i}].name must not be empty; omit it for an unnamed marker`);
   }
   const named = name === undefined || name === null ? rest : { ...rest, name };
-  return kind === undefined ? named : { ...named, kind: tokenCode('kind', kind, MARKER_KINDS) };
+  return kind === undefined
+    ? named
+    : { ...named, kind: tokenCode(`markers[${i}].kind`, kind, MARKER_KINDS) };
 }
 
 function markerFromNative(marker: {
@@ -482,12 +484,11 @@ function curveFromNative(ordinal: number): NonNullable<EngineAutomationPoint['cu
   return entry[0] as NonNullable<EngineAutomationPoint['curveToNext']>;
 }
 
-function nativeAutomationPoint(point: EngineAutomationPoint) {
-  noOrdinal('curveToNext', point.curveToNext);
+function nativeAutomationPoint(point: EngineAutomationPoint, i: number) {
   const { curveToNext, ...rest } = point;
   return curveToNext === undefined
     ? rest
-    : { ...rest, curveToNext: automationCurveCode(curveToNext, 'curveToNext') };
+    : { ...rest, curveToNext: automationCurveCode(curveToNext, `points[${i}].curveToNext`) };
 }
 
 function parameterInfoFromNative(info: {
@@ -583,14 +584,14 @@ function sidechainSourceArg(
   source: SidechainSource,
 ): { kind: number; id: number } {
   requestObject(requestName, source, 'source', true);
-  noOrdinal('kind', source.kind);
+  const kind = sidechainSourceKindCode(source.kind, 'source.kind');
   if (typeof source.id !== 'number') {
     throw refuseType(`source.id must be a number`);
   }
   if (source.id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
   }
-  return { kind: sidechainSourceKindCode(source.kind, 'source.kind'), id: source.id };
+  return { kind, id: source.id };
 }
 
 function bypassState(
@@ -780,7 +781,7 @@ export class RealtimeEngine {
     }
     const index = this.laneOrder.indexOf(trackId);
     if (index < 0) {
-      throw refuse(`trackId ${trackId} has no lane`);
+      throw refuse('trackId must be the id of a track in this engine');
     }
     return index;
   }
@@ -818,7 +819,6 @@ export class RealtimeEngine {
    * Offline renders, bounces and freezes never include the cue.
    */
   setTrackMonitorMode(trackId: number, mode: EngineTrackMonitorMode, renderFrame?: number): void {
-    noOrdinal('mode', mode);
     this.native.setTrackMonitorMode(
       this.laneIndexOf(trackId),
       trackMonitorModeCode(mode, 'mode'),
@@ -1729,12 +1729,11 @@ export class RealtimeEngine {
    * Control thread only; do not call concurrently with {@link process}.
    */
   addParameter(info: EngineParameterInfo): void {
-    noOrdinal('defaultCurve', info?.defaultCurve);
     const { defaultCurve, ...rest } = info;
     this.native.addParameter(
       defaultCurve === undefined
         ? rest
-        : { ...rest, defaultCurve: automationCurveCode(defaultCurve, 'defaultCurve') },
+        : { ...rest, defaultCurve: automationCurveCode(defaultCurve, 'info.defaultCurve') },
     );
   }
 
@@ -1763,7 +1762,9 @@ export class RealtimeEngine {
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
     this.native.setAutomationLane(
       paramId,
-      Array.isArray(points) ? points.map((point) => nativeAutomationPoint(point) as never) : points,
+      Array.isArray(points)
+        ? points.map((point, i) => nativeAutomationPoint(point, i) as never)
+        : points,
     );
   }
 
@@ -1788,7 +1789,7 @@ export class RealtimeEngine {
       floor = Math.max(floor, stored.id + 1);
     }
     const assigned = assignMarkerIds(markers, floor);
-    this.native.setMarkers(assigned.markers.map(nativeMarker) as never);
+    this.native.setMarkers(assigned.markers.map((marker, i) => nativeMarker(marker, i)) as never);
     this.nextMarkerId = assigned.nextId;
     return assigned.markers.map((marker) => this.marker(marker.id));
   }
@@ -1894,7 +1895,7 @@ export class RealtimeEngine {
               ...node,
               ...(type === undefined || type === null
                 ? {}
-                : { type: tokenCode('node type', type, GRAPH_NODE_TYPES) }),
+                : { type: tokenCode(`nodes[${i}].type`, type, GRAPH_NODE_TYPES) }),
               ...(ports === undefined ? {} : { numPorts: ports }),
             };
           })
@@ -1911,7 +1912,7 @@ export class RealtimeEngine {
               ...connection,
               ...(mix === undefined || mix === null
                 ? {}
-                : { mix: tokenCode('mix', mix, GRAPH_MIXES) }),
+                : { mix: tokenCode(`connections[${i}].mix`, mix, GRAPH_MIXES) }),
             };
           })
         : spec.connections,
@@ -1933,7 +1934,7 @@ export class RealtimeEngine {
    * leaves the previous set unchanged. Control thread only.
    */
   setClips(clips: EngineClip[]): void {
-    this.native.setClips(clips.map(nativeClip));
+    this.native.setClips(clips.map((clip, i) => nativeClip(clip, `clips[${i}]`)));
   }
 
   /**
@@ -1943,7 +1944,7 @@ export class RealtimeEngine {
    * clip leaves the published set unchanged.
    */
   upsertClip(clip: EngineClip): void {
-    this.native.upsertClip(nativeClip(clip));
+    this.native.upsertClip(nativeClip(clip, 'clip'));
   }
 
   /**
@@ -1974,13 +1975,12 @@ export class RealtimeEngine {
    * reads; an omitted one stays absent, and embind fills in the default.
    * Shared by track lanes and buses, which carry the same send shape.
    */
-  private static normalizeSends(sends: EngineTrackSend[]): WasmEngineTrackSend[] {
-    return sends.map((send) => {
-      noOrdinal('sendTiming', send.sendTiming);
+  private static normalizeSends(sends: EngineTrackSend[], where: string): WasmEngineTrackSend[] {
+    return sends.map((send, i) => {
       const { sendTiming, ...rest } = send;
       return sendTiming === undefined
         ? rest
-        : { ...rest, sendTiming: sendTimingCode(sendTiming, 'sendTiming') };
+        : { ...rest, sendTiming: sendTimingCode(sendTiming, `${where}[${i}].sendTiming`) };
     });
   }
 
@@ -1990,17 +1990,19 @@ export class RealtimeEngine {
    * `outputBusId` is an explicit `0` (omit it to stay on the master mix).
    */
   setTrackLanes(lanes: readonly EngineTrackLane[]): void {
-    const nativeLanes = lanes.map((lane) => {
+    const nativeLanes = lanes.map((lane, i) => {
       const { sourceChannelLayout, outputBusId, ...rest } = lane;
       return {
         ...rest,
-        sends: lane.sends ? RealtimeEngine.normalizeSends(lane.sends) : undefined,
-        outputBusId: optionalBusId('outputBusId', outputBusId),
+        sends: lane.sends
+          ? RealtimeEngine.normalizeSends(lane.sends, `lanes[${i}].sends`)
+          : undefined,
+        outputBusId: optionalBusId(`lanes[${i}].outputBusId`, outputBusId),
         ...(sourceChannelLayout === undefined
           ? {}
           : {
               sourceChannelLayout: tokenCode(
-                'sourceChannelLayout',
+                `lanes[${i}].sourceChannelLayout`,
                 sourceChannelLayout,
                 CHANNEL_LAYOUT_VALUES,
               ),
@@ -2020,7 +2022,7 @@ export class RealtimeEngine {
    * declared through {@link setTrackLanes}.
    */
   setTrackSends(trackId: number, sends: EngineTrackSend[]): void {
-    this.native.setTrackSends(trackId, RealtimeEngine.normalizeSends(sends));
+    this.native.setTrackSends(trackId, RealtimeEngine.normalizeSends(sends, 'sends'));
   }
 
   /**
@@ -2097,16 +2099,22 @@ export class RealtimeEngine {
     // failing here on a `.map` that array-likes do not implement.
     this.native.setTrackBuses(
       Array.isArray(buses)
-        ? buses.map((bus) => {
+        ? buses.map((bus, i) => {
             const { channelLayout, outputBusId, ...rest } = bus;
             return {
               ...rest,
-              sends: bus.sends ? RealtimeEngine.normalizeSends(bus.sends) : undefined,
-              outputBusId: optionalBusId('outputBusId', outputBusId),
+              sends: bus.sends
+                ? RealtimeEngine.normalizeSends(bus.sends, `buses[${i}].sends`)
+                : undefined,
+              outputBusId: optionalBusId(`buses[${i}].outputBusId`, outputBusId),
               ...(channelLayout === undefined
                 ? {}
                 : {
-                    channelLayout: tokenCode('channelLayout', channelLayout, CHANNEL_LAYOUT_VALUES),
+                    channelLayout: tokenCode(
+                      `buses[${i}].channelLayout`,
+                      channelLayout,
+                      CHANNEL_LAYOUT_VALUES,
+                    ),
                   }),
             };
           })
@@ -2451,14 +2459,12 @@ export class RealtimeEngine {
   /** Sets a track strip's pan law in realtime; an ordinal is a `TypeError`. */
   setStripPanLaw(ref: StripRef, panLaw: PanLaw): void {
     const trackId = trackOnly(ref);
-    noOrdinal('panLaw', panLaw);
     this.native.setTrackStripPanLaw(trackId, panLawCode(panLaw, 'panLaw'));
   }
 
   /** Sets a track strip's pan mode in realtime; an ordinal is a `TypeError`. */
   setStripPanMode(ref: StripRef, panMode: PanMode): void {
     const trackId = trackOnly(ref);
-    noOrdinal('panMode', panMode);
     this.native.setTrackStripPanMode(trackId, panModeCode(panMode, 'panMode'));
   }
 
@@ -2501,13 +2507,11 @@ export class RealtimeEngine {
 
   /** Sets a bus strip's pan law in realtime; an ordinal is a `TypeError`. */
   setBusPanLaw(busId: number, panLaw: PanLaw): void {
-    noOrdinal('panLaw', panLaw);
     this.native.setBusStripPanLaw(busId, panLawCode(panLaw, 'panLaw'));
   }
 
   /** Sets a bus strip's pan mode in realtime; an ordinal is a `TypeError`. */
   setBusPanMode(busId: number, panMode: PanMode): void {
-    noOrdinal('panMode', panMode);
     this.native.setBusStripPanMode(busId, panModeCode(panMode, 'panMode'));
   }
 

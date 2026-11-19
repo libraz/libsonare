@@ -126,7 +126,9 @@ describe('an empty name is refused by name and an omitted or null one is not giv
   it('names an engine marker', () => {
     withEngine((engine) => {
       expect(() => engine.setMarkers([{ ppq: 0, name: '' }])).toThrow(
-        new RangeError(`RealtimeEngine.setMarkers: ${EMPTY_MARKER}`),
+        new RangeError(
+          'RealtimeEngine.setMarkers: markers[0].name must not be empty; omit it for an unnamed marker',
+        ),
       );
       engine.setMarkers([{ ppq: 0, name: null as never }]);
       expect(engine.markers()[0]).not.toHaveProperty('name');

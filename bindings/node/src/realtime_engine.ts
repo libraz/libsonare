@@ -253,7 +253,7 @@ function resolveEngineConfig(
 }
 
 /** The addon reads a page provider through its native handle and a warp mode by ordinal. */
-function toNativeClip(clip: EngineClip): unknown {
+function toNativeClip(clip: EngineClip, label: string): unknown {
   const native: Record<string, unknown> = {
     ...clip,
   };
@@ -261,19 +261,23 @@ function toNativeClip(clip: EngineClip): unknown {
     native.pageProvider = nativeClipPageProviderOf(clip.pageProvider);
   }
   if (!isAbsent(clip.warpMode)) {
-    native.warpMode = requireToken(clip.warpMode, WARP_MODE, 'warpMode');
+    native.warpMode = requireToken(clip.warpMode, WARP_MODE, `${label}.warpMode`);
   }
   return native;
 }
 
 /** Resolves each send's `sendTiming` spelling to its C ABI ordinal. */
-function normalizeSends(sends: EngineTrackSend[]): EngineTrackSend[] {
-  return sends.map((send) =>
+function normalizeSends(sends: EngineTrackSend[], where: string): EngineTrackSend[] {
+  return sends.map((send, i) =>
     isAbsent(send.sendTiming)
       ? send
       : {
           ...send,
-          sendTiming: requireToken(send.sendTiming, SEND_TIMING, 'sendTiming') as never,
+          sendTiming: requireToken(
+            send.sendTiming,
+            SEND_TIMING,
+            `${where}[${i}].sendTiming`,
+          ) as never,
         },
   );
 }
@@ -299,7 +303,7 @@ function laneToNative(requestName: 'setTrackLanes', lane: EngineTrackLane, index
     );
   }
   if (Array.isArray(record.sends)) {
-    native.sends = normalizeSends(record.sends as EngineTrackSend[]);
+    native.sends = normalizeSends(record.sends as EngineTrackSend[], `${label}.sends`);
   }
   return native;
 }
@@ -319,7 +323,7 @@ function busToNative(requestName: 'setTrackBuses', bus: EngineBus, index: number
     );
   }
   if (Array.isArray(record.sends)) {
-    native.sends = normalizeSends(record.sends as EngineTrackSend[]);
+    native.sends = normalizeSends(record.sends as EngineTrackSend[], `${label}.sends`);
   }
   return native;
 }
@@ -460,18 +464,10 @@ function curveName(ordinal: number): AutomationCurve {
   return tokenOf(AUTOMATION_CURVE_VALUES, ordinal, 'automation curve') as AutomationCurve;
 }
 
-function curveOrdinal(curve: unknown, argName: string): number {
-  if (typeof curve !== 'string') {
-    throw refuseType(`${argName} must be an automation curve name`);
-  }
-  assertClosedToken(curve, Object.keys(AUTOMATION_CURVE_VALUES), argName);
-  return automationCurveValue(curve as AutomationCurve, argName);
-}
-
-function automationPointToNative(point: EngineAutomationPoint): EngineAutomationPoint {
+function automationPointToNative(point: EngineAutomationPoint, i: number): EngineAutomationPoint {
   const curve = isAbsent(point.curveToNext)
     ? AUTOMATION_CURVE_VALUES.linear
-    : curveOrdinal(point.curveToNext, 'curveToNext');
+    : automationCurveValue(point.curveToNext, `points[${i}].curveToNext`);
   return { ...point, curveToNext: curve as never };
 }
 
@@ -479,7 +475,7 @@ function parameterToNative(info: EngineParameterInfo): unknown {
   if (typeof info !== 'object' || info === null || isAbsent(info.defaultCurve)) {
     return info;
   }
-  return { ...info, defaultCurve: curveOrdinal(info.defaultCurve, 'defaultCurve') };
+  return { ...info, defaultCurve: automationCurveValue(info.defaultCurve, 'info.defaultCurve') };
 }
 
 function parameterFromNative(native: Record<string, unknown>): Required<EngineParameterInfo> {
@@ -540,19 +536,19 @@ function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknow
   });
 }
 
-function markerToNative(marker: EngineMarker): unknown {
+function markerToNative(marker: EngineMarker, i: number): unknown {
   if (typeof marker !== 'object' || marker === null) {
     return marker;
   }
   const { name, ...rest } = marker;
   if (name === '') {
-    throw refuse('marker name must not be empty; omit it for an unnamed marker');
+    throw refuse(`markers[${i}].name must not be empty; omit it for an unnamed marker`);
   }
   const named = isAbsent(name) ? rest : { ...rest, name };
   if (isAbsent(marker.kind)) {
     return named;
   }
-  return { ...named, kind: requireToken(marker.kind, MARKER_KIND, 'kind') };
+  return { ...named, kind: requireToken(marker.kind, MARKER_KIND, `markers[${i}].kind`) };
 }
 
 /** An unnamed marker reads back without a `name` key, so the record can be passed to `setMarkers` again. */
@@ -1139,7 +1135,7 @@ export class RealtimeEngine {
    * leaves the previous set unchanged. Control thread only.
    */
   setClips(clips: EngineClip[]): void {
-    this.native.setClips(clips.map((clip) => toNativeClip(clip)));
+    this.native.setClips(clips.map((clip, i) => toNativeClip(clip, `clips[${i}]`)));
   }
 
   /**
@@ -1151,7 +1147,7 @@ export class RealtimeEngine {
    * engine.upsertClip({ id: 3, channels: [samples], startPpq: 4, gain: 0.5 });
    */
   upsertClip(clip: EngineClip): void {
-    this.native.upsertClip(toNativeClip(clip));
+    this.native.upsertClip(toNativeClip(clip, 'clip'));
   }
 
   /**
@@ -1202,7 +1198,10 @@ export class RealtimeEngine {
    *   when `sends` is not an array
    */
   setTrackSends(trackId: number, sends: EngineTrackSend[]): void {
-    this.native.setTrackSends(trackId, Array.isArray(sends) ? normalizeSends(sends) : sends);
+    this.native.setTrackSends(
+      trackId,
+      Array.isArray(sends) ? normalizeSends(sends, 'sends') : sends,
+    );
   }
 
   /**
@@ -2206,7 +2205,7 @@ export class RealtimeEngine {
     }
     const index = this.laneOrder.indexOf(trackId);
     if (index < 0) {
-      throw refuse(`unknown track id ${String(trackId)}`);
+      throw refuse('trackId must be the id of a track in this engine');
     }
     return index;
   }
