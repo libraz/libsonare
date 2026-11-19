@@ -54,7 +54,7 @@ export const ROWS: Row[] = [
     invalid: { hopLength: 0 },
     defaults: { nFft: 1024, hopLength: 256 },
     oneOf: [
-      { fields: ['sampleRate'], error: 'TypeError: griffinLim: sampleRate must be a number' },
+      { fields: ['sampleRate'], error: 'TypeError: griffinLim: sampleRate must be an integer' },
     ],
     inert: {
       sampleRate: 'reconstruction runs in bins and frames',

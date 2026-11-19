@@ -270,7 +270,10 @@ export const ROWS: Row[] = [
         fields: ['onsetEnvelope'],
         error: 'TypeError: cyclicTempogram: onsetEnvelope must be a Float32Array',
       },
-      { fields: ['sampleRate'], error: 'TypeError: cyclicTempogram: sampleRate must be a number' },
+      {
+        fields: ['sampleRate'],
+        error: 'TypeError: cyclicTempogram: sampleRate must be an integer',
+      },
     ],
   },
   {
@@ -485,7 +488,7 @@ export const ROWS: Row[] = [
     },
     invalid: { hopLength: 0 },
     oneOf: [
-      { fields: ['sampleRate'], error: 'TypeError: cqtToAudio: sampleRate must be a number' },
+      { fields: ['sampleRate'], error: 'TypeError: cqtToAudio: sampleRate must be an integer' },
     ],
   },
   {
@@ -504,7 +507,7 @@ export const ROWS: Row[] = [
     },
     invalid: { hopLength: 0 },
     oneOf: [
-      { fields: ['sampleRate'], error: 'TypeError: vqtToAudio: sampleRate must be a number' },
+      { fields: ['sampleRate'], error: 'TypeError: vqtToAudio: sampleRate must be an integer' },
     ],
   },
   {
