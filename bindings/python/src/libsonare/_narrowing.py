@@ -56,7 +56,7 @@ def _narrow_int(value: object, name: str, low: int, high: int) -> int:
             raise _refuse(_narrowing_error(name, low, high))
     if _is_number(value):
         raise _refuse(_narrowing_error(name, low, high))
-    raise _refuse_type(_narrowing_error(name, low, high))
+    raise _refuse_type(f"{name} must be an integer")
 
 
 def _is_number(value: object) -> bool:
@@ -65,7 +65,10 @@ def _is_number(value: object) -> bool:
 
 
 def _narrowing_error(name: str, low: int, high: int) -> str:
-    """Word one refusal for both halves of the family: the closed range of the target type."""
+    """Word the refusal of a number outside the target type: its closed range.
+
+    A non-number is refused by type alone, without the range.
+    """
     return f"{name} must be an integer in [{low}, {high}]"
 
 
@@ -114,11 +117,11 @@ def _narrow_float(value: object, name: str) -> float:
             if math.isfinite(number) and abs(number) <= _FLOAT32_MAX:
                 return number
             raise _refuse(_float_narrowing_error(name))
-    raise _refuse_type(_float_narrowing_error(name))
+    raise _refuse_type(f"{name} must be a number")
 
 
 def _float_narrowing_error(name: str) -> str:
-    """Word one refusal for the float half, as :func:`_narrowing_error` does for ints."""
+    """Word the refusal of a number outside the float range, as for ints."""
     return f"{name} must be finite and in [-3.4028235e38, 3.4028235e38]"
 
 

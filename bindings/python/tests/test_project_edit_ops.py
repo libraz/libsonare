@@ -175,9 +175,11 @@ def test_set_max_history_bytes_rejects_invalid_values_without_mutating_history()
     size_t_max = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
 
     for invalid in (True, 1.0, -1, size_t_max + 1):
-        expected = TypeError if isinstance(invalid, bool) else ValueError
+        refused = isinstance(invalid, bool)
+        expected = TypeError if refused else ValueError
+        domain = "$" if refused else r" in \[0, "
         with pytest.raises(
-            expected, match=r"^Project\.set_max_history_bytes: bytes must be an integer in \[0, "
+            expected, match=rf"^Project\.set_max_history_bytes: bytes must be an integer{domain}"
         ):
             p.set_max_history_bytes(invalid)
         assert p.to_json() == before
