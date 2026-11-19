@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from extractors import c_api  # noqa: E402
+from extractors import c_api
 
 ROOT = Path(__file__).resolve().parents[2]
 TARGETS = (
@@ -71,7 +71,9 @@ inline std::size_t CEntryPrefixLength(std::string_view message) {{
 def main(argv: list[str]) -> int:
     ex = c_api.extract(ROOT)
     if ex.unparsed:
-        print(f"c entries: {ex.unparsed} declarations unparsed: {ex.unparsed_notes}", file=sys.stderr)
+        print(
+            f"c entries: {ex.unparsed} declarations unparsed: {ex.unparsed_notes}", file=sys.stderr
+        )
         return 1
     names = sorted({f.raw_name for f in ex.functions})
     tokens = sorted(n[len(PREFIX) :] for n in names if n.startswith(PREFIX))
@@ -91,7 +93,10 @@ def main(argv: list[str]) -> int:
             target.write_text(text, encoding="utf-8")
     print(f"c entries: {len(tokens)} tokens, {len(TARGETS)} tables")
     if stale:
-        print(f"c entries: stale {', '.join(stale)}; run tools/parity/gen_c_entry_names.py", file=sys.stderr)
+        print(
+            f"c entries: stale {', '.join(stale)}; run tools/parity/gen_c_entry_names.py",
+            file=sys.stderr,
+        )
         return 1
     return 0
 
