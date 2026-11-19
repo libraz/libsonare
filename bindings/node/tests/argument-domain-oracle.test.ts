@@ -160,7 +160,16 @@ describe('zero counts the C ABI accepts', () => {
     ).not.toThrow();
   });
 
+  it('detectChords accepts smoothingWindowSec 0 and still detects chords', () => {
+    expect(
+      detectChords({ samples, sampleRate: SR, smoothingWindowSec: 0 }).chords.length,
+    ).toBeGreaterThan(0);
+  });
+
   it('still refuses the negatives and fractions the C ABI refuses', () => {
+    expect(() => detectChords({ samples, sampleRate: SR, smoothingWindowSec: -1 })).toThrow(
+      new RangeError('detectChords: ChordConfig: smoothing_window must be finite and at least 0'),
+    );
     expectRefusal(() => analyzeBpm({ samples, sampleRate: SR, maxCandidates: -1 }), RangeError);
     expectRefusal(() => analyzeBpm({ samples, sampleRate: SR, maxCandidates: 1.5 }), RangeError);
     expectRefusal(

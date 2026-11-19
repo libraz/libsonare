@@ -185,11 +185,15 @@ describe('WASM wave3 analysis parity', () => {
       ).toThrow();
     });
 
-    // Mirrors the C-ABI's sonare_detect_chords_ex range checks: a non-positive
+    // Mirrors the C-ABI's sonare_detect_chords_ex range checks: a negative
     // smoothingWindow and a negative hmmBeamWidth are rejected on every
-    // surface, not just passed through to the DSP layer.
-    it('throws on a non-positive smoothingWindow', () => {
-      expect(() => detectChords(samples, SR, { smoothingWindowSec: 0 })).toThrow();
+    // surface, not just passed through to the DSP layer. A window of 0 turns
+    // smoothing off and still detects chords.
+    it('throws on a negative smoothingWindow and accepts 0', () => {
+      expect(() => detectChords(samples, SR, { smoothingWindowSec: -1 })).toThrow(
+        new RangeError('detectChords: ChordConfig: smoothing_window must be finite and at least 0'),
+      );
+      expect(detectChords(samples, SR, { smoothingWindowSec: 0 }).chords.length).toBeGreaterThan(0);
     });
 
     it('throws on a negative hmmBeamWidth', () => {
@@ -263,16 +267,16 @@ describe('WASM wave3 analysis parity', () => {
       ).toThrow();
     });
 
-    it('throws on a non-positive smoothingWindow', () => {
-      expect(() =>
-        chordFunctionalAnalysis({
-          samples,
-          sampleRate: SR,
-          keyRoot: PitchClass.C,
-          keyMode: 'major',
-          smoothingWindowSec: 0,
-        }),
-      ).toThrow();
+    it('throws on a negative smoothingWindow and accepts 0', () => {
+      const request = { samples, sampleRate: SR, keyRoot: PitchClass.C, keyMode: 'major' as const };
+      expect(() => chordFunctionalAnalysis({ ...request, smoothingWindowSec: -1 })).toThrow(
+        new RangeError(
+          'chordFunctionalAnalysis: ChordConfig: smoothing_window must be finite and at least 0',
+        ),
+      );
+      expect(chordFunctionalAnalysis({ ...request, smoothingWindowSec: 0 }).length).toBeGreaterThan(
+        0,
+      );
     });
 
     it('throws on a negative hmmBeamWidth', () => {
