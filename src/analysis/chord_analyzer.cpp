@@ -105,6 +105,7 @@ void ChordAnalyzer::init_templates() {
 
 ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
     : config_(requested) {
+  validate_chord_config(config_);
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   const ChordConfig& config = config_;
   init_templates();
@@ -165,6 +166,8 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
 
 ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const ChordConfig& config)
     : chroma_(chroma), config_(config) {
+  // The config is refused whole, including the fields a precomputed chroma leaves unread.
+  validate_chord_config(config_);
   init_templates();
 
   analyze_chords();
@@ -177,6 +180,7 @@ ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& bea
 ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& beat_times,
                              const Chroma& bass_chroma, const ChordConfig& config)
     : chroma_(chroma), bass_chroma_(bass_chroma), config_(config) {
+  validate_chord_config(config_);
   init_templates();
 
   if (config.use_beat_sync && !beat_times.empty()) {

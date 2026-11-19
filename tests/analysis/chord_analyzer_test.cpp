@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <iterator>
 #include <string>
@@ -1082,7 +1083,8 @@ std::vector<Chord> analyze(const std::vector<Piece>& pieces, const Row& r, float
   beats.push_back(n * dt);
   ChordConfig cfg;
   cfg.min_duration = min;
-  cfg.smoothing_window = 0;
+  // Shorter than one hop, so smoothing averages a single frame.
+  cfg.smoothing_window = dt / 2;
   cfg.threshold = threshold;
   cfg.use_hmm = r.hmm;
   cfg.use_beat_sync = r.beat;
@@ -1235,7 +1237,8 @@ TEST_CASE("a zero-duration same chord does not dilute retained confidence",
   const Chroma chroma(std::move(data), 12, frames, 10000, 100);
   ChordConfig config;
   config.use_hmm = false;
-  config.smoothing_window = 0.0f;
+  // Shorter than one 10 ms hop, so smoothing averages a single frame.
+  config.smoothing_window = 0.005f;
   config.threshold = 0.0f;
   config.min_duration = 0.0f;
   const std::vector<float> beats{0.0f, 1.0f, chroma.duration()};
@@ -1257,4 +1260,16 @@ TEST_CASE("a zero-duration same chord does not dilute retained confidence",
   CHECK_THAT(merged[0].start, WithinAbs(raw[0].start, 1e-5f));
   CHECK_THAT(merged[0].end, WithinAbs(raw[2].end, 1e-5f));
   CHECK_THAT(merged[0].confidence, WithinAbs(raw[0].confidence, 2e-5f));
+}
+
+TEST_CASE("ChordAnalyzer refuses an n_fft of 0 even where the call leaves it unread",
+          "[analysis][chord]") {
+  ChordConfig config;
+  config.n_fft = 0;
+  config.chroma_method = ChromaMethod::CQT;
+  const std::vector<float> tone(22050, 0.1f);
+  const Audio audio = Audio::from_buffer(tone.data(), tone.size(), 22050);
+  REQUIRE_THROWS_WITH(
+      ChordAnalyzer(audio, config),
+      Catch::Matchers::ContainsSubstring("ChordConfig: n_fft and hop_length must be positive"));
 }

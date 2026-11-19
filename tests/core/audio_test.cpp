@@ -414,3 +414,21 @@ TEST_CASE("the offline-input validators name the function, the buffer and the sa
   CHECK(offline_audio_input_problem("detect_bpm", "left", samples.data(), samples.size(), 1) ==
         "detect_bpm: sample_rate is out of the supported range");
 }
+
+TEST_CASE("a null function leaves the offline-input refusal without a subject",
+          "[audio][offline_audio_input_problem]") {
+  std::vector<float> samples(64, 0.25f);
+  CHECK(offline_audio_input_problem(nullptr, "samples", samples.data(), samples.size(), 1) ==
+        "sample_rate is out of the supported range");
+  CHECK(offline_audio_input_problem(nullptr, "samples", nullptr, 0, 22050) ==
+        "samples must be a non-empty buffer");
+  samples[17] = std::numeric_limits<float>::infinity();
+  CHECK(offline_audio_input_problem(nullptr, "samples", samples.data(), samples.size(), 22050) ==
+        "samples contains a non-finite sample at index 17");
+  try {
+    validate_offline_audio_window(nullptr, "samples", samples.data(), samples.size(), 22050, 16, 8);
+    FAIL("a non-finite sample in the window was accepted");
+  } catch (const SonareException& e) {
+    CHECK(std::string(e.what()) == "samples contains a non-finite sample at index 17");
+  }
+}

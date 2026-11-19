@@ -448,12 +448,29 @@ SonareError sonare_align_take_to_reference_ex(
   SONARE_C_API_ENTRY;
   if (out_alignment != nullptr) *out_alignment = SonareTakeAlignment{};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (out_anchors == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_anchors == nullptr) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "align_take_to_reference_ex: out_anchors must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (out_count == nullptr) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "align_take_to_reference_ex: out_count must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   *out_anchors = nullptr;
   *out_count = 0;
-  if (reference == nullptr || take == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (reference_len == 0 || take_len == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (reference_sample_rate <= 0 || take_sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err =
+          validate_audio_params("align_take_to_reference_ex", "reference", reference, reference_len,
+                                reference_sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err = validate_audio_params("align_take_to_reference_ex", "take", take,
+                                                    take_len, take_sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
   const bool resample_take = take_sample_rate != reference_sample_rate;
   // Sized before anything is copied, so a rate ratio that would blow the take up
   // past the buffer cap is refused rather than allocated.
@@ -461,8 +478,10 @@ SonareError sonare_align_take_to_reference_ex(
   if (resample_take &&
       !sonare::numeric::checked_converted_count(take_len, take_sample_rate, reference_sample_rate,
                                                 kMaxBufferSize, &resampled_take_len)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "take resampled to the reference sample rate exceeds the buffer size limit");
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        "align_take_to_reference_ex: take resampled to the reference sample rate exceeds "
+        "the buffer size limit");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 

@@ -168,7 +168,9 @@ inline constexpr std::size_t kMaxAudioBufferSize = resource::kMaxOfflineAudioSam
 ///          there is one statement of the policy rather than a second copy.
 ///
 ///          Every refusal in this group reads "<fn>: <name> <predicate>": @p fn is
-///          the core function the buffer feeds, @p name the caller's parameter.
+///          the core function the buffer feeds, @p name the caller's parameter. A
+///          null @p fn leaves the subject to a caller that prefixes its own entry
+///          name, and the refusal reads "<name> <predicate>".
 /// @throws SonareException(InvalidParameter) for an empty buffer, a
 ///         @p sample_rate outside [kMinAudioSampleRate, kMaxAudioSampleRate], or
 ///         a @p length above kMaxAudioBufferSize.
@@ -176,7 +178,7 @@ void validate_offline_audio_extent(const char* fn, const char* name, std::size_t
                                    int sample_rate);
 
 /// @brief Validates an offline-analysis audio buffer (single source of truth).
-/// @param fn            Core function the buffer feeds, the refusal's prefix.
+/// @param fn            Core function the buffer feeds, the refusal's prefix, or null for none.
 /// @param name          The caller's name for the buffer.
 /// @param samples       Pointer to mono/interleaved float sample data.
 /// @param length        Number of float samples.
@@ -196,7 +198,7 @@ std::string offline_audio_input_problem(const char* fn, const char* name, const 
                                         std::size_t length, int sample_rate);
 
 /// @brief Validates an offline-analysis buffer whose analysis reads one window of it.
-/// @param fn            Core function the buffer feeds, the refusal's prefix.
+/// @param fn            Core function the buffer feeds, the refusal's prefix, or null for none.
 /// @param name          The caller's name for the buffer.
 /// @param samples       Pointer to mono/interleaved float sample data.
 /// @param length        Number of float samples in the whole buffer.

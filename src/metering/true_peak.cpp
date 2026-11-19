@@ -114,7 +114,8 @@ float true_peak(const float* data, size_t length, int oversample_factor) {
                    ErrorCode::InvalidParameter,
                    "true_peak: oversample_factor must be one of 1, 2, 4, 8, 16, got " +
                        std::to_string(oversample_factor));
-  SONARE_CHECK(data != nullptr || length == 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(data != nullptr || length == 0, ErrorCode::InvalidParameter,
+                   "true_peak: data must not be NULL with a non-zero length");
   if (length == 0) return 0.0f;
   // peak_abs absorbs a non-finite sample, and the skip test below compares an
   // interpolation bound against the running peak, so one would be dropped twice

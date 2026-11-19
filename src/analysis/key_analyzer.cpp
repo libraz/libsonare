@@ -199,6 +199,7 @@ std::string key_name(int root, bool minor, bool short_form) {
 }
 
 KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& requested) : config_(requested) {
+  validate_key_config(config_);
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   validate_chroma_config(audio, config_);
   if (!config_.tuning) config_.tuning = measure_tuning(audio);
@@ -223,6 +224,8 @@ KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& requested) : confi
 }
 
 KeyAnalyzer::KeyAnalyzer(const Chroma& chroma, const KeyConfig& config) : config_(config) {
+  // The config is refused whole, including the fields a precomputed chroma leaves unread.
+  validate_key_config(config_);
   SONARE_CHECK(!chroma.empty(), ErrorCode::InvalidParameter);
 
   auto mean_energy = chroma.mean_energy();
@@ -233,6 +236,7 @@ KeyAnalyzer::KeyAnalyzer(const Chroma& chroma, const KeyConfig& config) : config
 
 KeyAnalyzer::KeyAnalyzer(const std::array<float, 12>& mean_chroma, const KeyConfig& config)
     : mean_chroma_(mean_chroma), config_(config) {
+  validate_key_config(config_);
   analyze();
 }
 

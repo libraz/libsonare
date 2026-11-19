@@ -282,6 +282,44 @@ TEST_CASE("griffin_lim derives an absent hop and names a negative one",
   }
 }
 
+TEST_CASE("phase_vocoder derives an absent hop and names a negative one",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["phase_vocoder"];
+  const Value& input = route["input"];
+  const int rate = static_cast<int>(input["sample_rate"].as_number());
+  const std::vector<float> samples(static_cast<size_t>(input["length"].as_number()),
+                                   static_cast<float>(input["fill"].as_number()));
+  const float speed = static_cast<float>(input["speed_ratio"].as_number());
+
+  const auto run = [&](int n_fft, int hop, SonareError expected) {
+    float* audio = nullptr;
+    size_t audio_length = 0;
+    REQUIRE(sonare_phase_vocoder(samples.data(), samples.size(), rate, speed, n_fft, hop, &audio,
+                                 &audio_length) == expected);
+    std::vector<float> result(audio, audio + audio_length);
+    sonare_free_floats(audio);
+    return result;
+  };
+  for (const auto& item : route["absent_hop"].as_array()) {
+    INFO(item["id"].as_string());
+    const int n_fft = static_cast<int>(item["n_fft"].as_number());
+    const std::vector<float> absent =
+        run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_OK);
+    CHECK_FALSE(absent.empty());
+    CHECK(absent ==
+          run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
+  }
+  for (const auto& item : route["negative_hop"].as_array()) {
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+    run(static_cast<int>(item["n_fft"].as_number()),
+        static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(),
+               Catch::Matchers::ContainsSubstring(item["message"].as_string()));
+  }
+}
+
 TEST_CASE("native spectral stretch geometry refusals are owned by the core function",
           "[conformance][core_validation]") {
   const Value corpus = load_refusal_corpus();

@@ -233,8 +233,8 @@ SonareError sonare_trim(const float* samples, size_t length, int sample_rate, fl
                         float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  return sonare_trim_ex(samples, length, sample_rate, threshold_db, constants::kDefaultNFft,
-                        constants::kDefaultHopLength, out, out_length);
+  return sonare_trim_ex(samples, length, sample_rate, threshold_db, kDefaultSilenceFrameLength,
+                        kDefaultSilenceHopLength, out, out_length);
 }
 
 SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
@@ -611,13 +611,16 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
 
   return run_offline("phase_vocoder", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
+                       // A hop of 0 is absent and runs a quarter of n_fft; a negative one is
+                       // named by the core.
+                       const int hop = resolve_resynthesis_hop(hop_length, n_fft);
                        StftConfig stft_config;
                        stft_config.n_fft = n_fft;
-                       stft_config.hop_length = hop_length;
+                       stft_config.hop_length = hop;
                        Spectrogram spec = Spectrogram::compute(audio, stft_config);
 
                        PhaseVocoderConfig pv_config;
-                       pv_config.hop_length = hop_length;
+                       pv_config.hop_length = hop;
                        Spectrogram stretched = phase_vocoder(spec, speed_ratio, pv_config);
 
                        int expected_length = static_cast<int>(

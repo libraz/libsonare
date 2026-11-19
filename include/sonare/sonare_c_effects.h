@@ -1280,8 +1280,9 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 /// @param sample_rate Sample rate.
 /// @param speed_ratio Time stretch rate (< 1.0 = slower, > 1.0 = faster). Must be > 0.
 /// @param n_fft FFT size used for analysis/synthesis: an even integer >= 4.
-/// @param hop_length Hop length used for analysis/synthesis, in (0, n_fft/2];
-///        see @ref sonare_hpss_ex for why the overlap bound applies.
+/// @param hop_length Hop length used for analysis/synthesis, in (0, n_fft/2], or 0 for a
+///        quarter of @p n_fft (at least 1); see @ref sonare_hpss_ex for why the overlap
+///        bound applies.
 /// @param out Receives the time-stretched audio buffer.
 /// @param out_length Receives the output length.
 /// @note Positional facades use the same order after the audio buffer:

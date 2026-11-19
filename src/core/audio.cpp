@@ -19,7 +19,8 @@ Audio::Audio(std::shared_ptr<const std::vector<float>> buffer, size_t offset, si
 namespace {
 
 std::string refusal(const char* fn, const char* name, const char* predicate) {
-  return std::string(fn) + ": " + name + " " + predicate;
+  std::string message = fn != nullptr ? std::string(fn) + ": " : std::string();
+  return message + name + " " + predicate;
 }
 
 std::string extent_problem(const char* fn, const char* name, std::size_t length, int sample_rate) {

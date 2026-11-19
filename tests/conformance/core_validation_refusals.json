@@ -62,6 +62,15 @@
       { "id": "negative_hop", "n_fft": 2048, "hop_length": -1, "cause": "argument", "message": "hopLength must be positive" }
     ]
   },
+  "phase_vocoder": {
+    "input": { "sample_rate": 22050, "length": 4096, "fill": 0.1, "speed_ratio": 1.25 },
+    "absent_hop": [
+      { "id": "absent_hop", "n_fft": 2048, "hop_length": 0, "derived_hop_length": 512 }
+    ],
+    "negative_hop": [
+      { "id": "negative_hop", "n_fft": 2048, "hop_length": -1, "cause": "argument", "message": "hopLength must be positive" }
+    ]
+  },
   "native_spectral_stretch": {
     "input": { "sample_rate": 22050, "length": 2048, "fill": 0.1, "speed_ratio": 1.25, "pitch_semitones": 2 },
     "accepted": [

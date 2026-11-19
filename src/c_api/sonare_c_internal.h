@@ -154,8 +154,8 @@ SonareError record_current_exception() noexcept;
 ///          points (sonare_audio_* in sonare_c_types.h), which validate the
 ///          buffer at construction time and never re-scan per analysis.
 ///
-///          @p fn names the core function the buffer feeds and @p name the entry's
-///          parameter; the refusal is recorded as "<fn>: <name> <predicate>".
+///          @p fn is the C entry's name without its `sonare_` prefix and @p name the
+///          entry's parameter; the refusal is recorded as "<fn>: <name> <predicate>".
 SonareError validate_audio_params(const char* fn, const char* name, const float* samples,
                                   size_t length, int sample_rate) noexcept;
 

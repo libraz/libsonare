@@ -97,26 +97,23 @@ SonareError transform_buffer(const char* fn, const char* name, const float* valu
   SONARE_C_CATCH
 }
 
-// Shared by both interleaved LUFS entry points. Mirrors the mono sonare_lufs
-// input contract (validate_audio_params): reject empty audio, out-of-range
-// sample rate, oversized buffers, and non-finite samples so every LUFS entry
-// point shares one validation policy.
-SonareError validate_interleaved_lufs_input(const float* samples, size_t frames, int channels,
-                                            int sample_rate) {
-  if (channels <= 0 || frames == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+// Shared by both interleaved LUFS entry points; @p fn is the entry's name without `sonare_`.
+// The interleaved buffer goes through the same audio input policy as the mono sonare_lufs.
+SonareError validate_interleaved_lufs_input(const char* fn, const float* samples, size_t frames,
+                                            int channels, int sample_rate) {
+  if (channels <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   (std::string(fn) + ": channels must be positive").c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (samples == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (static_cast<size_t>(channels) > kMaxBufferSize / frames) {
+  if (frames != 0 && static_cast<size_t>(channels) > kMaxBufferSize / frames) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        (std::string(fn) + ": frames times channels exceeds the buffer size limit").c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const size_t total = frames * static_cast<size_t>(channels);
-  if (total > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
-  for (size_t i = 0; i < total; ++i) {
-    if (!std::isfinite(samples[i])) return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_OK;
+  return validate_audio_params(fn, "samples", samples, frames * static_cast<size_t>(channels),
+                               sample_rate);
 }
 
 // SonareNormType carries the NormType ordinal itself.
@@ -551,9 +548,13 @@ SonareError sonare_short_term_lufs(const float* samples, size_t length, int samp
 SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
                                     int sample_rate, SonareLufsResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "lufs_interleaved: out must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   *out = {};
-  const SonareError err = validate_interleaved_lufs_input(samples, frames, channels, sample_rate);
+  const SonareError err =
+      validate_interleaved_lufs_input("lufs_interleaved", samples, frames, channels, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   metering::LufsResult result = metering::lufs_interleaved(samples, frames, channels, sample_rate);
@@ -581,12 +582,20 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   // A pointer without its length cannot be consumed, so a half-given pair is a
   // caller error rather than a request to skip the series.
   if ((out_momentary == nullptr) != (out_momentary_length == nullptr)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "lufs_series_interleaved: out_momentary and out_momentary_length must be given "
+                   "together");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if ((out_short_term == nullptr) != (out_short_term_length == nullptr)) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        "lufs_series_interleaved: out_short_term and out_short_term_length must be given "
+        "together");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const SonareError err = validate_interleaved_lufs_input(samples, frames, channels, sample_rate);
+  const SonareError err = validate_interleaved_lufs_input("lufs_series_interleaved", samples,
+                                                          frames, channels, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   std::vector<float> momentary;

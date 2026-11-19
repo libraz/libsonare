@@ -6,6 +6,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <vector>
 
@@ -493,4 +494,19 @@ TEST_CASE("analyze publishes the chroma key on unambiguous monophonic input",
     CHECK(result.key.mode == chroma.mode);
     CHECK_THAT(result.key.confidence, WithinAbs(chroma.confidence, 1e-4f));
   }
+}
+
+TEST_CASE("KeyAnalyzer refuses an n_fft of 0 even where the call leaves it unread",
+          "[analysis][key]") {
+  KeyConfig config;
+  config.n_fft = 0;
+  config.use_hpss = false;
+  const std::vector<float> tone(22050, 0.1f);
+  const Audio audio = Audio::from_buffer(tone.data(), tone.size(), 22050);
+  const std::array<float, 12> mean_chroma{1.0f, 0.0f, 0.5f, 0.0f, 0.8f, 0.6f,
+                                          0.0f, 0.9f, 0.0f, 0.4f, 0.0f, 0.3f};
+  const auto message =
+      Catch::Matchers::ContainsSubstring("KeyConfig: n_fft and hop_length must be positive");
+  REQUIRE_THROWS_WITH(KeyAnalyzer(audio, config), message);
+  REQUIRE_THROWS_WITH(KeyAnalyzer(mean_chroma, config), message);
 }

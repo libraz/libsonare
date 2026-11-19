@@ -210,6 +210,8 @@ add_executable(sonare_tests
   api/sonare_c_mixing_features_test.cpp
   api/sonare_c_features_extra_test.cpp
   api/sonare_c_effects_extra_test.cpp
+  api/c_refusal_subjects_test.cpp
+  api/c_entry_refusal_names_test.cpp
   api/sonare_c_note_objects_test.cpp
   api/sonare_c_auto_tune_test.cpp
   api/sonare_c_vocal_edit_test.cpp

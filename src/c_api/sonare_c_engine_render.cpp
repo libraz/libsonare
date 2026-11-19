@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
@@ -141,13 +142,37 @@ SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* 
                                             int num_channels, int64_t total_frames, int block_size,
                                             int finalize) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out || num_channels <= 0 || total_frames < 0 || block_size < 0) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_render_offline_ex: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_render_offline_ex: out must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (num_channels <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_render_offline_ex: num_channels must be positive");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (total_frames < 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_render_offline_ex: total_frames must not be negative");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (block_size < 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_render_offline_ex: block_size must not be negative");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // render_offline on a never-prepared engine renders nothing and cannot even
   // signal through telemetry (the ring is unreserved until prepare()). Report it
   // synchronously so the caller does not mistake a silent buffer for a render.
   if (engine->engine.max_block_size() <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_STATE,
+                   "engine_render_offline_ex: the engine has not been prepared");
     return SONARE_ERROR_INVALID_STATE;
   }
   block_size = sonare_c_engine_detail::resolve_offline_block(engine->engine, block_size);
@@ -157,11 +182,20 @@ SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* 
   // the host reads a "successful" render that is actually silence for the
   // channels it asked for beyond the prepared maximum.
   if (num_channels > engine->engine.prepared_channels()) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   ("engine_render_offline_ex: num_channels exceeds the prepared channel count " +
+                    std::to_string(engine->engine.prepared_channels()))
+                       .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // A block larger than the prepared one cannot be rendered as asked; refuse it
   // rather than render at the smaller block the engine would clamp to.
   if (block_size > engine->engine.max_block_size()) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        ("engine_render_offline_ex: block_size exceeds the prepared maximum block size " +
+         std::to_string(engine->engine.max_block_size()))
+            .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -178,11 +212,17 @@ SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out
 
 SonareError sonare_engine_finish_offline_render(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_finish_offline_render: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   // Same never-prepared rule as the render entry points: with no reserved
   // telemetry ring there is nothing to release and nothing that could report,
   // so say so rather than returning OK for a no-op.
   if (engine->engine.max_block_size() <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_STATE,
+                   "engine_finish_offline_render: the engine has not been prepared");
     return SONARE_ERROR_INVALID_STATE;
   }
   engine->engine.finish_offline_render();
@@ -191,7 +231,11 @@ SonareError sonare_engine_finish_offline_render(SonareEngine* engine) {
 
 SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* options) {
   SONARE_C_API_ENTRY;
-  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!options) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_options_default: options must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   *options = SonareEngineBounceOptions{};
   options->block_size = 0;
   options->num_channels = 0;
@@ -216,9 +260,48 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   if (out) {
     *out = {};
   }
-  if (!engine || !options || !out || options->total_frames <= 0 || options->block_size < 0 ||
-      options->num_channels <= 0 || options->target_sample_rate < 0 ||
-      options->source_sample_rate < 0 || options->dither_bits < 0) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!options) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "engine_bounce_offline: out must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->total_frames <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options->total_frames must be positive");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->block_size < 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options->block_size must not be negative");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->num_channels <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options->num_channels must be positive");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->target_sample_rate < 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options->target_sample_rate must not be negative");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->source_sample_rate < 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options->source_sample_rate must not be negative");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->dither_bits < 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options->dither_bits must not be negative");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // 0 selects the prepared rate for the source and the source rate for the target.
@@ -228,16 +311,28 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
                                      : options->source_sample_rate;
   const int target_sample_rate =
       options->target_sample_rate == 0 ? source_sample_rate : options->target_sample_rate;
-  if (source_sample_rate <= 0 ||
-      !resource::engine_bounce_shape_fits(options->total_frames, options->num_channels,
+  if (source_sample_rate <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options->source_sample_rate is 0 and the engine has no "
+                   "prepared sample rate");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!resource::engine_bounce_shape_fits(options->total_frames, options->num_channels,
                                           source_sample_rate, target_sample_rate,
                                           options->dither != 0)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_bounce_offline: options->total_frames, options->num_channels and the "
+                   "sample rates give a result larger than the supported size");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Reject an out-of-range dither type instead of silently mapping it to None,
   // which would return SONARE_OK with undithered audio and no way to tell that
   // the request was ignored (same policy as the analysis options' chroma_method).
   if (!valid_c_enum(options->dither, 0, 3)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   ("engine_bounce_offline: options->dither is not a dither type: " +
+                    std::to_string(options->dither))
+                       .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Every option-derived refusal precedes the render, which consumes engine state.
@@ -246,9 +341,18 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
     if (options->dither_bits != 0 &&
         (options->dither_bits < mastering::final::kMinDitherTargetBits ||
          options->dither_bits > mastering::final::kMaxDitherTargetBits)) {
+      set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                     ("engine_bounce_offline: options->dither_bits must be 0 or between " +
+                      std::to_string(mastering::final::kMinDitherTargetBits) + " and " +
+                      std::to_string(mastering::final::kMaxDitherTargetBits) + ": " +
+                      std::to_string(options->dither_bits))
+                         .c_str());
       return SONARE_ERROR_INVALID_PARAMETER;
     }
 #else
+    set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                   "engine_bounce_offline: options->dither is not supported because mastering "
+                   "support is not compiled in");
     return SONARE_ERROR_NOT_SUPPORTED;
 #endif
   }
@@ -257,12 +361,18 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   // leave their extra planes unpanned, so reject them up front.
   if (sonare::channel_count(sonare::layout_from_channel_count(options->num_channels)) !=
       options->num_channels) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   ("engine_bounce_offline: options->num_channels must be 1, 2, 6 or 8: " +
+                    std::to_string(options->num_channels))
+                       .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // A never-prepared engine renders only silence and cannot report through the
   // (unreserved) telemetry ring, so fail closed instead of returning a bounce
   // result the caller would read as a valid silent render.
   if (engine->engine.max_block_size() <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_STATE,
+                   "engine_bounce_offline: the engine has not been prepared");
     return SONARE_ERROR_INVALID_STATE;
   }
   // See sonare_engine_render_offline: bouncing more channels than the engine
@@ -270,13 +380,30 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   // bound instead of erroring.
   const int block_size =
       sonare_c_engine_detail::resolve_offline_block(engine->engine, options->block_size);
-  if (options->num_channels > engine->engine.prepared_channels() ||
-      block_size > engine->engine.max_block_size()) {
+  if (options->num_channels > engine->engine.prepared_channels()) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        ("engine_bounce_offline: options->num_channels exceeds the prepared channel count " +
+         std::to_string(engine->engine.prepared_channels()))
+            .c_str());
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (block_size > engine->engine.max_block_size()) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        ("engine_bounce_offline: options->block_size exceeds the prepared maximum block size " +
+         std::to_string(engine->engine.max_block_size()))
+            .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // The render runs at the prepared rate, which an explicit source_sample_rate must name exactly.
   if (options->source_sample_rate > 0 &&
       engine->engine.sample_rate() != static_cast<double>(options->source_sample_rate)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   ("engine_bounce_offline: options->source_sample_rate does not match the "
+                    "prepared sample rate " +
+                    std::to_string(static_cast<long long>(engine->engine.sample_rate())))
+                       .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -342,15 +469,56 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
                                          SonareEngineFreezeResult* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = {};
-  if (!engine || !options || !out || options->total_frames <= 0 || options->block_size < 0 ||
-      options->num_channels <= 0 || !std::isfinite(options->start_ppq) ||
-      options->start_ppq < 0.0 || !(std::isfinite(options->gain) && options->gain >= 0.0f) ||
-      !resource::engine_offline_shape_fits(options->total_frames, options->num_channels, 1)) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_freeze_offline: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!options) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_freeze_offline: options must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "engine_freeze_offline: out must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->total_frames <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_freeze_offline: options->total_frames must be positive");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->block_size < 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_freeze_offline: options->block_size must not be negative");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->num_channels <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_freeze_offline: options->num_channels must be positive");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!std::isfinite(options->start_ppq) || options->start_ppq < 0.0) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_freeze_offline: options->start_ppq must be finite and not negative");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!(std::isfinite(options->gain) && options->gain >= 0.0f)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_freeze_offline: options->gain must be finite and not negative");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!resource::engine_offline_shape_fits(options->total_frames, options->num_channels, 1)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_freeze_offline: options->total_frames times options->num_channels "
+                   "exceeds the supported size");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Freezing a never-prepared engine would capture pure silence with no error
   // channel (telemetry is unreserved before prepare()); fail closed instead.
   if (engine->engine.max_block_size() <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_STATE,
+                   "engine_freeze_offline: the engine has not been prepared");
     return SONARE_ERROR_INVALID_STATE;
   }
   // See sonare_engine_render_offline: freezing more channels than the engine
@@ -358,8 +526,20 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
   // bound instead of erroring.
   const int block_size =
       sonare_c_engine_detail::resolve_offline_block(engine->engine, options->block_size);
-  if (options->num_channels > engine->engine.prepared_channels() ||
-      block_size > engine->engine.max_block_size()) {
+  if (options->num_channels > engine->engine.prepared_channels()) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        ("engine_freeze_offline: options->num_channels exceeds the prepared channel count " +
+         std::to_string(engine->engine.prepared_channels()))
+            .c_str());
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (block_size > engine->engine.max_block_size()) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        ("engine_freeze_offline: options->block_size exceeds the prepared maximum block size " +
+         std::to_string(engine->engine.max_block_size()))
+            .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -380,7 +560,19 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
 SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written) {
   SONARE_C_API_ENTRY;
-  if (!engine || !written || (max_records > 0 && !out)) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_telemetry: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!written) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_telemetry: written must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (max_records > 0 && !out) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_telemetry: out must not be NULL when max_records is not 0");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -404,7 +596,19 @@ SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count || (max_records > 0 && !out)) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out_count) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry: out_count must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (max_records > 0 && !out) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry: out must not be NULL when max_records is not 0");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -420,6 +624,8 @@ SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
   return SONARE_OK;
 #else
   *out_count = 0;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "engine_drain_meter_telemetry: mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
@@ -428,7 +634,20 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
                                                      SonareMeterTelemetryRecordWide* out,
                                                      size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count || (max_records > 0 && !out)) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry_wide: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out_count) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry_wide: out_count must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (max_records > 0 && !out) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        "engine_drain_meter_telemetry_wide: out must not be NULL when max_records is not 0");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -444,6 +663,8 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
   return SONARE_OK;
 #else
   *out_count = 0;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "engine_drain_meter_telemetry_wide: mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
@@ -452,7 +673,20 @@ SonareError sonare_engine_drain_meter_telemetry_v2(SonareEngine* engine,
                                                    SonareMeterTelemetryRecordV2* out,
                                                    size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count || (max_records > 0 && !out)) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry_v2: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out_count) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry_v2: out_count must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (max_records > 0 && !out) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        "engine_drain_meter_telemetry_v2: out must not be NULL when max_records is not 0");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -467,6 +701,8 @@ SonareError sonare_engine_drain_meter_telemetry_v2(SonareEngine* engine,
   return SONARE_OK;
 #else
   *out_count = 0;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "engine_drain_meter_telemetry_v2: mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
@@ -475,7 +711,20 @@ SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareEngine* engine,
                                                         SonareMeterTelemetryRecordWideV2* out,
                                                         size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count || (max_records > 0 && !out)) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry_wide_v2: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out_count) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_meter_telemetry_wide_v2: out_count must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (max_records > 0 && !out) {
+    set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        "engine_drain_meter_telemetry_wide_v2: out must not be NULL when max_records is not 0");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -490,6 +739,8 @@ SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareEngine* engine,
   return SONARE_OK;
 #else
   *out_count = 0;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "engine_drain_meter_telemetry_wide_v2: mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
@@ -499,7 +750,20 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engin
                                                              size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (out_count) *out_count = 0;
-  if (!engine || !out_count || (capacity > 0 && !out_db)) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_meter_target_insert_gain_reduction: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out_count) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_meter_target_insert_gain_reduction: out_count must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (capacity > 0 && !out_db) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_meter_target_insert_gain_reduction: out_db must not be NULL when "
+                   "capacity is not 0");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -511,11 +775,17 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engin
   if (!engine->engine.read_meter_target_insert_gain_reduction(target_id, out_db, capacity,
                                                               out_count)) {
     *out_count = 0;
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   ("engine_meter_target_insert_gain_reduction: unknown target_id " +
+                    std::to_string(target_id))
+                       .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   return SONARE_OK;
 #else
   (void)target_id;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "engine_meter_target_insert_gain_reduction: mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
@@ -525,7 +795,11 @@ SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int in
                                                     unsigned int* out_band_count) {
   SONARE_C_API_ENTRY;
   if (out_band_count) *out_band_count = 0;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_configure_scope_telemetry: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 #if defined(SONARE_WITH_MIXING)
   SONARE_C_TRY
   const uint32_t applied =
@@ -537,6 +811,8 @@ SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int in
   (void)interval_frames;
   (void)band_count;
   if (out_band_count) *out_band_count = 0;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "engine_configure_scope_telemetry: mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
@@ -545,7 +821,19 @@ SonareError sonare_engine_drain_scope_telemetry(SonareEngine* engine,
                                                 SonareScopeTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count || (max_records > 0 && !out)) {
+  if (!engine) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_scope_telemetry: engine must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!out_count) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_scope_telemetry: out_count must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (max_records > 0 && !out) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "engine_drain_scope_telemetry: out must not be NULL when max_records is not 0");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -572,6 +860,8 @@ SonareError sonare_engine_drain_scope_telemetry(SonareEngine* engine,
   return SONARE_OK;
 #else
   *out_count = 0;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "engine_drain_scope_telemetry: mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }

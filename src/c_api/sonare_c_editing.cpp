@@ -13,6 +13,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "analysis/key_profiles.h"
@@ -28,6 +29,7 @@
 #include "metering/stereo.h"
 #include "metering/true_peak.h"
 #include "metering/waveform.h"
+#include "rt/true_peak_fir.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 #include "util/math_utils.h"
@@ -67,6 +69,19 @@ SonareError fill_dynamic_range_result(const metering::DynamicRangeResult& result
   staged->window_rms_db = copy_vector(result.window_rms_db);
   staged.publish(out);
   return SONARE_OK;
+}
+
+// The oversample factor a true-peak entry runs, 0 selecting the meter's default, or 0 after
+// recording a refusal under @p fn when the core has no polyphase design for it.
+int true_peak_factor_or_refuse(const char* fn, int oversample_factor) {
+  const int factor =
+      oversample_factor == 0 ? metering::kDefaultTruePeakOversample : oversample_factor;
+  if (rt::is_supported_polyphase_oversample_factor(factor)) return factor;
+  set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                 (std::string(fn) + ": oversample_factor must be one of 1, 2, 4, 8, 16, got " +
+                  std::to_string(oversample_factor))
+                     .c_str());
+  return 0;
 }
 
 }  // namespace
@@ -152,12 +167,14 @@ SonareError sonare_metering_dc_offset(const float* samples, size_t length, int s
 SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, int sample_rate,
                                            int oversample_factor, float* out_db) {
   SONARE_C_API_ENTRY;
-  if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_db = 0.0f;
-  int factor = oversample_factor == 0 ? 4 : oversample_factor;
-  if (factor < 1 || factor > 16 || !is_power_of_two(factor)) {
+  if (!out_db) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "metering_true_peak_dbtp: out_db must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  *out_db = 0.0f;
+  const int factor = true_peak_factor_or_refuse("metering_true_peak_dbtp", oversample_factor);
+  if (factor == 0) return SONARE_ERROR_INVALID_PARAMETER;
   return run_offline("metering_true_peak_dbtp", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_db = metering::true_peak_db(audio, factor);
@@ -539,12 +556,17 @@ SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold
 SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample_factor,
                                         float* out_db) {
   SONARE_C_API_ENTRY;
-  if (!audio || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_db = 0.0f;
-  const int factor = oversample_factor == 0 ? 4 : oversample_factor;
-  if (factor < 1 || factor > 16 || !is_power_of_two(factor)) {
+  if (!audio) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "audio_true_peak_dbtp: audio must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  if (!out_db) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "audio_true_peak_dbtp: out_db must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_db = 0.0f;
+  const int factor = true_peak_factor_or_refuse("audio_true_peak_dbtp", oversample_factor);
+  if (factor == 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   *out_db = metering::true_peak_db(audio->audio, factor);
   return SONARE_OK;
