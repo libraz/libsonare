@@ -7,6 +7,9 @@ name, so the test fails if 0 drifts back to meaning absence.
 
 from __future__ import annotations
 
+import math
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -85,7 +88,8 @@ def test_midi_schedule_refuses_zero_where_none_is_absence(field: str, value: int
             match=rf"^RealtimeEngine\.set_midi_clips: clip\.{field} must be an integer in \[1, ",
         ),
     ):
-        engine.set_midi_clips([EngineMidiClipSchedule(events=[], **{field: value})])
+        given: dict[str, Any] = {field: value}
+        engine.set_midi_clips([EngineMidiClipSchedule(events=[], **given)])
 
 
 def test_midi_schedule_omitted_fields_are_accepted() -> None:
@@ -113,13 +117,12 @@ def test_bounce_rates_are_none_when_omitted_and_zero_is_refused() -> None:
         )
         assert halved.sample_rate == SR // 2
         for field in ("target_sample_rate", "source_sample_rate"):
+            zero: dict[str, Any] = {field: 0}
             with pytest.raises(
                 SonareValueError,
                 match=rf"^RealtimeEngine\.bounce_offline: options\.{field} must be an integer",
             ):
-                engine.bounce_offline(
-                    EngineBounceOptions(total_frames=128, num_channels=2, **{field: 0})
-                )
+                engine.bounce_offline(EngineBounceOptions(total_frames=128, num_channels=2, **zero))
 
 
 def _tone(n: int = SR // 4) -> np.ndarray:
@@ -137,7 +140,7 @@ def test_onset_threshold_is_none_for_the_adaptive_path_and_zero_is_refused() -> 
         libsonare.detect_onsets(tone, SR, threshold=0.0)
 
 
-@pytest.mark.parametrize("high_hz", [0.0, -1.0])
+@pytest.mark.parametrize("high_hz", [0.0, -1.0, math.nan, math.inf])
 def test_spectral_high_edge_is_none_for_nyquist_and_non_positive_is_refused(
     high_hz: float,
 ) -> None:
@@ -146,18 +149,32 @@ def test_spectral_high_edge_is_none_for_nyquist_and_non_positive_is_refused(
     assert len(libsonare.spectral_edit(tone, SR, [whole])) == len(tone)
     with pytest.raises(
         SonareValueError,
-        match="^spectral_edit: op.high_hz must be greater than 0; omit it for Nyquist$",
+        match=(
+            r"^spectral_edit: ops\[1\]\.high_hz must be finite and greater than 0; "
+            r"omit it for Nyquist$"
+        ),
     ):
         libsonare.spectral_edit(
-            tone, SR, [libsonare.SpectralRegionOp(low_hz=300.0, high_hz=high_hz)]
+            tone, SR, [whole, libsonare.SpectralRegionOp(low_hz=300.0, high_hz=high_hz)]
         )
+
+
+@pytest.mark.parametrize("field", ["low_hz", "gain_db"])
+def test_spectral_region_refusals_name_the_op_index(field: str) -> None:
+    nan: dict[str, Any] = {field: math.nan}
+    ops = [libsonare.SpectralRegionOp(), libsonare.SpectralRegionOp(**nan)]
+    with pytest.raises(
+        SonareValueError, match=rf"^spectral_edit: ops\[1\]\.{field} must be a finite number$"
+    ):
+        libsonare.spectral_edit(_tone(), SR, ops)
 
 
 def test_metronome_click_seconds_omitted_is_the_library_length_and_zero_is_refused() -> None:
     with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
         engine.set_metronome(EngineMetronomeConfig(enabled=True))
         # The core stores the length it resolved, so an omitted one reads back positive.
-        assert engine.metronome().click_sec > 0
+        resolved = engine.metronome().click_sec
+        assert resolved is not None and resolved > 0
         engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=0.004))
         assert engine.metronome().click_sec == pytest.approx(0.004)
         with pytest.raises(
@@ -259,4 +276,5 @@ def test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default(
         SonareValueError,
         match=rf"^extract_percussive_events: {field} must not be 0; omit it for the library value$",
     ):
-        libsonare.extract_percussive_events(tone, SR, **{field: zero})
+        given: dict[str, Any] = {field: zero}
+        libsonare.extract_percussive_events(tone, SR, **given)

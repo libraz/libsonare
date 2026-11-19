@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
+import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ._errors import _entry, _refuse
+from ._errors import SonareValueError, _entry, _refuse
 from ._ffi import (
     SonareSpectralEditConfig,
     SonareSpectralRegionOp,
@@ -52,15 +53,16 @@ class SpectralRegionOp:
     """
 
     start_sample: int | None = None
-    """Region start in input samples, clamped to ``[0, length]``; None is 0. Not with
-    ``start_sec``."""
+    """Region start in input samples; past the end reads as the end, a negative value is
+    refused. None is 0. Not with ``start_sec``."""
     end_sample: int | None = None
-    """Region end (exclusive) in input samples, clamped to ``[0, length]``; None spans to the end.
-    Not with ``end_sec``."""
+    """Region end (exclusive) in input samples; past the end reads as the end, a negative value
+    is refused. None spans to the end. Not with ``end_sec``."""
     low_hz: float = 0.0
     """Region low frequency edge in Hz, clamped to ``[0, nyquist]``."""
     high_hz: float | None = None
-    """Region high frequency edge in Hz, greater than 0; None or ``>= nyquist`` means Nyquist."""
+    """Region high frequency edge in Hz, finite and greater than 0; None or ``>= nyquist`` means
+    Nyquist."""
     gain_db: float = 0.0
     """Gain in dB for ``"gain"`` / ``"attenuate"``; ignored by ``"mute"`` and ``"heal"``."""
     mode: SpectralEditMode = "gain"
@@ -73,13 +75,16 @@ class SpectralRegionOp:
     ``end_sample``."""
 
 
-def _spectral_high_hz(value: float | None) -> float:
+def _spectral_high_hz(value: float | None, name: str) -> float:
     """Map a region's high edge onto the C field, where ``<= 0`` reads as Nyquist."""
     if value is None:
         return 0.0
-    high_hz = _narrow_double(value, "op.high_hz")
-    if high_hz <= 0:
-        raise _refuse("op.high_hz must be greater than 0; omit it for Nyquist")
+    try:
+        high_hz = _narrow_double(value, name)
+    except SonareValueError:
+        high_hz = math.nan
+    if not high_hz > 0:
+        raise _refuse(f"{name} must be finite and greater than 0; omit it for Nyquist")
     return high_hz
 
 
@@ -128,9 +133,8 @@ def spectral_edit(
         upper bound on ``n_fft`` is a value rule and is checked by the C++ core
         instead, so exceeding it raises a plain :class:`SonareError`; both carry
         ``ErrorCode.INVALID_PARAMETER``, so only ``except ValueError`` tells them
-        apart. The Node and WASM surfaces accept the same valid inputs but
-        delegate every rejection to the core. The accepted input range is
-        identical across surfaces.
+        apart. The Node and WASM facades refuse the same given values before the
+        core is reached, so the accepted input range is identical across surfaces.
     """
     # An omitted value reaches the C config as 0, its "keep the default". A given
     # one is narrowed first: int(0.5) is that 0, so a fraction would run at the default.
@@ -182,9 +186,9 @@ def spectral_edit(
             c_ops[i] = SonareSpectralRegionOp(
                 start_sample=0 if start_sample is None else start_sample,
                 end_sample=length if end_sample is None else end_sample,
-                low_hz=_narrow_double(op.low_hz, "op.low_hz"),
-                high_hz=_spectral_high_hz(op.high_hz),
-                gain_db=_narrow_double(op.gain_db, "op.gain_db"),
+                low_hz=_narrow_double(op.low_hz, f"ops[{i}].low_hz"),
+                high_hz=_spectral_high_hz(op.high_hz, f"ops[{i}].high_hz"),
+                gain_db=_narrow_double(op.gain_db, f"ops[{i}].gain_db"),
                 mode=_token_ordinal(op.mode, _SPECTRAL_EDIT_MODES, f"ops[{i}].mode"),
             )
 
