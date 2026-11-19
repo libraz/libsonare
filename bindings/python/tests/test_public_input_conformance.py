@@ -357,3 +357,27 @@ def test_gm_lookup_follows_the_corpus(case: dict[str, Any]) -> None:
         assert lookup(**case["args"]) == case["value"]
     else:
         assert lookup(**case["args"]) == case["name"]
+
+
+_NUMBER_SPLIT = _CORPUS["number_reader_split"]
+
+
+def _corpus_number(raw: object) -> object:
+    if isinstance(raw, dict) and "$number" in raw:
+        return {"nan": math.nan, "inf": math.inf, "neg_inf": -math.inf}[raw["$number"]]
+    return raw
+
+
+@pytest.mark.parametrize("case", _NUMBER_SPLIT["cases"], ids=lambda case: case["id"])
+def test_number_reader_split_follows_the_corpus(case: dict[str, Any]) -> None:
+    fn = getattr(Project, _NUMBER_SPLIT["fn"])
+    args = {**_NUMBER_SPLIT["base"], case["key"]: _corpus_number(case["value"])}
+    if case.get("accepted"):
+        fn(**args)
+        return
+    refusal = f"{case['key']} {case['predicate']}"
+    with pytest.raises(
+        _GM_REFUSALS[case["refused"]],
+        match=rf"^Project\.{_NUMBER_SPLIT['fn']}: {re.escape(refusal)}$",
+    ):
+        fn(**args)

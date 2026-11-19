@@ -681,3 +681,40 @@ def test_a_midi_fx_config_refusal_is_invalid_format_naming_the_key(
             project.bake_midi_fx(clip, config)
     finally:
         project.close()
+
+
+@pytest.mark.parametrize(
+    ("packer", "args", "key", "domain"),
+    [
+        (Project.midi_note_on, (0.0, 16, 0, 60, 100), "group", "[0, 15]"),
+        (Project.midi_note_on, (0.0, 0, 16, 60, 100), "channel", "[0, 15]"),
+        (Project.midi_note_on, (0.0, 0, 0, 60, 128), "velocity", "[0, 127]"),
+        (Project.midi_cc, (0.0, 0, 0, 7, 128), "value", "[0, 127]"),
+        (Project.midi_pitch_bend, (0.0, 0, 0, 16384), "bend", "[0, 16383]"),
+        (Project.midi2_registered_controller, (0.0, 0, 0, 128, 0, 0), "bank", "[0, 127]"),
+        (Project.midi2_registered_controller, (0.0, 0, 0, 0, 128, 0), "index", "[0, 127]"),
+        (Project.midi_bank_program, (0.0, 0, 0, 128, 0, 0), "bank_msb", "[0, 127]"),
+    ],
+)
+def test_a_midi_packer_refuses_a_field_outside_its_width_by_name(packer, args, key, domain) -> None:
+    with pytest.raises(
+        SonareValueError, match=rf": {key} must be an integer in {re.escape(domain)}$"
+    ):
+        packer(*args)
+
+
+def test_a_per_note_controller_index_takes_all_eight_bits() -> None:
+    assert Project.midi2_registered_per_note_controller(0.0, 0, 0, 60, 255, 0)
+
+
+def test_program_and_bank_are_refused_outside_their_widths() -> None:
+    project = Project()
+    try:
+        clip = project.add_midi_clip(0.0, 4.0).clip_id
+        project.set_program(clip, 0, bank=16383)
+        with pytest.raises(SonareValueError, match=r": bank must be an integer in \[0, 16383\]$"):
+            project.set_program(clip, 0, bank=16384)
+        with pytest.raises(SonareValueError, match=r": program must be an integer in \[0, 127\]$"):
+            project.set_program_on_channel(clip, 0, 0, 128)
+    finally:
+        project.close()
