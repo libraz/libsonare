@@ -233,6 +233,18 @@ def ts_member(param: dict[str, Any]) -> list[str]:
     )
 
 
+# A position component (sourceX, listenerZ ...) is named for its axis, so its length unit is
+# stated once on the processor that owns the coordinates.
+AXIS_NAME = re.compile(r"[xyz]|.*[a-z0-9][XYZ]")
+
+
+def group_doc(processor: dict[str, Any]) -> str:
+    doc = f"Parameters of the `{processor['id']}` processor"
+    if any(p.get("unit") == "m" and AXIS_NAME.fullmatch(p["name"]) for p in processor["params"]):
+        doc += "; positions are in metres"
+    return doc + "."
+
+
 def render_param_map(catalog: Any) -> str:
     lines = [
         "/**",
@@ -243,7 +255,7 @@ def render_param_map(catalog: Any) -> str:
     ]
     for processor in catalog["processors"]:
         params = processor["params"]
-        lines.append(f"  /** Parameters of the `{processor['id']}` processor. */")
+        lines.append(f"  /** {group_doc(processor)} */")
         if not params:
             lines.append(f"  '{processor['id']}': Record<string, never>;")
             continue

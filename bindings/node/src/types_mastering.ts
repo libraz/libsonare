@@ -550,7 +550,7 @@ export interface MasteringProcessorParamMap {
     /** Default: true. */
     linkedDetection?: boolean;
   };
-  /** Parameters of the `effects.acoustic.roomMorph` processor. */
+  /** Parameters of the `effects.acoustic.roomMorph` processor; positions are in metres. */
   'effects.acoustic.roomMorph': {
     /** Range: [0, 1]. Default: 0.5. */
     dryWet?: number;
@@ -998,7 +998,7 @@ export interface MasteringProcessorParamMap {
     /** Unit: s. Range: [0.05, 62.0087]. Default: unset. */
     decaySec?: number;
   };
-  /** Parameters of the `effects.reverb.room` processor. */
+  /** Parameters of the `effects.reverb.room` processor; positions are in metres. */
   'effects.reverb.room': {
     /** Default: 0.35. */
     dryWet?: number;
