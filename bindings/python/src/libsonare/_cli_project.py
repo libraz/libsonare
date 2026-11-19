@@ -699,7 +699,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             reattack_ratio=args.reattack_ratio,
             min_note_division=args.min_note_division,
             monophonic_model=args.monophonic_model,
-            **_given(args, "group", "channel"),
+            **_given(args, "channel"),
         )
         data = cast(Any, project).export_smf()
     finally:
@@ -1096,12 +1096,6 @@ def register_project_parsers(
         default=None,
         metavar="N",
         help="Give every note velocity N (1-127) and skip the level measurement",
-    )
-    transcribe_p.add_argument(
-        "--group",
-        type=_c_int,
-        default=None,
-        help="UMP group the events are emitted on (default: 0)",
     )
     transcribe_p.add_argument(
         "--channel",

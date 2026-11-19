@@ -1413,8 +1413,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                          "0.1"),
          library_default(number_value("reattack-ratio"), "2.0"),
          library_default(number_value("velocity-floor-db"), transcribe_defaults.velocity_floor_db),
-         int_value("fixed-velocity"), library_default(int_value("group"), "0"),
-         library_default(int_value("channel"), "0"),
+         int_value("fixed-velocity"), library_default(int_value("channel"), "0"),
          library_default(
              with_domain(nullable_string_value("monophonic-model"),
                          choices_of({"segments", "singing"}, CliOptionDomainStage::Parameter)),

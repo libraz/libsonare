@@ -4742,16 +4742,6 @@
           "domain": null
         },
         {
-          "name": "group",
-          "type": "integer",
-          "default": null,
-          "stated_default": "0",
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "json",
           "type": "boolean",
           "default": false,
@@ -17597,16 +17587,6 @@
           "type": "integer",
           "default": null,
           "stated_default": null,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
-          "name": "group",
-          "type": "integer",
-          "default": null,
-          "stated_default": "0",
           "aliases": [],
           "repeatable": false,
           "required": false,

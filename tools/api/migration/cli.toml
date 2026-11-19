@@ -264,6 +264,14 @@ test = "tests/conformance/cli_contract_v2.json::zero_tempo"
 
 [[entry]]
 kind = "flag"
+old = "transcribe --group"
+removed = true
+no_replacement = "a Standard MIDI File carries no UMP group, so the written file never depended on it; leave the flag out"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "flag"
 old = "key --genre-hint"
 changed = "a value that names no genre hint (auto, edm, electronic, dance, pop, classical, jazz), an empty one included, is refused as an invalid parameter (exit 3) on the native CLI too, rather than read as auto or as not given; any letter case is accepted"
 domain = "analysis"

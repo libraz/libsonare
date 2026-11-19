@@ -1924,8 +1924,6 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"project bounce", p.project_json + " --frames 128" + to_out, "instrument-latency-samples",
        ""},
       {"midi-render", p.project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
-      // A MIDI 1.0 file carries no group.
-      {"transcribe", p.tone_wav + to_out, "group", ""},
       // The channel shows only in the written .mid status bytes.
       {"transcribe", p.tone_wav + to_out, "channel", "5"},
       {"transcribe", p.glide_wav + to_out, "monophonic-model", "singing"},

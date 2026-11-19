@@ -123,7 +123,6 @@ _ROWS: tuple[tuple[str, str, str, str, int | None], ...] = (
         "instrument_latency_samples",
         None,
     ),
-    ("transcribe", "--group", "_project_midi:_ProjectMidiMixin.transcribe_to_clip", "group", None),
     ("trim-silence", "--threshold-db", "_effects_level:trim", "threshold_db", None),
     ("trim-silence", "--n-fft", "_effects_level:trim", "frame_length", None),
     ("trim-silence", "--hop-length", "_effects_level:trim", "hop_length", None),

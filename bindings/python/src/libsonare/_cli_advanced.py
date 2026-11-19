@@ -311,7 +311,10 @@ def register_advanced_parsers(
         "rhythm", parents=[fft_stdout_options], help="Analyze rhythm primitives"
     )
     rhythm_p.add_argument(
-        "--start-bpm", type=_tempo_bpm, default=None, help="Starting tempo in BPM (default: 120.0)"
+        "--start-bpm",
+        type=_tempo_bpm,
+        default=None,
+        help="Tempo reported when nothing is detected (default: 120.0)",
     )
     rhythm_p.add_argument(
         "--bpm-min", type=_tempo_bpm, default=None, help="Lowest tempo in BPM (default: 60.0)"
