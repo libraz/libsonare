@@ -37,7 +37,10 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
   }
 
   float semitones = args.get_float("pitch-semitones", 0.0f);
-  PitchShiftConfig config{args.n_fft, args.hop_length};
+  PitchShiftConfig config;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  // The hop is held at the CLI's own value, which differs from the library's derived one.
+  config.hop_length = args.hop_length;
 
   if (!args.quiet) {
     std::cerr << color::blue << "Pitch shifting by " << semitones << " semitones..." << color::reset
@@ -72,7 +75,10 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
   }
 
   float rate = args.get_float("rate", 1.0f);
-  TimeStretchConfig config{args.n_fft, args.hop_length};
+  TimeStretchConfig config;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  // The hop is held at the CLI's own value, which differs from the library's derived one.
+  config.hop_length = args.hop_length;
 
   if (!args.quiet) {
     std::cerr << color::blue << "Time stretching with rate " << rate << "..." << color::reset
@@ -1004,8 +1010,12 @@ int cmd_voice_preset_validate(const CliArgs&, const Audio&) {
 int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
   DecomposeStemsConfig config;
   config.n_components = args.get_int("n-components", config.n_components);
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  // The core config spells "a quarter of the FFT size" as a zero hop, so only an absent flag may
+  // send it; an explicit zero is refused as the C ABI refuses it.
+  if (args.has("hop-length")) {
+    config.hop_length = args.get_int_in_range("hop-length", 1, std::numeric_limits<int>::max(), 0);
+  }
   config.n_iter = args.get_int("n-iter", config.n_iter);
   config.beta = args.get_float("beta", config.beta);
   config.init = args.get_string("init", config.init);
@@ -1093,7 +1103,10 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   config.kernel_size_percussive = args.get_int("kernel-percussive", config.kernel_size_percussive);
   config.use_soft_mask = !args.has("hard-mask");
 
-  StftConfig stft{args.n_fft, args.hop_length};
+  StftConfig stft;
+  stft.n_fft = args.get_int("n-fft", stft.n_fft);
+  // The hop is held at the CLI's own value.
+  stft.hop_length = args.hop_length;
 
   if (!args.quiet) {
     std::cerr << color::blue << "Performing harmonic-percussive separation..." << color::reset

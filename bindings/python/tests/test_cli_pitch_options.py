@@ -34,7 +34,7 @@ def test_pitch_parser_accepts_and_defaults_analysis_options() -> None:
     defaults = _pitch_args()
     assert defaults.algorithm == "pyin"
     assert defaults.threshold is None
-    assert defaults.hop_length == 512
+    assert defaults.hop_length is None
     assert defaults.f0_min_hz is None
     assert defaults.f0_max_hz is None
     assert not hasattr(defaults, "output")
@@ -86,7 +86,7 @@ def test_pitch_omitted_options_are_left_to_the_library(monkeypatch: pytest.Monke
     )
 
     # Left out, nothing is passed; spelling the library's own values passes them.
-    assert calls[0][1] == {"sample_rate": 22050, "hop_length": 512}
+    assert calls[0][1] == {"sample_rate": 22050}
     assert calls[1][1] == {
         "sample_rate": 22050,
         "hop_length": 512,

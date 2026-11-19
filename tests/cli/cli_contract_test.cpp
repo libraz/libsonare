@@ -253,8 +253,8 @@ TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]"
       found_chroma = true;
       REQUIRE(command["options"].size() == 3);
       REQUIRE(command["options"][1]["name"].as_string() == "n-fft");
-      REQUIRE(command["options"][1]["default"].as_int() == 2048);
-      REQUIRE(command["options"][2]["default"].as_int() == 512);
+      REQUIRE(command["options"][1]["default"].is_null());
+      REQUIRE(command["options"][2]["default"].is_null());
     } else if (path == "pitch-shift") {
       found_pitch_shift = true;
       REQUIRE(command["options"][0]["name"].as_string() == "json");
@@ -452,8 +452,8 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(fft != nullptr);
   REQUIRE(fft->scalar_type == CliOptionScalarType::Integer);
   REQUIRE(fft->arity == CliOptionArity::RequiredValue);
-  REQUIRE(fft->default_value.kind == CliOptionDefaultKind::Integer);
-  REQUIRE(fft->default_value.integer_value == 2048);
+  REQUIRE(fft->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(fft->stated_default == "2048");
   REQUIRE(fft->global_lexical);
 
   const auto* output = cli_option_spec_for_command("pitch-shift", "o");
@@ -528,8 +528,8 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
     const auto* n_mels = cli_option_spec_for_command(command, "n-mels");
     REQUIRE(n_mels != nullptr);
     REQUIRE(n_mels->scalar_type == CliOptionScalarType::Integer);
-    REQUIRE(n_mels->default_value.kind == CliOptionDefaultKind::Integer);
-    REQUIRE(n_mels->default_value.integer_value == 128);
+    REQUIRE(n_mels->default_value.kind == CliOptionDefaultKind::Null);
+    REQUIRE(n_mels->stated_default == "128");
   }
   for (const std::string command : {"fourier-tempogram", "tempogram-ratio"})
     REQUIRE(cli_option_spec_for_command(command, "n-fft") == nullptr);
@@ -540,8 +540,8 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(pitch_threshold->stated_default == "0.1");
   const auto* pitch_hop = cli_option_spec_for_command("pitch", "hop-length");
   REQUIRE(pitch_hop != nullptr);
-  REQUIRE(pitch_hop->default_value.kind == CliOptionDefaultKind::Integer);
-  REQUIRE(pitch_hop->default_value.integer_value == 512);
+  REQUIRE(pitch_hop->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(pitch_hop->stated_default == "512");
   const auto* pitch_fmin = cli_option_spec_for_command("pitch", "f0-min-hz");
   REQUIRE(pitch_fmin != nullptr);
   REQUIRE(pitch_fmin->default_value.kind == CliOptionDefaultKind::Null);
@@ -636,10 +636,10 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
     return ArgParser::parse(static_cast<int>(argv.size()), argv.data());
   };
 
+  // The spectral geometry is the library's, so the parse leaves it unset.
   const CliArgs chroma = parse({"sonare-cli", "chroma"});
-  REQUIRE(chroma.get_int("n-fft", -1) == 2048);
-  REQUIRE(chroma.get_int("hop-length", -1) == 512);
-  REQUIRE(chroma.get_int("n-fft", -1) != -1);
+  REQUIRE_FALSE(chroma.has("n-fft"));
+  REQUIRE_FALSE(chroma.has("hop-length"));
 
   const CliArgs key = parse({"sonare-cli", "key", "--hpss", "--candidates", "3"});
   REQUIRE(key.has("hpss"));
@@ -655,7 +655,7 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
   // The pYIN settings are the library's, so the parse leaves them unset.
   const CliArgs pitch = parse({"sonare-cli", "pitch"});
   REQUIRE(pitch.get_float("threshold", -1.0f) == -1.0f);
-  REQUIRE(pitch.get_int("hop-length", -1) == 512);
+  REQUIRE_FALSE(pitch.has("hop-length"));
   REQUIRE(pitch.get_float("f0-min-hz", -1.0f) == -1.0f);
   REQUIRE(pitch.get_float("f0-max-hz", -1.0f) == -1.0f);
   REQUIRE(validate_cli_arguments(pitch, true).empty());
@@ -1655,7 +1655,23 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
   const std::string reference_smf = unique_temp_path("_stated_reference.mid");
   const std::string rir_wav = unique_temp_path("_stated_rir.wav");
   const std::string click_wav = unique_temp_path("_stated_clicks.wav");
+  const std::string sine_chords_wav = unique_temp_path("_stated_sine_chords.wav");
+  const std::string sine_chords_fast_wav = unique_temp_path("_stated_sine_chords_fast.wav");
+  const std::string harmonic_chords_wav = unique_temp_path("_stated_harmonic_chords.wav");
+  const std::string sections_wav = unique_temp_path("_stated_sections.wav");
+  const std::string silent_wav = unique_temp_path("_stated_silent.wav");
+  const std::string glide_wav = unique_temp_path("_stated_glide.wav");
+  const std::string stereo_wav = unique_temp_path("_stated_stereo.wav");
+  const std::string takes_project = unique_temp_path("_stated_takes.json");
+  const std::string takes_out = unique_temp_path("_stated_takes_out.json");
   create_test_wav(tone_wav, 1.0f);
+  create_chord_progression_wav(sine_chords_wav, 0.5f, false);
+  create_chord_progression_wav(sine_chords_fast_wav, 0.25f, false);
+  create_chord_progression_wav(harmonic_chords_wav, 0.25f, true);
+  create_section_triads_wav(sections_wav);
+  create_silent_wav(silent_wav);
+  create_glide_wav(glide_wav);
+  create_stereo_delayed_wav(stereo_wav);
   create_clipped_wav(clipped_wav);
   create_stepped_level_wav(stepped_wav);
   create_noisy_wav(noisy_wav);
@@ -1671,6 +1687,7 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
   REQUIRE(exec_command(CLI + " project new -o " + project_json + " -q").first == 0);
+  create_takes_project(takes_project);
 #ifdef SONARE_WITH_PITCH_EDITOR
   create_reference_smf(reference_smf, {{0.0, 1.0, 60}}, 4.0);
 #endif
@@ -1681,10 +1698,14 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
     std::string command;
     std::string arguments;
     std::string option;
-    // Empty where the option changes nothing the command prints (vqt reports only its shape).
+    // Empty only where the command prints nothing the option affects.
     std::string other_value;
   };
   const std::string to_out = " -o " + out + " --json -q";
+  // Two recordings of one progression at different tempi, so the alignment has a path to find.
+  const std::string takes_arguments =
+      takes_project + " --reference-source 1 --audio 1=" + sine_chords_fast_wav +
+      " --audio 2=" + sine_chords_wav + " -o " + takes_out + " --json -q";
   const std::vector<Row> rows = {
       {"preemphasis", tone_wav + to_out, "coef", "0.5"},
       {"deemphasis", tone_wav + to_out, "coef", "0.5"},
@@ -1730,6 +1751,8 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       {"vqt", tone_wav + " --json -q", "n-bins", "48"},
       {"vqt", tone_wav + " --json -q", "bins-per-octave", "24"},
       {"vqt", tone_wav + " --json -q", "gamma", "0"},
+      // The vqt JSON prints only shape, fmin, bins per octave and gamma, none of which depend on
+      // it.
       {"vqt", tone_wav + " --json -q", "filter-scale", ""},
       {"meter", clipped_wav + " --json -q", "clip-threshold", "0.2"},
       {"meter", clipped_wav + " --json -q", "oversample", "1"},
@@ -1739,21 +1762,21 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "hop-sec", "0.25"},
       {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "low-percentile", "0.5"},
       {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "high-percentile", "0.5"},
-      // The analysis options below are read against a one-second tone, so an option whose
-      // effect a single steady tone cannot show carries "" instead of a second value.
+      // Options a steady tone cannot move read a chord, section or glide input built for them.
       {"analyze", tone_wav + " --json -q", "chroma-high-pass-hz", "4000"},
       {"analyze", tone_wav + " --json -q", "meter-denominator", "8"},
       {"key", tone_wav + " --json -q", "high-pass-hz", "4000"},
-      {"chords", tone_wav + " --json -q", "min-duration-sec", ""},
-      {"chords", tone_wav + " --json -q", "smoothing-window", ""},
+      {"chords", sine_chords_wav + " --json -q", "min-duration-sec", "1.5"},
+      {"chords", tone_wav + " --json -q", "smoothing-window", "0.5"},
       {"chords", tone_wav + " --json -q", "threshold", "0.99"},
       {"chords", tone_wav + " --json -q", "chroma-method", "stft"},
-      {"chords", tone_wav + " --json -q", "hmm-beam-width", ""},
-      {"chords", tone_wav + " --key-context --json -q", "key-root", ""},
-      {"chords", tone_wav + " --key-context --json -q", "key-mode", ""},
-      {"sections", tone_wav + " --json -q", "min-duration-sec", ""},
+      {"chords", harmonic_chords_wav + " --json -q", "hmm-beam-width", "1"},
+      {"chords", sine_chords_fast_wav + " --key-context --json -q", "key-root", "D"},
+      {"chords", sine_chords_fast_wav + " --key-context --json -q", "key-mode", "minor"},
+      {"sections", sections_wav + " --json -q", "min-duration-sec", "1"},
       {"dynamics", tone_wav + " --json -q", "window-sec", "0.1"},
-      {"rhythm", tone_wav + " --json -q", "start-bpm", ""},
+      // start-bpm answers only when the estimator finds no tempo, which silence guarantees.
+      {"rhythm", silent_wav + " --json -q", "start-bpm", "80"},
       {"rhythm", click_wav + " --json -q", "bpm-min", "160"},
       {"rhythm", click_wav + " --json -q", "bpm-max", "100"},
       {"pitch", noisy_wav + " --json -q", "threshold", "0.9"},
@@ -1798,9 +1821,66 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "wet", "0"},
       {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "ism-order", "1"},
       {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "seed", "7"},
-      // Only a stereo input is heard through the receiver pair, and the take is mono.
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "receiver-spacing", ""},
+      // Only a stereo input is heard through the receiver pair; it shows in the written WAV.
+      {"room-morph", stereo_wav + " --max-sec 0.3" + to_out, "receiver-spacing", "2.0"},
 #endif
+      // The spectral geometry. key reads the FFT size only with --hpss, chords only with STFT
+      // chroma, and sections moves only when the minimum lets more than one section survive.
+      {"timbre", tone_wav + " --json -q", "n-fft", "1024"},
+      {"timbre", tone_wav + " --json -q", "hop-length", "256"},
+      {"timbre", tone_wav + " --json -q", "n-mels", "64"},
+      {"mel", tone_wav + " --json -q", "n-fft", "1024"},
+      {"mel", tone_wav + " --json -q", "hop-length", "256"},
+      {"mel", tone_wav + " --json -q", "n-mels", "64"},
+      {"mel", tone_wav + " --json -q", "fmin-hz", "100"},
+      {"chroma", tone_wav + " --json -q", "n-fft", "1024"},
+      {"chroma", tone_wav + " --json -q", "hop-length", "256"},
+      {"tonnetz", tone_wav + " --json -q", "n-fft", "1024"},
+      {"tonnetz", tone_wav + " --json -q", "hop-length", "256"},
+      {"spectral", tone_wav + " --json -q", "n-fft", "1024"},
+      {"spectral", tone_wav + " --json -q", "hop-length", "256"},
+      {"onset-env", tone_wav + " --json -q", "n-fft", "1024"},
+      {"onset-env", tone_wav + " --json -q", "hop-length", "256"},
+      {"onset-env", tone_wav + " --json -q", "n-mels", "64"},
+      {"onset-envelope", tone_wav + " --json -q", "n-fft", "1024"},
+      {"onset-envelope", tone_wav + " --json -q", "hop-length", "256"},
+      {"onset-envelope", tone_wav + " --json -q", "n-mels", "64"},
+      {"fourier-tempogram", tone_wav + " --json -q", "hop-length", "256"},
+      {"tempogram-ratio", tone_wav + " --json -q", "hop-length", "256"},
+      {"tempogram", tone_wav + " --json -q", "n-fft", "1024"},
+      {"tempogram", tone_wav + " --json -q", "hop-length", "256"},
+      {"tempogram", tone_wav + " --json -q", "n-mels", "64"},
+      {"plp", tone_wav + " --json -q", "n-fft", "1024"},
+      {"plp", tone_wav + " --json -q", "hop-length", "256"},
+      {"plp", tone_wav + " --json -q", "n-mels", "64"},
+      {"nnls-chroma", tone_wav + " --json -q", "hop-length", "256"},
+      {"cqt", tone_wav + " --json -q", "hop-length", "256"},
+      {"vqt", tone_wav + " --json -q", "hop-length", "256"},
+      {"pitch", tone_wav + " --json -q", "hop-length", "256"},
+      {"key", tone_wav + " --hpss --json -q", "n-fft", "1024"},
+      {"key", tone_wav + " --json -q", "hop-length", "256"},
+      {"chords", sine_chords_wav + " --chroma-method stft --json -q", "n-fft", "1024"},
+      {"chords", sine_chords_wav + " --json -q", "hop-length", "256"},
+      {"sections", sections_wav + " --min-duration-sec 1 --json -q", "n-fft", "1024"},
+      {"sections", sections_wav + " --min-duration-sec 1 --json -q", "hop-length", "256"},
+      {"dynamics", tone_wav + " --json -q", "hop-length", "256"},
+      {"rhythm", click_wav + " --json -q", "n-fft", "1024"},
+      {"rhythm", click_wav + " --json -q", "hop-length", "256"},
+      {"boundaries", sections_wav + " --json -q", "n-fft", "1024"},
+      {"boundaries", sections_wav + " --json -q", "hop-length", "256"},
+      {"hpss", tone_wav + " --harmonic-only" + to_out, "n-fft", "1024"},
+      {"decompose-stems", tone_wav + to_out, "n-fft", "1024"},
+      {"decompose-stems", tone_wav + to_out, "hop-length", "256"},
+      {"pitch-shift", tone_wav + " --pitch-semitones 3" + to_out, "n-fft", "1024"},
+      {"time-stretch", tone_wav + " --rate 1.5" + to_out, "n-fft", "1024"},
+      {"mel-to-audio", tone_wav + to_out, "n-fft", "1024"},
+      {"mel-to-audio", tone_wav + to_out, "hop-length", "256"},
+      {"mel-to-audio", tone_wav + to_out, "n-mels", "64"},
+      {"mel-to-audio", tone_wav + to_out, "fmin-hz", "100"},
+      {"mfcc-to-audio", tone_wav + to_out, "n-fft", "1024"},
+      {"mfcc-to-audio", tone_wav + to_out, "hop-length", "256"},
+      {"mfcc-to-audio", tone_wav + to_out, "n-mels", "64"},
+      {"mfcc-to-audio", tone_wav + to_out, "fmin-hz", "100"},
 #ifdef SONARE_WITH_PITCH_EDITOR
       // A target three semitones up makes every correction setting audible; the scale
       // options act only in scale mode, where a root or mask off the tone puts it off-grid.
@@ -1822,12 +1902,16 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
 #endif
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
-      // An empty project renders silence, so no second value shows in what is written.
+      // Bounce does not read the option today, so nothing it prints or writes can differ.
       {"project bounce", project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
       {"midi-render", project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
+      // A MIDI 1.0 file carries no group.
       {"transcribe", tone_wav + to_out, "group", ""},
-      {"transcribe", tone_wav + to_out, "channel", ""},
-      {"transcribe", tone_wav + to_out, "monophonic-model", ""},
+      // The channel shows only in the written .mid status bytes.
+      {"transcribe", tone_wav + to_out, "channel", "5"},
+      {"transcribe", glide_wav + to_out, "monophonic-model", "singing"},
+      {"project align-takes", takes_arguments, "hop-length", "256"},
+      {"project align-takes", takes_arguments, "bins-per-octave", "24"},
 #endif
   };
 
@@ -1872,8 +1956,10 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
     }
   }
 
-  for (const std::string& path : {tone_wav, clipped_wav, stepped_wav, noisy_wav, out, project_json,
-                                  reference_smf, rir_wav, click_wav})
+  for (const std::string& path :
+       {tone_wav, clipped_wav, stepped_wav, noisy_wav, out, project_json, reference_smf, rir_wav,
+        click_wav, sine_chords_wav, sine_chords_fast_wav, harmonic_chords_wav, sections_wav,
+        silent_wav, glide_wav, stereo_wav, takes_project, takes_out})
     std::remove(path.c_str());
 }
 

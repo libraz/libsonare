@@ -217,8 +217,6 @@ def test_chords_forwards_smoothing_window_and_beat_sync_flag(
             "sample_rate": 22050,
             "smoothing_window_sec": 1.25,
             "use_triads_only": True,
-            "n_fft": 2048,
-            "hop_length": 512,
             "use_beat_sync": False,
             "use_hmm": True,
             "use_key_context": False,
@@ -305,10 +303,6 @@ def test_mel_forwards_htk_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls == [
         {
             "sample_rate": 22050,
-            "n_fft": 2048,
-            "hop_length": 512,
-            "n_mels": 128,
-            "fmin_hz": 0.0,
             "fmax_hz": None,
             "htk": True,
         }

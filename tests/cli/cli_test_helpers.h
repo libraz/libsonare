@@ -208,6 +208,34 @@ inline void create_surround_master_project(const std::string& path, const char* 
        << R"("scene":{"version":1,"buses":[{"id":"bus.main","role":"master","layout":")" << layout
        << R"("}]}})";
 }
+
+/// @brief Writes a 22050 Hz project with two audio sources, a reference clip on
+///        source 1 and a take clip on source 2, for `project align-takes`.
+inline void create_takes_project(const std::string& path) {
+  const char* clip_tail =
+      R"("startPpq":0,"lengthPpq":960,"sourceOffsetPpq":0,"gain":1,)"
+      R"("fadeIn":{"lengthPpq":0,"curve":0},"fadeOut":{"lengthPpq":0,"curve":0},)"
+      R"("loopMode":0,"loopLengthPpq":0,"warpRefId":0,"warpMode":0})";
+  std::ofstream file(path);
+  file << R"({"version":7,"sampleRate":22050,"sources":[)";
+  for (int id = 1; id <= 2; ++id) {
+    file << (id == 1 ? "" : ",") << R"({"kind":0,"id":)" << id
+         << R"(,"uri":"","channelCount":1,"sampleRateHint":22050,"storageHandleId":0})";
+  }
+  file << R"(],"tracks":[)";
+  for (int id = 1; id <= 2; ++id) {
+    file << (id == 1 ? "" : ",") << R"({"id":)" << id << R"(,"name":")"
+         << (id == 1 ? "reference" : "take")
+         << R"(","kind":0,"channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
+         << R"("automationLanes":[]})";
+  }
+  file << R"(],"clips":[)";
+  for (int id = 1; id <= 2; ++id) {
+    file << (id == 1 ? "" : ",") << R"({"id":)" << id << R"(,"trackId":)" << id << R"(,"sourceId":)"
+         << id << "," << clip_tail;
+  }
+  file << R"(],"warpMaps":[]})";
+}
 #endif  // SONARE_WITH_ARRANGEMENT
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
@@ -418,6 +446,129 @@ inline void create_noisy_wav(const std::string& path, int sample_rate = 22050) {
     samples[i] = 0.5f * std::sin(two_pi * 440.0f * t) + noise(rng);
   }
   save_wav(path, samples, sample_rate);
+}
+
+/// @brief Appends a triad to @p samples.
+/// @param samples Buffer to extend
+/// @param midis MIDI note numbers of the chord tones
+/// @param seconds Length of the chord
+/// @param harmonic Four partials at 1/k amplitude with 200-sample fades when true,
+///        plain sines at 0.15 amplitude when false
+/// @param sample_rate Sample rate
+inline void append_triad(std::vector<float>& samples, const std::array<int, 3>& midis,
+                         float seconds, bool harmonic, int sample_rate = 22050) {
+  const size_t count = static_cast<size_t>(seconds * static_cast<float>(sample_rate));
+  const double two_pi = 2.0 * sonare::constants::kPiD;
+  for (size_t i = 0; i < count; ++i) {
+    const double t = static_cast<double>(i) / sample_rate;
+    double value = 0.0;
+    for (int midi : midis) {
+      const double f = 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+      if (harmonic) {
+        for (int k = 1; k <= 4; ++k) value += std::sin(two_pi * f * k * t) / k;
+      } else {
+        value += 0.15 * std::sin(two_pi * f * t);
+      }
+    }
+    if (harmonic) {
+      const double fade =
+          std::min({1.0, static_cast<double>(i) / 200.0, static_cast<double>(count - i) / 200.0});
+      value *= fade / 3.0 / 1.5;
+    }
+    samples.push_back(static_cast<float>(value));
+  }
+}
+
+/// @brief Creates a C, G, Am, F progression repeated four times.
+/// @param path Output path
+/// @param chord_sec Length of each chord
+/// @param harmonic Harmonic triads (low voicing) when true, pure-sine triads otherwise
+/// @param sample_rate Sample rate
+///
+/// The chord options (minimum duration, beam width, key context) only move the
+/// result where the material changes chord quickly enough to leave near-ties
+/// for them to settle; a steady tone has one chord and nothing to merge or prune.
+inline void create_chord_progression_wav(const std::string& path, float chord_sec, bool harmonic,
+                                         int sample_rate = 22050) {
+  const std::array<std::array<int, 3>, 4> sine_voicing{
+      {{60, 64, 67}, {55, 59, 62}, {57, 60, 64}, {53, 57, 60}}};
+  const std::array<std::array<int, 3>, 4> harmonic_voicing{
+      {{48, 52, 55}, {43, 47, 50}, {45, 48, 52}, {53, 57, 60}}};
+  const auto& voicing = harmonic ? harmonic_voicing : sine_voicing;
+  std::vector<float> samples;
+  for (int round = 0; round < 4; ++round) {
+    for (const auto& chord : voicing)
+      append_triad(samples, chord, chord_sec, harmonic, sample_rate);
+  }
+  save_wav(path, samples, sample_rate);
+}
+
+/// @brief Creates a harmonic C triad, an E triad and a Bb triad of 3, 2 and 3 seconds.
+/// @param path Output path
+/// @param sample_rate Sample rate
+///
+/// The middle section is shorter than the default minimum section length, so the
+/// minimum decides whether it survives as a section of its own.
+inline void create_section_triads_wav(const std::string& path, int sample_rate = 22050) {
+  std::vector<float> samples;
+  append_triad(samples, {48, 52, 55}, 3.0f, true, sample_rate);
+  append_triad(samples, {52, 56, 59}, 2.0f, true, sample_rate);
+  append_triad(samples, {46, 50, 53}, 3.0f, true, sample_rate);
+  save_wav(path, samples, sample_rate);
+}
+
+/// @brief Creates a silent mono WAV.
+inline void create_silent_wav(const std::string& path, float duration = 2.0f,
+                              int sample_rate = 22050) {
+  save_wav(path, std::vector<float>(static_cast<size_t>(duration * sample_rate), 0.0f),
+           sample_rate);
+}
+
+/// @brief Creates a mono WAV whose pitch rises one octave over its length.
+/// @param path Output path
+/// @param duration Length in seconds; the glide starts at 261.6 Hz
+/// @param sample_rate Sample rate
+///
+/// A steady tone is one note under every note-extraction model; a glide is where
+/// the models disagree on where one note ends and the next begins.
+inline void create_glide_wav(const std::string& path, float duration = 1.5f,
+                             int sample_rate = 22050) {
+  const size_t n_samples = static_cast<size_t>(duration * static_cast<float>(sample_rate));
+  std::vector<float> samples(n_samples);
+  const double two_pi = 2.0 * sonare::constants::kPiD;
+  double cumulative = 0.0;
+  for (size_t i = 0; i < n_samples; ++i) {
+    const double t = static_cast<double>(i) / sample_rate;
+    cumulative += 261.6 * std::pow(2.0, t / duration);
+    samples[i] = static_cast<float>(0.5 * std::sin(two_pi * cumulative / sample_rate));
+  }
+  save_wav(path, samples, sample_rate);
+}
+
+/// @brief Creates a one-second stereo WAV whose right channel trails the left.
+/// @param path Output path
+/// @param sample_rate Sample rate
+///
+/// Only a stereo take is heard through the receiver pair; the right channel is
+/// the left scaled by 0.7 and delayed (wrapping) by five samples, so the two
+/// channels differ in level and phase.
+inline void create_stereo_delayed_wav(const std::string& path, int sample_rate = 22050) {
+  const size_t n_frames = static_cast<size_t>(sample_rate);
+  const double two_pi = 2.0 * sonare::constants::kPiD;
+  std::mt19937 rng(1);
+  std::normal_distribution<double> noise(0.0, 1.0);
+  std::vector<float> left(n_frames);
+  for (size_t i = 0; i < n_frames; ++i) {
+    const double t = static_cast<double>(i) / sample_rate;
+    left[i] = static_cast<float>(0.3 * std::sin(two_pi * 440.0 * t) + 0.05 * noise(rng));
+  }
+  constexpr size_t kDelay = 5;
+  std::vector<float> interleaved(2 * n_frames);
+  for (size_t i = 0; i < n_frames; ++i) {
+    interleaved[2 * i] = left[i];
+    interleaved[2 * i + 1] = 0.7f * left[(i + n_frames - kDelay) % n_frames];
+  }
+  save_wav_multichannel(path, interleaved.data(), n_frames, 2, ChannelLayout::Stereo, sample_rate);
 }
 
 /// @brief Measures the amplitude of one frequency in a buffer.

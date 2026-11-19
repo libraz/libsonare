@@ -6,11 +6,11 @@
 
 int cmd_mel(const CliArgs& args, const Audio& audio) {
   MelConfig config;
-  config.n_mels = args.n_mels;
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  config.n_mels = args.get_int("n-mels", config.n_mels);
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   config.htk = args.has("htk");
-  config.fmin = args.fmin;
+  config.fmin = args.get_float("fmin-hz", config.fmin);
   config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
@@ -51,8 +51,8 @@ int cmd_mel(const CliArgs& args, const Audio& audio) {
 
 int cmd_chroma(const CliArgs& args, const Audio& audio) {
   ChromaConfig config;
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
 
   Chroma chroma = Chroma::compute(audio, config);
   auto mean_energy = chroma.mean_energy();
@@ -90,8 +90,8 @@ int cmd_chroma(const CliArgs& args, const Audio& audio) {
 
 int cmd_tonnetz(const CliArgs& args, const Audio& audio) {
   ChromaConfig config;
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   Chroma chroma = Chroma::compute(audio, config);
   auto values = tonnetz(chroma);
   Stats stats = Stats::compute(values);
@@ -120,7 +120,9 @@ int cmd_tonnetz(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_spectral(const CliArgs& args, const Audio& audio) {
-  StftConfig stft{args.n_fft, args.hop_length};
+  StftConfig stft;
+  stft.n_fft = args.get_int("n-fft", stft.n_fft);
+  stft.hop_length = args.get_int("hop-length", stft.hop_length);
   Spectrogram spec = Spectrogram::compute(audio, stft);
   int sr = audio.sample_rate();
 
@@ -128,8 +130,8 @@ int cmd_spectral(const CliArgs& args, const Audio& audio) {
   auto bandwidth = spectral_bandwidth(spec, sr);
   auto rolloff = spectral_rolloff(spec, sr);
   auto flatness = spectral_flatness(spec);
-  auto zcr = zero_crossing_rate(audio, args.n_fft, args.hop_length);
-  auto rms = rms_energy(audio, args.n_fft, args.hop_length);
+  auto zcr = zero_crossing_rate(audio, stft.n_fft, stft.hop_length);
+  auto rms = rms_energy(audio, stft.n_fft, stft.hop_length);
 
   Stats sc = Stats::compute(centroid), sb = Stats::compute(bandwidth),
         sr_s = Stats::compute(rolloff), sf = Stats::compute(flatness), sz = Stats::compute(zcr),
@@ -210,7 +212,7 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
   config.fmin = args.get_float("f0-min-hz", config.fmin);
   config.fmax = args.get_float("f0-max-hz", config.fmax);
   config.threshold = args.get_float("threshold", config.threshold);
-  config.hop_length = args.get_int("hop-length", 512);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
 
   const std::string algo = args.get_string("algorithm", "pyin");
   PitchResult result = (algo == "yin") ? yin_track(audio, config) : pyin(audio, config);
@@ -261,16 +263,16 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
 
 int cmd_onset_env(const CliArgs& args, const Audio& audio) {
   MelConfig mel_config;
-  mel_config.n_fft = args.n_fft;
-  mel_config.hop_length = args.hop_length;
-  mel_config.n_mels = args.n_mels;
+  mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);
+  mel_config.hop_length = args.get_int("hop-length", mel_config.hop_length);
+  mel_config.n_mels = args.get_int("n-mels", mel_config.n_mels);
 
   auto envelope = compute_onset_strength(audio, mel_config);
 
   auto max_it = std::max_element(envelope.begin(), envelope.end());
   float peak = *max_it;
   int peak_frame = static_cast<int>(std::distance(envelope.begin(), max_it));
-  float peak_time = static_cast<float>(peak_frame * args.hop_length) / audio.sample_rate();
+  float peak_time = static_cast<float>(peak_frame * mel_config.hop_length) / audio.sample_rate();
   // Accumulate in double; a float sum drops low digits well before a full envelope ends.
   float mean = static_cast<float>(std::accumulate(envelope.begin(), envelope.end(), 0.0) /
                                   static_cast<double>(envelope.size()));
@@ -280,7 +282,7 @@ int cmd_onset_env(const CliArgs& args, const Audio& audio) {
         .begin_object()
         .kv("n_frames", envelope.size())
         .kv("duration", audio.duration())
-        .kv("hop_length", args.hop_length)
+        .kv("hop_length", mel_config.hop_length)
         .kv("peak_time", peak_time)
         .kv("peak_strength", peak)
         .kv("mean", mean)
@@ -299,16 +301,16 @@ int cmd_onset_env(const CliArgs& args, const Audio& audio) {
 
 int cmd_tempogram(const CliArgs& args, const Audio& audio) {
   MelConfig mel_config;
-  mel_config.n_fft = args.n_fft;
-  mel_config.hop_length = args.hop_length;
-  mel_config.n_mels = args.n_mels;
+  mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);
+  mel_config.hop_length = args.get_int("hop-length", mel_config.hop_length);
+  mel_config.n_mels = args.get_int("n-mels", mel_config.n_mels);
 
   OnsetConfig onset_config;
   onset_config.center = true;
   const auto envelope = compute_onset_strength(audio, mel_config, onset_config);
 
   TempogramConfig config;
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   config.win_length = args.get_int("win-length", config.win_length);
   auto values = tempogram(envelope, audio.sample_rate(), config);
   const int n_frames =
@@ -340,9 +342,9 @@ int cmd_tempogram(const CliArgs& args, const Audio& audio) {
 
 int cmd_plp(const CliArgs& args, const Audio& audio) {
   MelConfig mel_config;
-  mel_config.n_fft = args.n_fft;
-  mel_config.hop_length = args.hop_length;
-  mel_config.n_mels = args.n_mels;
+  mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);
+  mel_config.hop_length = args.get_int("hop-length", mel_config.hop_length);
+  mel_config.n_mels = args.get_int("n-mels", mel_config.n_mels);
 
   OnsetConfig onset_config;
   onset_config.center = true;
@@ -350,7 +352,7 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
 
   PlpConfig config;
   config.sr = audio.sample_rate();
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   // An omitted bound keeps the library's search range.
   if (args.has("bpm-min")) config.tempo_min = args.get_float("bpm-min", config.tempo_min);
   if (args.has("bpm-max")) config.tempo_max = args.get_float("bpm-max", config.tempo_max);
@@ -382,7 +384,7 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
 
 int cmd_cqt(const CliArgs& args, const Audio& audio) {
   CqtConfig config;
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   if (args.has("fmin-hz")) config.fmin = args.fmin;
   config.n_bins = args.get_int("n-bins", config.n_bins);
   config.bins_per_octave = args.get_int("bins-per-octave", config.bins_per_octave);
@@ -413,7 +415,7 @@ int cmd_cqt(const CliArgs& args, const Audio& audio) {
 
 int cmd_vqt(const CliArgs& args, const Audio& audio) {
   VqtConfig config;
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   if (args.has("fmin-hz")) config.fmin = args.fmin;
   config.n_bins = args.get_int("n-bins", config.n_bins);
   config.bins_per_octave = args.get_int("bins-per-octave", config.bins_per_octave);
@@ -451,10 +453,10 @@ int cmd_vqt(const CliArgs& args, const Audio& audio) {
 
 int cmd_mel_to_audio(const CliArgs& args, const Audio& audio) {
   MelConfig config;
-  config.n_mels = args.n_mels;
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
-  config.fmin = args.fmin;
+  config.n_mels = args.get_int("n-mels", config.n_mels);
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
+  config.fmin = args.get_float("fmin-hz", config.fmin);
   config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
   const int n_iter = args.get_int("n-iter", 32);
@@ -481,10 +483,10 @@ int cmd_mel_to_audio(const CliArgs& args, const Audio& audio) {
 
 int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
   MelConfig config;
-  config.n_mels = args.n_mels;
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
-  config.fmin = args.fmin;
+  config.n_mels = args.get_int("n-mels", config.n_mels);
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
+  config.fmin = args.get_float("fmin-hz", config.fmin);
   config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
   const int n_mfcc = args.get_int("n-mfcc", 13);
@@ -775,9 +777,9 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
 
 int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
   MelConfig mel_config;
-  mel_config.n_fft = args.n_fft;
-  mel_config.hop_length = args.hop_length;
-  mel_config.n_mels = args.n_mels;
+  mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);
+  mel_config.hop_length = args.get_int("hop-length", mel_config.hop_length);
+  mel_config.n_mels = args.get_int("n-mels", mel_config.n_mels);
 
   auto envelope = compute_onset_strength(audio, mel_config, OnsetConfig());
   Stats stats = Stats::compute(envelope);
@@ -786,7 +788,7 @@ int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
     JsonBuilder()
         .begin_object()
         .kv("count", envelope.size())
-        .kv("hop_length", args.hop_length)
+        .kv("hop_length", mel_config.hop_length)
         .kv("duration", audio.duration())
         .key("stats")
         .begin_object()
@@ -810,7 +812,7 @@ int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
 
 int cmd_fourier_tempogram(const CliArgs& args, const Audio& audio) {
   TempogramConfig config;
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   config.win_length = args.get_int("win-length", config.win_length);
 
   auto values = fourier_tempogram(audio, config);
@@ -844,7 +846,7 @@ int cmd_fourier_tempogram(const CliArgs& args, const Audio& audio) {
 
 int cmd_tempogram_ratio(const CliArgs& args, const Audio& audio) {
   TempogramConfig config;
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   config.win_length = args.get_int("win-length", config.win_length);
 
   auto tempogram_data = tempogram(audio, config);
@@ -872,7 +874,7 @@ int cmd_nnls_chroma(const CliArgs& args, const Audio& audio) {
   NnlsChromaConfig config;
   config.cqt.bins_per_octave = 12;
   config.cqt.n_bins = 84;
-  config.cqt.hop_length = args.hop_length;
+  config.cqt.hop_length = args.get_int("hop-length", config.cqt.hop_length);
   config.midi_min = 24;
   config.n_pitches = 60;
   config.n_harmonics = 4;

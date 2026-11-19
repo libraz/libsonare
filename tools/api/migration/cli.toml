@@ -962,3 +962,19 @@ changed = "omitted, notes follow GM program and channel routing; an explicit emp
 domain = "project"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::synth_empty_refused"
+
+[[entry]]
+kind = "flag"
+old = "project.align-takes --hop-length"
+changed = "omitted, the library's chroma hop applies; an explicit 0 is refused as an invalid parameter (exit 3) rather than read as the library value"
+domain = "project"
+rule = "library-owned-defaults"
+test = "tests/conformance/cli_contract_v2.json::hop_length_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "project.align-takes --bins-per-octave"
+changed = "omitted, the library's chroma resolution applies; an explicit 0 is refused as an invalid parameter (exit 3) rather than read as the library value"
+domain = "project"
+rule = "library-owned-defaults"
+test = "tests/conformance/cli_contract_v2.json::bins_per_octave_zero_refused"

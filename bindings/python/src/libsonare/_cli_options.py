@@ -214,6 +214,12 @@ def _given(args: argparse.Namespace, *same: str, **renamed: str) -> dict[str, An
     }
 
 
+def _effective(args: argparse.Namespace, facade: Callable[..., Any], name: str) -> Any:
+    """The value ``facade`` runs with for option ``name``: the one given, else its own default."""
+    value = getattr(args, name, None)
+    return inspect.signature(facade).parameters[name].default if value is None else value
+
+
 def _library_catalog(name: str) -> Callable[[], Sequence[str]]:
     """The package's catalog function ``name``, imported only when it is read."""
 
@@ -546,20 +552,22 @@ def build_shared_parsers() -> SharedParsers:
     )
 
     fft_options = _ContractArgumentParser(add_help=False, parents=[common])
-    fft_options.add_argument("--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)")
+    # The geometry a command leaves out is the library's own, which every command
+    # fed by these parents agrees on, so one help text states it.
+    fft_options.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
     fft_options.add_argument(
-        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+        "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
     )
     fft_stdout_options = _ContractArgumentParser(add_help=False, parents=[stdout_options])
     fft_stdout_options.add_argument(
-        "--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)"
+        "--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"
     )
     fft_stdout_options.add_argument(
-        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+        "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
     )
     mel_options = _ContractArgumentParser(add_help=False, parents=[fft_stdout_options])
     mel_options.add_argument(
-        "--n-mels", type=_c_int, default=128, help="Number of mel bands (default: 128)"
+        "--n-mels", type=_c_int, default=None, help="Number of mel bands (default: 128)"
     )
     return SharedParsers(
         common=common,

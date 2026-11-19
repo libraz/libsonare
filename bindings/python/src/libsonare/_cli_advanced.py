@@ -18,6 +18,7 @@ from ._cli_options import (
     SharedParsers,
     _c_int,
     _ContractArgumentParser,
+    _effective,
     _finite_float,
     _given,
     _tempo_bpm,
@@ -115,9 +116,7 @@ def cmd_timbre(args: argparse.Namespace) -> int:
     from . import analyze_timbre
 
     samples, sr = _load_audio(args.file)
-    r = analyze_timbre(
-        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
-    )
+    r = analyze_timbre(samples, sample_rate=sr, **_given(args, "n_fft", "hop_length", "n_mels"))
 
     if args.json:
         print(
@@ -184,16 +183,14 @@ def cmd_onset_envelope(args: argparse.Namespace) -> int:
     from ._conversions import onset_strength
 
     samples, sr = _load_audio(args.file)
-    env = onset_strength(
-        samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
-    ).tolist()
+    env = onset_strength(samples, sr=sr, **_given(args, "n_fft", "hop_length", "n_mels")).tolist()
 
     if args.json:
         print(
             _strict_json_dumps(
                 {
                     "count": len(env),
-                    "hop_length": args.hop_length,
+                    "hop_length": _effective(args, onset_strength, "hop_length"),
                     # The analyzed audio's duration, not the frame grid's span.
                     "duration": len(samples) / sr if sr > 0 else 0.0,
                     "stats": _array_stats(env, with_count=False),
@@ -215,6 +212,7 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     chroma_rows = nnls_chroma(samples, sample_rate=sr, **_given(args, "hop_length"))
+    hop_length = _effective(args, nnls_chroma, "hop_length")
     n_chroma = 12
     n_frames = chroma_rows.shape[1]
     # One row per pitch class; mean energy per bin.
@@ -226,7 +224,7 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
                 {
                     "n_chroma": n_chroma,
                     "n_frames": n_frames,
-                    "duration": n_frames * args.hop_length / sr if sr > 0 else 0.0,
+                    "duration": n_frames * hop_length / sr if sr > 0 else 0.0,
                     "mean_energy": [round(e, 6) for e in mean_energy],
                 }
             )
@@ -245,10 +243,8 @@ def cmd_tempogram(args: argparse.Namespace) -> int:
     from ._conversions import onset_strength, tempogram
 
     samples, sr = _load_audio(args.file)
-    env = onset_strength(
-        samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
-    )
-    matrix = tempogram(env, sr=sr, hop_length=args.hop_length, **_given(args, "win_length"))
+    env = onset_strength(samples, sr=sr, **_given(args, "n_fft", "hop_length", "n_mels"))
+    matrix = tempogram(env, sr=sr, **_given(args, "hop_length", "win_length"))
     n_frames = matrix.shape[1]
     data = matrix.ravel().tolist()
     win_length = args.win_length if args.win_length is not None else matrix.shape[0]
@@ -277,15 +273,12 @@ def cmd_plp(args: argparse.Namespace) -> int:
     from ._conversions import onset_strength, plp
 
     samples, sr = _load_audio(args.file)
-    env = onset_strength(
-        samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
-    )
+    env = onset_strength(samples, sr=sr, **_given(args, "n_fft", "hop_length", "n_mels"))
     # plp keeps librosa's keyword names; an omitted bound keeps the library's range.
     pulse = plp(
         env,
         sr=sr,
-        hop_length=args.hop_length,
-        **_given(args, "win_length", tempo_min="bpm_min", tempo_max="bpm_max"),
+        **_given(args, "hop_length", "win_length", tempo_min="bpm_min", tempo_max="bpm_max"),
     ).tolist()
 
     if args.json:
@@ -343,7 +336,7 @@ def register_advanced_parsers(
     # Dynamics windows the loudness series but runs no FFT, so it takes the hop
     # control without the matching --n-fft.
     dynamics_p.add_argument(
-        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+        "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
     )
     sub.add_parser("timbre", parents=[mel_options], help="Analyze timbre/spectral shape")
     lufs_p = sub.add_parser("lufs", parents=[stdout_options], help="Compute LUFS loudness")
@@ -354,7 +347,7 @@ def register_advanced_parsers(
         "onset-envelope", parents=[mel_options], help="Compute the onset strength envelope"
     )
     nnls_p = sub.add_parser("nnls-chroma", parents=[stdout_options], help="Compute NNLS chroma")
-    nnls_p.add_argument("--hop-length", type=_c_int, default=512)
+    nnls_p.add_argument("--hop-length", type=_c_int, default=None, help="Hop length (default: 512)")
     tempogram_p = sub.add_parser(
         "tempogram", parents=[mel_options], help="Compute autocorrelation tempogram"
     )

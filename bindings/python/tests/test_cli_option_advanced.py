@@ -218,13 +218,15 @@ def test_native_rhythm_handlers_use_explicit_mel_envelopes() -> None:
         (tempogram, "tempogram(envelope, audio.sample_rate(), config)"),
         (plp, "plp(envelope, config)"),
     ):
-        assert "mel_config.n_fft = args.n_fft;" in function
-        assert "mel_config.hop_length = args.hop_length;" in function
-        assert "mel_config.n_mels = args.n_mels;" in function
+        assert 'mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);' in function
+        assert (
+            'mel_config.hop_length = args.get_int("hop-length", mel_config.hop_length);' in function
+        )
+        assert 'mel_config.n_mels = args.get_int("n-mels", mel_config.n_mels);' in function
         assert "compute_onset_strength(audio, mel_config, onset_config)" in function
         assert call in function
 
     onset = source[
         source.index("int cmd_onset_envelope(") : source.index("int cmd_fourier_tempogram(")
     ]
-    assert "mel_config.n_mels = args.n_mels;" in onset
+    assert 'mel_config.n_mels = args.get_int("n-mels", mel_config.n_mels);' in onset

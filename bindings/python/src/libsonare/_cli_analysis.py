@@ -30,6 +30,7 @@ from ._cli_options import (
     _c_int,
     _candidate_count,
     _ContractArgumentParser,
+    _effective,
     _finite_float,
     _given,
     _nonnegative_finite_float,
@@ -108,11 +109,11 @@ def cmd_key(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     key_options: dict[str, Any] = {
         "sample_rate": sr,
-        "n_fft": args.n_fft,
-        "hop_length": args.hop_length,
         "use_hpss": args.hpss,
         "loudness_weighted": args.loudness_weighted,
-        **_given(args, chroma_high_pass_hz="high_pass_hz", genre_hint="genre_hint"),
+        **_given(
+            args, "n_fft", "hop_length", chroma_high_pass_hz="high_pass_hz", genre_hint="genre_hint"
+        ),
     }
     # A value the caller spelled reaches the library as written, an empty one included.
     if args.modes is not None:
@@ -222,14 +223,14 @@ def cmd_chords(args: argparse.Namespace) -> int:
         samples,
         sample_rate=sr,
         use_triads_only=not args.with_seventh,
-        n_fft=args.n_fft,
-        hop_length=args.hop_length,
         use_beat_sync=not args.no_beat_sync,
         use_hmm=not args.no_hmm,
         use_key_context=args.key_context,
         detect_inversions=args.detect_inversions,
         **_given(
             args,
+            "n_fft",
+            "hop_length",
             "min_duration_sec",
             "threshold",
             "hmm_beam_width",
@@ -281,10 +282,8 @@ def cmd_sections(args: argparse.Namespace) -> int:
     result = analyze_sections(
         samples,
         sample_rate=sr,
-        n_fft=args.n_fft,
-        hop_length=args.hop_length,
         threshold=args.threshold,
-        **_given(args, min_section_sec="min_duration_sec"),
+        **_given(args, "n_fft", "hop_length", min_section_sec="min_duration_sec"),
     )
     sections = result
     if args.json:
@@ -436,12 +435,9 @@ def cmd_mel(args: argparse.Namespace) -> int:
     result = mel_spectrogram(
         samples,
         sample_rate=sr,
-        n_fft=args.n_fft,
-        hop_length=args.hop_length,
-        n_mels=args.n_mels,
-        fmin_hz=args.fmin_hz,
         fmax_hz=args.fmax_hz,
         htk=args.htk,
+        **_given(args, "n_fft", "hop_length", "n_mels", "fmin_hz"),
     )
     n_mels, n_frames = result.power.shape
     power = result.power.ravel().tolist()
@@ -474,7 +470,7 @@ def cmd_chroma(args: argparse.Namespace) -> int:
     from . import chroma
 
     samples, sr = _load_audio(args.file)
-    result = chroma(samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length)
+    result = chroma(samples, sample_rate=sr, **_given(args, "n_fft", "hop_length"))
     n_chroma, n_frames = result.features.shape
     mean_energy = result.mean_energy.tolist()
     if args.json:
@@ -511,8 +507,8 @@ def cmd_spectral(args: argparse.Namespace) -> int:
     )
 
     samples, sr = _load_audio(args.file)
-    nf = args.n_fft
-    hl = args.hop_length
+    fft = _given(args, "n_fft", "hop_length")
+    frames = _given(args, frame_length="n_fft", hop_length="hop_length")
 
     def _stats(vals: list[float]) -> dict[str, float]:
         if not vals:
@@ -524,12 +520,12 @@ def cmd_spectral(args: argparse.Namespace) -> int:
             "max": float(max(vals)),
         }
 
-    centroid = spectral_centroid(samples, sr, nf, hl).tolist()
-    bandwidth = spectral_bandwidth(samples, sr, nf, hl).tolist()
-    rolloff = spectral_rolloff(samples, sr, nf, hl).tolist()
-    flatness = spectral_flatness(samples, sr, nf, hl).tolist()
-    zcr = zero_crossing_rate(samples, sr, nf, hl).tolist()
-    rms = rms_energy(samples, sr, nf, hl).tolist()
+    centroid = spectral_centroid(samples, sr, **fft).tolist()
+    bandwidth = spectral_bandwidth(samples, sr, **fft).tolist()
+    rolloff = spectral_rolloff(samples, sr, **fft).tolist()
+    flatness = spectral_flatness(samples, sr, **fft).tolist()
+    zcr = zero_crossing_rate(samples, sr, **frames).tolist()
+    rms = rms_energy(samples, sr, **frames).tolist()
     features = {
         "centroid": _stats(centroid),
         "bandwidth": _stats(bandwidth),
@@ -554,7 +550,7 @@ def cmd_spectral(args: argparse.Namespace) -> int:
 
 
 def cmd_pitch(args: argparse.Namespace) -> int:
-    from . import pitch_pyin, pitch_yin
+    from . import _features_pitch, pitch_pyin, pitch_yin
 
     samples, sr = _load_audio(args.file)
     algo = getattr(args, "algorithm", "pyin")
@@ -566,15 +562,20 @@ def cmd_pitch(args: argparse.Namespace) -> int:
     use_pitch_options = any(
         hasattr(args, name) for name in ("hop_length", "f0_min_hz", "f0_max_hz", "threshold")
     )
-    hop_length = int(getattr(args, "hop_length", 512))
     track = pitch_yin if algo == "yin" else pitch_pyin
+    hop_length = int(
+        _effective(
+            args,
+            _features_pitch.pitch_yin if algo == "yin" else _features_pitch.pitch_pyin,
+            "hop_length",
+        )
+    )
     if use_pitch_options:
         # A bound the caller left out is not passed, so the library chooses it.
         result = track(
             samples,
             sample_rate=sr,
-            hop_length=hop_length,
-            **_given(args, "threshold", "f0_min_hz", "f0_max_hz"),
+            **_given(args, "hop_length", "threshold", "f0_min_hz", "f0_max_hz"),
         )
     else:
         result = track(samples, sample_rate=sr)
@@ -622,8 +623,8 @@ def register_analysis_parsers(
     key_p = sub.add_parser("key", parents=[stdout_options], help="Detect musical key")
     # Declared here rather than inherited from fft_options: key takes no
     # --win-length or --window options.
-    key_p.add_argument("--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)")
-    key_p.add_argument("--hop-length", type=_c_int, default=512, help="Hop length (default: 512)")
+    key_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
+    key_p.add_argument("--hop-length", type=_c_int, default=None, help="Hop length (default: 512)")
     key_p.add_argument(
         "--candidates",
         type=_candidate_count,
@@ -793,7 +794,10 @@ def register_analysis_parsers(
     # so the refusal is the invalid-parameter class, not the usage one.
     _cli_domain(
         mel_p.add_argument(
-            "--fmin-hz", type=_finite_float, default=0.0, help="Lowest mel band frequency in Hz"
+            "--fmin-hz",
+            type=_finite_float,
+            default=None,
+            help="Lowest mel band frequency in Hz (default: 0.0)",
         ),
         minimum=0,
         reject_exit="invalid_parameter",
@@ -833,7 +837,7 @@ def register_analysis_parsers(
     pitch_p.add_argument(
         "--hop-length",
         type=_positive_int,
-        default=512,
+        default=None,
         help="Hop length in samples (default: 512)",
     )
     pitch_p.add_argument(

@@ -222,7 +222,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -276,7 +276,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -339,7 +339,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -357,7 +357,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -377,7 +377,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -432,7 +432,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -485,7 +485,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -971,7 +971,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -1064,7 +1064,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -1109,7 +1109,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -1756,7 +1756,7 @@
         {
           "name": "fmin-hz",
           "type": "number",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -1772,7 +1772,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -1799,7 +1799,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -1808,7 +1808,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2009,7 +2009,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2282,7 +2282,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2300,7 +2300,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2309,7 +2309,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2391,7 +2391,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2677,7 +2677,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2747,7 +2747,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2765,7 +2765,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -2774,7 +2774,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -3119,14 +3119,14 @@
         {
           "name": "bins-per-octave",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusive_minimum": false,
+            "exclusive_minimum": true,
             "maximum": null,
             "exclusive_maximum": false,
             "reject_exit": "invalid_parameter"
@@ -3135,14 +3135,14 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusive_minimum": false,
+            "exclusive_minimum": true,
             "maximum": null,
             "exclusive_maximum": false,
             "reject_exit": "invalid_parameter"
@@ -3510,7 +3510,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -3528,7 +3528,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -3817,7 +3817,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -3835,7 +3835,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4143,7 +4143,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4161,7 +4161,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4170,7 +4170,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4190,7 +4190,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4208,7 +4208,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4217,7 +4217,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4253,7 +4253,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4900,7 +4900,9 @@
           "name": "output",
           "type": "path",
           "default": null,
-          "aliases": ["o"],
+          "aliases": [
+            "o"
+          ],
           "repeatable": false,
           "required": false,
           "domain": null
@@ -5867,7 +5869,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -5885,7 +5887,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -6223,7 +6225,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -6241,7 +6243,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -7803,7 +7805,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -7821,7 +7823,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -7994,7 +7996,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -8856,7 +8858,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -8959,7 +8961,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9279,7 +9281,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9366,7 +9368,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9384,7 +9386,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9393,7 +9395,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9487,7 +9489,7 @@
         {
           "name": "fmin-hz",
           "type": "number",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9503,7 +9505,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9530,7 +9532,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9539,7 +9541,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9593,7 +9595,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9611,7 +9613,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9620,7 +9622,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9681,7 +9683,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9699,7 +9701,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9708,7 +9710,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10083,7 +10085,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10373,7 +10375,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10418,7 +10420,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10574,6 +10576,21 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "n_fft_zero_refused",
+          "argv": [
+            "key",
+            "{audio}",
+            "--n-fft",
+            "0",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}
@@ -10629,7 +10646,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10683,7 +10700,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10849,6 +10866,21 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "n_fft_zero_refused",
+          "argv": [
+            "chords",
+            "{audio}",
+            "--n-fft",
+            "0",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}
@@ -10908,7 +10940,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10990,7 +11022,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -11008,7 +11040,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -11017,7 +11049,7 @@
         {
           "name": "n-mels",
           "type": "integer",
-          "default": 128,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -12777,14 +12809,14 @@
         {
           "name": "bins-per-octave",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusive_minimum": false,
+            "exclusive_minimum": true,
             "maximum": null,
             "exclusive_maximum": false,
             "reject_exit": "invalid_parameter"
@@ -12793,14 +12825,14 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusive_minimum": false,
+            "exclusive_minimum": true,
             "maximum": null,
             "exclusive_maximum": false,
             "reject_exit": "invalid_parameter"
@@ -13035,6 +13067,52 @@
             "2={audio_take}",
             "--hop-length",
             "-256",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "hop_length_zero_refused",
+          "argv": [
+            "project",
+            "align-takes",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "--hop-length",
+            "0",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "bins_per_octave_zero_refused",
+          "argv": [
+            "project",
+            "align-takes",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "--bins-per-octave",
+            "0",
             "-o",
             "{align_takes_finer_output}",
             "--json"
@@ -14108,7 +14186,10 @@
                 "noise": {
                   "keys": {
                     "floor_dbfs": "number",
-                    "band_floor_dbfs": { "type": "array", "items": "number" }
+                    "band_floor_dbfs": {
+                      "type": "array",
+                      "items": "number"
+                    }
                   }
                 },
                 "hum": {
@@ -14116,7 +14197,10 @@
                     "fundamental_hz": "number",
                     "fundamental_prominence": "number",
                     "harmonics": "integer",
-                    "harmonic_dbfs": { "type": "array", "items": "number" }
+                    "harmonic_dbfs": {
+                      "type": "array",
+                      "items": "number"
+                    }
                   }
                 },
                 "reverb": {
@@ -14166,7 +14250,10 @@
                 "noise": {
                   "keys": {
                     "floor_dbfs": "number",
-                    "band_floor_dbfs": { "type": "array", "items": "number" }
+                    "band_floor_dbfs": {
+                      "type": "array",
+                      "items": "number"
+                    }
                   }
                 },
                 "hum": {
@@ -14174,7 +14261,10 @@
                     "fundamental_hz": "number",
                     "fundamental_prominence": "number",
                     "harmonics": "integer",
-                    "harmonic_dbfs": { "type": "array", "items": "number" }
+                    "harmonic_dbfs": {
+                      "type": "array",
+                      "items": "number"
+                    }
                   }
                 },
                 "reverb": {
@@ -15953,7 +16043,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -16008,7 +16098,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -16121,6 +16211,23 @@
             "{output}",
             "--mask-power",
             "0.5",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "hop_length_zero_refused",
+          "argv": [
+            "decompose-stems",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--hop-length",
+            "0",
             "--json"
           ],
           "exit": 3,
@@ -17667,7 +17774,9 @@
           "name": "output",
           "type": "path",
           "default": null,
-          "aliases": ["o"],
+          "aliases": [
+            "o"
+          ],
           "repeatable": false,
           "required": false,
           "domain": null
@@ -18339,7 +18448,11 @@
           },
           "harmony": {
             "voices": 0,
-            "steps": [2, 4, -3],
+            "steps": [
+              2,
+              4,
+              -3
+            ],
             "level": 0.7,
             "leadLevel": 1,
             "detuneCents": 6,

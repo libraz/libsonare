@@ -347,10 +347,10 @@ def _project_align_takes(args: argparse.Namespace) -> int:
         raise ValueError(
             f"--reference-source must be between 1 and 4294967295, got {reference_source}"
         )
-    if args.hop_length < 0:
-        raise ValueError(f"--hop-length must be >= 0, got {args.hop_length}")
-    if args.bins_per_octave < 0:
-        raise ValueError(f"--bins-per-octave must be >= 0, got {args.bins_per_octave}")
+    if args.hop_length is not None and args.hop_length <= 0:
+        raise ValueError(f"--hop-length must be > 0, got {args.hop_length}")
+    if args.bins_per_octave is not None and args.bins_per_octave <= 0:
+        raise ValueError(f"--bins-per-octave must be > 0, got {args.bins_per_octave}")
 
     document = _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES)
     project = cast(Any, _project_from_document(document)).project
@@ -403,8 +403,7 @@ def _project_align_takes(args: argparse.Namespace) -> int:
                 take_samples,
                 reference_rate,
                 take_sample_rate=take_rate,
-                hop_length=args.hop_length,
-                bins_per_octave=args.bins_per_octave,
+                **_given(args, "hop_length", "bins_per_octave"),
             )
             anchors, alignment = aligned_take.anchors, aligned_take.alignment
             next_warp_id += 1
@@ -893,26 +892,28 @@ def register_project_parsers(
         action="store_true",
         help="Read the file:// URIs the document's audio sources already carry",
     )
-    # 0 asks for the library value on both, so only a negative is refused here;
-    # the resolution's own grid is the core's to enforce.
+    # The C entry spells "library value" as 0, so an explicit 0 is refused here and an
+    # omitted flag passes nothing; the resolution's own grid is the core's to enforce.
     _cli_domain(
         palign.add_argument(
             "--hop-length",
             type=_c_int,
-            default=0,
-            help="Chroma hop in samples (0: the library value)",
+            default=None,
+            help="Chroma hop in samples (default: 512)",
         ),
         minimum=0,
+        exclusive_minimum=True,
         reject_exit="invalid_parameter",
     )
     _cli_domain(
         palign.add_argument(
             "--bins-per-octave",
             type=_c_int,
-            default=0,
-            help="Chroma bins per octave (0: the library value)",
+            default=None,
+            help="Chroma bins per octave (default: 12)",
         ),
         minimum=0,
+        exclusive_minimum=True,
         reject_exit="invalid_parameter",
     )
     pexport_smf = project_sub.add_parser("export-smf", parents=[project_common], help="Export SMF")

@@ -650,9 +650,12 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
 
 
 def _add_spectral_geometry(parser: argparse.ArgumentParser) -> None:
-    """Declare ``--n-fft`` and ``--hop-length`` for a spectral effect."""
+    """Declare ``--n-fft`` and ``--hop-length`` for a spectral effect.
+
+    The hop stays the CLI's own 512 on both front-ends; only the FFT size is left to the library.
+    """
     _cli_domain(
-        parser.add_argument("--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)"),
+        parser.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"),
         minimum=0,
         exclusive_minimum=True,
         reject_exit="invalid_parameter",
@@ -674,9 +677,12 @@ def register_effects_parsers(
     common = shared.common
     stdout_options = shared.stdout_options
     fft_options = shared.fft_options
-    fft_stdout_options = shared.fft_stdout_options
 
-    hpss_p = sub.add_parser("hpss", parents=[fft_options], help="Harmonic-percussive separation")
+    hpss_p = sub.add_parser("hpss", parents=[common], help="Harmonic-percussive separation")
+    # The hop stays the CLI's own 512 on both front-ends, so this command cannot
+    # inherit the shared geometry parent, which leaves the hop to the library.
+    hpss_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
+    hpss_p.add_argument("--hop-length", type=_c_int, default=512, help="Hop length (default: 512)")
     hpss_p.add_argument(
         "--kernel-harmonic",
         type=_c_int,
@@ -789,10 +795,22 @@ def register_effects_parsers(
     # alternate selector absent by default so the handler can distinguish the
     # default threshold mode from an explicit top-dB request.
     trim_silence_p.add_argument("--top-db", type=_finite_float, default=None)
-    trim_silence_p.add_argument("--n-fft", type=_c_int, default=2048)
-    trim_silence_p.add_argument("--hop-length", type=_c_int, default=512)
+    # The native core call takes both positionally, so the CLI owns these values on both front-ends.
+    trim_silence_p.add_argument(
+        "--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)"
+    )
+    trim_silence_p.add_argument(
+        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+    )
     split_silence_p = sub.add_parser(
-        "split-silence", parents=[fft_stdout_options], help="List non-silent intervals"
+        "split-silence", parents=[stdout_options], help="List non-silent intervals"
+    )
+    # The C entry has no default for either, so the CLI owns them.
+    split_silence_p.add_argument(
+        "--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)"
+    )
+    split_silence_p.add_argument(
+        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
     )
     split_silence_p.add_argument(
         "--top-db",

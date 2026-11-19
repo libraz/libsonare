@@ -58,8 +58,10 @@ int cmd_bpm(const CliArgs& args, const Audio& audio) {
 
 int cmd_key(const CliArgs& args, const Audio& audio) {
   KeyConfig config;
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  // The analyzer never reads the FFT size without --hpss, so a zero ran here while the C ABI the
+  // other surfaces call refuses it; the range read reports that same invalid-parameter class.
+  config.n_fft = args.get_int_in_range("n-fft", 1, std::numeric_limits<int>::max(), config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   config.use_hpss = args.has("hpss");
   config.loudness_weighted = args.has("loudness-weighted");
   config.high_pass_hz = args.get_float("high-pass-hz", config.high_pass_hz);
@@ -196,8 +198,9 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
   config.smoothing_window = args.get_float("smoothing-window", config.smoothing_window);
   config.threshold = args.get_float("threshold", config.threshold);
   config.use_triads_only = !args.has("with-seventh");
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  // CQT chroma never reads the FFT size, so a zero must be refused here as the C ABI refuses it.
+  config.n_fft = args.get_int_in_range("n-fft", 1, std::numeric_limits<int>::max(), config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
   config.use_beat_sync = !args.has("no-beat-sync");
   // The registry has already refused any value outside cqt, stft and nnls.
   if (args.has("chroma-method")) {
@@ -265,8 +268,8 @@ int cmd_sections(const CliArgs& args, const Audio& audio) {
   SectionConfig config;
   config.min_section_sec = args.get_float("min-duration-sec", config.min_section_sec);
   config.boundary_threshold = args.get_float("threshold", config.boundary_threshold);
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
 
   SectionAnalyzer analyzer(audio, config);
   const auto& sections = analyzer.sections();
@@ -320,9 +323,9 @@ int cmd_sections(const CliArgs& args, const Audio& audio) {
 
 int cmd_timbre(const CliArgs& args, const Audio& audio) {
   TimbreConfig config;
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
-  config.n_mels = args.n_mels;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
+  config.n_mels = args.get_int("n-mels", config.n_mels);
 
   TimbreAnalyzer analyzer(audio, config);
   const Timbre& t = analyzer.timbre();
@@ -366,7 +369,7 @@ int cmd_dynamics(const CliArgs& args, const Audio& audio) {
   // argument ran here and was rejected everywhere else. Rejecting through
   // get_int_in_range reports the invalid-parameter class the C ABI returns.
   config.hop_length =
-      args.get_int_in_range("hop-length", 1, std::numeric_limits<int>::max(), args.hop_length);
+      args.get_int_in_range("hop-length", 1, std::numeric_limits<int>::max(), config.hop_length);
 
   DynamicsAnalyzer analyzer(audio, config);
   const Dynamics& d = analyzer.dynamics();
@@ -402,8 +405,8 @@ int cmd_rhythm(const CliArgs& args, const Audio& audio) {
   config.start_bpm = args.get_float("start-bpm", config.start_bpm);
   config.bpm_min = args.get_float("bpm-min", config.bpm_min);
   config.bpm_max = args.get_float("bpm-max", config.bpm_max);
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
 
   RhythmAnalyzer analyzer(audio, config);
   const RhythmFeatures& r = analyzer.features();
@@ -510,8 +513,8 @@ int cmd_boundaries(const CliArgs& args, const Audio& audio) {
   config.reference_window = args.get_float("reference-window", config.reference_window);
   config.use_mfcc = !args.has("no-mfcc");
   config.use_chroma = !args.has("no-chroma");
-  config.n_fft = args.n_fft;
-  config.hop_length = args.hop_length;
+  config.n_fft = args.get_int("n-fft", config.n_fft);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
 
   BoundaryDetector detector(audio, config);
   const auto& bounds = detector.boundaries();

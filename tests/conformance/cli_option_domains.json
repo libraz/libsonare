@@ -835,7 +835,7 @@
       "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusive_minimum": false,
+      "exclusive_minimum": true,
       "maximum": null,
       "exclusive_maximum": false
     },
@@ -845,7 +845,7 @@
       "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusive_minimum": false,
+      "exclusive_minimum": true,
       "maximum": null,
       "exclusive_maximum": false
     },

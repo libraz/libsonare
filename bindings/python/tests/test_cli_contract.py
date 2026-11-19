@@ -311,7 +311,7 @@ def test_fft_option_manifest_reaches_each_consuming_handler() -> None:
         for option_name in option_names:
             cli_spelling = f"--{option_name.replace('_', '-')}"
             assert cli_spelling in help_result.stdout
-            assert f"args.{option_name}" in handler_source
+            assert f"args.{option_name}" in handler_source or f'"{option_name}"' in handler_source
 
 
 @pytest.mark.parametrize("command", ["chords", "timbre"])
