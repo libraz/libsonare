@@ -344,7 +344,7 @@ export interface MasteringProcessorParamMap {
     attackMs?: number;
     /** Unit: ms. Range: [0, inf). Default: 100. */
     releaseMs?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     makeupGainDb?: number;
     /** Unit: dB. Range: [0, inf). Default: 0. */
     kneeDb?: number;
@@ -431,7 +431,7 @@ export interface MasteringProcessorParamMap {
     releaseMs?: number;
     /** Unit: ratio. Range: [0, inf). Default: 0. */
     ratio?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     postGainDb?: number;
     /** Unit: ms. Range: [0, inf). Default: 1. */
     lookaheadMs?: number;
@@ -446,11 +446,11 @@ export interface MasteringProcessorParamMap {
     attackMs?: number;
     /** Unit: ms. Range: [0, inf). Default: 100. */
     releaseMs?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     makeupGainDb?: number;
     /** Range: [0, 1]. Default: 0.5. */
     mix?: number;
-    /** Unit: dBFS. Range: (-903.09, 770.636]. Default: 0. */
+    /** Unit: dBFS. Range: [-890, 770]. Default: 0. */
     outputCeilingDb?: number;
     /** Default: true. */
     linkedDetection?: boolean;
@@ -496,7 +496,7 @@ export interface MasteringProcessorParamMap {
     slowReleaseMs?: number;
     /** Range: [0, inf). Default: 1. */
     sensitivity?: number;
-    /** Unit: dB. Range: [0, 770.636]. Default: 12. */
+    /** Unit: dB. Range: [0, 770]. Default: 12. */
     maxGainDb?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     gainSmoothingMs?: number;
@@ -513,7 +513,7 @@ export interface MasteringProcessorParamMap {
     attackMs?: number;
     /** Unit: ms. Range: [0, inf). Default: 100. */
     releaseMs?: number;
-    /** Unit: dB. Range: [0, 770.636]. Default: 12. */
+    /** Unit: dB. Range: [0, 770]. Default: 12. */
     rangeDb?: number;
   };
   /** Parameters of the `dynamics.upwardExpander` processor. */
@@ -526,14 +526,14 @@ export interface MasteringProcessorParamMap {
     attackMs?: number;
     /** Unit: ms. Range: [0, inf). Default: 80. */
     releaseMs?: number;
-    /** Unit: dB. Range: [0, 770.636]. Default: 12. */
+    /** Unit: dB. Range: [0, 770]. Default: 12. */
     rangeDb?: number;
   };
   /** Parameters of the `dynamics.vocalRider` processor. */
   'dynamics.vocalRider': {
     /** Unit: dB. Default: -18. */
     targetDb?: number;
-    /** Unit: dB. Range: [0, 770.636]. Default: 6. */
+    /** Unit: dB. Range: [0, 770]. Default: 6. */
     maxBoostDb?: number;
     /** Unit: dB. Range: [0, inf). Default: 6. */
     maxCutDb?: number;
@@ -541,7 +541,7 @@ export interface MasteringProcessorParamMap {
     attackMs?: number;
     /** Unit: ms. Range: [0, inf). Default: 500. */
     releaseMs?: number;
-    /** Unit: dB. Range: (-inf, 764.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 764]. Default: 0. */
     outputGainDb?: number;
     /** Unit: ms. Range: [0, inf). Default: 100. */
     gainSmoothingMs?: number;
@@ -907,9 +907,9 @@ export interface MasteringProcessorParamMap {
     drumFastHz?: number;
     /** Range: [-1, 1]. Default: -1. */
     speed?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     hornLevelDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     drumLevelDb?: number;
     /** Default: 'linear'. */
     interpolation?: 'linear' | 'lagrange3';
@@ -1399,145 +1399,145 @@ export interface MasteringProcessorParamMap {
   'eq.equalizer': {
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band0.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band0.gainDb'?: number;
     /** Default: 0.70710677. */
     'band0.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band1.gainDb'?: number;
     /** Default: 0.70710677. */
     'band1.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band2.gainDb'?: number;
     /** Default: 0.70710677. */
     'band2.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band3.gainDb'?: number;
     /** Default: 0.70710677. */
     'band3.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band4.gainDb'?: number;
     /** Default: 0.70710677. */
     'band4.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band5.gainDb'?: number;
     /** Default: 0.70710677. */
     'band5.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band6.gainDb'?: number;
     /** Default: 0.70710677. */
     'band6.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band7.gainDb'?: number;
     /** Default: 0.70710677. */
     'band7.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band8.gainDb'?: number;
     /** Default: 0.70710677. */
     'band8.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band9.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band9.gainDb'?: number;
     /** Default: 0.70710677. */
     'band9.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band10.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band10.gainDb'?: number;
     /** Default: 0.70710677. */
     'band10.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band11.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band11.gainDb'?: number;
     /** Default: 0.70710677. */
     'band11.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band12.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band12.gainDb'?: number;
     /** Default: 0.70710677. */
     'band12.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band13.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band13.gainDb'?: number;
     /** Default: 0.70710677. */
     'band13.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band14.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band14.gainDb'?: number;
     /** Default: 0.70710677. */
     'band14.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band15.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band15.gainDb'?: number;
     /** Default: 0.70710677. */
     'band15.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band16.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band16.gainDb'?: number;
     /** Default: 0.70710677. */
     'band16.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band17.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band17.gainDb'?: number;
     /** Default: 0.70710677. */
     'band17.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band18.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band18.gainDb'?: number;
     /** Default: 0.70710677. */
     'band18.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band19.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band19.gainDb'?: number;
     /** Default: 0.70710677. */
     'band19.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band20.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band20.gainDb'?: number;
     /** Default: 0.70710677. */
     'band20.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band21.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band21.gainDb'?: number;
     /** Default: 0.70710677. */
     'band21.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band22.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band22.gainDb'?: number;
     /** Default: 0.70710677. */
     'band22.q'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band23.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band23.gainDb'?: number;
     /** Default: 0.70710677. */
     'band23.q'?: number;
@@ -2749,7 +2749,7 @@ export interface MasteringProcessorParamMap {
     gainScale?: number;
     /** Unit: samples. Range: [1, inf). Default: 513. */
     kernelSize?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     outputGainDb?: number;
     /** Range: [-1, 1]. Default: 0. */
     outputPan?: number;
@@ -2764,67 +2764,67 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `eq.graphic` processor. */
   'eq.graphic': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band0GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band1GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band2GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band3GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band4GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band5GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band6GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band7GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band8GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band9GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band10GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band11GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band12GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band13GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band14GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band15GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band16GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band17GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band18GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band19GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band20GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band21GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band22GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band23GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band24GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band25GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band26GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band27GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band28GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band29GainDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     band30GainDb?: number;
     /** Range: [0, inf). Default: 0. */
     q?: number;
@@ -9412,7 +9412,7 @@ export interface MasteringProcessorParamMap {
   'maximizer.loudnessOptimize': Record<string, never>;
   /** Parameters of the `maximizer.maximizer` processor. */
   'maximizer.maximizer': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     inputGainDb?: number;
     /** Unit: dBFS. Range: (-inf, 0]. Default: -1. */
     ceilingDb?: number;
@@ -9423,7 +9423,7 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `maximizer.softKneeMax` processor. */
   'maximizer.softKneeMax': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     inputGainDb?: number;
     /** Unit: dBFS. Range: (-inf, 0]. Default: -1. */
     ceilingDb?: number;
@@ -9455,7 +9455,7 @@ export interface MasteringProcessorParamMap {
     'band0.attackMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 100. */
     'band0.releaseMs'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band0.makeupGainDb'?: number;
     /** Unit: dB. Default: -18. */
     'band1.thresholdDb'?: number;
@@ -9465,7 +9465,7 @@ export interface MasteringProcessorParamMap {
     'band1.attackMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 100. */
     'band1.releaseMs'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band1.makeupGainDb'?: number;
     /** Unit: dB. Default: -18. */
     'band2.thresholdDb'?: number;
@@ -9475,7 +9475,7 @@ export interface MasteringProcessorParamMap {
     'band2.attackMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 100. */
     'band2.releaseMs'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band2.makeupGainDb'?: number;
     /** Unit: dB. Range: [0, inf). Default: 0. */
     'band0.kneeDb'?: number;
@@ -9487,7 +9487,7 @@ export interface MasteringProcessorParamMap {
     'band3.attackMs'?: number;
     /** Unit: dB. Range: [0, inf). Default: 0. */
     'band3.kneeDb'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band3.makeupGainDb'?: number;
     /** Unit: ratio. Range: [1, inf). Default: 2. */
     'band3.ratio'?: number;
@@ -9499,7 +9499,7 @@ export interface MasteringProcessorParamMap {
     'band4.attackMs'?: number;
     /** Unit: dB. Range: [0, inf). Default: 0. */
     'band4.kneeDb'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band4.makeupGainDb'?: number;
     /** Unit: ratio. Range: [1, inf). Default: 2. */
     'band4.ratio'?: number;
@@ -9511,7 +9511,7 @@ export interface MasteringProcessorParamMap {
     'band5.attackMs'?: number;
     /** Unit: dB. Range: [0, inf). Default: 0. */
     'band5.kneeDb'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band5.makeupGainDb'?: number;
     /** Unit: ratio. Range: [1, inf). Default: 2. */
     'band5.ratio'?: number;
@@ -9523,7 +9523,7 @@ export interface MasteringProcessorParamMap {
     'band6.attackMs'?: number;
     /** Unit: dB. Range: [0, inf). Default: 0. */
     'band6.kneeDb'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band6.makeupGainDb'?: number;
     /** Unit: ratio. Range: [1, inf). Default: 2. */
     'band6.ratio'?: number;
@@ -9535,7 +9535,7 @@ export interface MasteringProcessorParamMap {
     'band7.attackMs'?: number;
     /** Unit: dB. Range: [0, inf). Default: 0. */
     'band7.kneeDb'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band7.makeupGainDb'?: number;
     /** Unit: ratio. Range: [1, inf). Default: 2. */
     'band7.ratio'?: number;
@@ -9547,7 +9547,7 @@ export interface MasteringProcessorParamMap {
     'band8.attackMs'?: number;
     /** Unit: dB. Range: [0, inf). Default: 0. */
     'band8.kneeDb'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band8.makeupGainDb'?: number;
     /** Unit: ratio. Range: [1, inf). Default: 2. */
     'band8.ratio'?: number;
@@ -12344,23 +12344,23 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `multiband.saturation` processor. */
   'multiband.saturation': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band0.driveDb'?: number;
     /** Range: [0, 1]. Default: 1. */
     'band0.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band0.outputGainDb'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band1.driveDb'?: number;
     /** Range: [0, 1]. Default: 1. */
     'band1.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band1.outputGainDb'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band2.driveDb'?: number;
     /** Range: [0, 1]. Default: 1. */
     'band2.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band2.outputGainDb'?: number;
     /** Default: true. */
     'band0.enabled'?: boolean;
@@ -12374,63 +12374,63 @@ export interface MasteringProcessorParamMap {
     'band2.enabled'?: boolean;
     /** Default: 'softClip'. */
     'band2.type'?: 'softClip' | 'tape' | 'tube' | 'exciter';
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band3.driveDb'?: number;
     /** Default: true. */
     'band3.enabled'?: boolean;
     /** Range: [0, 1]. Default: 1. */
     'band3.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band3.outputGainDb'?: number;
     /** Default: 'softClip'. */
     'band3.type'?: 'softClip' | 'tape' | 'tube' | 'exciter';
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band4.driveDb'?: number;
     /** Default: true. */
     'band4.enabled'?: boolean;
     /** Range: [0, 1]. Default: 1. */
     'band4.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band4.outputGainDb'?: number;
     /** Default: 'softClip'. */
     'band4.type'?: 'softClip' | 'tape' | 'tube' | 'exciter';
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band5.driveDb'?: number;
     /** Default: true. */
     'band5.enabled'?: boolean;
     /** Range: [0, 1]. Default: 1. */
     'band5.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band5.outputGainDb'?: number;
     /** Default: 'softClip'. */
     'band5.type'?: 'softClip' | 'tape' | 'tube' | 'exciter';
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band6.driveDb'?: number;
     /** Default: true. */
     'band6.enabled'?: boolean;
     /** Range: [0, 1]. Default: 1. */
     'band6.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band6.outputGainDb'?: number;
     /** Default: 'softClip'. */
     'band6.type'?: 'softClip' | 'tape' | 'tube' | 'exciter';
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band7.driveDb'?: number;
     /** Default: true. */
     'band7.enabled'?: boolean;
     /** Range: [0, 1]. Default: 1. */
     'band7.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band7.outputGainDb'?: number;
     /** Default: 'softClip'. */
     'band7.type'?: 'softClip' | 'tape' | 'tube' | 'exciter';
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band8.driveDb'?: number;
     /** Default: true. */
     'band8.enabled'?: boolean;
     /** Range: [0, 1]. Default: 1. */
     'band8.mix'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     'band8.outputGainDb'?: number;
     /** Default: 'softClip'. */
     'band8.type'?: 'softClip' | 'tape' | 'tube' | 'exciter';
@@ -12472,7 +12472,7 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `repair.declip` processor. */
   'repair.declip': {
-    /** Unit: dBFS. Range: (-903.09, 5.17719e-07). Default: -0.17547831. */
+    /** Unit: dBFS. Range: [-890, 0]. Default: -0.17547831. */
     clipThresholdDb?: number;
     /** Unit: count. Range: [1, 8]. Default: 2. */
     iterations?: number;
@@ -12588,7 +12588,7 @@ export interface MasteringProcessorParamMap {
     trebleDb?: number;
     /** Unit: dB. Default: 0. */
     presenceDb?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     levelDb?: number;
     /** Default: 0. */
     power?: number;
@@ -12610,7 +12610,7 @@ export interface MasteringProcessorParamMap {
     crossover?: number;
     /** Default: 0. */
     biasShift?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     inputDb?: number;
     /** Default: true. */
     cab?: boolean;
@@ -12714,14 +12714,14 @@ export interface MasteringProcessorParamMap {
     gainDb?: number;
     /** Unit: Hz. Range: [475, 20000]. Default: 4000. */
     toneHz?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     levelDb?: number;
   };
   /** Parameters of the `saturation.exciter` processor. */
   'saturation.exciter': {
     /** Unit: Hz. Range: (0, inf). Default: 3000. */
     frequencyHz?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     driveDb?: number;
     /** Range: [0, inf). Default: 0.25. */
     amount?: number;
@@ -12743,7 +12743,7 @@ export interface MasteringProcessorParamMap {
   'saturation.multibandExciter': {
     /** Unit: Hz. Range: (0, inf). Default: 3000. */
     'band0.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band0.driveDb'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band0.amount'?: number;
@@ -12753,7 +12753,7 @@ export interface MasteringProcessorParamMap {
     'band0.evenOddMix'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 3000. */
     'band1.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band1.driveDb'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band1.amount'?: number;
@@ -12763,7 +12763,7 @@ export interface MasteringProcessorParamMap {
     'band1.evenOddMix'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 3000. */
     'band2.frequencyHz'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band2.driveDb'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band2.amount'?: number;
@@ -12773,7 +12773,7 @@ export interface MasteringProcessorParamMap {
     'band2.evenOddMix'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band3.amount'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band3.driveDb'?: number;
     /** Range: [0, 1]. Default: 0.5. */
     'band3.evenOddMix'?: number;
@@ -12783,7 +12783,7 @@ export interface MasteringProcessorParamMap {
     'band3.q'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band4.amount'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band4.driveDb'?: number;
     /** Range: [0, 1]. Default: 0.5. */
     'band4.evenOddMix'?: number;
@@ -12793,7 +12793,7 @@ export interface MasteringProcessorParamMap {
     'band4.q'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band5.amount'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band5.driveDb'?: number;
     /** Range: [0, 1]. Default: 0.5. */
     'band5.evenOddMix'?: number;
@@ -12803,7 +12803,7 @@ export interface MasteringProcessorParamMap {
     'band5.q'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band6.amount'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band6.driveDb'?: number;
     /** Range: [0, 1]. Default: 0.5. */
     'band6.evenOddMix'?: number;
@@ -12813,7 +12813,7 @@ export interface MasteringProcessorParamMap {
     'band6.q'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band7.amount'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band7.driveDb'?: number;
     /** Range: [0, 1]. Default: 0.5. */
     'band7.evenOddMix'?: number;
@@ -12823,7 +12823,7 @@ export interface MasteringProcessorParamMap {
     'band7.q'?: number;
     /** Range: [0, inf). Default: 0.25. */
     'band8.amount'?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     'band8.driveDb'?: number;
     /** Range: [0, 1]. Default: 0.5. */
     'band8.evenOddMix'?: number;
@@ -12860,12 +12860,12 @@ export interface MasteringProcessorParamMap {
     gainDb?: number;
     /** Unit: Hz. Range: [500, 8000]. Default: 3000. */
     toneHz?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     levelDb?: number;
   };
   /** Parameters of the `saturation.softClipper` processor. */
   'saturation.softClipper': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     driveDb?: number;
     /** Range: [0, 1]. Default: 1. */
     mix?: number;
@@ -12876,17 +12876,17 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `saturation.tape` processor. */
   'saturation.tape': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 3. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 3. */
     driveDb?: number;
     /** Range: [0, 1]. Default: 0.5. */
     saturation?: number;
     /** Range: [0, 1]. Default: 0.2. */
     hysteresis?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     outputGainDb?: number;
     /** Unit: in/s. Range: (0, inf). Default: 15. */
     speedIps?: number;
-    /** Unit: dB. Range: [0, 770.636]. Default: 1.5. */
+    /** Unit: dB. Range: [0, 770]. Default: 1.5. */
     headBumpDb?: number;
     /** Default: 0. */
     bias?: number;
@@ -12897,7 +12897,7 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `saturation.transformer` processor. */
   'saturation.transformer': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 4. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 4. */
     driveDb?: number;
     /** Range: [-1, 1]. Default: 0.1. */
     asymmetry?: number;
@@ -12906,7 +12906,7 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `saturation.tube` processor. */
   'saturation.tube': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 6. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 6. */
     driveDb?: number;
     /** Default: 0.15. */
     bias?: number;
@@ -12921,11 +12921,11 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `saturation.waveshaper` processor. */
   'saturation.waveshaper': {
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     driveDb?: number;
     /** Range: [0, 1]. Default: 1. */
     mix?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     outputGainDb?: number;
     /** Default: 'none'. */
     aliasing?: 'none' | 'adaa1' | 'oversample4x';
@@ -13025,7 +13025,7 @@ export interface MasteringProcessorParamMap {
   'stereo.imager': {
     /** Range: [0, 2]. Default: 1. */
     width?: number;
-    /** Unit: dB. Range: (-inf, 770.636]. Default: 0. */
+    /** Unit: dB. Range: (-inf, 770]. Default: 0. */
     outputGainDb?: number;
     /** Range: [0, 1]. Default: 0. */
     decorrelationAmount?: number;
