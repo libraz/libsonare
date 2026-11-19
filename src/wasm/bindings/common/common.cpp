@@ -724,6 +724,16 @@ std::optional<float> optionalNumber(const val& v, const char* key) {
   return checkedFloatFromVal(v, key);
 }
 
+std::optional<float> optionalDomainNumber(const val& v, const char* key) {
+  if (v.isUndefined() || v.isNull()) return std::nullopt;
+  const double number = numberFromVal(v, key);
+  if (std::isfinite(number) &&
+      std::fabs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
+    throw WasmRangeError(std::string(key) + " must be finite and in [-3.4028235e38, 3.4028235e38]");
+  }
+  return static_cast<float>(number);
+}
+
 std::optional<bool> optionalBool(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
   if (!v.isTrue() && !v.isFalse()) {

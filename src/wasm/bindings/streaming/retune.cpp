@@ -28,11 +28,11 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
   }
   refuseUnknownKeys(config, {"pitchSemitones", "mix", "grainSizeSamples"});
   if (const auto semitones =
-          optionalNumber(objectProperty(config, "pitchSemitones"), "pitchSemitones");
+          optionalDomainNumber(objectProperty(config, "pitchSemitones"), "pitchSemitones");
       semitones) {
     result.semitones = *semitones;
   }
-  if (const auto mix = optionalNumber(objectProperty(config, "mix"), "mix"); mix) {
+  if (const auto mix = optionalDomainNumber(objectProperty(config, "mix"), "mix"); mix) {
     result.mix = *mix;
   }
   if (const auto grain =

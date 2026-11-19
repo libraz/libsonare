@@ -543,6 +543,12 @@ std::string stringFromVal(const val& value, const char* key);
 /// @throws WasmArgumentError naming @p key when @p v is not a
 ///         number, or is one the 32-bit float cannot hold.
 std::optional<float> optionalNumber(const val& v, const char* key);
+/// @brief Optional number reader for a field whose consumer states the domain: type-checked only.
+/// @details A non-finite value travels on, so the consumer's "<key> must be finite and in
+///          [lo, hi]" is the refusal for NaN and infinity, as on the Node addon's float reader.
+/// @throws WasmArgumentError naming @p key when @p v is present and not a number, or is a
+///         finite number the 32-bit float cannot hold.
+std::optional<float> optionalDomainNumber(const val& v, const char* key);
 /// @brief Boolean sibling of optionalNumber.
 /// @throws WasmArgumentError naming @p key when @p v is present
 ///         and not a JS boolean.
