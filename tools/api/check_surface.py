@@ -1176,6 +1176,7 @@ _CATALOG_UNIT_WORDS = {
     "dBPerOct": "db_oct",
     "m": "m",
     "deg": "deg",
+    "bpm": "bpm",
 }
 
 

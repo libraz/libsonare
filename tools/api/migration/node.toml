@@ -16278,3 +16278,13 @@ old = "SurroundPan.elevation"
 removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
 domain = "mastering"
 rule = "individual"
+
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.deesser.bandpassQ"
+to = "MasteringChainConfig.dynamics.deesser.bandPassQ"
+changed = "renamed to bandPassQ; the chain document key is dynamics.deesser.bandPassQ"
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/node/tests/insert-key-spellings.test.ts::reads the de-esser band Q in a chain document"

@@ -339,7 +339,7 @@ export interface MasteringProcessorParamMap {
     /** Unit: dB. Range: [0, inf). Default: 12. */
     rangeDb?: number;
     /** Range: (0, inf). Default: 1.5. */
-    bandpassQ?: number;
+    bandPassQ?: number;
   };
   /** Parameters of the `dynamics.duckingProcessor` processor. */
   'dynamics.duckingProcessor': {
@@ -548,7 +548,7 @@ export interface MasteringProcessorParamMap {
     /** Range: [0, 5]. Default: 0. */
     materialPreset?: number;
     /** Unit: s. Range: [0, 600]. Default: 0. */
-    maxSeconds?: number;
+    maxSec?: number;
     /** Unit: ms. Range: [0, 10000]. Default: 0. */
     mixingTimeMs?: number;
     /** Default: true. */
@@ -803,17 +803,17 @@ export interface MasteringProcessorParamMap {
   /** Parameters of the `effects.modulation.pitchShifter` processor. */
   'effects.modulation.pitchShifter': {
     /** Unit: semitones. Range: [-24, 24]. Default: 0. */
-    semitones?: number;
+    pitchSemitones?: number;
     /** Range: [0, 1]. Default: 1. */
     dryWet?: number;
     /** Unit: cents. Range: [-100, 100]. Default: 0. */
-    cents?: number;
+    pitchCents?: number;
     /** Range: [-1, 1]. Default: 0. */
     pan?: number;
     /** Unit: semitones. Range: [-24, 24]. Default: 0. */
-    semitones2?: number;
+    pitchSemitones2?: number;
     /** Unit: cents. Range: [-100, 100]. Default: 0. */
-    cents2?: number;
+    pitchCents2?: number;
     /** Range: [0, 1]. Default: 0. */
     level2?: number;
     /** Range: [-1, 1]. Default: 0. */
@@ -881,9 +881,9 @@ export interface MasteringProcessorParamMap {
     /** Range: [0, 1]. Default: 1. */
     stereoSpread?: number;
     /** Unit: s. Range: [0, inf). Default: 0. */
-    accelTauS?: number;
+    accelTauSec?: number;
     /** Unit: s. Range: [0, inf). Default: 0. */
-    decelTauS?: number;
+    decelTauSec?: number;
     /** Unit: Hz. Range: [0, inf). Default: 0. */
     undershootHz?: number;
     /** Unit: Hz. Range: [0, inf). Default: 0. */
@@ -986,7 +986,7 @@ export interface MasteringProcessorParamMap {
     /** Unit: m. Range: [0, inf). Default: 1.7. */
     listenerZ?: number;
     /** Unit: s. Range: [0, 600]. Default: 0. */
-    maxSeconds?: number;
+    maxSec?: number;
     /** Unit: m. Range: [0, 2.5]. Default: 0. */
     receiverSpacingM?: number;
     /** Range: [0, inf). Default: 1. */
@@ -1005,7 +1005,7 @@ export interface MasteringProcessorParamMap {
     /** Range: [0, 1]. Default: 0.45. */
     decay?: number;
     /** Unit: s. Range: [0.05, 12]. Default: 1.5. */
-    reverbTimeS?: number;
+    reverbTimeSec?: number;
     /** Range: [0, 1]. Default: 0.3. */
     dryWet?: number;
     /** Unit: Hz. Range: [1000, 3000]. Default: 2000. */
@@ -12534,8 +12534,8 @@ export interface MasteringProcessorParamMap {
     mode?: 'peak' | 'lufsGated';
     /** Unit: samples. Range: [0, 960000]. Default: 0. */
     paddingSamples?: number;
-    /** Range: [0, 1]. Default: 0.001. */
-    threshold?: number;
+    /** Unit: dBFS. Range: [-890, 0]. Default: -60. */
+    thresholdDb?: number;
     /** Unit: ms. Range: (0, 10000]. Default: 400. */
     windowMs?: number;
   };
@@ -13036,7 +13036,7 @@ export interface MasteringProcessorParamMap {
     /** Range: [0, 1]. Default: 1. */
     wetMix?: number;
     /** Unit: semitones. Range: [-24, 24]. Default: 0. */
-    retuneSemitones?: number;
+    retunePitchSemitones?: number;
     /** Range: [0, 1]. Default: 1. */
     retuneMix?: number;
     /** Unit: ratio. Range: [0.55, 1.65]. Default: 1. */
@@ -13050,7 +13050,7 @@ export interface MasteringProcessorParamMap {
     /** Range: [-1, 1]. Default: 0. */
     formantNasal?: number;
     /** Unit: Hz. Range: [20, 300]. Default: 80. */
-    eqHighpassHz?: number;
+    eqHighPassHz?: number;
     /** Unit: dB. Range: [-12, 12]. Default: 0. */
     eqBodyDb?: number;
     /** Unit: dB. Range: [-12, 12]. Default: 1. */
@@ -13149,7 +13149,7 @@ export interface MasteringProcessorParamMap {
     reverbVariationDelayMs?: number;
     /** Range: [0, 0.95]. Default: 0.35. */
     reverbVariationFeedback?: number;
-    /** Range: [30, 300]. Default: 120. */
+    /** Unit: bpm. Range: [30, 300]. Default: 120. */
     reverbVariationTempoBpm?: number;
     /** Default: 'eighth'. */
     reverbVariationDivision?: 'quarter' | 'eighth' | 'dottedEighth' | 'sixteenth';
@@ -13160,7 +13160,7 @@ export interface MasteringProcessorParamMap {
     /** Default: true. */
     limiterEnableIspLimiter?: boolean;
     /** Unit: samples. Range: [0, 8192]. Default: 0. */
-    retuneGrainSize?: number;
+    retuneGrainSizeSamples?: number;
     /** Default: 1. */
     reverbSeed?: number;
     /** Unit: count. Range: [8, 32]. Default: 20. */
@@ -13816,7 +13816,7 @@ export interface MasteringChainConfig {
       /** Largest gain reduction in dB the de-esser may apply (0 or more). Default 12. */
       rangeDb?: number;
       /** Q of the sibilance detection band; higher is narrower. Default 1.5. */
-      bandpassQ?: number;
+      bandPassQ?: number;
     };
     /** Attack and sustain shaping driven by fast and slow envelopes. */
     transientShaper?: {
