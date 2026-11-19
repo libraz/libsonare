@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   Audio,
+  griffinLim,
   init,
   masterAudio,
   masterAudioStereo,
@@ -28,9 +29,25 @@ type MfccCase = { id: string; n_mels: number; cause?: Cause; message?: string };
 type MfccRoute = { input: MfccInput; accepted: MfccCase[]; refused: MfccCase[] };
 type MelInput = { n_mels: number; n_frames: number; fill: number };
 type MelCase = { id: string; n_iter: number; cause?: Cause; message?: string };
-type MelRoute = { input: MelInput; accepted: MelCase[]; refused: MelCase[] };
+type InverseHopCase = {
+  id: string;
+  n_fft: number;
+  hop_length: number;
+  derived_hop_length?: number;
+  cause?: Cause;
+  message?: string;
+};
+type InverseHops = { absent_hop: InverseHopCase[]; negative_hop: InverseHopCase[] };
+type MelRoute = InverseHops & { input: MelInput; accepted: MelCase[]; refused: MelCase[] };
+type GriffinLimRoute = InverseHops & {
+  input: { sample_rate: number; n_frames: number; fill: number };
+};
 type MfccAudioInput = { n_mfcc: number; n_frames: number; n_mels: number; fill: number };
-type MfccAudioRoute = { input: MfccAudioInput; accepted: MelCase[]; refused: MelCase[] };
+type MfccAudioRoute = InverseHops & {
+  input: MfccAudioInput;
+  accepted: MelCase[];
+  refused: MelCase[];
+};
 type StretchInput = {
   sample_rate: number;
   length: number;
@@ -120,6 +137,7 @@ const corpus = JSON.parse(
   mfcc_to_mel: MfccRoute;
   mel_to_audio: MelRoute;
   mfcc_to_audio: MfccAudioRoute;
+  griffin_lim: GriffinLimRoute;
   native_spectral_stretch: StretchRoute;
   streaming_mastering_chain_prepare: RateBlockRoute;
   equalizer_prepare: EqualizerRoute;
@@ -148,6 +166,7 @@ type RawInverse = {
   mfccToAudio(...args: unknown[]): Float32Array;
   resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array;
   melToAudio(...args: unknown[]): Float32Array;
+  griffinLim(...args: unknown[]): Float32Array;
   timeStretchEx(...args: unknown[]): Float32Array;
   pitchShiftEx(...args: unknown[]): Float32Array;
   createStreamingMasteringChain(configJson: string | null): {
@@ -293,6 +312,136 @@ describe('mfcc_to_audio refusals come from the core', () => {
       expect(expectRefusalOf(call, kind).message).toMatch(text);
     }
   });
+});
+
+describe('an absent inverse-transform hop is derived from nFft by the core', () => {
+  const mel = corpus.mel_to_audio;
+  const melData = new Float32Array(mel.input.n_mels * mel.input.n_frames).fill(mel.input.fill);
+  const power = { data: melData, rows: mel.input.n_mels, cols: mel.input.n_frames };
+  const mfcc = corpus.mfcc_to_audio;
+  const mfccData = new Float32Array(mfcc.input.n_mfcc * mfcc.input.n_frames).fill(mfcc.input.fill);
+  const coefficients = { data: mfccData, rows: mfcc.input.n_mfcc, cols: mfcc.input.n_frames };
+  const gl = corpus.griffin_lim;
+  const magnitude = (nFft: number) => {
+    const rows = nFft / 2 + 1;
+    const data = new Float32Array(rows * gl.input.n_frames).fill(gl.input.fill);
+    return { data, rows, cols: gl.input.n_frames };
+  };
+  const hop = (hopLength?: number) => (hopLength === undefined ? {} : { hopLength });
+  const N_ITER = 2;
+  const raw = () => getSonareModule() as unknown as RawInverse;
+
+  type Route = {
+    cases: InverseHops;
+    facade: (nFft: number, hopLength?: number) => Float32Array;
+    native: (nFft: number, hopLength: number) => Float32Array;
+  };
+  const routes: Array<[string, Route]> = [
+    [
+      'melToAudio',
+      {
+        cases: mel,
+        facade: (nFft, hopLength) => melToAudio({ power, nFft, nIter: N_ITER, ...hop(hopLength) }),
+        native: (nFft, hopLength) =>
+          raw().melToAudio(
+            melData,
+            mel.input.n_mels,
+            mel.input.n_frames,
+            22050,
+            nFft,
+            hopLength,
+            0,
+            0,
+            N_ITER,
+            false,
+          ),
+      },
+    ],
+    [
+      'mfccToAudio',
+      {
+        cases: mfcc,
+        facade: (nFft, hopLength) =>
+          mfccToAudio({
+            coefficients,
+            nMels: mfcc.input.n_mels,
+            nFft,
+            nIter: N_ITER,
+            ...hop(hopLength),
+          }),
+        native: (nFft, hopLength) =>
+          raw().mfccToAudio(
+            mfccData,
+            mfcc.input.n_mfcc,
+            mfcc.input.n_frames,
+            mfcc.input.n_mels,
+            22050,
+            nFft,
+            hopLength,
+            0,
+            0,
+            N_ITER,
+            false,
+            0,
+          ),
+      },
+    ],
+    [
+      'griffinLim',
+      {
+        cases: gl,
+        facade: (nFft, hopLength) =>
+          griffinLim({
+            magnitude: magnitude(nFft),
+            sampleRate: gl.input.sample_rate,
+            nFft,
+            nIter: N_ITER,
+            ...hop(hopLength),
+          }),
+        native: (nFft, hopLength) => {
+          const m = magnitude(nFft);
+          return raw().griffinLim(
+            m.data,
+            m.rows,
+            m.cols,
+            gl.input.sample_rate,
+            nFft,
+            hopLength,
+            N_ITER,
+            0.99,
+          );
+        },
+      },
+    ],
+  ];
+
+  for (const [name, route] of routes) {
+    it.each(route.cases.absent_hop)(
+      `${name} $id: an omitted hop runs as the derived one and an explicit 0 is refused`,
+      ({ n_fft, hop_length, derived_hop_length }) => {
+        const derived = derived_hop_length as number;
+        expect(route.facade(n_fft)).toEqual(route.facade(n_fft, derived));
+        // The native entry takes a 0 hop as the derived one.
+        expect(route.native(n_fft, hop_length)).toEqual(route.native(n_fft, derived));
+        expect(expectRefusalOf(() => route.facade(n_fft, hop_length), RangeError).message).toMatch(
+          /hopLength/,
+        );
+      },
+    );
+
+    it.each(route.cases.negative_hop)(
+      `${name} $id is refused`,
+      ({ n_fft, hop_length, cause, message }) => {
+        const kind = errorClassFor[cause as Cause];
+        expect(expectRefusalOf(() => route.facade(n_fft, hop_length), kind).message).toMatch(
+          /hopLength/,
+        );
+        expect(expectRefusalOf(() => route.native(n_fft, hop_length), kind).message).toMatch(
+          new RegExp(message as string),
+        );
+      },
+    );
+  }
 });
 
 describe('native spectral stretch geometry refusals come from the core', () => {
