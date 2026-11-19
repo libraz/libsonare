@@ -16,8 +16,9 @@ A return's class is its disjuncts' set; more than one is ``mixed``. Its text sta
 <count> is not 0``, no ``<fn>: `` prefix), ``text`` (any other message set on that path),
 ``helper`` (the condition calls a C-ABI helper that sets the message itself) or ``none``.
 
-The counts in ``c_abi_bare_refusals.json`` are a line: a count above it fails, and one below it
-fails until ``--write`` lowers it in the same change. ``--table <path>`` writes the per-file work
+The counts in ``c_abi_bare_refusals.json`` are a line: a count above it fails. While
+``CEILING_ONLY`` holds, a count below it passes and is reported, so parallel fixes do not each
+rewrite the line; otherwise it fails until ``--write`` lowers it in the same change. ``--table <path>`` writes the per-file work
 order. A scan that reads no return fails, so a moved tree cannot pass as clean.
 """
 
@@ -40,6 +41,8 @@ TEXT_STATES = ("conforming", "text", "helper", "none")
 # The ratcheted lines: refusals with no message, null refusals in a non-ruled form, guards the
 # heuristics cannot place.
 RATCHET_KEYS = ("no_text", "null_nonconforming", "unclassified")
+# Ceiling-only while several changes lower the counts at once; the line is rewritten per batch.
+CEILING_ONLY = True
 
 MESSAGE_CALL = re.compile(r"\b(set_last_error(?:_static)?|refuse\w*|\w+_or_refuse)\s*\(")
 CONFORMING_NULL = re.compile(
@@ -424,14 +427,16 @@ def table(result: Scan) -> str:
     return "\n".join(lines) + "\n"
 
 
-def evaluate(found: dict[str, int], baseline: dict[str, int]) -> list[str]:
+def evaluate(
+    found: dict[str, int], baseline: dict[str, int], ceiling_only: bool = CEILING_ONLY
+) -> list[str]:
     errors = []
     for key in RATCHET_KEYS:
         if key not in baseline:
             errors.append(f"{key}: no recorded line; run with --write")
         elif found[key] > baseline[key]:
             errors.append(f"{key}: {found[key]} is above the recorded line {baseline[key]}")
-        elif found[key] < baseline[key]:
+        elif found[key] < baseline[key] and not ceiling_only:
             errors.append(
                 f"{key}: {found[key]} is below the recorded line {baseline[key]}; lower it "
                 f"with --write in the same change"
@@ -464,6 +469,12 @@ def main(argv: list[str]) -> int:
         return 0
     baseline = json.loads(BASELINE.read_text(encoding="utf-8")) if BASELINE.exists() else {}
     errors = evaluate(found, baseline)
+    below = [k for k in RATCHET_KEYS if k in baseline and found[k] < baseline[k]]
+    if below and CEILING_ONLY:
+        print(
+            "below the line (ceiling-only, not rewritten here): "
+            + ", ".join(f"{k} {found[k]} < {baseline[k]}" for k in below)
+        )
     for e in errors:
         print(e)
     return 1 if errors else 0

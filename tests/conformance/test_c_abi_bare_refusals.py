@@ -97,12 +97,17 @@ class ClassifyTest(unittest.TestCase):
 
 
 class RatchetTest(unittest.TestCase):
-    def test_above_and_below_the_line_both_fail_and_equal_passes(self) -> None:
+    def test_both_ways_above_and_below_the_line_fail_and_equal_passes(self) -> None:
         line = {"no_text": 5, "null_nonconforming": 3, "unclassified": 1}
         self.assertEqual(scanner.evaluate(dict(line), line), [])
         self.assertTrue(scanner.evaluate({**line, "no_text": 6}, line))
-        self.assertTrue(scanner.evaluate({**line, "no_text": 4}, line))
+        self.assertTrue(scanner.evaluate({**line, "no_text": 4}, line, ceiling_only=False))
         self.assertTrue(scanner.evaluate(line, {}))
+
+    def test_ceiling_only_passes_a_count_below_the_line_and_still_fails_above(self) -> None:
+        line = {"no_text": 5, "null_nonconforming": 3, "unclassified": 1}
+        self.assertEqual(scanner.evaluate({**line, "no_text": 4}, line, ceiling_only=True), [])
+        self.assertTrue(scanner.evaluate({**line, "no_text": 6}, line, ceiling_only=True))
 
     def test_the_tree_scan_reads_returns(self) -> None:
         self.assertGreater(len(scanner.scan(scanner.ROOT).refusals), 0)
