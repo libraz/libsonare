@@ -442,7 +442,7 @@ def test_effect_cli_commands_appear_in_help() -> None:
         ("chroma", True, True),
         ("spectral", True, True),
         ("hpss", True, True),
-        ("onset-envelope", True, True),
+        ("onset-strength", True, True),
         ("nnls-chroma", False, True),
         ("tempogram", True, True),
         ("plp", True, True),
@@ -464,7 +464,7 @@ def test_fft_options_are_only_advertised_by_consuming_commands(
     assert ("--hop-length" in result.stdout) is expects_hop
     expects_mels = command in {
         "mel",
-        "onset-envelope",
+        "onset-strength",
         "tempogram",
         "plp",
     }

@@ -806,20 +806,30 @@ TEST_CASE("CLI pitch --frames adds the per-frame contour", "[cli][pitch]") {
   std::remove(wav.c_str());
 }
 
-TEST_CASE("CLI onset-env command", "[cli]") {
-  create_test_wav(TEST_WAV);
+TEST_CASE("CLI onset-strength command", "[cli]") {
+  create_test_wav(TEST_WAV, 1.0f);
 
   SECTION("text output") {
-    auto [code, output] = exec_command(CLI + " onset-env " + TEST_WAV + " -q");
+    auto [code, output] = exec_command(CLI + " onset-strength " + TEST_WAV + " -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("Onset Strength Envelope"));
+    REQUIRE_THAT(output, ContainsSubstring("Peak:"));
   }
 
-  SECTION("json output") {
-    auto [code, output] = exec_command(CLI + " onset-env " + TEST_WAV + " --json -q");
+  SECTION("peak_time is the time of the first frame holding stats.max") {
+    auto [code, output] = exec_command(CLI + " onset-strength " + TEST_WAV + " --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"n_frames\""));
-    REQUIRE_THAT(output, ContainsSubstring("\"peak_strength\""));
+    const auto json = sonare::util::json::parse_strict(output);
+    const auto& values = json["values"].as_array();
+    REQUIRE(values.size() == static_cast<size_t>(json["count"].as_int()));
+    REQUIRE_FALSE(values.empty());
+    size_t peak_frame = 0;
+    for (size_t i = 1; i < values.size(); ++i) {
+      if (values[i].as_number() > values[peak_frame].as_number()) peak_frame = i;
+    }
+    CHECK(values[peak_frame].as_number() == Catch::Approx(json["stats"]["max"].as_number()));
+    const double expected = static_cast<double>(peak_frame) * json["hop_length"].as_int() / 22050.0;
+    CHECK(json["peak_time"].as_number() == Catch::Approx(expected).margin(1e-9));
   }
 }
 

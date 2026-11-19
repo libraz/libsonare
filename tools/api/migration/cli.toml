@@ -627,6 +627,21 @@ test = 'bindings/python/tests/test_cli_effects.py::payload["pitch_semitones"]'
 
 [[entry]]
 kind = "command"
+old = "onset-envelope"
+new = "onset-strength"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "command"
+old = "onset-env"
+frontend = "native"
+removed = "use onset-strength: its count, stats.max, stats.mean and peak_time carry what n_frames, peak_strength, mean and peak_time did"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "command"
 old = "tone"
 frontend = "native"
 changed = "the JSON frequency key is frequency_hz and sr is sample_rate, named as the flags are"

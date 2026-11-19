@@ -181,7 +181,7 @@ def _run_cli(args: list[str]) -> subprocess.CompletedProcess:
     )
 
 
-@pytest.mark.parametrize("command", ["lufs", "onset-envelope", "nnls-chroma", "tempogram"])
+@pytest.mark.parametrize("command", ["lufs", "onset-strength", "nnls-chroma", "tempogram"])
 def test_cli_new_commands_smoke(command: str) -> None:
     """New CLI subcommands run end-to-end on a synthetic WAV and emit JSON."""
     with tempfile.TemporaryDirectory() as tmpdir:

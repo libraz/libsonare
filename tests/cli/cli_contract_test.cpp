@@ -535,7 +535,7 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE_FALSE(analyze_hpss->default_value.boolean_value);
   REQUIRE(cli_option_spec_for_command("analyze", "no-hpss") == nullptr);
 
-  for (const std::string command : {"onset-env", "onset-envelope", "tempogram", "plp"}) {
+  for (const std::string command : {"onset-strength", "tempogram", "plp"}) {
     const auto* n_mels = cli_option_spec_for_command(command, "n-mels");
     REQUIRE(n_mels != nullptr);
     REQUIRE(n_mels->scalar_type == CliOptionScalarType::Integer);
@@ -961,8 +961,7 @@ TEST_CASE("CLI rejects option typos and terminal required options before dispatc
                                        "tonnetz",
                                        "spectral",
                                        "pitch",
-                                       "onset-env",
-                                       "onset-envelope",
+                                       "onset-strength",
                                        "tempogram",
                                        "fourier-tempogram",
                                        "tempogram-ratio",
@@ -1852,12 +1851,9 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"tonnetz", p.tone_wav + " --json -q", "hop-length", "256"},
       {"spectral", p.tone_wav + " --json -q", "n-fft", "1024"},
       {"spectral", p.tone_wav + " --json -q", "hop-length", "256"},
-      {"onset-env", p.tone_wav + " --json -q", "n-fft", "1024"},
-      {"onset-env", p.tone_wav + " --json -q", "hop-length", "256"},
-      {"onset-env", p.tone_wav + " --json -q", "n-mels", "64"},
-      {"onset-envelope", p.tone_wav + " --json -q", "n-fft", "1024"},
-      {"onset-envelope", p.tone_wav + " --json -q", "hop-length", "256"},
-      {"onset-envelope", p.tone_wav + " --json -q", "n-mels", "64"},
+      {"onset-strength", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"onset-strength", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"onset-strength", p.tone_wav + " --json -q", "n-mels", "64"},
       {"fourier-tempogram", p.tone_wav + " --json -q", "hop-length", "256"},
       {"tempogram-ratio", p.tone_wav + " --json -q", "hop-length", "256"},
       {"tempogram", p.tone_wav + " --json -q", "n-fft", "1024"},

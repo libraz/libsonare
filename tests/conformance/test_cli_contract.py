@@ -826,12 +826,12 @@ class CliContractSelfTest(unittest.TestCase):
     def test_a_reason_citing_a_function_the_package_does_not_export_is_rejected(self) -> None:
         """A route a reason sends the caller down must exist on the Python side."""
         candidate = copy.deepcopy(self.manifest)
-        candidate["commands"]["onset-env"]["reason"] = (
-            "a librosa-style primitive; a Python caller reaches it as libsonare.onset_envelope()"
+        candidate["commands"]["cqt"]["reason"] = (
+            "a librosa-style primitive; a Python caller reaches it as libsonare.constant_q()"
         )
         errors = CHECKER.validate_manifest(candidate)
         self.assertIn(
-            "manifest.commands.onset-env.reason: cites libsonare.onset_envelope(), "
+            "manifest.commands.cqt.reason: cites libsonare.constant_q(), "
             "which the Python package does not export",
             errors,
         )
@@ -839,12 +839,12 @@ class CliContractSelfTest(unittest.TestCase):
     def test_a_reason_cites_a_function_through_the_package_name(self) -> None:
         """A bare name cannot be resolved, so it cannot be checked either."""
         candidate = copy.deepcopy(self.manifest)
-        candidate["commands"]["onset-env"]["reason"] = (
-            "a librosa-style primitive; a Python caller reaches it as onset_strength()"
+        candidate["commands"]["cqt"]["reason"] = (
+            "a librosa-style primitive; a Python caller reaches it as cqt()"
         )
         errors = CHECKER.validate_manifest(candidate)
         self.assertIn(
-            "manifest.commands.onset-env.reason: cites onset_strength(); "
+            "manifest.commands.cqt.reason: cites cqt(); "
             "write a library entry point as libsonare.<name>()",
             errors,
         )

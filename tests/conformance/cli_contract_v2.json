@@ -2518,7 +2518,7 @@
           "domain": null
         }
       ],
-      "onset-envelope": [
+      "onset-strength": [
         {
           "name": "hop-length",
           "type": "integer",
@@ -5674,7 +5674,7 @@
       "status": "active",
       "option_status": "active"
     },
-    "onset-envelope": {
+    "onset-strength": {
       "classification": "shared",
       "status": "active",
       "option_status": "active"
@@ -6022,13 +6022,6 @@
       ],
       "reason_kind": "by_design",
       "reason": "the measurement is already a Python entry point, libsonare.mastering_stereo_analysis_names(), so the CLI would only add a JSON round trip"
-    },
-    "onset-env": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.onset_strength() over the array it already holds, where it composes"
     },
     "fourier-tempogram": {
       "classification": "native_only",
@@ -10488,7 +10481,7 @@
       "artifacts": {}
     },
     {
-      "path": "onset-envelope",
+      "path": "onset-strength",
       "options": [
         {
           "name": "hop-length",
@@ -10544,6 +10537,7 @@
             "count": "integer",
             "hop_length": "integer",
             "duration": "number",
+            "peak_time": "number",
             "stats": {
               "keys": {
                 "mean": "number",
@@ -10560,7 +10554,7 @@
         {
           "id": "success",
           "argv": [
-            "onset-envelope",
+            "onset-strength",
             "{audio}",
             "--json"
           ],

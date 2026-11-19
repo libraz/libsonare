@@ -1113,11 +1113,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                                              greater_than(0.0, CliOptionDomainStage::Usage)),
                                  "2093.0")},
                 {}, &validate_pitch_frequency_order);
-    add_command(commands, "onset-env", true,
-                {library_default(global_int("n-fft"), "2048"),
-                 library_default(global_int("hop-length"), "512"),
-                 library_default(global_int("n-mels"), "128")});
-    add_command(commands, "onset-envelope", true,
+    add_command(commands, "onset-strength", true,
                 {library_default(global_int("n-fft"), "2048"),
                  library_default(global_int("hop-length"), "512"),
                  library_default(global_int("n-mels"), "128")});

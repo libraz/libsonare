@@ -227,6 +227,6 @@ def test_native_rhythm_handlers_use_explicit_mel_envelopes() -> None:
         assert call in function
 
     onset = source[
-        source.index("int cmd_onset_envelope(") : source.index("int cmd_fourier_tempogram(")
+        source.index("int cmd_onset_strength(") : source.index("int cmd_fourier_tempogram(")
     ]
     assert 'mel_config.n_mels = args.get_int("n-mels", mel_config.n_mels);' in onset

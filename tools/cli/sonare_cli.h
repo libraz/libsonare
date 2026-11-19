@@ -293,7 +293,6 @@ int cmd_chroma(const CliArgs& args, const Audio& audio);
 int cmd_tonnetz(const CliArgs& args, const Audio& audio);
 int cmd_spectral(const CliArgs& args, const Audio& audio);
 int cmd_pitch(const CliArgs& args, const Audio& audio);
-int cmd_onset_env(const CliArgs& args, const Audio& audio);
 int cmd_tempogram(const CliArgs& args, const Audio& audio);
 int cmd_plp(const CliArgs& args, const Audio& audio);
 int cmd_cqt(const CliArgs& args, const Audio& audio);
@@ -306,7 +305,7 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio& audio);
 int cmd_estimate_room(const CliArgs& args, const Audio& audio);
 int cmd_room_morph(const CliArgs& args, const Audio& audio);
 #endif
-int cmd_onset_envelope(const CliArgs& args, const Audio& audio);
+int cmd_onset_strength(const CliArgs& args, const Audio& audio);
 int cmd_fourier_tempogram(const CliArgs& args, const Audio& audio);
 int cmd_tempogram_ratio(const CliArgs& args, const Audio& audio);
 int cmd_nnls_chroma(const CliArgs& args, const Audio& audio);

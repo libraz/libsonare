@@ -262,44 +262,6 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
-int cmd_onset_env(const CliArgs& args, const Audio& audio) {
-  MelConfig mel_config;
-  mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);
-  mel_config.hop_length = args.get_int("hop-length", mel_config.hop_length);
-  mel_config.n_mels = args.get_int("n-mels", mel_config.n_mels);
-
-  auto envelope = compute_onset_strength(audio, mel_config);
-
-  auto max_it = std::max_element(envelope.begin(), envelope.end());
-  float peak = *max_it;
-  int peak_frame = static_cast<int>(std::distance(envelope.begin(), max_it));
-  float peak_time = static_cast<float>(peak_frame * mel_config.hop_length) / audio.sample_rate();
-  // Accumulate in double; a float sum drops low digits well before a full envelope ends.
-  float mean = static_cast<float>(std::accumulate(envelope.begin(), envelope.end(), 0.0) /
-                                  static_cast<double>(envelope.size()));
-
-  if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("n_frames", envelope.size())
-        .kv("duration", audio.duration())
-        .kv("hop_length", mel_config.hop_length)
-        .kv("peak_time", peak_time)
-        .kv("peak_strength", peak)
-        .kv("mean", mean)
-        .end_object()
-        .print();
-  } else {
-    std::cout << "Onset Strength Envelope:\n";
-    printf("  Frames:        %zu\n", envelope.size());
-    printf("  Duration:      %.2fs\n", audio.duration());
-    printf("  Peak Time:     %.2fs\n", peak_time);
-    printf("  Peak Strength: %.3f\n", peak);
-    printf("  Mean:          %.3f\n", mean);
-  }
-  return 0;
-}
-
 int cmd_tempogram(const CliArgs& args, const Audio& audio) {
   MelConfig mel_config;
   mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);
@@ -776,7 +738,7 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
 }
 #endif  // SONARE_WITH_ACOUSTIC_SIM
 
-int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
+int cmd_onset_strength(const CliArgs& args, const Audio& audio) {
   MelConfig mel_config;
   mel_config.n_fft = args.get_int("n-fft", mel_config.n_fft);
   mel_config.hop_length = args.get_int("hop-length", mel_config.hop_length);
@@ -784,6 +746,13 @@ int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
 
   auto envelope = compute_onset_strength(audio, mel_config, OnsetConfig());
   Stats stats = Stats::compute(envelope);
+  // The time of the first frame holding stats.max; 0 for an empty envelope, as the stats are.
+  const size_t peak_frame =
+      envelope.empty() ? 0
+                       : static_cast<size_t>(std::distance(
+                             envelope.begin(), std::max_element(envelope.begin(), envelope.end())));
+  const double peak_time =
+      static_cast<double>(peak_frame) * mel_config.hop_length / audio.sample_rate();
 
   if (args.json_output) {
     JsonBuilder()
@@ -791,6 +760,7 @@ int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
         .kv("count", envelope.size())
         .kv("hop_length", mel_config.hop_length)
         .kv("duration", audio.duration())
+        .kv("peak_time", peak_time)
         .key("stats")
         .begin_object()
         .kv("mean", stats.mean)
@@ -807,6 +777,7 @@ int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
     printf("  Frames: %zu\n", envelope.size());
     printf("  Stats:  mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std, stats.min,
            stats.max);
+    printf("  Peak:   %.2fs\n", peak_time);
   }
   return 0;
 }

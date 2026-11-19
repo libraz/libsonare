@@ -100,7 +100,7 @@ TOP_LEVEL_ROUTES = (
     "dynamics",
     "timbre",
     "lufs",
-    "onset-envelope",
+    "onset-strength",
     "nnls-chroma",
     "tempogram",
     "plp",
@@ -161,7 +161,7 @@ FFT_OPTION_CONSUMERS = {
     "chroma": ("cmd_chroma", ("n_fft", "hop_length")),
     "spectral": ("cmd_spectral", ("n_fft", "hop_length")),
     "timbre": ("cmd_timbre", ("n_fft", "hop_length", "n_mels")),
-    "onset-envelope": ("cmd_onset_envelope", ("n_fft", "hop_length", "n_mels")),
+    "onset-strength": ("cmd_onset_strength", ("n_fft", "hop_length", "n_mels")),
     "tempogram": ("cmd_tempogram", ("n_fft", "hop_length", "n_mels")),
     "plp": ("cmd_plp", ("n_fft", "hop_length", "n_mels")),
 }

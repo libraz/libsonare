@@ -179,20 +179,25 @@ def cmd_lufs(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_onset_envelope(args: argparse.Namespace) -> int:
+def cmd_onset_strength(args: argparse.Namespace) -> int:
     from ._conversions import onset_strength
 
     samples, sr = _load_audio(args.file)
     env = onset_strength(samples, sr=sr, **_given(args, "n_fft", "hop_length", "n_mels")).tolist()
+    hop_length = _effective(args, onset_strength, "hop_length")
+    # The time of the first frame holding the maximum; 0 for an empty envelope, as the stats are.
+    peak_frame = env.index(max(env)) if env else 0
+    peak_time = peak_frame * hop_length / sr if sr > 0 else 0.0
 
     if args.json:
         print(
             _strict_json_dumps(
                 {
                     "count": len(env),
-                    "hop_length": _effective(args, onset_strength, "hop_length"),
+                    "hop_length": hop_length,
                     # The analyzed audio's duration, not the frame grid's span.
                     "duration": len(samples) / sr if sr > 0 else 0.0,
+                    "peak_time": peak_time,
                     "stats": _array_stats(env, with_count=False),
                     "values": [round(v, 6) for v in env],
                 }
@@ -204,6 +209,7 @@ def cmd_onset_envelope(args: argparse.Namespace) -> int:
         print(f"    Frames: {stats['count']}")
         print(f"    Mean:   {stats['mean']:.6f}")
         print(f"    Max:    {stats['max']:.6f}")
+        print(f"    Peak:   {peak_time:.2f}s")
     return 0
 
 
@@ -347,7 +353,7 @@ def register_advanced_parsers(
         "--series", action="store_true", help="Also emit momentary/short-term LUFS series"
     )
     sub.add_parser(
-        "onset-envelope", parents=[mel_options], help="Compute the onset strength envelope"
+        "onset-strength", parents=[mel_options], help="Compute the onset strength envelope"
     )
     nnls_p = sub.add_parser("nnls-chroma", parents=[stdout_options], help="Compute NNLS chroma")
     nnls_p.add_argument("--hop-length", type=_c_int, default=None, help="Hop length (default: 512)")
