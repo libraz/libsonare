@@ -45,6 +45,7 @@ std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphN
 SonareError sonare_engine_set_capture_buffer(SonareEngine* engine,
                                              const SonareEngineCaptureBuffer* buffer) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_set_capture_buffer: engine must not be NULL");
@@ -82,6 +83,7 @@ SonareError sonare_engine_set_capture_buffer(SonareEngine* engine,
   engine->engine.set_capture_segment(
       {buffer->channels, buffer->num_channels, buffer->capacity_frames});
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_arm_capture(SonareEngine* engine, int armed) {
@@ -126,6 +128,7 @@ SonareError sonare_engine_set_capture_punch(SonareEngine* engine, int64_t start_
 SonareError sonare_engine_set_capture_source(SonareEngine* engine,
                                              SonareEngineCaptureSource source) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_set_capture_source: engine must not be NULL");
@@ -146,6 +149,7 @@ SonareError sonare_engine_set_capture_source(SonareEngine* engine,
       return SONARE_ERROR_INVALID_PARAMETER;
     }
   }
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_set_record_offset_samples(SonareEngine* engine, int64_t offset_samples) {

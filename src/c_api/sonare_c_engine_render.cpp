@@ -142,6 +142,7 @@ SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* 
                                             int num_channels, int64_t total_frames, int block_size,
                                             int finalize) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "engine_render_offline_ex: engine must not be NULL");
@@ -198,7 +199,6 @@ SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* 
             .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   engine->engine.render_offline(out, num_channels, total_frames, block_size, finalize != 0);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -207,7 +207,9 @@ SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* 
 SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out, int num_channels,
                                          int64_t total_frames, int block_size) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   return sonare_engine_render_offline_ex(engine, out, num_channels, total_frames, block_size, 1);
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_finish_offline_render(SonareEngine* engine) {
@@ -253,6 +255,7 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   // Zero the owned out-pointer/lengths BEFORE any validation early-return so a
   // failed validation always leaves a NULL owned pointer (matching the analysis
   // wrappers in sonare_c.cpp). Otherwise the standard
@@ -406,7 +409,6 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
                        .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   // Offline pre-roll: a bounce is a one-shot render, so the first audible block
   // must open at the settled fader/pan/gate values instead of ramping in from
   // the defaults the way a live stream legitimately does (see
@@ -468,6 +470,7 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
                                          const SonareEngineFreezeOptions* options,
                                          SonareEngineFreezeResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (out) *out = {};
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
@@ -542,7 +545,6 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
             .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   // Offline pre-roll, as in sonare_engine_bounce_offline: a freeze captures the
   // lane at its settled values, so the frozen clip does not carry a fade-in that
   // the live lane never had.
@@ -749,6 +751,7 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engin
                                                              uint32_t target_id, float* out_db,
                                                              size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (out_count) *out_count = 0;
   if (!engine) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
@@ -788,6 +791,7 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engin
                  "engine_meter_target_insert_gain_reduction: mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int interval_frames,

@@ -548,6 +548,7 @@ SonareError sonare_short_term_lufs(const float* samples, size_t length, int samp
 SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
                                     int sample_rate, SonareLufsResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!out) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, "lufs_interleaved: out must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -556,7 +557,6 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
   const SonareError err =
       validate_interleaved_lufs_input("lufs_interleaved", samples, frames, channels, sample_rate);
   if (err != SONARE_OK) return err;
-  SONARE_C_TRY
   metering::LufsResult result = metering::lufs_interleaved(samples, frames, channels, sample_rate);
   out->integrated_lufs = result.integrated_lufs;
   out->momentary_lufs = result.momentary_lufs;
@@ -573,6 +573,7 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
                                            size_t* out_momentary_length, float** out_short_term,
                                            size_t* out_short_term_length) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   // Define every out-parameter the caller did supply before any return, so a
   // rejection below still leaves them readable.
   if (out_momentary) *out_momentary = nullptr;
@@ -597,7 +598,6 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   const SonareError err = validate_interleaved_lufs_input("lufs_series_interleaved", samples,
                                                           frames, channels, sample_rate);
   if (err != SONARE_OK) return err;
-  SONARE_C_TRY
   std::vector<float> momentary;
   std::vector<float> short_term;
   metering::lufs_interleaved(samples, frames, channels, sample_rate, {},

@@ -167,6 +167,7 @@ SonareError sonare_metering_dc_offset(const float* samples, size_t length, int s
 SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, int sample_rate,
                                            int oversample_factor, float* out_db) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!out_db) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "metering_true_peak_dbtp: out_db must not be NULL");
@@ -180,6 +181,7 @@ SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, 
                        *out_db = metering::true_peak_db(audio, factor);
                        return SONARE_OK;
                      });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_metering_detect_clipping(const float* samples, size_t length, int sample_rate,
@@ -556,6 +558,7 @@ SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold
 SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample_factor,
                                         float* out_db) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!audio) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, "audio_true_peak_dbtp: audio must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -567,7 +570,6 @@ SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample
   *out_db = 0.0f;
   const int factor = true_peak_factor_or_refuse("audio_true_peak_dbtp", oversample_factor);
   if (factor == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  SONARE_C_TRY
   *out_db = metering::true_peak_db(audio->audio, factor);
   return SONARE_OK;
   SONARE_C_CATCH

@@ -565,6 +565,7 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
                                     uint32_t* out_clip_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (out_clip_id) *out_clip_id = 0;
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, "project_add_clip: project must not be NULL");
@@ -617,7 +618,6 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
                                                 desc)
                          : SONARE_OK;
   if (audio_err != SONARE_OK) return audio_err;
-  SONARE_C_TRY
   const arr::SourceId source_id = project->history.project().next_source_id();
   const arr::ClipId clip_id = project->history.project().next_clip_id();
   if (!valid_next_id(source_id) || !valid_next_id(clip_id)) {
@@ -687,6 +687,7 @@ SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t sou
                                             int sample_rate) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_source_audio: project must not be NULL");
@@ -722,7 +723,6 @@ SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t sou
                        .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   arr::AudioSourceSamples contents;
   contents.sample_rate = static_cast<double>(sample_rate);
   contents.channels = deinterleave(interleaved, frames, channels);
@@ -759,6 +759,7 @@ SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uin
                                                      const char* external_stem_role) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_audio_source_metadata: project must not be NULL");
@@ -795,7 +796,6 @@ SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uin
                        .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   // Copy the complete source first so changing these two metadata fields can
   // never discard URI, channel/rate hints, storage handles, or future fields.
   arr::AudioSourceRef replacement = *audio;
@@ -820,6 +820,7 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
                                                     uint32_t* out_clip_id, size_t* out_take_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (out_clip_id) *out_clip_id = 0;
   if (out_take_count) *out_take_count = 0;
   if (!project) {
@@ -922,7 +923,6 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  SONARE_C_TRY
   sonare::transport::TempoMap tempo_map;
   tempo_map.prepare(project->history.project().sample_rate());
   std::vector<sonare::transport::TempoSegment> tempo_segments =
@@ -1153,6 +1153,7 @@ SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, 
                                       uint32_t* out_new_clip_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (out_new_clip_id) *out_new_clip_id = 0;
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, "project_split_clip: project must not be NULL");
@@ -1171,7 +1172,6 @@ SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, 
                    ("project_split_clip: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::SplitClip>(clip_id, split_ppq);
   if (!project->history.apply(std::move(command))) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "project_split_clip: the edit was not applied");
@@ -1197,6 +1197,7 @@ SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, d
                                      double new_length_ppq) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, "project_trim_clip: project must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -1220,7 +1221,6 @@ SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, d
                    ("project_trim_clip: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::TrimClip>(clip_id, new_start_ppq, new_length_ppq);
   if (!project->history.apply(std::move(command))) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "project_trim_clip: the edit was not applied");
@@ -1237,6 +1237,7 @@ SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, d
                                      uint32_t new_track_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, "project_move_clip: project must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -1261,7 +1262,6 @@ SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, d
         ("project_move_clip: unknown new_track_id " + std::to_string(new_track_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::MoveClip>(clip_id, new_start_ppq, new_track_id);
   if (!project->history.apply(std::move(command))) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "project_move_clip: the edit was not applied");
@@ -1278,6 +1278,7 @@ SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t cl
                                              uint32_t warp_ref_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_clip_warp_ref: project must not be NULL");
@@ -1303,7 +1304,6 @@ SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t cl
         ("project_set_clip_warp_ref: unknown warp_ref_id " + std::to_string(warp_ref_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::SetClipWarpRef>(clip_id, warp_ref_id);
   if (!project->history.apply(std::move(command))) {
     set_last_error(SONARE_ERROR_INVALID_STATE,
@@ -1321,6 +1321,7 @@ SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t c
                                               SonareProjectWarpMode mode) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_clip_warp_mode: project must not be NULL");
@@ -1346,7 +1347,6 @@ SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t c
         ("project_set_clip_warp_mode: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   arr::WarpMode arr_mode = arr::WarpMode::kOff;
   if (mode == SONARE_PROJECT_WARP_MODE_REPITCH) {
     arr_mode = arr::WarpMode::kRepitch;
@@ -1373,6 +1373,7 @@ SonareError sonare_project_set_clip_takes(SonareProject* project, uint32_t clip_
                                           uint32_t active_take_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_clip_takes: project must not be NULL");
@@ -1387,7 +1388,6 @@ SonareError sonare_project_set_clip_takes(SonareProject* project, uint32_t clip_
                    ("project_set_clip_takes: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   std::vector<arr::ClipTake> arr_takes;
   const SonareError err =
       clip_takes_from_desc("project_set_clip_takes", takes, take_count, &arr_takes);
@@ -1431,6 +1431,7 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
                                                   size_t segment_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_clip_comp_segments: project must not be NULL");
@@ -1448,7 +1449,6 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
         ("project_set_clip_comp_segments: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   std::vector<arr::ClipCompSegment> arr_segments;
   const SonareError err = clip_comp_segments_from_desc("project_set_clip_comp_segments", segments,
                                                        segment_count, &arr_segments);
@@ -1483,6 +1483,7 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
 SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, "project_remove_clip: project must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -1498,7 +1499,6 @@ SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id)
                    ("project_remove_clip: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   const std::vector<arr::SourceId> orphaned_sources = collect_orphaned_sources(edit_project, *clip);
   std::vector<arr::SourceId> orphaned_audio_contents;
   std::vector<arr::EditCommandPtr> commands;
@@ -1528,6 +1528,7 @@ SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id)
 SonareError sonare_project_set_clip_gain(SonareProject* project, uint32_t clip_id, float gain) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_clip_gain: project must not be NULL");
@@ -1547,7 +1548,6 @@ SonareError sonare_project_set_clip_gain(SonareProject* project, uint32_t clip_i
                    ("project_set_clip_gain: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::SetClipGain>(clip_id, gain);
   if (!project->history.apply(std::move(command))) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "project_set_clip_gain: the edit was not applied");
@@ -1565,6 +1565,7 @@ SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_i
                                          const SonareProjectClipFade* fade_out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_clip_fade: project must not be NULL");
@@ -1595,7 +1596,6 @@ SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_i
   if (err != SONARE_OK) return err;
   err = clip_fade_from_desc("project_set_clip_fade", "fade_out", fade_out, &out_fade);
   if (err != SONARE_OK) return err;
-  SONARE_C_TRY
   auto command = std::make_unique<arr::SetClipFade>(clip_id, in_fade, out_fade);
   if (!project->history.apply(std::move(command))) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "project_set_clip_fade: the edit was not applied");
@@ -1612,6 +1612,7 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
                                          double loop_length_ppq, double loop_crossfade_ppq) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   arr::LoopMode mode{};
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
@@ -1646,7 +1647,6 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
                    ("project_set_clip_loop: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command =
       std::make_unique<arr::SetClipLoop>(clip_id, mode, loop_length_ppq, loop_crossfade_ppq);
   if (!project->history.apply(std::move(command))) {
@@ -1664,6 +1664,7 @@ SonareError sonare_project_set_clip_source(SonareProject* project, uint32_t clip
                                            uint32_t source_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "project_set_clip_source: project must not be NULL");
@@ -1690,7 +1691,6 @@ SonareError sonare_project_set_clip_source(SonareProject* project, uint32_t clip
         ("project_set_clip_source: unknown source_id " + std::to_string(source_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::SetClipSource>(clip_id, source_id);
   if (!project->history.apply(std::move(command))) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "project_set_clip_source: the edit was not applied");
@@ -1707,6 +1707,7 @@ SonareError sonare_project_duplicate_clip(SonareProject* project, uint32_t clip_
                                           double new_start_ppq, uint32_t* out_new_clip_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (out_new_clip_id) *out_new_clip_id = 0;
   if (!project) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
@@ -1727,7 +1728,6 @@ SonareError sonare_project_duplicate_clip(SonareProject* project, uint32_t clip_
                    ("project_duplicate_clip: unknown clip_id " + std::to_string(clip_id)).c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::DuplicateClip>(clip_id, new_start_ppq);
   if (!project->history.apply(std::move(command))) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "project_duplicate_clip: the edit was not applied");
