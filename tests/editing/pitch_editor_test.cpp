@@ -986,6 +986,18 @@ TEST_CASE("PitchCorrector refuses each parameter under its own core name", "[pit
   track.f0_hz[2] = -1.0f;
   CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
         "f0_hz[2] must be NaN or in [0, 11025]");
+  track = good;
+  track.sample_rate = sample_rate * 2;
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
+        "track.sample_rate must equal audio.sample_rate");
+  track = good;
+  track.frame_rate_hz = static_cast<float>(sample_rate) * 2.0f;
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
+        "track.frame_rate_hz must be at most track.sample_rate");
+  track = good;
+  std::fill(track.voiced.begin(), track.voiced.end(), false);
+  CHECK(text_of([&] { corrector.estimate_median_midi(track); }) ==
+        "voiced must mark at least one frame whose f0_hz is greater than 0");
 
   const std::vector<float> deltas(16, 0.0f);
   CHECK(text_of([&] { corrector.resynthesize(audio, good, deltas, 0.0, 0.5); }) ==

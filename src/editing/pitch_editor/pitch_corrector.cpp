@@ -61,11 +61,14 @@ void validate_f0_track(const Audio& audio, const F0Track& track) {
   }
   // hop_length is in samples at the track's rate; a rate mismatch would
   // silently apply the correction curve at the wrong time positions.
-  SONARE_CHECK_MSG(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter,
-                   "f0 track sampleRate must match the audio sampleRate");
+  if (track.sample_rate != audio.sample_rate()) {
+    check::refuse_relation({"track.sample_rate", "audio.sample_rate"}, "{0} must equal {1}");
+  }
   const double samples_per_frame = track.samples_per_frame();
-  SONARE_CHECK_MSG(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
-                   ErrorCode::InvalidParameter, "hopLength must be at least one sample");
+  if (!(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0)) {
+    // hop_length >= 1 is refused above, so only a frame rate above the sample rate lands here.
+    check::refuse_relation({"track.frame_rate_hz", "track.sample_rate"}, "{0} must be at most {1}");
+  }
 
   const float nyquist = 0.5f * static_cast<float>(audio.sample_rate());
   for (size_t i = 0; i < track.f0_hz.size(); ++i) {
@@ -226,7 +229,10 @@ float PitchCorrector::estimate_median_midi(const F0Track& track) const {
       midi_values.push_back(hz_to_midi(track.f0_hz[static_cast<size_t>(frame)]));
     }
   }
-  SONARE_CHECK(!midi_values.empty(), ErrorCode::InvalidParameter);
+  if (midi_values.empty()) {
+    check::refuse_relation({"voiced", "f0_hz"},
+                           "{0} must mark at least one frame whose {1} is greater than 0");
+  }
 
   return sonare::median(midi_values.data(), midi_values.size());
 }
