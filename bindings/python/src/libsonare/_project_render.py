@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from ._errors import _entry, _not_supported, _refuse, _refuse_type
+from ._errors import _entry, _refuse, _refuse_type
 from ._narrowing import _resolve_zero_default
 from ._project_model import *  # noqa: F403
 from ._project_model import (
@@ -210,8 +210,6 @@ class _ProjectRenderMixin:
         fixed project + options + patch.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_bounce_with_builtin_instruments"):
-            raise _not_supported("libsonare was built without the built-in instrument bounce ABI")
         if instruments is None:
             patch = instrument if instrument is not None else BuiltinSynthConfig()
             bindings = [(destination_id, patch)]
@@ -297,8 +295,6 @@ class _ProjectRenderMixin:
         unknown preset name.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_bounce_with_synth_instruments"):
-            raise _not_supported("libsonare was built without the NativeSynth bounce ABI")
         if instruments is None:
             bindings = [(destination_id, _synth_patch_arg(instrument))]
         else:
@@ -352,8 +348,6 @@ class _ProjectRenderMixin:
         (``INVALID_FORMAT``) on malformed input (the previous SoundFont is kept).
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_load_soundfont"):
-            raise _not_supported("libsonare was built without the SoundFont ABI")
         buf = bytes(data)
         if not buf:
             raise _refuse("SoundFont data must not be empty")
@@ -368,16 +362,12 @@ class _ProjectRenderMixin:
     def clear_sound_font(self) -> None:
         """Release the project's loaded SoundFont (no-op when none is loaded)."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_clear_soundfont"):
-            raise _not_supported("libsonare was built without the SoundFont ABI")
         _check(lib.sonare_project_clear_soundfont(self._require_handle()))
 
     @property
     def sound_font_preset_count(self) -> int:
         """Number of presets in the loaded SoundFont (0 when none is loaded)."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_soundfont_preset_count"):
-            raise _not_supported("libsonare was built without the SoundFont ABI")
         out = ctypes.c_size_t()
         _check(lib.sonare_project_soundfont_preset_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
@@ -394,8 +384,6 @@ class _ProjectRenderMixin:
         Without a loaded SoundFont every entry is a synth fallback.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_soundfont_manifest"):
-            raise _not_supported("libsonare was built without the SoundFont ABI")
         handle = self._require_handle()
         total = ctypes.c_size_t()
         _check(lib.sonare_project_soundfont_manifest(handle, None, 0, ctypes.byref(total)))
@@ -459,8 +447,6 @@ class _ProjectRenderMixin:
         fixed project + options + SoundFont + patch.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_bounce_with_sf2_instruments"):
-            raise _not_supported("libsonare was built without the SoundFont ABI")
         if instruments is None:
             patch = instrument if instrument is not None else Sf2InstrumentConfig()
             bindings = [(destination_id, patch)]
@@ -535,8 +521,6 @@ class _ProjectRenderMixin:
         latency-bearing source-aware instrument.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_bounce_with_instruments"):
-            raise _not_supported("libsonare was built without the external-instrument bounce ABI")
         if instruments is None:
             if instrument is None:
                 raise _refuse("bounce_with_instruments requires `instrument` or `instruments`")

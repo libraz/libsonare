@@ -30,8 +30,6 @@ def _acoustic_available() -> bool:
     )
 
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synthesize_rir"):
-        return False
     config = SonareRirSynthConfig(
         length_m=7.0,
         width_m=5.0,

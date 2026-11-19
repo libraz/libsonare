@@ -10,7 +10,7 @@ from typing import Literal, Protocol, TypeAlias, cast, get_args
 
 import numpy as np
 
-from ._errors import _entry, _not_supported, _refuse, _refuse_type
+from ._errors import _entry, _refuse, _refuse_type
 from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD2_AMP_DELAY_MS,
     SONARE_SYNTH_FIELD2_AMP_HOLD_MS,
@@ -802,8 +802,6 @@ def synth_preset_names() -> list[str]:
     ``"ePiano"``, ``"drumKit"``, ...). Use these to discover valid
     :class:`SynthPatch` preset names instead of hardcoding magic strings."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_preset_names"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
     return _joined_names(lib.sonare_synth_preset_names(), "synth preset names")
 
 
@@ -824,8 +822,6 @@ def synth_engine_param_info(engine_mode: SynthEngineMode) -> list[SynthParamInfo
     unknown mode raises.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_engine_param_info"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
     mode = _synth_enum_value(engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
     return _synth_param_info(
         _call_string(lib.sonare_synth_engine_param_info, _to_c_int(mode, "engine_mode"))
@@ -843,8 +839,6 @@ def synth_patch_param_info() -> list[SynthParamInfo]:
     described.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_patch_param_info"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
     return _synth_param_info(_call_string(lib.sonare_synth_patch_param_info))
 
 
@@ -858,8 +852,6 @@ def synth_gs_drum_kit_name(program: int) -> str | None:
     every set this build voices; a file selecting an older map reaches fewer.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_gs_drum_kit_name"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
     raw = lib.sonare_synth_gs_drum_kit_name(_to_c_int(program, "program"))
     return raw.decode("utf-8") if raw else None
 
@@ -877,8 +869,6 @@ def synth_gs_drum_kit_is_voiced_apart(program: int) -> bool | None:
     nothing.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_gs_drum_kit_is_voiced_apart"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
     r = lib.sonare_synth_gs_drum_kit_is_voiced_apart(_to_c_int(program, "program"))
     return None if r < 0 else bool(r)
 
@@ -898,8 +888,6 @@ def synth_gs_variation_is_voiced_apart(bank: int, program: int) -> bool | None:
     since both address the same variation.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_gs_variation_is_voiced_apart"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
     r = lib.sonare_synth_gs_variation_is_voiced_apart(
         _to_c_int(bank, "bank"), _to_c_int(program, "program")
     )
@@ -913,8 +901,6 @@ def controller_profile_names() -> list[str]:
     :meth:`RealtimeEngine.set_controller_profile` accepts instead of hardcoding
     magic strings."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_controller_profile_names"):
-        raise _not_supported("libsonare was built without the controller-profile ABI")
     return _joined_names(lib.sonare_controller_profile_names(), "controller profile names")
 
 
@@ -925,8 +911,6 @@ def synth_preset_patch(name: str) -> SynthPatch:
     fields before binding it. A ``"va:"`` routing prefix is accepted. Raises
     :class:`SonareValueError` for unknown names."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_preset_patch"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
     out = SonareSynthPatch()
     _check(
         lib.sonare_synth_preset_patch(_utf8_arg(_strip_va_prefix(name), "name"), ctypes.byref(out))

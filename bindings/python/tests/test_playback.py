@@ -42,36 +42,6 @@ def test_capabilities_report_playback() -> None:
     assert capabilities().features.playback is True
 
 
-class _LibWithoutPlayback:
-    """A stand-in for a ctypes.CDLL from a dylib built without BUILD_PLAYBACK.
-
-    Not a real CDLL: hasattr() on the real thing performs a dlsym lookup and
-    raises AttributeError for a genuinely absent symbol, which is exactly what
-    this object reproduces without needing two actual dylib builds.
-    """
-
-
-def test_require_playback_names_the_missing_capability() -> None:
-    """The internal guard raises a descriptive RuntimeError, not AttributeError.
-
-    _ffi_signatures_playback.py's hasattr guards mean a playback-less but
-    ABI-matched dylib loads cleanly; this is the other half -- an actual call
-    into playback on that dylib must fail by naming what is missing, not with
-    ctypes' own "object has no attribute" message.
-    """
-    from libsonare._playback import _require_playback
-
-    with raises_coded(ErrorCode.NOT_SUPPORTED, match="playback"):
-        _require_playback(_LibWithoutPlayback())
-
-
-def test_require_playback_is_silent_when_the_symbol_is_present() -> None:
-    from libsonare._playback import _require_playback
-    from libsonare._runtime import _get_lib
-
-    _require_playback(_get_lib())  # does not raise on this build, which has playback
-
-
 def test_renderer_reports_its_shape() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         assert renderer.num_output_channels == 6

@@ -65,7 +65,6 @@ from ._errors import (
     SonareError,
     _entry,
     _invalid_state,
-    _not_supported,
     _refuse,
     _require_open,
 )
@@ -331,8 +330,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         Not concurrent with processing.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_prime_offline_parameters"):
-            raise _not_supported("libsonare was built without offline priming support")
         _check(
             lib.sonare_engine_prime_offline_parameters(
                 self._require_handle(),
@@ -356,8 +353,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         concurrent with processing.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_tail_samples"):
-            raise _not_supported("libsonare was built without tail-length support")
         out = ctypes.c_int()
         _check(lib.sonare_engine_tail_samples(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
@@ -369,8 +364,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         The value telemetry records carry as ``graph_latency_samples``.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_graph_latency_samples_q8"):
-            raise _not_supported("libsonare was built without latency query support")
         out = ctypes.c_int()
         _check(
             lib.sonare_engine_graph_latency_samples_q8(self._require_handle(), ctypes.byref(out))
@@ -506,8 +499,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def sample_at_ppq(self, ppq: float) -> int:
         """Convert PPQ to a timeline sample using the engine tempo-map snapshot."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_sample_at_ppq"):
-            raise _not_supported("libsonare was built without sampleAtPpq support")
         out = ctypes.c_int64()
         _check(
             lib.sonare_engine_sample_at_ppq(
@@ -561,8 +552,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         realtime-safe.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_clear_parameters"):
-            raise _not_supported("libsonare was built without parameter-registry support")
         _check(lib.sonare_engine_clear_parameters(self._require_handle()))
 
     @_entry("RealtimeEngine.parameters")
@@ -790,8 +779,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         (``resolve_strip_automation_id("master", ...)`` for the master fader, pan and width).
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_parameter"):
-            raise _not_supported("libsonare was built without live-parameter support")
         _check(
             lib.sonare_engine_set_parameter(
                 self._require_handle(),
@@ -812,8 +799,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         :meth:`set_parameter`.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_parameter_smoothed"):
-            raise _not_supported("libsonare was built without live-parameter support")
         _check(
             lib.sonare_engine_set_parameter_smoothed(
                 self._require_handle(),
@@ -835,8 +820,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         directly. The default is 20 ms; ``0`` makes the governed changes instant.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_param_smoothing_ms"):
-            raise _not_supported("libsonare was built without live-parameter support")
         _check(
             lib.sonare_engine_set_param_smoothing_ms(
                 self._require_handle(), _to_c_float(smoothing_ms, "smoothing_ms")
@@ -869,8 +852,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         lane_index = self._lane_index_of(track_id)
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_solo_mute"):
-            raise _not_supported("libsonare was built without realtime mixer support")
         _check(
             lib.sonare_engine_set_solo_mute(
                 self._require_handle(),
@@ -901,11 +882,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         lane_index = self._lane_index_of(track_id)
         mode_value = _track_monitor_mode_value(mode)
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_track_monitor_mode"):
-            raise _not_supported(
-                "loaded libsonare does not expose sonare_engine_set_track_monitor_mode; "
-                "rebuild or upgrade the native library"
-            )
         _check(
             lib.sonare_engine_set_track_monitor_mode(
                 self._require_handle(),
@@ -919,8 +895,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def set_midi_clips(self, clips: Sequence[EngineMidiClipSchedule]) -> None:
         """Replace the realtime MIDI clip snapshot with compiled schedules."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_midi_clips"):
-            raise _not_supported("libsonare was built without realtime MIDI clip support")
         event_arrays: list[ctypes.Array[_ffi_project.SonareEngineMidiEvent]] = []
         raw_clips = (_ffi_project.SonareEngineMidiClipSchedule * len(clips))()
         for index, clip in enumerate(clips):
@@ -999,8 +973,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         MIDI-FX events. Single writer.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_midi_destination_external"):
-            raise _not_supported("libsonare was built without external-MIDI output support")
         _check(
             lib.sonare_engine_set_midi_destination_external(
                 self._require_handle(),
@@ -1018,8 +990,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         be tempo-synced. Off by default.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_external_midi_clock_enabled"):
-            raise _not_supported("libsonare was built without external-MIDI output support")
         _check(
             lib.sonare_engine_set_external_midi_clock_enabled(
                 self._require_handle(), 1 if enabled else 0
@@ -1033,8 +1003,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         Advisory telemetry; monotonic within a prepared session.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_external_midi_dropped_count"):
-            raise _not_supported("libsonare was built without external-MIDI output support")
         out = ctypes.c_uint32()
         _check(
             lib.sonare_engine_external_midi_dropped_count(self._require_handle(), ctypes.byref(out))
@@ -1051,8 +1019,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         for, so their reads produced silence.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_clip_page_request_overflow_count"):
-            raise _not_supported("libsonare was built without clip-page streaming support")
         out = ctypes.c_uint32()
         _check(
             lib.sonare_engine_clip_page_request_overflow_count(
@@ -1072,8 +1038,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         detect that degradation.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_warp_stretch_overflow_count"):
-            raise _not_supported("libsonare was built without clip-warp support")
         out = ctypes.c_uint32()
         _check(
             lib.sonare_engine_warp_stretch_overflow_count(self._require_handle(), ctypes.byref(out))
@@ -1092,8 +1056,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         restarts its WSOLA state rather than carrying it over.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_warp_voice_capacity"):
-            raise _not_supported("libsonare was built without clip-warp support")
         _check(
             lib.sonare_engine_set_warp_voice_capacity(
                 self._require_handle(),
@@ -1110,8 +1072,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         called.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_warp_voice_capacity"):
-            raise _not_supported("libsonare was built without clip-warp support")
         out = ctypes.c_uint32()
         _check(lib.sonare_engine_warp_voice_capacity(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
@@ -1141,8 +1101,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 f"{_MAX_LOWERED_MIDI1_MESSAGES} to guarantee forward progress"
             )
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_drain_external_midi"):
-            raise _not_supported("libsonare was built without external-MIDI output support")
         capacity = _to_c_size_t(max_records, "max_records").value
         raw = (_ffi_core.SonareExternalMidiEvent * capacity)()
         written = ctypes.c_size_t()
@@ -1184,8 +1142,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def transport_state(self) -> TransportState:
         """Read the current engine transport state (playing/position/ppq/tempo)."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_get_transport_state"):
-            raise _not_supported("libsonare was built without transport-state support")
         raw = _ffi_core.SonareTransportState()
         _check(lib.sonare_engine_get_transport_state(self._require_handle(), ctypes.byref(raw)))
         return TransportState(

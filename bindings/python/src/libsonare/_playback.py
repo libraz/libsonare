@@ -18,7 +18,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_open
+from ._errors import _entry, _refuse, _refuse_type, _require_open
 from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -58,22 +58,6 @@ def _playback_config_to_json(config: PlaybackRendererConfig) -> bytes:
     return _utf8_arg(json.dumps(dict(config)), "config")
 
 
-def _require_playback(lib: ctypes.CDLL) -> None:
-    """Raise a descriptive error rather than an AttributeError from ctypes.
-
-    Playback is a real, independently disableable build option
-    (BUILD_PLAYBACK), so an ABI-matched dylib built without it never sets up
-    these symbols in _ffi_signatures_playback.py's hasattr-guarded configure
-    step. Called at the top of every entry point that creates a handle;
-    methods on an already-created handle need no re-check, since the same
-    dylib backs every call on it.
-    """
-    if not hasattr(lib, "sonare_playback_renderer_create_json"):
-        raise _not_supported(
-            "the loaded libsonare does not expose playback (built without BUILD_PLAYBACK)"
-        )
-
-
 def _json_out_result(lib: ctypes.CDLL, out: ctypes.c_char_p) -> dict[str, Any]:
     try:
         if not out:
@@ -100,7 +84,6 @@ class HrtfSet:
     def default(cls) -> HrtfSet:
         """Build the embedded default set (SADIE II KU100, native builds only)."""
         lib = _get_lib()
-        _require_playback(lib)
         handle = ctypes.c_void_p()
         _check(lib.sonare_hrtf_set_create_default(ctypes.byref(handle)))
         return cls(handle, lib)
@@ -110,7 +93,6 @@ class HrtfSet:
     def from_bytes(cls, data: bytes) -> HrtfSet:
         """Parse SHRF v1 bytes into an HRTF set; malformed data raises :class:`SonareError`."""
         lib = _get_lib()
-        _require_playback(lib)
         buf = (ctypes.c_uint8 * len(data)).from_buffer_copy(data) if data else None
         handle = ctypes.c_void_p()
         _check(
@@ -185,7 +167,6 @@ class PlaybackRenderer:
         # __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
-        _require_playback(self._lib)
         _check(
             self._lib.sonare_playback_renderer_create_json(
                 _playback_config_to_json(config),
@@ -465,7 +446,6 @@ def render_playback(
         raise _refuse("interleaved samples length must be divisible by num_channels")
     frames = total // ch
     lib = _get_lib()
-    _require_playback(lib)
     out_ptr = ctypes.POINTER(ctypes.c_float)()
     out_frames = ctypes.c_size_t()
     out_channels = ctypes.c_int()
@@ -504,7 +484,6 @@ class PlaybackLoudnessMeter:
     def __init__(self, *, num_channels: int, sample_rate: int) -> None:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
-        _require_playback(self._lib)
         self._channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
         _check(
             self._lib.sonare_playback_loudness_meter_create(

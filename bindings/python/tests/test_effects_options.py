@@ -1,4 +1,4 @@
-"""Tests for configurable effect entry points and legacy-library fallback."""
+"""Tests for configurable effect entry points."""
 
 from __future__ import annotations
 
@@ -62,35 +62,7 @@ def test_transform_options_use_new_symbols(monkeypatch: pytest.MonkeyPatch) -> N
     assert [int(value.value) for value in calls[1][1][3:]] == [1024, 256]
 
 
-def test_legacy_transform_defaults_fallback_but_custom_options_are_not_ignored(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    def fake_transform(name: str, *args: object) -> np.ndarray:
-        calls.append(name)
-        return np.zeros(1, dtype=np.float32)
-
-    legacy = SimpleNamespace(
-        sonare_time_stretch=object(),
-        sonare_pitch_shift=object(),
-    )
-    monkeypatch.setattr(timepitch, "_call_float_array_transform", fake_transform)
-    monkeypatch.setattr(timepitch, "_get_lib", lambda: legacy)
-
-    timepitch.time_stretch(_samples(), speed_ratio=1.0, sample_rate=22050)
-    timepitch.pitch_shift(_samples(), pitch_semitones=0.0, sample_rate=22050)
-    assert calls == ["sonare_time_stretch", "sonare_pitch_shift"]
-
-    with pytest.raises(SonareError, match="sonare_time_stretch_ex") as stretch_error:
-        timepitch.time_stretch(_samples(), speed_ratio=1.0, n_fft=1024, sample_rate=22050)
-    assert stretch_error.value.code == ErrorCode.NOT_SUPPORTED
-    with pytest.raises(SonareError, match="sonare_pitch_shift_ex") as shift_error:
-        timepitch.pitch_shift(_samples(), pitch_semitones=0.0, hop_length=256, sample_rate=22050)
-    assert shift_error.value.code == ErrorCode.NOT_SUPPORTED
-
-
-def test_hpss_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_hpss_options_reach_the_native_call(monkeypatch: pytest.MonkeyPatch) -> None:
     new_call = _Call()
     new = SimpleNamespace(
         sonare_hpss_ex=new_call,
@@ -104,22 +76,8 @@ def test_hpss_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> No
     assert len(new_call.calls) == 1
     assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 0]
 
-    legacy = SimpleNamespace(sonare_hpss=object())
-    fallback: list[tuple[object, ...]] = []
 
-    def fake_legacy(*args: object) -> object:
-        fallback.append(args)
-        return "legacy-result"
-
-    monkeypatch.setattr(separation, "_get_lib", lambda: legacy)
-    monkeypatch.setattr(separation, "_hpss_legacy", fake_legacy)
-    assert separation.hpss(_samples(), sample_rate=22050) == "legacy-result"
-    assert len(fallback) == 1
-    with pytest.raises(SonareError, match="sonare_hpss_ex"):
-        separation.hpss(_samples(), hard_mask=True, sample_rate=22050)
-
-
-def test_hpss_with_residual_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_hpss_with_residual_options_reach_the_native_call(monkeypatch: pytest.MonkeyPatch) -> None:
     new_call = _Call()
     new = SimpleNamespace(
         sonare_hpss_ex=new_call,
@@ -133,17 +91,6 @@ def test_hpss_with_residual_options_and_legacy_fallback(monkeypatch: pytest.Monk
     assert set(result) == {"harmonic", "percussive", "residual", "sampleRate"}
     assert len(new_call.calls) == 1
     assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 1]
-
-    legacy = SimpleNamespace(sonare_hpss_with_residual=object())
-    monkeypatch.setattr(separation, "_get_lib", lambda: legacy)
-    monkeypatch.setattr(
-        separation,
-        "_hpss_with_residual_legacy",
-        lambda *args: "legacy-result",
-    )
-    assert separation.hpss_with_residual(_samples(), sample_rate=22050) == "legacy-result"
-    with pytest.raises(SonareError, match="sonare_hpss_ex"):
-        separation.hpss_with_residual(_samples(), hard_mask=True, sample_rate=22050)
 
 
 def test_trim_and_rms_normalization_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -160,17 +107,10 @@ def test_trim_and_rms_normalization_symbols(monkeypatch: pytest.MonkeyPatch) -> 
     assert float(rms_call.calls[0][3].value) == pytest.approx(-12.0)
 
 
-def test_legacy_trim_fallback_and_rms_normalization_is_explicitly_unsupported(
+def test_rms_normalization_without_the_native_entry_is_explicitly_unsupported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    trim_call = _Call()
-    legacy = SimpleNamespace(sonare_trim=trim_call)
-    monkeypatch.setattr(level, "_get_lib", lambda: legacy)
-    assert level.trim(_samples(), sample_rate=22050).size == 0
-    assert len(trim_call.calls) == 1
-    with pytest.raises(SonareError, match="sonare_trim_ex"):
-        level.trim(_samples(), frame_length=64, sample_rate=22050)
-
+    monkeypatch.setattr(level, "_get_lib", lambda: SimpleNamespace())
     with pytest.raises(SonareError, match="sonare_normalize_rms") as error:
         level.normalize(_samples(), sample_rate=22050, mode="rms")
     assert error.value.code == ErrorCode.NOT_SUPPORTED
@@ -218,16 +158,7 @@ def _has_extended_effects() -> bool:
         lib = _get_lib()
     except Exception:
         return False
-    return all(
-        hasattr(lib, name)
-        for name in (
-            "sonare_hpss_ex",
-            "sonare_time_stretch_ex",
-            "sonare_pitch_shift_ex",
-            "sonare_normalize_rms",
-            "sonare_trim_ex",
-        )
-    )
+    return all(hasattr(lib, name) for name in ("sonare_normalize_rms",))
 
 
 @pytest.mark.skipif(not _has_extended_effects(), reason="extended effects symbols unavailable")

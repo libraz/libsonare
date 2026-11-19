@@ -56,7 +56,6 @@ from ._runtime import (
     _to_c_int32,
     _to_c_int_array,
     _to_c_size_t,
-    _unsupported_effect_symbol,
     _validate_samples,
     _validate_scalar,
 )
@@ -262,8 +261,6 @@ def extract_notes(
         >>> quieter = libsonare.render_notes(samples, sr, notes)
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_extract_notes"):
-        raise _unsupported_effect_symbol("sonare_extract_notes")
 
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz)
@@ -366,8 +363,6 @@ def render_notes(
         ... )
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_render_notes"):
-        raise _unsupported_effect_symbol("sonare_render_notes")
 
     c_array, length = _to_c_float_array(samples)
     c_notes, note_count, envelopes, envelope_count = _notes_to_c(notes, sample_rate)
@@ -479,8 +474,6 @@ def decompose_note_pitch(
         >>> curve.vibrato_cents.max()  # doctest: +SKIP
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_decompose_note_pitch"):
-        raise _unsupported_effect_symbol("sonare_decompose_note_pitch")
 
     f0_array, n_frames = _to_c_float_array(f0_hz)
     voiced_array = _optional_note_voiced(voiced, f0_supplied=True, n_frames=n_frames)
@@ -823,8 +816,6 @@ def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> l
         >>> result = libsonare.assign_note_targets(notes, sr, targets)
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_note_targets_from_smf"):
-        raise _unsupported_effect_symbol("sonare_note_targets_from_smf")
 
     raw = bytes(data)
     buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
@@ -931,8 +922,6 @@ def assign_note_targets(
         >>> corrected = libsonare.render_notes(audio, sr, result.notes)
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_assign_note_targets"):
-        raise _unsupported_effect_symbol("sonare_assign_note_targets")
 
     policy = _unmatched_policy_value(unmatched_policy)
     # Seeded from the C ABI rather than from literals here, because 0 is a legal
@@ -1120,8 +1109,6 @@ def transcribe(
         >>> result.tuning_cents  # cents of the recording from A440
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_transcribe"):
-        raise _unsupported_effect_symbol("sonare_transcribe")
 
     rate = _transcribe_sample_rate(sample_rate)
     tempo = 0.0 if tempo_bpm is None else _transcribe_positive(tempo_bpm, "tempo_bpm")

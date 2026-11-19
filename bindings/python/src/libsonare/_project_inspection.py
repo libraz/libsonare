@@ -594,28 +594,22 @@ class _ProjectInspectionMixin:
         external_stem_role: str | None = None
         if int(raw.kind) == 0:  # SONARE_SOURCE_AUDIO; MIDI has no such metadata.
             lib = _get_lib()
-            # Metadata is an additive C API.  Keep source inspection usable
-            # with an older shared library, where the new fields simply read
-            # as their documented empty defaults.
-            if hasattr(lib, "sonare_project_get_audio_source_metadata") and hasattr(
-                lib, "sonare_free_project_audio_source_metadata"
-            ):
-                metadata = SonareProjectAudioSourceMetadata()
-                try:
-                    _check(
-                        lib.sonare_project_get_audio_source_metadata(
-                            self._require_handle(),
-                            _to_c_uint32(raw.id, "source_id"),
-                            ctypes.byref(metadata),
-                        )
+            metadata = SonareProjectAudioSourceMetadata()
+            try:
+                _check(
+                    lib.sonare_project_get_audio_source_metadata(
+                        self._require_handle(),
+                        _to_c_uint32(raw.id, "source_id"),
+                        ctypes.byref(metadata),
                     )
-                    # The core reports an unset field as NULL or as an empty string.
-                    content_hash = (metadata.content_hash or b"").decode() or None
-                    external_stem_role = (metadata.external_stem_role or b"").decode() or None
-                finally:
-                    # The native getter owns both strings even when it reports
-                    # a failure after partially filling the descriptor.
-                    lib.sonare_free_project_audio_source_metadata(ctypes.byref(metadata))
+                )
+                # The core reports an unset field as NULL or as an empty string.
+                content_hash = (metadata.content_hash or b"").decode() or None
+                external_stem_role = (metadata.external_stem_role or b"").decode() or None
+            finally:
+                # The native getter owns both strings even when it reports
+                # a failure after partially filling the descriptor.
+                lib.sonare_free_project_audio_source_metadata(ctypes.byref(metadata))
         if name_or_uri is None:
             name_or_uri = self._audio_source_uri(raw)
         return ProjectSource(
@@ -633,7 +627,7 @@ class _ProjectInspectionMixin:
         """Read a source's name or URI by id, the full URI for an audio source."""
         name_or_uri: str = raw.name_or_uri.split(b"\0", 1)[0].decode()
         lib = _get_lib()
-        if int(raw.kind) == 0 and hasattr(lib, "sonare_project_get_audio_source_uri"):
+        if int(raw.kind) == 0:
             uri = ctypes.c_char_p()
             try:
                 _check(

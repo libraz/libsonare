@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from ._errors import _entry, _not_supported, _refuse, _unknown_error
+from ._errors import _entry, _refuse, _unknown_error
 from ._ffi import (
     SonareClippingResult,
     SonareDynamicRangeResult,
@@ -379,8 +379,6 @@ def metering_crest_factor_db_stereo(
     left_buf = _validate_samples(left, arg_name="left")
     right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
-    if not hasattr(lib, "sonare_metering_crest_factor_db_stereo"):
-        raise _not_supported("libsonare was built without the stereo crest factor meter")
     left_array, left_length = _to_c_float_array(left_buf)
     right_array, right_length = _to_c_float_array(right_buf)
     if left_length != right_length:
@@ -628,8 +626,6 @@ def metering_vectorscope_decimated(
     left_buf = _validate_samples(left, arg_name="left")
     right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
-    if not hasattr(lib, "sonare_metering_vectorscope_decimated"):
-        raise _not_supported("libsonare was built without sonare_metering_vectorscope_decimated")
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
@@ -717,8 +713,6 @@ def metering_phase_scope_decimated(
     left_buf = _validate_samples(left, arg_name="left")
     right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
-    if not hasattr(lib, "sonare_metering_phase_scope_decimated"):
-        raise _not_supported("libsonare was built without sonare_metering_phase_scope_decimated")
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
@@ -844,8 +838,6 @@ def metering_spectrum_frame(
         window=(frame_offset, c_n_fft.value or _DEFAULT_SPECTRUM_N_FFT),
     )
     lib = _get_lib()
-    if not hasattr(lib, "sonare_metering_spectrum_frame"):
-        raise _not_supported("libsonare was built without sonare_metering_spectrum_frame")
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareSpectrumResult()
     rc = lib.sonare_metering_spectrum_frame(

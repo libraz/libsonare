@@ -41,8 +41,6 @@ def _chain(**callbacks):
 
 
 def _analyze(**callbacks):
-    if not hasattr(libsonare._runtime._get_lib(), "sonare_analyze_json_ex_with_progress"):
-        pytest.skip("libsonare built without sonare_analyze_json_ex_with_progress")
     return libsonare.analyze(sine(440.0, 1.0, sr=SR), SR, **callbacks)
 
 

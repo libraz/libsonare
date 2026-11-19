@@ -32,35 +32,9 @@ def _has_analyze_json() -> bool:
         return False
 
 
-def _has_analyze_json_progress() -> bool:
-    try:
-        from libsonare._runtime import _get_lib
-
-        return hasattr(_get_lib(), "sonare_analyze_json_ex_with_progress")
-    except Exception:
-        return False
-
-
-def _has_analyze_melody_ex() -> bool:
-    try:
-        from libsonare._runtime import _get_lib
-
-        return hasattr(_get_lib(), "sonare_analyze_melody_ex")
-    except Exception:
-        return False
-
-
 requires_json = pytest.mark.skipif(
     not _has_analyze_json(),
     reason="libsonare built without sonare_analyze_json",
-)
-requires_json_progress = pytest.mark.skipif(
-    not _has_analyze_json_progress(),
-    reason="libsonare built without sonare_analyze_json_ex_with_progress",
-)
-requires_melody_ex = pytest.mark.skipif(
-    not _has_analyze_melody_ex(),
-    reason="libsonare built without sonare_analyze_melody_ex",
 )
 
 
@@ -319,7 +293,6 @@ def test_analyze_melody_default_runs() -> None:
     assert isinstance(result.mean_frequency_hz, float)
 
 
-@requires_melody_ex
 def test_analyze_melody_pyin_runs() -> None:
     """analyze_melody(use_pyin=True) runs via the extended entry point."""
     from libsonare import MelodyResult
@@ -330,7 +303,6 @@ def test_analyze_melody_pyin_runs() -> None:
     assert isinstance(result.points, list)
 
 
-@requires_melody_ex
 def test_analyze_melody_center_flag_runs() -> None:
     """analyze_melody(center=False) runs via the extended entry point."""
     from libsonare import MelodyResult
@@ -342,7 +314,6 @@ def test_analyze_melody_center_flag_runs() -> None:
     assert isinstance(uncentered, MelodyResult)
 
 
-@requires_json_progress
 def test_analyze_progress_invokes_callback(progress_result) -> None:
     """A void progress callback remains compatible and returns a rich result."""
     from libsonare import AnalysisResult
@@ -356,7 +327,6 @@ def test_analyze_progress_invokes_callback(progress_result) -> None:
         assert isinstance(stage, str)
 
 
-@requires_json_progress
 def test_analyze_progress_false_result_does_not_cancel() -> None:
     """A progress callback's boolean return value is ignored."""
     calls: list[float] = []
@@ -373,7 +343,6 @@ def test_analyze_progress_false_result_does_not_cancel() -> None:
     assert isinstance(result, libsonare.AnalysisResult)
 
 
-@requires_json_progress
 def test_analyze_progress_cancel_callable_cancels_without_a_result() -> None:
     """The keyword-only cancel callable maps to the native cancellation callback."""
     result = None
@@ -387,7 +356,6 @@ def test_analyze_progress_cancel_callable_cancels_without_a_result() -> None:
     assert result is None
 
 
-@requires_json_progress
 def test_analyze_progress_no_callback() -> None:
     """analyze takes the cancellable path with no progress callback registered."""
     from libsonare import AnalysisResult
@@ -398,7 +366,6 @@ def test_analyze_progress_no_callback() -> None:
     assert isinstance(result, AnalysisResult)
 
 
-@requires_json_progress
 def test_analyze_progress_matches_analyze_shape(analyze_result, progress_result) -> None:
     """analyze with a callback returns the same-shaped result as without."""
     a = analyze_result

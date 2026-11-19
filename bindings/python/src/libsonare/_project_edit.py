@@ -832,7 +832,7 @@ class _ProjectEditMixin:
         try:
             raw = out_json.value
         finally:
-            if out_json.value and hasattr(lib, "sonare_free_string"):
+            if out_json.value:
                 lib.sonare_free_string(out_json)
         if not present.value:
             return None

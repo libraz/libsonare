@@ -178,7 +178,6 @@ from ._runtime import (
     SonareMidiEventPod,
     _check,
     _get_lib,
-    _require_export,
     _require_instance,
     _to_c_size_t,
     _token_ordinal,
@@ -582,15 +581,10 @@ def project_abi_version() -> int | None:
     presence is ``capabilities().features.project``.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_project_abi_version"):
-        return None
     return int(lib.sonare_project_abi_version()) or None
 
 
 def _check_project_abi(lib: Any) -> None:
-    _require_export(
-        lib, "sonare_project_abi_version", "libsonare was built without arrangement support"
-    )
     abi = int(lib.sonare_project_abi_version())
     if abi != _EXPECTED_PROJECT_ABI_VERSION:
         raise SonareError(

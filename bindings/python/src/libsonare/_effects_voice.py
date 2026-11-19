@@ -13,7 +13,7 @@ from typing import Any, Literal, TypeAlias, cast, get_args
 
 import numpy as np
 
-from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_open
+from ._errors import _entry, _refuse, _refuse_type, _require_open
 from ._ffi import (
     SONARE_OK,
     SONARE_VC_PRESET_NEUTRAL_MONITOR,
@@ -223,11 +223,6 @@ class RealtimeVoiceChanger:
         )
         c_channels = _to_c_int(self._channels, "num_channels")
         if isinstance(config, RealtimeVoiceChangerConfig):
-            if not hasattr(self._lib, "sonare_realtime_voice_changer_create"):
-                raise _not_supported(
-                    "loaded libsonare is missing sonare_realtime_voice_changer_create; "
-                    "rebuild the shared library."
-                )
             pod = config._to_pod()
             rc = self._lib.sonare_realtime_voice_changer_create(
                 ctypes.byref(pod), c_sample_rate, c_block, c_channels, ctypes.byref(self._handle)
@@ -359,11 +354,6 @@ class RealtimeVoiceChanger:
 
         Read without JSON on either side; :meth:`config_json` gives the document.
         """
-        if not hasattr(self._lib, "sonare_realtime_voice_changer_get_config"):
-            raise _not_supported(
-                "loaded libsonare is missing sonare_realtime_voice_changer_get_config; "
-                "rebuild the shared library."
-            )
         pod = SonareRealtimeVoiceChangerConfig()
         rc = self._lib.sonare_realtime_voice_changer_get_config(
             self._require_handle(), ctypes.byref(pod)
@@ -372,11 +362,6 @@ class RealtimeVoiceChanger:
         return RealtimeVoiceChangerConfig._from_pod(pod)
 
     def _set_record(self, config: RealtimeVoiceChangerConfig) -> None:
-        if not hasattr(self._lib, "sonare_realtime_voice_changer_set_config"):
-            raise _not_supported(
-                "loaded libsonare is missing sonare_realtime_voice_changer_set_config; "
-                "rebuild the shared library."
-            )
         pod = config._to_pod()
         rc = self._lib.sonare_realtime_voice_changer_set_config(
             self._require_handle(), ctypes.byref(pod)
@@ -1148,11 +1133,6 @@ def realtime_voice_changer_preset_config(preset: VoicePresetId) -> RealtimeVoice
         SonareValueError: If ``preset`` is not a :data:`VoicePresetId` token.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_realtime_voice_changer_preset_config"):
-        raise _not_supported(
-            "loaded libsonare is missing sonare_realtime_voice_changer_preset_config; "
-            "rebuild the shared library."
-        )
     pod = SonareRealtimeVoiceChangerConfig()
     rc = lib.sonare_realtime_voice_changer_preset_config(
         _to_c_int(_resolve_preset_ordinal(preset), "preset"), ctypes.byref(pod)

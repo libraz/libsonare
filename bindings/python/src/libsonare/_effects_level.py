@@ -267,35 +267,17 @@ def trim(
     _validate_samples(samples)
     frame_length, hop_length = _validate_trim_options(frame_length, hop_length)
     lib = _get_lib()
-    if not hasattr(lib, "sonare_trim_ex"):
-        if frame_length != _DEFAULT_TRIM_FRAME_LENGTH or hop_length != _DEFAULT_TRIM_HOP_LENGTH:
-            raise _unsupported_effect_symbol("sonare_trim_ex")
-        if not hasattr(lib, "sonare_trim"):
-            raise _unsupported_effect_symbol("sonare_trim")
-        fn_name = "sonare_trim"
-    else:
-        fn_name = "sonare_trim_ex"
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):
-        if fn_name == "sonare_trim_ex":
-            rc = lib.sonare_trim_ex(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                _to_c_float(threshold_db, "threshold_db"),
-                _to_c_int(frame_length, "frame_length"),
-                _to_c_int(hop_length, "hop_length"),
-                ctypes.byref(out),
-                ctypes.byref(out_length),
-            )
-        else:
-            rc = lib.sonare_trim(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                _to_c_float(threshold_db, "threshold_db"),
-                ctypes.byref(out),
-                ctypes.byref(out_length),
-            )
+        rc = lib.sonare_trim_ex(
+            c_array,
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_float(threshold_db, "threshold_db"),
+            _to_c_int(frame_length, "frame_length"),
+            _to_c_int(hop_length, "hop_length"),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
         _check(rc)
         return _from_c_float_array(out, out_length.value)

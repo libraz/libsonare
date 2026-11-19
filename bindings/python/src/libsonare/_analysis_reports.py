@@ -36,8 +36,6 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    ErrorCode,
-    SonareError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -69,13 +67,6 @@ from .types import (
 # MusicAnalyzerConfig::meter_candidate_numerators, so a default-argument
 # analyze() reproduces the native default rather than a Python-side guess.
 _DEFAULT_METER_CANDIDATE_NUMERATORS = (3, 4, 6)
-
-
-def _unsupported_feature_symbol(symbol: str) -> SonareError:
-    return SonareError(
-        int(ErrorCode.NOT_SUPPORTED),
-        f"libsonare does not export {symbol}; install a matching native library",
-    )
 
 
 def _music_analyze_options(
@@ -314,7 +305,7 @@ def analyze(
 
 
 def _free_json(lib: ctypes.CDLL, out_json: ctypes.c_char_p) -> None:
-    if out_json.value and hasattr(lib, "sonare_free_string"):
+    if out_json.value:
         lib.sonare_free_string(out_json)
 
 
@@ -335,8 +326,6 @@ def _analyze_with_callbacks(
     cancel: CancelCallback | None,
 ) -> AnalysisResult:
     """Run the cancellation-capable analysis entry point and parse its result."""
-    if not hasattr(lib, "sonare_analyze_json_ex_with_progress"):
-        raise _unsupported_feature_symbol("sonare_analyze_json_ex_with_progress")
 
     out_json = ctypes.c_char_p()
     state = CancellationState(cancel)
@@ -464,8 +453,6 @@ def estimate_meter(
         )
 
     lib = _get_lib()
-    if not hasattr(lib, "sonare_estimate_meter_json"):
-        raise _unsupported_feature_symbol("sonare_estimate_meter_json")
 
     entries = list(beats)
     if not all(isinstance(entry, Beat) for entry in entries):
@@ -505,7 +492,7 @@ def estimate_meter(
         raw = out_json.value
         data = json.loads(raw.decode("utf-8") if raw else "{}")
     finally:
-        if out_json.value and hasattr(lib, "sonare_free_string"):
+        if out_json.value:
             lib.sonare_free_string(out_json)
 
     ts_d = data.get("timeSignature", {})
@@ -611,25 +598,14 @@ def analyze_impulse_response(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareAcousticResult()
-    if hasattr(lib, "sonare_analyze_impulse_response_ex"):
-        rc = lib.sonare_analyze_impulse_response_ex(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            _to_c_int(n_octave_bands_value, "n_octave_bands_value"),
-            ctypes.c_float(decay_db_c),
-            ctypes.byref(out),
-        )
-    elif decay_db_c != 30.0:
-        raise _unsupported_feature_symbol("sonare_analyze_impulse_response_ex")
-    else:
-        rc = lib.sonare_analyze_impulse_response(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            _to_c_int(n_octave_bands_value, "n_octave_bands_value"),
-            ctypes.byref(out),
-        )
+    rc = lib.sonare_analyze_impulse_response_ex(
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_octave_bands_value, "n_octave_bands_value"),
+        ctypes.c_float(decay_db_c),
+        ctypes.byref(out),
+    )
     _check(rc)
     try:
         count = out.band_count

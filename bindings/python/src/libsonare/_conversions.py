@@ -19,7 +19,6 @@ from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
     ErrorCode,
-    SonareError,
     SonareValueError,
     _call_float_array_transform,
     _call_string,
@@ -48,13 +47,6 @@ from ._runtime import (
     _validate_samples,
 )
 from ._types_enums import _NORM_TYPES, _TEMPOGRAM_MODES, NormType, TempogramMode
-
-
-def _unsupported_feature_symbol(symbol: str) -> SonareError:
-    return SonareError(
-        int(ErrorCode.NOT_SUPPORTED),
-        f"libsonare does not export {symbol}; install a matching native library",
-    )
 
 
 @_entry("hz_to_mel")
@@ -479,8 +471,6 @@ def split_silence_common_with_report(
     """
     c_arrays, signal_ptrs, length_array = _common_silence_signals(signals)
     lib = _get_lib()
-    if not hasattr(lib, "sonare_split_silence_common_ex"):
-        raise _unsupported_feature_symbol("sonare_split_silence_common_ex")
     report = SonareSilenceCommonReport()
     with _out_int_array(lib) as (out, out_count):
         rc = lib.sonare_split_silence_common_ex(
@@ -973,48 +963,18 @@ def nnls_chroma(
     c_array, length = _to_c_float_array(samples)
     n_frames = ctypes.c_int()
     with _out_float_array(lib) as (out, out_length):
-        if hasattr(lib, "sonare_nnls_chroma_ex2"):
-            rc = lib.sonare_nnls_chroma_ex2(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                _to_c_int(int(enable_stft_blend), "enable_stft_blend"),
-                ctypes.c_float(blend_weight_c),
-                _to_c_int(stft_blend_n_fft_value, "stft_blend_n_fft_value"),
-                _to_c_int(hop_length_value, "hop_length_value"),
-                ctypes.byref(out),
-                ctypes.byref(out_length),
-                ctypes.byref(n_frames),
-            )
-        elif hop_length_value != 512:
-            raise _unsupported_feature_symbol("sonare_nnls_chroma_ex2")
-        elif hasattr(lib, "sonare_nnls_chroma_ex"):
-            rc = lib.sonare_nnls_chroma_ex(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                _to_c_int(int(enable_stft_blend), "enable_stft_blend"),
-                ctypes.c_float(blend_weight_c),
-                _to_c_int(stft_blend_n_fft_value, "stft_blend_n_fft_value"),
-                ctypes.byref(out),
-                ctypes.byref(out_length),
-                ctypes.byref(n_frames),
-            )
-        elif (
-            not bool(enable_stft_blend)
-            or blend_weight_c != ctypes.c_float(0.55).value
-            or stft_blend_n_fft_value != 4096
-        ):
-            raise _unsupported_feature_symbol("sonare_nnls_chroma_ex")
-        else:
-            rc = lib.sonare_nnls_chroma(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                ctypes.byref(out),
-                ctypes.byref(out_length),
-                ctypes.byref(n_frames),
-            )
+        rc = lib.sonare_nnls_chroma_ex2(
+            c_array,
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(int(enable_stft_blend), "enable_stft_blend"),
+            ctypes.c_float(blend_weight_c),
+            _to_c_int(stft_blend_n_fft_value, "stft_blend_n_fft_value"),
+            _to_c_int(hop_length_value, "hop_length_value"),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(n_frames),
+        )
         _check(rc)
         return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 

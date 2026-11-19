@@ -9,7 +9,7 @@ from typing import cast
 import numpy as np
 
 from ._analysis_music import _key_pair
-from ._errors import _entry, _not_supported, _refuse
+from ._errors import _entry, _refuse
 from ._features_metering import scale_mask_for_mode
 from ._ffi import (
     SONARE_PITCH_TARGET_FIXED_MIDI,
@@ -39,7 +39,6 @@ from ._runtime import (
     _to_c_int_array,
     _to_c_size_t,
     _token_arg,
-    _unsupported_effect_symbol,
     _validate_effect_hop,
     _validate_samples,
     _validate_stft_n_fft,
@@ -76,18 +75,6 @@ def time_stretch(
     _validate_samples(samples)
     n_fft = _validate_stft_n_fft(n_fft)
     hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_time_stretch_ex"):
-        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0:
-            raise _unsupported_effect_symbol("sonare_time_stretch_ex")
-        if not hasattr(lib, "sonare_time_stretch"):
-            raise _unsupported_effect_symbol("sonare_time_stretch")
-        return _call_float_array_transform(
-            "sonare_time_stretch",
-            samples,
-            _to_c_int(sample_rate, "sample_rate"),
-            _to_c_float(speed_ratio, "speed_ratio"),
-        )
     return _call_float_array_transform(
         "sonare_time_stretch_ex",
         samples,
@@ -124,18 +111,6 @@ def pitch_shift(
     _validate_samples(samples)
     n_fft = _validate_stft_n_fft(n_fft)
     hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_pitch_shift_ex"):
-        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0:
-            raise _unsupported_effect_symbol("sonare_pitch_shift_ex")
-        if not hasattr(lib, "sonare_pitch_shift"):
-            raise _unsupported_effect_symbol("sonare_pitch_shift")
-        return _call_float_array_transform(
-            "sonare_pitch_shift",
-            samples,
-            _to_c_int(sample_rate, "sample_rate"),
-            _to_c_float(pitch_semitones, "pitch_semitones"),
-        )
     return _call_float_array_transform(
         "sonare_pitch_shift_ex",
         samples,
@@ -238,8 +213,6 @@ def pitch_correct_timevarying(
     """
     target = _token_arg(target_mode, _PITCH_TARGET_MODES, "target_mode")
     lib = _get_lib()
-    if not hasattr(lib, "sonare_pitch_correct_timevarying"):
-        raise _not_supported("libsonare was built without pitch-editor support")
 
     config = SonarePitchCorrectionConfig()
     _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
@@ -352,8 +325,6 @@ def auto_tune(
         :class:`AutoTuneResult` with the corrected ``samples`` and the ``key`` used.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_auto_tune"):
-        raise _not_supported("libsonare was built without pitch-editor support")
 
     named = _auto_tune_key(key)
     config = SonarePitchCorrectionConfig()

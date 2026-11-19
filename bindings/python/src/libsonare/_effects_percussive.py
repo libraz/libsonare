@@ -30,7 +30,6 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
-    _unsupported_effect_symbol,
     _validate_c_int_field,
 )
 
@@ -331,8 +330,6 @@ def extract_percussive_events(
         >>> without_the_first_hit = libsonare.render_percussive_events(audio, sr, events)
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_extract_percussive_events"):
-        raise _unsupported_effect_symbol("sonare_extract_percussive_events")
 
     c_array, length = _to_c_float_array(samples)
     config = SonarePercussiveEventConfig(
@@ -450,8 +447,6 @@ def render_percussive_events(
         >>> rendered = libsonare.render_percussive_events(audio, sr, events)
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_render_percussive_events"):
-        raise _unsupported_effect_symbol("sonare_render_percussive_events")
 
     c_array, length = _to_c_float_array(samples)
     c_events, count = _percussive_events_to_c(events, sample_rate)

@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 
 from ._effects_repair_common import _linked_channel_planes
-from ._errors import _entry, _not_supported, _refuse, _refuse_type
+from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._narrowing import (
     _narrow_double,
@@ -38,7 +38,6 @@ from ._runtime import (
     _to_c_int_array,
     _to_c_size_t,
     _token_arg,
-    _unsupported_effect_symbol,
     _utf8_arg,
     _validate_effect_hop,
     _validate_hpss_kernel,
@@ -142,8 +141,6 @@ def decompose_with_init(
         ``(n_components, n_frames)``.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_decompose_with_init"):
-        raise _not_supported("libsonare was built without sonare_decompose_with_init")
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
         raise _refuse("s length must equal n_features * n_frames")
@@ -262,8 +259,6 @@ def decompose_stems(
     _validate_samples(samples)
     config = _stems_config(n_components, n_fft, hop_length, n_iter, beta, init, mask_power)
     lib = _get_lib()
-    if not hasattr(lib, "sonare_decompose_stems"):
-        raise _unsupported_effect_symbol("sonare_decompose_stems")
     c_array, length = _to_c_float_array(samples)
     component_count = ctypes.c_size_t()
     with (
@@ -360,8 +355,6 @@ def decompose_stems_linked(
     """
     config = _stems_config(n_components, n_fft, hop_length, n_iter, beta, init, mask_power)
     lib = _get_lib()
-    if not hasattr(lib, "sonare_decompose_stems_linked"):
-        raise _unsupported_effect_symbol("sonare_decompose_stems_linked")
     planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     channel_count = len(arrays)
@@ -544,8 +537,6 @@ def remix_aligned_intervals(
         per input interval.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_remix_aligned_intervals"):
-        raise _not_supported("loaded libsonare does not expose sonare_remix_aligned_intervals")
     c_array, length = _to_c_float_array(samples)
     intervals_array, n_pairs = _remix_interval_array(intervals)
     with _out_int_array(lib) as (out, out_count):
@@ -604,12 +595,6 @@ def hpss(
 
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1
-    if not hasattr(lib, "sonare_hpss_ex"):
-        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0 or hard_mask:
-            raise _unsupported_effect_symbol("sonare_hpss_ex")
-        if not hasattr(lib, "sonare_hpss"):
-            raise _unsupported_effect_symbol("sonare_hpss")
-        return _hpss_legacy(lib, samples, sample_rate, kernel_harmonic, kernel_percussive)
 
     c_array, length = _to_c_float_array(samples)
     out = SonareHpssResult()
@@ -625,37 +610,6 @@ def hpss(
         ctypes.c_int(0),
         ctypes.byref(out),
         None,
-    )
-    _check(rc)
-    try:
-        n = out.length
-        return HpssResult(
-            harmonic=_from_c_float_array(out.harmonic, n),
-            percussive=_from_c_float_array(out.percussive, n),
-            length=int(n),
-            sample_rate=int(out.sample_rate),
-        )
-    finally:
-        lib.sonare_free_hpss_result(ctypes.byref(out))
-
-
-def _hpss_legacy(
-    lib: ctypes.CDLL,
-    samples: Sequence[float] | list[float],
-    sample_rate: int,
-    kernel_harmonic: int,
-    kernel_percussive: int,
-) -> HpssResult:
-    """Call the pre-extended HPSS entry point for legacy-default requests."""
-    c_array, length = _to_c_float_array(samples)
-    out = SonareHpssResult()
-    rc = lib.sonare_hpss(
-        c_array,
-        _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(kernel_harmonic, "kernel_harmonic"),
-        _to_c_int(kernel_percussive, "kernel_percussive"),
-        ctypes.byref(out),
     )
     _check(rc)
     try:
@@ -765,14 +719,6 @@ def hpss_with_residual(
 
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1
-    if not hasattr(lib, "sonare_hpss_ex"):
-        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0 or hard_mask:
-            raise _unsupported_effect_symbol("sonare_hpss_ex")
-        if not hasattr(lib, "sonare_hpss_with_residual"):
-            raise _unsupported_effect_symbol("sonare_hpss_with_residual")
-        return _hpss_with_residual_legacy(
-            lib, samples, sample_rate, kernel_harmonic, kernel_percussive
-        )
 
     c_array, length = _to_c_float_array(samples)
     out = SonareHpssResult()
@@ -803,44 +749,6 @@ def hpss_with_residual(
         lib.sonare_free_hpss_result(ctypes.byref(out))
         if residual:
             lib.sonare_free_floats(residual)
-
-
-def _hpss_with_residual_legacy(
-    lib: ctypes.CDLL,
-    samples: Sequence[float] | list[float],
-    sample_rate: int,
-    kernel_harmonic: int,
-    kernel_percussive: int,
-) -> dict[str, object]:
-    """Call the pre-extended three-way HPSS entry point."""
-    c_array, length = _to_c_float_array(samples)
-    with (
-        _out_float_array(lib) as (out_harmonic, out_length),
-        _out_float_array(lib) as (out_percussive, _),
-        _out_float_array(lib) as (out_residual, _),
-    ):
-        out_sample_rate = ctypes.c_int()
-        _check(
-            lib.sonare_hpss_with_residual(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                _to_c_int(kernel_harmonic, "kernel_harmonic"),
-                _to_c_int(kernel_percussive, "kernel_percussive"),
-                ctypes.byref(out_harmonic),
-                ctypes.byref(out_percussive),
-                ctypes.byref(out_residual),
-                ctypes.byref(out_length),
-                ctypes.byref(out_sample_rate),
-            )
-        )
-        n = out_length.value
-        return {
-            "harmonic": _from_c_float_array(out_harmonic, n),
-            "percussive": _from_c_float_array(out_percussive, n),
-            "residual": _from_c_float_array(out_residual, n),
-            "sampleRate": int(out_sample_rate.value),
-        }
 
 
 @_entry("phase_vocoder")

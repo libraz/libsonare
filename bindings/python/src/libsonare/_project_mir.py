@@ -10,7 +10,7 @@ from typing import cast
 import numpy as np
 
 from ._analysis_music import _CHORD_QUALITY_ORDINALS
-from ._errors import _entry, _not_supported, _refuse, _refuse_type
+from ._errors import _entry, _refuse, _refuse_type
 from ._narrowing import _narrow_int
 from ._project_model import (
     _NO_PITCH_CLASS,
@@ -151,11 +151,6 @@ def align_take_to_reference(
         >>> project.set_clip_warp_ref(take_clip, 1)
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_align_take_to_reference_ex"):
-        raise _not_supported(
-            "loaded libsonare does not export sonare_align_take_to_reference_ex; "
-            "rebuild or upgrade the shared library before calling align_take_to_reference"
-        )
     if take_sample_rate is None:
         take_sample_rate = sample_rate
     # Left at 0, the C spelling of "library value", when the caller supplied nothing.
@@ -241,11 +236,6 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     if not isinstance(chord, Chord):
         raise _refuse_type(f"chord must be a Chord, got {type(chord).__name__}")
     lib = _get_lib()
-    if not hasattr(lib, "sonare_chord_symbol_from_analysis"):
-        raise _not_supported(
-            "loaded libsonare does not export sonare_chord_symbol_from_analysis; "
-            "rebuild or upgrade the shared library before calling chord_symbol_from_analysis"
-        )
     root = _pitch_class_arg(chord.root, "chord.root")
     ordinal = _CHORD_QUALITY_ORDINALS.get(chord.quality)
     if ordinal is None:
@@ -292,11 +282,6 @@ def key_mode_from_analysis(mode: KeyMode) -> ProjectKeyMode:
     """
     ordinal = _mode_value(mode)
     lib = _get_lib()
-    if not hasattr(lib, "sonare_key_mode_from_analysis"):
-        raise _not_supported(
-            "loaded libsonare does not export sonare_key_mode_from_analysis; "
-            "rebuild or upgrade the shared library before calling key_mode_from_analysis"
-        )
     out_mode = ctypes.c_uint32()
     _check(lib.sonare_key_mode_from_analysis(_to_c_int32(ordinal, "mode"), ctypes.byref(out_mode)))
     return cast(ProjectKeyMode, _PROJECT_KEY_MODES[int(out_mode.value)])

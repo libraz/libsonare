@@ -18,7 +18,7 @@ from typing import Literal, cast, get_args
 
 import numpy as np
 
-from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_open, _unknown_error
+from ._errors import _entry, _refuse, _refuse_type, _require_open, _unknown_error
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._narrowing import _is_number, _narrow_double, _optional_nonzero
 from ._runtime import (
@@ -419,8 +419,6 @@ _SYNTH_ENUM_KINDS = {
 def synth_enum_tables() -> dict[str, tuple[str, ...]]:
     """Canonical NativeSynth enum-name tables supplied by the C ABI."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_enum_names"):
-        raise _not_supported("libsonare was built without the NativeSynth enum ABI")
     out: dict[str, tuple[str, ...]] = {}
     for key, kind in _SYNTH_ENUM_KINDS.items():
         raw = lib.sonare_synth_enum_names(_to_c_int(kind, "kind"))
@@ -553,8 +551,6 @@ class SampleBank:
         # attribute for __del__/close() instead of raising AttributeError.
         self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
-        if not hasattr(lib, "sonare_sample_bank_create"):
-            raise _not_supported("libsonare was built without the sample-bank ABI")
         handle = ctypes.c_void_p()
         _check(lib.sonare_sample_bank_create(ctypes.byref(handle)))
         self._handle = handle

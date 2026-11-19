@@ -26,7 +26,6 @@ from ._effects_note_model import (
 )
 from ._errors import _entry, _refuse, _require_open
 from ._narrowing import _narrow_double
-from ._runtime import _unsupported_effect_symbol
 
 if TYPE_CHECKING:
     # analyzer.pyi declares the two note dataclasses itself rather than
@@ -254,8 +253,6 @@ class PolyphonicAnalysis:
         buf = _validate_samples(samples)
 
         lib = _get_lib()
-        if not hasattr(lib, "sonare_polyphonic_analyze"):
-            raise _unsupported_effect_symbol("sonare_polyphonic_analyze")
 
         # The core reads 0 as "n_fft" / "derived"; here that is None, so a given 0 is refused.
         for name, named_zero in (("win_length", win_length), ("max_refine_hz", max_refine_hz)):

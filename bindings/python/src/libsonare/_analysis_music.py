@@ -537,63 +537,17 @@ def analyze_melody(
         hop_length: Hop length in samples of the input buffer.
         threshold: YIN/pYIN absolute threshold.
         use_pyin: When ``True``, use pYIN (probabilistic YIN with Viterbi
-            smoothing) instead of plain YIN. Requires
-            ``sonare_analyze_melody_ex`` in the loaded library; falls back to
-            plain YIN on older builds.
+            smoothing) instead of plain YIN.
         center: When ``True`` (default), apply librosa-style center padding
-            so the first frame is centred on sample 0. Requires
-            ``sonare_analyze_melody_ex``; older builds ignore this flag.
+            so the first frame is centred on sample 0.
 
     Returns:
         A :class:`MelodyResult` with the contour points and summary stats.
     """
     lib = _get_lib()
-
-    # Prefer the extended function when use_pyin or center flags are needed,
-    # or when it is the only melody entry point available.
-    if hasattr(lib, "sonare_analyze_melody_ex"):
-        if not hasattr(lib, "sonare_analyze_melody"):
-            pass  # fall through to _ex path below
-        c_array, length = _to_c_float_array(samples)
-        out = SonareMelodyResult()
-        rc = lib.sonare_analyze_melody_ex(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            _to_c_float(f0_min_hz, "f0_min_hz"),
-            _to_c_float(f0_max_hz, "f0_max_hz"),
-            _to_c_int(frame_length, "frame_length"),
-            _to_c_int(hop_length, "hop_length"),
-            _to_c_float(threshold, "threshold"),
-            ctypes.c_int(1 if use_pyin else 0),
-            ctypes.c_int(1 if center else 0),
-            ctypes.byref(out),
-        )
-        _check(rc)
-        try:
-            return MelodyResult(
-                points=[
-                    MelodyPoint(
-                        time_sec=float(out.points[i].time_sec),
-                        frequency_hz=_voiced_hz(out.points[i].frequency_hz),
-                        confidence=float(out.points[i].confidence),
-                    )
-                    for i in range(out.point_count)
-                ],
-                pitch_range_octaves=float(out.pitch_range_octaves),
-                pitch_stability=float(out.pitch_stability),
-                mean_frequency_hz=float(out.mean_frequency_hz),
-                vibrato_rate_hz=float(out.vibrato_rate_hz),
-            )
-        finally:
-            lib.sonare_free_melody_result(ctypes.byref(out))
-
-    _require_export(
-        lib, "sonare_analyze_melody", "libsonare was built without melody-analysis support"
-    )
     c_array, length = _to_c_float_array(samples)
     out = SonareMelodyResult()
-    rc = lib.sonare_analyze_melody(
+    rc = lib.sonare_analyze_melody_ex(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
@@ -602,6 +556,8 @@ def analyze_melody(
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(threshold, "threshold"),
+        ctypes.c_int(1 if use_pyin else 0),
+        ctypes.c_int(1 if center else 0),
         ctypes.byref(out),
     )
     _check(rc)
@@ -663,11 +619,9 @@ def abi_version() -> int:
 
     Folds every subsystem ABI macro into a single 32-bit value (see
     ``sonare_c.h``), letting a prebuilt binding detect an incompatible native
-    library. Returns 0 when the loaded library predates this symbol.
+    library.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_abi_version"):
-        return 0
     return int(lib.sonare_abi_version())
 
 

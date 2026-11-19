@@ -20,7 +20,7 @@ from ._engine_conversions import (
     _scope_telemetry_from_c,
     _telemetry_from_c,
 )
-from ._errors import _entry, _invalid_state, _not_supported, _refuse
+from ._errors import _entry, _invalid_state, _refuse
 from ._ffi_types_core import (
     SONARE_METER_MAX_INSERTS,
     SonareClipPageRequest,
@@ -510,8 +510,6 @@ class _EngineIoMixin:
     def reset_master_loudness_meter(self, render_frame: int | None = None) -> None:
         """Queue a reset of the master integrated-loudness meter."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_reset_master_loudness_meter"):
-            raise _not_supported("libsonare was built without master-meter reset support")
         _check(
             lib.sonare_engine_reset_master_loudness_meter(
                 self._require_handle(),
@@ -529,8 +527,6 @@ class _EngineIoMixin:
         their state. Raises when the command queue is full.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_reset_processor_state"):
-            raise _not_supported("libsonare was built without processor-state reset support")
         _check(
             lib.sonare_engine_reset_processor_state(
                 self._require_handle(),
@@ -573,8 +569,6 @@ class _EngineIoMixin:
         no requests either way. Safe to call during playback.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_clip_page_prefetch_frames"):
-            raise _not_supported("libsonare was built without clip-page look-ahead support")
         _check(
             lib.sonare_engine_set_clip_page_prefetch_frames(
                 self._require_handle(), _to_c_int64(frames, "frames")
@@ -585,8 +579,6 @@ class _EngineIoMixin:
     def clip_page_prefetch_frames(self) -> int:
         """Return the clip-page look-ahead window in timeline frames."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_clip_page_prefetch_frames"):
-            raise _not_supported("libsonare was built without clip-page look-ahead support")
         out = ctypes.c_int64()
         _check(
             lib.sonare_engine_clip_page_prefetch_frames(self._require_handle(), ctypes.byref(out))
@@ -603,8 +595,6 @@ class _EngineIoMixin:
         if max_records <= 0:
             return []
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_drain_meter_telemetry_v2"):
-            raise _not_supported("libsonare was built without meter-telemetry support")
         capacity = _to_c_size_t(max_records, "max_records")
         raw = (SonareMeterTelemetryRecordV2 * capacity.value)()
         written = ctypes.c_size_t()
@@ -626,8 +616,6 @@ class _EngineIoMixin:
         if max_records <= 0:
             return []
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_drain_meter_telemetry_wide_v2"):
-            raise _not_supported("libsonare was built without meter-telemetry support")
         capacity = _to_c_size_t(max_records, "max_records")
         raw = (SonareMeterTelemetryRecordWideV2 * capacity.value)()
         written = ctypes.c_size_t()
@@ -648,8 +636,6 @@ class _EngineIoMixin:
         (0xFFFF) and unused slots give an empty array.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_meter_target_insert_gain_reduction"):
-            raise _not_supported("libsonare was built without insert gain-reduction support")
         raw = (ctypes.c_float * SONARE_METER_MAX_INSERTS)()
         count = ctypes.c_size_t()
         _check(
@@ -667,8 +653,6 @@ class _EngineIoMixin:
     def insert_parameter_constructed_value(self, param_id: int) -> float:
         """Return an insert parameter's immutable construction value."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_insert_parameter_constructed_value"):
-            raise _not_supported("libsonare was built without insert constructed-value support")
         out_value = ctypes.c_float()
         _check(
             lib.sonare_engine_insert_parameter_constructed_value(
@@ -686,8 +670,6 @@ class _EngineIoMixin:
         engine). Returns the band count the engine actually applied.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_configure_scope_telemetry"):
-            raise _not_supported("libsonare was built without scope-telemetry support")
         applied = ctypes.c_uint()
         _check(
             lib.sonare_engine_configure_scope_telemetry(
@@ -705,8 +687,6 @@ class _EngineIoMixin:
         if max_records <= 0:
             return []
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_drain_scope_telemetry"):
-            raise _not_supported("libsonare was built without scope-telemetry support")
         capacity = _to_c_size_t(max_records, "max_records")
         raw = (SonareScopeTelemetryRecord * capacity.value)()
         written = ctypes.c_size_t()

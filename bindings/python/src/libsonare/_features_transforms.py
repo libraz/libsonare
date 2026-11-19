@@ -70,8 +70,6 @@ def cqt(
         the bin frequencies.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_cqt"):
-        raise _not_supported("libsonare was built without CQT support")
     c_array, length = _to_c_float_array(samples)
     out = SonareCqtResult()
     rc = lib.sonare_cqt(
@@ -219,13 +217,9 @@ def mel_to_stft(
         reconstructed STFT magnitude (not squared).
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mel_to_stft"):
-        raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, n_mels, n_frames = _to_c_float_matrix(mel, arg_name="mel")
     out = SonareInverseResult()
     if htk:
-        if not hasattr(lib, "sonare_mel_to_stft_ex"):
-            raise _not_supported("libsonare was built without HTK inverse-reconstruction support")
         rc = lib.sonare_mel_to_stft_ex(
             c_array,
             _to_c_int(n_mels, "n_mels"),
@@ -312,8 +306,6 @@ def mel_to_audio(
         The reconstructed audio samples as a float32 array.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mel_to_audio"):
-        raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, n_mels, n_frames = _to_c_float_matrix(mel, arg_name="mel")
     return _inverse_audio(
         lib,
@@ -398,29 +390,16 @@ def mfcc_to_mel(
         A float32 array of shape ``(n_mels, n_frames)`` with the reconstructed Mel power.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mfcc_to_mel"):
-        raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, n_mfcc, n_frames = _to_c_float_matrix(coefficients, arg_name="coefficients")
     out = SonareInverseResult()
-    if hasattr(lib, "sonare_mfcc_to_mel_ex"):
-        rc = lib.sonare_mfcc_to_mel_ex(
-            c_array,
-            _to_c_int(n_mfcc, "n_mfcc"),
-            _to_c_int(n_frames, "n_frames"),
-            _to_c_int(n_mels, "n_mels"),
-            _to_c_float(lifter, "lifter"),
-            ctypes.byref(out),
-        )
-    else:
-        if lifter != 0.0:
-            raise _not_supported("this libsonare build does not support inverse MFCC liftering")
-        rc = lib.sonare_mfcc_to_mel(
-            c_array,
-            _to_c_int(n_mfcc, "n_mfcc"),
-            _to_c_int(n_frames, "n_frames"),
-            _to_c_int(n_mels, "n_mels"),
-            ctypes.byref(out),
-        )
+    rc = lib.sonare_mfcc_to_mel_ex(
+        c_array,
+        _to_c_int(n_mfcc, "n_mfcc"),
+        _to_c_int(n_frames, "n_frames"),
+        _to_c_int(n_mels, "n_mels"),
+        _to_c_float(lifter, "lifter"),
+        ctypes.byref(out),
+    )
     _check(rc)
     try:
         return _from_c_float_matrix(out.data, int(out.rows), int(out.n_frames))
@@ -459,8 +438,6 @@ def mfcc_to_audio(
         The reconstructed audio samples as a float32 array.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mfcc_to_audio"):
-        raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, n_mfcc, n_frames = _to_c_float_matrix(coefficients, arg_name="coefficients")
     hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
     if lifter == 0.0:
@@ -482,8 +459,6 @@ def mfcc_to_audio(
             n_iter,
             htk,
         )
-    if not hasattr(lib, "sonare_mfcc_to_audio_ex2"):
-        raise _not_supported("this libsonare build does not support inverse MFCC liftering")
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
     rc = lib.sonare_mfcc_to_audio_ex2(
@@ -538,8 +513,6 @@ def vqt(
         the bin frequencies.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_vqt"):
-        raise _not_supported("libsonare was built without VQT support")
     c_array, length = _to_c_float_array(samples)
     out = SonareCqtResult()
     rc = lib.sonare_vqt(

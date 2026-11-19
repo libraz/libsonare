@@ -16,7 +16,7 @@ import math
 from collections.abc import Sequence
 from typing import TypeVar
 
-from ._errors import _entry, _not_supported, _refuse, _refuse_type
+from ._errors import _entry, _refuse, _refuse_type
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -263,8 +263,6 @@ def synthesize_rir(
             code, such as ``acoustic.source_outside_room``.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_synthesize_rir"):
-        raise _not_supported("libsonare was built without acoustic-simulation support")
     bands_ptr, bands_count, _bands_owner = _band_array_args(
         band_absorption, arg_name="band_absorption"
     )
@@ -360,8 +358,6 @@ def estimate_room(
             negative value; omit it for the default.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_estimate_room"):
-        raise _not_supported("libsonare was built without acoustic-simulation support")
     c_array, length = _to_c_float_array(samples)
     config = SonareRoomEstimateConfig(
         aspect_hint_lw=aspect_hint_lw,
@@ -604,8 +600,6 @@ def room_morph(
             reporting a diagnostic, because the morph validates its config.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_room_morph"):
-        raise _not_supported("libsonare was built without acoustic-simulation support")
     c_array, length = _to_c_float_array(samples)
     config, _owners = _room_morph_config(
         length_m,
@@ -702,8 +696,6 @@ def room_morph_stereo(
     The remaining keywords are those of :func:`room_morph`.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_room_morph_stereo"):
-        raise _not_supported("libsonare was built without acoustic-simulation support")
     spacing: float | None = None
     if receiver_spacing_m is not None:
         spacing = _narrow_double(receiver_spacing_m, "receiver_spacing_m")

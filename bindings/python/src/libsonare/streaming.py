@@ -10,7 +10,7 @@ import numpy as np
 
 from . import _ffi_types_streaming as _ffi_streaming
 from ._analysis_detection import _UNKNOWN_QUALITY_ORDINAL
-from ._errors import _entry, _not_supported, _require_open
+from ._errors import _entry, _require_open
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _WINDOW_TYPES,
@@ -125,8 +125,6 @@ class StreamAnalyzer:
         # Set first so a failed create leaves a valid attribute for __del__/close().
         self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
-        if not hasattr(lib, "sonare_stream_analyzer_create"):
-            raise _not_supported("libsonare was built without StreamAnalyzer support")
         raw = _ffi_streaming.SonareStreamConfig()
         _check(lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)))
         # Integer fields are assigned bare: SonareStreamConfig is a CStruct, so
@@ -243,8 +241,6 @@ class StreamAnalyzer:
         without the overlap context the finalized tail consumed.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_stream_analyzer_finalize"):
-            raise _not_supported("libsonare was built without StreamAnalyzer.finalize support")
         _check(lib.sonare_stream_analyzer_finalize(self._require_handle()))
 
     @property
@@ -341,8 +337,7 @@ class StreamAnalyzer:
         try:
             return _stream_stats_from_c(raw)
         finally:
-            if hasattr(lib, "sonare_free_stream_stats"):
-                lib.sonare_free_stream_stats(ctypes.byref(raw))
+            lib.sonare_free_stream_stats(ctypes.byref(raw))
 
     @property
     def frame_count(self) -> int:
