@@ -1040,7 +1040,9 @@ class Mixer:
             left_array, left_length = _to_c_float_array(left, arg_name=f"left_inputs[{index}]")
             right_array, right_length = _to_c_float_array(right, arg_name=f"right_inputs[{index}]")
             if left_length != right_length:
-                raise _refuse("left and right channel lengths must match")
+                raise _refuse(
+                    f"left_inputs[{index}] and right_inputs[{index}] must have the same length"
+                )
             if length is None:
                 length = left_length
             elif left_length != length:
@@ -1259,7 +1261,9 @@ def mix_stereo(
         left_array, left_length = _to_c_float_array(left_buf)
         right_array, right_length = _to_c_float_array(right_buf)
         if left_length != right_length:
-            raise _refuse("left and right channel lengths must match")
+            raise _refuse(
+                f"strips[{index}] left and strips[{index}] right must have the same length"
+            )
         if length is None:
             length = left_length
         elif left_length != length:

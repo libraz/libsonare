@@ -256,7 +256,7 @@ def mastering_repair_declick_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     config = SonareDeclickConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         neighbor_ratio=_narrow_double(neighbor_ratio, "neighbor_ratio"),
@@ -475,7 +475,7 @@ def mastering_repair_declip_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
         lpc_order=_narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX),
@@ -648,7 +648,7 @@ def mastering_repair_decrackle_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         mode=_coerce_decrackle_mode(mode, "mode"),

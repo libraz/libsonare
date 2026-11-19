@@ -409,7 +409,7 @@ def mastering_repair_denoise_classical_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode, "mode"),
         noise_estimator=_coerce_denoise_estimator(noise_estimator, "noise_estimator"),
@@ -777,7 +777,7 @@ def mastering_repair_dehum_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=_narrow_double(fundamental_hz, "fundamental_hz"),
         harmonics=_narrow_int(harmonics, "harmonics", _C_INT_MIN, _C_INT_MAX),

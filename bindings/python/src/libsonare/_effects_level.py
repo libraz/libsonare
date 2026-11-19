@@ -112,7 +112,7 @@ def _run_normalize_stereo(
     left_array, left_length = _to_c_float_array(left, arg_name="left")
     right_array, right_length = _to_c_float_array(right, arg_name="right")
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     out = SonareNormalizeStereoResult()
     rc = getattr(lib, symbol)(
         left_array,

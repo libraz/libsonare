@@ -206,9 +206,9 @@ class TestNormalizeStereoPairRefusals:
     @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_unequal_lengths_are_refused(self, call: object) -> None:
         left, right = _pair()
-        with pytest.raises(SonareValueError, match="lengths must match"):
+        with pytest.raises(SonareValueError, match=r": left and right must have the same length$"):
             call(left[:-1], right, SR)  # type: ignore[operator]
-        with pytest.raises(SonareValueError, match="lengths must match"):
+        with pytest.raises(SonareValueError, match=r": left and right must have the same length$"):
             call(left, right[:-1], SR)  # type: ignore[operator]
 
     @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])

@@ -509,7 +509,7 @@ def mastering_apply_processor_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     param_array, param_count = _mastering_params(_processor_params(processor, params))
     out = SonareMasteringStereoResult()
     rc = lib.sonare_mastering_apply_processor_stereo(
@@ -923,7 +923,7 @@ def master_audio_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     audio = (
         left_array,
         right_array,

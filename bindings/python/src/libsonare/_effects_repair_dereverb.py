@@ -308,7 +308,7 @@ def mastering_repair_dereverb_classical_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         attenuation=_narrow_double(attenuation, "attenuation"),

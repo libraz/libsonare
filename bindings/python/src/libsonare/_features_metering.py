@@ -382,7 +382,7 @@ def metering_crest_factor_db_stereo(
     left_array, left_length = _to_c_float_array(left_buf)
     right_array, right_length = _to_c_float_array(right_buf)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     out = ctypes.c_float(0.0)
     rc = lib.sonare_metering_crest_factor_db_stereo(
         left_array,
@@ -491,7 +491,7 @@ def _stereo_scalar(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise _refuse("left and right buffers must have the same length")
+        raise _refuse("left and right must have the same length")
     out = ctypes.c_float(0.0)
     rc = getattr(lib, name)(
         left_array,
@@ -591,7 +591,7 @@ def metering_vectorscope(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise _refuse("left and right buffers must have the same length")
+        raise _refuse("left and right must have the same length")
     out = SonareVectorscopeResult()
     rc = lib.sonare_metering_vectorscope(
         left_array,
@@ -629,7 +629,7 @@ def metering_vectorscope_decimated(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise _refuse("left and right buffers must have the same length")
+        raise _refuse("left and right must have the same length")
     out = SonareVectorscopeResult()
     rc = lib.sonare_metering_vectorscope_decimated(
         left_array,
@@ -670,7 +670,7 @@ def metering_phase_scope(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise _refuse("left and right buffers must have the same length")
+        raise _refuse("left and right must have the same length")
     out = SonarePhaseScopeResult()
     rc = lib.sonare_metering_phase_scope(
         left_array,
@@ -716,7 +716,7 @@ def metering_phase_scope_decimated(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise _refuse("left and right buffers must have the same length")
+        raise _refuse("left and right must have the same length")
     out = SonarePhaseScopeResult()
     rc = lib.sonare_metering_phase_scope_decimated(
         left_array,

@@ -248,7 +248,7 @@ def mastering_repair_detect_trim_range_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_domain_float(threshold_db, "threshold_db"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
@@ -343,7 +343,7 @@ def mastering_repair_trim_silence_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_domain_float(threshold_db, "threshold_db"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),

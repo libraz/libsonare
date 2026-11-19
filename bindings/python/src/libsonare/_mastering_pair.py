@@ -171,9 +171,9 @@ def mastering_apply_pair_processor_stereo(
         reference_right, arg_name="reference_right"
     )
     if source_left_length != source_right_length:
-        raise _refuse("source_left and source_right channel lengths must match")
+        raise _refuse("source_left and source_right must have the same length")
     if reference_left_length != reference_right_length:
-        raise _refuse("reference_left and reference_right channel lengths must match")
+        raise _refuse("reference_left and reference_right must have the same length")
     out = SonareMasteringStereoResult()
     try:
         rc = lib.sonare_mastering_apply_pair_processor_stereo_ex(
@@ -369,9 +369,9 @@ def mastering_ab_match_loudness_stereo(
         reference_right, arg_name="reference_right"
     )
     if source_left_length != source_right_length:
-        raise _refuse("source_left and source_right channel lengths must match")
+        raise _refuse("source_left and source_right must have the same length")
     if reference_left_length != reference_right_length:
-        raise _refuse("reference_left and reference_right channel lengths must match")
+        raise _refuse("reference_left and reference_right must have the same length")
     out = SonareMasteringStereoResult()
     match = SonareLoudnessMatch()
     try:
@@ -427,7 +427,7 @@ def mastering_analyze_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_analyze_stereo(
@@ -757,7 +757,7 @@ def _stereo_channels(
     left_array, left_length = _to_c_float_array(left, arg_name="left")
     right_array, right_length = _to_c_float_array(right, arg_name="right")
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     return left_array, right_array, left_length
 
 

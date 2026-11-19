@@ -177,6 +177,118 @@ def test_metering_stereo_rejects_mismatched_lengths() -> None:
         libsonare.metering_vectorscope(left, right, SR)
 
 
+_A = [0.1] * 4800
+_B = [0.1] * 4799
+
+
+@pytest.mark.parametrize(
+    ("entry", "call", "pair"),
+    [
+        (
+            "metering_stereo_correlation",
+            lambda: libsonare.metering_stereo_correlation(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "metering_vectorscope",
+            lambda: libsonare.metering_vectorscope(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "metering_vectorscope_decimated",
+            lambda: libsonare.metering_vectorscope_decimated(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "metering_phase_scope",
+            lambda: libsonare.metering_phase_scope(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "metering_phase_scope_decimated",
+            lambda: libsonare.metering_phase_scope_decimated(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "metering_crest_factor_db_stereo",
+            lambda: libsonare.metering_crest_factor_db_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_repair_declick_stereo",
+            lambda: libsonare.mastering_repair_declick_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_repair_declip_stereo",
+            lambda: libsonare.mastering_repair_declip_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_repair_decrackle_stereo",
+            lambda: libsonare.mastering_repair_decrackle_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_repair_denoise_classical_stereo",
+            lambda: libsonare.mastering_repair_denoise_classical_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_repair_dehum_stereo",
+            lambda: libsonare.mastering_repair_dehum_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_repair_dereverb_classical_stereo",
+            lambda: libsonare.mastering_repair_dereverb_classical_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_repair_detect_trim_range_stereo",
+            lambda: libsonare.mastering_repair_detect_trim_range_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_repair_trim_silence_stereo",
+            lambda: libsonare.mastering_repair_trim_silence_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "master_audio_stereo",
+            lambda: libsonare.master_audio_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "streaming_loudness_gain_stereo",
+            lambda: libsonare.streaming_loudness_gain_stereo(_A, _B, 48000),
+            "left and right",
+        ),
+        (
+            "mastering_ab_match_loudness_stereo",
+            lambda: libsonare.mastering_ab_match_loudness_stereo(_A, _B, _A, _A, 48000),
+            "source_left and source_right",
+        ),
+        (
+            "mastering_ab_match_loudness_stereo",
+            lambda: libsonare.mastering_ab_match_loudness_stereo(_A, _A, _A, _B, 48000),
+            "reference_left and reference_right",
+        ),
+        (
+            "mix_stereo",
+            lambda: libsonare.mix_stereo([(_A, _A), (_A, _B)], 48000),
+            "strips[1] left and strips[1] right",
+        ),
+    ],
+)
+def test_a_stereo_pair_of_unequal_lengths_names_both_channels(
+    entry: str, call: Any, pair: str
+) -> None:
+    with pytest.raises(libsonare.SonareValueError) as refused:
+        call()
+    assert str(refused.value) == f"{entry}: {pair} must have the same length"
+
+
 def test_metering_stereo_rejects_invalid_sample_rates() -> None:
     left = _sine(440.0, 0.1)
     with raises_coded():

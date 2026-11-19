@@ -130,7 +130,7 @@ def streaming_loudness_gain_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise _refuse("left and right channel lengths must match")
+        raise _refuse("left and right must have the same length")
     param_array, param_count = _chain_params(config, "config")
     out = SonareStreamingLoudnessGain()
     rc = lib.sonare_streaming_loudness_gain_stereo(
@@ -296,7 +296,7 @@ class StreamingMasteringChain:
         left_array, left_length = _to_c_float_array_owned(left, arg_name="left")
         right_array, right_length = _to_c_float_array_owned(right, arg_name="right")
         if left_length != right_length:
-            raise _refuse("left and right channel lengths must match")
+            raise _refuse("left and right must have the same length")
         rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
             self._handle, left_array, right_array, _to_c_size_t(left_length, "left_length")
         )
@@ -633,7 +633,7 @@ class StreamingEqualizer:
         left_array, left_length = _to_c_float_array(left)
         right_array, right_length = _to_c_float_array(right)
         if left_length != right_length:
-            raise _refuse("left and right sidechain lengths must match")
+            raise _refuse("left and right must have the same length")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
         channels = channel_array_type(
             ctypes.cast(left_array, ctypes.POINTER(ctypes.c_float)),
@@ -727,7 +727,7 @@ class StreamingEqualizer:
         left_array, left_length = _to_c_float_array_owned(left, arg_name="left")
         right_array, right_length = _to_c_float_array_owned(right, arg_name="right")
         if left_length != right_length:
-            raise _refuse("left and right channel lengths must match")
+            raise _refuse("left and right must have the same length")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
         channels = channel_array_type(
             ctypes.cast(left_array, ctypes.POINTER(ctypes.c_float)),
