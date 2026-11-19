@@ -148,8 +148,11 @@ def test_empty_and_non_finite_input_are_rejected() -> None:
         libsonare.PolyphonicAnalysis(np.empty(0, dtype=np.float32), SR)
     bad = _chord()
     bad[10] = np.nan
-    with pytest.raises(SonareValueError, match="NaN"):
+    with pytest.raises(SonareValueError) as caught:
         libsonare.PolyphonicAnalysis(bad, SR)
+    assert (
+        str(caught.value) == "PolyphonicAnalysis: samples contains a non-finite sample at index 10"
+    )
 
 
 # ---------------------------------------------------------------------------

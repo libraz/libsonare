@@ -90,7 +90,9 @@ def test_non_finite_inside_the_frame_is_refused_by_absolute_index(bad: float) ->
     bad_index = FRAME_OFFSET + 176
     with pytest.raises(
         SonareValueError,
-        match=rf"^metering_spectrum_frame: samples contains a non-finite sample at index {bad_index}$",
+        match=(
+            rf"^metering_spectrum_frame: samples contains a non-finite sample at index {bad_index}$"
+        ),
     ):
         libsonare.metering_spectrum_frame(_with(bad_index, bad), SR, FRAME_OFFSET, N_FFT)
 

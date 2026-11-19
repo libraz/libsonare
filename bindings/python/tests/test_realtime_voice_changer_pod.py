@@ -250,7 +250,7 @@ def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None
     )
     # The creation document is a JSON entry point: its content defect is InvalidFormat.
     with pytest.raises(
-        SonareError, match=r"formantFactor must be in \[0\.55, 0\.981\] "
+        SonareError, match=r"formantFactor must be finite and in \[0\.55, 0\.981\] "
     ) as refused:
         libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(unreachable))
     assert not isinstance(refused.value, SonareValueError)
@@ -261,11 +261,11 @@ def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     with libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(base)) as changer:
         before = changer.config
-        factor_range = r"formant\.factor must be finite and in \[0\.55, 1\.65\]"
+        factor_range = r": formant_factor must be finite and in \[0\.55, 1\.65\]$"
         with pytest.raises(SonareValueError, match=factor_range):
             changer.set_config(dataclasses.replace(base, formant_factor=3.0))
         with pytest.raises(
-            SonareValueError, match=r"limiter\.ceilingDb must be finite and in \[-12, -1\]"
+            SonareValueError, match=r": limiter_ceiling_db must be finite and in \[-12, -1\]$"
         ):
             changer.set_config(dataclasses.replace(base, limiter_ceiling_db=0.5))
         assert changer.config == before
@@ -392,3 +392,40 @@ def test_an_explicit_grain_reads_back_as_given() -> None:
         assert changer.config.retune_grain_size_samples == 1024
     finally:
         changer.close()
+
+
+_FORMANT_RANGE = r"formant_factor must be finite and in \[0\.55, 1\.65\]$"
+_FORMANT_WARP = (
+    r"formant_factor must be finite and in \[0\.55, 0\.981\] in absolute formant mode at "
+    r"retune_pitch_semitones -9 \(the warp reaches \[0\.3271, 0\.981\] there\)$"
+)
+
+
+@pytest.mark.parametrize(
+    ("changes", "predicate"),
+    [
+        ({"formant_factor": 0.3}, _FORMANT_RANGE),
+        ({"formant_factor": 1.2, "voice_engine": "grain"}, _FORMANT_WARP),
+    ],
+    ids=["range", "warp"],
+)
+def test_a_record_field_refusal_names_the_record_field(
+    changes: dict[str, object], predicate: str
+) -> None:
+    """The record's own field names reach the refusal, the second key in a sentence included."""
+    base = dataclasses.replace(
+        libsonare.RealtimeVoiceChangerConfig(),
+        formant_mode="absolute",
+        retune_pitch_semitones=-9.0,
+        retune_mix=1.0,
+    )
+    refused = dataclasses.replace(base, **changes)
+    accepted = dataclasses.replace(refused, formant_factor=0.6)
+    with pytest.raises(libsonare.SonareValueError, match=rf"^RealtimeVoiceChanger: {predicate}"):
+        libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=refused)
+    with libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=accepted) as changer:
+        with pytest.raises(
+            libsonare.SonareValueError, match=rf"^RealtimeVoiceChanger\.set_config: {predicate}"
+        ):
+            changer.set_config(refused)
+        assert changer.config.formant_factor == pytest.approx(0.6)

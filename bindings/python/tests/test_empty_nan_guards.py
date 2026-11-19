@@ -195,7 +195,9 @@ class TestNanInfGuards:
     def test_mastering_dynamics_compressor_rejects_nan(self):
         with pytest.raises(
             ValueError,
-            match=r"mastering_dynamics_compressor: samples contains a non-finite sample at index 100",
+            match=(
+                r"mastering_dynamics_compressor: samples contains a non-finite sample at index 100"
+            ),
         ):
             mastering_dynamics_compressor(_with_nan(), SR)
 
@@ -471,7 +473,10 @@ class TestNonFiniteInputYieldsNoPlausibleResult:
             assert len(eq.magnitude_response([100.0, 1000.0])) == 2
             with pytest.raises(
                 SonareValueError,
-                match=r"^StreamingEqualizer\.magnitude_response: frequencies_hz contains a non-finite sample at index 1$",
+                match=(
+                    r"^StreamingEqualizer\.magnitude_response: "
+                    r"frequencies_hz contains a non-finite sample at index 1$"
+                ),
             ):
                 eq.magnitude_response([100.0, math.nan, 1000.0])
 

@@ -94,8 +94,11 @@ def test_insert_timing_rejects_an_unknown_key() -> None:
     """A key the insert does not read is refused rather than silently ignored."""
     import libsonare
 
-    with pytest.raises(libsonare.SonareError, match="does not read parameter\\(s\\).*bogus"):
+    with pytest.raises(libsonare.SonareValueError) as caught:
         libsonare.mastering_insert_timing("saturation.softClipper", {"bogus": 1.0}, 48000)
+    assert str(caught.value) == (
+        "mastering_insert_timing: unknown key bogus (expected aliasing, ceiling, driveDb, mix)"
+    )
 
 
 def test_insert_timing_rejects_non_finite_and_non_numeric_values() -> None:

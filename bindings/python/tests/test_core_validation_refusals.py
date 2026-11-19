@@ -71,10 +71,12 @@ def test_mfcc_to_mel_accepts(case: dict) -> None:
 @pytest.mark.parametrize("case", _MFCC["refused"], ids=lambda case: case["id"])
 def test_mfcc_to_mel_refuses(case: dict) -> None:
     error_class = _ERROR_CLASS[case["cause"]]
-    with pytest.raises(error_class, match=case["message"]):
+    with pytest.raises(error_class) as caught:
         libsonare.mfcc_to_mel(_mfcc(), n_mels=case["n_mels"])
-    with pytest.raises(error_class, match=case["message"]):
+    assert str(caught.value) == f"mfcc_to_mel: {case['message']}"
+    with pytest.raises(error_class) as caught:
         libsonare.mfcc_to_audio(_mfcc(), n_mels=case["n_mels"], n_iter=1)
+    assert str(caught.value) == f"mfcc_to_audio: {case['message']}"
 
 
 def _mel() -> np.ndarray:
@@ -89,8 +91,9 @@ def test_mel_to_audio_accepts(case: dict) -> None:
 
 @pytest.mark.parametrize("case", _MEL["refused"], ids=lambda case: case["id"])
 def test_mel_to_audio_refuses(case: dict) -> None:
-    with pytest.raises(_ERROR_CLASS[case["cause"]], match=case["message"]):
+    with pytest.raises(_ERROR_CLASS[case["cause"]]) as caught:
         libsonare.mel_to_audio(_mel(), n_iter=case["n_iter"])
+    assert str(caught.value) == f"mel_to_audio: {case['message']}"
 
 
 def _mfcc_audio() -> np.ndarray:
@@ -107,8 +110,9 @@ def test_mfcc_to_audio_accepts(case: dict) -> None:
 @pytest.mark.parametrize("case", _MFCC_AUDIO["refused"], ids=lambda case: case["id"])
 def test_mfcc_to_audio_refuses(case: dict) -> None:
     n_mels = _MFCC_AUDIO["input"]["n_mels"]
-    with pytest.raises(_ERROR_CLASS[case["cause"]], match=case["message"]):
+    with pytest.raises(_ERROR_CLASS[case["cause"]]) as caught:
         libsonare.mfcc_to_audio(_mfcc_audio(), n_mels=n_mels, n_iter=case["n_iter"])
+    assert str(caught.value) == f"mfcc_to_audio: {case['message']}"
 
 
 def _griffin_lim_magnitude(n_fft: int) -> np.ndarray:

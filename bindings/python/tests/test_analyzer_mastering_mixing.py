@@ -253,10 +253,14 @@ def test_a_renamed_insert_key_is_refused_with_its_new_spelling(
 def test_a_key_renamed_only_on_another_insert_gets_no_hint() -> None:
     import libsonare
 
-    with pytest.raises(libsonare.SonareValueError, match=r"parameter\(s\): semitones$"):
+    with pytest.raises(libsonare.SonareValueError) as caught:
         libsonare.mastering_apply_processor(
             "effects.reverb.velvet", np.zeros(4800, np.float32), 48000, {"semitones": 1.0}
         )
+    assert str(caught.value) == (
+        "mastering_apply_processor: unknown key semitones "
+        "(expected decay, decaySec, densityHz, dryWet, enableShelf, reverbTimeSec)"
+    )
 
 
 def test_mastering_amp_preset_catalog_reports_index_name_and_params() -> None:
