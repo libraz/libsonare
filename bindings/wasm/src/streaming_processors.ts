@@ -8,9 +8,16 @@ import type {
   EqStereoPlacement,
   StreamingEqualizerConfig,
   StreamingMasteringChainConfig,
+  StreamingRetuneAppliedConfig,
   StreamingRetuneConfig,
 } from './public_types.js';
-import { assertInt32, assertIntegerValue, requireBoolean, requireToken } from './validation.js';
+import {
+  assertInt32,
+  assertIntegerValue,
+  assertRetuneGrain,
+  requireBoolean,
+  requireToken,
+} from './validation.js';
 
 /** Global equalizer phase mode. */
 export type EqPhaseMode = 'zero' | 'natural' | 'linear';
@@ -601,7 +608,8 @@ export class StreamingEqualizer {
 // StreamingRetune Class
 // ============================================================================
 
-// Native refuses unknown keys, wrong types and an explicit 0 `grainSizeSamples` itself.
+// The grain is checked here because native rounds a fraction and reads a negative as automatic;
+// native refuses unknown keys and wrong-typed controls.
 function assertRetuneConfig(
   fnName: string,
   config: StreamingRetuneConfig,
@@ -609,6 +617,11 @@ function assertRetuneConfig(
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError(`${fnName}: config must be an object`);
   }
+  const { grainSizeSamples, ...rest } = config as Record<string, unknown>;
+  if (grainSizeSamples === undefined || grainSizeSamples === null) {
+    return rest;
+  }
+  assertRetuneGrain(fnName, grainSizeSamples, 'grainSizeSamples');
   return config as Record<string, unknown>;
 }
 
@@ -649,27 +662,30 @@ export class StreamingRetune {
   /**
    * Update the live controls; omitted keys keep their current value. Changing
    * `grainSizeSamples` takes effect after the next {@link prepare} call, and an
-   * omitted `grainSizeSamples` keeps whatever was last requested, so a
-   * re-{@link prepare} at another sample rate re-derives a derived grain.
+   * omitted `grainSizeSamples` keeps the configured one, automatic included, so a
+   * re-{@link prepare} at another sample rate re-derives an automatic grain.
    *
-   * @throws TypeError for a wrong-typed or unknown key; RangeError for an explicit 0
-   *   `grainSizeSamples` or a non-finite control.
+   * @throws TypeError for a wrong-typed or unknown key; RangeError for a `grainSizeSamples`
+   *   of 0 or not a multiple of 4 in [4, 8192], or a non-finite control.
    */
   setConfig(config: StreamingRetuneConfig): void {
     this.retune.setConfig(assertRetuneConfig('StreamingRetune.setConfig', config));
   }
 
-  /** The currently applied controls, with `grainSizeSamples` as the effective one. */
-  config(): Required<StreamingRetuneConfig> {
+  /**
+   * The configured controls, in the form {@link setConfig} accepts, so
+   * `other.setConfig(retune.config())` reproduces them. An automatic grain reads back as an
+   * absent `grainSizeSamples`; the grain in use is {@link grainSizeSamples}.
+   */
+  config(): StreamingRetuneAppliedConfig {
     const native = this.retune.config();
-    return {
-      pitchSemitones: native.pitchSemitones,
-      mix: native.mix,
-      grainSizeSamples: native.grainSizeSamples,
-    };
+    const controls = { pitchSemitones: native.pitchSemitones, mix: native.mix };
+    return native.grainSizeSamples === 0
+      ? controls
+      : { ...controls, grainSizeSamples: native.grainSizeSamples };
   }
 
-  /** Resolved grain size in samples after {@link prepare}; 0 before. */
+  /** Grain size in use, in samples, after {@link prepare}; 0 before. */
   get grainSizeSamples(): number {
     return this.retune.grainSizeSamples();
   }

@@ -472,6 +472,32 @@ export function assertBoundedInteger(
   }
 }
 
+/** The core's largest retune grain, in samples. */
+const MAX_RETUNE_GRAIN_SAMPLES = 8192;
+
+/**
+ * A given retune grain: `TypeError` unless a number; `RangeError` for 0, since absence is the
+ * automatic grain, and for anything but a multiple of 4 in `[4, 8192]` (the hop is a quarter).
+ */
+export function assertRetuneGrain(fnName: string, value: unknown, argName: string): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  if (value === 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be 0; omit it for the automatic grain`);
+  }
+  if (
+    !Number.isInteger(value) ||
+    value % 4 !== 0 ||
+    value < 4 ||
+    value > MAX_RETUNE_GRAIN_SAMPLES
+  ) {
+    throw new RangeError(
+      `${fnName}: ${argName} must be a multiple of 4 in [4, ${MAX_RETUNE_GRAIN_SAMPLES}]`,
+    );
+  }
+}
+
 export function assertU7(fnName: string, value: number, argName: string): number {
   if (!Number.isInteger(value) || value < 0 || value > 127) {
     throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 127]`);

@@ -1023,6 +1023,7 @@ export type {
   StreamingLoudnessGainResult,
   StreamingMasteringChainConfig,
   StreamingPlatform,
+  StreamingRetuneAppliedConfig,
   StreamingRetuneConfig,
   SurroundPan,
   SynthesizeRirRequest,

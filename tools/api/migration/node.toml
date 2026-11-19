@@ -10373,7 +10373,7 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses th
 kind = "field"
 old = "RealtimeVoiceChangerConfig.retuneGrainSize"
 to = "RealtimeVoiceChangerConfig.retuneGrainSizeSamples"
-changed = "retuneGrainSize -> retuneGrainSizeSamples"
+changed = "retuneGrainSize -> retuneGrainSizeSamples (a multiple of 4 in [4, 8192]; absent = the automatic grain; 0 and any other value outside the domain -> RangeError, never rounded or clamped)"
 domain = "effects"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
@@ -10409,7 +10409,7 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::refuses the old optio
 kind = "field"
 old = "StreamingRetuneConfig.grainSize"
 to = "StreamingRetuneConfig.grainSizeSamples"
-changed = "grainSize -> grainSizeSamples (grain size in samples; absent = derived from the sample rate; explicit 0 -> RangeError)"
+changed = "grainSize -> grainSizeSamples (grain size in samples, a multiple of 4 in [4, 8192]; absent = the automatic grain derived from the sample rate; 0 and any other value outside the domain -> RangeError, never rounded or clamped)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
@@ -10568,6 +10568,14 @@ changed = "readonly getter grainSizeSamples: number"
 domain = "effects"
 rule = "getters"
 test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.config"
+changed = "returns StreamingRetuneAppliedConfig { pitchSemitones, mix, grainSizeSamples? }: grainSizeSamples is the grain as configured, absent when automatic (was the grain in use); the grain in use is the grainSizeSamples getter, and setConfig(config()) round-trips"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/streaming-retune.test.ts::reads an automatic grain back as absent before and after prepare"
 
 [[entry]]
 kind = "method"

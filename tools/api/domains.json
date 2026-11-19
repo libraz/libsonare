@@ -2194,6 +2194,7 @@
 "streaming_mastering_chain_stage_names": {"domain": "mastering", "surfaces": ["c"]},
 "streaming_platform": {"domain": "mastering", "surfaces": ["c", "node", "wasm"]},
 "streaming_retune": {"domain": "effects", "surfaces": ["c", "node", "python", "wasm"]},
+"streaming_retune_applied_config": {"domain": "effects", "surfaces": ["node", "wasm"]},
 "streaming_retune_config": {"domain": "effects", "surfaces": ["c", "node", "wasm"]},
 "streaming_retune_create": {"domain": "effects", "surfaces": ["c"]},
 "streaming_retune_destroy": {"domain": "effects", "surfaces": ["c"]},

@@ -147,11 +147,18 @@ export interface StreamingRetuneConfig {
   /** Wet/dry mix, clamped by the native processor to 0..1. Default 1. */
   mix?: number;
   /**
-   * Grain size in samples. Omit to derive it from the sample rate; an explicit 0 throws
-   * `RangeError`.
+   * Grain size in samples, a multiple of 4 in [4, 8192]. Omitted: the automatic grain, derived
+   * from the sample rate at each `prepare` and readable from `StreamingRetune.grainSizeSamples`
+   * after it; 0 is refused. Takes effect at the next `prepare`.
    */
   grainSizeSamples?: number;
 }
+
+/** The controls {@link StreamingRetune.config} reports; `grainSizeSamples` is absent when automatic. */
+export type StreamingRetuneAppliedConfig = Required<
+  Omit<StreamingRetuneConfig, 'grainSizeSamples'>
+> &
+  Pick<StreamingRetuneConfig, 'grainSizeSamples'>;
 
 /** Options for {@link StreamingEqualizer.match}. */
 export interface EqMatchOptions {
@@ -277,7 +284,7 @@ export interface RealtimeVoiceChangerConfig {
   retunePitchSemitones: number;
   /** Wet/dry mix of the retune stage. */
   retuneMix: number;
-  /** Retune grain length in samples; omitted for the automatic grain, and never 0. */
+  /** Retune grain length in samples, a multiple of 4 in [4, 8192]; omitted for the automatic grain. */
   retuneGrainSizeSamples?: number;
   /** Formant shift factor; 1 leaves the formants unchanged. */
   formantFactor: number;

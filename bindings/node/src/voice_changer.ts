@@ -9,6 +9,7 @@ import {
   assertAudioChannels,
   assertAudioInput,
   assertPositiveInteger,
+  assertRetuneGrain,
   assertSampleRate,
   requestOnly,
   sampleOneShot,
@@ -79,7 +80,7 @@ function assertFlatConfigFields(fnName: string, config: Record<string, unknown>)
 
 /**
  * The one optional flat field: an omitted (`undefined` or `null`) retune grain is the
- * automatic grain and leaves the key out; an explicit 0 is refused rather than read as it.
+ * automatic grain and leaves the key out; a given one is a multiple of 4 in [4, 8192].
  */
 function withRetuneGrain(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
   const grain = config.retuneGrainSizeSamples;
@@ -87,14 +88,7 @@ function withRetuneGrain(fnName: string, config: Record<string, unknown>): Recor
     const { retuneGrainSizeSamples: _omitted, ...rest } = config;
     return rest;
   }
-  if (typeof grain !== 'number') {
-    throw new TypeError(`${fnName}: retuneGrainSizeSamples must be a number`);
-  }
-  if (grain === 0) {
-    throw new RangeError(
-      `${fnName}: retuneGrainSizeSamples must not be 0; omit it for the automatic grain`,
-    );
-  }
+  assertRetuneGrain(fnName, grain, 'retuneGrainSizeSamples');
   return config;
 }
 
@@ -103,7 +97,7 @@ function withRetuneGrain(fnName: string, config: Record<string, unknown>): Recor
  * the native parser.
  *
  * @throws TypeError for a missing or wrong-typed field; RangeError for a `harmonySteps` of
- *   another length or a retune grain of 0.
+ *   another length or a retune grain that is not a multiple of 4 in [4, 8192].
  */
 function nativePodConfig(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
   config = withRetuneGrain(fnName, config);
@@ -598,19 +592,31 @@ export interface StreamingRetuneConfig {
   /** Dry/wet blend, clamped to [0, 1]. Default 1 (fully wet). */
   mix?: number;
   /**
-   * Grain length in samples. Omit to derive roughly a 46 ms grain from the sample rate; an
-   * explicit 0 throws `RangeError`. Structural: a new value takes effect at the NEXT
-   * {@link StreamingRetune.prepare} call, and {@link StreamingRetune.config} keeps reporting
-   * the effective grain until then.
+   * Grain length in samples, a multiple of 4 in [4, 8192]. Omitted: the automatic grain, roughly
+   * 46 ms derived from the sample rate at each {@link StreamingRetune.prepare} and readable from
+   * {@link StreamingRetune.grainSizeSamples} after it; 0 is refused. Structural: a new value
+   * takes effect at the NEXT {@link StreamingRetune.prepare} call.
    */
   grainSizeSamples?: number;
 }
 
-// Native refuses unknown keys, wrong types and an explicit 0 `grainSizeSamples` itself.
+/** The controls {@link StreamingRetune.config} reports; `grainSizeSamples` is absent when automatic. */
+export type StreamingRetuneAppliedConfig = Required<
+  Omit<StreamingRetuneConfig, 'grainSizeSamples'>
+> &
+  Pick<StreamingRetuneConfig, 'grainSizeSamples'>;
+
+// The grain is checked here because nothing below refuses a fraction or an out-of-range value;
+// native refuses unknown keys and wrong-typed controls.
 function assertRetuneConfig(fnName: string, config: StreamingRetuneConfig): StreamingRetuneConfig {
   if (!isRecord(config)) {
     throw new TypeError(`${fnName}: config must be an object`);
   }
+  const { grainSizeSamples, ...rest } = config as Record<string, unknown>;
+  if (grainSizeSamples === undefined || grainSizeSamples === null) {
+    return rest;
+  }
+  assertRetuneGrain(fnName, grainSizeSamples, 'grainSizeSamples');
   return config;
 }
 
@@ -644,31 +650,34 @@ export class StreamingRetune {
 
   /**
    * Update the live controls; omitted keys keep their current value. An omitted
-   * `grainSizeSamples` keeps the last requested one, so re-{@link prepare}ing at another
-   * sample rate re-derives a derived grain rather than freezing the first rate's answer.
+   * `grainSizeSamples` keeps the configured one, automatic included, so re-{@link prepare}ing
+   * at another sample rate re-derives an automatic grain rather than freezing the first rate's.
    *
-   * @throws TypeError for a wrong-typed or unknown key; RangeError for an explicit 0
-   *   `grainSizeSamples` or a non-finite control.
+   * @throws TypeError for a wrong-typed or unknown key; RangeError for a `grainSizeSamples`
+   *   of 0 or not a multiple of 4 in [4, 8192], or a non-finite control.
    */
   setConfig(config: StreamingRetuneConfig): void {
     this.native.setConfig(assertRetuneConfig('StreamingRetune.setConfig', config));
   }
 
-  /** The currently applied controls, with `grainSizeSamples` as the effective one. */
-  config(): Required<StreamingRetuneConfig> {
+  /**
+   * The configured controls, in the form {@link setConfig} accepts, so
+   * `other.setConfig(retune.config())` reproduces them. An automatic grain reads back as an
+   * absent `grainSizeSamples`; the grain in use is {@link grainSizeSamples}.
+   */
+  config(): StreamingRetuneAppliedConfig {
     const native = this.native.config() as {
       pitchSemitones: number;
       mix: number;
       grainSizeSamples: number;
     };
-    return {
-      pitchSemitones: native.pitchSemitones,
-      mix: native.mix,
-      grainSizeSamples: native.grainSizeSamples,
-    };
+    const controls = { pitchSemitones: native.pitchSemitones, mix: native.mix };
+    return native.grainSizeSamples === 0
+      ? controls
+      : { ...controls, grainSizeSamples: native.grainSizeSamples };
   }
 
-  /** Resolved grain length in samples; 0 before {@link prepare}. */
+  /** Grain length in use, in samples; 0 before {@link prepare}. */
   get grainSizeSamples(): number {
     return this.native.grainSizeSamples();
   }

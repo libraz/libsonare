@@ -4,6 +4,7 @@ import type {
   RealtimeVoiceChangerConfigInput,
 } from '../public_types.js';
 import type { WasmRealtimeVoiceChangerPodConfig } from '../sonare.js';
+import { assertRetuneGrain } from '../validation.js';
 import { checkedVoicePresetId, voicePresetOrdinal } from './voice_preset_ids.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -43,7 +44,7 @@ function assertFlatConfigFields(fnName: string, config: Record<string, unknown>)
 
 /**
  * The one optional flat field: an omitted (`undefined` or `null`) retune grain is the
- * automatic grain and leaves the key out; an explicit 0 is refused rather than read as it.
+ * automatic grain and leaves the key out; a given one is a multiple of 4 in [4, 8192].
  */
 function withRetuneGrain(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
   const grain = config.retuneGrainSizeSamples;
@@ -51,14 +52,7 @@ function withRetuneGrain(fnName: string, config: Record<string, unknown>): Recor
     const { retuneGrainSizeSamples: _omitted, ...rest } = config;
     return rest;
   }
-  if (typeof grain !== 'number') {
-    throw new TypeError(`${fnName}: retuneGrainSizeSamples must be a number`);
-  }
-  if (grain === 0) {
-    throw new RangeError(
-      `${fnName}: retuneGrainSizeSamples must not be 0; omit it for the automatic grain`,
-    );
-  }
+  assertRetuneGrain(fnName, grain, 'retuneGrainSizeSamples');
   return config;
 }
 
@@ -67,7 +61,7 @@ function withRetuneGrain(fnName: string, config: Record<string, unknown>): Recor
  * native parser.
  *
  * @throws TypeError for a missing or wrong-typed field; RangeError for a `harmonySteps` of
- *   another length or a retune grain of 0.
+ *   another length or a retune grain that is not a multiple of 4 in [4, 8192].
  */
 export function podConfigToNative(
   input: RealtimeVoiceChangerConfig,

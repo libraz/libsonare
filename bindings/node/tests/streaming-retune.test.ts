@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { StreamingRetune } from '../src/index.js';
+import { StreamingRetune, type StreamingRetuneConfig } from '../src/index.js';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -52,10 +52,10 @@ describe('StreamingRetune', () => {
       retune.prepare(SR, BLOCK);
       const derived = retune.grainSizeSamples;
       retune.setConfig({ grainSizeSamples: 512 });
-      // Still the effective grain: the request is structural and takes effect
-      // at the next prepare, which is what the config doc promises.
+      // Structural: the grain in use moves at the next prepare, while config()
+      // reports what is configured from the moment it is set.
       expect(retune.grainSizeSamples).toBe(derived);
-      expect(retune.config().grainSizeSamples).toBe(derived);
+      expect(retune.config().grainSizeSamples).toBe(512);
       retune.prepare(SR, BLOCK);
       expect(retune.grainSizeSamples).toBe(512);
     } finally {
@@ -165,5 +165,92 @@ describe('StreamingRetune', () => {
     const retune = new StreamingRetune();
     retune.destroy();
     expect(() => retune.destroy()).not.toThrow();
+  });
+});
+
+describe('StreamingRetune grain', () => {
+  const withRetune = (config: StreamingRetuneConfig, body: (retune: StreamingRetune) => void) => {
+    const retune = new StreamingRetune(config);
+    try {
+      body(retune);
+    } finally {
+      retune.destroy();
+    }
+  };
+
+  it('reads an automatic grain back as absent before and after prepare', () => {
+    withRetune({}, (retune) => {
+      expect('grainSizeSamples' in retune.config()).toBe(false);
+      retune.prepare(SR, BLOCK);
+      expect('grainSizeSamples' in retune.config()).toBe(false);
+      expect(retune.grainSizeSamples).toBe(2232);
+    });
+  });
+
+  it('keeps a configured grain across a sample-rate change', () => {
+    withRetune({ grainSizeSamples: 2232 }, (retune) => {
+      retune.prepare(SR, BLOCK);
+      retune.prepare(22050, BLOCK);
+      expect(retune.config().grainSizeSamples).toBe(2232);
+      expect(retune.grainSizeSamples).toBe(2232);
+    });
+  });
+
+  it('refuses a grain of 0 with the automatic-grain hint', () => {
+    expect(() => new StreamingRetune({ grainSizeSamples: 0 })).toThrow(
+      new RangeError(
+        'StreamingRetune: grainSizeSamples must not be 0; omit it for the automatic grain',
+      ),
+    );
+    withRetune({}, (retune) => {
+      expect(() => retune.setConfig({ grainSizeSamples: 0 })).toThrow(
+        new RangeError(
+          'StreamingRetune.setConfig: grainSizeSamples must not be 0; omit it for the automatic grain',
+        ),
+      );
+    });
+  });
+
+  it('refuses a grain that is not a multiple of 4 in [4, 8192]', () => {
+    for (const grain of [1, 3, 6, 1.5, -4, 8196]) {
+      expect(() => new StreamingRetune({ grainSizeSamples: grain }), String(grain)).toThrow(
+        new RangeError('StreamingRetune: grainSizeSamples must be a multiple of 4 in [4, 8192]'),
+      );
+    }
+    withRetune({ grainSizeSamples: 512 }, (retune) => {
+      expect(() => retune.setConfig({ grainSizeSamples: 8196 })).toThrow(
+        new RangeError(
+          'StreamingRetune.setConfig: grainSizeSamples must be a multiple of 4 in [4, 8192]',
+        ),
+      );
+      expect(() => retune.setConfig({ grainSizeSamples: '512' as never })).toThrow(
+        new TypeError('StreamingRetune.setConfig: grainSizeSamples must be a number'),
+      );
+      // A refused grain leaves the configured one in place.
+      expect(retune.config().grainSizeSamples).toBe(512);
+    });
+    for (const grain of [4, 8192]) {
+      withRetune({ grainSizeSamples: grain }, (retune) => {
+        retune.prepare(SR, BLOCK);
+        expect(retune.grainSizeSamples).toBe(grain);
+      });
+    }
+  });
+
+  it('round-trips config() through setConfig without moving the grain', () => {
+    withRetune({}, (retune) => {
+      retune.prepare(SR, BLOCK);
+      retune.setConfig(retune.config());
+      retune.prepare(22050, BLOCK);
+      expect(retune.grainSizeSamples).toBe(1024);
+      expect('grainSizeSamples' in retune.config()).toBe(false);
+    });
+    withRetune({ grainSizeSamples: 2232 }, (retune) => {
+      retune.prepare(SR, BLOCK);
+      retune.setConfig(retune.config());
+      retune.prepare(22050, BLOCK);
+      expect(retune.grainSizeSamples).toBe(2232);
+      expect(retune.config().grainSizeSamples).toBe(2232);
+    });
   });
 });

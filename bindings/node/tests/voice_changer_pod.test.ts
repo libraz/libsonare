@@ -218,6 +218,16 @@ describe('RealtimeVoiceChanger config read', () => {
       expect(() => changer.setConfig({ ...base, retuneGrainSizeSamples: '512' as never })).toThrow(
         TypeError,
       );
+      for (const grain of [1, 3, 6, 1.5, -4, 8196]) {
+        expect(
+          () => changer.setConfig({ ...base, retuneGrainSizeSamples: grain }),
+          String(grain),
+        ).toThrow(
+          new RangeError(
+            'RealtimeVoiceChanger.setConfig: retuneGrainSizeSamples must be a multiple of 4 in [4, 8192]',
+          ),
+        );
+      }
       changer.setConfig({ ...base, retuneGrainSizeSamples: 1024 });
       const explicit = changer.config();
       expect(explicit.retuneGrainSizeSamples).toBe(1024);

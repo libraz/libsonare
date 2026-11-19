@@ -128,7 +128,7 @@ export interface RealtimeVoiceChangerConfig {
   retunePitchSemitones: number;
   /** Retune wet amount in [0, 1]. */
   retuneMix: number;
-  /** Retune grain length in samples; omitted for the automatic grain, and never 0. */
+  /** Retune grain length in samples, a multiple of 4 in [4, 8192]; omitted for the automatic grain. */
   retuneGrainSizeSamples?: number;
   /** Formant scale factor, [0.55, 1.65]; 1 leaves the formants alone. See `formantMode`. */
   formantFactor: number;
