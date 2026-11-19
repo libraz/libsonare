@@ -20,7 +20,7 @@ import numpy as np
 
 from ._errors import _not_supported, _require_open, _unknown_error
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
-from ._narrowing import _is_number, _narrow_double
+from ._narrowing import _is_number, _narrow_double, _optional_nonzero
 from ._runtime import (
     _UINT8_MAX,
     _UINT32_MAX,
@@ -589,7 +589,7 @@ class SampleBank:
         *,
         root_key: int = 60,
         fine_tune_cents: float = 0.0,
-        source_rate: float = 0.0,
+        source_rate: float | None = None,
         loop_start: int = 0,
         loop_end: int = 0,
         loop_mode: SampleDescLoopMode = "none",
@@ -603,9 +603,9 @@ class SampleBank:
                 (0-127). The default is middle C, which is also what the C ABI
                 substitutes for an unset value.
             fine_tune_cents: Tuning offset applied on top of the recorded pitch.
-            source_rate: Rate the sample was recorded at. ``0.0`` means "the
+            source_rate: Rate the sample was recorded at. ``None`` means "the
                 render's own rate", so a bank built without rate information
-                plays back unresampled.
+                plays back unresampled; an explicit 0 raises.
             loop_start / loop_end: Frame offsets INSIDE this sample. Both are
                 clamped into it, and a loop that survives the clamp empty is
                 dropped, so a malformed loop plays as an unlooped sample rather
@@ -625,7 +625,10 @@ class SampleBank:
         desc = SonareSampleDesc(
             root_key=_unsigned(root_key, "root_key", 127),
             fine_tune_cents=_finite(fine_tune_cents, "fine_tune_cents"),
-            source_rate=_finite(source_rate, "source_rate"),
+            source_rate=_finite(
+                _optional_nonzero(source_rate, "source_rate", "the render's own rate"),
+                "source_rate",
+            ),
             loop_start=_unsigned(loop_start, "loop_start", _UINT32_MAX),
             loop_end=_unsigned(loop_end, "loop_end", _UINT32_MAX),
             loop_mode=_sample_desc_loop_value(loop_mode),

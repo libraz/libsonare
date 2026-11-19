@@ -13,7 +13,7 @@ from ._ffi_types_core import (
     SonareKeyCandidate,
     SonareOnsetDetectConfig,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _optional_nonzero
 from ._runtime import (
     SonareValueError,
     _check,
@@ -330,7 +330,7 @@ def detect_onsets(
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
-    threshold: float = 0.0,
+    threshold: float | None = None,
     pre_max: int = 1,
     post_max: int = 1,
     pre_avg: int = 3,
@@ -345,6 +345,8 @@ def detect_onsets(
     Args:
         samples: Audio samples as a list/sequence of floats.
         sample_rate: Sample rate in Hz.
+        threshold: Minimum onset strength a peak must reach; None selects the
+            adaptive threshold, and an explicit 0 raises.
 
     Returns:
         A float32 array of onset times in seconds.
@@ -360,7 +362,7 @@ def detect_onsets(
         config = SonareOnsetDetectConfig(
             n_fft=n_fft,
             hop_length=hop_length,
-            threshold=_narrow_double(threshold, "threshold"),
+            threshold=_optional_nonzero(threshold, "threshold", "the adaptive threshold"),
             pre_max=pre_max,
             post_max=post_max,
             pre_avg=pre_avg,

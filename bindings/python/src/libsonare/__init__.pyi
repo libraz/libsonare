@@ -45,6 +45,7 @@ from ._project import SampleKeyTrack as SampleKeyTrack
 from ._project import SampleLoopMode as SampleLoopMode
 from ._project import Sf2InstrumentConfig as Sf2InstrumentConfig
 from ._project import Sf2ProgramStatus as Sf2ProgramStatus
+from ._project import SourceBackend as SourceBackend
 from ._project import SynthBodyType as SynthBodyType
 from ._project import SynthEngineMode as SynthEngineMode
 from ._project import SynthFilterModel as SynthFilterModel
@@ -1040,6 +1041,9 @@ from .types import (
 )
 from .types import (
     EngineClip as EngineClip,
+)
+from .types import (
+    EngineDither as EngineDither,
 )
 from .types import (
     EngineFreezeOptions as EngineFreezeOptions,

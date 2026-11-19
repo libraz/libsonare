@@ -112,10 +112,10 @@ def test_bounce_non_finite_target_lufs_is_refused_by_name(target: float) -> None
 
 def test_bounce_dither_types_apply_their_documented_behaviour() -> None:
     plain, _ = _bounce()
-    none, _ = _bounce(dither=0, dither_bits=DITHER_BITS, dither_seed=1)
-    rpdf, _ = _bounce(dither=1, dither_bits=DITHER_BITS, dither_seed=1)
-    tpdf, _ = _bounce(dither=2, dither_bits=DITHER_BITS, dither_seed=1)
-    shaped, _ = _bounce(dither=3, dither_bits=DITHER_BITS, dither_seed=1)
+    none, _ = _bounce(dither=None, dither_bits=DITHER_BITS, dither_seed=1)
+    rpdf, _ = _bounce(dither="rpdf", dither_bits=DITHER_BITS, dither_seed=1)
+    tpdf, _ = _bounce(dither="tpdf", dither_bits=DITHER_BITS, dither_seed=1)
+    shaped, _ = _bounce(dither="noiseShaped", dither_bits=DITHER_BITS, dither_seed=1)
 
     # Identifying each type by what it does keeps a remapped integer from
     # passing. Every non-None type lands the output on the target-depth grid --
@@ -164,8 +164,8 @@ def test_bounce_dataclass_defaults_match_the_native_defaults() -> None:
 
 
 def test_bounce_dither_seed_is_reproducible_and_effective() -> None:
-    first, _ = _bounce(dither=2, dither_bits=DITHER_BITS, dither_seed=1)
-    repeat, _ = _bounce(dither=2, dither_bits=DITHER_BITS, dither_seed=1)
-    other, _ = _bounce(dither=2, dither_bits=DITHER_BITS, dither_seed=2)
+    first, _ = _bounce(dither="tpdf", dither_bits=DITHER_BITS, dither_seed=1)
+    repeat, _ = _bounce(dither="tpdf", dither_bits=DITHER_BITS, dither_seed=1)
+    other, _ = _bounce(dither="tpdf", dither_bits=DITHER_BITS, dither_seed=2)
     assert first == repeat
     assert _max_abs_diff(other, first) > 0.0

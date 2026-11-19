@@ -37,6 +37,7 @@ from ._narrowing import _narrow_double as _narrow_double
 from ._narrowing import _narrow_float as _narrow_float
 from ._narrowing import _narrow_int as _narrow_int
 from ._narrowing import _narrowing_error as _narrowing_error
+from ._narrowing import _optional_nonzero as _optional_nonzero
 from ._narrowing import _resolve_optional_non_negative as _resolve_optional_non_negative
 from ._narrowing import _resolve_render_frame as _resolve_render_frame
 from ._narrowing import _resolve_sample_bound as _resolve_sample_bound

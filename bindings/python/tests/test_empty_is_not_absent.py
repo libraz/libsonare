@@ -90,6 +90,8 @@ def test_project_source_uri_has_no_byte_limit(uri: str) -> None:
         track = project.add_track("audio", "a")
         project.add_clip(track, 0.0, 4.0, source_uri=uri)
         assert [source.name_or_uri for source in project.sources()] == [uri]
+        with Project.from_json(project.to_json()) as restored:
+            assert [source.name_or_uri for source in restored.unresolved_audio_sources()] == [uri]
 
 
 def test_engine_marker_name_is_none_when_unnamed_and_is_never_cut() -> None:

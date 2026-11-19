@@ -6,7 +6,7 @@ import ctypes
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, Protocol, TypeAlias, cast
+from typing import Literal, Protocol, TypeAlias, cast, get_args
 
 import numpy as np
 
@@ -52,7 +52,7 @@ from ._ffi_types_mastering_project import (
     SONARE_SYNTH_PATCH_MOD_ROUTINGS,
     SONARE_SYNTH_PRESET_NAME_MAX,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _narrow_float, _optional_nonzero
 from ._project_synth import (
     _BUILTIN_SYNTH_WAVEFORMS,
     _SAMPLE_KEY_TRACKS,
@@ -148,9 +148,11 @@ class BuiltinSynthConfig:
     """Patch for the built-in polyphonic oscillator synth (see
     :meth:`Project.bounce_with_builtin_instrument`).
 
-    Every float field uses "0 => sensible default" and ``polyphony`` uses
-    ``None``, so a default-constructed config is the default sine patch; override only what you
-    need. ``waveform`` is ``"sine"``, ``"saw"`` (also spelled ``"sawtooth"``),
+    Every numeric field is ``None`` for the library value, so a
+    default-constructed config is the default sine patch; override only what
+    you need. An explicit 0 raises :class:`SonareValueError`: the native config
+    still reads 0 as "use the default", so a zero gain or sustain cannot be
+    expressed yet. ``waveform`` is ``"sine"``, ``"saw"`` (also spelled ``"sawtooth"``),
     ``"square"`` or ``"triangle"``. It is the one field with no "nearest
     sensible value": another string raises :class:`SonareValueError` and a
     number raises :class:`TypeError` rather than falling back to sine.
@@ -162,36 +164,42 @@ class BuiltinSynthConfig:
 
     waveform: SynthWaveform = "sine"
     """Oscillator waveform, a ``SynthWaveform`` token."""
-    gain: float = 0.0
-    """Master output gain (linear); 0 selects the default 0.2."""
-    attack_ms: float = 0.0
-    """ADSR attack in ms; 0 selects 5."""
-    decay_ms: float = 0.0
-    """ADSR decay in ms; 0 selects 60."""
-    sustain: float = 0.0
-    """ADSR sustain level in [0, 1]; 0 selects 0.7."""
-    release_ms: float = 0.0
-    """ADSR release in ms; 0 selects 120."""
+    gain: float | None = None
+    """Master output gain (linear); None selects the library value."""
+    attack_ms: float | None = None
+    """ADSR attack in ms; None selects the library value."""
+    decay_ms: float | None = None
+    """ADSR decay in ms; None selects the library value."""
+    sustain: float | None = None
+    """ADSR sustain level in [0, 1]; None selects the library value."""
+    release_ms: float | None = None
+    """ADSR release in ms; None selects the library value."""
     polyphony: int | None = None
-    """Maximum simultaneous voices, clamped to [1, 64]; None selects 16."""
+    """Maximum simultaneous voices, clamped to [1, 64]; None selects the library value."""
 
     def _to_c(self) -> SonareBuiltinSynthConfig:
         return SonareBuiltinSynthConfig(
             waveform=_synth_waveform_value(self.waveform),
-            gain=float(self.gain),
-            attack_ms=float(self.attack_ms),
-            decay_ms=float(self.decay_ms),
-            sustain=float(self.sustain),
-            release_ms=float(self.release_ms),
+            gain=_optional_nonzero_float(self.gain, "BuiltinSynthConfig: gain"),
+            attack_ms=_optional_nonzero_float(self.attack_ms, "BuiltinSynthConfig: attack_ms"),
+            decay_ms=_optional_nonzero_float(self.decay_ms, "BuiltinSynthConfig: decay_ms"),
+            sustain=_optional_nonzero_float(self.sustain, "BuiltinSynthConfig: sustain"),
+            release_ms=_optional_nonzero_float(self.release_ms, "BuiltinSynthConfig: release_ms"),
             polyphony=_optional_positive_int(
                 self.polyphony, "BuiltinSynthConfig: polyphony", _C_INT_MAX
             ),
         )
 
 
-# Source backend ordinals (mirror SonareSourceBackend).
-SOURCE_BACKEND_SYNTH = 0
-SOURCE_BACKEND_SF2 = 1
+def _optional_nonzero_float(value: float | None, name: str) -> float:
+    """Narrow an optional ``float`` config field whose C ``0`` means "use the default"."""
+    return _narrow_float(_optional_nonzero(value, name), name)
+
+
+SourceBackend: TypeAlias = Literal["synth", "sf2"]
+"""Backend a resolved MIDI program renders through."""
+# Indexed by the C SonareSourceBackend ordinal.
+_SOURCE_BACKENDS: tuple[str, ...] = get_args(SourceBackend)
 
 
 @dataclass(frozen=True)
@@ -199,7 +207,8 @@ class Sf2InstrumentConfig:
     """Patch for the SoundFont (SF2) player (see
     :meth:`Project.bounce_with_sf2_instrument`).
 
-    ``gain`` 0 selects the default 0.5 and ``polyphony`` None selects 48.
+    ``gain`` and ``polyphony`` are ``None`` for the library value; an explicit
+    0 raises :class:`SonareValueError`.
     ``prefer_model_for_modeled_families`` defaults to false, retaining the
     established SoundFont-first behavior.
 
@@ -214,10 +223,10 @@ class Sf2InstrumentConfig:
     :class:`SonareValueError`.
     """
 
-    gain: float = 0.0
-    """Master output gain (linear); 0 selects the default 0.5."""
+    gain: float | None = None
+    """Master output gain (linear); None selects the library value."""
     polyphony: int | None = None
-    """Maximum simultaneous voices, clamped to [1, 64]; None selects 48."""
+    """Maximum simultaneous voices, clamped to [1, 64]; None selects the library value."""
     prefer_model_for_modeled_families: bool = False
     """True selects the dedicated melodic models; drums stay SF2-first."""
     clear_bank_rig: bool = False
@@ -228,7 +237,7 @@ class Sf2InstrumentConfig:
     def _to_c(self) -> SonareSf2InstrumentConfig:
         return SonareSf2InstrumentConfig(
             struct_version=4,
-            gain=float(self.gain),
+            gain=_optional_nonzero_float(self.gain, "Sf2InstrumentConfig: gain"),
             polyphony=_optional_positive_int(
                 self.polyphony, "Sf2InstrumentConfig: polyphony", _C_INT_MAX
             ),
@@ -251,7 +260,7 @@ def _gs_efx_realization_value(name: str) -> int:
 class Sf2ProgramStatus:
     """One :meth:`Project.sound_font_manifest` entry: a (channel, bank, program)
     combination the arrangement plays, with the backend it resolves to
-    (:data:`SOURCE_BACKEND_SF2` or :data:`SOURCE_BACKEND_SYNTH`) and the
+    (a :data:`SourceBackend` token) and the
     resolved SF2 preset name (GS fallback included; empty for the synth
     fallback)."""
 
@@ -261,8 +270,8 @@ class Sf2ProgramStatus:
     """Effective SF2 bank; 128 for a drum channel."""
     program: int
     """Program number, 0-127."""
-    backend: int
-    """Backend the program resolves to, ``SOURCE_BACKEND_SF2`` or ``SOURCE_BACKEND_SYNTH``."""
+    backend: SourceBackend
+    """Backend the program resolves to, a :data:`SourceBackend` token."""
     preset_name: str
     """Resolved SF2 preset name; empty for the synth fallback."""
 

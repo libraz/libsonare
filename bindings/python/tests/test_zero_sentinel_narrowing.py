@@ -452,7 +452,7 @@ def test_a_fractional_dither_word_length_is_refused_rather_than_read_as_the_defa
             )
             engine.play()
             result = engine.bounce_offline(
-                ls.EngineBounceOptions(total_frames=frames, num_channels=2, dither=1, **kwargs)
+                ls.EngineBounceOptions(total_frames=frames, num_channels=2, dither="rpdf", **kwargs)
             )
             return _digest(result.interleaved)
 

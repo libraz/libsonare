@@ -299,6 +299,9 @@ from ._types_engine import (
     EngineClip as EngineClip,
 )
 from ._types_engine import (
+    EngineDither as EngineDither,
+)
+from ._types_engine import (
     EngineFreezeOptions as EngineFreezeOptions,
 )
 from ._types_engine import (

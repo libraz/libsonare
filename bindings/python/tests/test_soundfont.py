@@ -16,7 +16,6 @@ from libsonare import (
     SonareError,
     SonareValueError,
 )
-from libsonare._project import SOURCE_BACKEND_SF2, SOURCE_BACKEND_SYNTH
 
 # Canonical minimal GS test SoundFont (presets: "Piano 1" at (0,0),
 # "Piano 2" at (0,1), "Standard Kit" at (128,0); program 2 uncovered).
@@ -73,16 +72,12 @@ def test_sound_font_manifest_reports_backends() -> None:
         # Without a SoundFont the played program is a synth fallback.
         manifest = project.sound_font_manifest()
         assert manifest == [
-            Sf2ProgramStatus(
-                channel=0, bank=0, program=0, backend=SOURCE_BACKEND_SYNTH, preset_name=""
-            )
+            Sf2ProgramStatus(channel=0, bank=0, program=0, backend="synth", preset_name="")
         ]
         project.load_sound_font(_SF2_BYTES)
         manifest = project.sound_font_manifest()
         assert manifest == [
-            Sf2ProgramStatus(
-                channel=0, bank=0, program=0, backend=SOURCE_BACKEND_SF2, preset_name="Piano 1"
-            )
+            Sf2ProgramStatus(channel=0, bank=0, program=0, backend="sf2", preset_name="Piano 1")
         ]
     finally:
         project.close()

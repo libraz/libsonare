@@ -72,9 +72,11 @@ from ._runtime import (
     _to_c_int64,
     _to_c_size_t,
     _to_c_uint,
+    _token_ordinal,
     _validate_c_int_field,
 )
 from ._types_engine import (
+    _ENGINE_DITHERS,
     CaptureInputMonitor,
     CapturePunch,
     EngineCaptureSource,
@@ -385,7 +387,7 @@ class _EngineIoMixin:
 
         The cap is a *frame* count: inversely proportional to ``num_channels``,
         and independent of the sample rate. Stereo refuses past 44,739,242
-        frames, or past 33,554,432 frames when ``dither`` is non-zero, which
+        frames, or past 33,554,432 frames when ``dither`` is given, which
         adds one more copy; 5.1 refuses past a third of each. Read as a
         *duration* those two stereo counts are 15 min 32 s and 11 min 39 s at
         48 kHz, and half that at 96 kHz. When ``source_sample_rate`` and
@@ -425,7 +427,12 @@ class _EngineIoMixin:
         )
         raw_options.normalize_lufs = 1 if options.normalize_lufs else 0
         raw_options.target_lufs = _narrow_double(options.target_lufs, "options.target_lufs")
-        raw_options.dither = options.dither
+        # The C ordinals put "none" at 0, ahead of the three shapes.
+        raw_options.dither = (
+            0
+            if options.dither is None
+            else _token_ordinal(options.dither, _ENGINE_DITHERS, "dither") + 1
+        )
         # Same narrowing as the fields above, worded against this entry point:
         # int(0.5) is the 0 this field reads as "keep the default 16", so a
         # fractional word length would dither at 16 and report success.

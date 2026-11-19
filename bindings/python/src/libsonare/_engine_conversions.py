@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 
 from ._ffi_types_core import SonareAutomationPoint
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _optional_nonzero
 from ._runtime import (
     _AUTOMATION_CURVES,
     _C_INT_MAX,
@@ -190,7 +190,9 @@ def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfi
     raw.click_samples = _optional_positive_int(
         config.click_samples, "set_metronome: click_samples", _C_INT_MAX
     )
-    raw.click_sec = _narrow_double(config.click_sec, "config.click_sec")
+    raw.click_sec = _optional_nonzero(
+        config.click_sec, "set_metronome: click_sec", "the default click length"
+    )
     return raw
 
 

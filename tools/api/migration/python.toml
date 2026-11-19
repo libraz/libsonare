@@ -6799,9 +6799,11 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "EngineMetronomeConfig.click_seconds"
-new = "EngineMetronomeConfig.click_sec"
+changed = "float | None, default None: None selects the library click length and an explicit 0 raises SonareValueError"
+to = "EngineMetronomeConfig.click_sec"
 domain = "engine"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_metronome_click_seconds_omitted_is_the_library_length_and_zero_is_refused"
 
 [[entry]]
 kind = "field"
@@ -12195,3 +12197,91 @@ changed = "a MIDI source name or audio URI longer than 127 bytes reads back whol
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_empty_is_not_absent.py::test_project_source_uri_has_no_byte_limit"
+
+[[entry]]
+kind = "option"
+old = "detect_onsets(threshold)"
+changed = "float | None, default None: None selects the adaptive threshold and an explicit 0 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_onset_threshold_is_none_for_the_adaptive_path_and_zero_is_refused"
+
+[[entry]]
+kind = "field"
+old = "SpectralRegionOp.high_hz"
+changed = "float | None, default None: None is Nyquist, and 0 or a negative edge raises SonareValueError instead of reading as Nyquist"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_spectral_high_edge_is_none_for_nyquist_and_non_positive_is_refused"
+
+[[entry]]
+kind = "option"
+old = "SampleBank.add_sample(source_rate)"
+changed = "float | None, default None: None plays at the render's own rate and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_sample_source_rate_is_none_for_the_render_rate_and_zero_is_refused"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.gain"
+changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.attack_ms"
+changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.decay_ms"
+changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.sustain"
+changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.release_ms"
+changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+
+[[entry]]
+kind = "field"
+old = "Sf2InstrumentConfig.gain"
+changed = "float | None, default None: None selects the library value; an explicit 0 raises SonareValueError, since the native config cannot yet express it"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.dither"
+changed = "an EngineDither token ('rpdf', 'tpdf', 'noiseShaped') or None for no dither; the 0..3 ordinals are TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_bounce_dither_is_a_token_and_none_renders_undithered"
+
+[[entry]]
+kind = "field"
+old = "Sf2ProgramStatus.backend"
+changed = "a SourceBackend token ('synth' or 'sf2') instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_soundfont.py::test_sound_font_manifest_reports_backends"

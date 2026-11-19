@@ -58,8 +58,8 @@ class SpectralRegionOp:
     Not with ``end_sec``."""
     low_hz: float = 0.0
     """Region low frequency edge in Hz, clamped to ``[0, nyquist]``."""
-    high_hz: float = 0.0
-    """Region high frequency edge in Hz; ``<= 0`` or ``>= nyquist`` means Nyquist."""
+    high_hz: float | None = None
+    """Region high frequency edge in Hz, positive; None or ``>= nyquist`` means Nyquist."""
     gain_db: float = 0.0
     """Gain in dB for ``"gain"`` / ``"attenuate"``; ignored by ``"mute"`` and ``"heal"``."""
     mode: SpectralEditMode = "gain"
@@ -70,6 +70,16 @@ class SpectralRegionOp:
     end_sec: float | None = None
     """Region end in seconds, rounded to the nearest sample; None is unset. Not with
     ``end_sample``."""
+
+
+def _spectral_high_hz(value: float | None) -> float:
+    """Map a region's high edge onto the C field, where ``<= 0`` reads as Nyquist."""
+    if value is None:
+        return 0.0
+    high_hz = _narrow_double(value, "op.high_hz")
+    if high_hz <= 0:
+        raise SonareValueError("op.high_hz must be positive; omit it for Nyquist")
+    return high_hz
 
 
 @_guard_buffer("samples")
@@ -173,7 +183,7 @@ def spectral_edit(
                 start_sample=0 if start_sample is None else start_sample,
                 end_sample=length if end_sample is None else end_sample,
                 low_hz=_narrow_double(op.low_hz, "op.low_hz"),
-                high_hz=_narrow_double(op.high_hz, "op.high_hz"),
+                high_hz=_spectral_high_hz(op.high_hz),
                 gain_db=_narrow_double(op.gain_db, "op.gain_db"),
                 mode=_token_ordinal(op.mode, _SPECTRAL_EDIT_MODES, f"ops[{i}].mode"),
             )

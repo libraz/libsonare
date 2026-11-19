@@ -7,8 +7,10 @@ name, so the test fails if 0 drifts back to meaning absence.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
+import libsonare
 from libsonare import (
     EngineBounceOptions,
     EngineClip,
@@ -112,3 +114,94 @@ def test_bounce_rates_are_none_when_omitted_and_zero_is_refused() -> None:
                 engine.bounce_offline(
                     EngineBounceOptions(total_frames=128, num_channels=2, **{field: 0})
                 )
+
+
+def _tone(n: int = SR // 4) -> np.ndarray:
+    t = np.arange(n, dtype=np.float32) / SR
+    return (0.3 * np.sin(2.0 * np.pi * 440.0 * t)).astype(np.float32)
+
+
+def test_onset_threshold_is_none_for_the_adaptive_path_and_zero_is_refused() -> None:
+    tone = _tone()
+    assert libsonare.detect_onsets(tone, SR).dtype == np.float32
+    with pytest.raises(
+        SonareValueError, match="^threshold must not be 0; omit it for the adaptive threshold$"
+    ):
+        libsonare.detect_onsets(tone, SR, threshold=0.0)
+
+
+@pytest.mark.parametrize("high_hz", [0.0, -1.0])
+def test_spectral_high_edge_is_none_for_nyquist_and_non_positive_is_refused(
+    high_hz: float,
+) -> None:
+    tone = _tone()
+    whole = libsonare.SpectralRegionOp(low_hz=300.0, gain_db=-12.0)
+    assert len(libsonare.spectral_edit(tone, SR, [whole])) == len(tone)
+    with pytest.raises(
+        SonareValueError, match="^op.high_hz must be positive; omit it for Nyquist$"
+    ):
+        libsonare.spectral_edit(
+            tone, SR, [libsonare.SpectralRegionOp(low_hz=300.0, high_hz=high_hz)]
+        )
+
+
+def test_metronome_click_seconds_omitted_is_the_library_length_and_zero_is_refused() -> None:
+    with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
+        engine.set_metronome(EngineMetronomeConfig(enabled=True))
+        # The core stores the length it resolved, so an omitted one reads back positive.
+        assert engine.metronome().click_sec > 0
+        engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=0.004))
+        assert engine.metronome().click_sec == pytest.approx(0.004)
+        with pytest.raises(SonareValueError, match="^set_metronome: click_sec must not be 0"):
+            engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=0.0))
+
+
+def test_sample_source_rate_is_none_for_the_render_rate_and_zero_is_refused() -> None:
+    with libsonare.SampleBank() as bank:
+        assert bank.add_sample(_tone(4800)) == 0
+        with pytest.raises(
+            SonareValueError, match="^source_rate must not be 0; omit it for the render's own rate$"
+        ):
+            bank.add_sample(_tone(4800), source_rate=0.0)
+
+
+@pytest.mark.parametrize(
+    ("config", "field"),
+    [
+        ("BuiltinSynthConfig", "gain"),
+        ("BuiltinSynthConfig", "attack_ms"),
+        ("BuiltinSynthConfig", "decay_ms"),
+        ("BuiltinSynthConfig", "sustain"),
+        ("BuiltinSynthConfig", "release_ms"),
+        ("Sf2InstrumentConfig", "gain"),
+    ],
+)
+def test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed(
+    config: str, field: str
+) -> None:
+    cls = getattr(libsonare, config)
+    binder = "set_builtin_instrument" if config == "BuiltinSynthConfig" else "set_sf2_instrument"
+    with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
+        getattr(engine, binder)(cls(), 6)
+        with pytest.raises(
+            SonareValueError,
+            match=rf"^{config}: {field} must not be 0; omit it for the library value$",
+        ):
+            getattr(engine, binder)(cls(**{field: 0.0}), 6)
+
+
+def test_bounce_dither_is_a_token_and_none_renders_undithered() -> None:
+    with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
+        engine.play()
+        for dither in (None, "rpdf", "tpdf", "noiseShaped"):
+            engine.bounce_offline(
+                EngineBounceOptions(total_frames=128, num_channels=2, dither=dither)
+            )
+        with pytest.raises(TypeError, match="dither"):
+            engine.bounce_offline(
+                EngineBounceOptions(total_frames=128, num_channels=2, dither=1)  # type: ignore[arg-type]
+            )
+        with pytest.raises(SonareValueError, match="dither"):
+            engine.bounce_offline(
+                EngineBounceOptions(total_frames=128, num_channels=2, dither="none")  # type: ignore[arg-type]
+            )

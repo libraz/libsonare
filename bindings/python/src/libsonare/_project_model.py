@@ -38,10 +38,7 @@ from ._project_instruments import (
     _GS_EFX_REALIZATIONS as _GS_EFX_REALIZATIONS,
 )
 from ._project_instruments import (
-    SOURCE_BACKEND_SF2 as SOURCE_BACKEND_SF2,
-)
-from ._project_instruments import (
-    SOURCE_BACKEND_SYNTH as SOURCE_BACKEND_SYNTH,
+    _SOURCE_BACKENDS as _SOURCE_BACKENDS,
 )
 from ._project_instruments import (
     BuiltinSynthConfig as BuiltinSynthConfig,
@@ -57,6 +54,9 @@ from ._project_instruments import (
 )
 from ._project_instruments import (
     Sf2ProgramStatus as Sf2ProgramStatus,
+)
+from ._project_instruments import (
+    SourceBackend as SourceBackend,
 )
 from ._project_instruments import (
     SynthModRouting as SynthModRouting,

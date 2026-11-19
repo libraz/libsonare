@@ -376,7 +376,7 @@ def detect_onsets(
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
-    threshold: float = 0.0,
+    threshold: float | None = None,
     pre_max: int = 1,
     post_max: int = 1,
     pre_avg: int = 3,

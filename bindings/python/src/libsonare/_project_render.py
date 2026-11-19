@@ -13,8 +13,10 @@ from ._errors import _not_supported
 from ._narrowing import _resolve_zero_default
 from ._project_model import *  # noqa: F403
 from ._project_model import (
+    _SOURCE_BACKENDS,
     ProjectDiagnosticCode,
     ProjectDiagnosticSeverity,
+    SourceBackend,
     _make_instrument_callbacks,
     _synth_patch_arg,
 )
@@ -381,8 +383,8 @@ class _ProjectRenderMixin:
         Returns one :class:`Sf2ProgramStatus` per (channel, bank, program)
         combination a note actually plays through, in first-use order. Each
         entry reports whether it resolves in the loaded SoundFont
-        (:data:`SOURCE_BACKEND_SF2`, GS variation/drum fallbacks included) or
-        would fall back to the built-in synth (:data:`SOURCE_BACKEND_SYNTH`).
+        (``"sf2"``, GS variation/drum fallbacks included) or would fall back to
+        the built-in synth (``"synth"``).
         Without a loaded SoundFont every entry is a synth fallback.
         """
         lib = _get_lib()
@@ -405,7 +407,7 @@ class _ProjectRenderMixin:
                 channel=int(e.channel),
                 bank=int(e.bank),
                 program=int(e.program),
-                backend=int(e.backend),
+                backend=cast(SourceBackend, _SOURCE_BACKENDS[int(e.backend)]),
                 preset_name=e.preset_name.decode("utf-8", errors="replace"),
             )
             for e in entries[: min(count, int(total.value))]

@@ -321,6 +321,20 @@ def _resolve_zero_default(value: object, name: str) -> int | float:
     return value  # type: ignore[return-value]
 
 
+def _optional_nonzero(value: object, name: str, absent: str = "the library value") -> float:
+    """Map an optional float onto a C field whose ``0`` means "not given".
+
+    ``None`` is that ``0``; an explicit 0 is refused by ``name`` rather than read
+    as absent, and the refusal says what omitting the value selects.
+    """
+    if value is None:
+        return 0.0
+    number = _narrow_double(value, name)
+    if number == 0:
+        raise SonareValueError(f"{name} must not be 0; omit it for {absent}")
+    return number
+
+
 def _utf8_arg(value: str, name: str) -> bytes:
     """Encode ``value`` for a NUL-terminated ``char *``, refusing an embedded NUL.
 

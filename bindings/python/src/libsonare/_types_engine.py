@@ -427,8 +427,8 @@ class EngineMetronomeConfig:
     """Linear gain of the downbeat click."""
     click_samples: int | None = None
     """Click length in samples, 1..384000; None uses :attr:`click_sec`."""
-    click_sec: float = 0.0
-    """Click length in seconds, 0..1; 0 selects the engine default (2 ms)."""
+    click_sec: float | None = None
+    """Click length in seconds, up to 1; None selects the engine default (2 ms)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -563,6 +563,11 @@ class EngineCaptureStatus:
     """Capture alignment offset in samples relative to the punch start."""
 
 
+EngineDither: TypeAlias = Literal["rpdf", "tpdf", "noiseShaped"]
+"""Dither shape of :attr:`EngineBounceOptions.dither`; omitting it renders undithered."""
+_ENGINE_DITHERS: tuple[str, ...] = get_args(EngineDither)
+
+
 @dataclass(frozen=True, slots=True)
 class EngineBounceOptions:
     """Offline export options for the realtime engine.
@@ -589,8 +594,8 @@ class EngineBounceOptions:
     """Whether to normalize the result to :attr:`target_lufs`."""
     target_lufs: float = -14.0
     """Integrated loudness target in LUFS, applied when :attr:`normalize_lufs` is set."""
-    dither: int = 0
-    """Dither mode: 0 none, 1 RPDF, 2 TPDF, 3 noise-shaped."""
+    dither: EngineDither | None = None
+    """Dither shape, an :data:`EngineDither` token; None renders undithered."""
     dither_bits: int = 16
     """Target bit depth the dither is shaped for."""
     dither_seed: int = 0
