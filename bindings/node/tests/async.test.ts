@@ -88,13 +88,17 @@ describe('Node async API', () => {
       }
       expect(caught).toBeInstanceOf(RangeError);
       expect(isSonareError(caught)).toBe(false);
-      expect((caught as Error).message).toMatch(/^MusicAnalyzerConfig: hopLength must be positive/);
+      expect((caught as Error).message).toMatch(
+        /^analyzeAsync: MusicAnalyzerConfig: hopLength must be positive/,
+      );
     });
 
     it('forwards MusicAnalyzeOptions to the worker', async () => {
       const rejection = analyzeAsync(generateSine(440, 0.1), SR, { nFft: 1 });
       await expect(rejection).rejects.toBeInstanceOf(RangeError);
-      await expect(rejection).rejects.toThrow(/^MusicAnalyzerConfig: nFft must be an even value/);
+      await expect(rejection).rejects.toThrow(
+        /^analyzeAsync: MusicAnalyzerConfig: nFft must be an even value/,
+      );
     });
 
     it('does not block the JS event loop while running', async () => {
@@ -131,7 +135,9 @@ describe('Node async API', () => {
       }
       expect(caught).toBeInstanceOf(RangeError);
       expect(isSonareError(caught)).toBe(false);
-      expect((caught as Error).message).toMatch(/^unknown mastering preset: not-a-preset/);
+      expect((caught as Error).message).toMatch(
+        /^masterAudioAsync: unknown mastering preset: not-a-preset/,
+      );
     });
 
     it('stereo variant resolves to a mastered StereoChainResult', async () => {
@@ -163,7 +169,9 @@ describe('Node async API', () => {
           returned = (addon as Record<string, (...a: unknown[]) => unknown>)[name](...args);
         }, `${name} threw synchronously`).not.toThrow();
         expect(returned).toBeInstanceOf(Promise);
-        await expect(returned).rejects.toThrow(/^overridesJson must be a string$/);
+        await expect(returned).rejects.toThrow(
+          /^masterAudio(?:Stereo)?Async: overridesJson must be a string$/,
+        );
       }
     });
 

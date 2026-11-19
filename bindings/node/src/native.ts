@@ -20,12 +20,21 @@ function entryFor(key: string): string {
 // the per-block realtime methods go through this wrapper.
 function wrapFunction(fn: NativeFunction, entry: string): NativeFunction {
   return function (this: unknown) {
+    let result: unknown;
     try {
       // biome-ignore lint/complexity/noArguments: forwarded without an array allocation on the per-block path
-      return Reflect.apply(fn, this, arguments);
+      result = Reflect.apply(fn, this, arguments);
     } catch (error) {
       throw nameNativeError(error, entry);
     }
+    // An async addon entry refuses through its promise, which needs the same naming.
+    return result instanceof Promise ? result.catch(rejectNamed(entry)) : result;
+  };
+}
+
+function rejectNamed(entry: string): (error: unknown) => never {
+  return (error) => {
+    throw nameNativeError(error, entry);
   };
 }
 
