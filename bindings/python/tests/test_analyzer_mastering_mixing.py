@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 
 # ruff: noqa: F403,F405
@@ -226,6 +228,35 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     for name in ("retuneGrainSizeSamples", "limiterEnableIspLimiter", "reverbSeed"):
         assert voice_params[name].id is None
         assert voice_params[name].rt_safe is False
+
+
+@pytest.mark.parametrize(
+    ("processor", "old", "new"),
+    [
+        ("dynamics.deesser", "bandpassQ", "bandPassQ"),
+        ("effects.modulation.pitchShifter", "semitones", "pitchSemitones"),
+        ("voice.changer", "retuneSemitones", "retunePitchSemitones"),
+        ("repair.trimSilence", "threshold", "thresholdDb"),
+    ],
+)
+def test_a_renamed_insert_key_is_refused_with_its_new_spelling(
+    processor: str, old: str, new: str
+) -> None:
+    """The old spelling is refused rather than read, and the refusal names the new one."""
+    import libsonare
+
+    hint = rf"{re.escape(old)} \(renamed to {re.escape(new)}\)$"
+    with pytest.raises(libsonare.SonareValueError, match=hint):
+        libsonare.mastering_apply_processor(processor, np.zeros(4800, np.float32), 48000, {old: 1})
+
+
+def test_a_key_renamed_only_on_another_insert_gets_no_hint() -> None:
+    import libsonare
+
+    with pytest.raises(libsonare.SonareValueError, match=r"parameter\(s\): semitones$"):
+        libsonare.mastering_apply_processor(
+            "effects.reverb.velvet", np.zeros(4800, np.float32), 48000, {"semitones": 1.0}
+        )
 
 
 def test_mastering_amp_preset_catalog_reports_index_name_and_params() -> None:

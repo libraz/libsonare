@@ -125,7 +125,9 @@ def test_streaming_denoise_takes_an_estimator_by_name_and_still_refuses_quantile
     for name in ("mcra", "imcra", "spp"):
         config = {"repair": {"denoise": {"enabled": True, "noiseEstimator": name}}}
         libsonare.StreamingMasteringChain(config, sample_rate=SR, num_channels=1).close()
-    with pytest.raises(SonareError, match="the quantile noise estimator"):
+    with pytest.raises(
+        SonareError, match=r"noiseEstimator quantile is not supported for a streaming"
+    ):
         libsonare.StreamingMasteringChain(
             {"repair": {"denoise": {"enabled": True, "noiseEstimator": "quantile"}}},
             sample_rate=SR,

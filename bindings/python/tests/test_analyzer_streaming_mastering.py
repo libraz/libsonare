@@ -358,18 +358,56 @@ def test_streaming_equalizer_magnitude_response_rejects_unknown_placement() -> N
 
 
 def test_streaming_mastering_chain_rejects_denoise_with_the_quantile_estimator() -> None:
-    """The whole-signal estimator is refused by name; the stream's default prepares."""
-    from libsonare import SonareError, StreamingMasteringChain
+    """The whole-signal estimator is NotSupported by name; the stream's default prepares."""
+    from libsonare import SonareError, SonareValueError, StreamingMasteringChain
 
-    with pytest.raises(SonareError, match="the quantile noise estimator"):
+    with pytest.raises(
+        SonareError,
+        match=r"^\[6\] StreamingMasteringChain: repair\.denoise\.noiseEstimator quantile is not "
+        r"supported for a streaming chain: ",
+    ) as refused:
         StreamingMasteringChain(
             {"repair": {"denoise": {"enabled": 1, "noiseEstimator": "quantile"}}},
             sample_rate=44100,
             num_channels=1,
         )
+    assert refused.value.code_name == "NotSupported"
+    assert not isinstance(refused.value, SonareValueError)
     StreamingMasteringChain(
         {"repair": {"denoise": {"enabled": 1}}}, sample_rate=44100, num_channels=1
     ).close()
+
+
+@pytest.mark.parametrize("stage", ["declick", "declip", "decrackle", "dehum", "dereverb"])
+def test_streaming_mastering_chain_refuses_a_whole_signal_repair_stage(stage: str) -> None:
+    """A stage that needs the whole signal is NotSupported, not an argument error."""
+    from libsonare import SonareError, SonareValueError, StreamingMasteringChain
+
+    with pytest.raises(
+        SonareError,
+        match=rf"^\[6\] StreamingMasteringChain: repair\.{stage} is not supported for a "
+        r"streaming chain: it needs the whole signal$",
+    ) as refused:
+        StreamingMasteringChain(
+            {"repair": {stage: {"enabled": True}}}, sample_rate=44100, num_channels=1
+        )
+    assert refused.value.code_name == "NotSupported"
+    assert not isinstance(refused.value, SonareValueError)
+
+
+def test_streaming_mastering_chain_names_the_new_spelling_of_a_renamed_key() -> None:
+    from libsonare import SonareError, StreamingMasteringChain
+
+    with pytest.raises(
+        SonareError,
+        match=r"unknown key params\.dynamics\.deesser\.bandpassQ "
+        r"\(renamed to params\.dynamics\.deesser\.bandPassQ\)$",
+    ):
+        StreamingMasteringChain(
+            {"dynamics": {"deesser": {"enabled": True, "bandpassQ": 2.0}}},
+            sample_rate=48000,
+            num_channels=1,
+        )
 
 
 def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
