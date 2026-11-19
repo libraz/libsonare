@@ -7,6 +7,7 @@ the same wording.
 
 from __future__ import annotations
 
+import ctypes
 import math
 import numbers
 import operator
@@ -125,39 +126,22 @@ def _float_narrowing_error(name: str) -> str:
     return f"{name} must be finite and in [-3.4028235e38, 3.4028235e38]"
 
 
-def _domain_checked_float(value: object, name: str) -> float:
-    """Return ``value`` as a ``float`` for a C entry that refuses its own finite domain.
+def _domain_float(value: object, name: str) -> ctypes.c_float:
+    """Carry ``value`` to a C ``float`` argument whose domain the core refuses by name.
 
-    Only a non-number is refused here. A NaN, an infinity or a value past the
-    float range reaches the core, whose refusal states the argument's domain
-    rather than the float range.
+    Only a non-number is refused here. NaN and an infinity pass unchanged and a
+    double no float can hold saturates to an infinity, so the core's keyed check
+    refuses each with the argument's whole domain and no bound is copied here.
     """
     if not isinstance(value, bool) and isinstance(value, SupportsFloat):
         try:
-            return float(value)
+            return ctypes.c_float(float(value))
         except OverflowError:
             # Only an int too wide for a double overflows; its sign survives.
-            return math.inf if isinstance(value, int) and value > 0 else -math.inf
+            return ctypes.c_float(math.inf if isinstance(value, int) and value > 0 else -math.inf)
         except (TypeError, ValueError):
             pass
     raise _refuse_type(f"{name} must be a number")
-
-
-def _domain_float(
-    value: object, name: str, low: float, high: float, *, low_open: bool = False
-) -> float:
-    """Return ``value`` as a ``float`` inside the domain the core states for it.
-
-    Checked before any float narrowing, so a NaN, an infinity or a double past
-    the float range is refused with the domain rather than the float range. A
-    bound copied from the core is pinned by a shared input-corpus row.
-    """
-    number = _domain_checked_float(value, name)
-    inside_low = low < number if low_open else low <= number
-    if not (inside_low and number <= high):
-        opening = "(" if low_open else "["
-        raise _refuse(f"{name} must be finite and in {opening}{low}, {high}]")
-    return number
 
 
 def _narrow_double(value: object, name: str) -> float:

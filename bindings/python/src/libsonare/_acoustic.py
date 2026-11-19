@@ -156,7 +156,7 @@ def _fill_room_config(
     air_absorption_enabled: bool,
     seed: int | None,
     ism_order: int,
-    **fields: float | None,
+    **fields: float | ctypes.c_float | None,
 ) -> _RoomConfig:
     """Overwrite an ``_init``-filled config with every field the caller gave.
 
@@ -494,7 +494,7 @@ def _room_morph_config(
     air_absorption_enabled: bool,
     air_temperature_c: float | None,
     air_humidity_percent: float | None,
-    receiver_spacing_m: float | None = None,
+    receiver_spacing_m: ctypes.c_float | None = None,
 ) -> tuple[SonareRoomMorphConfig, tuple[object, object]]:
     """Builds the morph config shared by the mono and stereo entry points.
 
@@ -694,9 +694,11 @@ def room_morph_stereo(
     The remaining keywords are those of :func:`room_morph`.
     """
     lib = _get_lib()
-    spacing: float | None = None
-    if receiver_spacing_m is not None:
-        spacing = _domain_float(receiver_spacing_m, "receiver_spacing_m", 0, 4, low_open=True)
+    spacing = (
+        None
+        if receiver_spacing_m is None
+        else _domain_float(receiver_spacing_m, "receiver_spacing_m")
+    )
     c_left, length = _to_c_float_array(left)
     c_right, right_length = _to_c_float_array(right)
     if right_length != length:

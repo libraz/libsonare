@@ -196,11 +196,11 @@ _TRIM_ENTRIES = (
 def test_a_trim_detector_control_is_refused_with_its_domain_whatever_the_value(
     entry, key: str, domain: str, accepted: tuple[float, ...], refused: tuple[float, ...]
 ) -> None:
-    """A non-finite or saturating value reads the core's domain, not the float range."""
+    """A non-finite or saturating value reaches the core, which refuses it with its domain."""
     signal = np.r_[np.zeros(480), np.full(480, 0.5), np.zeros(480)].astype(np.float32)
     mode = {} if key == "threshold_db" else {"mode": "lufsGated"}
     for value in accepted:
-        entry(signal, **{key: value}, **mode)  # the copied bounds are no stricter than the core
+        entry(signal, **{key: value}, **mode)  # positive control: each edge of the domain
     for value in (*refused, *REFUSED):
         with pytest.raises(SonareValueError, match=rf": {key} must be finite and in {domain}$"):
             entry(signal, **{key: value}, **mode)
