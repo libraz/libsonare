@@ -18,6 +18,7 @@ import {
   realtimeVoiceChangerValidatePresetJson,
   type ScaleKind,
   StreamingRetune,
+  type StreamingRetuneAppliedConfig,
   type StreamingRetuneConfig,
   type VocoderCarrierSource,
   type VocoderCarrierWave,
@@ -686,7 +687,7 @@ describe('voice changer surface', () => {
         retune.setConfig({ pitchSemitones: -2 });
         expect(retune.config().pitchSemitones).toBe(-2);
         expectTypeOf(retune.grainSizeSamples).toEqualTypeOf<number>();
-        expectTypeOf(retune.config()).toEqualTypeOf<Required<StreamingRetuneConfig>>();
+        expectTypeOf(retune.config()).toEqualTypeOf<StreamingRetuneAppliedConfig>();
       } finally {
         retune.destroy();
       }
