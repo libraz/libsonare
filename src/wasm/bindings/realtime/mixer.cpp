@@ -917,9 +917,9 @@ void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val
 #endif
 }
 
-// Sets a lane strip's surround pan from {azimuth, elevation, divergence, lfe,
-// distance}; absent fields take the centered point-source defaults, a present
-// non-number is refused by name, and an out-of-range or non-finite field is refused.
+// Sets a lane strip's surround pan from {azimuth, divergence, lfe}; absent fields take the centered
+// point-source defaults, a present non-number is refused by name, and an out-of-range or non-finite
+// field is refused.
 void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const val& pan_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   if (pan_val.isNull() || pan_val.typeOf().as<std::string>() != "object") {
@@ -931,10 +931,8 @@ void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const
 #if defined(SONARE_WITH_MIXING)
   sonare::mixing::SurroundPanParams params;
   params.azimuth = field("azimuth", params.azimuth);
-  params.elevation = field("elevation", params.elevation);
   params.divergence = field("divergence", params.divergence);
   params.lfe = field("lfe", params.lfe);
-  params.distance = field("distance", params.distance);
   if (!(params.azimuth >= -180.0f && params.azimuth <= 180.0f) ||
       !(params.divergence >= 0.0f && params.divergence <= 1.0f) ||
       !(params.lfe >= 0.0f && params.lfe <= 1.0f)) {

@@ -309,10 +309,11 @@ Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
   const Napi::Object obj = info[1].As<Napi::Object>();
   SonareSurroundPan pan{};
   pan.azimuth = FloatProperty(obj, "azimuth", pan.azimuth);
-  pan.elevation = FloatProperty(obj, "elevation", pan.elevation);
   pan.divergence = FloatProperty(obj, "divergence", pan.divergence);
   pan.lfe = FloatProperty(obj, "lfe", pan.lfe);
-  pan.distance = FloatProperty(obj, "distance", pan.distance);
+  // The C struct still carries the two reserved fields; they take their fixed values.
+  pan.elevation = 0.0f;
+  pan.distance = 1.0f;
   SonareError err = sonare_strip_set_surround_pan(strip, &pan);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip surround pan: ");

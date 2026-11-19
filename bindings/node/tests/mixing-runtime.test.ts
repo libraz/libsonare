@@ -108,12 +108,19 @@ describe('Mixer runtime methods', () => {
     expect(host.surroundPan.azimuth).toBeCloseTo(-45, 5);
     expect(host.surroundPan.divergence).toBeCloseTo(0.25, 5);
     expect(host.surroundPan.lfe).toBeCloseTo(0.5, 5);
-    expect(host.surroundPan.distance).toBeCloseTo(1, 5);
   });
 
   it('refuses an out-of-range surround pan instead of clamping it', () => {
     for (const pan of [{ azimuth: 181 }, { azimuth: -181 }, { divergence: 1.5 }, { lfe: -0.1 }]) {
       expectRefusal(() => mixer.setSurroundPan('host', pan), RangeError);
+    }
+  });
+
+  it('refuses elevation and distance as unknown surround pan keys', () => {
+    for (const key of ['elevation', 'distance']) {
+      expect(() => mixer.setSurroundPan('host', { [key]: 0 } as never)).toThrow(
+        new TypeError(`setSurroundPan: unknown request key '${key}'`),
+      );
     }
   });
 

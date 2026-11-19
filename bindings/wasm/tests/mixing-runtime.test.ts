@@ -139,6 +139,11 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(() =>
           mixer.setSurroundPan(vocal, { azimuth: -45, divergence: 0.25, lfe: 0.5 }),
         ).not.toThrow();
+        for (const key of ['elevation', 'distance']) {
+          expect(() => mixer.setSurroundPan(vocal, { [key]: 0 } as never)).toThrow(
+            new TypeError(`setSurroundPan: unknown request key '${key}'`),
+          );
+        }
 
         const sendIndex = mixer.addSend(vocal, {
           id: 'rt-send',

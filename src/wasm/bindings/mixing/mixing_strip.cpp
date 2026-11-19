@@ -105,9 +105,9 @@ void MixerWasm::setDualPan(const val& strip_index_val, const val& left_pan_val,
   checkStripValueError(sonare_strip_set_dual_pan(stripAt(strip_index), left_pan, right_pan));
 }
 
-// Sets the strip's surround pan from a JS object {azimuth, elevation,
-// divergence, lfe, distance}; absent (undefined/null) fields fall back to the
-// centered point-source default and a present wrong-typed field is refused.
+// Sets the strip's surround pan from a JS object {azimuth, divergence, lfe};
+// absent (undefined/null) fields fall back to the centered point-source default
+// and a present wrong-typed field is refused.
 void MixerWasm::setSurroundPan(const val& strip_index_val, val pan) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   if (pan.isNull() || pan.typeOf().as<std::string>() != "object") {
@@ -118,10 +118,11 @@ void MixerWasm::setSurroundPan(const val& strip_index_val, val pan) {
   };
   SonareSurroundPan sp{};
   sp.azimuth = field("azimuth", sp.azimuth);
-  sp.elevation = field("elevation", sp.elevation);
   sp.divergence = field("divergence", sp.divergence);
   sp.lfe = field("lfe", sp.lfe);
-  sp.distance = field("distance", sp.distance);
+  // The C struct still carries the two reserved fields; they take their fixed values.
+  sp.elevation = 0.0f;
+  sp.distance = 1.0f;
   checkStripError(sonare_strip_set_surround_pan(stripAt(strip_index), &sp));
 }
 

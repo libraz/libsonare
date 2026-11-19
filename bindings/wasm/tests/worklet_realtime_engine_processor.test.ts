@@ -3094,7 +3094,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       syncTrackStripSurroundPan: {
         type: 'syncTrackStripSurroundPan',
         trackId: 10,
-        pan: { azimuth: -110, elevation: 0, divergence: 0, lfe: 0, distance: 1 },
+        pan: { azimuth: -110, divergence: 0, lfe: 0 },
       },
       syncWarpVoiceCapacity: { type: 'syncWarpVoiceCapacity', voices: 12 },
     };

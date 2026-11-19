@@ -809,9 +809,10 @@ export class Mixer {
    * Applied when the engine's track mixer renders this strip's lane into a
    * destination with more than two channels. This stereo-only mixer's own
    * block entry points ignore it. `azimuth` outside [-180, 180] or `divergence`/`lfe`
-   * outside [0, 1] throws a RangeError.
+   * outside [0, 1] throws a RangeError; a key outside those three throws a TypeError.
    */
   setSurroundPan(strip: StripRef, pan: SurroundPan): void {
+    requestObject('setSurroundPan', pan, 'pan', true);
     assertSurroundPan('setSurroundPan', pan);
     this.mixer.setSurroundPan(this.stripIndex('setSurroundPan', strip), pan);
   }

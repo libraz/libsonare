@@ -269,6 +269,7 @@ import type {
   MidiProgramRequest,
   MidiRouteEventsRequest,
 } from './public_types_midi_messages.js';
+import type { SurroundPan } from './public_types_mixing.js';
 import type { ChordFunctionsInput } from './public_types_music.js';
 import type {
   PlaybackLoudnessMeterOptions,
@@ -2286,6 +2287,7 @@ const ConfigureMeterRequestKeys = keysOf<MixerMeterOptions>()([
   'measureTruePeak',
 ]);
 const SetPolarityInvertRequestKeys = keysOf<PolarityInvert>()(['left', 'right']);
+const SurroundPanRequestKeys = keysOf<SurroundPan>()(['azimuth', 'divergence', 'lfe']);
 const MixerAddSendRequestKeys = keysOf<MixerSend>()(['id', 'destinationBusId', 'sendDb', 'timing']);
 const ScheduleInsertAutomationRequestKeys = keysOf<InsertAutomationPoint>()([
   'paramId',
@@ -2704,6 +2706,8 @@ export const REQUEST_SHAPES = {
   'Mixer.fromJson': { keys: MixerJsonOptionsRequestKeys },
   configureMeter: { keys: ConfigureMeterRequestKeys },
   setPolarityInvert: { keys: SetPolarityInvertRequestKeys },
+  setSurroundPan: { keys: SurroundPanRequestKeys },
+  setStripSurroundPan: { keys: SurroundPanRequestKeys },
   addSend: { keys: MixerAddSendRequestKeys },
   scheduleInsertAutomation: { keys: ScheduleInsertAutomationRequestKeys },
   scheduleFaderAutomation: { keys: ScheduleFaderAutomationRequestKeys },

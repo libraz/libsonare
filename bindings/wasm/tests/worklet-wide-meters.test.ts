@@ -51,7 +51,7 @@ function seedBus(
 
 const SURROUND_STRIP: MixSceneStrip = {
   id: 's',
-  surroundPan: { azimuth: -110, elevation: 0, divergence: 0, lfe: 0, distance: 1 },
+  surroundPan: { azimuth: -110, divergence: 0, lfe: 0 },
 } as MixSceneStrip;
 
 function silent(channels: number): Float32Array[] {

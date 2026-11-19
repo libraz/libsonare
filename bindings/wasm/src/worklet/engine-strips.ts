@@ -374,13 +374,12 @@ export function setStripSurroundPan(
     () => {
       const resolved = {
         azimuth: pan.azimuth ?? 0,
-        elevation: pan.elevation ?? 0,
         divergence: pan.divergence ?? 0,
         lfe: pan.lfe ?? 0,
-        distance: pan.distance === undefined || pan.distance <= 0 ? 1 : pan.distance,
       };
       mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
-        entry.surroundPan = resolved;
+        // The scene document still writes the two reserved fields at their fixed values.
+        entry.surroundPan = { ...resolved, elevation: 0, distance: 1 };
       });
       ctx.postSync({ type: 'syncTrackStripSurroundPan', trackId, pan: resolved });
     },

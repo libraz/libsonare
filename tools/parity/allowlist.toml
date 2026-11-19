@@ -983,6 +983,11 @@ fields = [
   # C beat_times + beat_count become beats: Beat[], each beat carrying its time
   # and the count being the array length.
   "analysis_result.beat_times",
+  # --- Reserved surround pan fields (category 4) ---
+  # The C struct still carries elevation and distance, documented as having no
+  # effect; the facades do not expose them and pass their fixed 0 / 1.
+  "surround_pan.elevation",
+  "surround_pan.distance",
 ]
 
 # Category 4 (intentionally one-sided): the facade record is a RICHER read model

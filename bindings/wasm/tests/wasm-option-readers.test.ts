@@ -104,10 +104,8 @@ describe('wrong-typed option values are refused by name', () => {
   describe('Mixer.setSurroundPan', () => {
     it.each([
       ['azimuth', '45'],
-      ['elevation', true],
       ['divergence', [0.25]],
       ['lfe', 'x'],
-      ['distance', {}],
     ])('refuses %s = %j', (key, value) => {
       const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: SR,
@@ -131,7 +129,10 @@ describe('wrong-typed option values are refused by name', () => {
       });
       try {
         const vocal = mixer.stripById('vocal');
-        expectInvalid(() => mixer.setSurroundPan(vocal, 5 as never), /pan must be an object/);
+        expectInvalid(
+          () => mixer.setSurroundPan(vocal, 5 as never),
+          /^setSurroundPan: request must be an object$/,
+        );
         expect(() =>
           mixer.setSurroundPan(vocal, { azimuth: undefined, lfe: null } as never),
         ).not.toThrow();

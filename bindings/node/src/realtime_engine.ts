@@ -1684,9 +1684,15 @@ export class RealtimeEngine {
    *
    * @param ref Track the strip belongs to.
    * @param pan Surround position; omitted fields default to a centered point source.
+   * @throws TypeError for a wrong-typed field or an unknown key; RangeError for a
+   *   field outside its range
    */
   setStripSurroundPan(ref: StripRef, pan: SurroundPan): void {
-    this.native.setTrackStripSurroundPan(trackOnly('setStripSurroundPan', ref), pan);
+    const trackId = trackOnly('setStripSurroundPan', ref);
+    this.native.setTrackStripSurroundPan(
+      trackId,
+      requestObject('setStripSurroundPan', pan, 'pan', true),
+    );
   }
 
   /**

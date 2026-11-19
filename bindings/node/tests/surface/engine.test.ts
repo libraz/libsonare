@@ -659,6 +659,11 @@ describe('RealtimeEngine strip addressing', () => {
       expect(caught(() => engine.setBusPanLaw(1, 1 as never))).toBeInstanceOf(TypeError);
       expect(caught(() => engine.setBusPanMode(1, 1 as never))).toBeInstanceOf(TypeError);
       expect(caught(() => engine.setStripSurroundPan('master', {}))).toBeInstanceOf(RangeError);
+      for (const key of ['elevation', 'distance']) {
+        expect(() => engine.setStripSurroundPan(10, { [key]: 0 } as never)).toThrow(
+          new TypeError(`setStripSurroundPan: unknown request key '${key}'`),
+        );
+      }
       for (const name of [
         'setTrackStripPan',
         'setTrackStripPanLaw',

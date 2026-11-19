@@ -594,10 +594,11 @@ Napi::Value RealtimeEngineWrap::SetTrackStripSurroundPan(const Napi::CallbackInf
   const Napi::Object obj = info[1].As<Napi::Object>();
   SonareSurroundPan pan{};
   pan.azimuth = FloatProperty(obj, "azimuth", pan.azimuth);
-  pan.elevation = FloatProperty(obj, "elevation", pan.elevation);
   pan.divergence = FloatProperty(obj, "divergence", pan.divergence);
   pan.lfe = FloatProperty(obj, "lfe", pan.lfe);
-  pan.distance = FloatProperty(obj, "distance", pan.distance);
+  // The C struct still carries the two reserved fields; they take their fixed values.
+  pan.elevation = 0.0f;
+  pan.distance = 1.0f;
   if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_track_strip_surround_pan(engine_, track_id, &pan));
   return env.Undefined();

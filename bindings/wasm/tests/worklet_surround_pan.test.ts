@@ -76,7 +76,7 @@ describe('SonareEngine surround pan at numChannels 6', () => {
     expect(surroundMessage).toEqual({
       type: 'syncTrackStripSurroundPan',
       trackId: TRACK,
-      pan: { azimuth: -110, elevation: 0, divergence: 0, lfe: 0, distance: 1 },
+      pan: { azimuth: -110, divergence: 0, lfe: 0 },
     });
 
     const processor = new SonareRealtimeEngineWorkletProcessor({

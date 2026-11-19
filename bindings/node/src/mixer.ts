@@ -646,9 +646,12 @@ export class Mixer {
    * Applied when the engine's track mixer renders this strip's lane into a
    * destination with more than two channels. This stereo-only mixer's own block
    * entry points ignore it.
+   *
+   * @throws TypeError for a wrong-typed field or an unknown key; RangeError for a
+   *   field outside its range
    */
   setSurroundPan(strip: StripRef, pan: SurroundPan): void {
-    this.native.setSurroundPan(strip, pan);
+    this.native.setSurroundPan(strip, requestObject('setSurroundPan', pan, 'pan', true));
   }
 
   /**

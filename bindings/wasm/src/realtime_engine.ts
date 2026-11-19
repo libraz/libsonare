@@ -2520,13 +2520,14 @@ export class RealtimeEngine {
   /**
    * Sets a track strip's surround placement in realtime (glitch-free; a
    * constant-power 5 ms one-pole glide). Used when the destination has more than
-   * two channels. Omitted fields default to a centered point source
-   * (`distance` 1); a `distance` of 0 or less is treated as 1. Throws a RangeError
-   * for `azimuth` outside [-180, 180] or `divergence`/`lfe` outside [0, 1], and for an
-   * unknown track, a track without a lane strip, or a non-finite field.
+   * two channels. Omitted fields default to a centered point source. Throws a
+   * RangeError for `azimuth` outside [-180, 180] or `divergence`/`lfe` outside [0, 1],
+   * and for an unknown track, a track without a lane strip, or a non-finite field;
+   * a TypeError for a key outside those three.
    */
   setStripSurroundPan(ref: StripRef, pan: SurroundPan): void {
     const trackId = trackOnly('setStripSurroundPan', ref);
+    requestObject('setStripSurroundPan', pan, 'pan', true);
     assertSurroundPan('setStripSurroundPan', pan);
     this.native.setTrackStripSurroundPan(trackId, pan);
   }

@@ -18,22 +18,18 @@ import type { EqBandInput } from './public_types_realtime.js';
 export type PanMode = 'balance' | 'stereoPan' | 'dualPan';
 
 /**
- * Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
- * `azimuth`/`divergence`/`lfe`; `elevation`/`distance` are reserved. All fields
- * are optional and default to a centered point source. A value outside the stated
- * range is refused with a RangeError, never clamped.
+ * Surround pan position for a strip feeding a >2-channel bus. All fields are
+ * optional and default to a centered point source. A value outside the
+ * stated range is refused with a RangeError, never clamped, and a key outside
+ * these three with a TypeError.
  */
 export interface SurroundPan {
   /** -180..180 deg, 0 = front-center, positive = right. */
   azimuth?: number;
-  /** Reserved (no height beds in phase 1). */
-  elevation?: number;
   /** 0 = point source, 1 = spread across the front. */
   divergence?: number;
   /** 0..1 scalar send into the LFE plane. */
   lfe?: number;
-  /** Reserved (focus/spread), defaults to 1. */
-  distance?: number;
 }
 
 /** Master-output meter reading for a mix. */
