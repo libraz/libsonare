@@ -7,7 +7,7 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import KW_ONLY, dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, get_args
 
 import numpy as np
@@ -306,12 +306,15 @@ class EngineMarker:
 
     ``kind`` is a :data:`MarkerKind` token; ``key_fifths`` (-7..7, sharps
     positive) and ``key_minor`` apply only to the ``"keySignature"`` kind.
+    Every field after ``ppq`` is keyword-only.
     """
 
-    id: int
-    """Marker id."""
     ppq: float
     """Marker position in PPQ."""
+    _: KW_ONLY
+    id: int | None = None
+    """Marker id; ``None`` asks :meth:`~libsonare.RealtimeEngine.set_markers` to allocate one.
+    A marker read back from the engine always carries its id."""
     name: str | None = None
     """Marker text, at most 63 UTF-8 bytes; ``None`` for an unnamed marker."""
     kind: MarkerKind = "marker"
@@ -328,13 +331,14 @@ class ProjectMarker:
 
     Same shape as :class:`EngineMarker`: ``kind`` is a :data:`MarkerKind`
     token and ``key_fifths`` / ``key_minor`` apply only to the
-    ``"keySignature"`` kind.
+    ``"keySignature"`` kind. Every field after ``ppq`` is keyword-only.
     """
 
-    id: int
-    """Marker id."""
     ppq: float
     """Marker position in PPQ."""
+    _: KW_ONLY
+    id: int
+    """Marker id."""
     name: str | None = None
     """Marker text; ``None`` for an unnamed marker."""
     kind: MarkerKind = "marker"

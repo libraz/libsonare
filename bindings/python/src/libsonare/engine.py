@@ -10,6 +10,7 @@ from . import _ffi_types_core as _ffi_core
 from . import _ffi_types_mastering_project as _ffi_project
 from ._engine_conversions import (
     _LATENCY_Q8_SCALE,
+    _assign_marker_ids,
     _automation_points_to_c,
     _clips_to_c,
     _fixed_bytes,
@@ -136,6 +137,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
+    # Lowest id set_markers may allocate; never moves back, so an id is not reused.
+    _next_marker_id: int = 1
 
     @_entry("RealtimeEngine")
     def __init__(
@@ -615,13 +618,24 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return int(out.value)
 
     @_entry("RealtimeEngine.set_markers")
-    def set_markers(self, markers: Sequence[EngineMarker]) -> None:
-        raw_markers = (_ffi_core.SonareEngineMarker * len(markers))(
-            *[_marker_to_c(marker) for marker in markers]
-        )
-        _check(
-            _get_lib().sonare_engine_set_markers(self._require_handle(), raw_markers, len(markers))
-        )
+    def set_markers(self, markers: Sequence[EngineMarker]) -> list[EngineMarker]:
+        """Replace the whole marker set and return the stored markers in the order given.
+
+        A marker whose ``id`` is ``None`` is given the lowest id above every id this
+        engine has stored or assigned that the list does not carry, so an id is not
+        reused after its marker is removed. An explicit id is kept; it must be
+        positive and unique within the list. A refused list changes neither the
+        stored markers nor the ids later allocations start from.
+        """
+        floor = self._next_marker_id
+        for stored in self.markers():
+            floor = max(floor, (stored.id or 0) + 1)
+        assigned, next_id = _assign_marker_ids(list(markers), floor)
+        raw = [_marker_to_c(marker) for marker in assigned]
+        raw_markers = (_ffi_core.SonareEngineMarker * len(raw))(*raw)
+        _check(_get_lib().sonare_engine_set_markers(self._require_handle(), raw_markers, len(raw)))
+        self._next_marker_id = next_id
+        return [self.marker(int(entry.id)) for entry in raw]
 
     @_entry("RealtimeEngine.markers")
     def markers(self) -> list[EngineMarker]:

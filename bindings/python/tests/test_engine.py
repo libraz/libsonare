@@ -174,19 +174,19 @@ def test_engine_marker_kind_and_key_signature_round_trip() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_markers(
             [
-                EngineMarker(1, 0.0, "verse", kind="cuePoint"),
+                EngineMarker(0.0, id=1, name="verse", kind="cuePoint"),
                 EngineMarker(
-                    2,
                     4.0,
-                    "G major",
+                    id=2,
+                    name="G major",
                     kind="keySignature",
                     key_fifths=1,
                     key_minor=False,
                 ),
                 EngineMarker(
-                    3,
                     8.0,
-                    "C minor",
+                    id=3,
+                    name="C minor",
                     kind="keySignature",
                     key_fifths=-3,
                     key_minor=True,

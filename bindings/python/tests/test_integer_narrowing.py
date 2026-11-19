@@ -141,16 +141,16 @@ def test_a_marker_kind_is_an_exact_token() -> None:
     with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_markers(
             [
-                ls.EngineMarker(1, 0.0, "a", kind="cuePoint"),
-                ls.EngineMarker(2, 4.0, "b", kind="keySignature"),
+                ls.EngineMarker(0.0, id=1, name="a", kind="cuePoint"),
+                ls.EngineMarker(4.0, id=2, name="b", kind="keySignature"),
             ]
         )
         assert engine.marker(1).kind != engine.marker(2).kind  # positive control
         for value in (3, 2**8 + 3, -1, True):
             with pytest.raises(TypeError, match="kind"):
-                engine.set_markers([ls.EngineMarker(3, 0.0, "c", kind=value)])  # type: ignore[arg-type]
+                engine.set_markers([ls.EngineMarker(0.0, id=3, name="c", kind=value)])  # type: ignore[arg-type]
         with pytest.raises(SonareValueError, match="cuePoint"):
-            engine.set_markers([ls.EngineMarker(3, 0.0, "c", kind="cue_point")])  # type: ignore[arg-type]
+            engine.set_markers([ls.EngineMarker(0.0, id=3, name="c", kind="cue_point")])  # type: ignore[arg-type]
 
 
 @pytest.fixture

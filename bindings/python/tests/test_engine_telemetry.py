@@ -157,7 +157,9 @@ def test_realtime_engine_process_and_telemetry() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_tempo(60.0)
         engine.set_time_signature(3, 4)
-        engine.set_markers([EngineMarker(11, 1.0, "intro"), EngineMarker(12, 2.0, "out")])
+        engine.set_markers(
+            [EngineMarker(1.0, id=11, name="intro"), EngineMarker(2.0, id=12, name="out")]
+        )
         assert len(engine.markers()) == 2
         assert engine.markers()[0].name == "intro"
         assert engine.marker(12).ppq == 2.0

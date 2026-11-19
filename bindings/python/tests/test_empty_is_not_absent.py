@@ -100,24 +100,24 @@ def test_project_source_uri_has_no_byte_limit(uri: str) -> None:
 
 
 def test_engine_marker_name_is_none_when_unnamed_and_is_never_cut() -> None:
-    assert EngineMarker(1, 0.0).name is None
+    assert EngineMarker(0.0, id=1).name is None
     longest = "m" * 63
     with RealtimeEngine(sample_rate=SR, max_block_size=128) as engine:
-        engine.set_markers([EngineMarker(1, 0.0), EngineMarker(2, 1.0, longest)])
+        engine.set_markers([EngineMarker(0.0, id=1), EngineMarker(1.0, id=2, name=longest)])
         names = {marker.id: marker.name for marker in engine.markers()}
         assert names == {1: None, 2: longest}
         with pytest.raises(
             SonareValueError, match="^RealtimeEngine.set_markers: marker name must not be empty"
         ):
-            engine.set_markers([EngineMarker(3, 0.0, "")])
+            engine.set_markers([EngineMarker(0.0, id=3, name="")])
         with pytest.raises(
             SonareValueError,
             match="^RealtimeEngine.set_markers: name must be at most 63 UTF-8 bytes$",
         ):
-            engine.set_markers([EngineMarker(4, 0.0, longest + "m")])
+            engine.set_markers([EngineMarker(0.0, id=4, name=longest + "m")])
         # A multi-byte name that does not fit is refused, not cut at a codepoint.
         with pytest.raises(SonareValueError, match="at most 63 UTF-8 bytes"):
-            engine.set_markers([EngineMarker(5, 0.0, "é" * 32)])
+            engine.set_markers([EngineMarker(0.0, id=5, name="é" * 32)])
 
 
 def test_engine_fixed_identifiers_are_refused_rather_than_cut() -> None:

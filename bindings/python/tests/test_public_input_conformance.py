@@ -28,7 +28,7 @@ _CORPUS = json.loads(
 def _marker_value(raw: dict[str, Any]) -> EngineMarker:
     marker_id = 0xFFFFFFFF if raw["id"] == "uint32_max" else raw["id"]
     ppq = {"nan": math.nan, "inf": math.inf}.get(raw["ppq"], raw["ppq"])
-    return EngineMarker(marker_id, ppq, raw["name"])
+    return EngineMarker(ppq, id=marker_id, name=raw["name"])
 
 
 def _snapshot(engine: RealtimeEngine) -> bytes:
@@ -269,3 +269,59 @@ def test_stream_overflow_drops_the_newest_frames() -> None:
     # The retained frames are the oldest ones, sample for sample.
     np.testing.assert_array_equal(kept.timestamps_sec, reference.timestamps_sec[:cap])
     np.testing.assert_array_equal(kept.rms_energy, reference.rms_energy[:cap])
+
+
+_MARKER_ID_CASES = json.loads(
+    (
+        Path(__file__).resolve().parents[3] / "tests/conformance/marker_id_allocation.json"
+    ).read_text()
+)["cases"]
+
+
+def _marker_entry(raw: dict[str, Any]) -> EngineMarker:
+    return EngineMarker(raw["ppq"], id=raw.get("id"))
+
+
+@pytest.mark.parametrize("case", _MARKER_ID_CASES, ids=lambda case: case["name"])
+def test_marker_id_allocation_follows_the_corpus(case: dict[str, Any]) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        for index, step in enumerate(case["steps"]):
+            entries = [_marker_entry(raw) for raw in step["set"]]
+            if step.get("refused"):
+                with pytest.raises(SonareValueError):
+                    engine.set_markers(entries)
+            else:
+                stored = engine.set_markers(entries)
+                assert [marker.id for marker in stored] == step["ids"], index
+                assert [marker.ppq for marker in stored] == [raw["ppq"] for raw in step["set"]]
+            assert [marker.id for marker in engine.markers()] == step["stored"], index
+
+
+def test_a_marker_takes_ppq_first_and_every_other_field_by_keyword() -> None:
+    with pytest.raises(TypeError):
+        EngineMarker(1, 0.0)  # type: ignore[call-arg, arg-type]
+    assert EngineMarker(480.0).id is None
+
+
+def test_markers_read_back_from_the_engine_set_again_keep_their_ids() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        stored = engine.set_markers(
+            [EngineMarker(0.0, id=7, name="intro"), EngineMarker(480.0), EngineMarker(960.0, id=3)]
+        )
+        assert [marker.id for marker in stored] == [7, 1, 3]
+        assert engine.set_markers(engine.markers()) == engine.markers()
+        assert [marker.id for marker in engine.markers()] == [7, 1, 3]
+
+
+def test_project_markers_keep_explicit_ids_across_a_round_trip() -> None:
+    project = Project()
+    ids = [
+        project.set_marker(0.0, marker_id=5, name="verse"),
+        project.set_marker(480.0),
+        project.set_marker(960.0, marker_id=9, kind="cuePoint"),
+    ]
+    before = project.markers()
+    assert [marker.id for marker in before] == ids
+    restored = Project.from_json(project.to_json())
+    assert restored.markers() == before
+    assert restored.set_marker(1440.0) > max(ids)

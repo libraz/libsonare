@@ -48,7 +48,9 @@ def test_a_wrapped_sample_rate_is_refused_rather_than_read_as_a_smaller_one() ->
 def test_a_wrapped_marker_id_is_refused_rather_than_read_as_a_smaller_one() -> None:
     """The engine's ``c_uint32`` lookup key: a wrap reads a different marker."""
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        engine.set_markers([EngineMarker(11, 1.0, "intro"), EngineMarker(12, 2.0, "out")])
+        engine.set_markers(
+            [EngineMarker(1.0, id=11, name="intro"), EngineMarker(2.0, id=12, name="out")]
+        )
         assert engine.marker(11).ppq != engine.marker(12).ppq  # positive control
         for value in (2**32 + 11, 2**32 + 12, 2**32, -1, 11.5):
             with pytest.raises(SonareValueError, match="id"):

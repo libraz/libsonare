@@ -12515,3 +12515,35 @@ old = "PlaybackRenderer.render_offline(in_channels)"
 new = "PlaybackRenderer.render_offline(num_input_channels)"
 domain = "engine"
 rule = "num-channels"
+
+[[entry]]
+kind = "type"
+old = "EngineMarker"
+changed = "ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only (EngineMarker(ppq, id=..., name=...))"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_public_input_conformance.py::test_a_marker_takes_ppq_first_and_every_other_field_by_keyword"
+
+[[entry]]
+kind = "field"
+old = "EngineMarker.id"
+changed = "optional, default None: set_markers allocates the lowest id above every id the engine has stored or assigned that the list does not carry; a marker read back always carries its id"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_public_input_conformance.py::test_marker_id_allocation_follows_the_corpus"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_markers"
+changed = "returns the stored markers in the order given (was None); a refused list leaves the stored markers and the allocation counter unchanged"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_public_input_conformance.py::test_marker_id_allocation_follows_the_corpus"
+
+[[entry]]
+kind = "type"
+old = "ProjectMarker"
+changed = "ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only, the field order of EngineMarker"
+domain = "project"
+rule = "individual"
+test = "bindings/python/tests/test_public_input_conformance.py::test_project_markers_keep_explicit_ids_across_a_round_trip"

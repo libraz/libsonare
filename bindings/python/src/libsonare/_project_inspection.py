@@ -509,8 +509,8 @@ class _ProjectInspectionMixin:
         )
         name = self._string_by_index("sonare_project_marker_name_by_index", index) or None
         return ProjectMarker(
+            float(raw.ppq),
             id=int(raw.id),
-            ppq=float(raw.ppq),
             name=name,
             kind=_marker_kind_name(raw.kind),
             key_fifths=int(raw.key_fifths),

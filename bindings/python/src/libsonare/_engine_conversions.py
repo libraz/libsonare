@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import dataclasses
 import json
 import operator
 from collections.abc import Mapping, Sequence
@@ -147,10 +148,46 @@ def _automation_points_to_c(
     return raw
 
 
-def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
-    _require_instance(marker, EngineMarker, "marker")
+def _assign_marker_ids(markers: Sequence[object], next_id: int) -> tuple[list[object], int]:
+    """Give every id-less marker the lowest id at or above ``next_id`` no entry carries.
+
+    Explicit ids are kept; validating them is the setter's, and an entry that is
+    not an :class:`EngineMarker` passes through for :func:`_marker_to_c` to refuse.
+    Returns the entries in the order given and the counter for the next call
+    (above every id the list now holds).
+    """
+
+    def explicit(marker: object) -> int | None:
+        if not isinstance(marker, EngineMarker):
+            return None
+        value = marker.id
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    taken = {value for value in map(explicit, markers) if value is not None}
+    following = next_id
+    highest = next_id - 1
+    out: list[object] = []
+    for marker in markers:
+        if not isinstance(marker, EngineMarker) or marker.id is not None:
+            value = explicit(marker)
+            if value is not None:
+                highest = max(highest, value)
+            out.append(marker)
+            continue
+        while following in taken:
+            following += 1
+        taken.add(following)
+        highest = max(highest, following)
+        out.append(dataclasses.replace(marker, id=following))
+        following += 1
+    return out, highest + 1
+
+
+def _marker_to_c(value: object) -> SonareEngineMarker:
+    marker = _require_instance(value, EngineMarker, "marker")
     try:
-        marker_id = operator.index(marker.id)
+        # set_markers has allocated every id-less entry, so a None does not reach here.
+        marker_id = operator.index(cast(int, marker.id))
     except TypeError as exc:
         raise _refuse(f"marker id must be an integer in [1, {_UINT32_MAX}]") from exc
     if marker_id <= 0 or marker_id > _UINT32_MAX:
@@ -172,8 +209,8 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
 
 def _marker_from_c(raw: SonareEngineMarker) -> EngineMarker:
     return EngineMarker(
+        float(raw.ppq),
         id=int(raw.id),
-        ppq=float(raw.ppq),
         name=_c_string(bytes(raw.name)) or None,
         kind=_marker_kind_name(raw.kind),
         key_fifths=int(raw.key_fifths),
