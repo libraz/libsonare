@@ -47,15 +47,6 @@ def test_a_track_monitor_mode_number_is_a_type_error(value: object) -> None:
 
 
 def test_engine_track_monitor_mode_pfl_and_afl() -> None:
-    from libsonare._runtime import _get_lib
-
-    lib = _get_lib()
-    # Presence is asserted for the whole suite by test_imports.py; a missing
-    # symbol here is a broken build rather than an older library to tolerate.
-    assert hasattr(lib, "sonare_engine_set_track_monitor_mode"), (
-        "loaded libsonare is missing sonare_engine_set_track_monitor_mode"
-    )
-
     block = 64
     frames = block * 16
     with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:

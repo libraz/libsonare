@@ -22,22 +22,6 @@ from ._helpers import LIB_AVAILABLE
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not available")
 
 
-def _has_analyze_json() -> bool:
-    """Whether the loaded library exposes the JSON analysis entry point."""
-    try:
-        from libsonare._runtime import _get_lib
-
-        return hasattr(_get_lib(), "sonare_analyze_json")
-    except Exception:
-        return False
-
-
-requires_json = pytest.mark.skipif(
-    not _has_analyze_json(),
-    reason="libsonare built without sonare_analyze_json",
-)
-
-
 def _generate_test_signal(sample_rate: int = 22050, duration: float = 4.0) -> list[float]:
     """Generate a pulsed C-major-ish tonal signal with a steady beat.
 
@@ -200,12 +184,10 @@ def test_analyze_returns_extended_fields(analyze_result) -> None:
     assert isinstance(result.sections, list)
     assert isinstance(result.form, str)
 
-    if _has_analyze_json():
-        # JSON path: rich sub-results are populated.
-        assert isinstance(result.timbre, TimbreFrame)
-        assert isinstance(result.dynamics, AnalysisDynamics)
-        assert isinstance(result.rhythm, AnalysisRhythm)
-        assert isinstance(result.melody, MelodyResult)
+    assert isinstance(result.timbre, TimbreFrame)
+    assert isinstance(result.dynamics, AnalysisDynamics)
+    assert isinstance(result.rhythm, AnalysisRhythm)
+    assert isinstance(result.melody, MelodyResult)
 
 
 def test_analysis_json_uses_canonical_display_names() -> None:
@@ -245,7 +227,6 @@ def test_analysis_json_uses_canonical_display_names() -> None:
     assert result.sections[0].group == 3
 
 
-@requires_json
 def test_analyze_beats_carry_a_strength_each(analyze_result) -> None:
     """Every beat has a float strength and downbeats are drawn from the beats (JSON path)."""
     result = analyze_result
@@ -254,7 +235,6 @@ def test_analyze_beats_carry_a_strength_each(analyze_result) -> None:
     assert all(d.time_sec in beat_times for d in result.downbeats)
 
 
-@requires_json
 def test_analyze_sub_result_types(analyze_result) -> None:
     """The JSON-decoded sub-results expose the expected scalar fields."""
     from libsonare import AnalysisChord, Section

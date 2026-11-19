@@ -584,8 +584,6 @@ def test_estimate_meter_keyword_defaults_match_the_core() -> None:
     from libsonare._runtime import _get_lib
 
     lib = _get_lib()
-    if not hasattr(lib, "sonare_meter_options_default"):
-        pytest.skip("libsonare was built without sonare_meter_options_default")
     lib.sonare_meter_options_default.restype = SonareMeterOptions
     lib.sonare_meter_options_default.argtypes = []
     core = lib.sonare_meter_options_default()
@@ -627,8 +625,6 @@ def test_detect_boundaries_keyword_defaults_match_the_core() -> None:
     from libsonare._runtime import _get_lib
 
     lib = _get_lib()
-    if not hasattr(lib, "sonare_boundary_options_default"):
-        pytest.skip("libsonare was built without sonare_boundary_options_default")
     lib.sonare_boundary_options_default.restype = SonareBoundaryOptions
     lib.sonare_boundary_options_default.argtypes = []
     core = lib.sonare_boundary_options_default()

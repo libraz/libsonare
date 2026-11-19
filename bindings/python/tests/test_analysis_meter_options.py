@@ -64,10 +64,7 @@ def native_option_defaults() -> Any:
     """The C ABI's own SonareMusicAnalyzeOptions defaults."""
     from libsonare._runtime import _get_lib
 
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_music_analyze_options_default"):
-        pytest.skip("libsonare built without sonare_music_analyze_options_default")
-    return lib.sonare_music_analyze_options_default()
+    return _get_lib().sonare_music_analyze_options_default()
 
 
 def test_analyze_reports_downbeats_drawn_from_beats(four_four_result) -> None:
