@@ -1223,14 +1223,13 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
     assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
     const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
     assertNonNegativeFloatValue(compressionThresholdDb, 'compressionThresholdDb');
-    const { loudnessRangeDb, ...raw }: Native = addon.analyzeDynamics(
+    return addon.analyzeDynamics(
       request.samples,
       request.sampleRate,
       request.windowSec ?? 0.4,
       request.hopLength ?? 512,
       compressionThresholdDb,
     );
-    return { ...raw, loudnessRangeLu: loudnessRangeDb };
   });
 }
 

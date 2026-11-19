@@ -311,6 +311,9 @@ describe('standalone functions', () => {
     expect(dynamics.peakDb).toBeLessThanOrEqual(1);
     expect(dynamics.loudnessTimesSec).toBeInstanceOf(Float32Array);
     expect(dynamics.loudnessRmsDb.length).toBe(dynamics.loudnessTimesSec.length);
+    // The addon names the range in LU itself; the facade passes it through unrenamed.
+    expect(Number.isFinite(dynamics.loudnessRangeLu)).toBe(true);
+    expect('loudnessRangeDb' in dynamics).toBe(false);
 
     const tone = new Float32Array(SR * 2);
     for (let i = 0; i < tone.length; i++) {
