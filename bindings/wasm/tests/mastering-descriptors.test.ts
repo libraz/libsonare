@@ -128,7 +128,9 @@ describe('equalizer ceiling', () => {
     const apply = (sampleRate: number) =>
       masteringApplyProcessor({ processor: 'eq.parametric', samples: x, sampleRate, params });
     expect(() => apply(96000)).not.toThrow();
-    expect(() => apply(SR)).toThrow(/below 24000 Hz \(Nyquist at 48000 Hz\)/);
+    expect(() => apply(SR)).toThrow(
+      new RangeError('masteringApplyProcessor: band0.frequencyHz must be finite and in (0, 24000)'),
+    );
   });
 });
 
