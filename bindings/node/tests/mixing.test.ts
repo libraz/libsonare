@@ -169,7 +169,7 @@ describe('insert param validation', () => {
     ).toThrow(
       expect.objectContaining({
         code: ErrorCode.InvalidFormat,
-        message: expect.stringContaining("unknown scene key 'strips[0].faderDB'"),
+        message: expect.stringContaining('unknown key strips[0].faderDB'),
       }),
     );
     const annotated = scene({ $schema: 'x', 'x-note': 1 }, { 'x-color': 'red' });

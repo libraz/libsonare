@@ -19,7 +19,7 @@ describe('unknown mixing scene keys', () => {
       }
       expect(isSonareError(error)).toBe(true);
       expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-      expect((error as Error).message).toContain("unknown scene key 'strips[0].faderDB'");
+      expect((error as Error).message).toContain('unknown key strips[0].faderDB');
       // `$`- and `x-`-prefixed keys are annotations, not unknown keys.
       const annotated = '{"version":1,"$schema":"s","strips":[{"id":"lead","x-note":1}]}';
       expect(project.setMixerSceneJson(annotated)).toBeUndefined();
@@ -45,7 +45,7 @@ describe('unknown mixing scene keys', () => {
         }
         expect(isSonareError(error)).toBe(true);
         expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-        expect((error as Error).message).toContain("unknown scene key 'strips[0].faderDB'");
+        expect((error as Error).message).toContain('unknown key strips[0].faderDB');
       }
       const annotated = '{"$schema":"s","version":1,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}';
       expect(() => engine.setStrip(10, sceneStrip(annotated))).not.toThrow();

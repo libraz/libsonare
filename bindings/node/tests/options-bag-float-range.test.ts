@@ -35,7 +35,7 @@ import { meteringSpectrum } from '../src/index.js';
 import { addon } from '../src/native.js';
 
 /** The suffix the refusal message ends with, whatever the key is. */
-const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
+const RANGE_MESSAGE = 'must be finite and in [-3.4028235e38, 3.4028235e38]';
 
 /** Finite values wider than a 32-bit float. Every one of these must be refused. */
 const PAST_FLOAT_MAX = [1e300, -1e300, 3.5e38] as const;

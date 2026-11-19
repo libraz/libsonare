@@ -639,7 +639,9 @@ describe('a gamma keeps its NaN, which selects the automatic ERB value', () => {
       // the reader, so it does not carry the reader's wording. This is why the
       // discriminating value above has to be a finite 1e39.
       expect(() => argument.call(Number.POSITIVE_INFINITY)).toThrow(RangeError);
-      expect(() => argument.call(Number.POSITIVE_INFINITY)).not.toThrow(/32-bit float range/);
+      expect(() => argument.call(Number.POSITIVE_INFINITY)).not.toThrow(
+        /must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
+      );
     },
   );
 });
@@ -1251,7 +1253,9 @@ describe('setExpectedDuration reaches the core, and 1e39 does not reach it at al
     // The core owns the non-negative half of the domain, so the argument
     // demonstrably arrives: its refusal lacks the reader's float-range wording.
     expect(() => analyzer().setExpectedDuration(-1)).toThrow(RangeError);
-    expect(() => analyzer().setExpectedDuration(-1)).not.toThrow(/32-bit float range/);
+    expect(() => analyzer().setExpectedDuration(-1)).not.toThrow(
+      /must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
+    );
     for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
       expect(() => analyzer().setExpectedDuration(value), `${value}`).toThrow(RangeError);
     }

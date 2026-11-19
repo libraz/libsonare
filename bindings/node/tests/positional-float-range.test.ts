@@ -29,7 +29,7 @@ import {
 } from '../src/index.js';
 
 /** The suffix every refusal from the float narrowing ends with. */
-const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
+const RANGE_MESSAGE = 'must be finite and in [-3.4028235e38, 3.4028235e38]';
 
 /**
  * The core's own refusal of a value the reader let through. It is a RangeError

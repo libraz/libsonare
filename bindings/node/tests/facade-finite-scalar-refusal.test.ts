@@ -35,7 +35,7 @@ const SPLIT_FRAME = 22;
 /** Finite, and larger than any 32-bit float. */
 const PAST_FLT_MAX = 1e39;
 const NON_FINITE = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-const NARROWING_REFUSAL = /must be a finite number within the 32-bit float range/;
+const NARROWING_REFUSAL = /must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/;
 
 function toneFromTrack(f0Hz: Float32Array): Float32Array {
   const samples = new Float32Array(LENGTH);
@@ -109,7 +109,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     for (const bad of NON_FINITE) {
       expect(() => timeStretch(tone.samples, SR, { speedRatio: bad })).toThrow(RangeError);
       expect(() => timeStretch(tone.samples, SR, { speedRatio: bad })).toThrow(
-        /timeStretch: speedRatio must be a finite number/,
+        /timeStretch: speedRatio must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
       );
     }
     expect(() => timeStretch(tone.samples, SR, { speedRatio: PAST_FLT_MAX })).toThrow(
@@ -128,7 +128,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     for (const bad of NON_FINITE) {
       expect(() => pitchShift(tone.samples, SR, { pitchSemitones: bad })).toThrow(RangeError);
       expect(() => pitchShift(tone.samples, SR, { pitchSemitones: bad })).toThrow(
-        /pitchShift: pitchSemitones must be a finite number/,
+        /pitchShift: pitchSemitones must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
       );
     }
     expect(() => pitchShift(tone.samples, SR, { pitchSemitones: PAST_FLT_MAX })).toThrow(

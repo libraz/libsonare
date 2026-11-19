@@ -43,7 +43,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     expect(() =>
       // @ts-expect-error deliberately partial nested preset; setConfig must reject it, not fill in defaults.
       vc.setConfig({ schemaVersion: 4, dsp: { retune: { pitchSemitones: 3 } } }),
-    ).toThrow(/missing field|field must/i);
+    ).toThrow(/\bid must be given$/);
     vc.destroy();
   });
 
@@ -101,10 +101,10 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       const before = vc.configJson();
       expect(() => vc.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
       expect(() => vc.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(
-        /formant\.factor out of range \[0\.55, 1\.65\], got 3/,
+        /formantFactor must be finite and in \[0\.55, 1\.65\]/,
       );
       expect(() => vc.setConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(
-        /limiter\.ceilingDb out of range/,
+        /limiterCeilingDb must be finite and in \[/,
       );
       expect(vc.configJson()).toBe(before);
     } finally {
