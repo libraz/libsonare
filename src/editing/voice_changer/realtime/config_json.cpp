@@ -91,6 +91,19 @@ int object_int(const sonare::util::json::Value& object, const char* section, con
   return json_number_to_int(value->as_number(), fallback);
 }
 
+// The retune grain: an absent key is the automatic grain (0 in the config), and an explicit 0 is
+// refused so that "automatic" has one spelling in a document.
+int object_grain(const sonare::util::json::Value& object, const char* section, const char* key) {
+  const int grain = object_int(object, section, key, 0);
+  if (object.find(key) != nullptr && grain == 0) {
+    const std::string path =
+        section[0] == '\0' ? std::string(key) : std::string(section) + "." + key;
+    throw SonareException(ErrorCode::InvalidFormat,
+                          path + " must not be 0; omit it for the automatic grain");
+  }
+  return grain;
+}
+
 // The harmony steps as an array of up to kMaxHarmonyVoices numbers; entries past its end keep
 // their current value.
 void object_steps(const sonare::util::json::Value& object, const char* section, const char* key,
@@ -194,8 +207,9 @@ void dump_dsp_section(std::string& out, const RealtimeVoiceChangerConfig& c) {
   dump_field(out, "wetMix", c.wet_mix);
   out += "\"retune\":{";
   dump_field(out, "pitchSemitones", c.retune.semitones);
-  dump_field(out, "mix", c.retune.mix);
-  dump_int_field(out, "grainSizeSamples", c.retune.grain_size, true);
+  // The automatic grain is written by omission, the one spelling a reader accepts for it.
+  dump_field(out, "mix", c.retune.mix, c.retune.grain_size == 0);
+  if (c.retune.grain_size != 0) dump_int_field(out, "grainSizeSamples", c.retune.grain_size, true);
   out += "},\"formant\":{";
   dump_field(out, "factor", c.formant.factor);
   dump_field(out, "amount", c.formant.amount);
@@ -466,10 +480,23 @@ bool validate_optional_section(const sonare::util::json::Value& parent, const ch
   return section == nullptr || validate_range_section(*section, path, fields, error);
 }
 
+// An absent grain is the automatic one; a written 0 is refused by name rather than as out of range.
+bool require_grain(const sonare::util::json::Value& object, const char* key, const char* path,
+                   std::string* error) {
+  const auto* value = object.find(key);
+  if (value->is_number() && value->as_number() == 0.0) {
+    if (error) {
+      *error = std::string(path) + "." + key + " must not be 0; omit it for the automatic grain";
+    }
+    return false;
+  }
+  return require_in(object, key, kGrainSize, path, error, true);
+}
+
 constexpr FieldSpec kRetuneFields[] = {
     range_field("pitchSemitones", kSemitones),
     range_field("mix", kUnit),
-    range_field("grainSizeSamples", kGrainSize, true),
+    {"grainSizeSamples", &require_grain, {}, true, false},
 };
 constexpr FieldSpec kFormantFields[] = {
     range_field("factor", kFormantFactor), range_field("amount", kUnit),
@@ -747,7 +774,7 @@ RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& r
   if (object.find("retunePitchSemitones") != nullptr) {
     c.retune.semitones = object_number(object, "", "retunePitchSemitones", c.retune.semitones);
     c.retune.mix = object_number(object, "", "retuneMix", c.retune.mix);
-    c.retune.grain_size = object_int(object, "", "retuneGrainSizeSamples", c.retune.grain_size);
+    c.retune.grain_size = object_grain(object, "", "retuneGrainSizeSamples");
     c.formant.factor = object_number(object, "", "formantFactor", c.formant.factor);
     c.formant.amount = object_number(object, "", "formantAmount", c.formant.amount);
     c.formant.body = object_number(object, "", "formantBody", c.formant.body);
@@ -840,7 +867,7 @@ RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& r
   if (const auto* v = object_section(object, "retune")) {
     c.retune.semitones = object_number(*v, "retune", "pitchSemitones", c.retune.semitones);
     c.retune.mix = object_number(*v, "retune", "mix", c.retune.mix);
-    c.retune.grain_size = object_int(*v, "retune", "grainSizeSamples", c.retune.grain_size);
+    c.retune.grain_size = object_grain(*v, "retune", "grainSizeSamples");
   }
   if (const auto* v = object_section(object, "formant")) {
     c.formant.factor = object_number(*v, "formant", "factor", c.formant.factor);
@@ -1002,9 +1029,8 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     for (const char* key : {"schemaVersion", "id", "name", "category"}) {
       if (!require_key(root, key, "$", error)) return false;
     }
-    // schemaVersion: JSON-Schema "type: integer, const: 3" demands an
-    // *exact* integer. as_int() silently truncates 1.5 -> 1, so check the
-    // raw double for both integral-ness and range before comparing.
+    // schemaVersion must be exactly the version read. as_int() silently truncates 1.5 -> 1,
+    // so check the raw double for both integral-ness and range before comparing.
     const auto* schema = root.find("schemaVersion");
     if (!schema || !schema->is_number()) {
       if (error) *error = "field is not a valid schemaVersion: $.schemaVersion (must be integer)";
@@ -1108,13 +1134,12 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
     // cannot silently fall back to unrelated defaults.
     const auto root = sonare::util::json::admit_strict(input);
     if (root.is_object() && root.find("retunePitchSemitones") != nullptr) {
-      static constexpr std::array<const char*, 36> kFlatPodKeys = {
+      static constexpr std::array<const char*, 35> kFlatPodKeys = {
           "inputGainDb",
           "outputGainDb",
           "wetMix",
           "retunePitchSemitones",
           "retuneMix",
-          "retuneGrainSizeSamples",
           "formantFactor",
           "formantAmount",
           "formantBody",
@@ -1209,6 +1234,19 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
                                                              : _value.is_number();
           if (!typed) {
             if (error) *error = "flat voice changer POD has an invalid field: $." + key;
+            return false;
+          }
+          allowed = true;
+        }
+        // The automatic grain is the absent key; a present one is a whole size in range.
+        if (key == "retuneGrainSizeSamples") {
+          if (!_value.is_number()) {
+            if (error) *error = "flat voice changer POD has an invalid field: $." + key;
+            return false;
+          }
+          if (_value.as_number() == 0.0) {
+            if (error)
+              *error = "$.retuneGrainSizeSamples must not be 0; omit it for the automatic grain";
             return false;
           }
           allowed = true;

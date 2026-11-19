@@ -799,7 +799,13 @@ TEST_CASE("RealtimeVoiceChanger config JSON round-trips the configured grain and
       REQUIRE(grain <= kMaxRetuneGrainSize);
 
       const std::string json = realtime_voice_changer_config_to_json(first.config());
-      REQUIRE(json.find("\"grainSizeSamples\":" + std::to_string(requested)) != std::string::npos);
+      // The automatic grain is written by omission, a requested one as given.
+      const bool written = json.find("\"grainSizeSamples\"") != std::string::npos;
+      REQUIRE(written == (requested != 0));
+      if (written) {
+        REQUIRE(json.find("\"grainSizeSamples\":" + std::to_string(requested)) !=
+                std::string::npos);
+      }
 
       RealtimeVoiceChanger second(realtime_voice_changer_config_from_json(json));
       second.prepare(rate, 256, 1);

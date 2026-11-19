@@ -71,7 +71,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 0,
           "pitchSemitones": 0
         },
@@ -108,7 +107,7 @@
       "id": "neutralMonitor",
       "name": "Neutral Monitor",
       "category": "monitor",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -179,7 +178,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 4
         },
@@ -216,7 +214,7 @@
       "id": "brightIdol",
       "name": "Bright Idol",
       "category": "bright",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -287,7 +285,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 2
         },
@@ -324,7 +321,7 @@
       "id": "softWhisper",
       "name": "Soft Whisper",
       "category": "soft",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -395,7 +392,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": -5
         },
@@ -432,7 +428,7 @@
       "id": "deepNarrator",
       "name": "Deep Narrator",
       "category": "deep",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -503,7 +499,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 7
         },
@@ -540,7 +535,7 @@
       "id": "robotMascot",
       "name": "Robot Mascot",
       "category": "robot",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -611,7 +606,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": -9
         },
@@ -648,7 +642,7 @@
       "id": "darkVillain",
       "name": "Dark Villain",
       "category": "dark",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -721,7 +715,6 @@
           "speedMs": 0
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 0
         },
@@ -758,7 +751,7 @@
       "id": "hardTune",
       "name": "Hard Tune",
       "category": "tune",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -831,7 +824,6 @@
           "speedMs": 0
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 0
         },
@@ -868,7 +860,7 @@
       "id": "robotMonotone",
       "name": "Robot Monotone",
       "category": "tune",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -941,7 +933,6 @@
           "speedMs": 60
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 0
         },
@@ -978,7 +969,7 @@
       "id": "choirHarmony",
       "name": "Choir Harmony",
       "category": "harmony",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -1051,7 +1042,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 0
         },
@@ -1088,7 +1078,7 @@
       "id": "vocoderStrings",
       "name": "Vocoder Strings",
       "category": "vocoder",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -1161,7 +1151,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 0
         },
@@ -1198,7 +1187,7 @@
       "id": "megaphone",
       "name": "Megaphone",
       "category": "character",
-      "schemaVersion": 3
+      "schemaVersion": 4
     },
     {
       "dsp": {
@@ -1271,7 +1260,6 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSizeSamples": 0,
           "mix": 1,
           "pitchSemitones": 0
         },
@@ -1308,8 +1296,8 @@
       "id": "radioVoice",
       "name": "Radio Voice",
       "category": "character",
-      "schemaVersion": 3
+      "schemaVersion": 4
     }
   ],
-  "schemaVersion": 3
+  "schemaVersion": 4
 }

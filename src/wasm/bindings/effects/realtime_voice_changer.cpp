@@ -20,7 +20,6 @@ std::string realtimeVoiceChangerConfigTextFromVal(val config) {
   X(wet_mix, wetMix)                                   \
   X(retune.semitones, retunePitchSemitones)            \
   X(retune.mix, retuneMix)                             \
-  X(retune.grain_size, retuneGrainSizeSamples)         \
   X(formant.factor, formantFactor)                     \
   X(formant.amount, formantAmount)                     \
   X(formant.body, formantBody)                         \
@@ -156,6 +155,8 @@ val realtimeVoiceChangerPodVal(const editing::voice_changer::RealtimeVoiceChange
     steps.call<void>("push", cfg.harmony.steps[i]);
   }
   out.set("harmonySteps", steps);
+  // The automatic grain is the absent key.
+  if (cfg.retune.grain_size != 0) out.set("retuneGrainSizeSamples", cfg.retune.grain_size);
   out.set("limiterEnableIspLimiter", cfg.limiter.enable_isp_limiter);
   out.set("formantMode", std::string(editing::voice_changer::formant_mode_name(cfg.formant_mode)));
   out.set("voiceEngine", std::string(vcEnumName(kVcEngineNames, cfg.voice_engine.engine)));
@@ -183,7 +184,7 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
   }
   using namespace editing::voice_changer;
   RealtimeVoiceChangerConfig parsed;
-  // Every field is REQUIRED: unlike the general JSON path (which normalizes a
+  // Every field but the retune grain is REQUIRED: unlike the general JSON path (which normalizes a
   // partial preset against defaults), the flat POD transport used by the
   // AudioWorklet control plane must reject a partial object rather than
   // silently zero-fill it. A missing limiterEnableIspLimiter used to read as
@@ -197,6 +198,15 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
   SONARE_WASM_VC_POD_TRANSFORM_INT_FIELDS(X)
 #undef X
   vcReadHarmonySteps(pod, parsed.harmony.steps);
+  // The one optional field: absent is the automatic grain, and a written 0 is refused.
+  if (!pod["retuneGrainSizeSamples"].isUndefined()) {
+    parsed.retune.grain_size = requireIntProperty(pod, "retuneGrainSizeSamples", kVcPodSubject);
+    if (parsed.retune.grain_size == 0) {
+      throw WasmRangeError(
+          std::string(kVcPodSubject) +
+          ".retuneGrainSizeSamples must not be 0; omit it for the automatic grain");
+    }
+  }
   parsed.limiter.enable_isp_limiter =
       requireProperty<bool>(pod, "limiterEnableIspLimiter", kVcPodSubject);
   parsed.formant_mode = parse_formant_mode(

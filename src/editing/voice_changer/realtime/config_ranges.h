@@ -111,7 +111,8 @@ constexpr Range kBipolar{-1.0, 1.0};
 constexpr Range kInputGainDb{-24.0, 24.0};
 constexpr Range kOutputGainDb{-36.0, 12.0};
 constexpr Range kSemitones{-24.0, 24.0};
-constexpr Range kGrainSize{0.0, static_cast<double>(kMaxRetuneGrainSize)};
+// A document spells the automatic grain by omitting the key, so a written size starts at 1.
+constexpr Range kGrainSize{1.0, static_cast<double>(kMaxRetuneGrainSize)};
 constexpr Range kFormantFactor{0.55, 1.65};
 constexpr Range kHighpassHz{static_cast<double>(kVoiceHighpassMinHz), 300.0};
 constexpr Range kEqGainDb{-static_cast<double>(kVoiceEqGainLimitDb),

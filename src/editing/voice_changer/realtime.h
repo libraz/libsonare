@@ -43,11 +43,10 @@ namespace sonare::editing::voice_changer {
 ///          fields, range tightening that rejects previously-valid documents).
 ///          Mirrored by the JSON Schema files under @c schemas/ and by the
 ///          @c "schemaVersion" literal emitted by @ref
-///          realtime_voice_changer_config_to_json. Version 2 adds the voice
-///          transformer sections; version 3 renames keys, enum tokens and built-in
-///          ids. Version 1 and 2 documents are translated on load, and a version 1
-///          document loads with the transformer sections at their defaults.
-inline constexpr int kVoiceChangerPresetSchemaVersion = 3;
+///          realtime_voice_changer_config_to_json. A document of any other
+///          version is refused. Version 4 spells the automatic retune grain by
+///          omitting the key and refuses a written 0.
+inline constexpr int kVoiceChangerPresetSchemaVersion = 4;
 
 /// @brief ABI version of the realtime voice changer POD config struct.
 /// @details Bumped whenever @ref SonareRealtimeVoiceChangerConfig

@@ -37,7 +37,12 @@ TEST_CASE("Factory presets JSON matches in-code definitions", "[voice_changer][p
     const auto& retune = dsp["retune"];
     REQUIRE(field(retune, "pitchSemitones") == code.retune.semitones);
     REQUIRE(field(retune, "mix") == code.retune.mix);
-    REQUIRE(retune["grainSizeSamples"].as_int() == code.retune.grain_size);
+    // The automatic grain is written by omission.
+    if (code.retune.grain_size == 0) {
+      REQUIRE(retune.find("grainSizeSamples") == nullptr);
+    } else {
+      REQUIRE(retune["grainSizeSamples"].as_int() == code.retune.grain_size);
+    }
 
     const auto& formant = dsp["formant"];
     REQUIRE(field(formant, "factor") == code.formant.factor);
@@ -96,7 +101,7 @@ TEST_CASE("Voice changer schemaVersion constant matches emitted JSON", "[voice_c
   // The constant in realtime_voice_changer.h is the single source of truth for
   // the preset schema version. Any change here MUST be accompanied by an update
   // of the JSON Schema files under schemas/ and by a binding-side migration.
-  REQUIRE(kVoiceChangerPresetSchemaVersion == 3);
+  REQUIRE(kVoiceChangerPresetSchemaVersion == 4);
 
   const auto json = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
   const auto root = sonare::util::json::parse(json);
@@ -123,7 +128,7 @@ TEST_CASE("Voice changer normalized config JSON is a valid custom preset",
 TEST_CASE("Voice changer preset expands input macros into normalized DSP",
           "[voice_changer][json]") {
   const std::string macro_only = R"json({
-    "schemaVersion":3,"id":"macro-voice","name":"Macro Voice","category":"custom",
+    "schemaVersion":4,"id":"macro-voice","name":"Macro Voice","category":"custom",
     "macros":{"pitch":5,"formant":1.2,"brightness":1,"space":1,
               "intensity":0.5,"noiseControl":1,"sibilance":1}
   })json";
@@ -174,11 +179,12 @@ TEST_CASE("Voice changer schemaVersion validator rejects future versions",
   // The validator should reject it rather than silently accepting (bindings
   // depend on this to refuse incompatible third-party preset packs).
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string needle = "\"schemaVersion\":3";
+  const std::string needle = "\"schemaVersion\":4";
   REQUIRE(baseline.find(needle) != std::string::npos);
   std::string bumped = baseline;
   const auto pos = bumped.find(needle);
-  bumped.replace(pos, needle.size(), "\"schemaVersion\":4");
+  bumped.replace(pos, needle.size(),
+                 "\"schemaVersion\":" + std::to_string(kVoiceChangerPresetSchemaVersion + 1));
 
   std::string normalized;
   std::string error;
@@ -198,7 +204,8 @@ TEST_CASE("Voice changer preset requires every transformer section and refuses a
   REQUIRE(error.find("dsp.midi") != std::string::npos);
 
   // An earlier or later schemaVersion is refused by both readers, naming the current one.
-  for (const double version : {1.0, 2.0, 4.0}) {
+  constexpr double kCurrent = kVoiceChangerPresetSchemaVersion;
+  for (const double version : {1.0, kCurrent - 1.0, kCurrent + 1.0}) {
     CAPTURE(version);
     auto other = sonare::util::json::parse_strict(
         realtime_voice_changer_preset_json(VoiceCharacterPreset::BrightIdol));
@@ -208,7 +215,8 @@ TEST_CASE("Voice changer preset requires every transformer section and refuses a
     CHECK(error.find("schemaVersion") != std::string::npos);
     RealtimeVoiceChangerConfig loaded;
     REQUIRE_FALSE(realtime_voice_changer_config_from_input(text, &loaded, &error));
-    CHECK(error.find("(3)") != std::string::npos);
+    CHECK(error.find("(" + std::to_string(kVoiceChangerPresetSchemaVersion) + ")") !=
+          std::string::npos);
   }
 }
 
@@ -270,7 +278,7 @@ TEST_CASE("preset JSON validator rejects non-integer schemaVersion", "[voice_cha
   // check let fractional values through. Also exercises the type-check path
   // when schemaVersion is a string rather than a number.
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string needle = "\"schemaVersion\":3";
+  const std::string needle = "\"schemaVersion\":4";
   REQUIRE(baseline.find(needle) != std::string::npos);
 
   {
@@ -325,7 +333,7 @@ TEST_CASE("preset JSON validator round-trips the caller's full preset identity",
   const std::string dsp_and_tail = baseline.substr(dsp_pos);
 
   const std::string full_identity_json =
-      "{\"schemaVersion\":3,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "{\"schemaVersion\":4,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
       "\"description\":\"A warm, tape-saturated preset for vocals.\","
       "\"category\":\"bright\"," +
       dsp_and_tail;
@@ -355,7 +363,7 @@ TEST_CASE(
   const std::string dsp_and_tail = baseline.substr(dsp_pos);
 
   const std::string minimal_json =
-      "{\"schemaVersion\":3,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "{\"schemaVersion\":4,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
       "\"category\":\"custom\"," +
       dsp_and_tail;
 
@@ -854,7 +862,7 @@ TEST_CASE("sonare_realtime_voice_changer_validate_preset_json round-trips preset
   const std::string dsp_and_tail = baseline.substr(dsp_pos);
 
   const std::string full_identity_json =
-      "{\"schemaVersion\":3,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "{\"schemaVersion\":4,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
       "\"description\":\"A warm, tape-saturated preset for vocals.\","
       "\"category\":\"bright\"," +
       dsp_and_tail;
@@ -1234,8 +1242,14 @@ TEST_CASE("Realtime voice changer config JSON round-trips grain and latency at e
     REQUIRE(sonare_realtime_voice_changer_config_json(first, &json) == SONARE_OK);
     const std::string document(json);
     sonare_free_string(json);
-    REQUIRE(sonare::util::json::parse(document)["dsp"]["retune"]["grainSizeSamples"].as_int() ==
-            pod.retune_grain_size_samples);
+    const auto parsed = sonare::util::json::parse(document);
+    const auto* written = parsed["dsp"]["retune"].find("grainSizeSamples");
+    if (pod.retune_grain_size_samples == 0) {
+      REQUIRE(written == nullptr);
+    } else {
+      REQUIRE(written != nullptr);
+      REQUIRE(written->as_int() == pod.retune_grain_size_samples);
+    }
 
     // Recreating from it at the same rate lands on the same grain and latency.
     SonareRealtimeVoiceChanger* second = nullptr;

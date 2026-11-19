@@ -8,7 +8,7 @@
   "oneOf": [{"required": ["dsp"]}, {"required": ["macros"]}],
   "allOf": [
     {
-      "if": {"properties": {"schemaVersion": {"const": 3}}, "required": ["schemaVersion", "dsp"]},
+      "if": {"properties": {"schemaVersion": {"const": 4}}, "required": ["schemaVersion", "dsp"]},
       "then": {
         "properties": {
           "dsp": {
@@ -21,8 +21,8 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "enum": [3],
-      "description": "Preset schema version. 3 is current and requires the voice transformer sections of dsp (voiceEngine, pitchCorrection, harmony, vocoder, character, reverbVariation, midi). This schema describes version 3 only. Version 1 and 2 documents (old key spellings retune.semitones, retune.grainSize, eq.highpassHz; snake_case enum tokens; kebab-case built-in ids; version 1 without the transformer sections) are translated on load and are not valid against this schema. Writers emit 3."
+      "enum": [4],
+      "description": "Preset schema version. 4 is the only version read and requires the voice transformer sections of dsp (voiceEngine, pitchCorrection, harmony, vocoder, character, reverbVariation, midi). A document of any other version is refused. Writers emit 4."
     },
     "id": {
       "type": "string",
@@ -60,11 +60,16 @@
         "retune": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["pitchSemitones", "mix", "grainSizeSamples"],
+          "required": ["pitchSemitones", "mix"],
           "properties": {
             "pitchSemitones": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
             "mix": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-            "grainSizeSamples": { "type": "integer", "minimum": 0, "maximum": 8192 }
+            "grainSizeSamples": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8192,
+              "description": "Retune grain in samples. Omit it for the automatic grain the changer derives from its sample rate; 0 is refused."
+            }
           }
         },
         "formant": {

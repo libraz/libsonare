@@ -38,7 +38,7 @@ TEST_CASE("RealtimeVoiceChanger processes realtime block sizes and resets determ
 
 TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[voice_changer]") {
   const auto config = realtime_voice_changer_config_from_json(
-      "{\"schemaVersion\":3,\"id\":\"x\",\"unknown\":true,\"dsp\":{\"retune\":{\"pitchSemitones\":"
+      "{\"schemaVersion\":4,\"id\":\"x\",\"unknown\":true,\"dsp\":{\"retune\":{\"pitchSemitones\":"
       "99},"
       "\"formant\":{\"factor\":9},\"limiter\":{\"ceilingDb\":3},\"reverb\":{\"mix\":2}}}");
 
@@ -63,7 +63,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
       realtime_voice_changer_preset_json(VoiceCharacterPreset::BrightIdol), &normalized, &error));
   REQUIRE(normalized.find("retune") != std::string::npos);
   REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(
-      "{\"schemaVersion\":3,\"id\":\"bad\",\"name\":\"bad\",\"dsp\":{\"retune\":{\"semitones\":99}"
+      "{\"schemaVersion\":4,\"id\":\"bad\",\"name\":\"bad\",\"dsp\":{\"retune\":{\"semitones\":99}"
       "}}",
       &normalized, &error));
   REQUIRE_FALSE(error.empty());
@@ -71,7 +71,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
 
 TEST_CASE("RealtimeVoiceChanger macro-only preset changes rendered audio", "[voice_changer]") {
   const std::string macro_only = R"json({
-    "schemaVersion":3,"id":"macro-render","name":"Macro Render","category":"custom",
+    "schemaVersion":4,"id":"macro-render","name":"Macro Render","category":"custom",
     "macros":{"pitch":4,"formant":1.15,"brightness":1,"space":0.4,
               "intensity":0.8,"noiseControl":0.7,"sibilance":0.9}
   })json";
@@ -184,7 +184,7 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   SonareRealtimeVoiceChanger* handle = nullptr;
   REQUIRE(
       sonare_realtime_voice_changer_create_json(
-          R"json({"schemaVersion":3,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json",
+          R"json({"schemaVersion":4,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json",
           48000, 128, 1, &handle) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(handle == nullptr);
   REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", 48000, 128, 1, &handle) ==
@@ -203,7 +203,7 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   REQUIRE(
       sonare_realtime_voice_changer_set_config_json(
           handle,
-          R"json({"schemaVersion":3,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json") ==
+          R"json({"schemaVersion":4,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json") ==
       SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deepNarrator") == SONARE_OK);
   REQUIRE(sonare_realtime_voice_changer_reset(handle) == SONARE_OK);
@@ -226,7 +226,7 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   normalized = nullptr;
   error = nullptr;
   REQUIRE(sonare_realtime_voice_changer_validate_preset_json(
-              "{\"schemaVersion\":3,\"id\":\"bad\",\"name\":\"bad\",\"dsp\":{\"retune\":{"
+              "{\"schemaVersion\":4,\"id\":\"bad\",\"name\":\"bad\",\"dsp\":{\"retune\":{"
               "\"semitones\":99}}}",
               &normalized, &error) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(normalized == nullptr);
@@ -563,7 +563,7 @@ TEST_CASE("realtime_voice_changer_config_from_input refuses an out-of-range flat
   std::string error;
   // A flat POD built from the neutral preset with one field pushed out of range.
   const std::string flat = R"({"inputGainDb":0,"outputGainDb":0,"wetMix":1,"retunePitchSemitones":0,
-    "retuneMix":1,"retuneGrainSizeSamples":0,"formantFactor":3,"formantAmount":1,"formantBody":0,
+    "retuneMix":1,"formantFactor":3,"formantAmount":1,"formantBody":0,
     "formantBrightness":0,"formantNasal":0,"eqHighPassHz":80,"eqBodyDb":0,"eqPresenceDb":1,
     "eqAirDb":0,"gateThresholdDb":-55,"gateAttackMs":2,"gateReleaseMs":100,"gateRangeDb":18,
     "compressorThresholdDb":-22,"compressorRatio":2.5,"compressorAttackMs":6,

@@ -194,7 +194,10 @@ Napi::Object RealtimeVoiceChangerConfigObject(
   out.Set("wetMix", number(config.wet_mix));
   out.Set("retunePitchSemitones", number(config.retune.semitones));
   out.Set("retuneMix", number(config.retune.mix));
-  out.Set("retuneGrainSizeSamples", number(config.retune.grain_size));
+  // The automatic grain is the absent key.
+  if (config.retune.grain_size != 0) {
+    out.Set("retuneGrainSizeSamples", number(config.retune.grain_size));
+  }
   out.Set("formantFactor", number(config.formant.factor));
   out.Set("formantAmount", number(config.formant.amount));
   out.Set("formantBody", number(config.formant.body));

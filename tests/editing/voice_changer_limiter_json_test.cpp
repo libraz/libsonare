@@ -668,19 +668,19 @@ TEST_CASE("RealtimeVoiceChanger JSON clamps out-of-int-range reverb seed", "[voi
   // invoking UB, and still produce a usable config.
   SECTION("absurdly large positive seed clamps to INT_MAX") {
     const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":3,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":1000000000000}}}");
+        "{\"schemaVersion\":4,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":1000000000000}}}");
     REQUIRE(config.reverb.seed == std::numeric_limits<int>::max());
   }
 
   SECTION("absurdly large negative seed clamps to INT_MIN") {
     const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":3,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":-1000000000000}}}");
+        "{\"schemaVersion\":4,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":-1000000000000}}}");
     REQUIRE(config.reverb.seed == std::numeric_limits<int>::min());
   }
 
   SECTION("clamped-seed config drives the engine without crashing") {
     const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":3,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":9e18,\"mix\":0.3}}}");
+        "{\"schemaVersion\":4,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":9e18,\"mix\":0.3}}}");
     RealtimeVoiceChanger changer(config);
     changer.prepare(48000, 128, 1);
     const auto input = sine(220.0f, 48000, 512);
@@ -763,6 +763,8 @@ namespace {
 // Every voice transformer field away from its default, valid on the psola engine.
 RealtimeVoiceChangerConfig transformer_config() {
   RealtimeVoiceChangerConfig c;
+  // A written grain, so the document carries the key the renames below act on.
+  c.retune.grain_size = 512;
   c.voice_engine = {PitchEngine::Psola, 90.0f};
   c.pitch_correction = {PitchCorrectionMode::Robot, 0.75f, 35.0f, 7, ScaleKind::NaturalMinor, -1};
   c.harmony.voices = 2;
@@ -826,7 +828,8 @@ TEST_CASE("RealtimeVoiceChanger JSON round-trips the voice transformer sections"
   const RealtimeVoiceChangerConfig config = transformer_config();
   REQUIRE(validate_realtime_voice_changer_config(config, nullptr, nullptr));
   const std::string json = realtime_voice_changer_config_to_json(config);
-  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"schemaVersion\":3"));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring(
+                       "\"schemaVersion\":" + std::to_string(kVoiceChangerPresetSchemaVersion)));
   CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"scale\":\"naturalMinor\""));
   CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"type\":\"bbdChorus\""));
   CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"division\":\"dottedEighth\""));
@@ -841,6 +844,8 @@ TEST_CASE("RealtimeVoiceChanger JSON round-trips the voice transformer sections"
 
 namespace {
 
+std::string version_field(int version) { return "\"schemaVersion\":" + std::to_string(version); }
+
 std::string replace_all_text(std::string text, const std::string& from, const std::string& to) {
   for (auto at = text.find(from); at != std::string::npos; at = text.find(from, at + to.size())) {
     text.replace(at, from.size(), to);
@@ -848,10 +853,12 @@ std::string replace_all_text(std::string text, const std::string& from, const st
   return text;
 }
 
-// The version 2 spelling of a current document: old keys, tokens, built-in id and version.
-std::string as_version_two(std::string document) {
+// A current document spelled the way the previous versions spelled it: old keys, tokens,
+// built-in id and an older version number.
+std::string as_older_version(std::string document) {
+  document = replace_all_text(document, version_field(kVoiceChangerPresetSchemaVersion),
+                              version_field(kVoiceChangerPresetSchemaVersion - 1));
   const std::pair<const char*, const char*> renames[] = {
-      {"\"schemaVersion\":3", "\"schemaVersion\":2"},
       {"\"pitchSemitones\"", "\"semitones\""},
       {"\"grainSizeSamples\"", "\"grainSize\""},
       {"\"highPassHz\"", "\"highpassHz\""},
@@ -872,26 +879,31 @@ std::string transformer_document_as_neutral() {
 
 }  // namespace
 
-TEST_CASE("RealtimeVoiceChanger preset JSON refuses a version 2 document",
+TEST_CASE("RealtimeVoiceChanger preset JSON refuses an older version document",
           "[voice_changer][json]") {
   const std::string current = transformer_document_as_neutral();
-  const std::string legacy = as_version_two(current);
+  const std::string legacy = as_older_version(current);
   REQUIRE(legacy != current);
 
   std::string normalized;
   std::string error;
   CHECK_FALSE(validate_realtime_voice_changer_preset_json(legacy, &normalized, &error));
-  CHECK_THAT(error, Catch::Matchers::ContainsSubstring("schemaVersion 2"));
-  CHECK_THAT(error, Catch::Matchers::ContainsSubstring("(3)"));
+  CHECK_THAT(error, Catch::Matchers::ContainsSubstring(
+                        "schemaVersion " + std::to_string(kVoiceChangerPresetSchemaVersion - 1)));
+  CHECK_THAT(error, Catch::Matchers::ContainsSubstring(
+                        "(" + std::to_string(kVoiceChangerPresetSchemaVersion) + ")"));
 
   RealtimeVoiceChangerConfig config;
   CHECK_FALSE(realtime_voice_changer_config_from_input(legacy, &config, &error));
   CHECK_THROWS_AS(realtime_voice_changer_config_from_json(legacy), sonare::SonareException);
 
   // A current-version document is read; the same document one version newer is refused too.
-  const std::string newer = replace_all_text(current, "\"schemaVersion\":3", "\"schemaVersion\":4");
+  const std::string newer =
+      replace_all_text(current, version_field(kVoiceChangerPresetSchemaVersion),
+                       version_field(kVoiceChangerPresetSchemaVersion + 1));
   CHECK_FALSE(validate_realtime_voice_changer_preset_json(newer, &normalized, &error));
-  CHECK_THAT(error, Catch::Matchers::ContainsSubstring("schemaVersion 4"));
+  CHECK_THAT(error, Catch::Matchers::ContainsSubstring(
+                        "schemaVersion " + std::to_string(kVoiceChangerPresetSchemaVersion + 1)));
 }
 
 TEST_CASE("RealtimeVoiceChanger preset JSON round trip is stable at the current version",
@@ -906,7 +918,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON round trip is stable at the current 
   CHECK(twice == once);
 }
 
-TEST_CASE("RealtimeVoiceChanger preset JSON refuses an old spelling in a version 3 document",
+TEST_CASE("RealtimeVoiceChanger preset JSON refuses an old spelling in a current document",
           "[voice_changer][json]") {
   const std::string current = transformer_document_as_neutral();
   const std::pair<const char*, const char*> stale[] = {
@@ -941,7 +953,7 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
           "[voice_changer][json]") {
   const std::string base = R"json({
     "inputGainDb": 0, "outputGainDb": 0, "wetMix": 1,
-    "retunePitchSemitones": 0, "retuneMix": 1, "retuneGrainSizeSamples": 0,
+    "retunePitchSemitones": 0, "retuneMix": 1,
     "formantFactor": 1, "formantAmount": 1, "formantBody": 0,
     "formantBrightness": 0, "formantNasal": 0,
     "eqHighPassHz": 80, "eqBodyDb": 0, "eqPresenceDb": 1, "eqAirDb": 0,
@@ -972,7 +984,9 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
   const std::string complete = base + transformer + "}";
   REQUIRE(realtime_voice_changer_config_from_input(complete, &parsed, &error));
   require_same_transformer_fields(parsed, transformer_config());
-  // The flat shape is complete or refused: a 36-key object misses the transformer keys.
+  // The retune grain is the one optional key: absent is the automatic grain.
+  CHECK(parsed.retune.grain_size == 0);
+  // The flat shape is otherwise complete or refused: the base object misses the transformer keys.
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(base + "}", &parsed, &error));
   CHECK(error == "missing field: $.voiceEngine");
   SonareRealtimeVoiceChanger* handle = nullptr;
@@ -998,6 +1012,10 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
       {R"("voiceEngineF0MinHz": 90)", R"("voiceEngineF0MinHz": 40)", "voiceEngine.f0MinHz"},
       {R"("dottedEighth", "midiRelease": "input")", R"("dottedEighth")",
        "missing field: $.midiRelease"},
+      {R"("retuneMix": 1)", R"("retuneMix": 1, "retuneGrainSizeSamples": 0)",
+       "retuneGrainSizeSamples must not be 0"},
+      {R"("retuneMix": 1)", R"("retuneMix": 1, "retuneGrainSizeSamples": null)",
+       "retuneGrainSizeSamples"},
   };
   for (const Refusal& r : refusals) {
     CAPTURE(r.to);
@@ -1153,4 +1171,50 @@ TEST_CASE("RealtimeVoiceChanger refuses a live change of a construction-fixed tr
   live.reverb_variation.variation = ReverbVariation::DubEcho;
   REQUIRE_NOTHROW(changer.set_config(live));
   CHECK(changer.latency_samples() == latency);
+}
+
+TEST_CASE("RealtimeVoiceChanger documents spell the automatic retune grain by omission",
+          "[voice_changer][json][grain]") {
+  RealtimeVoiceChangerConfig automatic;
+  REQUIRE(automatic.retune.grain_size == 0);
+  const std::string written = realtime_voice_changer_config_to_json(automatic);
+  CHECK(written.find("grainSizeSamples") == std::string::npos);
+
+  // The document without the key reads back as the automatic grain on every reader.
+  std::string normalized;
+  std::string error;
+  REQUIRE(validate_realtime_voice_changer_preset_json(
+      replace_all_text(written, "\"id\":\"custom\"", "\"id\":\"neutralMonitor\""), &normalized,
+      &error));
+  CHECK(realtime_voice_changer_config_from_json(written).retune.grain_size == 0);
+  RealtimeVoiceChangerConfig parsed;
+  REQUIRE(realtime_voice_changer_config_from_input(written, &parsed, &error));
+  CHECK(parsed.retune.grain_size == 0);
+
+  // A written size is kept as given.
+  RealtimeVoiceChangerConfig sized;
+  sized.retune.grain_size = 384;
+  const std::string sized_json = realtime_voice_changer_config_to_json(sized);
+  CHECK(sized_json.find("\"grainSizeSamples\":384") != std::string::npos);
+  CHECK(realtime_voice_changer_config_from_json(sized_json).retune.grain_size == 384);
+
+  // A written 0 or null is refused by name on the nested document, on every reader.
+  for (const char* spelled : {"0", "null"}) {
+    CAPTURE(spelled);
+    const std::string document = replace_all_text(sized_json, "\"grainSizeSamples\":384",
+                                                  std::string("\"grainSizeSamples\":") + spelled);
+    REQUIRE(document != sized_json);
+    CHECK_FALSE(realtime_voice_changer_config_from_input(document, &parsed, &error));
+    CHECK_THAT(error, Catch::Matchers::ContainsSubstring("grainSizeSamples"));
+    CHECK_THROWS_AS(realtime_voice_changer_config_from_json(document), sonare::SonareException);
+  }
+  const std::string zero =
+      replace_all_text(sized_json, "\"grainSizeSamples\":384", "\"grainSizeSamples\":0");
+  CHECK_FALSE(realtime_voice_changer_config_from_input(zero, &parsed, &error));
+  CHECK_THAT(error, Catch::Matchers::ContainsSubstring("must not be 0"));
+  CHECK_FALSE(validate_realtime_voice_changer_preset_json(
+      replace_all_text(zero, "\"id\":\"custom\"", "\"id\":\"neutralMonitor\""), &normalized,
+      &error));
+  CHECK_THAT(error,
+             Catch::Matchers::ContainsSubstring("dsp.retune.grainSizeSamples must not be 0"));
 }
