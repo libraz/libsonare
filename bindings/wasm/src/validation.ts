@@ -41,7 +41,7 @@ function assertFiniteSamples(
 export function assertFiniteValues(values: ArrayLike<number>, argName: string): void {
   for (let i = 0; i < values.length; i++) {
     if (!Number.isFinite(values[i] as number)) {
-      throw refuse(`${argName} contains a non-finite value at index ${i}`);
+      throw refuse(`${argName} contains a non-finite sample at index ${i}`);
     }
   }
 }

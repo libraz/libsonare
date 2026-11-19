@@ -131,7 +131,7 @@ describe('NaN/Inf guards (WASM)', () => {
   it('feature-core wrappers reject NaN and inconsistent matrix dimensions', () => {
     expect(() =>
       pcen({ values: { data: new Float32Array([1, Number.NaN, 3, 4]), rows: 2, cols: 2 } }),
-    ).toThrow();
+    ).toThrow(new RangeError('pcen: values.data contains a non-finite sample at index 1'));
     expect(() =>
       pcen({ values: { data: new Float32Array([1, 2, 3]), rows: 2, cols: 2 } }),
     ).toThrow();
