@@ -4309,6 +4309,38 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::spectralEdit takes a 
 
 [[entry]]
 kind = "field"
+old = "SpectralRegionOp.highHz"
+changed = "0, a negative or a non-finite high edge is refused with RangeError; omit highHz for Nyquist (0 or a negative used to select it)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/spectral-edit.test.ts::refuses a high edge that is not a positive frequency instead of reading it as Nyquist"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditOptions.nFft"
+changed = "an explicit 0 is refused with RangeError; omit nFft for the default (0 used to select it)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/spectral-edit.test.ts::instead of reading it as the default"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditOptions.hopLength"
+changed = "an explicit 0 is refused with RangeError; omit hopLength for the default (0 used to select it)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/spectral-edit.test.ts::instead of reading it as the default"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditOptions.healRadiusFrames"
+changed = "an explicit 0 is refused with RangeError; omit healRadiusFrames for the default (0 used to select it)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/spectral-edit.test.ts::instead of reading it as the default"
+
+[[entry]]
+kind = "field"
 old = "StftRequest.sampleRate"
 changed = "required (was optional with a 22050/44100 default)"
 domain = "analysis"

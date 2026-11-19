@@ -181,4 +181,29 @@ describe('spectralEdit (Node)', () => {
       /nFft must be a power of two/,
     );
   });
+
+  it('refuses a high edge that is not a positive frequency instead of reading it as Nyquist', () => {
+    const samples = sine(440, 0.1);
+    for (const highHz of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        () => spectralEdit(samples, SR, { ops: [{ mode: 'mute' }, { highHz, mode: 'mute' }] }),
+        `highHz ${highHz}`,
+      ).toThrow(
+        new RangeError(
+          'spectralEdit: ops[1].highHz must be finite and greater than 0; omit it for Nyquist',
+        ),
+      );
+    }
+    const kept = spectralEdit(samples, SR, { ops: [{ highHz: 1e6, mode: 'gain', gainDb: 0 }] });
+    expect(kept.length).toBe(samples.length);
+  });
+
+  it.each(['nFft', 'hopLength', 'healRadiusFrames'] as const)(
+    'refuses %s 0 instead of reading it as the default',
+    (field) => {
+      expect(() => spectralEdit(sine(440, 0.1), SR, { ops: [], [field]: 0 })).toThrow(
+        new RangeError(`spectralEdit: ${field} must not be 0 (omit it for the default)`),
+      );
+    },
+  );
 });

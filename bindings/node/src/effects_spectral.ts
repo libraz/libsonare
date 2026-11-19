@@ -3,7 +3,8 @@
  * STFT and resynthesized.
  */
 
-import { refuseType, withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { refuseZeroSentinel } from './internal/metering_native.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './types.js';
@@ -26,12 +27,20 @@ export interface SpectralEditRequest extends SpectralEditOptions {
   sampleRate: number;
 }
 
+/** The C field reads `high_hz <= 0` as Nyquist, so a given edge must be a real frequency. */
+function assertRegionHighHz(highHz: unknown, at: string): void {
+  if (typeof highHz === 'number' && !(Number.isFinite(highHz) && highHz > 0)) {
+    throw refuse(`${at}.highHz must be finite and greater than 0; omit it for Nyquist`);
+  }
+}
+
 function resolveRegionTimes(
   { startSec, endSec, ...op }: SpectralRegionOp,
   index: number,
   sampleRate: number,
 ): SpectralRegionOp {
   const at = `ops[${index}]`;
+  assertRegionHighHz(op.highHz, at);
   return {
     ...op,
     startSample: resolveSampleBound(
@@ -87,8 +96,9 @@ export function spectralEdit(...args: unknown[]): Float32Array {
     if (requestOptions.window !== undefined) {
       assertClosedToken(requestOptions.window, WINDOW_TYPES, 'window');
     }
-    // Each of the three is its own "0 => the documented default" on the C side,
-    // and the addon's narrowing truncates onto that 0.
+    // Each of the three is its own "0 => the documented default" on the C side, so a given 0
+    // is refused, and the addon's narrowing would truncate a fraction onto that 0.
+    refuseZeroSentinel(requestOptions, ['nFft', 'hopLength', 'healRadiusFrames']);
     for (const field of ['nFft', 'hopLength', 'healRadiusFrames'] as const) {
       const value = requestOptions[field];
       if (value !== undefined) {

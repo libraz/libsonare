@@ -646,7 +646,7 @@ export type WindowType = 'hann' | 'hamming' | 'blackman' | 'rectangular';
 
 /** One time x frequency rectangle edit op for `spectralEdit`. */
 export interface SpectralRegionOp {
-  /** Region time start in input samples (clamped to `[0, length]`). Default 0. Not with `startSec`. */
+  /** Region time start in input samples; past the end reads as the end, a negative value is refused. Default 0. Not with `startSec`. */
   startSample?: number;
   /** Region time start in seconds, rounded to the nearest sample. Not with `startSample`. */
   startSec?: number;
@@ -659,7 +659,7 @@ export interface SpectralRegionOp {
   endSec?: number;
   /** Region frequency low edge in Hz; clamped to [0, nyquist]. Default 0. */
   lowHz?: number;
-  /** Region frequency high edge in Hz; <=0 or >= nyquist means nyquist. Default 0. */
+  /** Region frequency high edge in Hz, finite and greater than 0; at or above Nyquist reads as Nyquist. Omit for Nyquist. */
   highHz?: number;
   /** Linear gain in dB for 'gain'/'attenuate'; ignored by 'mute'/'heal'. Default 0. */
   gainDb?: number;
@@ -671,13 +671,13 @@ export interface SpectralRegionOp {
 export interface SpectralEditOptions {
   /** Region edit ops applied in array order; an empty array returns a copy of the input. */
   ops: readonly SpectralRegionOp[];
-  /** FFT size; a power of two in `[4, 262144]`. Default 2048. */
+  /** FFT size; a power of two in `[4, 262144]`. Omit for 2048; 0 is refused. */
   nFft?: number;
-  /** Hop length; must satisfy 0 < hop <= nFft/2. Default 512. */
+  /** Hop length; `0 < hopLength <= nFft / 2`. Omit for a quarter of `nFft`; 0 is refused. */
   hopLength?: number;
   /** Analysis + synthesis window. Default 'hann'. */
   window?: WindowType;
-  /** Neighbour frames each side used by 'heal' (>= 1). Default 2. */
+  /** Neighbour frames each side used by `'heal'`, at least 1. Omit for 2; 0 is refused. */
   healRadiusFrames?: number;
 }
 

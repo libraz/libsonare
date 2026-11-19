@@ -399,19 +399,30 @@ describe('newly exposed WASM functions', () => {
     expect(goertzelPower(out, 5000)).toBeLessThan(goertzelPower(x, 5000) * 0.1);
   });
 
-  it('spectralEdit healRadiusFrames:0 keeps the core default (matches C ABI)', () => {
-    const x = makeSine(0.5, 440);
-    // 0 means "keep the default" at the C-ABI oracle; WASM must not throw here.
-    const out = spectralEdit(x, SR, { ops: [], healRadiusFrames: 0 });
-    expect(out.length).toBe(x.length);
-    expect(allFinite(out)).toBe(true);
-  });
+  it.each(['nFft', 'hopLength', 'healRadiusFrames'] as const)(
+    'spectralEdit refuses %s 0 instead of reading it as the default',
+    (field) => {
+      const x = makeSine(0.1, 440);
+      expect(() => spectralEdit(x, SR, { ops: [], [field]: 0 })).toThrow(
+        new RangeError(`spectralEdit: ${field} must not be 0 (omit it for the default)`),
+      );
+    },
+  );
 
-  it('spectralEdit nFft:0 / hopLength:0 keep the core defaults', () => {
-    const x = makeSine(0.5, 440);
-    const out = spectralEdit(x, SR, { ops: [], nFft: 0, hopLength: 0 });
-    expect(out.length).toBe(x.length);
-    expect(allFinite(out)).toBe(true);
+  it('spectralEdit refuses a high edge that is not a positive frequency instead of reading it as Nyquist', () => {
+    const x = makeSine(0.1, 440);
+    for (const highHz of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        () => spectralEdit(x, SR, { ops: [{ mode: 'mute' }, { highHz, mode: 'mute' }] }),
+        `highHz ${highHz}`,
+      ).toThrow(
+        new RangeError(
+          'spectralEdit: ops[1].highHz must be finite and greater than 0; omit it for Nyquist',
+        ),
+      );
+    }
+    const kept = spectralEdit(x, SR, { ops: [{ highHz: 1e6, mode: 'gain', gainDb: 0 }] });
+    expect(kept.length).toBe(x.length);
   });
 
   it('spectralEdit rejects an out-of-range sampleRate', () => {
