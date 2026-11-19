@@ -1981,12 +1981,8 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
 #endif
 #ifdef SONARE_WITH_PLAYBACK
       // Auto renders the input in its own layout: mono on a mono input, stereo on a stereo one,
-      // and each of those fixed layouts is refused on the other input. The audio alone is
-      // compared, since auto also counts the switch to the detected layout in its report.
-      {"playback",
-       " -o " + p.out + " -q",
-       "input-layout",
-       {{p.tone_wav, "mono"}, {p.stereo_wav, "stereo"}}},
+      // and each of those fixed layouts is refused on the other input.
+      {"playback", to_out, "input-layout", {{p.tone_wav, "mono"}, {p.stereo_wav, "stereo"}}},
 #endif
   };
   tables.prose = {
