@@ -1351,8 +1351,8 @@ TEST_CASE("sonare_mastering_insert_timing refuses what it cannot answer for",
     REQUIRE(sonare_mastering_insert_timing("saturation.softClipper",
                                            "{\"aliasing\":3,\"zeta\":1,\"alpha\":2}", 48000,
                                            &latency, &tail) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(message().find("saturation.softClipper does not read parameter(s): alpha, zeta") !=
-          std::string::npos);
+    // The first unread key, sorted, with the keys the insert reads.
+    CHECK(message() == "unknown key alpha (expected aliasing, ceiling, driveDb, mix)");
     CHECK(latency == 0);
     CHECK(tail == 0);
   }

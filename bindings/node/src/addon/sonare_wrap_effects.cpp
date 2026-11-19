@@ -381,10 +381,9 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
   if (info.Length() > 4 && info[4].IsObject()) {
     Napi::Object opts = info[4].As<Napi::Object>();
     sonare_node::RefuseUnknownKeys(
-        opts, "options",
-        {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask", "scaleReferenceMidi",
-         "retuneAmount", "maxCorrectionSemitones", "retuneSpeedMs", "vibratoThresholdCents",
-         "voiced", "voicedProb"});
+        opts, {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask", "scaleReferenceMidi",
+               "retuneAmount", "maxCorrectionSemitones", "retuneSpeedMs", "vibratoThresholdCents",
+               "voiced", "voicedProb"});
     config.target_mode = sonare_node::NamedSelectorProperty(
         opts, "targetMode", std::array<const char*, 2>{"midi", "scale"}, config.target_mode);
     config.target_midi = sonare_node::FloatProperty(opts, "targetMidi", config.target_midi);
@@ -486,9 +485,9 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
   sonare_pitch_correction_config_default(&config);
   if (info.Length() > 3 && info[3].IsObject()) {
     const Napi::Object opts = info[3].As<Napi::Object>();
-    sonare_node::RefuseUnknownKeys(opts, "options",
-                                   {"strength", "scaleReferenceMidi", "maxCorrectionSemitones",
-                                    "retuneSpeedMs", "vibratoThresholdCents"});
+    sonare_node::RefuseUnknownKeys(
+        opts, {"strength", "scaleReferenceMidi", "maxCorrectionSemitones", "retuneSpeedMs",
+               "vibratoThresholdCents"});
     config.retune_amount = sonare_node::FloatProperty(opts, "strength", config.retune_amount);
     config.scale_reference_midi =
         sonare_node::FloatProperty(opts, "scaleReferenceMidi", config.scale_reference_midi);

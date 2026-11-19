@@ -21,6 +21,7 @@
 #include "mastering/common/parameter_domain.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/json_schema.h"
 
 namespace sonare::mastering::api::detail {
 
@@ -345,10 +346,10 @@ inline ParamMap make_map(const std::vector<Param>& params) {
   return map;
 }
 
-/// @brief `" (renamed to <key>)"` for a parameter of @p owner that was renamed, else empty.
+/// @brief The current key for a parameter of @p owner that was renamed, else empty.
 /// @details A row with an empty owner holds for every processor; the rest only for the one named,
 ///   since an old spelling such as `semitones` is a live key elsewhere.
-inline std::string renamed_param_note(const std::string& owner, const std::string& key) {
+inline std::string renamed_param_successor(const std::string& owner, const std::string& key) {
   struct Renamed {
     const char* owner;
     const char* old_key;
@@ -376,21 +377,32 @@ inline std::string renamed_param_note(const std::string& owner, const std::strin
   };
   for (const Renamed& row : kRenamed) {
     const bool applies = row.owner[0] == '\0' || owner == row.owner;
-    if (applies && key == row.old_key) return std::string(" (renamed to ") + row.new_key + ")";
+    if (applies && key == row.old_key) return row.new_key;
   }
   return std::string();
 }
 
-/// @brief Refuses the supplied keys @p name never read, naming each one; no-op when empty.
-inline void refuse_unread_params(const std::string& name, const std::vector<std::string>& keys) {
+/// @brief Refuses the first of the supplied keys @p name never read (@p keys is sorted) as an
+///        unknown key, naming its successor when it was renamed and otherwise the keys @p name
+///        reads; no-op when @p keys is empty.
+inline void refuse_unread_params(const std::string& name, const std::vector<std::string>& keys,
+                                 const std::vector<std::string>& read_keys) {
   if (keys.empty()) return;
-  std::string joined;
-  for (const std::string& key : keys) {
-    if (!joined.empty()) joined += ", ";
-    joined += key + renamed_param_note(name, key);
-  }
-  throw SonareException(ErrorCode::InvalidParameter,
-                        name + " does not read parameter(s): " + joined);
+  const std::string& key = keys.front();
+  const std::string successor = renamed_param_successor(name, key);
+  throw SonareParameterRefusal::unknown(
+      ErrorCode::InvalidParameter, key, successor,
+      successor.empty() ? sonare::util::json::schema::expected_keys(read_keys) : std::string())
+      .as_caller_spelled();
+}
+
+/// @brief refuse_unread_params() for the keys a configuration read from @p map, which lists the
+///        keys it read as the expected ones.
+inline void refuse_unread_params(const std::string& name, const ParamMap& map) {
+  const std::vector<std::string> unread = map.unprobed_keys();
+  if (unread.empty()) return;
+  const auto& probed = map.probed_keys();
+  refuse_unread_params(name, unread, std::vector<std::string>(probed.begin(), probed.end()));
 }
 
 inline float f(const ParamMap& params, const char* key, float default_value) {

@@ -11,14 +11,18 @@
 ///          object" for the root. Keys are rendered with @ref escape_key so a key cannot forge a
 ///          line. The require_* helpers are the common checks built on the writer.
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <initializer_list>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/json.h"
 #include "util/json_key.h"
 #include "util/number_format.h"
@@ -77,6 +81,41 @@ inline std::string unknown_key_renamed(std::string_view path, std::string_view r
 /// @brief "unknown key <path> (expected <list>)", @p expected already joined by ", ".
 inline std::string unknown_key_expected(std::string_view path, std::string_view expected) {
   return unknown_key(path) + " (expected " + std::string(expected) + ")";
+}
+
+/// @brief @p keys as an unknown-key refusal lists them: an index inside a key becomes `{i}`
+///        (`band3.gainDb` -> `band{i}.gainDb`), and the result is sorted, without repeats and
+///        comma-separated, so every surface prints one string for one reader.
+inline std::string expected_keys(const std::vector<std::string>& keys) {
+  std::vector<std::string> collapsed;
+  collapsed.reserve(keys.size());
+  for (const std::string& key : keys) {
+    std::string out;
+    for (std::size_t at = 0; at < key.size();) {
+      const bool index_start = std::isdigit(static_cast<unsigned char>(key[at])) != 0 && at > 0 &&
+                               std::isalpha(static_cast<unsigned char>(key[at - 1])) != 0;
+      std::size_t end = at;
+      while (index_start && end < key.size() &&
+             std::isdigit(static_cast<unsigned char>(key[end])) != 0) {
+        ++end;
+      }
+      if (index_start && end < key.size() && key[end] == '.') {
+        out += "{i}";
+        at = end;
+      } else {
+        out += key[at++];
+      }
+    }
+    collapsed.push_back(std::move(out));
+  }
+  insertion_sort(collapsed.begin(), collapsed.end());
+  collapsed.erase(std::unique(collapsed.begin(), collapsed.end()), collapsed.end());
+  std::string joined;
+  for (const std::string& key : collapsed) {
+    if (!joined.empty()) joined += ", ";
+    joined += key;
+  }
+  return joined;
 }
 
 /// @brief "duplicate key <path>".

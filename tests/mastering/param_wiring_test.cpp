@@ -1255,9 +1255,11 @@ std::string refusal_of(Fn&& call) {
   return {};
 }
 
+// Whether @p message refuses @p key as an unknown key; @p key may carry its " (renamed to ...)".
 bool names_unread_key(const std::string& message, const std::string& key) {
-  return message.find("does not read parameter(s)") != std::string::npos &&
-         message.find(key) != std::string::npos;
+  const std::string lead = "unknown key " + key;
+  return message.compare(0, lead.size(), lead) == 0 &&
+         (message.size() == lead.size() || message[lead.size()] == ' ');
 }
 
 }  // namespace
@@ -1273,8 +1275,7 @@ TEST_CASE("the named-processor entry points refuse a key the processor does not 
   SECTION("mono") {
     const std::string message = refusal_of(
         [&] { api::apply_named_processor("utility.gain", a.data(), a.size(), kRate, typo); });
-    CHECK(names_unread_key(message, "gainDb"));
-    CHECK(message.find("utility.gain") != std::string::npos);
+    CHECK(message == "unknown key gainDb (expected levelDb)");
     const auto result =
         api::apply_named_processor("utility.gain", a.data(), a.size(), kRate, {{"levelDb", -6.0}});
     CHECK(result.samples.at(100) < 0.06f);
@@ -1323,6 +1324,26 @@ TEST_CASE("the named-processor entry points refuse a key the processor does not 
                            }),
                            "bogus"));
   }
+}
+
+TEST_CASE("an unknown insert key lists the keys the insert reads, indices collapsed",
+          "[mastering][param_wiring]") {
+  namespace api = sonare::mastering::api;
+  CHECK(sonare::util::json::schema::expected_keys({"mix", "band1.gainDb", "band0.gainDb",
+                                                   "cutoff0Hz", "band12.dyn3.q", "band0.dyn0.q"}) ==
+        "band{i}.dyn{i}.q, band{i}.gainDb, cutoff0Hz, mix");
+
+  const std::string multiband = refusal_of(
+      [&] { (void)api::insert_timing("multiband.compressor", R"({"bogus":1})", 48000.0); });
+  CHECK(names_unread_key(multiband, "bogus"));
+  CHECK(multiband.find("band{i}.attackMs") != std::string::npos);
+  CHECK(multiband.find("band0.") == std::string::npos);
+  // Only the first unread key (sorted) is named.
+  const std::string two = refusal_of([&] {
+    (void)api::insert_timing("multiband.compressor", R"({"zeta":1,"alpha":1})", 48000.0);
+  });
+  CHECK(names_unread_key(two, "alpha"));
+  CHECK(two.find("zeta") == std::string::npos);
 }
 
 TEST_CASE("every key the catalog publishes for an offline processor is one it reads",
@@ -1377,7 +1398,7 @@ TEST_CASE("every key the catalog publishes for an offline processor is one it re
         api::apply_named_processor(id, left.data(), left.size(), kRate, params);
       }
     });
-    if (message.find("does not read parameter(s)") != std::string::npos) defects.push_back(message);
+    if (message.rfind("unknown key ", 0) == 0) defects.push_back(message);
     if (message.empty()) ++ran;
   }
   for (const std::string& defect : defects) UNSCOPED_INFO(defect.substr(0, 160));

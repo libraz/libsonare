@@ -214,7 +214,7 @@ struct InsertTiming {
 /// @details Both are clamped at zero. The block size does not change either.
 /// @throws sonare::SonareException (InvalidParameter) for an unknown @p name
 ///         ("unknown insert processor: <name>"), a key the insert does not read
-///         ("<name> does not read parameter(s): <k1>, <k2>"), or a value its
+///         ("unknown key <k> (expected <keys it reads>)", the first such key), or a value its
 ///         construction or prepare refuses.
 InsertTiming insert_timing(const std::string& name, const std::string& json_params,
                            double sample_rate);

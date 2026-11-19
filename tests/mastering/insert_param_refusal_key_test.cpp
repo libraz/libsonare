@@ -26,7 +26,7 @@ constexpr std::size_t kKeylessCeiling = 0;
 
 constexpr double kBeyondBound = 1.0e6;
 constexpr const char* kMakeInsertPrefix = "make_insert: ";
-constexpr const char* kUnreadNote = "does not read parameter(s)";
+constexpr const char* kUnreadNote = "unknown key ";
 
 std::string number_text(double value) {
   std::ostringstream out;
@@ -50,7 +50,7 @@ void probe(const std::string& insert, const std::string& key, const std::string&
     std::string message = e.what();
     if (message.rfind(kMakeInsertPrefix, 0) == 0)
       message.erase(0, std::string(kMakeInsertPrefix).size());
-    if (message.find(kUnreadNote) != std::string::npos) return;
+    if (message.rfind(kUnreadNote, 0) == 0) return;
     ++tally->read;
     // A relation names every member it constrains, so the probed key need not come first.
     bool keyed = message.rfind(key + " ", 0) == 0;

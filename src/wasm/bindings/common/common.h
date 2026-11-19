@@ -351,7 +351,7 @@ val objectProperty(val object, const char* key);
 /// @brief Refuses an own enumerable key of @p object that is in neither @p allowed nor
 ///        @p extra, so a renamed key cannot be silently read as absent.
 /// @details An absent or non-object @p object is left to the property readers.
-/// @throws WasmTypeError naming the key.
+/// @throws WasmTypeError "unknown key <key> (expected <the accepted keys, sorted>)".
 void refuseUnknownKeys(val object, const std::vector<const char*>& allowed,
                        std::initializer_list<const char*> extra = {});
 /// @brief Refuses an own enumerable key of the document object @p object at @p path that is not

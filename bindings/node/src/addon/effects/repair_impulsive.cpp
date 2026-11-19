@@ -129,7 +129,7 @@ Napi::Object EmitDeclipReport(Napi::Env env, const T& report) {
 ///        the two structs share their shape, this is the C-ABI mirror of that
 ///        reading.
 SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDeclipConfig config) {
-  RefuseUnknownKeys(options, "options", {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
+  RefuseUnknownKeys(options, {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
   config.clip_threshold_db =
       FiniteFloatProperty(options, "clipThresholdDb", config.clip_threshold_db);
   config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
@@ -289,8 +289,7 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   sonare::mastering::repair::DeclipConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    RefuseUnknownKeys(options, "options",
-                      {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
+    RefuseUnknownKeys(options, {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
     config.clip_threshold = DbfsAsLinearProperty(options, "clipThresholdDb", config.clip_threshold,
                                                  sonare::mastering::repair::clip_threshold_from_db);
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);

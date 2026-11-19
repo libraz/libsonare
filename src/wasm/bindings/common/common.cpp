@@ -367,7 +367,11 @@ void refuseUnknownKeys(val object, const std::vector<const char*>& allowed,
         std::any_of(extra.begin(), extra.end(), matches)) {
       continue;
     }
-    throw WasmTypeError("unknown option '" + key + "'");
+    namespace schema = sonare::util::json::schema;
+    std::vector<std::string> accepted(allowed.begin(), allowed.end());
+    accepted.insert(accepted.end(), extra.begin(), extra.end());
+    throw WasmTypeError(schema::unknown_key_expected(sonare::util::json::escape_key(key),
+                                                     schema::expected_keys(accepted)));
   }
 }
 

@@ -304,10 +304,8 @@ inline void node_require_property_type(Napi::Env env, bool ok, const char* key,
 
 /// @brief Refuses an own enumerable key of @p obj that is in neither @p allowed nor @p extra,
 ///        so a renamed key cannot be silently read as absent.
-/// @throws Napi::TypeError naming @p field (the argument or option the object was read from) and
-///         the key.
-inline void RefuseUnknownKeys(const Napi::Object& obj, const char* field,
-                              const std::vector<const char*>& allowed,
+/// @throws Napi::TypeError "unknown key <key> (expected <the accepted keys, sorted>)".
+inline void RefuseUnknownKeys(const Napi::Object& obj, const std::vector<const char*>& allowed,
                               std::initializer_list<const char*> extra = {}) {
   const Napi::Array names = obj.GetPropertyNames();
   for (uint32_t i = 0; i < names.Length(); ++i) {
@@ -317,7 +315,12 @@ inline void RefuseUnknownKeys(const Napi::Object& obj, const char* field,
         std::any_of(extra.begin(), extra.end(), matches)) {
       continue;
     }
-    throw Napi::TypeError::New(obj.Env(), std::string(field) + ": unknown option '" + key + "'");
+    namespace schema = sonare::util::json::schema;
+    std::vector<std::string> accepted(allowed.begin(), allowed.end());
+    accepted.insert(accepted.end(), extra.begin(), extra.end());
+    throw Napi::TypeError::New(obj.Env(),
+                               schema::unknown_key_expected(sonare::util::json::escape_key(key),
+                                                            schema::expected_keys(accepted)));
   }
 }
 
