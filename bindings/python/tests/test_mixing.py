@@ -954,7 +954,7 @@ def test_from_json_refuses_an_unknown_scene_key_by_path() -> None:
         Mixer.from_json(build({}, {"faderDB": -3}), sample_rate=48000, max_block_size=256)
     assert not isinstance(refused.value, SonareValueError)
     assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
-    assert "unknown scene key 'strips[0].faderDB'" in str(refused.value)
+    assert "unknown key strips[0].faderDB" in str(refused.value)
 
     annotated = build({"$schema": "x", "x-note": 1}, {"x-color": "red"})
     mixer = Mixer.from_json(annotated, sample_rate=48000, max_block_size=256)

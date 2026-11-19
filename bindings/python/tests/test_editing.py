@@ -521,18 +521,14 @@ def test_a_voice_changer_config_string_is_a_preset_id_and_a_mapping_is_a_documen
 
 
 def test_realtime_voice_changer_invalid_json_config() -> None:
-    """The strict preset-pack validator must reject malformed JSON.
-
-    The C++ constructor path (`realtime_voice_changer_config_from_json`) is
-    intentionally lenient — unknown fields fall back to defaults rather than
-    throwing. The strict gate is `validate_realtime_voice_changer_preset_json`
-    which is what callers use when they need the schema enforced (e.g. when
-    loading a third-party preset pack). Exercise THAT path here.
-    """
-    # Missing schemaVersion / id / dsp → strict validator must reject.
+    """The validator and the constructor read a preset document with one strict reader."""
     result = libsonare.validate_realtime_voice_changer_preset_json('{"malformed":"json structure"}')
     assert result["ok"] is False
-    assert "error" in result
+    assert result["error"] == "unknown key malformed"
+    with raises_coded(ErrorCode.INVALID_FORMAT, match="unknown key malformed"):
+        libsonare.RealtimeVoiceChanger(
+            48000, num_channels=1, config={"malformed": "json structure"}
+        )
     # Non-JSON input must also be rejected.
     result_garbage = libsonare.validate_realtime_voice_changer_preset_json("not even json")
     assert result_garbage["ok"] is False

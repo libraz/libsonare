@@ -244,7 +244,7 @@ def test_an_earlier_config_spelling_is_refused_as_invalid_format(document: dict)
             r"target\.speakers\.left\.distanceM must be a number",
         ),
         ({"loudness": {"programLufs": None}}, r"loudness\.programLufs must be a number"),
-        ({"outputLimiter": {"ceilingDbtp": -1.0}}, r"unknown key: outputLimiter\.ceilingDbtp"),
+        ({"outputLimiter": {"ceilingDbtp": -1.0}}, r"unknown key outputLimiter\.ceilingDbtp"),
     ],
     ids=["null_channel_map", "null_distance", "null_program_lufs", "old_ceiling_key"],
 )

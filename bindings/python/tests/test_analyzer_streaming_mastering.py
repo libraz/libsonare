@@ -612,9 +612,12 @@ _CHAIN_CONFIG_CALLS = {
 _CHAIN_CONTENT_REFUSALS = {
     "duplicate_path": (
         {"eq": {"tilt": {"tiltDb": 1.0}}, "eq.tilt.tiltDb": 1.0},
-        r"eq\.tilt\.tiltDb is given twice",
+        r"duplicate key params\.eq\.tilt\.tiltDb",
     ),
-    "null_leaf": ({"loudness": {"targetLufs": None}}, r"loudness\.targetLufs is null"),
+    "null_leaf": (
+        {"loudness": {"targetLufs": None}},
+        r"params\.loudness\.targetLufs must be a number, a boolean or a token",
+    ),
     "number_for_a_token": (
         {"dynamics": {"compressor": {"detector": 1}}},
         r"dynamics\.compressor\.detector takes a token, not a number",

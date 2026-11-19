@@ -92,7 +92,7 @@ def test_a_dotted_key_and_a_nested_object_name_the_same_path() -> None:
         master_audio(LEFT, SR, overrides=FLAT).samples,
         master_audio(LEFT, SR, overrides=TYPED).samples,
     )
-    with raises_coded(ErrorCode.INVALID_FORMAT, match=rf"{MB}\.enabled is given twice"):
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=rf"duplicate key params\.{MB}\.enabled"):
         master_audio(
             LEFT,
             SR,
@@ -161,7 +161,8 @@ def test_streaming_chain_typed_matches_flat_keys() -> None:
 )
 def test_empty_list_is_refused_by_path(config: dict, path: str) -> None:
     with raises_coded(
-        ErrorCode.INVALID_FORMAT, match=path.replace(".", r"\.") + " is an empty list"
+        ErrorCode.INVALID_FORMAT,
+        match=r"params\." + path.replace(".", r"\.") + " must not be an empty list",
     ):
         master_audio(LEFT, SR, overrides=config)
 

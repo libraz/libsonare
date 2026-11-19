@@ -608,14 +608,14 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
             {"transpose_semitones": 12},
             "transpose_semitones is an earlier spelling; write transposeSemitones",
         ),
-        ({"transposeSemitone": 12}, "unknown MIDI-FX key 'transposeSemitone'"),
+        ({"transposeSemitone": 12}, "unknown key transposeSemitone"),
         ({"velocityScale": float("nan")}, None),
         ({"velocityGamma": 0.0}, "velocityGamma must be > 0"),
         (
             {"quantizePpq": 240, "quantizeStrength": 2.0},
             "quantizeStrength must be in [0, 1]",
         ),
-        ({"humanizeVelocity": 200}, "humanizeVelocity must be a whole number in [0, 127]"),
+        ({"humanizeVelocity": 200}, "humanizeVelocity must be an integer in [0, 127]"),
     ],
     ids=[
         "earlier_spelling",

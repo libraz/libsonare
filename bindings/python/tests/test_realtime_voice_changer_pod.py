@@ -251,13 +251,17 @@ def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     with libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(base)) as changer:
         before = changer.config
-        factor_range = r"formant\.factor out of range \[0\.55, 1\.65\]"
+        factor_range = r"formant\.factor must be finite and in \[0\.55, 1\.65\]"
         with pytest.raises(SonareValueError, match=factor_range):
             changer.set_config(dataclasses.replace(base, formant_factor=3.0))
-        with pytest.raises(SonareValueError, match=r"limiter\.ceilingDb out of range"):
+        with pytest.raises(
+            SonareValueError, match=r"limiter\.ceilingDb must be finite and in \[-12, -1\]"
+        ):
             changer.set_config(dataclasses.replace(base, limiter_ceiling_db=0.5))
         assert changer.config == before
-    with pytest.raises(SonareError, match="out of range") as created:
+    with pytest.raises(
+        SonareError, match=r"formantFactor must be finite and in \[0\.55, 1\.65\]"
+    ) as created:
         libsonare.RealtimeVoiceChanger(
             48000, num_channels=1, config=_flat(dataclasses.replace(base, formant_factor=3.0))
         )
