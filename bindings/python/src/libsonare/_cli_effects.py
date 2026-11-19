@@ -647,10 +647,7 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
 
 
 def _add_spectral_geometry(parser: argparse.ArgumentParser) -> None:
-    """Declare ``--n-fft`` and ``--hop-length`` for a spectral effect.
-
-    The hop stays the CLI's own 512 on both front-ends; only the FFT size is left to the library.
-    """
+    """Declare ``--n-fft`` and ``--hop-length`` for a spectral effect, both left to the library."""
     _cli_domain(
         parser.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"),
         minimum=0,
@@ -659,7 +656,7 @@ def _add_spectral_geometry(parser: argparse.ArgumentParser) -> None:
     )
     _cli_domain(
         parser.add_argument(
-            "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+            "--hop-length", type=_c_int, default=None, help="Hop length (default: n_fft/4)"
         ),
         minimum=0,
         exclusive_minimum=True,
@@ -675,10 +672,7 @@ def register_effects_parsers(
     stdout_options = shared.stdout_options
 
     hpss_p = sub.add_parser("hpss", parents=[common], help="Harmonic-percussive separation")
-    # The hop stays the CLI's own 512 on both front-ends, so this command cannot
-    # inherit the shared geometry parent, which leaves the hop to the library.
-    hpss_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
-    hpss_p.add_argument("--hop-length", type=_c_int, default=512, help="Hop length (default: 512)")
+    _add_spectral_geometry(hpss_p)
     hpss_p.add_argument(
         "--kernel-harmonic",
         type=_c_int,

@@ -1886,10 +1886,12 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       {"mel-to-audio", tone_wav + to_out, "hop-length", "256"},
       {"mel-to-audio", tone_wav + to_out, "n-mels", "64"},
       {"mel-to-audio", tone_wav + to_out, "fmin-hz", "100"},
+      {"mel-to-audio", tone_wav + to_out, "n-iter", "8"},
       {"mfcc-to-audio", tone_wav + to_out, "n-fft", "1024"},
       {"mfcc-to-audio", tone_wav + to_out, "hop-length", "256"},
       {"mfcc-to-audio", tone_wav + to_out, "n-mels", "64"},
       {"mfcc-to-audio", tone_wav + to_out, "fmin-hz", "100"},
+      {"mfcc-to-audio", tone_wav + to_out, "n-iter", "8"},
 #ifdef SONARE_WITH_PITCH_EDITOR
       // A target three semitones up makes every correction setting audible; the scale
       // options act only in scale mode, where a root or mask off the tone puts it off-grid.
@@ -1950,6 +1952,18 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
   const std::vector<DerivedRow> derived_rows = {
       {"decompose-stems",
        tone_wav + to_out,
+       "hop-length",
+       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
+      {"hpss",
+       tone_wav + " --harmonic-only" + to_out,
+       "hop-length",
+       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
+      {"pitch-shift",
+       tone_wav + " --pitch-semitones 3" + to_out,
+       "hop-length",
+       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
+      {"time-stretch",
+       tone_wav + " --rate 1.5" + to_out,
        "hop-length",
        {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
       {"normalize",

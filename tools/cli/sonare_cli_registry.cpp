@@ -14,6 +14,7 @@
 #include "core/channel_layout.h"
 #include "effects/normalize.h"
 #include "effects/silence.h"
+#include "util/constants.h"
 
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/assistant/platform_targets.h"
@@ -704,13 +705,13 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {number_value("pitch-semitones"), required_output(),
                  with_domain(library_default(global_int("n-fft"), "2048"),
                              greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(global_int("hop-length", 512),
+                 with_domain(library_default(global_int("hop-length"), "n_fft/4"),
                              greater_than(0.0, CliOptionDomainStage::Parameter))});
     add_command(commands, "time-stretch", true,
                 {number_value("rate"), required_output(),
                  with_domain(library_default(global_int("n-fft"), "2048"),
                              greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(global_int("hop-length", 512),
+                 with_domain(library_default(global_int("hop-length"), "n_fft/4"),
                              greater_than(0.0, CliOptionDomainStage::Parameter))});
     add_command(
         commands, "pitch-correct", true,
@@ -824,7 +825,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         {library_default(int_value("kernel-harmonic"), "31"),
          library_default(int_value("kernel-percussive"), "31"), required_output(),
          flag("harmonic-only"), flag("percussive-only"), flag("with-residual"), flag("hard-mask"),
-         library_default(global_int("n-fft"), "2048"), global_int("hop-length", 512)});
+         with_domain(library_default(global_int("n-fft"), "2048"),
+                     greater_than(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(library_default(global_int("hop-length"), "n_fft/4"),
+                     greater_than(0.0, CliOptionDomainStage::Parameter))});
     // `init` is refused here because nothing below refuses it: the core's
     // validate_config checks the numeric fields only and reads any other name
     // as its own default, so an unrecognised initialiser is caught at the
@@ -1104,22 +1108,25 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                              greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(
         commands, "mel-to-audio", true,
-        {int_value("n-iter", 32), required_output(), library_default(global_int("n-fft"), "2048"),
+        {library_default(int_value("n-iter"), sonare::constants::kDefaultGriffinLimIterations),
+         required_output(), library_default(global_int("n-fft"), "2048"),
          library_default(global_int("hop-length"), "512"),
          library_default(global_int("n-mels"), "128"),
          with_domain(library_default(global_number("fmin-hz"), "0.0"),
                      at_least(0.0, CliOptionDomainStage::Parameter)),
          with_domain(number_value("fmax-hz", false, true),
                      greater_than(0.0, CliOptionDomainStage::Usage))});
-    add_command(commands, "mfcc-to-audio", true,
-                {int_value("n-mfcc", 13), int_value("n-iter", 32), required_output(),
-                 library_default(global_int("n-fft"), "2048"),
-                 library_default(global_int("hop-length"), "512"),
-                 library_default(global_int("n-mels"), "128"),
-                 with_domain(library_default(global_number("fmin-hz"), "0.0"),
-                             at_least(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(number_value("fmax-hz", false, true),
-                             greater_than(0.0, CliOptionDomainStage::Usage))});
+    add_command(
+        commands, "mfcc-to-audio", true,
+        {int_value("n-mfcc", 13),
+         library_default(int_value("n-iter"), sonare::constants::kDefaultGriffinLimIterations),
+         required_output(), library_default(global_int("n-fft"), "2048"),
+         library_default(global_int("hop-length"), "512"),
+         library_default(global_int("n-mels"), "128"),
+         with_domain(library_default(global_number("fmin-hz"), "0.0"),
+                     at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("fmax-hz", false, true),
+                     greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(commands, "acoustic", true,
                 {flag("ir"), library_default(int_value("n-octave-bands"), "6"),
                  library_default(number_value("min-decay-db"), "30.0"),

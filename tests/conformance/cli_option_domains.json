@@ -930,6 +930,26 @@
       "exclusive_maximum": false
     },
     {
+      "command": "hpss",
+      "option": "n-fft",
+      "reject_exit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": true,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "hpss",
+      "option": "hop-length",
+      "reject_exit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": true,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
       "command": "pitch-shift",
       "option": "n-fft",
       "reject_exit": "invalid_parameter",

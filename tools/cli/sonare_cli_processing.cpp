@@ -39,8 +39,7 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
   float semitones = args.get_float("pitch-semitones", 0.0f);
   PitchShiftConfig config;
   config.n_fft = args.get_int("n-fft", config.n_fft);
-  // The hop is held at the CLI's own value, which differs from the library's derived one.
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", config.hop_length);
 
   if (!args.quiet) {
     std::cerr << color::blue << "Pitch shifting by " << semitones << " semitones..." << color::reset
@@ -77,8 +76,7 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
   float rate = args.get_float("rate", 1.0f);
   TimeStretchConfig config;
   config.n_fft = args.get_int("n-fft", config.n_fft);
-  // The hop is held at the CLI's own value, which differs from the library's derived one.
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", config.hop_length);
 
   if (!args.quiet) {
     std::cerr << color::blue << "Time stretching with rate " << rate << "..." << color::reset
@@ -1105,8 +1103,8 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
 
   StftConfig stft;
   stft.n_fft = args.get_int("n-fft", stft.n_fft);
-  // The hop is held at the CLI's own value.
-  stft.hop_length = args.hop_length;
+  // An absent hop is sent as 0, which the library derives from the FFT size.
+  stft.hop_length = args.get_int("hop-length", 0);
 
   if (!args.quiet) {
     std::cerr << color::blue << "Performing harmonic-percussive separation..." << color::reset

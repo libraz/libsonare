@@ -935,11 +935,18 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "json",
@@ -975,7 +982,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -2652,7 +2666,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4228,7 +4242,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -8887,7 +8901,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -8990,7 +9004,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10103,11 +10117,18 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "json",
@@ -10143,7 +10164,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
