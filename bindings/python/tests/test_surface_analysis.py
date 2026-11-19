@@ -155,6 +155,7 @@ PRIMARY_ARGS = {
     "left",
     "right",
     "channels",
+    "num_channels",
     "source",
     "reference",
     "source_left",
