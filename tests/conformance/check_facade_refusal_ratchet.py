@@ -11,9 +11,11 @@ the caller's name as text (``fnName`` and its siblings). A third kind,
 ``out of [supported ]range`` or ``a finite number`` instead of the predicate the value
 failed, and ``unknown-key`` counts
 the spellings of an undeclared-key refusal older than ``unknown key <path> (expected
-...)``. Both are also counted over the native readers (``bindings/node/src/addon`` and
-``src/wasm``) as the ``native`` surface, so the TS and native halves are two lines of
-one scan.
+...)``, and ``array-scan`` counts the retired ``non-finite value`` word of an array-scan
+refusal, which reads ``<key> contains a non-finite sample at index <i>``. All three are also
+counted over the native readers (``bindings/node/src/addon`` and ``src/wasm``) as the
+``native`` surface, so the TS and native halves are two lines of one scan; ``array-scan``
+is counted over the rest of ``src`` as the ``core`` surface too.
 
 The counts in ``facade_refusal_ratchet.json`` are a line, not a target: a count
 above it fails, and a count below it fails too until the file is rewritten with
@@ -34,16 +36,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = Path(__file__).resolve().parent / "facade_refusal_ratchet.json"
 # surface -> (source roots, file suffixes, counted kinds)
-TS_KINDS = ("raw-error", "fn-name-param", "value-echo", "unknown-key")
+TS_KINDS = ("raw-error", "fn-name-param", "value-echo", "unknown-key", "array-scan")
 SURFACES: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
     "node": (("bindings/node/src",), (".ts",), TS_KINDS),
     "wasm": (("bindings/wasm/src",), (".ts",), TS_KINDS),
     "native": (
         ("bindings/node/src/addon", "src/wasm"),
         (".cpp", ".h"),
-        ("value-echo", "unknown-key"),
+        ("value-echo", "unknown-key", "array-scan"),
     ),
+    "core": (("src",), (".cpp", ".h"), ("array-scan",)),
 }
+# Trees a surface's roots reach that another surface already counts.
+SKIP_UNDER = {"core": ("wasm/",)}
 # The helpers' own home, and a generated table.
 EXEMPT = {"internal/entry.ts", "internal/native_entries.ts"}
 FN_PARAM_NAMES = ("fnName", "fn", "fnLabel", "entryName", "caller")
@@ -58,12 +63,15 @@ KINDS = {"raw-error": RAW_ERROR, "fn-name-param": FN_PARAM}
 VALUE_ECHO = re.compile(r"[,(]\s*got\b|out of (?:supported )?range|a finite number", re.IGNORECASE)
 # An undeclared key reads "unknown key <path> (expected ...)"; these are the spellings before it.
 UNKNOWN_KEY = re.compile(r"unknown (?:request key|option|config key)\b", re.IGNORECASE)
-LITERAL_KINDS = {"value-echo": VALUE_ECHO, "unknown-key": UNKNOWN_KEY}
+# An array scan reads "<key> contains a non-finite sample at index <i>"; "value" is the retired word.
+ARRAY_SCAN = re.compile(r"non-finite value", re.IGNORECASE)
+LITERAL_KINDS = {"value-echo": VALUE_ECHO, "unknown-key": UNKNOWN_KEY, "array-scan": ARRAY_SCAN}
 HINTS = {
     "raw-error": "raise the refusal through refuse/refuseType/invalidState/codedError",
     "fn-name-param": "name it with the entry, not a passed-in name",
     "value-echo": 'state the predicate ("<key> must be ...") without echoing the value',
     "unknown-key": "refuse it with refuseUnknownKey: unknown key <path> (expected a, b, c)",
+    "array-scan": "say <key> contains a non-finite sample at index <i>",
 }
 
 
@@ -164,6 +172,8 @@ def scan(root: Path) -> dict[str, dict]:
             for path in sorted(p for p in base.rglob("*") if p.suffix in suffixes):
                 name = path.relative_to(base).as_posix()
                 if path.name.endswith(".d.ts") or name in EXEMPT:
+                    continue
+                if name.startswith(SKIP_UNDER.get(surface, ())):
                     continue
                 scanned += 1
                 counts = count_text(path.read_text(encoding="utf-8"), kinds, cpp)

@@ -3,16 +3,22 @@
     "raw-error": 0,
     "fn-name-param": 0,
     "value-echo": 0,
-    "unknown-key": 0
+    "unknown-key": 0,
+    "array-scan": 0
   },
   "wasm": {
     "raw-error": 0,
     "fn-name-param": 0,
     "value-echo": 0,
-    "unknown-key": 0
+    "unknown-key": 0,
+    "array-scan": 0
   },
   "native": {
     "value-echo": 49,
-    "unknown-key": 2
+    "unknown-key": 2,
+    "array-scan": 1
+  },
+  "core": {
+    "array-scan": 7
   }
 }

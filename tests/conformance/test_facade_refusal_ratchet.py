@@ -103,6 +103,17 @@ class UnknownKeyTest(unittest.TestCase):
         self.assertEqual(dict(found), {"unknown-key": 1})
 
 
+class ArrayScanTest(unittest.TestCase):
+    def test_counts_the_retired_word_in_every_ts_literal_kind(self) -> None:
+        text = (
+            "throw refuse(`${key} contains a non-finite value at index ${i}`);\n"
+            "throw refuse('samples contains a non-finite value');\n"
+            "throw refuse(`${key} contains a non-finite sample at index ${i}`);\n"
+            "/** a non-finite value in a doc comment */\n"
+        )
+        self.assertEqual(counts(text)["array-scan"], 2)
+
+
 class EvaluateTest(unittest.TestCase):
     def found(self, raw: int, scanned: int = 1) -> dict:
         totals = {"raw-error": raw, "fn-name-param": 0}
@@ -165,7 +176,25 @@ class ScanTest(unittest.TestCase):
                 (root / rel / "b.h").write_text('throw X("i must be below 4");\n')
             native = ratchet.scan(root)["native"]
             self.assertEqual(native["scanned"], 4)
-            self.assertEqual(native["totals"], {"value-echo": 2, "unknown-key": 0})
+            self.assertEqual(native["totals"], {"value-echo": 2, "unknown-key": 0, "array-scan": 0})
+
+    def test_core_counts_the_retired_scan_word_outside_the_native_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src" / "wasm").mkdir(parents=True)
+            (root / "src" / "feature").mkdir()
+            (root / "src" / "feature" / "a.cpp").write_text(
+                'refuse("S contains a non-finite value");\n'
+                'refuse("y contains a non-finite sample at index ");\n'
+                "// a non-finite value in a comment\n"
+            )
+            (root / "src" / "wasm" / "b.cpp").write_text(
+                'refuse(" contains a non-finite value");\n'
+            )
+            found = ratchet.scan(root)
+            self.assertEqual(found["core"]["totals"], {"array-scan": 1})
+            self.assertEqual(found["core"]["scanned"], 1)
+            self.assertEqual(found["native"]["totals"]["array-scan"], 1)
 
 
 if __name__ == "__main__":
