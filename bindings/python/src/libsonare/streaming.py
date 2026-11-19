@@ -10,7 +10,7 @@ import numpy as np
 
 from . import _ffi_types_streaming as _ffi_streaming
 from ._analysis_detection import _UNKNOWN_QUALITY_ORDINAL
-from ._errors import _not_supported, _require_open
+from ._errors import _entry, _not_supported, _require_open
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _WINDOW_TYPES,
@@ -76,6 +76,7 @@ class StreamAnalyzer:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("StreamAnalyzer")
     def __init__(
         self,
         *,
@@ -175,6 +176,7 @@ class StreamAnalyzer:
         _check(lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)))
         self._handle = handle
 
+    @_entry("StreamAnalyzer.close")
     def close(self) -> None:
         """Release the native handle. Idempotent, so a double close is a no-op."""
         if self._handle is not None:
@@ -195,6 +197,7 @@ class StreamAnalyzer:
     def _require_handle(self) -> ctypes.c_void_p:
         return _require_open(self._handle, "StreamAnalyzer")
 
+    @_entry("StreamAnalyzer.process")
     def process(self, samples: Sequence[float] | list[float]) -> None:
         """Feed an audio chunk (cumulative offset tracked internally).
 
@@ -208,6 +211,7 @@ class StreamAnalyzer:
             )
         )
 
+    @_entry("StreamAnalyzer.process_with_offset")
     def process_with_offset(
         self, samples: Sequence[float] | list[float], start_sample: int
     ) -> None:
@@ -228,6 +232,7 @@ class StreamAnalyzer:
             )
         )
 
+    @_entry("StreamAnalyzer.finalize")
     def finalize(self) -> None:
         """Drain any high-rate resampler tail, then zero-pad the final frame.
 
@@ -253,6 +258,7 @@ class StreamAnalyzer:
         )
         return int(out.value)
 
+    @_entry("StreamAnalyzer.read_frames")
     def read_frames(self, max_frames: int) -> StreamFrames:
         """Read up to ``max_frames`` analyzed frames (consumes them)."""
         lib = _get_lib()
@@ -267,6 +273,7 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames(ctypes.byref(raw))
 
+    @_entry("StreamAnalyzer.read_frames_u8")
     def read_frames_u8(
         self, max_frames: int, quantize_config: StreamQuantizeConfig | None = None
     ) -> StreamFramesU8:
@@ -291,6 +298,7 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames_u8(ctypes.byref(raw))
 
+    @_entry("StreamAnalyzer.read_frames_i16")
     def read_frames_i16(
         self, max_frames: int, quantize_config: StreamQuantizeConfig | None = None
     ) -> StreamFramesI16:
@@ -315,6 +323,7 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames_i16(ctypes.byref(raw))
 
+    @_entry("StreamAnalyzer.reset")
     def reset(self, start_sample: int = 0) -> None:
         """Reset analyzer state for a new stream starting at ``start_sample``."""
         _check(
@@ -323,6 +332,7 @@ class StreamAnalyzer:
             )
         )
 
+    @_entry("StreamAnalyzer.stats")
     def stats(self) -> StreamStats:
         """Read the current statistics and progressive estimate snapshot."""
         raw = _ffi_streaming.SonareStreamStats()
@@ -363,6 +373,7 @@ class StreamAnalyzer:
         )
         return int(out.value)
 
+    @_entry("StreamAnalyzer.set_expected_duration")
     def set_expected_duration(self, duration_sec: float) -> None:
         """Set the expected total duration (s) for pattern-lock timing."""
         _check(
@@ -371,6 +382,7 @@ class StreamAnalyzer:
             )
         )
 
+    @_entry("StreamAnalyzer.set_normalization_gain")
     def set_normalization_gain(self, gain: float) -> None:
         """Set a normalization gain applied to input samples.
 
@@ -388,6 +400,7 @@ class StreamAnalyzer:
             )
         )
 
+    @_entry("StreamAnalyzer.set_reference_hz")
     def set_reference_hz(self, reference_hz: float) -> None:
         """Set the A4 tuning reference (Hz) and rebuild the chroma filterbank.
 

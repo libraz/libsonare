@@ -13,6 +13,7 @@ from ._effects_note_model import (
     _transcribe_config,
     _transcribe_sample_rate,
 )
+from ._errors import _entry, _refuse
 
 # The transcription config is built once for the whole binding: this method and
 # the free `transcribe` take the same keyword options, and two builders would be
@@ -44,7 +45,6 @@ from ._runtime import (
     SonareMidiEventPod,
     SonareMidiRouteConfig,
     SonareNotePairValidation,
-    SonareValueError,
     _check,
     _from_c_int_array,
     _get_lib,
@@ -69,7 +69,7 @@ from ._types_engine import AutomationPoint, MidiFxConfig
 def _found_index(value: int, message: str) -> int:
     """A reverse lookup's answer; the C ABI's -1 (nothing found) is refused."""
     if value < 0:
-        raise SonareValueError(message)
+        raise _refuse(message)
     return int(value)
 
 
@@ -78,6 +78,7 @@ class _ProjectMidiMixin:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
 
+    @_entry("Project.set_midi_events")
     def set_midi_events(
         self,
         clip_id: int,
@@ -105,9 +106,7 @@ class _ProjectMidiMixin:
         """
         if isinstance(events, np.ndarray):
             if events.ndim != 2 or events.shape[1] != 3:
-                raise SonareValueError(
-                    "events must be an (n, 3) array of ppq, word0, word1 columns"
-                )
+                raise _refuse("events must be an (n, 3) array of ppq, word0, word1 columns")
             count = int(events.shape[0])
             c_events = (SonareMidiEventPod * count)()
             for i, (ppq, word0, word1) in enumerate(events.tolist()):
@@ -125,6 +124,7 @@ class _ProjectMidiMixin:
             )
         )
 
+    @_entry("Project.transcribe_to_clip")
     @_guard_buffer("samples")
     def transcribe_to_clip(
         self,
@@ -240,9 +240,8 @@ class _ProjectMidiMixin:
             >>> project.transcribe_to_clip(clip_id, samples, sr)
             4
         """
-        rate = _transcribe_sample_rate("transcribe_to_clip", sample_rate)
+        rate = _transcribe_sample_rate(sample_rate)
         config = _transcribe_config(
-            "transcribe_to_clip",
             polyphonic=polyphonic,
             reference_hz=reference_hz,
             f0_min_hz=f0_min_hz,
@@ -275,6 +274,7 @@ class _ProjectMidiMixin:
         )
         return int(note_count.value)
 
+    @_entry("Project.import_smf")
     def import_smf(self, data: bytes) -> int:
         """Import an in-memory SMF buffer; return the first added clip id.
 
@@ -295,6 +295,7 @@ class _ProjectMidiMixin:
         )
         return int(out_id.value)
 
+    @_entry("Project.export_smf")
     def export_smf(self) -> bytes:
         """Export the project's tempo map + MIDI clips to an SMF byte buffer."""
         lib = _get_lib()
@@ -313,6 +314,7 @@ class _ProjectMidiMixin:
             if out:
                 lib.sonare_free_bytes(out)
 
+    @_entry("Project.import_clip_file")
     def import_clip_file(self, data: bytes) -> int:
         """Import an in-memory MIDI 2.0 Clip File (``SMF2CLIP``); return the
         first added clip id.
@@ -336,6 +338,7 @@ class _ProjectMidiMixin:
         )
         return int(out_id.value)
 
+    @_entry("Project.export_clip_file")
     def export_clip_file(self) -> bytes:
         """Export the project's tempo map + MIDI clips to a MIDI 2.0 Clip File
         (``SMF2CLIP``) byte buffer.
@@ -359,6 +362,7 @@ class _ProjectMidiMixin:
             if out:
                 lib.sonare_free_bytes(out)
 
+    @_entry("Project.set_program")
     def set_program(self, clip_id: int, program: int, bank: int | None = None) -> None:
         """Set a MIDI clip's channel-0 program / bank at source PPQ 0.
 
@@ -375,6 +379,7 @@ class _ProjectMidiMixin:
             )
         )
 
+    @_entry("Project.set_program_on_channel")
     def set_program_on_channel(
         self, clip_id: int, group: int, channel: int, program: int, bank: int | None = None
     ) -> None:
@@ -390,6 +395,7 @@ class _ProjectMidiMixin:
             )
         )
 
+    @_entry("Project.bake_midi_fx")
     def bake_midi_fx(
         self,
         clip_id: int,
@@ -439,6 +445,7 @@ class _ProjectMidiMixin:
             else _from_c_int_array(None, 0)
         )
 
+    @_entry("Project.preview_midi_fx_count")
     def preview_midi_fx_count(self, clip_id: int, config: MidiFxConfig) -> int:
         """Count the events :meth:`bake_midi_fx` would produce, without baking."""
         count = ctypes.c_size_t(0)
@@ -452,6 +459,7 @@ class _ProjectMidiMixin:
         )
         return count.value
 
+    @_entry("Project.validate_midi_notes")
     def validate_midi_notes(self, clip_id: int) -> NotePairValidation:
         """Check the clip's exported playback window for unmatched notes.
 
@@ -474,6 +482,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi_note_on")
     def midi_note_on(
         ppq: float, group: int, channel: int, note: int, velocity: int
     ) -> ProjectMidiEvent:
@@ -488,6 +497,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi_note_off")
     def midi_note_off(
         ppq: float, group: int, channel: int, note: int, velocity: int = 0
     ) -> ProjectMidiEvent:
@@ -502,6 +512,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi_cc")
     def midi_cc(
         ppq: float, group: int, channel: int, controller: int, value: int
     ) -> ProjectMidiEvent:
@@ -516,6 +527,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi_poly_pressure")
     def midi_poly_pressure(
         ppq: float, group: int, channel: int, note: int, pressure: int
     ) -> ProjectMidiEvent:
@@ -530,6 +542,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi_program")
     def midi_program(ppq: float, group: int, channel: int, program: int) -> ProjectMidiEvent:
         """Pack a MIDI 1.0 program-change event tuple."""
         return _midi_event_packed(
@@ -541,6 +554,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi_channel_pressure")
     def midi_channel_pressure(
         ppq: float, group: int, channel: int, pressure: int
     ) -> ProjectMidiEvent:
@@ -554,6 +568,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi_pitch_bend")
     def midi_pitch_bend(ppq: float, group: int, channel: int, bend: int) -> ProjectMidiEvent:
         """Pack a MIDI 1.0 pitch-bend event tuple (`bend` is unsigned 14-bit)."""
         # The one uint16 in the family; a uint8 here would refuse most of the range.
@@ -566,6 +581,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_note_on")
     def midi2_note_on(
         ppq: float,
         group: int,
@@ -588,6 +604,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_note_off")
     def midi2_note_off(
         ppq: float, group: int, channel: int, note: int, velocity16: int = 0
     ) -> ProjectMidiEvent:
@@ -602,6 +619,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_cc")
     def midi2_cc(
         ppq: float, group: int, channel: int, controller: int, value32: int
     ) -> ProjectMidiEvent:
@@ -616,6 +634,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_poly_pressure")
     def midi2_poly_pressure(
         ppq: float, group: int, channel: int, note: int, pressure32: int
     ) -> ProjectMidiEvent:
@@ -630,6 +649,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_channel_pressure")
     def midi2_channel_pressure(
         ppq: float, group: int, channel: int, pressure32: int
     ) -> ProjectMidiEvent:
@@ -643,6 +663,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_pitch_bend")
     def midi2_pitch_bend(ppq: float, group: int, channel: int, bend32: int) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 pitch-bend event tuple (unsigned 32-bit)."""
         return _midi_event_packed(
@@ -654,6 +675,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_program")
     def midi2_program(
         ppq: float,
         group: int,
@@ -681,6 +703,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_registered_controller")
     def midi2_registered_controller(
         ppq: float, group: int, channel: int, bank: int, index: int, value32: int
     ) -> ProjectMidiEvent:
@@ -696,6 +719,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_assignable_controller")
     def midi2_assignable_controller(
         ppq: float, group: int, channel: int, bank: int, index: int, value32: int
     ) -> ProjectMidiEvent:
@@ -711,6 +735,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_relative_registered_controller")
     def midi2_relative_registered_controller(
         ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
     ) -> ProjectMidiEvent:
@@ -726,6 +751,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_relative_assignable_controller")
     def midi2_relative_assignable_controller(
         ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
     ) -> ProjectMidiEvent:
@@ -741,6 +767,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_registered_per_note_controller")
     def midi2_registered_per_note_controller(
         ppq: float, group: int, channel: int, note: int, index: int, value32: int
     ) -> ProjectMidiEvent:
@@ -756,6 +783,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_assignable_per_note_controller")
     def midi2_assignable_per_note_controller(
         ppq: float, group: int, channel: int, note: int, index: int, value32: int
     ) -> ProjectMidiEvent:
@@ -771,6 +799,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_per_note_pitch_bend")
     def midi2_per_note_pitch_bend(
         ppq: float, group: int, channel: int, note: int, bend32: int
     ) -> ProjectMidiEvent:
@@ -785,6 +814,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi2_per_note_management")
     def midi2_per_note_management(
         ppq: float, group: int, channel: int, note: int, detach: bool = False, reset: bool = False
     ) -> ProjectMidiEvent:
@@ -805,12 +835,14 @@ class _ProjectMidiMixin:
     # -- MIDI naming / GM tables (static-lifetime lookups) ------------------
 
     @staticmethod
+    @_entry("Project.gm_instrument_name")
     def gm_instrument_name(program: int) -> str | None:
         """GM Level 1 instrument name for ``program`` [0,127], or ``None``."""
         r = _get_lib().sonare_midi_gm_instrument_name(_to_c_int(program, "program"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
+    @_entry("Project.gm_program_for_name")
     def gm_program_for_name(name: str) -> int:
         """Reverse GM instrument lookup.
 
@@ -819,16 +851,18 @@ class _ProjectMidiMixin:
         """
         return _found_index(
             _get_lib().sonare_midi_gm_program_for_name(_utf8_arg(name, "name")),
-            f"gm_program_for_name: unknown instrument name {name!r}",
+            f"unknown instrument name {name!r}",
         )
 
     @staticmethod
+    @_entry("Project.gm_family_name")
     def gm_family_name(family: int) -> str | None:
         """GM family name for ``family`` [0,15], or ``None``."""
         r = _get_lib().sonare_midi_gm_family_name(_to_c_int(family, "family"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
+    @_entry("Project.gm_family_first_program")
     def gm_family_first_program(family: int) -> int:
         """First GM program in ``family`` [0,15].
 
@@ -837,10 +871,11 @@ class _ProjectMidiMixin:
         """
         return _found_index(
             _get_lib().sonare_midi_gm_family_first_program(_to_c_int(family, "family")),
-            f"gm_family_first_program: family {family!r} is out of range",
+            f"family {family!r} is out of range",
         )
 
     @staticmethod
+    @_entry("Project.gm2_instrument_name")
     def gm2_instrument_name(bank_lsb: int, program: int) -> str | None:
         """GM2 melodic instrument name for ``bank_lsb`` + ``program``, or ``None``."""
         r = _get_lib().sonare_midi_gm2_instrument_name(
@@ -849,12 +884,14 @@ class _ProjectMidiMixin:
         return r.decode("utf-8") if r else None
 
     @staticmethod
+    @_entry("Project.gm_drum_name")
     def gm_drum_name(note: int) -> str | None:
         """GM drum name for ``note`` [35,81], or ``None``."""
         r = _get_lib().sonare_midi_gm_drum_name(_to_c_int(note, "note"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
+    @_entry("Project.gm_drum_note_for_name")
     def gm_drum_note_for_name(name: str) -> int:
         """Reverse GM drum lookup.
 
@@ -863,16 +900,18 @@ class _ProjectMidiMixin:
         """
         return _found_index(
             _get_lib().sonare_midi_gm_drum_note_for_name(_utf8_arg(name, "name")),
-            f"gm_drum_note_for_name: unknown drum name {name!r}",
+            f"unknown drum name {name!r}",
         )
 
     @staticmethod
+    @_entry("Project.gm2_drum_set_name")
     def gm2_drum_set_name(bank_lsb: int) -> str | None:
         """GM2 drum-set name for ``bank_lsb``, or ``None``."""
         r = _get_lib().sonare_midi_gm2_drum_set_name(_to_c_int(bank_lsb, "bank_lsb"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
+    @_entry("Project.gm2_drum_name")
     def gm2_drum_name(bank_lsb: int, note: int) -> str | None:
         """GM2 drum name for ``bank_lsb`` + ``note``, or ``None``."""
         r = _get_lib().sonare_midi_gm2_drum_name(
@@ -881,12 +920,14 @@ class _ProjectMidiMixin:
         return r.decode("utf-8") if r else None
 
     @staticmethod
+    @_entry("Project.midi_cc_name")
     def midi_cc_name(controller: int) -> str | None:
         """Standard MIDI CC name for ``controller`` [0,127], or ``None``."""
         r = _get_lib().sonare_midi_cc_name(_to_c_int(controller, "controller"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
+    @_entry("Project.midi_cc_index_for_name")
     def midi_cc_index_for_name(name: str) -> int:
         """Reverse standard MIDI CC lookup.
 
@@ -895,10 +936,11 @@ class _ProjectMidiMixin:
         """
         return _found_index(
             _get_lib().sonare_midi_cc_index_for_name(_utf8_arg(name, "name")),
-            f"midi_cc_index_for_name: unknown controller name {name!r}",
+            f"unknown controller name {name!r}",
         )
 
     @staticmethod
+    @_entry("Project.per_note_controller_name")
     def per_note_controller_name(index: int) -> str | None:
         """MIDI 2.0 registered per-note controller name for ``index``, or ``None``."""
         r = _get_lib().sonare_midi_per_note_controller_name(_to_c_int(index, "index"))
@@ -907,6 +949,7 @@ class _ProjectMidiMixin:
     # -- MIDI pure conversion helpers ---------------------------------------
 
     @staticmethod
+    @_entry("Project.midi_bank_program")
     def midi_bank_program(
         ppq: float,
         group: int,
@@ -939,6 +982,7 @@ class _ProjectMidiMixin:
         return [_midi_event_from_c(events[i]) for i in range(int(out_count.value))]
 
     @staticmethod
+    @_entry("Project.midi_route_events")
     def midi_route_events(
         events: Sequence[ProjectMidiEvent],
         config: Mapping[str, int | None] | None = None,
@@ -989,6 +1033,7 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
+    @_entry("Project.midi_cc_learn")
     def midi_cc_learn(
         events: Sequence[ProjectMidiEvent],
         param_id: int,
@@ -1020,6 +1065,7 @@ class _ProjectMidiMixin:
         return _cc_binding_from_c(out_binding)
 
     @staticmethod
+    @_entry("Project.midi_cc_to_breakpoint")
     def midi_cc_to_breakpoint(
         bindings: Sequence[MidiCcBinding],
         event: ProjectMidiEvent,
@@ -1048,6 +1094,7 @@ class _ProjectMidiMixin:
         return AutomationPoint(float(pt.ppq), float(pt.value), curve)
 
     @staticmethod
+    @_entry("Project.midi_param_to_cc")
     def midi_param_to_cc(
         bindings: Sequence[MidiCcBinding],
         param_id: int,

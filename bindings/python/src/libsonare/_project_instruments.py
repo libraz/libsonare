@@ -10,7 +10,7 @@ from typing import Literal, Protocol, TypeAlias, cast, get_args
 
 import numpy as np
 
-from ._errors import _not_supported
+from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD2_AMP_DELAY_MS,
     SONARE_SYNTH_FIELD2_AMP_HOLD_MS,
@@ -128,7 +128,6 @@ from ._runtime import (
     SonareSynthEngineParam,
     SonareSynthModRouting,
     SonareSynthPatch,
-    SonareValueError,
     _call_string,
     _check,
     _get_lib,
@@ -180,14 +179,12 @@ class BuiltinSynthConfig:
     def _to_c(self) -> SonareBuiltinSynthConfig:
         return SonareBuiltinSynthConfig(
             waveform=_synth_waveform_value(self.waveform),
-            gain=_optional_nonzero_float(self.gain, "BuiltinSynthConfig: gain"),
-            attack_ms=_optional_nonzero_float(self.attack_ms, "BuiltinSynthConfig: attack_ms"),
-            decay_ms=_optional_nonzero_float(self.decay_ms, "BuiltinSynthConfig: decay_ms"),
-            sustain=_optional_nonzero_float(self.sustain, "BuiltinSynthConfig: sustain"),
-            release_ms=_optional_nonzero_float(self.release_ms, "BuiltinSynthConfig: release_ms"),
-            polyphony=_optional_positive_int(
-                self.polyphony, "BuiltinSynthConfig: polyphony", _C_INT_MAX
-            ),
+            gain=_optional_nonzero_float(self.gain, "gain"),
+            attack_ms=_optional_nonzero_float(self.attack_ms, "attack_ms"),
+            decay_ms=_optional_nonzero_float(self.decay_ms, "decay_ms"),
+            sustain=_optional_nonzero_float(self.sustain, "sustain"),
+            release_ms=_optional_nonzero_float(self.release_ms, "release_ms"),
+            polyphony=_optional_positive_int(self.polyphony, "polyphony", _C_INT_MAX),
         )
 
 
@@ -237,10 +234,8 @@ class Sf2InstrumentConfig:
     def _to_c(self) -> SonareSf2InstrumentConfig:
         return SonareSf2InstrumentConfig(
             struct_version=4,
-            gain=_optional_nonzero_float(self.gain, "Sf2InstrumentConfig: gain"),
-            polyphony=_optional_positive_int(
-                self.polyphony, "Sf2InstrumentConfig: polyphony", _C_INT_MAX
-            ),
+            gain=_optional_nonzero_float(self.gain, "gain"),
+            polyphony=_optional_positive_int(self.polyphony, "polyphony", _C_INT_MAX),
             prefer_model_for_modeled_families=int(self.prefer_model_for_modeled_families),
             clear_bank_rig=int(self.clear_bank_rig),
             gs_efx_realization=_gs_efx_realization_value(self.gs_efx_realization),
@@ -252,7 +247,7 @@ _GS_EFX_REALIZATIONS = {"modern": 0, "classic": 1}
 
 def _gs_efx_realization_value(name: str) -> int:
     if not isinstance(name, str) or name not in _GS_EFX_REALIZATIONS:
-        raise SonareValueError(f"gs_efx_realization must be 'modern' or 'classic', got {name!r}")
+        raise _refuse(f"gs_efx_realization must be 'modern' or 'classic', got {name!r}")
     return _GS_EFX_REALIZATIONS[name]
 
 
@@ -571,14 +566,12 @@ class SynthPatch:
         preset = b""
         if self.preset is not None:
             if not isinstance(self.preset, str):
-                raise TypeError("synth patch preset must be a string or None")
+                raise _refuse_type("synth patch preset must be a string or None")
             preset = _utf8_arg(_strip_va_prefix(self.preset), "preset")
             if not preset:
-                raise SonareValueError(
-                    "synth patch preset must not be empty; omit it for the init patch"
-                )
+                raise _refuse("synth patch preset must not be empty; omit it for the init patch")
             if len(preset) >= SONARE_SYNTH_PRESET_NAME_MAX:
-                raise SonareValueError(
+                raise _refuse(
                     f"synth patch preset must be at most {SONARE_SYNTH_PRESET_NAME_MAX - 1} bytes"
                 )
         c = SonareSynthPatch()
@@ -662,7 +655,7 @@ class SynthPatch:
         if self.mod_routings is not None:
             c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
         if len(routings) > SONARE_SYNTH_PATCH_MOD_ROUTINGS:
-            raise SonareValueError(
+            raise _refuse(
                 f"a synth patch supports at most {SONARE_SYNTH_PATCH_MOD_ROUTINGS} mod routings"
             )
         c.num_mod_routings = len(routings)
@@ -684,7 +677,7 @@ class SynthPatch:
         _set_float2("filter_hold_ms", SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, self.filter_hold_ms)
         if self.one_shot is not None:
             if not isinstance(self.one_shot, bool):
-                raise TypeError("synth patch one_shot must be a bool")
+                raise _refuse_type("synth patch one_shot must be a bool")
             c.one_shot = 1 if self.one_shot else 0
             c.present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT
         # Sample engine: no presence bits, because only a sample patch reads the
@@ -703,7 +696,7 @@ class SynthPatch:
             keys: list[bytes] = []
             for key in self.engine_params:
                 if not isinstance(key, str):
-                    raise TypeError("engine_params keys must be strings")
+                    raise _refuse_type("engine_params keys must be strings")
                 keys.append(_utf8_arg(key, "engine_params key"))
             params = (SonareSynthEngineParam * len(keys))()
             for i, (raw_key, (param_name, value)) in enumerate(
@@ -803,6 +796,7 @@ def _synth_patch_arg(instrument: SynthPatch | str | None) -> SynthPatch:
     return instrument
 
 
+@_entry("synth_preset_names")
 def synth_preset_names() -> list[str]:
     """NativeSynth preset catalog names (``"sine"``, ``"sawLead"``,
     ``"ePiano"``, ``"drumKit"``, ...). Use these to discover valid
@@ -817,6 +811,7 @@ def _synth_param_info(raw: str) -> list[SynthParamInfo]:
     return [_from_wire(SynthParamInfo, entry) for entry in json.loads(raw)]
 
 
+@_entry("synth_engine_param_info")
 def synth_engine_param_info(engine_mode: SynthEngineMode) -> list[SynthParamInfo]:
     """Describe every :attr:`SynthPatch.engine_params` key of ``engine_mode``.
 
@@ -837,6 +832,7 @@ def synth_engine_param_info(engine_mode: SynthEngineMode) -> list[SynthParamInfo
     )
 
 
+@_entry("synth_patch_param_info")
 def synth_patch_param_info() -> list[SynthParamInfo]:
     """Describe every numeric :class:`SynthPatch` wrapper field.
 
@@ -852,6 +848,7 @@ def synth_patch_param_info() -> list[SynthParamInfo]:
     return _synth_param_info(_call_string(lib.sonare_synth_patch_param_info))
 
 
+@_entry("synth_gs_drum_kit_name")
 def synth_gs_drum_kit_name(program: int) -> str | None:
     """GS rhythm-set name a rhythm part's ``program`` selects (``"Standard"``,
     ``"Room"``, ``"Jazz"``, ...), or ``None`` when the module's own tone map
@@ -867,6 +864,7 @@ def synth_gs_drum_kit_name(program: int) -> str | None:
     return raw.decode("utf-8") if raw else None
 
 
+@_entry("synth_gs_drum_kit_is_voiced_apart")
 def synth_gs_drum_kit_is_voiced_apart(program: int) -> bool | None:
     """Whether the GS rhythm set at ``program`` is voiced apart from Standard:
     ``True`` when at least one drum note differs, ``False`` when the set renders
@@ -885,6 +883,7 @@ def synth_gs_drum_kit_is_voiced_apart(program: int) -> bool | None:
     return None if r < 0 else bool(r)
 
 
+@_entry("synth_gs_variation_is_voiced_apart")
 def synth_gs_variation_is_voiced_apart(bank: int, program: int) -> bool | None:
     """Whether melodic Bank Select ``bank`` on ``program`` is voiced apart from
     the capital tone: ``True`` when the bank has a patch of its own, ``False``
@@ -907,6 +906,7 @@ def synth_gs_variation_is_voiced_apart(bank: int, program: int) -> bool | None:
     return None if r < 0 else bool(r)
 
 
+@_entry("controller_profile_names")
 def controller_profile_names() -> list[str]:
     """Controller-profile preset names (``"gm"``, ``"breath"``,
     ``"breathAftertouch"``, ``"mpe"``, ...). Use these to discover the names
@@ -918,6 +918,7 @@ def controller_profile_names() -> list[str]:
     return _joined_names(lib.sonare_controller_profile_names(), "controller profile names")
 
 
+@_entry("synth_preset_patch")
 def synth_preset_patch(name: str) -> SynthPatch:
     """Fetch the named catalog preset as a :class:`SynthPatch` (the preset name
     plus the wrapper-section values), so hosts can inspect a preset and tweak
@@ -951,6 +952,7 @@ class ExternalInstrument(Protocol):
                 tail_samples: int  # release/effect tail for auto-length bounce; defaults to 0
     """
 
+    @_entry("ExternalInstrument.render")
     def render(self, channels: np.ndarray, num_frames: int) -> None:
         """Add ``num_frames`` of audio into the planar ``(channels, num_frames)``
         float32 array (already zero-filled). Sum into it; do not overwrite

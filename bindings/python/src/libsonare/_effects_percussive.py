@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonarePercussiveEvent,
     SonarePercussiveEventConfig,
@@ -18,7 +19,6 @@ from ._ffi import (
 from ._narrowing import _narrow_double, _narrow_float, _optional_nonzero, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
-    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -138,7 +138,6 @@ class PercussiveEvent:
 
 
 def _percussive_separation(
-    fn_name: str,
     n_fft: int | None,
     hop_length: int | None,
     hpss_kernel_harmonic: int | None,
@@ -159,8 +158,7 @@ def _percussive_separation(
         "hpss_kernel_percussive": hpss_kernel_percussive,
     }
     return {
-        name: _optional_positive_int(value, f"{fn_name}: {name}", _C_INT_MAX)
-        for name, value in fields.items()
+        name: _optional_positive_int(value, f"{name}", _C_INT_MAX) for name, value in fields.items()
     }
 
 
@@ -196,21 +194,19 @@ def _percussive_events_to_c(
             event.onset_sample,
             event.onset_sec,
             sample_rate,
-            f"render_percussive_events: events[{i}].onset_sample",
-            f"render_percussive_events: events[{i}].onset_sec",
+            f"events[{i}].onset_sample",
+            f"events[{i}].onset_sec",
         )
         offset = _resolve_sample_bound(
             event.offset_sample,
             event.offset_sec,
             sample_rate,
-            f"render_percussive_events: events[{i}].offset_sample",
-            f"render_percussive_events: events[{i}].offset_sec",
+            f"events[{i}].offset_sample",
+            f"events[{i}].offset_sec",
         )
         if onset is None or offset is None:
             missing = "onset" if onset is None else "offset"
-            raise SonareValueError(
-                f"render_percussive_events: events[{i}] needs {missing}_sample or {missing}_sec"
-            )
+            raise _refuse(f"events[{i}] needs {missing}_sample or {missing}_sec")
         c_events[i].onset_sample = onset
         c_events[i].offset_sample = offset
         c_events[i].edit = SonarePercussiveEventEdit(
@@ -221,8 +217,8 @@ def _percussive_events_to_c(
                 event.edit.time_offset_samples,
                 event.edit.time_offset_sec,
                 sample_rate,
-                f"render_percussive_events: events[{i}].edit.time_offset_samples",
-                f"render_percussive_events: events[{i}].edit.time_offset_sec",
+                f"events[{i}].edit.time_offset_samples",
+                f"events[{i}].edit.time_offset_sec",
             ),
             gain_db=_narrow_double(event.edit.gain_db, "event.edit.gain_db"),
             muted=1 if event.edit.muted else 0,
@@ -238,14 +234,13 @@ def _onset_wait(onset_wait: int | None) -> int:
     """
     if onset_wait is None:
         return 0
-    wait = _validate_c_int_field("extract_percussive_events", onset_wait, "onset_wait")
+    wait = _validate_c_int_field(onset_wait, "onset_wait")
     if wait == 0:
-        raise SonareValueError(
-            "extract_percussive_events: onset_wait must not be 0; omit it for the library value"
-        )
+        raise _refuse("onset_wait must not be 0; omit it for the library value")
     return wait
 
 
+@_entry("extract_percussive_events")
 @_guard_buffer("samples")
 def extract_percussive_events(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -343,7 +338,6 @@ def extract_percussive_events(
     config = SonarePercussiveEventConfig(
         struct_version=_PERCUSSIVE_STRUCT_VERSION,
         **_percussive_separation(
-            "extract_percussive_events",
             n_fft,
             hop_length,
             hpss_kernel_harmonic,
@@ -351,12 +345,12 @@ def extract_percussive_events(
         ),
         onset_wait=_onset_wait(onset_wait),
         onset_delta=_narrow_float(
-            _optional_nonzero(onset_delta, "extract_percussive_events: onset_delta"),
-            "extract_percussive_events: onset_delta",
+            _optional_nonzero(onset_delta, "onset_delta"),
+            "onset_delta",
         ),
         max_event_ms=_narrow_float(
-            _optional_nonzero(max_event_ms, "extract_percussive_events: max_event_ms"),
-            "extract_percussive_events: max_event_ms",
+            _optional_nonzero(max_event_ms, "max_event_ms"),
+            "max_event_ms",
         ),
         # 0 is this field's own meaning as well as its default, so it is passed
         # through rather than read as "leave the default".
@@ -381,6 +375,7 @@ def extract_percussive_events(
         lib.sonare_free_percussive_events_result(ctypes.byref(out))
 
 
+@_entry("render_percussive_events")
 @_guard_buffer("samples")
 def render_percussive_events(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -463,7 +458,6 @@ def render_percussive_events(
     config = SonarePercussiveRenderConfig(
         struct_version=_PERCUSSIVE_STRUCT_VERSION,
         **_percussive_separation(
-            "render_percussive_events",
             n_fft,
             hop_length,
             hpss_kernel_harmonic,

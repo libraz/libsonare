@@ -27,6 +27,7 @@ from ._effects_note_model import (
     _transcribe_result_from_c,
     _transcribe_sample_rate,
 )
+from ._errors import _entry, _refuse
 from ._ffi import (
     SONARE_NOTE_TARGET_UNMATCHED_LEAVE,
     SONARE_NOTE_TARGET_UNMATCHED_MUTE,
@@ -40,7 +41,6 @@ from ._ffi import (
     SonareTranscribeResult,
 )
 from ._runtime import (
-    SonareValueError,
     _call_float_array_transform,
     _check,
     _from_c_float_array,
@@ -71,7 +71,6 @@ _UNMATCHED_POLICIES = {
 
 
 def _optional_note_voiced(
-    fn_name: str,
     voiced: Sequence[int] | list[int] | np.ndarray | None,
     *,
     f0_supplied: bool,
@@ -89,13 +88,14 @@ def _optional_note_voiced(
     if voiced is None:
         return None
     if not f0_supplied:
-        raise SonareValueError(f"{fn_name}: voiced requires f0_hz")
+        raise _refuse("voiced requires f0_hz")
     voiced_array, voiced_len = _to_c_int_array(voiced, "voiced")
     if voiced_len != n_frames:
-        raise SonareValueError(f"{fn_name}: voiced must have f0_hz's length")
+        raise _refuse("voiced must have f0_hz's length")
     return voiced_array
 
 
+@_entry("note_stretch")
 @_guard_buffer("samples")
 def note_stretch(
     samples: Sequence[float] | list[float],
@@ -144,6 +144,7 @@ def note_stretch(
     )
 
 
+@_entry("note_move")
 @_guard_buffer("samples")
 def note_move(
     samples: Sequence[float] | list[float],
@@ -187,6 +188,7 @@ def note_move(
     )
 
 
+@_entry("extract_notes")
 @_guard_buffer("samples", shape_only=("f0_hz",))
 def extract_notes(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -265,7 +267,7 @@ def extract_notes(
 
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz)
-    prob_array, voiced_array = _note_voicing_arrays("extract_notes", n_frames, voiced, voiced_prob)
+    prob_array, voiced_array = _note_voicing_arrays(n_frames, voiced, voiced_prob)
     config = _note_extractor_config(
         segmentation_threshold_cents, min_note_ms, reference_hz, voiced_threshold
     )
@@ -289,6 +291,7 @@ def extract_notes(
         lib.sonare_free_note_objects_result(ctypes.byref(out))
 
 
+@_entry("render_notes")
 @_guard_buffer("samples")
 def render_notes(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -367,7 +370,7 @@ def render_notes(
         raise _unsupported_effect_symbol("sonare_render_notes")
 
     c_array, length = _to_c_float_array(samples)
-    c_notes, note_count, envelopes, envelope_count = _notes_to_c("render_notes", notes, sample_rate)
+    c_notes, note_count, envelopes, envelope_count = _notes_to_c(notes, sample_rate)
 
     f0_array = None
     voiced_array = None
@@ -376,7 +379,7 @@ def render_notes(
     c_frame_rate = 0.0
     if f0_hz is not None:
         if frame_rate is None:
-            raise SonareValueError("render_notes: pass frame_rate with f0_hz")
+            raise _refuse("pass frame_rate with f0_hz")
         # Shape-only, the way the five siblings spell it through the decorator's
         # `shape_only`: pYIN marks an unvoiced frame with NaN, so the track this
         # call's own docstring tells the caller to pass carries one. It is
@@ -384,14 +387,12 @@ def render_notes(
         # optional, and an explicit `f0_hz=None` reaches the decorator as a
         # supplied name.
         f0_array, n_frames = _to_c_float_array(
-            _validate_samples("render_notes", f0_hz, scan=False, arg_name="f0_hz")
+            _validate_samples(f0_hz, scan=False, arg_name="f0_hz")
         )
-        voiced_array = _optional_note_voiced(
-            "render_notes", voiced, f0_supplied=True, n_frames=n_frames
-        )
+        voiced_array = _optional_note_voiced(voiced, f0_supplied=True, n_frames=n_frames)
         c_frame_rate = _narrow_double(frame_rate, "frame_rate")
     elif voiced is not None:
-        _optional_note_voiced("render_notes", voiced, f0_supplied=False, n_frames=0)
+        _optional_note_voiced(voiced, f0_supplied=False, n_frames=0)
 
     config = SonareNoteRenderConfig(
         _NOTE_STRUCT_VERSION,
@@ -420,6 +421,7 @@ def render_notes(
         return _from_c_float_array(out, out_length.value)
 
 
+@_entry("decompose_note_pitch")
 @_guard_buffer(shape_only=("f0_hz",))
 def decompose_note_pitch(
     f0_hz: Sequence[float] | list[float] | np.ndarray,
@@ -481,9 +483,7 @@ def decompose_note_pitch(
         raise _unsupported_effect_symbol("sonare_decompose_note_pitch")
 
     f0_array, n_frames = _to_c_float_array(f0_hz)
-    voiced_array = _optional_note_voiced(
-        "decompose_note_pitch", voiced, f0_supplied=True, n_frames=n_frames
-    )
+    voiced_array = _optional_note_voiced(voiced, f0_supplied=True, n_frames=n_frames)
     out = SonarePitchDecompositionResult()
     rc = lib.sonare_decompose_note_pitch(
         f0_array,
@@ -505,6 +505,7 @@ def decompose_note_pitch(
         lib.sonare_free_pitch_decomposition_result(ctypes.byref(out))
 
 
+@_entry("split_note")
 @_guard_buffer("samples", shape_only=("f0_hz",))
 def split_note(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -584,7 +585,6 @@ def split_note(
         ...                              voiced=voiced)
     """
     return _note_set_edit(
-        "split_note",
         "sonare_split_note",
         samples,
         sample_rate,
@@ -597,12 +597,13 @@ def split_note(
             segmentation_threshold_cents, min_note_ms, reference_hz, voiced_threshold
         ),
         (
-            _to_c_size_t(_note_set_index("split_note", "index", index), "index"),
+            _to_c_size_t(_note_set_index("index", index), "index"),
             _to_c_int32(frame, "frame"),
         ),
     )
 
 
+@_entry("merge_notes")
 @_guard_buffer("samples", shape_only=("f0_hz",))
 def merge_notes(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -674,7 +675,6 @@ def merge_notes(
         ...                               voiced=voiced)
     """
     return _note_set_edit(
-        "merge_notes",
         "sonare_merge_notes",
         samples,
         sample_rate,
@@ -687,8 +687,8 @@ def merge_notes(
             segmentation_threshold_cents, min_note_ms, reference_hz, voiced_threshold
         ),
         (
-            _to_c_size_t(_note_set_index("merge_notes", "first", first), "first"),
-            _to_c_size_t(_note_set_index("merge_notes", "last", last), "last"),
+            _to_c_size_t(_note_set_index("first", first), "first"),
+            _to_c_size_t(_note_set_index("last", last), "last"),
         ),
     )
 
@@ -730,7 +730,7 @@ class AssignNoteTargetsResult:
     """How many notes got a target."""
 
 
-def _unmatched_policy_value(fn_name: str, policy: str) -> int:
+def _unmatched_policy_value(policy: str) -> int:
     """Resolve the policy name to its ordinal, refusing an unknown one by name.
 
     The ordinal is never published: a caller passing 1 would be spelling a
@@ -738,13 +738,11 @@ def _unmatched_policy_value(fn_name: str, policy: str) -> int:
     behaviours was wanted.
     """
     if not isinstance(policy, str) or policy not in _UNMATCHED_POLICIES:
-        raise SonareValueError(
-            f"{fn_name}: unmatched_policy must be one of {sorted(_UNMATCHED_POLICIES)}"
-        )
+        raise _refuse(f"unmatched_policy must be one of {sorted(_UNMATCHED_POLICIES)}")
     return _UNMATCHED_POLICIES[policy]
 
 
-def _note_targets_to_c(fn_name: str, targets: Sequence[NoteTarget]) -> tuple[object, int]:
+def _note_targets_to_c(targets: Sequence[NoteTarget]) -> tuple[object, int]:
     """Marshal a target list into the C target array; an empty set is NULL and 0.
 
     The two times are doubles, which ``CStruct`` has no fold to refuse, so their
@@ -757,11 +755,9 @@ def _note_targets_to_c(fn_name: str, targets: Sequence[NoteTarget]) -> tuple[obj
 
     rows = (SonareNoteTarget * count)()
     for i, target in enumerate(targets):
-        rows[i].start_sec = _narrow_double(target.start_sec, f"{fn_name}: targets[{i}].start_sec")
-        rows[i].end_sec = _narrow_double(target.end_sec, f"{fn_name}: targets[{i}].end_sec")
-        rows[i].target_midi = _narrow_float(
-            target.target_midi, f"{fn_name}: targets[{i}].target_midi"
-        )
+        rows[i].start_sec = _narrow_double(target.start_sec, f"targets[{i}].start_sec")
+        rows[i].end_sec = _narrow_double(target.end_sec, f"targets[{i}].end_sec")
+        rows[i].target_midi = _narrow_float(target.target_midi, f"targets[{i}].target_midi")
     return rows, count
 
 
@@ -786,6 +782,7 @@ def _note_with_assigned_edit(note: NoteObject, row: SonareNoteObject) -> NoteObj
     )
 
 
+@_entry("note_targets_from_smf")
 def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> list[NoteTarget]:
     """Read one track of an in-memory Standard MIDI File as a reference melody.
 
@@ -856,6 +853,7 @@ def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> l
             lib.sonare_free_note_targets(out)
 
 
+@_entry("assign_note_targets")
 def assign_note_targets(
     notes: Sequence[NoteObject],
     sample_rate: int,
@@ -936,25 +934,21 @@ def assign_note_targets(
     if not hasattr(lib, "sonare_assign_note_targets"):
         raise _unsupported_effect_symbol("sonare_assign_note_targets")
 
-    policy = _unmatched_policy_value("assign_note_targets", unmatched_policy)
+    policy = _unmatched_policy_value(unmatched_policy)
     # Seeded from the C ABI rather than from literals here, because 0 is a legal
     # value for both floats and so cannot double as the unset sentinel.
     config = SonareNoteTargetAssignConfig()
     _check(lib.sonare_note_target_assign_config_default(ctypes.byref(config)))
     config.unmatched_policy = policy
     if min_overlap_ratio is not None:
-        config.min_overlap_ratio = _validate_scalar(
-            "assign_note_targets", min_overlap_ratio, "min_overlap_ratio"
-        )
+        config.min_overlap_ratio = _validate_scalar(min_overlap_ratio, "min_overlap_ratio")
     if max_correction_semitones is not None:
         config.max_correction_semitones = _validate_scalar(
-            "assign_note_targets", max_correction_semitones, "max_correction_semitones"
+            max_correction_semitones, "max_correction_semitones"
         )
 
-    c_notes, note_count, _envelopes, _envelope_count = _notes_to_c(
-        "assign_note_targets", notes, sample_rate
-    )
-    c_targets, target_count = _note_targets_to_c("assign_note_targets", targets)
+    c_notes, note_count, _envelopes, _envelope_count = _notes_to_c(notes, sample_rate)
+    c_targets, target_count = _note_targets_to_c(targets)
     assigned = ctypes.c_size_t()
     _check(
         lib.sonare_assign_note_targets(
@@ -974,6 +968,7 @@ def assign_note_targets(
     return AssignNoteTargetsResult(notes=edited, assigned_count=int(assigned.value))
 
 
+@_entry("transcribe")
 @_guard_buffer("samples")
 def transcribe(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -1128,10 +1123,9 @@ def transcribe(
     if not hasattr(lib, "sonare_transcribe"):
         raise _unsupported_effect_symbol("sonare_transcribe")
 
-    rate = _transcribe_sample_rate("transcribe", sample_rate)
-    tempo = 0.0 if tempo_bpm is None else _transcribe_positive("transcribe", tempo_bpm, "tempo_bpm")
+    rate = _transcribe_sample_rate(sample_rate)
+    tempo = 0.0 if tempo_bpm is None else _transcribe_positive(tempo_bpm, "tempo_bpm")
     config = _transcribe_config(
-        "transcribe",
         polyphonic=polyphonic,
         reference_hz=reference_hz,
         f0_min_hz=f0_min_hz,

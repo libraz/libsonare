@@ -17,7 +17,7 @@ from typing import Any, Self
 
 import numpy as np
 
-from ._errors import SonareValueError, _invalid_state, _unknown_error
+from ._errors import _entry, _invalid_state, _refuse, _unknown_error
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._ffi_types_vocal import (
     SonareVocalAnalysisResult,
@@ -370,6 +370,7 @@ class VocalEditSession(_HandleOwner):
             self._drafts = drafts
         return drafts
 
+    @_entry("VocalEditSession")
     def __init__(
         self,
         samples: Sequence[float] | np.ndarray[Any, Any],
@@ -401,7 +402,7 @@ class VocalEditSession(_HandleOwner):
         lib = _get_lib()
         if not int(lib.sonare_has_feature(b"vocalEdit")):
             raise VocalEditError(6, "libsonare was built without vocal-edit support")
-        source = _validate_samples("VocalEditSession", samples)
+        source = _validate_samples(samples)
         rate = _vocal_sample_rate(sample_rate)
         raw_options, keepalive = _create_options_to_c(
             lib,
@@ -448,6 +449,7 @@ class VocalEditSession(_HandleOwner):
             raise
 
     @classmethod
+    @_entry("VocalEditSession.restore")
     def restore(
         cls,
         samples: Sequence[float] | np.ndarray[Any, Any],
@@ -462,14 +464,14 @@ class VocalEditSession(_HandleOwner):
         """Restore a session; the limits default to those of session creation."""
         obj = cls.__new__(cls)
         lib = _get_lib()
-        source = _validate_samples("VocalEditSession.restore", samples)
+        source = _validate_samples(samples)
         rate = _vocal_sample_rate(sample_rate)
         restore_options = _restore_options_to_c(
             lib, max_history_bytes, max_cache_bytes, max_undo_depth, max_render_jobs
         )
         state_bytes = bytes(state)
         if not state_bytes:
-            raise SonareValueError("state must not be empty")
+            raise _refuse("state must not be empty")
         payload = (ctypes.c_uint8 * len(state_bytes)).from_buffer_copy(state_bytes)
         handle = ctypes.c_void_p()
         _vocal_check(
@@ -497,9 +499,11 @@ class VocalEditSession(_HandleOwner):
             raise
         return obj
 
+    @_entry("VocalEditSession.notes")
     def notes(self) -> VocalNotesResult:
         return self._owned_notes()
 
+    @_entry("VocalEditSession.analysis")
     def analysis(self) -> VocalAnalysisResult:
         lib = _get_lib()
         with _owned_result(
@@ -513,6 +517,7 @@ class VocalEditSession(_HandleOwner):
             )
             return _analysis_from_result(raw)
 
+    @_entry("VocalEditSession.capabilities")
     def capabilities(self) -> VocalCapabilities:
         lib = _get_lib()
         raw = _new_result(lib, "sonare_vocal_capabilities_init", SonareVocalCapabilities)
@@ -528,6 +533,7 @@ class VocalEditSession(_HandleOwner):
             maximum_formant_shift_semitones=float(raw.maximum_formant_shift_semitones),
         )
 
+    @_entry("VocalEditSession.token")
     def token(self) -> VocalStateToken:
         return self._owned_token()
 
@@ -539,6 +545,7 @@ class VocalEditSession(_HandleOwner):
     def output_length_samples(self) -> int:
         return self._output_length
 
+    @_entry("VocalEditSession.history")
     def history(self) -> VocalHistory:
         lib = _get_lib()
         can_undo = ctypes.c_int()
@@ -558,6 +565,7 @@ class VocalEditSession(_HandleOwner):
     def can_redo(self) -> bool:
         return self.history().can_redo
 
+    @_entry("VocalEditSession.begin_edit")
     def begin_edit(self, expected_revision: int | None = None) -> VocalEditDraft:
         lib = _get_lib()
         revision = (
@@ -575,9 +583,11 @@ class VocalEditSession(_HandleOwner):
         self._live_drafts().add(draft)
         return draft
 
+    @_entry("VocalEditSession.undo")
     def undo(self, expected_revision: int | None = None) -> VocalEditResult:
         return self._history_call("sonare_vocal_session_undo", expected_revision)
 
+    @_entry("VocalEditSession.redo")
     def redo(self, expected_revision: int | None = None) -> VocalEditResult:
         return self._history_call("sonare_vocal_session_redo", expected_revision)
 
@@ -594,18 +604,23 @@ class VocalEditSession(_HandleOwner):
             )
             return _edit_result_from_c(raw)
 
+    @_entry("VocalEditSession.evaluate_pitch")
     def evaluate_pitch(self, note_id: int) -> VocalPitchResult:
         return self._owned_evaluate_pitch(note_id)
 
+    @_entry("VocalEditSession.source_sample_to_destination_sample")
     def source_sample_to_destination_sample(self, note_id: int, source_sample: float) -> float:
         return self._owned_source_to_destination(note_id, source_sample)
 
+    @_entry("VocalEditSession.destination_sample_to_source_sample")
     def destination_sample_to_source_sample(self, note_id: int, destination_sample: float) -> float:
         return self._owned_destination_to_source(note_id, destination_sample)
 
+    @_entry("VocalEditSession.capture_render_snapshot")
     def capture_render_snapshot(self) -> VocalRenderSnapshot:
         return VocalRenderSnapshot(self._capture_snapshot_handle(), self._sample_rate)
 
+    @_entry("VocalEditSession.export_state")
     def export_state(self) -> bytes:
         lib = _get_lib()
         with _owned_result(
@@ -619,6 +634,7 @@ class VocalEditSession(_HandleOwner):
             )
             return bytes(_copy_pointer(raw.data, int(raw.size), np.dtype(np.uint8)))
 
+    @_entry("VocalEditSession.render")
     def render(
         self,
         range: VocalRange | Sequence[int | None] | None = None,
@@ -655,17 +671,21 @@ class VocalEditDraft(_HandleOwner):
     _destroy_symbol = "sonare_vocal_draft_destroy"
     _symbol_prefix = "sonare_vocal_draft"
 
+    @_entry("VocalEditDraft")
     def __init__(self, session: VocalEditSession, handle: ctypes.c_void_p) -> None:
         self._session = session
         self._handle = handle
         self._output_length = session.output_length_samples
 
+    @_entry("VocalEditDraft.notes")
     def notes(self) -> VocalNotesResult:
         return self._owned_notes()
 
+    @_entry("VocalEditDraft.token")
     def token(self) -> VocalStateToken:
         return self._owned_token()
 
+    @_entry("VocalEditDraft.apply")
     def apply(
         self,
         operations: Iterable[VocalOperation],
@@ -688,6 +708,7 @@ class VocalEditDraft(_HandleOwner):
             )
             return _edit_result_from_c(raw)
 
+    @_entry("VocalEditDraft.commit")
     def commit(self, expected_revision: int | None = None) -> VocalEditResult:
         lib = _get_lib()
         revision = (
@@ -703,19 +724,24 @@ class VocalEditDraft(_HandleOwner):
             )
             return _edit_result_from_c(raw)
 
+    @_entry("VocalEditDraft.cancel")
     def cancel(self) -> None:
         lib = _get_lib()
         _vocal_check(lib.sonare_vocal_draft_cancel(self._require_handle()))
 
+    @_entry("VocalEditDraft.evaluate_pitch")
     def evaluate_pitch(self, note_id: int) -> VocalPitchResult:
         return self._owned_evaluate_pitch(note_id)
 
+    @_entry("VocalEditDraft.source_sample_to_destination_sample")
     def source_sample_to_destination_sample(self, note_id: int, source_sample: float) -> float:
         return self._owned_source_to_destination(note_id, source_sample)
 
+    @_entry("VocalEditDraft.destination_sample_to_source_sample")
     def destination_sample_to_source_sample(self, note_id: int, destination_sample: float) -> float:
         return self._owned_destination_to_source(note_id, destination_sample)
 
+    @_entry("VocalEditDraft.capture_render_snapshot")
     def capture_render_snapshot(self) -> VocalRenderSnapshot:
         return VocalRenderSnapshot(self._capture_snapshot_handle(), self._session._sample_rate)
 
@@ -725,6 +751,7 @@ class VocalRenderSnapshot(_HandleOwner):
 
     _destroy_symbol = "sonare_vocal_snapshot_destroy"
 
+    @_entry("VocalRenderSnapshot")
     def __init__(self, handle: ctypes.c_void_p, sample_rate: int) -> None:
         self._handle = handle
         self._sample_rate = sample_rate
@@ -740,6 +767,7 @@ class VocalRenderSnapshot(_HandleOwner):
     def output_length_samples(self) -> int:
         return self._output_length
 
+    @_entry("VocalRenderSnapshot.render")
     def render(
         self,
         range: VocalRange | Sequence[int | None] | None = None,
@@ -776,6 +804,7 @@ class VocalRenderSnapshot(_HandleOwner):
             finally:
                 lib.sonare_free_vocal_render_result(ctypes.byref(raw))
 
+    @_entry("VocalRenderSnapshot.begin_render_job")
     def begin_render_job(
         self,
         range: VocalRange | Sequence[int | None] | None = None,
@@ -808,10 +837,12 @@ class VocalRenderJob(_HandleOwner):
 
     _destroy_symbol = "sonare_vocal_render_job_destroy"
 
+    @_entry("VocalRenderJob")
     def __init__(self, snapshot: VocalRenderSnapshot, handle: ctypes.c_void_p) -> None:
         self._snapshot = snapshot
         self._handle = handle
 
+    @_entry("VocalRenderJob.next")
     def next(self, cancel: Callable[[], bool] | None = None) -> bool:
         with self._native_call(), self._snapshot._native_call():
             lib = _get_lib()
@@ -825,6 +856,7 @@ class VocalRenderJob(_HandleOwner):
             )
             return bool(complete.value)
 
+    @_entry("VocalRenderJob.finalize")
     def finalize(self, cancel: Callable[[], bool] | None = None) -> VocalRenderResult:
         native_succeeded = False
         result: VocalRenderResult | None = None
@@ -851,6 +883,7 @@ class VocalRenderJob(_HandleOwner):
             raise _unknown_error("native vocal render finalize produced no result")
         return result
 
+    @_entry("VocalRenderJob.abort")
     def abort(self) -> None:
         if self._handle and self._handle.value:
             _get_lib().sonare_vocal_render_job_abort(self._handle)
@@ -888,6 +921,7 @@ def _coordinate(
     return float(out.value)
 
 
+@_entry("vocal_edit_abi_version")
 def vocal_edit_abi_version() -> int | None:
     """Return the vocal-edit C ABI version of the loaded native library.
 

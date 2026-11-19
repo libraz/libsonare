@@ -9,7 +9,7 @@ from typing import Any, SupportsFloat, cast
 
 import numpy as np
 
-from ._errors import SonareError, SonareValueError, _unknown_error
+from ._errors import SonareError, _entry, _refuse, _refuse_type, _unknown_error
 from ._ffi_types_vocal import (
     SONARE_VOCAL_EDIT_ABI_VERSION,
     VOCAL_MAX_SAMPLE_RATE,
@@ -84,11 +84,11 @@ def _finite_float(value: object, name: str) -> float:
     try:
         result = float(cast(SupportsFloat, value))
     except OverflowError as exc:
-        raise SonareValueError(f"{name} must be a finite number") from exc
+        raise _refuse(f"{name} must be a finite number") from exc
     except (TypeError, ValueError) as exc:
-        raise TypeError(f"{name} must be a finite number") from exc
+        raise _refuse_type(f"{name} must be a finite number") from exc
     if not math.isfinite(result):
-        raise SonareValueError(f"{name} must be a finite number")
+        raise _refuse(f"{name} must be a finite number")
     return result
 
 
@@ -99,14 +99,14 @@ def _int64(value: object, name: str) -> int:
 def _uint32(value: object, name: str, *, allow_zero: bool = True) -> int:
     result = _narrow_int(value, name, 0, _UINT32_MAX)
     if not allow_zero and result == 0:
-        raise SonareValueError(f"{name} must be positive")
+        raise _refuse(f"{name} must be positive")
     return result
 
 
 def _uint64(value: object, name: str, *, allow_zero: bool = True) -> int:
     result = _narrow_int(value, name, 0, _UINT64_MAX)
     if not allow_zero and result == 0:
-        raise SonareValueError(f"{name} must be positive")
+        raise _refuse(f"{name} must be positive")
     return result
 
 
@@ -173,6 +173,7 @@ class VocalEditError(SonareError):
     expected_text: str
     actual_text: str
 
+    @_entry("VocalEditError")
     def __init__(
         self,
         code: int,
@@ -255,7 +256,7 @@ def _range(
     the output; negative bounds are refused.
     """
     if value is not None and (start_sec is not None or end_sec is not None):
-        raise SonareValueError("give range or start_sec/end_sec, not both")
+        raise _refuse("give range or start_sec/end_sec, not both")
     if value is None:
         start_i = _resolve_sample_bound(
             None, start_sec, sample_rate, _RANGE_BOUND_NAMES[0], "start_sec"
@@ -272,11 +273,9 @@ def _range(
         try:
             length = len(value)
         except (TypeError, ValueError) as exc:
-            raise SonareValueError(
-                "render range must be a (start_sample, end_sample) pair"
-            ) from exc
+            raise _refuse("render range must be a (start_sample, end_sample) pair") from exc
         if length != 2:
-            raise SonareValueError("render range must be a (start_sample, end_sample) pair")
+            raise _refuse("render range must be a (start_sample, end_sample) pair")
         start_i, end_i = (
             _resolve_sample_bound(
                 item, None, sample_rate, _RANGE_BOUND_NAMES[i], _RANGE_SECOND_NAMES[i]
@@ -286,7 +285,7 @@ def _range(
     start_i = 0 if start_i is None else start_i
     end_i = output_length if end_i is None else end_i
     if end_i < start_i:
-        raise SonareValueError("render range must satisfy 0 <= start_sample <= end_sample")
+        raise _refuse("render range must satisfy 0 <= start_sample <= end_sample")
     return SonareVocalRange(start_i, end_i)
 
 
@@ -296,10 +295,10 @@ def _analysis_to_c(
     f0 = np.ascontiguousarray(np.asarray(analysis.f0_hz, dtype=np.float32))
     voiced_input = np.asarray(analysis.voiced)
     if voiced_input.ndim != 1 or not np.isin(voiced_input, (0, 1)).all():
-        raise SonareValueError("analysis voiced must be a one-dimensional 0/1 mask")
+        raise _refuse("analysis voiced must be a one-dimensional 0/1 mask")
     voiced = np.ascontiguousarray(voiced_input, dtype=np.uint8)
     if f0.ndim != 1 or f0.size != voiced.size:
-        raise SonareValueError("analysis f0_hz and voiced must be one-dimensional and equal length")
+        raise _refuse("analysis f0_hz and voiced must be one-dimensional and equal length")
     raw = SonareVocalAnalysis()
     lib.sonare_vocal_analysis_init(ctypes.byref(raw))
     raw.frame_origin_sample = _finite_float(analysis.frame_origin_sample, "frame_origin_sample")
@@ -440,7 +439,7 @@ def _edit_to_c(lib: ctypes.CDLL, edit: VocalNoteEdit) -> tuple[SonareVocalNoteEd
     )
     raw.gain_db = _finite_float(edit.gain_db, "gain_db")
     if not isinstance(edit.muted, (bool, np.bool_)):
-        raise TypeError("muted must be a bool")
+        raise _refuse_type("muted must be a bool")
     raw.muted = int(edit.muted)
     raw.formant_mode = _token_ordinal(edit.formant_mode, _VOCAL_FORMANT_MODES, "formant_mode")
     raw.formant_shift_semitones = _finite_float(
@@ -460,7 +459,7 @@ def _edit_to_c(lib: ctypes.CDLL, edit: VocalNoteEdit) -> tuple[SonareVocalNoteEd
     if edit.amplitude_envelope:
         envelope = np.ascontiguousarray(np.asarray(edit.amplitude_envelope, dtype=np.float32))
         if envelope.ndim != 1 or not np.isfinite(envelope).all():
-            raise SonareValueError("amplitude_envelope must be a finite one-dimensional sequence")
+            raise _refuse("amplitude_envelope must be a finite one-dimensional sequence")
         raw.amplitude_envelope = envelope.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
         raw.amplitude_envelope_count = int(envelope.size)
         keepalive.append(envelope)
@@ -481,7 +480,7 @@ def _transition_to_c(lib: ctypes.CDLL, transition: VocalTransition) -> SonareVoc
     )
     raw.strength = _finite_float(transition.strength, "strength")
     if not 0.0 <= raw.strength <= 1.0:
-        raise SonareValueError("strength must be in [0, 1]")
+        raise _refuse("strength must be in [0, 1]")
     return raw
 
 
@@ -499,7 +498,7 @@ def _operation_position(
     """
     resolved = _resolve_sample_bound(sample_value, sec_value, sample_rate, sample_name, sec_name)
     if resolved is None:
-        raise SonareValueError(f"{operation_name} needs {sample_name} or {sec_name}")
+        raise _refuse(f"{operation_name} needs {sample_name} or {sec_name}")
     return resolved
 
 
@@ -591,7 +590,7 @@ def _operation_to_c(
         raw.note_id_count = len(operation.note_ids)
         keepalive.append(ids)
     else:
-        raise SonareValueError(f"unsupported vocal operation: {type(operation).__name__}")
+        raise _refuse(f"unsupported vocal operation: {type(operation).__name__}")
     return raw, keepalive
 
 

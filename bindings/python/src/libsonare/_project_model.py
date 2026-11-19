@@ -26,6 +26,8 @@ from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, 
 
 import numpy as np
 
+from ._errors import _entry, _refuse, _refuse_type
+
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
 
@@ -174,7 +176,6 @@ from ._runtime import (
     SonareAutomationLaneDesc,
     SonareMidiCcBinding,
     SonareMidiEventPod,
-    SonareValueError,
     _check,
     _get_lib,
     _require_export,
@@ -262,12 +263,12 @@ def _automation_target_kind_value(value: object) -> int:
 def _automation_target_param_id_value(value: object) -> int:
     """Validate a non-zero uint32 automation target parameter id."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise SonareValueError("target_param_id must be a finite integer in [1, 4294967295]")
+        raise _refuse("target_param_id must be a finite integer in [1, 4294967295]")
     target = float(cast(SupportsFloat, value))
     if not math.isfinite(target) or not target.is_integer() or target < 1.0 or target > _UINT32_MAX:
         if math.isfinite(target) and target == 0.0:
-            raise SonareValueError("target_param_id must be non-zero")
-        raise SonareValueError("target_param_id must be a finite integer in [1, 4294967295]")
+            raise _refuse("target_param_id must be non-zero")
+        raise _refuse("target_param_id must be a finite integer in [1, 4294967295]")
     return int(target)
 
 
@@ -453,7 +454,7 @@ def _absent_or_in_range(value: object, name: str, upper: int, absent: int) -> in
     if value is None:
         return absent
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= upper:
-        raise SonareValueError(f"{name} {value!r} must be in 0..{upper}, or None when absent")
+        raise _refuse(f"{name} {value!r} must be in 0..{upper}, or None when absent")
     return value
 
 
@@ -499,7 +500,7 @@ def _marker_name_arg(name: str | None) -> str:
     if name is None:
         return ""
     if name == "":
-        raise SonareValueError("marker name must not be empty; omit it for an unnamed marker")
+        raise _refuse("marker name must not be empty; omit it for an unnamed marker")
     return name
 
 
@@ -573,6 +574,7 @@ class PartRigEntry:
     """``{"processor", "params"}`` dicts for a ``"chain"`` entry; ``None`` otherwise."""
 
 
+@_entry("project_abi_version")
 def project_abi_version() -> int | None:
     """Return the project C ABI version of the loaded native library.
 
@@ -625,7 +627,7 @@ def _midi_event_from_c(event: SonareMidiEventPod) -> ProjectMidiEvent:
 def _midi_event_to_c(event: object, label: str) -> SonareMidiEventPod:
     """Validate one :class:`ProjectMidiEvent` and pack it for the C ABI."""
     if not isinstance(event, ProjectMidiEvent):
-        raise TypeError(f"{label} must be a ProjectMidiEvent, not {type(event).__name__}")
+        raise _refuse_type(f"{label} must be a ProjectMidiEvent, not {type(event).__name__}")
     return SonareMidiEventPod(
         ppq=_validate_midi_event_ppq(event.ppq, f"{label}.ppq"),
         word0=_validate_midi_event_word(event.word0, f"{label}.word0"),
@@ -636,7 +638,7 @@ def _midi_event_to_c(event: object, label: str) -> SonareMidiEventPod:
 def _midi_events_to_c(events: object, name: str) -> tuple[ctypes.Array[SonareMidiEventPod], int]:
     """Pack a sequence of :class:`ProjectMidiEvent` records; a str or mapping is refused."""
     if isinstance(events, (str, bytes)) or not isinstance(events, Sequence):
-        raise TypeError(f"{name} must be a sequence of ProjectMidiEvent")
+        raise _refuse_type(f"{name} must be a sequence of ProjectMidiEvent")
     rows = list(events)
     c_events = (SonareMidiEventPod * len(rows))()
     for i, event in enumerate(rows):
@@ -646,17 +648,17 @@ def _midi_events_to_c(events: object, name: str) -> tuple[ctypes.Array[SonareMid
 
 def _validate_midi_event_word(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise TypeError(f"{label} must be an integer in [0, 4294967295]")
+        raise _refuse_type(f"{label} must be an integer in [0, 4294967295]")
     word = float(cast(SupportsFloat, value))
     if not math.isfinite(word) or not word.is_integer() or word < 0.0 or word > _UINT32_MAX:
-        raise SonareValueError(f"{label} must be an integer in [0, 4294967295]")
+        raise _refuse(f"{label} must be an integer in [0, 4294967295]")
     return int(word)
 
 
 def _validate_midi_event_ppq(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise TypeError(f"{label} must be a non-negative finite number")
+        raise _refuse_type(f"{label} must be a non-negative finite number")
     ppq = float(cast(SupportsFloat, value))
     if not math.isfinite(ppq) or ppq < 0.0:
-        raise SonareValueError(f"{label} must be a non-negative finite number")
+        raise _refuse(f"{label} must be a non-negative finite number")
     return ppq

@@ -168,7 +168,10 @@ def test_push_midi_ump_rejects_bad_messages(words) -> None:
         engine.set_builtin_instrument(destination_id=0)
         with pytest.raises(SonareValueError) as excinfo:
             engine.push_midi_ump(0, words)
-        assert str(excinfo.value) == "push_midi_ump: words do not form a pushable UMP message"
+        assert (
+            str(excinfo.value)
+            == "RealtimeEngine.push_midi_ump: words do not form a pushable UMP message"
+        )
 
 
 def test_push_midi_ump_rejects_word_out_of_range() -> None:

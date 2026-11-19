@@ -196,7 +196,7 @@ def _refuses(name: str, call, *args) -> None:
     ``new_track_id``, so a substring test would let a refusal about one argument
     stand in for a refusal about its neighbour.
     """
-    with pytest.raises(SonareValueError, match=rf"^{re.escape(name)} must be"):
+    with pytest.raises(SonareValueError, match=rf"^[A-Za-z_][\w.]*: {re.escape(name)} must be"):
         call(*args)
 
 
@@ -341,9 +341,9 @@ def test_a_wrapped_take_id_is_refused_rather_than_read_as_take_zero() -> None:
 
     assert applied(1) != applied(2)  # positive control
     for value in WRAPPED_IDS:
-        _refuses("set_clip_takes: takes[0].id", applied, value)
+        _refuses("takes[0].id", applied, value)
         _refuses(
-            "set_clip_takes: takes[0].source_id",
+            "takes[0].source_id",
             lambda v: project.set_clip_takes(clip, [{"id": 1, "source_id": v}]),
             value,
         )
@@ -390,7 +390,10 @@ def test_a_wrapped_source_audio_argument_is_refused_rather_than_replacing_anothe
     for value in (2**32, 2**32 + 1, 1.5):
         _refuses("channels", empty, value)
     for value in (2**32, -1, 0):
-        with pytest.raises(SonareValueError, match="^audio length must be a multiple of channels$"):
+        with pytest.raises(
+            SonareValueError,
+            match="^Project.set_source_audio: audio length must be a multiple of channels$",
+        ):
             bounced(1, value, 48000)
 
 
@@ -714,7 +717,7 @@ def _wrong_type_sites():
     return [
         ("finite_float", lambda v: _finite_float(v, "gain"), "x", float("nan")),
         ("unsigned", lambda v: _unsigned(v, "key", 127), "x", 1.5),
-        ("note_set_index", lambda v: _note_set_index("fn", "index", v), "x", 1.5),
+        ("note_set_index", lambda v: _note_set_index("index", v), "x", 1.5),
         ("target_kind", _automation_target_kind_value, 1, "track-pan"),
         ("midi_word", lambda v: _validate_midi_event_word(v, "word"), "x", -1),
         ("enum", _meter_tap_value, [], "post"),

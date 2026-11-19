@@ -12,7 +12,7 @@ import numbers
 import operator
 from typing import SupportsFloat, SupportsIndex
 
-from ._errors import SonareValueError
+from ._errors import _refuse, _refuse_type
 
 
 def _narrow_int(value: object, name: str, low: int, high: int) -> int:
@@ -53,10 +53,10 @@ def _narrow_int(value: object, name: str, low: int, high: int) -> int:
         else:
             if low <= integer <= high:
                 return integer
-            raise SonareValueError(_narrowing_error(name, low, high))
+            raise _refuse(_narrowing_error(name, low, high))
     if _is_number(value):
-        raise SonareValueError(_narrowing_error(name, low, high))
-    raise TypeError(_narrowing_error(name, low, high))
+        raise _refuse(_narrowing_error(name, low, high))
+    raise _refuse_type(_narrowing_error(name, low, high))
 
 
 def _is_number(value: object) -> bool:
@@ -109,14 +109,14 @@ def _narrow_float(value: object, name: str) -> float:
         try:
             number = float(value)
         except OverflowError:
-            raise SonareValueError(_float_narrowing_error(name)) from None
+            raise _refuse(_float_narrowing_error(name)) from None
         except (TypeError, ValueError):
             pass
         else:
             if math.isfinite(number) and abs(number) <= _FLOAT32_MAX:
                 return number
-            raise SonareValueError(_float_narrowing_error(name))
-    raise TypeError(_float_narrowing_error(name))
+            raise _refuse(_float_narrowing_error(name))
+    raise _refuse_type(_float_narrowing_error(name))
 
 
 def _float_narrowing_error(name: str) -> str:
@@ -154,14 +154,14 @@ def _narrow_double(value: object, name: str) -> float:
         try:
             number = float(value)
         except OverflowError:
-            raise SonareValueError(f"{name} must be a finite number") from None
+            raise _refuse(f"{name} must be a finite number") from None
         except (TypeError, ValueError):
             pass
         else:
             if math.isfinite(number):
                 return number
-            raise SonareValueError(f"{name} must be a finite number")
-    raise TypeError(f"{name} must be a finite number")
+            raise _refuse(f"{name} must be a finite number")
+    raise _refuse_type(f"{name} must be a finite number")
 
 
 _INT64_MIN = -(2**63)
@@ -184,7 +184,7 @@ def _seconds_to_samples(seconds: object, sample_rate: float, name: str) -> int:
     """
     samples = math.floor(_narrow_double(seconds, name) * sample_rate + 0.5)
     if not _INT64_MIN <= samples <= _INT64_MAX:
-        raise SonareValueError(f"{name} is out of range at {sample_rate} Hz")
+        raise _refuse(f"{name} is out of range at {sample_rate} Hz")
     return samples
 
 
@@ -211,7 +211,7 @@ def _resolve_sample_bound(
             range, or a position is negative.
     """
     if sample_value is not None and sec_value is not None:
-        raise SonareValueError(f"give {sample_name} or {sec_name}, not both")
+        raise _refuse(f"give {sample_name} or {sec_name}, not both")
     if sample_value is None and sec_value is None:
         return None
     if sec_value is not None:
@@ -221,7 +221,7 @@ def _resolve_sample_bound(
         value = _narrow_int(sample_value, sample_name, _INT64_MIN, _INT64_MAX)
         name = sample_name
     if not signed and value < 0:
-        raise SonareValueError(f"{name} must be non-negative")
+        raise _refuse(f"{name} must be non-negative")
     return value
 
 
@@ -281,7 +281,7 @@ def _resolve_optional_non_negative(value: object, name: str) -> int | float:
         return _C_ABSENT
     number = _narrow_double(value, name)
     if number < 0:
-        raise SonareValueError(f"{name} must be non-negative (use None for the default)")
+        raise _refuse(f"{name} must be non-negative (use None for the default)")
     return value  # type: ignore[return-value]
 
 
@@ -299,7 +299,7 @@ def _resolve_absent_positive(value: object, name: str) -> int | float:
         return _C_ABSENT
     number = _narrow_double(value, name)
     if number <= 0:
-        raise SonareValueError(f"{name} must be positive (use None for the default)")
+        raise _refuse(f"{name} must be positive (use None for the default)")
     return value  # type: ignore[return-value]
 
 
@@ -317,7 +317,7 @@ def _resolve_zero_default(value: object, name: str) -> int | float:
         return 0
     number = _narrow_double(value, name)
     if number <= 0:
-        raise SonareValueError(f"{name} must be positive (use None for the default)")
+        raise _refuse(f"{name} must be positive (use None for the default)")
     return value  # type: ignore[return-value]
 
 
@@ -331,7 +331,7 @@ def _optional_nonzero(value: object, name: str, absent: str = "the library value
         return 0.0
     number = _narrow_double(value, name)
     if number == 0:
-        raise SonareValueError(f"{name} must not be 0; omit it for {absent}")
+        raise _refuse(f"{name} must not be 0; omit it for {absent}")
     return number
 
 
@@ -342,5 +342,5 @@ def _utf8_arg(value: str, name: str) -> bytes:
     silently shortened; every string argument crosses the boundary through here.
     """
     if "\x00" in value:
-        raise SonareValueError(f"{name} must not contain NUL")
+        raise _refuse(f"{name} must not contain NUL")
     return value.encode("utf-8")

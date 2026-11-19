@@ -8,8 +8,8 @@ from typing import Any, TypeVar
 
 import numpy as np
 
+from ._errors import _refuse
 from ._runtime import (
-    SonareValueError,
     _as_float32_buffer,
     _check,
     _not_planar_channels,
@@ -86,7 +86,6 @@ def _run_repair(
 
 
 def _linked_channel_planes(
-    fn_name: str,
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
 ) -> list[np.ndarray]:
     """Coerce and preflight the channel set of an N-channel linked repair.
@@ -107,9 +106,9 @@ def _linked_channel_planes(
         except TypeError as exc:
             raise _not_planar_channels(channels, "channels") from exc
     if not planes:
-        raise SonareValueError(f"{fn_name}: channels must not be empty")
+        raise _refuse("channels must not be empty")
     return [
-        _validate_samples(fn_name, plane, arg_name=f"channels[{index}]")
+        _validate_samples(plane, arg_name=f"channels[{index}]")
         for index, plane in enumerate(planes)
     ]
 

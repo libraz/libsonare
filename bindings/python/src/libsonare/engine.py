@@ -60,7 +60,15 @@ from ._engine_midi import _EngineMidiMixin
 from ._engine_mixing import _EngineMixingMixin
 from ._engine_pages import ClipPageProvider as ClipPageProvider
 from ._engine_pages import FileClipPageProvider as FileClipPageProvider
-from ._errors import ErrorCode, SonareError, _invalid_state, _not_supported, _require_open
+from ._errors import (
+    ErrorCode,
+    SonareError,
+    _entry,
+    _invalid_state,
+    _not_supported,
+    _refuse,
+    _require_open,
+)
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._mixing import StripRef
 from ._narrowing import _narrow_double, _resolve_zero_default
@@ -130,6 +138,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("RealtimeEngine")
     def __init__(
         self,
         sample_rate: float,
@@ -167,6 +176,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             sample_rate, max_block_size, command_capacity, telemetry_capacity, max_channels
         )
 
+    @_entry("RealtimeEngine.close")
     def close(self) -> None:
         if self._handle is not None:
             _get_lib().sonare_engine_destroy(self._handle)
@@ -186,6 +196,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def _require_handle(self) -> ctypes.c_void_p:
         return _require_open(self._handle, "RealtimeEngine")
 
+    @_entry("RealtimeEngine.apply_project_timeline")
     def apply_project_timeline(self, timeline: ProjectTimeline) -> None:
         """Install a compiled project timeline into this stopped engine.
 
@@ -212,6 +223,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         self._lane_order = "timeline"
 
+    @_entry("RealtimeEngine.prepare")
     def prepare(
         self,
         sample_rate: float,
@@ -249,6 +261,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         self._sample_rate = _narrow_double(sample_rate, "sample_rate")
 
+    @_entry("RealtimeEngine.play")
     def play(self, render_frame: int | None = None) -> None:
         _check(
             _get_lib().sonare_engine_play(
@@ -257,6 +270,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.stop")
     def stop(self, render_frame: int | None = None) -> None:
         """Stop the transport.
 
@@ -273,6 +287,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.seek_sample")
     def seek_sample(self, timeline_sample: int, render_frame: int | None = None) -> None:
         """Move the playhead to a timeline sample.
 
@@ -290,6 +305,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.settle_parameters")
     def settle_parameters(self) -> None:
         """Snap every in-flight parameter ramp to its target value.
 
@@ -301,6 +317,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(_get_lib().sonare_engine_settle_parameters(self._require_handle()))
 
+    @_entry("RealtimeEngine.prime_offline_parameters")
     def prime_offline_parameters(self, num_channels: int, block_size: int | None = None) -> None:
         """Bring an offline engine to its start-of-render state without rendering.
 
@@ -360,6 +377,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return int(out.value) / _LATENCY_Q8_SCALE
 
+    @_entry("RealtimeEngine.flush_control_commands")
     def flush_control_commands(self) -> None:
         """Apply commands queued on an offline/control-only engine immediately.
 
@@ -370,6 +388,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(_get_lib().sonare_engine_flush_control_commands(self._require_handle()))
 
+    @_entry("RealtimeEngine.settle_insert_parameters")
     def settle_insert_parameters(self) -> None:
         """Snap every in-flight strip insert parameter smoother to its target.
 
@@ -377,6 +396,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(_get_lib().sonare_engine_settle_insert_parameters(self._require_handle()))
 
+    @_entry("RealtimeEngine.apply_commands_due_now_preserving_future")
     def apply_commands_due_now_preserving_future(self) -> None:
         """Apply commands already due at the current render frame.
 
@@ -391,6 +411,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.seek_ppq")
     def seek_ppq(self, ppq: float, render_frame: int | None = None) -> None:
         """Move the playhead to a PPQ position.
 
@@ -408,12 +429,14 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_tempo")
     def set_tempo(self, bpm: float) -> None:
         """Set a finite tempo in the range ``(0, 100000]`` BPM."""
         _check(
             _get_lib().sonare_engine_set_tempo(self._require_handle(), _narrow_double(bpm, "bpm"))
         )
 
+    @_entry("RealtimeEngine.set_time_signature")
     def set_time_signature(self, numerator: int, denominator: int) -> None:
         _check(
             _get_lib().sonare_engine_set_time_signature(
@@ -423,6 +446,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_tempo_segments")
     def set_tempo_segments(
         self,
         segments: Sequence[Mapping[str, float]],
@@ -451,6 +475,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_time_signature_segments")
     def set_time_signature_segments(
         self,
         segments: Sequence[Mapping[str, float]],
@@ -477,6 +502,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.sample_at_ppq")
     def sample_at_ppq(self, ppq: float) -> int:
         """Convert PPQ to a timeline sample using the engine tempo-map snapshot."""
         lib = _get_lib()
@@ -490,6 +516,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.set_loop")
     def set_loop(self, start_ppq: float, end_ppq: float, enabled: bool = True) -> None:
         """Set the loop region and whether it is enabled.
 
@@ -508,6 +535,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.add_parameter")
     def add_parameter(self, info: ParameterInfo) -> None:
         _require_instance(info, ParameterInfo, "info")
         raw = _ffi_core.SonareParameterInfo()
@@ -524,6 +552,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         raw.default_curve = _curve_value(info.default_curve)
         _check(_get_lib().sonare_engine_add_parameter(self._require_handle(), ctypes.byref(raw)))
 
+    @_entry("RealtimeEngine.clear_parameters")
     def clear_parameters(self) -> None:
         """Remove all registered parameters and release their backing strings.
 
@@ -536,6 +565,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             raise _not_supported("libsonare was built without parameter-registry support")
         _check(lib.sonare_engine_clear_parameters(self._require_handle()))
 
+    @_entry("RealtimeEngine.parameters")
     def parameters(self) -> list[ParameterInfo]:
         """Every registered parameter, in stored order."""
         lib = _get_lib()
@@ -553,6 +583,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             out.append(_parameter_from_c(raw))
         return out
 
+    @_entry("RealtimeEngine.parameter_info")
     def parameter_info(self, id: int) -> ParameterInfo:
         raw = _ffi_core.SonareParameterInfo()
         _check(
@@ -562,6 +593,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return _parameter_from_c(raw)
 
+    @_entry("RealtimeEngine.set_automation_lane")
     def set_automation_lane(self, param_id: int, points: Sequence[AutomationPoint]) -> None:
         """Replace the automation lane driving ``param_id``.
 
@@ -593,6 +625,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.set_markers")
     def set_markers(self, markers: Sequence[EngineMarker]) -> None:
         raw_markers = (_ffi_core.SonareEngineMarker * len(markers))(
             *[_marker_to_c(marker) for marker in markers]
@@ -601,6 +634,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             _get_lib().sonare_engine_set_markers(self._require_handle(), raw_markers, len(markers))
         )
 
+    @_entry("RealtimeEngine.markers")
     def markers(self) -> list[EngineMarker]:
         """Every marker, in stored order."""
         lib = _get_lib()
@@ -618,6 +652,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             out.append(_marker_from_c(raw))
         return out
 
+    @_entry("RealtimeEngine.marker")
     def marker(self, id: int) -> EngineMarker:
         raw = _ffi_core.SonareEngineMarker()
         _check(
@@ -627,6 +662,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return _marker_from_c(raw)
 
+    @_entry("RealtimeEngine.seek_marker")
     def seek_marker(self, marker_id: int, render_frame: int | None = None) -> None:
         _check(
             _get_lib().sonare_engine_seek_marker(
@@ -636,6 +672,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_loop_from_markers")
     def set_loop_from_markers(self, start_marker_id: int, end_marker_id: int) -> None:
         _check(
             _get_lib().sonare_engine_set_loop_from_markers(
@@ -645,15 +682,18 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_metronome")
     def set_metronome(self, config: EngineMetronomeConfig) -> None:
         raw = _metronome_to_c(config)
         _check(_get_lib().sonare_engine_set_metronome(self._require_handle(), ctypes.byref(raw)))
 
+    @_entry("RealtimeEngine.metronome")
     def metronome(self) -> EngineMetronomeConfig:
         raw = _ffi_core.SonareEngineMetronomeConfig()
         _check(_get_lib().sonare_engine_metronome(self._require_handle(), ctypes.byref(raw)))
         return _metronome_from_c(raw)
 
+    @_entry("RealtimeEngine.count_in_end_sample")
     def count_in_end_sample(self, start_sample: int, bars: int) -> int:
         """Return the sample at which a count-in of ``bars`` bars from ``start_sample`` ends.
 
@@ -672,6 +712,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.set_clips")
     def set_clips(self, clips: Sequence[EngineClip]) -> None:
         page_providers: dict[int, list[ClipPageProvider]] = {}
         for clip in clips:
@@ -683,6 +724,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(_get_lib().sonare_engine_set_clips(self._require_handle(), raw_clips, len(clips)))
         self._clip_page_providers = page_providers
 
+    @_entry("RealtimeEngine.upsert_clip")
     def upsert_clip(self, clip: EngineClip) -> None:
         """Replace the clip with ``clip.id``, or add it, keeping every other clip.
 
@@ -697,6 +739,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         else:
             self._clip_page_providers.pop(clip.id, None)
 
+    @_entry("RealtimeEngine.remove_clip")
     def remove_clip(self, clip_id: int) -> None:
         """Remove the clip ``clip_id``, keeping every other clip.
 
@@ -715,6 +758,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(_get_lib().sonare_engine_clip_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("RealtimeEngine.set_strip_fader_db")
     def set_strip_fader_db(
         self, ref: StripRef, fader_db: float, render_frame: int | None = None
     ) -> None:
@@ -726,11 +770,13 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         param_id = self.resolve_strip_automation_id(ref, "faderDb")
         self.set_parameter(param_id, fader_db, render_frame)
 
+    @_entry("RealtimeEngine.set_bus_gain_db")
     def set_bus_gain_db(self, bus_id: int, gain_db: float, render_frame: int | None = None) -> None:
         """Set a bus's gain in decibels in realtime, through its reserved automation id."""
         param_id = self.resolve_bus_automation_id(bus_id, "faderDb")
         self.set_parameter(param_id, gain_db, render_frame)
 
+    @_entry("RealtimeEngine.set_parameter")
     def set_parameter(self, param_id: int, value: float, render_frame: int | None = None) -> None:
         """Push a live parameter value to the engine (immediate jump).
 
@@ -755,6 +801,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_parameter_smoothed")
     def set_parameter_smoothed(
         self, param_id: int, value: float, render_frame: int | None = None
     ) -> None:
@@ -776,6 +823,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_param_smoothing_ms")
     def set_param_smoothing_ms(self, smoothing_ms: float) -> None:
         """Set the ramp time (ms) of the engine-level smoother.
 
@@ -795,19 +843,19 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
-    def _lane_index_of(self, fn: str, track_id: int) -> int:
+    def _lane_index_of(self, track_id: int) -> int:
         """Lane index of ``track_id`` in set_track_lanes order; an unknown id is refused."""
         track = _narrow_int(track_id, "track_id", 0, _UINT32_MAX)
         if self._lane_order == "timeline":
             raise _invalid_state(
-                f"{fn}: the lanes were installed by a project timeline; "
-                "declare them with set_track_lanes"
+                "the lanes were installed by a project timeline; declare them with set_track_lanes"
             )
         try:
             return self._lane_order.index(track)
         except ValueError:
-            raise SonareValueError(f"{fn}: unknown track id {track}") from None
+            raise _refuse(f"unknown track id {track}") from None
 
+    @_entry("RealtimeEngine.set_track_solo_mute")
     def set_track_solo_mute(
         self, track_id: int, *, solo: bool, mute: bool, render_frame: int | None = None
     ) -> None:
@@ -819,7 +867,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         into the program output by ``process`` and kept separate by the ``*_with_monitor``
         variants; offline renders, bounces and freezes never include it.
         """
-        lane_index = self._lane_index_of("set_track_solo_mute", track_id)
+        lane_index = self._lane_index_of(track_id)
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_solo_mute"):
             raise _not_supported("libsonare was built without realtime mixer support")
@@ -833,6 +881,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_track_monitor_mode")
     def set_track_monitor_mode(
         self,
         track_id: int,
@@ -849,7 +898,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         ``*_with_monitor`` variants keep the cue separate. Offline renders,
         bounces and freezes never include the cue.
         """
-        lane_index = self._lane_index_of("set_track_monitor_mode", track_id)
+        lane_index = self._lane_index_of(track_id)
         mode_value = _track_monitor_mode_value(mode)
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_track_monitor_mode"):
@@ -866,6 +915,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_midi_clips")
     def set_midi_clips(self, clips: Sequence[EngineMidiClipSchedule]) -> None:
         """Replace the realtime MIDI clip snapshot with compiled schedules."""
         lib = _get_lib()
@@ -886,7 +936,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                     group = _narrow_int(event.group, "EngineMidiEvent.group", 0, _UINT8_MAX)
                 except (TypeError, SonareValueError) as exc:
                     raise _int_refusal(
-                        "set_midi_clips",
                         event.group,
                         "EngineMidiEvent.group",
                         f"must be in [0, {_UINT8_MAX}]",
@@ -937,6 +986,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         _ = event_arrays
 
+    @_entry("RealtimeEngine.set_midi_destination_external")
     def set_midi_destination_external(self, destination_id: int, external: bool) -> None:
         """Mark a MIDI destination for external routing (or clear it).
 
@@ -959,6 +1009,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.set_external_midi_clock_enabled")
     def set_external_midi_clock_enabled(self, enabled: bool) -> None:
         """Enable/disable forwarding MIDI clock/transport bytes to the external queue.
 
@@ -1029,6 +1080,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.set_warp_voice_capacity")
     def set_warp_voice_capacity(self, voices: int) -> None:
         """Set the number of concurrent time-stretch voices.
 
@@ -1049,6 +1101,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @_entry("RealtimeEngine.warp_voice_capacity")
     def warp_voice_capacity(self) -> int:
         """Read the current time-stretch voice capacity.
 
@@ -1063,6 +1116,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(lib.sonare_engine_warp_voice_capacity(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("RealtimeEngine.drain_external_midi")
     def drain_external_midi(self, max_records: int = 1024) -> list[ExternalMidiEvent]:
         """Drain queued external-MIDI events, lowered to MIDI 1.0 byte messages.
 
@@ -1082,8 +1136,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         if max_records <= 0:
             return []
         if max_records < _MAX_LOWERED_MIDI1_MESSAGES:
-            raise SonareValueError(
-                "drain_external_midi: max_records must be 0 or at least "
+            raise _refuse(
+                "max_records must be 0 or at least "
                 f"{_MAX_LOWERED_MIDI1_MESSAGES} to guarantee forward progress"
             )
         lib = _get_lib()
@@ -1126,6 +1180,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 )
         return results
 
+    @_entry("RealtimeEngine.transport_state")
     def transport_state(self) -> TransportState:
         """Read the current engine transport state (playing/position/ppq/tempo)."""
         lib = _get_lib()

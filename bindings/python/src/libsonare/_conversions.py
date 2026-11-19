@@ -12,6 +12,7 @@ import numpy as np
 import numpy.typing as npt
 
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
+from ._errors import _BARE_TEXT, _entry, _refuse
 from ._ffi import SonareSilenceCommonReport
 from ._narrowing import _narrow_double
 from ._runtime import (
@@ -55,24 +56,28 @@ def _unsupported_feature_symbol(symbol: str) -> SonareError:
     )
 
 
+@_entry("hz_to_mel")
 def hz_to_mel(hz: float) -> float:
     """Convert frequency in Hz to Mel scale."""
     lib = _get_lib()
     return float(lib.sonare_hz_to_mel(_to_c_float(hz, "hz")))
 
 
+@_entry("mel_to_hz")
 def mel_to_hz(mel: float) -> float:
     """Convert Mel scale value to frequency in Hz."""
     lib = _get_lib()
     return float(lib.sonare_mel_to_hz(_to_c_float(mel, "mel")))
 
 
+@_entry("hz_to_midi")
 def hz_to_midi(hz: float) -> float:
     """Convert frequency in Hz to MIDI note number."""
     lib = _get_lib()
     return float(lib.sonare_hz_to_midi(_to_c_float(hz, "hz")))
 
 
+@_entry("midi_to_hz")
 def midi_to_hz(midi: float) -> float:
     """Convert MIDI note number to frequency in Hz."""
     lib = _get_lib()
@@ -84,10 +89,15 @@ def _refused_argument(fallback_message: str) -> SonareValueError:
     lib = _get_lib()
     code = int(lib.sonare_last_error_code())
     raw = lib.sonare_last_error_message()
-    detail = raw.decode("utf-8", errors="replace") if raw else fallback_message
-    return SonareValueError(detail, code or int(ErrorCode.INVALID_PARAMETER))
+    if not raw:
+        return _refuse(fallback_message)
+    detail = raw.decode("utf-8", errors="replace")
+    exc = SonareValueError(detail, code or int(ErrorCode.INVALID_PARAMETER))
+    setattr(exc, _BARE_TEXT, detail)
+    return exc
 
 
+@_entry("hz_to_note")
 def hz_to_note(hz: float) -> str:
     """Convert frequency in Hz to note name (e.g. 'A4').
 
@@ -98,6 +108,7 @@ def hz_to_note(hz: float) -> str:
     return _call_string(lib.sonare_hz_to_note, _to_c_float(hz, "hz"))
 
 
+@_entry("note_to_hz")
 def note_to_hz(note: str) -> float:
     """Convert note name (e.g. 'A4') to frequency in Hz.
 
@@ -111,6 +122,7 @@ def note_to_hz(note: str) -> float:
     return hz
 
 
+@_entry("frames_to_time")
 def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float:
     """Convert frame count to time in seconds.
 
@@ -124,10 +136,11 @@ def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float
         )
     )
     if math.isnan(seconds):
-        raise _refused_argument("frames_to_time: sr and hop_length must be positive")
+        raise _refused_argument("sr and hop_length must be positive")
     return seconds
 
 
+@_entry("time_to_frames")
 def time_to_frames(time_sec: float, sr: int = 22050, hop_length: int = 512) -> int:
     """Convert time in seconds to frame count.
 
@@ -144,10 +157,11 @@ def time_to_frames(time_sec: float, sr: int = 22050, hop_length: int = 512) -> i
     )
     # 0 is also a real answer, so the refusal is read from the last error.
     if frames == 0 and int(lib.sonare_last_error_code()) != 0:
-        raise _refused_argument("time_to_frames: sr and hop_length must be positive")
+        raise _refused_argument("sr and hop_length must be positive")
     return frames
 
 
+@_entry("frames_to_samples")
 def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int | None = None) -> int:
     """Convert frame count to sample index.
 
@@ -163,6 +177,7 @@ def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int | None = No
     )
 
 
+@_entry("samples_to_frames")
 def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int | None = None) -> int:
     """Convert sample index to frame count.
 
@@ -178,6 +193,7 @@ def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int | None = N
     )
 
 
+@_entry("power_to_db")
 def power_to_db(
     values: Sequence[float] | list[float],
     ref: float = 1.0,
@@ -195,6 +211,7 @@ def power_to_db(
     )
 
 
+@_entry("amplitude_to_db")
 def amplitude_to_db(
     values: Sequence[float] | list[float],
     ref: float = 1.0,
@@ -212,6 +229,7 @@ def amplitude_to_db(
     )
 
 
+@_entry("db_to_power")
 def db_to_power(values: Sequence[float] | list[float], ref: float = 1.0) -> np.ndarray:
     """Convert dB values back to power; returns a float32 array shaped like ``values``."""
     return _call_float_array_transform(
@@ -219,6 +237,7 @@ def db_to_power(values: Sequence[float] | list[float], ref: float = 1.0) -> np.n
     )
 
 
+@_entry("db_to_amplitude")
 def db_to_amplitude(values: Sequence[float] | list[float], ref: float = 1.0) -> np.ndarray:
     """Convert dB values back to amplitude; returns a float32 array shaped like ``values``."""
     return _call_float_array_transform(
@@ -226,6 +245,7 @@ def db_to_amplitude(values: Sequence[float] | list[float], ref: float = 1.0) -> 
     )
 
 
+@_entry("preemphasis")
 def preemphasis(
     samples: Sequence[float] | list[float],
     coef: float = 0.97,
@@ -241,6 +261,7 @@ def preemphasis(
     )
 
 
+@_entry("deemphasis")
 def deemphasis(
     samples: Sequence[float] | list[float],
     coef: float = 0.97,
@@ -256,6 +277,7 @@ def deemphasis(
     )
 
 
+@_entry("trim_silence")
 @_guard_buffer("samples")
 def trim_silence(
     samples: Sequence[float] | list[float],
@@ -288,6 +310,7 @@ def trim_silence(
         )
 
 
+@_entry("split_silence")
 @_guard_buffer("samples")
 def split_silence(
     samples: Sequence[float] | list[float],
@@ -370,7 +393,7 @@ class SilenceCommonReport:
 
 
 def _common_silence_signals(
-    fn_name: str, signals: Sequence[Sequence[float]]
+    signals: Sequence[Sequence[float]],
 ) -> tuple[list[ctypes.Array[ctypes.c_float]], ctypes.Array[Any], ctypes.Array[ctypes.c_size_t]]:
     """Validate and marshal the signal table both common-silence splitters take.
 
@@ -378,12 +401,12 @@ def _common_silence_signals(
     caller must hold them for as long as the call runs.
     """
     if len(signals) == 0:
-        raise SonareValueError(f"{fn_name}: signals must not be empty")
+        raise _refuse("signals must not be empty")
     c_arrays: list[ctypes.Array[ctypes.c_float]] = []
     lengths: list[int] = []
     for index, signal in enumerate(signals):
-        coerced = _validate_samples(fn_name, signal, arg_name=f"signals[{index}]")
-        c_array, length = _to_c_float_array(coerced, fn_name=fn_name, arg_name=f"signals[{index}]")
+        coerced = _validate_samples(signal, arg_name=f"signals[{index}]")
+        c_array, length = _to_c_float_array(coerced, arg_name=f"signals[{index}]")
         c_arrays.append(c_array)
         lengths.append(length)
     float_ptr = ctypes.POINTER(ctypes.c_float)
@@ -394,6 +417,7 @@ def _common_silence_signals(
     return c_arrays, signal_ptrs, length_array
 
 
+@_entry("split_silence_common")
 def split_silence_common(
     signals: Sequence[Sequence[float]],
     top_db: float = 60.0,
@@ -411,8 +435,7 @@ def split_silence_common(
     signal is quiet, never mid-phrase in one of them. A single signal returns
     exactly what :func:`split_silence` does.
     """
-    fn_name = "split_silence_common"
-    c_arrays, signal_ptrs, length_array = _common_silence_signals(fn_name, signals)
+    c_arrays, signal_ptrs, length_array = _common_silence_signals(signals)
     lib = _get_lib()
     with _out_int_array(lib) as (out, out_count):
         rc = lib.sonare_split_silence_common(
@@ -443,6 +466,7 @@ class SplitSilenceCommonWithReportResult:
     """Why the intervals came out as they did."""
 
 
+@_entry("split_silence_common_with_report")
 def split_silence_common_with_report(
     signals: Sequence[Sequence[float]],
     top_db: float = 60.0,
@@ -457,8 +481,7 @@ def split_silence_common_with_report(
     entry point stays because a caller cutting takes has no use for the
     diagnosis.
     """
-    fn_name = "split_silence_common_with_report"
-    c_arrays, signal_ptrs, length_array = _common_silence_signals(fn_name, signals)
+    c_arrays, signal_ptrs, length_array = _common_silence_signals(signals)
     lib = _get_lib()
     if not hasattr(lib, "sonare_split_silence_common_ex"):
         raise _unsupported_feature_symbol("sonare_split_silence_common_ex")
@@ -487,6 +510,7 @@ def split_silence_common_with_report(
     )
 
 
+@_entry("frame_signal")
 def frame_signal(
     samples: Sequence[float] | list[float],
     frame_length: int,
@@ -518,6 +542,7 @@ def frame_signal(
         return np.ascontiguousarray(flat.reshape(frames, frame_size).T)
 
 
+@_entry("pad_center")
 def pad_center(
     values: Sequence[float] | list[float],
     target_size: int,
@@ -533,6 +558,7 @@ def pad_center(
     )
 
 
+@_entry("fix_length")
 def fix_length(
     values: Sequence[float] | list[float],
     target_size: int,
@@ -548,6 +574,7 @@ def fix_length(
     )
 
 
+@_entry("fix_frames")
 def fix_frames(
     frames: Sequence[int] | list[int],
     x_min: int = 0,
@@ -561,9 +588,9 @@ def fix_frames(
     """
     lib = _get_lib()
     # Frame indices take the int path, which keeps an integer dtype exact.
-    c_array, length = _to_c_int_array(frames, "fix_frames: frames")
+    c_array, length = _to_c_int_array(frames, "frames")
     if length == 0:
-        raise SonareValueError("fix_frames: frames must not be empty")
+        raise _refuse("frames must not be empty")
     with _out_int_array(lib) as (out, out_length):
         rc = lib.sonare_fix_frames(
             c_array,
@@ -578,6 +605,7 @@ def fix_frames(
         return _from_c_int_array(out, out_length.value)
 
 
+@_entry("peak_pick")
 def peak_pick(
     values: Sequence[float] | list[float],
     pre_max: int,
@@ -618,6 +646,7 @@ def peak_pick(
         return _from_c_int_array(out, out_length.value)
 
 
+@_entry("vector_normalize")
 def vector_normalize(
     values: Sequence[float] | list[float],
     norm: NormType = "max",
@@ -633,6 +662,7 @@ def vector_normalize(
     )
 
 
+@_entry("pcen")
 def pcen(
     values: npt.ArrayLike,
     sr: int = 22050,
@@ -649,7 +679,7 @@ def pcen(
     float32 array of the same shape.
     """
     lib = _get_lib()
-    c_array, n_bins, n_frames = _to_c_float_matrix("pcen", values, arg_name="values")
+    c_array, n_bins, n_frames = _to_c_float_matrix(values, arg_name="values")
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_pcen(
             c_array,
@@ -669,6 +699,7 @@ def pcen(
         return _from_c_float_matrix(out, n_bins, n_frames)
 
 
+@_entry("tonnetz")
 def tonnetz(chromagram: npt.ArrayLike) -> np.ndarray:
     """Compute Tonnetz from a chromagram.
 
@@ -676,7 +707,7 @@ def tonnetz(chromagram: npt.ArrayLike) -> np.ndarray:
     a float32 array of shape ``(6, n_frames)``.
     """
     lib = _get_lib()
-    c_array, n_chroma, n_frames = _to_c_float_matrix("tonnetz", chromagram, arg_name="chromagram")
+    c_array, n_chroma, n_frames = _to_c_float_matrix(chromagram, arg_name="chromagram")
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_tonnetz(
             c_array,
@@ -689,6 +720,7 @@ def tonnetz(chromagram: npt.ArrayLike) -> np.ndarray:
         return _from_c_float_columns(out, out_length.value, n_frames)
 
 
+@_entry("tempogram")
 def tempogram(
     onset_envelope: Sequence[float] | list[float],
     sr: int = 22050,
@@ -721,6 +753,7 @@ def tempogram(
         return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
+@_entry("cyclic_tempogram")
 def cyclic_tempogram(
     onset_envelope: Sequence[float] | list[float],
     sample_rate: int,
@@ -750,6 +783,7 @@ def cyclic_tempogram(
         return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
+@_entry("plp")
 def plp(
     onset_envelope: Sequence[float] | list[float],
     sr: int = 22050,
@@ -775,6 +809,7 @@ def plp(
     )
 
 
+@_entry("onset_strength")
 @_guard_buffer("samples")
 def onset_strength(
     samples: Sequence[float] | list[float],
@@ -798,6 +833,7 @@ def onset_strength(
     )
 
 
+@_entry("onset_strength_multi")
 @_guard_buffer("samples")
 def onset_strength_multi(
     samples: Sequence[float] | list[float],
@@ -828,6 +864,7 @@ def onset_strength_multi(
         return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
+@_entry("fourier_tempogram")
 def fourier_tempogram(
     onset_envelope: Sequence[float] | list[float],
     sr: int = 22050,
@@ -860,6 +897,7 @@ def fourier_tempogram(
         return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
+@_entry("tempogram_ratio")
 def tempogram_ratio(
     tempogram: npt.ArrayLike,
     sr: int = 22050,
@@ -872,7 +910,7 @@ def tempogram_ratio(
     ``factors`` is None the library default factors are used. Returns a float32
     array with one value per factor.
     """
-    matrix = _validate_matrix("tempogram_ratio", tempogram, arg_name="tempogram")
+    matrix = _validate_matrix(tempogram, arg_name="tempogram")
     win_length = int(matrix.shape[0])
     if factors is None:
         factors_ptr: ctypes.Array[ctypes.c_float] | None = None
@@ -885,9 +923,7 @@ def tempogram_ratio(
         factor_values = [_narrow_double(value, "factors") for value in factors]
         for index, factor in enumerate(factor_values):
             if not math.isfinite(factor) or factor <= 0.0:
-                raise SonareValueError(
-                    f"tempogram_ratio: factors[{index}] must be a finite positive number"
-                )
+                raise _refuse(f"factors[{index}] must be a finite positive number")
         factors_ptr, n_factors = _to_c_float_array(factor_values, arg_name="factors")
     return _call_float_array_transform(
         "sonare_tempogram_ratio",
@@ -901,6 +937,7 @@ def tempogram_ratio(
     )
 
 
+@_entry("nnls_chroma")
 @_guard_buffer("samples")
 def nnls_chroma(
     samples: Sequence[float] | list[float],
@@ -920,23 +957,23 @@ def nnls_chroma(
     # One refusal per property, through the shared narrowing rather than a local
     # copy of it: 512.7 is positive and 2 ** 31 is even, so a single message for
     # each argument names a property the offending value already has.
-    hop_length_value = _narrow_int(hop_length, "nnls_chroma: hop_length", _C_INT_MIN, _C_INT_MAX)
+    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
     if hop_length_value <= 0:
-        raise SonareValueError("nnls_chroma: hop_length must be a positive integer")
+        raise _refuse("hop_length must be a positive integer")
     stft_blend_n_fft_value = _narrow_int(
-        stft_blend_n_fft, "nnls_chroma: stft_blend_n_fft", _C_INT_MIN, _C_INT_MAX
+        stft_blend_n_fft, "stft_blend_n_fft", _C_INT_MIN, _C_INT_MAX
     )
     if stft_blend_n_fft_value < 2:
-        raise SonareValueError("nnls_chroma: stft_blend_n_fft must be at least 2")
+        raise _refuse("stft_blend_n_fft must be at least 2")
     if (stft_blend_n_fft_value & 1) != 0:
-        raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer")
+        raise _refuse("stft_blend_n_fft must be an even integer")
     try:
         blend_weight = _narrow_double(stft_blend_weight, "stft_blend_weight")
         blend_weight_c = ctypes.c_float(blend_weight).value
     except (TypeError, ValueError, OverflowError) as exc:
-        raise SonareValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]") from exc
+        raise _refuse("stft_blend_weight must be finite in [0, 1]") from exc
     if not math.isfinite(blend_weight_c) or not 0.0 <= blend_weight_c <= 1.0:
-        raise SonareValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]")
+        raise _refuse("stft_blend_weight must be finite in [0, 1]")
 
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -1007,6 +1044,7 @@ def _resample_float32(
         return _from_c_float_array(out, out_length.value)
 
 
+@_entry("resample")
 @_guard_buffer("samples")
 def resample(
     samples: Sequence[float] | list[float],

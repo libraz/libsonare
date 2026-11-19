@@ -63,7 +63,7 @@ _SEED_ROUTES = {
     route.helper: route
     for route in (
         _Route("_as_float32_buffer", 0, "arg_name", "samples"),
-        _Route("_validate_samples", 1, "arg_name", "samples"),
+        _Route("_validate_samples", 0, "arg_name", "samples"),
         _Route("_to_c_float_array", 0, "arg_name", "samples"),
         _Route("_to_c_float_array_owned", 0, "arg_name", "samples"),
     )

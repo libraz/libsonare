@@ -11,6 +11,7 @@ import ctypes
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
+from ._errors import _entry, _refuse
 from ._ffi_types_mastering_project import SonareControllerBinding, SonareSynthInstrumentBinding
 from ._project import (
     BuiltinSynthConfig,
@@ -40,7 +41,6 @@ from ._project_synth import (
 )
 from ._runtime import (
     ErrorCode,
-    SonareValueError,
     _check,
     _get_lib,
     _midi_fx_config_json,
@@ -70,15 +70,14 @@ _MAX_14 = 16383
 _UMP_SHAPE_ERROR = "words do not form a pushable UMP message"
 
 
-def _refuse_live_push_args(method: str, *args: tuple[str, int, int]) -> None:
+def _refuse_live_push_args(*args: tuple[str, int, int]) -> None:
     """Raise :class:`SonareValueError` naming the first ``(name, value, max)`` out of range."""
     for name, value, maximum in args:
         if not 0 <= value <= maximum:
-            raise SonareValueError(f"{method}: {name} must be in [0, {maximum}]")
+            raise _refuse(f"{name} must be in [0, {maximum}]")
 
 
 def _refuse_live_program_args(
-    method: str,
     group: ctypes.c_uint8,
     channel: ctypes.c_uint8,
     program: ctypes.c_uint8,
@@ -88,7 +87,6 @@ def _refuse_live_program_args(
 ) -> None:
     """Apply the program-change half of the live push argument rule."""
     _refuse_live_push_args(
-        method,
         ("group", group.value, _MAX_NIBBLE),
         ("channel", channel.value, _MAX_NIBBLE),
         ("program", program.value, _MAX_7),
@@ -96,17 +94,17 @@ def _refuse_live_program_args(
         ("bank_lsb", bank_lsb.value, _MAX_7),
     )
     if not bank_valid and (bank_msb.value != 0 or bank_lsb.value != 0):
-        raise SonareValueError(f"{method}: bank MSB and LSB must be 0 when bank-valid is false")
+        raise _refuse("bank MSB and LSB must be 0 when bank-valid is false")
 
 
-def _check_ump_push(method: str, rc: int) -> None:
+def _check_ump_push(rc: int) -> None:
     """Raise a refused UMP shape as an argument error, every other code through ``_check``.
 
     The shape rule is the engine's own, so the C call is its single judge; a live UMP push
     returns ``INVALID_PARAMETER`` for nothing else once the handle is valid.
     """
     if rc == int(ErrorCode.INVALID_PARAMETER):
-        raise SonareValueError(f"{method}: {_UMP_SHAPE_ERROR}")
+        raise _refuse(f"{_UMP_SHAPE_ERROR}")
     _check(rc)
 
 
@@ -117,6 +115,7 @@ class _EngineMidiMixin:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
 
+    @_entry("RealtimeEngine.push_midi_cc")
     def push_midi_cc(
         self,
         destination_id: int,
@@ -144,7 +143,6 @@ class _EngineMidiMixin:
         c_value = _to_c_uint8(value, "value")
         c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
         _refuse_live_push_args(
-            "push_midi_cc",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("controller", c_controller.value, _MAX_7),
@@ -162,6 +160,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_sysex")
     def push_midi_sysex(
         self,
         destination_id: int,
@@ -184,7 +183,7 @@ class _EngineMidiMixin:
         )
         buf = bytes(data)
         if not buf:
-            raise SonareValueError("SysEx data must not be empty")
+            raise _refuse("SysEx data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
         _check(
             lib.sonare_engine_push_midi_sysex(
@@ -196,6 +195,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_ump")
     def push_midi_ump(
         self,
         destination_id: int,
@@ -221,7 +221,6 @@ class _EngineMidiMixin:
         c_destination = _to_c_uint32(destination_id, "destination_id")
         c_words, count = _ump_words_to_c(words)
         _check_ump_push(
-            "push_midi_ump",
             lib.sonare_engine_push_midi_ump(
                 handle,
                 c_destination,
@@ -231,6 +230,7 @@ class _EngineMidiMixin:
             ),
         )
 
+    @_entry("RealtimeEngine.push_midi_program")
     def push_midi_program(
         self,
         destination_id: int,
@@ -276,9 +276,7 @@ class _EngineMidiMixin:
         c_bank_msb = _to_c_uint8(bank_msb, "bank_msb")
         c_bank_lsb = _to_c_uint8(bank_lsb, "bank_lsb")
         c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
-        _refuse_live_program_args(
-            "push_midi_program", c_group, c_channel, c_program, bank_valid, c_bank_msb, c_bank_lsb
-        )
+        _refuse_live_program_args(c_group, c_channel, c_program, bank_valid, c_bank_msb, c_bank_lsb)
         _check(
             lib.sonare_engine_push_midi_program(
                 handle,
@@ -293,6 +291,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_panic")
     def push_midi_panic(self, render_frame: int | None = None) -> None:
         """Queue a MIDI panic (all-notes-off) releasing every sounding note.
 
@@ -311,6 +310,7 @@ class _EngineMidiMixin:
 
     # -- live MIDI instruments / CC bindings / input source -----------------
 
+    @_entry("RealtimeEngine.set_builtin_instrument")
     def set_builtin_instrument(
         self, config: BuiltinSynthConfig | None = None, destination_id: int = 0
     ) -> None:
@@ -335,6 +335,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_synth_instrument")
     def set_synth_instrument(
         self,
         patch: SynthPatch | str | None = None,
@@ -393,6 +394,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.resolve_instrument_automation_id")
     def resolve_instrument_automation_id(self, destination_id: int, param_name: str) -> int:
         """Resolve a hosted instrument's continuous parameter to its automation id.
 
@@ -445,6 +447,7 @@ class _EngineMidiMixin:
         )
         return int(out_id.value)
 
+    @_entry("RealtimeEngine.load_sound_font")
     def load_sound_font(self, data: bytes | bytearray | memoryview) -> None:
         """Load (parse) SoundFont 2 bytes into the engine.
 
@@ -459,7 +462,7 @@ class _EngineMidiMixin:
         )
         buf = bytes(data)
         if not buf:
-            raise SonareValueError("SoundFont data must not be empty")
+            raise _refuse("SoundFont data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
         _check(
             lib.sonare_engine_load_soundfont(
@@ -467,6 +470,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_sf2_instrument")
     def set_sf2_instrument(
         self, config: Sf2InstrumentConfig | None = None, destination_id: int = 0
     ) -> None:
@@ -493,6 +497,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.clear_midi_instrument")
     def clear_midi_instrument(self, destination_id: int = 0) -> None:
         """Clear any realtime instrument bound to ``destination_id`` (default 0)."""
         lib = _get_lib()
@@ -522,6 +527,7 @@ class _EngineMidiMixin:
 
     # -- controller profiles -------------------------------------------------
 
+    @_entry("RealtimeEngine.set_controller_profile")
     def set_controller_profile(self, destination_id: int, preset_name: str) -> None:
         """Replace the instrument's controller profile with a named preset.
 
@@ -550,6 +556,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.bind_controller")
     def bind_controller(
         self,
         destination_id: int,
@@ -611,6 +618,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.clear_controller_bindings")
     def clear_controller_bindings(self, destination_id: int) -> None:
         """Drop every binding of the instrument's controller profile.
 
@@ -629,6 +637,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.controller_binding_count")
     def controller_binding_count(self, destination_id: int) -> int:
         """Return the bindings the instrument's controller profile holds."""
         lib = _get_lib()
@@ -647,6 +656,7 @@ class _EngineMidiMixin:
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.set_controller_velocity_meaningful")
     def set_controller_velocity_meaningful(self, destination_id: int, meaningful: bool) -> None:
         """Say whether note-on velocity is expression for this instrument.
 
@@ -669,6 +679,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.controller_velocity_meaningful")
     def controller_velocity_meaningful(self, destination_id: int) -> bool:
         """Read back :meth:`set_controller_velocity_meaningful`."""
         lib = _get_lib()
@@ -687,6 +698,7 @@ class _EngineMidiMixin:
         )
         return out.value != 0
 
+    @_entry("RealtimeEngine.set_controller_note_tracking")
     def set_controller_note_tracking(
         self, destination_id: int, dimension: MpeDimension, tracking: NoteTracking
     ) -> None:
@@ -728,6 +740,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.controller_note_tracking")
     def controller_note_tracking(
         self, destination_id: int, dimension: MpeDimension
     ) -> NoteTracking:
@@ -755,6 +768,7 @@ class _EngineMidiMixin:
 
     # -- articulation --------------------------------------------------------
 
+    @_entry("RealtimeEngine.set_articulation")
     def set_articulation(
         self, destination_id: int, channel: int, articulation: Articulation
     ) -> None:
@@ -800,6 +814,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_part_rig")
     def set_part_rig(
         self,
         destination_id: int,
@@ -835,6 +850,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.articulation")
     def articulation(self, destination_id: int, channel: int) -> Articulation:
         """Read back :meth:`set_articulation` as its canonical name.
 
@@ -856,6 +872,7 @@ class _EngineMidiMixin:
         )
         return _articulation_name(int(out.value))
 
+    @_entry("RealtimeEngine.legato_fallback_count")
     def legato_fallback_count(self, destination_id: int) -> int:
         """Times a legato continuation was asked for and refused.
 
@@ -888,6 +905,7 @@ class _EngineMidiMixin:
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.bind_midi_cc")
     def bind_midi_cc(self, binding: MidiCcBinding) -> None:
         """Bind a 7/14-bit CC, RPN or NRPN descriptor to a live engine parameter.
 
@@ -905,6 +923,7 @@ class _EngineMidiMixin:
             lib.sonare_engine_bind_midi_cc_binding(self._require_handle(), ctypes.byref(c_binding))
         )
 
+    @_entry("RealtimeEngine.clear_midi_cc_bindings")
     def clear_midi_cc_bindings(self) -> None:
         """Clear all live MIDI CC to parameter bindings."""
         lib = _get_lib()
@@ -928,6 +947,7 @@ class _EngineMidiMixin:
         _check(lib.sonare_engine_midi_cc_binding_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("RealtimeEngine.set_midi_fx")
     def set_midi_fx(self, destination_id: int, config: MidiFxConfig) -> None:
         """Install/replace a live non-destructive MIDI-FX insert for ``destination_id``.
 
@@ -947,6 +967,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.clear_midi_fx")
     def clear_midi_fx(self, destination_id: int = 0) -> None:
         """Clear the live MIDI-FX insert for ``destination_id`` (default 0)."""
         lib = _get_lib()
@@ -959,6 +980,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_midi_input_source")
     def set_midi_input_source(self, destination_id: int = 0) -> None:
         """Enable the engine-owned live MIDI input source for ``destination_id``.
 
@@ -979,6 +1001,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.clear_midi_input_source")
     def clear_midi_input_source(self) -> None:
         """Clear the engine-owned live MIDI input source."""
         lib = _get_lib()
@@ -1004,6 +1027,7 @@ class _EngineMidiMixin:
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.push_midi_input_note_on")
     def push_midi_input_note_on(
         self,
         group: int,
@@ -1031,7 +1055,6 @@ class _EngineMidiMixin:
         c_velocity = _to_c_uint8(velocity, "velocity")
         c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
-            "push_midi_input_note_on",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("note", c_note.value, _MAX_7),
@@ -1048,6 +1071,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_input_note_off")
     def push_midi_input_note_off(
         self,
         group: int,
@@ -1075,7 +1099,6 @@ class _EngineMidiMixin:
         c_velocity = _to_c_uint8(velocity, "velocity")
         c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
-            "push_midi_input_note_off",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("note", c_note.value, _MAX_7),
@@ -1092,6 +1115,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_input_cc")
     def push_midi_input_cc(
         self,
         group: int,
@@ -1117,7 +1141,6 @@ class _EngineMidiMixin:
         c_value = _to_c_uint8(value, "value")
         c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
-            "push_midi_input_cc",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("controller", c_controller.value, _MAX_7),
@@ -1134,6 +1157,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_input_pitch_bend")
     def push_midi_input_pitch_bend(
         self,
         group: int,
@@ -1164,7 +1188,6 @@ class _EngineMidiMixin:
         c_bend14 = _to_c_uint16(bend14, "bend14")
         c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
-            "push_midi_input_pitch_bend",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("bend14", c_bend14.value, _MAX_14),
@@ -1179,6 +1202,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_input_channel_pressure")
     def push_midi_input_channel_pressure(
         self,
         group: int,
@@ -1207,7 +1231,6 @@ class _EngineMidiMixin:
         c_pressure = _to_c_uint8(pressure, "pressure")
         c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
-            "push_midi_input_channel_pressure",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("pressure", c_pressure.value, _MAX_7),
@@ -1222,6 +1245,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_input_poly_pressure")
     def push_midi_input_poly_pressure(
         self,
         group: int,
@@ -1253,7 +1277,6 @@ class _EngineMidiMixin:
         c_pressure = _to_c_uint8(pressure, "pressure")
         c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
-            "push_midi_input_poly_pressure",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("note", c_note.value, _MAX_7),
@@ -1270,6 +1293,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_input_ump")
     def push_midi_input_ump(self, words: Iterable[int], offset_in_block_samples: int = 0) -> None:
         """Queue a raw UMP message into the live MIDI input source.
 
@@ -1290,7 +1314,6 @@ class _EngineMidiMixin:
         handle = self._require_handle()
         c_words, count = _ump_words_to_c(words)
         _check_ump_push(
-            "push_midi_input_ump",
             lib.sonare_engine_push_midi_input_ump(
                 handle,
                 c_words,
@@ -1299,6 +1322,7 @@ class _EngineMidiMixin:
             ),
         )
 
+    @_entry("RealtimeEngine.push_midi_input_program")
     def push_midi_input_program(
         self,
         group: int,
@@ -1345,7 +1369,6 @@ class _EngineMidiMixin:
         c_bank_lsb = _to_c_uint8(bank_lsb, "bank_lsb")
         c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_program_args(
-            "push_midi_input_program",
             c_group,
             c_channel,
             c_program,
@@ -1366,6 +1389,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_note_on")
     def push_midi_note_on(
         self,
         destination_id: int,
@@ -1391,7 +1415,6 @@ class _EngineMidiMixin:
         c_velocity = _to_c_uint8(velocity, "velocity")
         c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
         _refuse_live_push_args(
-            "push_midi_note_on",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("note", c_note.value, _MAX_7),
@@ -1409,6 +1432,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_note_off")
     def push_midi_note_off(
         self,
         destination_id: int,
@@ -1434,7 +1458,6 @@ class _EngineMidiMixin:
         c_velocity = _to_c_uint8(velocity, "velocity")
         c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
         _refuse_live_push_args(
-            "push_midi_note_off",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("note", c_note.value, _MAX_7),
@@ -1452,6 +1475,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_pitch_bend")
     def push_midi_pitch_bend(
         self,
         destination_id: int,
@@ -1480,7 +1504,6 @@ class _EngineMidiMixin:
         c_bend14 = _to_c_uint16(bend14, "bend14")
         c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
         _refuse_live_push_args(
-            "push_midi_pitch_bend",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("bend14", c_bend14.value, _MAX_14),
@@ -1496,6 +1519,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_channel_pressure")
     def push_midi_channel_pressure(
         self,
         destination_id: int,
@@ -1522,7 +1546,6 @@ class _EngineMidiMixin:
         c_pressure = _to_c_uint8(pressure, "pressure")
         c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
         _refuse_live_push_args(
-            "push_midi_channel_pressure",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("pressure", c_pressure.value, _MAX_7),
@@ -1538,6 +1561,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @_entry("RealtimeEngine.push_midi_poly_pressure")
     def push_midi_poly_pressure(
         self,
         destination_id: int,
@@ -1567,7 +1591,6 @@ class _EngineMidiMixin:
         c_pressure = _to_c_uint8(pressure, "pressure")
         c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
         _refuse_live_push_args(
-            "push_midi_poly_pressure",
             ("group", c_group.value, _MAX_NIBBLE),
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("note", c_note.value, _MAX_7),

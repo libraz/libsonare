@@ -82,13 +82,13 @@ def test_an_unknown_or_legacy_profile_names_the_accepted_tokens(value: str) -> N
 
 
 def test_a_mode_list_resolves_each_entry_and_names_a_group() -> None:
-    assert _mode_values("detect_key", ["dorian", "locrian"]) == [2, 6]
-    assert _mode_values("detect_key", "majorMinor") == [0, 1]
-    assert _mode_values("detect_key", "all") == list(range(7))
+    assert _mode_values(["dorian", "locrian"]) == [2, 6]
+    assert _mode_values("majorMinor") == [0, 1]
+    assert _mode_values("all") == list(range(7))
     with pytest.raises(TypeError):
-        _mode_values("detect_key", [1])  # type: ignore[list-item]
+        _mode_values([1])  # type: ignore[list-item]
     with pytest.raises(SonareValueError):
-        _mode_values("detect_key", "major-minor")
+        _mode_values("major-minor")
 
 
 def test_the_resolver_returns_the_index_in_the_given_tokens() -> None:

@@ -968,7 +968,7 @@ def test_split_note_refuses_an_index_past_size_t_rather_than_splitting_the_folde
     assert _spans(first) != _spans(second)
 
     for value, _folds_to in WRAPPING_NOTE_INDICES:
-        with pytest.raises(SonareValueError, match=r"^index must be"):
+        with pytest.raises(SonareValueError, match=r"^split_note: index must be"):
             libsonare.split_note(audio, SR, f0_hz, FRAME_RATE, notes, value, 13, voiced=voiced)
 
     # What makes 2**64 + 1 the interesting value rather than a merely huge one:
@@ -993,16 +993,16 @@ def test_merge_notes_refuses_a_run_past_size_t_rather_than_joining_the_folded_on
     assert _spans(low) != _spans(high)
 
     for value, _folds_to in WRAPPING_NOTE_INDICES:
-        with pytest.raises(SonareValueError, match=r"^first must be"):
+        with pytest.raises(SonareValueError, match=r"^merge_notes: first must be"):
             libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, value, 1, voiced=voiced)
-        with pytest.raises(SonareValueError, match=r"^last must be"):
+        with pytest.raises(SonareValueError, match=r"^merge_notes: last must be"):
             libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 0, value, voiced=voiced)
 
     # The silent path a refusal-shaped assertion cannot reach: 2**64 and
     # 2**64 + 1 fold to 0 and 1, the run the control merged, so an unchecked
     # pair returns that result rather than failing.
     assert _spans(low) == [(0, 17), (19, 24)]
-    with pytest.raises(SonareValueError, match=r"^first must be"):
+    with pytest.raises(SonareValueError, match=r"^merge_notes: first must be"):
         libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 2**64, 2**64 + 1, voiced=voiced)
 
 

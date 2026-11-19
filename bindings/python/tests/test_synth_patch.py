@@ -391,7 +391,10 @@ def test_an_empty_preset_name_is_refused_rather_than_read_as_the_init_patch(pres
 def test_bouncing_with_an_empty_preset_string_is_refused() -> None:
     project = _build_midi_only_project()
     try:
-        with pytest.raises(SonareValueError, match="^synth patch preset must not be empty"):
+        with pytest.raises(
+            SonareValueError,
+            match="^Project.bounce_with_synth_instrument: synth patch preset must not be empty",
+        ):
             project.bounce_with_synth_instrument("", total_frames=4800)
     finally:
         project.close()

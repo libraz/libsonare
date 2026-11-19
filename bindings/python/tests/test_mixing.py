@@ -311,7 +311,10 @@ def test_read_goniometer_latest_bounds_the_buffer_independently_of_max_points(mi
     # Not a finite non-negative integer -> a catchable error, never a silent
     # clamp to zero, matching what Node and WASM do with the same value.
     for invalid in (-1, -4096, 1.5):
-        with pytest.raises(ValueError, match=r"^max_points must be an integer in \[0, "):
+        with pytest.raises(
+            ValueError,
+            match=r"^Mixer\.read_goniometer_latest: max_points must be an integer in \[0, ",
+        ):
             mixer.read_goniometer_latest("vocal", invalid)
     with pytest.raises(TypeError, match="max_points"):
         mixer.read_goniometer_latest("vocal", True)

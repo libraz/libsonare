@@ -11344,7 +11344,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_griffin_lim_infers
 [[entry]]
 kind = "option"
 old = "griffin_lim(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
+changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
@@ -11352,7 +11352,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse
 [[entry]]
 kind = "option"
 old = "mel_to_audio(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
+changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
@@ -11360,7 +11360,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse
 [[entry]]
 kind = "option"
 old = "mfcc_to_audio(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
+changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
@@ -11368,7 +11368,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse
 [[entry]]
 kind = "option"
 old = "hpss(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_hop_is_a_quarter_of_n_fft"
@@ -11376,7 +11376,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_ho
 [[entry]]
 kind = "option"
 old = "hpss_with_residual(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_hop_is_a_quarter_of_n_fft"
@@ -11384,7 +11384,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_ho
 [[entry]]
 kind = "option"
 old = "time_stretch(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_time_stretch_hop_is_a_quarter_of_n_fft"
@@ -11392,7 +11392,7 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_time_st
 [[entry]]
 kind = "option"
 old = "pitch_shift(hop_length)"
-changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_pitch_shift_hop_is_a_quarter_of_n_fft"
@@ -12345,7 +12345,7 @@ test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_sep
 [[entry]]
 kind = "option"
 old = "extract_percussive_events(hop_length)"
-changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default; an omitted hop is n_fft / 4 (at least 1), so it moves with a given n_fft"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default; an omitted hop is n_fft / 4, so it moves with a given n_fft"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
@@ -12377,7 +12377,7 @@ test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_sep
 [[entry]]
 kind = "option"
 old = "render_percussive_events(hop_length)"
-changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default; an omitted hop is n_fft / 4 (at least 1), so it moves with a given n_fft"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default; an omitted hop is n_fft / 4, so it moves with a given n_fft"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"

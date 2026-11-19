@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonareChromaResult,
     SonareMelResult,
@@ -16,7 +17,6 @@ from ._ffi import (
     SonareStftResult,
 )
 from ._runtime import (
-    SonareValueError,
     _call_float_array_transform,
     _check,
     _from_c_float_array,
@@ -44,6 +44,7 @@ from .types import (
 )
 
 
+@_entry("tone")
 def tone(
     frequency: float = 440.0,
     sr: int = 22050,
@@ -68,6 +69,7 @@ def tone(
         return _from_c_float_array(out, out_length.value)
 
 
+@_entry("chirp")
 def chirp(
     fmin: float = 440.0,
     fmax: float = 880.0,
@@ -92,6 +94,7 @@ def chirp(
         return _from_c_float_array(out, out_length.value)
 
 
+@_entry("clicks")
 def clicks(
     times: Sequence[float] | list[float],
     sr: int = 22050,
@@ -121,6 +124,7 @@ def clicks(
         return _from_c_float_array(out, out_length.value)
 
 
+@_entry("stft")
 def stft(
     samples: Sequence[float] | list[float],
     sr: int = 22050,
@@ -140,7 +144,7 @@ def stft(
         ``(n_fft // 2 + 1, n_frames)``.
     """
     lib = _get_lib()
-    sample_buf = _validate_samples("stft", samples)
+    sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareStftResult()
     rc = lib.sonare_stft(
@@ -164,6 +168,7 @@ def stft(
         lib.sonare_free_stft_result(ctypes.byref(out))
 
 
+@_entry("stft_db")
 @_guard_buffer("samples")
 def stft_db(
     samples: Sequence[float] | list[float],
@@ -211,6 +216,7 @@ def stft_db(
 # ============================================================================
 
 
+@_entry("mel_spectrogram")
 def mel_spectrogram(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -240,7 +246,7 @@ def mel_spectrogram(
         ``(n_mels, n_frames)``.
     """
     lib = _get_lib()
-    sample_buf = _validate_samples("mel_spectrogram", samples)
+    sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareMelResult()
     rc = lib.sonare_mel_spectrogram_ex(
@@ -271,6 +277,7 @@ def mel_spectrogram(
         lib.sonare_free_mel_result(ctypes.byref(out))
 
 
+@_entry("mfcc")
 def mfcc(
     samples: Sequence[float] | list[float],
     sr: int = 22050,
@@ -301,7 +308,7 @@ def mfcc(
         MfccResult whose coefficients have shape ``(n_mfcc, n_frames)``.
     """
     lib = _get_lib()
-    sample_buf = _validate_samples("mfcc", samples)
+    sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareMfccResult()
     rc = lib.sonare_mfcc_ex(
@@ -335,6 +342,7 @@ def mfcc(
         lib.sonare_free_mfcc_result(ctypes.byref(out))
 
 
+@_entry("mel_delta")
 def mel_delta(features: npt.ArrayLike, width: int = 9) -> np.ndarray:
     """Compute first-order regression deltas of a feature matrix.
 
@@ -342,9 +350,9 @@ def mel_delta(features: npt.ArrayLike, width: int = 9) -> np.ndarray:
     a float32 array of the same shape.
     """
     if width < 3 or width % 2 == 0:
-        raise SonareValueError("mel_delta: width must be an odd integer of at least 3")
+        raise _refuse("width must be an odd integer of at least 3")
     lib = _get_lib()
-    c_array, n_features, n_frames = _to_c_float_matrix("mel_delta", features, arg_name="features")
+    c_array, n_features, n_frames = _to_c_float_matrix(features, arg_name="features")
     out = ctypes.POINTER(ctypes.c_float)()
     rc = lib.sonare_mel_delta(
         c_array,
@@ -366,6 +374,7 @@ def mel_delta(features: npt.ArrayLike, width: int = 9) -> np.ndarray:
 # ============================================================================
 
 
+@_entry("chroma")
 def chroma(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -393,7 +402,7 @@ def chroma(
         the mean energy of each class.
     """
     lib = _get_lib()
-    sample_buf = _validate_samples("chroma", samples)
+    sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareChromaResult()
     rc = lib.sonare_chroma(
@@ -429,7 +438,7 @@ def _chroma_variant(
     # ``fn_name`` is the C symbol; ``wrapper_name`` is the public Python name the
     # caller used, so the preflight blames the entry point rather than the ABI.
     lib = _get_lib()
-    sample_buf = _validate_samples(wrapper_name, samples)
+    sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareChromaResult()
     args: list[object] = [
@@ -455,6 +464,7 @@ def _chroma_variant(
         lib.sonare_free_chroma_result(ctypes.byref(out))
 
 
+@_entry("chroma_cens")
 def chroma_cens(
     samples: Sequence[float] | list[float],
     sr: int = 22050,
@@ -489,6 +499,7 @@ def chroma_cens(
     )
 
 
+@_entry("chroma_cqt")
 def chroma_cqt(
     samples: Sequence[float] | list[float],
     sr: int = 22050,
@@ -523,6 +534,7 @@ def chroma_cqt(
     )
 
 
+@_entry("bass_chroma")
 def bass_chroma(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -559,6 +571,7 @@ def bass_chroma(
 # ============================================================================
 
 
+@_entry("spectral_centroid")
 @_guard_buffer("samples")
 def spectral_centroid(
     samples: Sequence[float] | list[float],
@@ -586,6 +599,7 @@ def spectral_centroid(
     )
 
 
+@_entry("spectral_bandwidth")
 @_guard_buffer("samples")
 def spectral_bandwidth(
     samples: Sequence[float] | list[float],
@@ -616,6 +630,7 @@ def spectral_bandwidth(
     )
 
 
+@_entry("spectral_flux")
 @_guard_buffer("samples")
 def spectral_flux(
     samples: Sequence[float] | list[float],
@@ -635,6 +650,7 @@ def spectral_flux(
     )
 
 
+@_entry("onset_backtrack")
 def onset_backtrack(
     events: Sequence[int] | list[int], energy: Sequence[float] | list[float]
 ) -> np.ndarray:
@@ -656,6 +672,7 @@ def onset_backtrack(
         return _from_c_int_array(out, out_count.value)
 
 
+@_entry("spectral_rolloff")
 @_guard_buffer("samples")
 def spectral_rolloff(
     samples: Sequence[float] | list[float],
@@ -686,6 +703,7 @@ def spectral_rolloff(
     )
 
 
+@_entry("spectral_flatness")
 @_guard_buffer("samples")
 def spectral_flatness(
     samples: Sequence[float] | list[float],
@@ -713,6 +731,7 @@ def spectral_flatness(
     )
 
 
+@_entry("zero_crossing_rate")
 @_guard_buffer("samples")
 def zero_crossing_rate(
     samples: Sequence[float] | list[float],
@@ -740,6 +759,7 @@ def zero_crossing_rate(
     )
 
 
+@_entry("rms_energy")
 @_guard_buffer("samples")
 def rms_energy(
     samples: Sequence[float] | list[float],
@@ -772,6 +792,7 @@ def rms_energy(
 # ============================================================================
 
 
+@_entry("spectral_contrast")
 @_guard_buffer("samples")
 def spectral_contrast(
     samples: Sequence[float] | list[float],
@@ -830,6 +851,7 @@ def spectral_contrast(
         return _from_c_float_array(out, rows * cols).reshape(rows, cols)
 
 
+@_entry("poly_features")
 @_guard_buffer("samples")
 def poly_features(
     samples: Sequence[float] | list[float],
@@ -873,6 +895,7 @@ def poly_features(
         return _from_c_float_array(out, rows * cols).reshape(rows, cols)
 
 
+@_entry("zero_crossings")
 def zero_crossings(
     samples: Sequence[float] | list[float],
     threshold: float = 1e-10,
@@ -896,7 +919,7 @@ def zero_crossings(
     # A non-finite sample does not merely propagate here: it compares unequal to
     # itself, so the sign test fabricates crossings on both sides of it that are
     # absent from the same signal without the NaN.
-    sample_buf = _validate_samples("zero_crossings", samples)
+    sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     with _out_int_array(lib) as (out, out_count):
         rc = lib.sonare_zero_crossings(
@@ -913,6 +936,7 @@ def zero_crossings(
         return _from_c_int_array(out, out_count.value)
 
 
+@_entry("reassigned_spectrogram")
 @_guard_buffer("samples")
 def reassigned_spectrogram(
     samples: Sequence[float] | list[float],
@@ -927,7 +951,7 @@ def reassigned_spectrogram(
     Each field is a float32 array of shape ``(n_bins, n_frames)``.
     """
     if ref_power < 0.0 or not np.isfinite(ref_power):
-        raise SonareValueError("reassigned_spectrogram: ref_power must be finite and non-negative")
+        raise _refuse("ref_power must be finite and non-negative")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareReassignedSpectrogramResult()

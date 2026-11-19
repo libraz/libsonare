@@ -17,6 +17,7 @@ from ._cancellation import (
     raise_callback_error,
 )
 from ._effects_repair_common import _linked_channel_planes, _linked_output_planes
+from ._errors import _entry, _refuse_type
 from ._ffi import SonareMasteringProgressCallback
 from ._result_records import _camel, _fields, _snake
 from ._runtime import (
@@ -150,6 +151,7 @@ def _take_string(lib: ctypes.CDLL, pointer: ctypes.c_char_p) -> str:
             lib.sonare_free_string(pointer)
 
 
+@_entry("mastering_repair_analyze")
 def mastering_repair_analyze(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     sample_rate: int,
@@ -194,7 +196,7 @@ def mastering_repair_analyze(
     symbol = "sonare_mastering_repair_analyze"
     if not hasattr(lib, symbol):
         raise _unsupported_effect_symbol(symbol)
-    planes = _linked_channel_planes("mastering_repair_analyze", channels)
+    planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     request = json.dumps({"preferStreamingSafe": bool(prefer_streaming_safe)})
     json_ptr = ctypes.c_char_p()
@@ -211,6 +213,7 @@ def mastering_repair_analyze(
     return _repair_analysis_from_wire(json.loads(_take_string(lib, json_ptr)))
 
 
+@_entry("mastering_repair_apply")
 def mastering_repair_apply(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     sample_rate: int,
@@ -272,8 +275,8 @@ def mastering_repair_apply(
     if isinstance(stages, (str, bytes, Mapping)) or not all(
         isinstance(stage, stage_types) for stage in stages
     ):
-        raise TypeError("mastering_repair_apply: stages must be a sequence of stage records")
-    planes = _linked_channel_planes("mastering_repair_apply", channels)
+        raise _refuse_type("stages must be a sequence of stage records")
+    planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     stages_json = json.dumps([_stage_to_wire(stage) for stage in stages])
     out_buffers, out_ptrs = _linked_output_planes(len(arrays), frame_count)

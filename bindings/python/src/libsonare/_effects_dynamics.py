@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from ._errors import SonareValueError
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonareCompressorConfig,
     SonareGateConfig,
@@ -43,7 +43,7 @@ def _high_pass_corner(value: object, name: str, *, positive: bool) -> float:
     corner = _narrow_double(value, name)
     if corner < 0 or (positive and corner == 0):
         bound = "positive" if positive else "non-negative"
-        raise SonareValueError(f"{name} must be {bound} (omit it for no high-pass)")
+        raise _refuse(f"{name} must be {bound} (omit it for no high-pass)")
     return corner
 
 
@@ -52,14 +52,12 @@ def _run_dynamics(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     config: Any,
-    *,
-    fn_name: str = "mastering_dynamics",
 ) -> DynamicsProcessorResult:
     """Invoke a dynamics ``(samples, sr, &config, &out, &out_length, &out_latency)``
     C call and return its :class:`DynamicsProcessorResult`.
     """
     lib = _get_lib()
-    in_buf = _validate_samples(fn_name, samples)
+    in_buf = _validate_samples(samples)
     length = int(in_buf.shape[0])
     c_array = in_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
     latency = ctypes.c_int()
@@ -80,6 +78,7 @@ def _run_dynamics(
         )
 
 
+@_entry("mastering_dynamics_compressor")
 def mastering_dynamics_compressor(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
@@ -140,10 +139,10 @@ def mastering_dynamics_compressor(
         samples,
         sample_rate,
         config,
-        fn_name="mastering_dynamics_compressor",
     )
 
 
+@_entry("mastering_dynamics_gate")
 def mastering_dynamics_gate(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
@@ -191,10 +190,10 @@ def mastering_dynamics_gate(
         samples,
         sample_rate,
         config,
-        fn_name="mastering_dynamics_gate",
     )
 
 
+@_entry("mastering_dynamics_transient_shaper")
 def mastering_dynamics_transient_shaper(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
@@ -247,5 +246,4 @@ def mastering_dynamics_transient_shaper(
         samples,
         sample_rate,
         config,
-        fn_name="mastering_dynamics_transient_shaper",
     )

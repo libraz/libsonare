@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonareSpectralEditConfig,
     SonareSpectralRegionOp,
 )
 from ._narrowing import _narrow_double
 from ._runtime import (
-    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -78,10 +78,11 @@ def _spectral_high_hz(value: float | None) -> float:
         return 0.0
     high_hz = _narrow_double(value, "op.high_hz")
     if high_hz <= 0:
-        raise SonareValueError("op.high_hz must be positive; omit it for Nyquist")
+        raise _refuse("op.high_hz must be positive; omit it for Nyquist")
     return high_hz
 
 
+@_entry("spectral_edit")
 @_guard_buffer("samples")
 def spectral_edit(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -134,19 +135,19 @@ def spectral_edit(
     # one is narrowed first: int(0.5) is that 0, so a fraction would run at the default.
     c_n_fft = c_hop = c_heal = 0
     if n_fft is not None:
-        c_n_fft = _validate_c_int_field("spectral_edit", n_fft, "n_fft")
+        c_n_fft = _validate_c_int_field(n_fft, "n_fft")
         # spectral_edit.cpp requires a power of two, stricter than the shared even-size rule.
         _require_power_of_two(c_n_fft, "n_fft")
         if c_n_fft < 4:
-            raise SonareValueError("n_fft must be a power of two >= 4")
+            raise _refuse("n_fft must be a power of two >= 4")
     if hop_length is not None:
-        c_hop = _validate_c_int_field("spectral_edit", hop_length, "hop_length")
+        c_hop = _validate_c_int_field(hop_length, "hop_length")
         if c_hop <= 0 or (c_n_fft and c_hop > c_n_fft // 2):
-            raise SonareValueError("hop_length must satisfy 0 < hop_length <= n_fft / 2")
+            raise _refuse("hop_length must satisfy 0 < hop_length <= n_fft / 2")
     if heal_radius_frames is not None:
-        c_heal = _validate_c_int_field("spectral_edit", heal_radius_frames, "heal_radius_frames")
+        c_heal = _validate_c_int_field(heal_radius_frames, "heal_radius_frames")
         if c_heal <= 0:
-            raise SonareValueError("heal_radius_frames must be positive")
+            raise _refuse("heal_radius_frames must be positive")
     window_value = _token_ordinal(window, _WINDOW_TYPES, "window")
 
     lib = _get_lib()
@@ -169,15 +170,15 @@ def spectral_edit(
                 op.start_sample,
                 op.start_sec,
                 sample_rate,
-                f"spectral_edit: ops[{i}].start_sample",
-                f"spectral_edit: ops[{i}].start_sec",
+                f"ops[{i}].start_sample",
+                f"ops[{i}].start_sec",
             )
             end_sample = _resolve_sample_bound(
                 op.end_sample,
                 op.end_sec,
                 sample_rate,
-                f"spectral_edit: ops[{i}].end_sample",
-                f"spectral_edit: ops[{i}].end_sec",
+                f"ops[{i}].end_sample",
+                f"ops[{i}].end_sec",
             )
             c_ops[i] = SonareSpectralRegionOp(
                 start_sample=0 if start_sample is None else start_sample,

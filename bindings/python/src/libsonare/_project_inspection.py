@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from ._engine_conversions import _marker_kind_name, _marker_kind_value
+from ._errors import _entry, _refuse, _refuse_type
 from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_model import (
@@ -49,7 +50,6 @@ from ._runtime import (
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
     SonareProjectTrack,
-    SonareValueError,
     _check,
     _get_lib,
     _guard_buffer,
@@ -110,6 +110,7 @@ class _ProjectInspectionMixin:
             options.include_octave_candidates = 1 if include_octave_candidates else 0
         return options
 
+    @_entry("Project.analyze_tempo")
     @_guard_buffer("audio")
     def analyze_tempo(
         self,
@@ -182,6 +183,7 @@ class _ProjectInspectionMixin:
             for candidate in candidates[: min(count.value, len(candidates))]
         ]
 
+    @_entry("Project.auto_tempo")
     @_guard_buffer("audio")
     def auto_tempo(
         self,
@@ -229,6 +231,7 @@ class _ProjectInspectionMixin:
         )
         return float(out_bpm.value)
 
+    @_entry("Project.snap_to_grid")
     def snap_to_grid(self, ppq: float, strength: float = 1.0, division: int = 1) -> float:
         """Snap a PPQ coordinate to a project-grid line.
 
@@ -248,6 +251,7 @@ class _ProjectInspectionMixin:
         )
         return float(out_ppq.value)
 
+    @_entry("Project.annotate_keys")
     def annotate_keys(self, keys: Sequence[Mapping[str, object]]) -> None:
         """Replace the project's key annotation stream via an undoable command.
 
@@ -275,6 +279,7 @@ class _ProjectInspectionMixin:
             )
         )
 
+    @_entry("Project.annotate_chords")
     def annotate_chords(self, chords: Sequence[dict[str, object]]) -> None:
         """Replace the project's chord-symbol annotation stream (undoable command).
 
@@ -296,7 +301,7 @@ class _ProjectInspectionMixin:
                 c = _mapping_keys(chord, _CHORD_KEYS, f"chords[{i}]")
                 extension_values = c.get("extensions", []) or []
                 if not isinstance(extension_values, Sequence) or isinstance(extension_values, str):
-                    raise TypeError("chord extensions must be a sequence")
+                    raise _refuse_type("chord extensions must be a sequence")
                 # Left unconverted so the per-element narrowing below sees the
                 # caller's value; int() would truncate a fraction past it.
                 ext = list(extension_values)
@@ -345,6 +350,7 @@ class _ProjectInspectionMixin:
 
     # -- assist sidecars ----------------------------------------------------
 
+    @_entry("Project.set_assist_sidecar")
     def set_assist_sidecar(
         self,
         module_id: str,
@@ -362,9 +368,9 @@ class _ProjectInspectionMixin:
         non-empty and ``payload`` is copied opaque bytes.
         """
         if not isinstance(module_id, str):
-            raise TypeError("module_id must be a string")
+            raise _refuse_type("module_id must be a string")
         if not module_id:
-            raise SonareValueError("module_id must be a non-empty string")
+            raise _refuse("module_id must be a non-empty string")
         raw = bytes(payload)
         buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
         _check(
@@ -405,6 +411,7 @@ class _ProjectInspectionMixin:
         finally:
             lib.sonare_free_project_assist_sidecar(ctypes.byref(raw))
 
+    @_entry("Project.assist_sidecars")
     def assist_sidecars(self) -> list[AssistSidecar]:
         """Return all stored assist sidecars as a list of :class:`AssistSidecar`."""
         count = int(_get_lib().sonare_project_assist_sidecar_count(self._require_handle()))
@@ -431,6 +438,7 @@ class _ProjectInspectionMixin:
             _ordinal_token(int(out.value), _OVERLAP_POLICIES, "overlap policy"),
         )
 
+    @_entry("Project.set_overlap_policy")
     def set_overlap_policy(self, policy: ProjectOverlapPolicy) -> None:
         """Set the project's clip-overlap policy.
 
@@ -445,6 +453,7 @@ class _ProjectInspectionMixin:
             )
         )
 
+    @_entry("Project.set_marker")
     def set_marker(
         self,
         ppq: float,
@@ -469,7 +478,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectMarker()
         if marker_id is not None:
             if marker_id == 0:
-                raise SonareValueError("marker_id must not be 0 (omit it to allocate a new id)")
+                raise _refuse("marker_id must not be 0 (omit it to allocate a new id)")
             raw.id = _to_c_uint32(marker_id, "marker_id")
         raw.ppq = _narrow_double(ppq, "ppq")
         if kind is not None:
@@ -641,6 +650,7 @@ class _ProjectInspectionMixin:
                     lib.sonare_free_string(uri)
         return name_or_uri
 
+    @_entry("Project.set_mixer_scene_json")
     def set_mixer_scene_json(self, scene_json: str) -> None:
         """Replace the project's mixer scene from scene JSON.
 
@@ -656,6 +666,7 @@ class _ProjectInspectionMixin:
             )
         )
 
+    @_entry("Project.set_tempo_segments")
     def set_tempo_segments(
         self,
         segments: Sequence[Mapping[str, float]],
@@ -684,6 +695,7 @@ class _ProjectInspectionMixin:
             )
         )
 
+    @_entry("Project.set_time_signatures")
     def set_time_signatures(
         self,
         segments: Sequence[Mapping[str, float]],
@@ -714,27 +726,33 @@ class _ProjectInspectionMixin:
         _check(getattr(_get_lib(), fn_name)(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("Project.markers")
     def markers(self) -> list[ProjectMarker]:
         """Every marker, in stored order, including its kind and key."""
         return [self._marker_by_index(i) for i in range(self._count("sonare_project_marker_count"))]
 
+    @_entry("Project.tracks")
     def tracks(self) -> list[ProjectTrack]:
         """Every track, in stored order."""
         return [self._track_by_index(i) for i in range(self._count("sonare_project_track_count"))]
 
+    @_entry("Project.clips")
     def clips(self) -> list[ProjectClip]:
         """Every clip, in stored order."""
         return [self._clip_by_index(i) for i in range(self._count("sonare_project_clip_count"))]
 
+    @_entry("Project.sources")
     def sources(self) -> list[ProjectSource]:
         """Every registered source, in stored order."""
         return [self._source_by_index(i) for i in range(self._count("sonare_project_source_count"))]
 
+    @_entry("Project.tempo_segments")
     def tempo_segments(self) -> list[dict[str, float]]:
         """Every tempo-map segment in stored order, as :meth:`set_tempo_segments` takes it."""
         count = self._count("sonare_project_tempo_segment_count")
         return [self._tempo_segment_by_index(i) for i in range(count)]
 
+    @_entry("Project.time_signatures")
     def time_signatures(self) -> list[dict[str, float | int]]:
         """Every time-signature segment in stored order, as :meth:`set_time_signatures` takes it."""
         count = self._count("sonare_project_time_signature_count")
@@ -783,6 +801,7 @@ class _ProjectInspectionMixin:
 
     # -- compile / render ---------------------------------------------------
 
+    @_entry("Project.last_bounce_compile_result")
     def last_bounce_compile_result(self) -> ProjectCompileResult | None:
         """Return the compile result captured by the most recent bounce.
 

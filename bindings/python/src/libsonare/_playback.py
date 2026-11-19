@@ -18,12 +18,11 @@ from typing import Any, cast
 
 import numpy as np
 
-from ._errors import _not_supported, _require_open
+from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_open
 from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    SonareValueError,
     _check,
     _check_realtime,
     _from_c_float_array,
@@ -56,7 +55,7 @@ is parsed by the caller (``json.loads``) before it is passed.
 
 def _playback_config_to_json(config: PlaybackRendererConfig) -> bytes:
     if not isinstance(config, Mapping):
-        raise TypeError("config must be a mapping (parse JSON text with json.loads first)")
+        raise _refuse_type("config must be a mapping (parse JSON text with json.loads first)")
     return _utf8_arg(json.dumps(dict(config)), "config")
 
 
@@ -92,11 +91,13 @@ class HrtfSet:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("HrtfSet")
     def __init__(self, handle: ctypes.c_void_p, lib: ctypes.CDLL) -> None:
         self._handle = handle
         self._lib = lib
 
     @classmethod
+    @_entry("HrtfSet.default")
     def default(cls) -> HrtfSet:
         """Build the embedded default set (SADIE II KU100, native builds only)."""
         lib = _get_lib()
@@ -106,6 +107,7 @@ class HrtfSet:
         return cls(handle, lib)
 
     @classmethod
+    @_entry("HrtfSet.from_bytes")
     def from_bytes(cls, data: bytes) -> HrtfSet:
         """Parse SHRF v1 bytes into an HRTF set; malformed data raises :class:`SonareError`."""
         lib = _get_lib()
@@ -133,6 +135,7 @@ class HrtfSet:
         """
         return _require_open(self._handle, "HrtfSet")
 
+    @_entry("HrtfSet.close")
     def close(self) -> None:
         """Release the underlying C handle. Safe to call multiple times."""
         if self._handle:
@@ -165,6 +168,7 @@ class PlaybackRenderer:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("PlaybackRenderer")
     def __init__(
         self,
         config: PlaybackRendererConfig,
@@ -195,6 +199,7 @@ class PlaybackRenderer:
             )
         )
 
+    @_entry("PlaybackRenderer.close")
     def close(self) -> None:
         """Release the underlying C handle. Safe to call multiple times."""
         if self._handle:
@@ -217,6 +222,7 @@ class PlaybackRenderer:
         """Return the live renderer handle, or reject a closed renderer."""
         return _require_open(self._handle, "PlaybackRenderer")
 
+    @_entry("PlaybackRenderer.reset")
     def reset(self) -> None:
         """Clear DSP state (filters, FIFOs, DRC, convolution history, pending drains).
 
@@ -225,6 +231,7 @@ class PlaybackRenderer:
         handle = self._require_handle()
         _check(self._lib.sonare_playback_renderer_reset(handle))
 
+    @_entry("PlaybackRenderer.set_config")
     def set_config(self, config: PlaybackRendererConfig) -> None:
         """Apply a complete configuration document.
 
@@ -239,6 +246,7 @@ class PlaybackRenderer:
             )
         )
 
+    @_entry("PlaybackRenderer.config")
     def config(self) -> PlaybackRendererConfig:
         """The current complete configuration document."""
         handle = self._require_handle()
@@ -246,6 +254,7 @@ class PlaybackRenderer:
         _check(self._lib.sonare_playback_renderer_config_json(handle, ctypes.byref(out)))
         return _json_out_result(self._lib, out)
 
+    @_entry("PlaybackRenderer.set_head_orientation")
     def set_head_orientation(
         self, yaw_deg: float, pitch_deg: float = 0.0, roll_deg: float = 0.0
     ) -> None:
@@ -316,6 +325,7 @@ class PlaybackRenderer:
         )
         return int(out.value)
 
+    @_entry("PlaybackRenderer.diagnostics")
     def diagnostics(self) -> dict[str, Any]:
         """Inactive stages, per-stage latency, clamps, active input layout and counters."""
         handle = self._require_handle()
@@ -323,6 +333,7 @@ class PlaybackRenderer:
         _check(self._lib.sonare_playback_renderer_diagnostics_json(handle, ctypes.byref(out)))
         return _json_out_result(self._lib, out)
 
+    @_entry("PlaybackRenderer.process_planar")
     def process_planar(self, planes: Sequence[Sequence[float]] | np.ndarray) -> np.ndarray:
         """Render one planar block; returns a ``(num_output_channels, frames)`` array.
 
@@ -353,6 +364,7 @@ class PlaybackRenderer:
         )
         return out
 
+    @_entry("PlaybackRenderer.process_interleaved")
     def process_interleaved(
         self, samples: Sequence[float] | list[float] | np.ndarray, in_channels: int
     ) -> np.ndarray:
@@ -364,10 +376,10 @@ class PlaybackRenderer:
         handle = self._require_handle()
         ch = _narrow_int(in_channels, "in_channels", _C_INT_MIN, _C_INT_MAX)
         if ch <= 0:
-            raise SonareValueError("in_channels must be positive")
+            raise _refuse("in_channels must be positive")
         c_in, total = _to_c_float_array(samples)
         if total % ch != 0:
-            raise SonareValueError("interleaved samples length must be divisible by in_channels")
+            raise _refuse("interleaved samples length must be divisible by in_channels")
         frames = total // ch
         out_channels = self.num_output_channels
         out_len = frames * out_channels
@@ -387,6 +399,7 @@ class PlaybackRenderer:
         )
         return out_buf
 
+    @_entry("PlaybackRenderer.render_offline")
     def render_offline(
         self, samples: Sequence[float] | list[float] | np.ndarray, in_channels: int
     ) -> np.ndarray:
@@ -401,11 +414,11 @@ class PlaybackRenderer:
         handle = self._require_handle()
         ch = _narrow_int(in_channels, "in_channels", _C_INT_MIN, _C_INT_MAX)
         if ch <= 0:
-            raise SonareValueError("in_channels must be positive")
-        validated = _validate_samples("render_offline", samples)
+            raise _refuse("in_channels must be positive")
+        validated = _validate_samples(samples)
         c_in, total = _to_c_float_array(validated)
         if total % ch != 0:
-            raise SonareValueError("interleaved samples length must be divisible by in_channels")
+            raise _refuse("interleaved samples length must be divisible by in_channels")
         out_ptr = ctypes.POINTER(ctypes.c_float)()
         out_frames = ctypes.c_size_t()
         out_channels = ctypes.c_int()
@@ -427,6 +440,7 @@ class PlaybackRenderer:
                 self._lib.sonare_free_floats(out_ptr)
 
 
+@_entry("render_playback")
 @_guard_buffer("samples")
 def render_playback(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -452,10 +466,10 @@ def render_playback(
     """
     ch = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
     if ch <= 0:
-        raise SonareValueError("num_channels must be positive")
+        raise _refuse("num_channels must be positive")
     c_in, total = _to_c_float_array(samples)
     if total % ch != 0:
-        raise SonareValueError("interleaved samples length must be divisible by num_channels")
+        raise _refuse("interleaved samples length must be divisible by num_channels")
     frames = total // ch
     lib = _get_lib()
     _require_playback(lib)
@@ -493,13 +507,14 @@ class PlaybackLoudnessMeter:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("PlaybackLoudnessMeter")
     def __init__(self, *, num_channels: int, sample_rate: int) -> None:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         _require_playback(self._lib)
         self._channels = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         if self._channels <= 0:
-            raise SonareValueError("num_channels must be positive")
+            raise _refuse("num_channels must be positive")
         _check(
             self._lib.sonare_playback_loudness_meter_create(
                 _to_c_int(self._channels, "num_channels"),
@@ -508,6 +523,7 @@ class PlaybackLoudnessMeter:
             )
         )
 
+    @_entry("PlaybackLoudnessMeter.close")
     def close(self) -> None:
         """Release the underlying C handle. Safe to call multiple times."""
         if self._handle:
@@ -530,13 +546,14 @@ class PlaybackLoudnessMeter:
         """Return the live meter handle, or reject a closed meter."""
         return _require_open(self._handle, "PlaybackLoudnessMeter")
 
+    @_entry("PlaybackLoudnessMeter.push_interleaved")
     def push_interleaved(self, samples: Sequence[float] | list[float] | np.ndarray) -> None:
         """Feed interleaved frames of any length."""
         handle = self._require_handle()
-        validated = _validate_samples("push_interleaved", samples)
+        validated = _validate_samples(samples)
         c_array, total = _to_c_float_array(validated)
         if total % self._channels != 0:
-            raise SonareValueError("interleaved samples length must be divisible by num_channels")
+            raise _refuse("interleaved samples length must be divisible by num_channels")
         frames = total // self._channels
         _check(
             self._lib.sonare_playback_loudness_meter_push_interleaved(

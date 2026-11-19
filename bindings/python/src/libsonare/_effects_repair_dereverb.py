@@ -14,6 +14,7 @@ from ._effects_repair_common import (
     _run_detection,
     _run_repair,
 )
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonareDereverbClassicalConfig,
     SonareDereverbReport,
@@ -26,7 +27,6 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -50,6 +50,7 @@ from .types import (
 )
 
 
+@_entry("mastering_repair_dereverb_classical")
 @_guard_buffer("samples")
 def mastering_repair_dereverb_classical(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -73,11 +74,9 @@ def mastering_repair_dereverb_classical(
     # than the shared even-size rule; check it eagerly so the message names it.
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
     # Narrowed ahead of the range check: int() takes 256.7 as 256, a hop nobody asked for.
-    hop_length_value = _narrow_int(
-        hop_length, "mastering_repair_dereverb_classical: hop_length", _C_INT_MIN, _C_INT_MAX
-    )
+    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
     if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
-        raise SonareValueError("hop_length must be in (0, n_fft // 2]")
+        raise _refuse("hop_length must be in (0, n_fft // 2]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         attenuation=_narrow_double(attenuation, "attenuation"),
@@ -90,13 +89,11 @@ def mastering_repair_dereverb_classical(
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations,
-            "mastering_repair_dereverb_classical: wpe_iterations",
+            "wpe_iterations",
             _C_INT_MIN,
             _C_INT_MAX,
         ),
-        wpe_taps=_narrow_int(
-            wpe_taps, "mastering_repair_dereverb_classical: wpe_taps", _C_INT_MIN, _C_INT_MAX
-        ),
+        wpe_taps=_narrow_int(wpe_taps, "wpe_taps", _C_INT_MIN, _C_INT_MAX),
         wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
     lib = _get_lib()
@@ -121,6 +118,7 @@ def _extract_reverb_detection(raw: Any) -> ReverbDetection:
     )
 
 
+@_entry("mastering_repair_detect_reverb")
 @_guard_buffer("samples")
 def mastering_repair_detect_reverb(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -192,11 +190,9 @@ def mastering_repair_detect_reverb(
     # The core requires a power of two here (dereverb_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
-    hop_length_value = _narrow_int(
-        hop_length, "mastering_repair_detect_reverb: hop_length", _C_INT_MIN, _C_INT_MAX
-    )
+    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
     if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
-        raise SonareValueError("hop_length must be in (0, n_fft // 2]")
+        raise _refuse("hop_length must be in (0, n_fft // 2]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         attenuation=_narrow_double(attenuation, "attenuation"),
@@ -207,12 +203,8 @@ def mastering_repair_detect_reverb(
         over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
         spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
         wpe_enabled=1 if wpe_enabled else 0,
-        wpe_iterations=_narrow_int(
-            wpe_iterations, "mastering_repair_detect_reverb: wpe_iterations", _C_INT_MIN, _C_INT_MAX
-        ),
-        wpe_taps=_narrow_int(
-            wpe_taps, "mastering_repair_detect_reverb: wpe_taps", _C_INT_MIN, _C_INT_MAX
-        ),
+        wpe_iterations=_narrow_int(wpe_iterations, "wpe_iterations", _C_INT_MIN, _C_INT_MAX),
+        wpe_taps=_narrow_int(wpe_taps, "wpe_taps", _C_INT_MIN, _C_INT_MAX),
         wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
     return _extract_reverb_detection(
@@ -235,6 +227,7 @@ def _extract_dereverb_report(raw: Any) -> DereverbReport:
     )
 
 
+@_entry("mastering_repair_dereverb_classical_stereo")
 @_guard_buffer("left", "right")
 def mastering_repair_dereverb_classical_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -303,18 +296,18 @@ def mastering_repair_dereverb_classical_stereo(
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
     hop_length_value = _narrow_int(
         hop_length,
-        "mastering_repair_dereverb_classical_stereo: hop_length",
+        "hop_length",
         _C_INT_MIN,
         _C_INT_MAX,
     )
     if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
-        raise SonareValueError("hop_length must be in (0, n_fft // 2]")
+        raise _refuse("hop_length must be in (0, n_fft // 2]")
 
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         attenuation=_narrow_double(attenuation, "attenuation"),
@@ -327,13 +320,13 @@ def mastering_repair_dereverb_classical_stereo(
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations,
-            "mastering_repair_dereverb_classical_stereo: wpe_iterations",
+            "wpe_iterations",
             _C_INT_MIN,
             _C_INT_MAX,
         ),
         wpe_taps=_narrow_int(
             wpe_taps,
-            "mastering_repair_dereverb_classical_stereo: wpe_taps",
+            "wpe_taps",
             _C_INT_MIN,
             _C_INT_MAX,
         ),
@@ -361,6 +354,7 @@ def mastering_repair_dereverb_classical_stereo(
         lib.sonare_free_dereverb_stereo_result(ctypes.byref(out))
 
 
+@_entry("mastering_repair_dereverb_classical_linked")
 def mastering_repair_dereverb_classical_linked(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     sample_rate: int,
@@ -442,18 +436,18 @@ def mastering_repair_dereverb_classical_linked(
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
     hop_length_value = _narrow_int(
         hop_length,
-        "mastering_repair_dereverb_classical_linked: hop_length",
+        "hop_length",
         _C_INT_MIN,
         _C_INT_MAX,
     )
     if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
-        raise SonareValueError("hop_length must be in (0, n_fft // 2]")
+        raise _refuse("hop_length must be in (0, n_fft // 2]")
 
     lib = _get_lib()
     symbol = "sonare_mastering_repair_dereverb_classical_linked"
     if not hasattr(lib, symbol):
         raise _unsupported_effect_symbol(symbol)
-    planes = _linked_channel_planes("mastering_repair_dereverb_classical_linked", channels)
+    planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
@@ -467,13 +461,13 @@ def mastering_repair_dereverb_classical_linked(
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations,
-            "mastering_repair_dereverb_classical_linked: wpe_iterations",
+            "wpe_iterations",
             _C_INT_MIN,
             _C_INT_MAX,
         ),
         wpe_taps=_narrow_int(
             wpe_taps,
-            "mastering_repair_dereverb_classical_linked: wpe_taps",
+            "wpe_taps",
             _C_INT_MIN,
             _C_INT_MAX,
         ),
@@ -498,6 +492,7 @@ def mastering_repair_dereverb_classical_linked(
     )
 
 
+@_entry("mastering_repair_dereverb_config_for_room")
 def mastering_repair_dereverb_config_for_room(
     estimate: RoomEstimate,
     *,
@@ -572,9 +567,7 @@ def mastering_repair_dereverb_config_for_room(
     if not hasattr(lib, symbol):
         raise _unsupported_effect_symbol(symbol)
     if estimate is None:
-        raise SonareValueError(
-            "mastering_repair_dereverb_config_for_room: estimate must not be None"
-        )
+        raise _refuse("estimate must not be None")
     bands, band_count = _to_c_float_array(estimate.rt60_bands, arg_name="estimate.rt60_bands")
     c_estimate = SonareRoomEstimate(
         volume=float(estimate.volume),
@@ -586,12 +579,10 @@ def mastering_repair_dereverb_config_for_room(
         attenuation=_narrow_double(attenuation, "attenuation"),
         # Integrality alone: this entry rewrites two fields and takes the rest
         # literally, so it carries none of the dereverb call's own domains.
-        n_fft=_narrow_int(
-            n_fft, "mastering_repair_dereverb_config_for_room: n_fft", _C_INT_MIN, _C_INT_MAX
-        ),
+        n_fft=_narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX),
         hop_length=_narrow_int(
             hop_length,
-            "mastering_repair_dereverb_config_for_room: hop_length",
+            "hop_length",
             _C_INT_MIN,
             _C_INT_MAX,
         ),
@@ -602,13 +593,13 @@ def mastering_repair_dereverb_config_for_room(
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations,
-            "mastering_repair_dereverb_config_for_room: wpe_iterations",
+            "wpe_iterations",
             _C_INT_MIN,
             _C_INT_MAX,
         ),
         wpe_taps=_narrow_int(
             wpe_taps,
-            "mastering_repair_dereverb_config_for_room: wpe_taps",
+            "wpe_taps",
             _C_INT_MIN,
             _C_INT_MAX,
         ),

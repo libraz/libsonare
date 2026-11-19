@@ -24,7 +24,7 @@ from ._effects_note_model import (
     _pitch_hz_from_c,
     _transcribe_reattack,
 )
-from ._errors import _require_open
+from ._errors import _entry, _refuse, _require_open
 from ._narrowing import _narrow_double
 from ._runtime import _unsupported_effect_symbol
 
@@ -44,7 +44,6 @@ from ._ffi import (
     SonarePolyphonicConfig,
 )
 from ._runtime import (
-    SonareValueError,
     _check,
     _from_c_float_array,
     _from_c_int_array,
@@ -62,7 +61,7 @@ from ._runtime import (
 
 def _count_field(name: str, value: int) -> int:
     """Narrowed rather than coerced: int(0.5) would run at 0 and report success."""
-    return _validate_c_int_field("PolyphonicAnalysis", value, name)
+    return _validate_c_int_field(value, name)
 
 
 class PolyphonicAnalysis:
@@ -97,6 +96,7 @@ class PolyphonicAnalysis:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("PolyphonicAnalysis")
     def __init__(
         self,
         samples: Sequence[float] | list[float] | np.ndarray,
@@ -251,7 +251,7 @@ class PolyphonicAnalysis:
                 without the pitch editor, or another coded C-call failure.
         """
         self._sample_rate = sample_rate
-        buf = _validate_samples("PolyphonicAnalysis", samples)
+        buf = _validate_samples(samples)
 
         lib = _get_lib()
         if not hasattr(lib, "sonare_polyphonic_analyze"):
@@ -260,9 +260,7 @@ class PolyphonicAnalysis:
         # The core reads 0 as "n_fft" / "derived"; here that is None, so a given 0 is refused.
         for name, named_zero in (("win_length", win_length), ("max_refine_hz", max_refine_hz)):
             if named_zero is not None and not isinstance(named_zero, bool) and named_zero == 0:
-                raise SonareValueError(
-                    f"PolyphonicAnalysis: {name} must not be 0 (leave it out for the default)"
-                )
+                raise _refuse(f"{name} must not be 0 (leave it out for the default)")
         config = SonarePolyphonicConfig()
         lib.sonare_polyphonic_config_init(ctypes.byref(config))
         # None keeps the value sonare_polyphonic_config_init set; a given value is
@@ -313,7 +311,7 @@ class PolyphonicAnalysis:
                 setattr(config, name, _narrow_double(value, name))
         # 0 is the core's "no split"; on this surface that is None, so a given 0 is refused.
         if reattack_ratio is not None:
-            config.reattack_ratio = _transcribe_reattack("PolyphonicAnalysis", reattack_ratio)
+            config.reattack_ratio = _transcribe_reattack(reattack_ratio)
         config.tonality = 1 if tonality else 0
         config.estimate_inharmonicity = 1 if estimate_inharmonicity else 0
 
@@ -331,6 +329,7 @@ class PolyphonicAnalysis:
         self._handle = handle
 
     @classmethod
+    @_entry("PolyphonicAnalysis.analyze")
     @_guard_buffer("samples")
     def analyze(
         cls,
@@ -352,6 +351,7 @@ class PolyphonicAnalysis:
 
     # -- lifecycle ----------------------------------------------------------
 
+    @_entry("PolyphonicAnalysis.close")
     def close(self) -> None:
         """Release the native analysis. Idempotent, so a double close is a no-op."""
         if self._handle is not None:
@@ -390,6 +390,7 @@ class PolyphonicAnalysis:
         _check(lib.sonare_polyphonic_frame_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("PolyphonicAnalysis.notes")
     def notes(self) -> list[NoteObject]:
         """Copy the notes out, in the order their claim sets are held in.
 
@@ -423,6 +424,7 @@ class PolyphonicAnalysis:
         )
         return [self._note_from_c(rows[i], i) for i in range(int(written.value))]
 
+    @_entry("PolyphonicAnalysis.polyphony")
     def polyphony(self) -> np.ndarray:
         """Per-frame voice count, before tracking dropped anything.
 
@@ -445,6 +447,7 @@ class PolyphonicAnalysis:
         )
         return _from_c_int_array(out, int(written.value))
 
+    @_entry("PolyphonicAnalysis.note_inharmonicity")
     def note_inharmonicity(self) -> np.ndarray:
         """The stretch fitted for each note, where the fit was asked for.
 
@@ -480,6 +483,7 @@ class PolyphonicAnalysis:
         stretch[stretch < 0.0] = np.nan
         return stretch
 
+    @_entry("PolyphonicAnalysis.note_f0")
     def note_f0(self, note: int) -> np.ndarray:
         """One note's F0 in Hz, per frame over its own span.
 
@@ -498,15 +502,17 @@ class PolyphonicAnalysis:
             SonareValueError: If ``note`` is not a non-negative integer.
             SonareError: If ``note`` is at or past :meth:`note_count`.
         """
-        return self._note_curve("sonare_polyphonic_note_f0", "note_f0", note)
+        return self._note_curve("sonare_polyphonic_note_f0", note)
 
+    @_entry("PolyphonicAnalysis.note_amplitude")
     def note_amplitude(self, note: int) -> np.ndarray:
         """One note's linear RMS, per frame over its own span.
 
         Indexed exactly as :meth:`note_f0`.
         """
-        return self._note_curve("sonare_polyphonic_note_amplitude", "note_amplitude", note)
+        return self._note_curve("sonare_polyphonic_note_amplitude", note)
 
+    @_entry("PolyphonicAnalysis.note_salience")
     def note_salience(self, note: int) -> np.ndarray:
         """One note's salience, per frame over its own span.
 
@@ -516,8 +522,9 @@ class PolyphonicAnalysis:
         candidate at, so it says how well the material supported this note rather
         than how loud the note is -- :meth:`note_amplitude` is the loud.
         """
-        return self._note_curve("sonare_polyphonic_note_salience", "note_salience", note)
+        return self._note_curve("sonare_polyphonic_note_salience", note)
 
+    @_entry("PolyphonicAnalysis.note_envelope")
     def note_envelope(self, note: int) -> np.ndarray:
         """One note's amplitude envelope points, as last set.
 
@@ -541,11 +548,12 @@ class PolyphonicAnalysis:
         """
         lib = _get_lib()
         handle = self._require_handle()
-        index = _note_set_index("note_envelope", "note", note)
+        index = _note_set_index("note", note)
         return self._envelope_points(lib, handle, index, self._envelope_count(lib, handle, index))
 
     # -- editing ------------------------------------------------------------
 
+    @_entry("PolyphonicAnalysis.set_note_edit")
     def set_note_edit(self, note: int, edit: NoteEdit | None = None) -> None:
         """Replace one note's pending edit.
 
@@ -573,7 +581,7 @@ class PolyphonicAnalysis:
         """
         lib = _get_lib()
         handle = self._require_handle()
-        index = _note_set_index("set_note_edit", "note", note)
+        index = _note_set_index("note", note)
         if edit is None:
             _check(
                 lib.sonare_polyphonic_set_note_edit(
@@ -584,7 +592,7 @@ class PolyphonicAnalysis:
 
         curve = np.asarray(edit.amplitude_envelope, dtype=np.float32)
         if curve.ndim != 1:
-            raise SonareValueError("set_note_edit: edit.amplitude_envelope must be one-dimensional")
+            raise _refuse("edit.amplitude_envelope must be one-dimensional")
         envelope, envelope_count = _to_c_float_array(curve, arg_name="edit.amplitude_envelope")
         # envelope_offset / envelope_count are inert on this door: the points are
         # the argument below and the analysis keeps its own copy.
@@ -596,8 +604,8 @@ class PolyphonicAnalysis:
                 edit.time_offset_samples,
                 edit.time_offset_sec,
                 self._sample_rate,
-                "set_note_edit: edit.time_offset_samples",
-                "set_note_edit: edit.time_offset_sec",
+                "edit.time_offset_samples",
+                "edit.time_offset_sec",
             ),
             pitch_semitones=_narrow_double(edit.pitch_semitones, "edit.pitch_semitones"),
             gain_db=_narrow_double(edit.gain_db, "edit.gain_db"),
@@ -619,6 +627,7 @@ class PolyphonicAnalysis:
             )
         )
 
+    @_entry("PolyphonicAnalysis.render")
     def render(
         self,
         *,
@@ -669,7 +678,7 @@ class PolyphonicAnalysis:
 
     # -- internals ----------------------------------------------------------
 
-    def _note_curve(self, symbol: str, fn_name: str, note: int) -> np.ndarray:
+    def _note_curve(self, symbol: str, note: int) -> np.ndarray:
         """Read one per-frame curve, sizing the buffer so the caller never clamps.
 
         A note's span is cut out of the analysis's own frames, so the frame count
@@ -679,7 +688,7 @@ class PolyphonicAnalysis:
         """
         lib = _get_lib()
         handle = self._require_handle()
-        index = _note_set_index(fn_name, "note", note)
+        index = _note_set_index("note", note)
         capacity = self.frame_count
         out = (ctypes.c_float * capacity)()
         written = ctypes.c_size_t()

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from ._errors import _not_supported
+from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._narrowing import _resolve_zero_default
 from ._project_model import *  # noqa: F403
 from ._project_model import (
@@ -34,7 +34,6 @@ from ._runtime import (
     SonareSf2InstrumentBinding,
     SonareSf2ProgramStatus,
     SonareSynthInstrumentBinding,
-    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -71,7 +70,7 @@ def _diagnostic_token(name_fn: Callable[[int], bytes | None], ordinal: int, what
     """Read a diagnostic ordinal's token from the library's own name table."""
     token = name_fn(ordinal)
     if token is None:
-        raise SonareValueError(f"unknown {what} ordinal: {ordinal}")
+        raise _refuse(f"unknown {what} ordinal: {ordinal}")
     return token.decode("ascii")
 
 
@@ -115,6 +114,7 @@ class _ProjectRenderMixin:
 
         def last_bounce_compile_result(self) -> ProjectCompileResult | None: ...
 
+    @_entry("Project.compile")
     def compile(self) -> ProjectCompileResult:
         """Compile the project into an RT-readable timeline.
 
@@ -129,6 +129,7 @@ class _ProjectRenderMixin:
         finally:
             lib.sonare_free_project_compile_result(ctypes.byref(result))
 
+    @_entry("Project.bounce")
     def bounce(
         self,
         *,
@@ -172,6 +173,7 @@ class _ProjectRenderMixin:
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
 
+    @_entry("Project.bounce_with_builtin_instrument")
     def bounce_with_builtin_instrument(
         self,
         instrument: BuiltinSynthConfig | None = None,
@@ -241,6 +243,7 @@ class _ProjectRenderMixin:
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
 
+    @_entry("Project.bounce_with_synth_instrument")
     def bounce_with_synth_instrument(
         self,
         instrument: SynthPatch | str | None = None,
@@ -339,6 +342,7 @@ class _ProjectRenderMixin:
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
 
+    @_entry("Project.load_sound_font")
     def load_sound_font(self, data: bytes | bytearray | memoryview) -> None:
         """Load (parse) SoundFont 2 bytes into the project.
 
@@ -352,7 +356,7 @@ class _ProjectRenderMixin:
             raise _not_supported("libsonare was built without the SoundFont ABI")
         buf = bytes(data)
         if not buf:
-            raise SonareValueError("SoundFont data must not be empty")
+            raise _refuse("SoundFont data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
         _check(
             lib.sonare_project_load_soundfont(
@@ -360,6 +364,7 @@ class _ProjectRenderMixin:
             )
         )
 
+    @_entry("Project.clear_sound_font")
     def clear_sound_font(self) -> None:
         """Release the project's loaded SoundFont (no-op when none is loaded)."""
         lib = _get_lib()
@@ -377,6 +382,7 @@ class _ProjectRenderMixin:
         _check(lib.sonare_project_soundfont_preset_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("Project.sound_font_manifest")
     def sound_font_manifest(self) -> list[Sf2ProgramStatus]:
         """Enumerate the programs the arrangement plays and their backends.
 
@@ -413,6 +419,7 @@ class _ProjectRenderMixin:
             for e in entries[: min(count, int(total.value))]
         ]
 
+    @_entry("Project.bounce_with_sf2_instrument")
     def bounce_with_sf2_instrument(
         self,
         instrument: Sf2InstrumentConfig | None = None,
@@ -485,6 +492,7 @@ class _ProjectRenderMixin:
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
 
+    @_entry("Project.bounce_with_instruments")
     def bounce_with_instruments(
         self,
         instrument: ExternalInstrument | None = None,
@@ -531,9 +539,7 @@ class _ProjectRenderMixin:
             raise _not_supported("libsonare was built without the external-instrument bounce ABI")
         if instruments is None:
             if instrument is None:
-                raise SonareValueError(
-                    "bounce_with_instruments requires `instrument` or `instruments`"
-                )
+                raise _refuse("bounce_with_instruments requires `instrument` or `instruments`")
             bindings = [(destination_id, instrument)]
         else:
             bindings = [(dst, inst) for dst, inst in instruments]
@@ -544,7 +550,7 @@ class _ProjectRenderMixin:
         c_bindings = (SonareInstrumentBinding * count)()
         for i, (dst, inst) in enumerate(bindings):
             if not callable(getattr(inst, "render", None)):
-                raise TypeError(
+                raise _refuse_type(
                     "each instrument must provide a render(channels, num_frames) method"
                 )
             c_bindings[i].destination_id = dst

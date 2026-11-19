@@ -8,7 +8,7 @@ import ctypes
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Self
 
-from ._errors import _invalid_state, _require_open
+from ._errors import _entry, _invalid_state, _require_open
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._project_edit import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project_edit import TakeAlignment as TakeAlignment
@@ -93,10 +93,12 @@ class ProjectTimeline:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("ProjectTimeline")
     def __init__(self, handle: ctypes.c_void_p) -> None:
         # Only Project.compile_timeline constructs this, with a live handle.
         self._handle: ctypes.c_void_p | None = handle
 
+    @_entry("ProjectTimeline.close")
     def close(self) -> None:
         """Release the native timeline handle (idempotent)."""
         if self._handle is not None:
@@ -136,6 +138,7 @@ class Project(
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("Project")
     def __init__(self) -> None:
         # Set first so a failed create (e.g. an ABI mismatch) leaves a valid
         # attribute for __del__/close() instead of raising AttributeError.
@@ -147,12 +150,14 @@ class Project(
         self._handle = handle
 
     @classmethod
+    @_entry("Project.create")
     def create(cls) -> Self:
         """Create a new empty project."""
         return cls()
 
     # -- lifecycle ----------------------------------------------------------
 
+    @_entry("Project.close")
     def close(self) -> None:
         """Destroy the native project; deferred to the end of an active native call."""
         if getattr(self, "_active_native_calls", 0):
@@ -183,6 +188,7 @@ class Project(
             raise _invalid_state("Project is closed")
         return self._handle
 
+    @_entry("Project.compile_timeline")
     def compile_timeline(self) -> ProjectCompileTimelineResult:
         """Compile the project and keep the timeline for an engine.
 
@@ -224,6 +230,7 @@ class Project(
 
     # -- serialization ------------------------------------------------------
 
+    @_entry("Project.to_json_bytes")
     def to_json_bytes(self) -> bytes:
         """Serialize the project to deterministic JSON as raw UTF-8 bytes."""
         lib = _get_lib()
@@ -244,11 +251,13 @@ class Project(
             if out:
                 lib.sonare_free_string(out)
 
+    @_entry("Project.to_json")
     def to_json(self) -> str:
         """Serialize the project to deterministic JSON (UTF-8 decoded)."""
         return self.to_json_bytes().decode("utf-8", errors="replace")
 
     @classmethod
+    @_entry("Project.from_json")
     def from_json(cls, json: str | bytes) -> Project:
         """Deserialize project JSON into a new :class:`Project`.
 
@@ -277,6 +286,7 @@ class Project(
         return obj
 
     @classmethod
+    @_entry("Project.from_json_with_diagnostics")
     def from_json_with_diagnostics(cls, json: str | bytes) -> ProjectDeserializeResult:
         """Deserialize project JSON and return warnings from successful loads."""
         lib = _get_lib()
@@ -298,6 +308,7 @@ class Project(
         obj._handle = handle
         return ProjectDeserializeResult(project=obj, diagnostics=diagnostics)
 
+    @_entry("Project.apply_vocal_edit")
     def apply_vocal_edit(
         self,
         *,
@@ -342,6 +353,7 @@ class Project(
             rendered_start_sample=rendered_start_sample,
         )
 
+    @_entry("Project.vocal_edit_dependencies")
     def vocal_edit_dependencies(
         self,
     ) -> tuple[ProjectVocalEditDependency, ...]:
@@ -350,6 +362,7 @@ class Project(
 
         return _project_vocal_edit_dependencies(self)
 
+    @_entry("Project.rehydrate_vocal_edits")
     def rehydrate_vocal_edits(
         self,
         original_sources: Sequence[ProjectVocalOriginalSource],

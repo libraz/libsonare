@@ -40,7 +40,8 @@ def test_move_clip_keeps_the_track_when_none_and_refuses_zero() -> None:
         project.move_clip(clip, 240.0, second)
         assert track_of() == second
         with pytest.raises(
-            SonareValueError, match=r"^new_track_id must be an integer (?:in|within) \[1, "
+            SonareValueError,
+            match=r"^Project\.move_clip: new_track_id must be an integer (?:in|within) \[1, ",
         ):
             project.move_clip(clip, 240.0, 0)
 
@@ -59,7 +60,8 @@ def test_engine_clip_track_is_none_when_unset_and_zero_is_refused() -> None:
         assert clip.track_id is None
         engine.set_clips([clip])
         with pytest.raises(
-            SonareValueError, match=r"^clip\.track_id must be an integer (?:in|within) \[1, "
+            SonareValueError,
+            match=r"^RealtimeEngine\.set_clips: clip\.track_id must be an integer in \[1, ",
         ):
             engine.set_clips([EngineClip(id=1, channels=[[0.5] * 128], start_ppq=0.0, track_id=0)])
 
@@ -79,7 +81,8 @@ def test_midi_schedule_refuses_zero_where_none_is_absence(field: str, value: int
     with (
         RealtimeEngine(sample_rate=SR, max_block_size=128) as engine,
         pytest.raises(
-            SonareValueError, match=rf"^clip\.{field} must be an integer (?:in|within) \[1, "
+            SonareValueError,
+            match=rf"^RealtimeEngine\.set_midi_clips: clip\.{field} must be an integer in \[1, ",
         ),
     ):
         engine.set_midi_clips([EngineMidiClipSchedule(events=[], **{field: value})])
@@ -110,7 +113,10 @@ def test_bounce_rates_are_none_when_omitted_and_zero_is_refused() -> None:
         )
         assert halved.sample_rate == SR // 2
         for field in ("target_sample_rate", "source_sample_rate"):
-            with pytest.raises(SonareValueError, match=rf"^options\.{field} must be an integer"):
+            with pytest.raises(
+                SonareValueError,
+                match=rf"^RealtimeEngine\.bounce_offline: options\.{field} must be an integer",
+            ):
                 engine.bounce_offline(
                     EngineBounceOptions(total_frames=128, num_channels=2, **{field: 0})
                 )
@@ -125,7 +131,8 @@ def test_onset_threshold_is_none_for_the_adaptive_path_and_zero_is_refused() -> 
     tone = _tone()
     assert libsonare.detect_onsets(tone, SR).dtype == np.float32
     with pytest.raises(
-        SonareValueError, match="^threshold must not be 0; omit it for the adaptive threshold$"
+        SonareValueError,
+        match="^detect_onsets: threshold must not be 0; omit it for the adaptive threshold$",
     ):
         libsonare.detect_onsets(tone, SR, threshold=0.0)
 
@@ -138,7 +145,7 @@ def test_spectral_high_edge_is_none_for_nyquist_and_non_positive_is_refused(
     whole = libsonare.SpectralRegionOp(low_hz=300.0, gain_db=-12.0)
     assert len(libsonare.spectral_edit(tone, SR, [whole])) == len(tone)
     with pytest.raises(
-        SonareValueError, match="^op.high_hz must be positive; omit it for Nyquist$"
+        SonareValueError, match="^spectral_edit: op.high_hz must be positive; omit it for Nyquist$"
     ):
         libsonare.spectral_edit(
             tone, SR, [libsonare.SpectralRegionOp(low_hz=300.0, high_hz=high_hz)]
@@ -152,7 +159,9 @@ def test_metronome_click_seconds_omitted_is_the_library_length_and_zero_is_refus
         assert engine.metronome().click_sec > 0
         engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=0.004))
         assert engine.metronome().click_sec == pytest.approx(0.004)
-        with pytest.raises(SonareValueError, match="^set_metronome: click_sec must not be 0"):
+        with pytest.raises(
+            SonareValueError, match="^RealtimeEngine.set_metronome: click_sec must not be 0"
+        ):
             engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=0.0))
 
 
@@ -160,7 +169,9 @@ def test_sample_source_rate_is_none_for_the_render_rate_and_zero_is_refused() ->
     with libsonare.SampleBank() as bank:
         assert bank.add_sample(_tone(4800)) == 0
         with pytest.raises(
-            SonareValueError, match="^source_rate must not be 0; omit it for the render's own rate$"
+            SonareValueError,
+            match="^SampleBank.add_sample: source_rate must not be 0; "
+            "omit it for the render's own rate$",
         ):
             bank.add_sample(_tone(4800), source_rate=0.0)
 
@@ -185,7 +196,8 @@ def test_instrument_zero_level_or_time_is_refused_until_it_can_be_expressed(
         getattr(engine, binder)(cls(), 6)
         with pytest.raises(
             SonareValueError,
-            match=rf"^{config}: {field} must not be 0; omit it for the library value$",
+            match=rf"^RealtimeEngine\.{binder}: {field} must not be 0; "
+            "omit it for the library value$",
         ):
             getattr(engine, binder)(cls(**{field: 0.0}), 6)
 

@@ -20,7 +20,7 @@ from ._engine_conversions import (
     _scope_telemetry_from_c,
     _telemetry_from_c,
 )
-from ._errors import _invalid_state, _not_supported
+from ._errors import _entry, _invalid_state, _not_supported, _refuse
 from ._ffi_types_core import (
     SONARE_METER_MAX_INSERTS,
     SonareClipPageRequest,
@@ -56,7 +56,6 @@ from ._runtime import (
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
     ScopeTelemetryRecord,
-    SonareValueError,
     _check,
     _check_realtime,
     _from_c_float_array,
@@ -125,13 +124,11 @@ class _EngineIoMixin:
         sec = getattr(punch, f"{edge}_sec")
         names = (f"{edge}_ppq", f"{edge}_sample", f"{edge}_sec")
         if sum(value is not None for value in (ppq, sample, sec)) != 1:
-            raise SonareValueError(
-                f"configure_capture: punch needs exactly one of {', '.join(names)}"
-            )
+            raise _refuse(f"punch needs exactly one of {', '.join(names)}")
         if ppq is not None:
             beats = _narrow_double(ppq, f"punch.{edge}_ppq")
             if not beats >= 0.0:
-                raise SonareValueError(f"configure_capture: punch.{edge}_ppq must be non-negative")
+                raise _refuse(f"punch.{edge}_ppq must be non-negative")
             return self.sample_at_ppq(beats)
         bound = _resolve_sample_bound(
             sample, sec, self._sample_rate, f"punch.{edge}_sample", f"punch.{edge}_sec"
@@ -139,6 +136,7 @@ class _EngineIoMixin:
         assert bound is not None
         return bound
 
+    @_entry("RealtimeEngine.configure_capture")
     def configure_capture(
         self,
         *,
@@ -163,9 +161,9 @@ class _EngineIoMixin:
         channel_count = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         frame_capacity = _narrow_int(capacity_frames, "capacity_frames", _INT64_MIN, _INT64_MAX)
         if channel_count <= 0:
-            raise SonareValueError("num_channels must be positive")
+            raise _refuse("num_channels must be positive")
         if frame_capacity <= 0:
-            raise SonareValueError("capacity_frames must be positive")
+            raise _refuse("capacity_frames must be positive")
         source_value = _capture_source_value(source)
         offset = _narrow_int(record_offset_samples, "record_offset_samples", _INT64_MIN, _INT64_MAX)
         monitor = (
@@ -180,9 +178,7 @@ class _EngineIoMixin:
 
         if self._capture_shape() != (channel_count, frame_capacity):
             if self.capture_status().armed:
-                raise _invalid_state(
-                    "configure_capture: the capture buffer cannot be resized while armed"
-                )
+                raise _invalid_state("the capture buffer cannot be resized while armed")
             self._install_capture_buffer(channel_count, frame_capacity)
         handle = self._require_handle()
         lib = _get_lib()
@@ -209,12 +205,15 @@ class _EngineIoMixin:
             )
         )
 
+    @_entry("RealtimeEngine.arm_capture")
     def arm_capture(self, armed: bool = True) -> None:
         _check(_get_lib().sonare_engine_arm_capture(self._require_handle(), 1 if armed else 0))
 
+    @_entry("RealtimeEngine.reset_capture")
     def reset_capture(self) -> None:
         _check(_get_lib().sonare_engine_reset_capture(self._require_handle()))
 
+    @_entry("RealtimeEngine.capture_status")
     def capture_status(self) -> EngineCaptureStatus:
         raw = SonareEngineCaptureStatus()
         _check(_get_lib().sonare_engine_capture_status(self._require_handle(), ctypes.byref(raw)))
@@ -227,12 +226,14 @@ class _EngineIoMixin:
             record_offset_samples=int(raw.record_offset_samples),
         )
 
+    @_entry("RealtimeEngine.captured_audio")
     def captured_audio(self) -> list[np.ndarray]:
         status = self.capture_status()
         capacity = len(self._capture_arrays[0]) if self._capture_arrays else 0
         frames = max(0, min(status.captured_frames, capacity))
         return [_from_c_float_array(array, frames) for array in self._capture_arrays]
 
+    @_entry("RealtimeEngine.set_graph")
     def set_graph(self, spec: EngineGraphSpec) -> None:
         _require_instance(spec, EngineGraphSpec, "spec")
         nodes = (SonareEngineGraphNode * len(spec.nodes))(
@@ -254,7 +255,7 @@ class _EngineIoMixin:
         raw.parameter_binding_count = len(bindings)
         for field in ("input_node", "output_node"):
             if getattr(spec, field) == "":
-                raise SonareValueError(f"set_graph: {field} must not be empty")
+                raise _refuse(f"{field} must not be empty")
         raw.input_node = _fixed_bytes(spec.input_node, 64, "input_node")
         raw.output_node = _fixed_bytes(spec.output_node, 64, "output_node")
         # Assigned unconverted so the struct's own narrowing sees the caller's
@@ -278,6 +279,7 @@ class _EngineIoMixin:
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.process")
     def process(self, channels: Sequence[Sequence[float]]) -> list[np.ndarray]:
         """Render one block and return the processed channel copies.
 
@@ -296,6 +298,7 @@ class _EngineIoMixin:
         )
         return _plane_arrays(arrays, frame_count)
 
+    @_entry("RealtimeEngine.process_with_monitor")
     def process_with_monitor(
         self, channels: Sequence[Sequence[float]]
     ) -> EngineProcessWithMonitorResult:
@@ -321,6 +324,7 @@ class _EngineIoMixin:
             monitor=tuple(_plane_arrays(monitor_arrays, frame_count)),
         )
 
+    @_entry("RealtimeEngine.render_offline")
     def render_offline(
         self,
         channels: Sequence[Sequence[float]],
@@ -362,6 +366,7 @@ class _EngineIoMixin:
         )
         return _plane_arrays(arrays, frame_count)
 
+    @_entry("RealtimeEngine.finish_offline_render")
     def finish_offline_render(self) -> None:
         """End a chunked offline render.
 
@@ -378,6 +383,7 @@ class _EngineIoMixin:
         """
         _check(_get_lib().sonare_engine_finish_offline_render(self._require_handle()))
 
+    @_entry("RealtimeEngine.bounce_offline")
     def bounce_offline(self, options: EngineBounceOptions) -> EngineBounceResult:
         """Render the whole span in one call and return the interleaved mix.
 
@@ -436,9 +442,7 @@ class _EngineIoMixin:
         # Same narrowing as the fields above, worded against this entry point:
         # int(0.5) is the 0 this field reads as "keep the default 16", so a
         # fractional word length would dither at 16 and report success.
-        raw_options.dither_bits = _validate_c_int_field(
-            "bounce_offline", options.dither_bits, "dither_bits"
-        )
+        raw_options.dither_bits = _validate_c_int_field(options.dither_bits, "dither_bits")
         raw_options.dither_seed = options.dither_seed
         raw_result = SonareEngineBounceResult()
         _check(
@@ -461,6 +465,7 @@ class _EngineIoMixin:
             if raw_result.interleaved:
                 lib.sonare_free_engine_bounce_result(ctypes.byref(raw_result))
 
+    @_entry("RealtimeEngine.freeze_offline")
     def freeze_offline(self, options: EngineFreezeOptions) -> EngineFreezeResult:
         """Render the source layer over the span and install it as the only clip.
 
@@ -493,6 +498,7 @@ class _EngineIoMixin:
             num_channels=int(raw_result.num_channels),
         )
 
+    @_entry("RealtimeEngine.drain_telemetry")
     def drain_telemetry(self, max_records: int = 1024) -> list[EngineTelemetry]:
         if max_records <= 0:
             return []
@@ -506,6 +512,7 @@ class _EngineIoMixin:
         )
         return [_telemetry_from_c(raw[i]) for i in range(written.value)]
 
+    @_entry("RealtimeEngine.reset_master_loudness_meter")
     def reset_master_loudness_meter(self, render_frame: int | None = None) -> None:
         """Queue a reset of the master integrated-loudness meter."""
         lib = _get_lib()
@@ -518,6 +525,7 @@ class _EngineIoMixin:
             )
         )
 
+    @_entry("RealtimeEngine.reset_processor_state")
     def reset_processor_state(self, render_frame: int | None = None) -> None:
         """Queue a reset of every lane, bus, master and graph processor state.
 
@@ -536,6 +544,7 @@ class _EngineIoMixin:
             )
         )
 
+    @_entry("RealtimeEngine.pop_clip_page_request")
     def pop_clip_page_request(self) -> ClipPageRequest | None:
         raw = SonareClipPageRequest()
         has_request = ctypes.c_int()
@@ -550,6 +559,7 @@ class _EngineIoMixin:
             clip_id=int(raw.clip_id), channel=int(raw.channel), sample=int(raw.sample)
         )
 
+    @_entry("RealtimeEngine.set_clip_page_prefetch_frames")
     def set_clip_page_prefetch_frames(self, frames: int) -> None:
         """Set the clip-page look-ahead window in timeline frames.
 
@@ -589,6 +599,7 @@ class _EngineIoMixin:
         )
         return int(out.value)
 
+    @_entry("RealtimeEngine.drain_meter_telemetry")
     def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
         """Drain pending stereo meter telemetry records published by the engine.
 
@@ -610,6 +621,7 @@ class _EngineIoMixin:
         )
         return [_meter_telemetry_from_c(raw[i]) for i in range(written.value)]
 
+    @_entry("RealtimeEngine.drain_meter_telemetry_wide")
     def drain_meter_telemetry_wide(self, max_records: int = 1024) -> list[MeterTelemetryRecordWide]:
         """Drain pending per-plane meter telemetry for every target.
 
@@ -632,6 +644,7 @@ class _EngineIoMixin:
         )
         return [_meter_telemetry_wide_from_c(raw[i]) for i in range(written.value)]
 
+    @_entry("RealtimeEngine.meter_target_insert_gain_reduction")
     def meter_target_insert_gain_reduction(self, target_id: int) -> np.ndarray:
         """Return per-insert gain reduction in dB (<= 0) for a meter target's strip.
 
@@ -656,6 +669,7 @@ class _EngineIoMixin:
         )
         return _from_c_float_array(raw, min(count.value, SONARE_METER_MAX_INSERTS))
 
+    @_entry("RealtimeEngine.insert_parameter_constructed_value")
     def insert_parameter_constructed_value(self, param_id: int) -> float:
         """Return an insert parameter's immutable construction value."""
         lib = _get_lib()
@@ -669,6 +683,7 @@ class _EngineIoMixin:
         )
         return float(out_value.value)
 
+    @_entry("RealtimeEngine.configure_scope_telemetry")
     def configure_scope_telemetry(self, interval_frames: int, band_count: int) -> int:
         """Enable scope telemetry publishing and return the applied band count.
 
@@ -690,6 +705,7 @@ class _EngineIoMixin:
         )
         return int(applied.value)
 
+    @_entry("RealtimeEngine.drain_scope_telemetry")
     def drain_scope_telemetry(self, max_records: int = 1024) -> list[ScopeTelemetryRecord]:
         """Drain pending scope telemetry records published by the engine."""
         if max_records <= 0:

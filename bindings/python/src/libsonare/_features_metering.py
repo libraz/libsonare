@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from ._errors import _not_supported, _unknown_error
+from ._errors import _entry, _not_supported, _refuse, _unknown_error
 from ._ffi import (
     SonareClippingResult,
     SonareDynamicRangeResult,
@@ -23,7 +23,6 @@ from ._ffi import (
 )
 from ._runtime import (
     _SIZE_T_MAX,
-    SonareValueError,
     _call_float_array_transform,
     _check,
     _from_c_float_array,
@@ -99,13 +98,13 @@ def _dynamic_range_args(
     """The dynamic-range arguments; percentiles are ranks in [0, 1] with low <= high."""
     for name, value in (("low_percentile", low_percentile), ("high_percentile", high_percentile)):
         if value is not None and not 0.0 <= _narrow_double(value, name) <= 1.0:
-            raise SonareValueError(f"{name} must be in [0, 1]")
+            raise _refuse(f"{name} must be in [0, 1]")
     if (
         low_percentile is not None
         and high_percentile is not None
         and low_percentile > high_percentile
     ):
-        raise SonareValueError("low_percentile must not exceed high_percentile")
+        raise _refuse("low_percentile must not exceed high_percentile")
     return (
         _resolve_zero_default(window_sec, "window_sec"),
         _resolve_zero_default(hop_sec, "hop_sec"),
@@ -114,12 +113,13 @@ def _dynamic_range_args(
     )
 
 
+@_entry("lufs")
 def lufs(
     samples: Sequence[float] | list[float],
     sample_rate: int,
 ) -> LufsResult:
     """Compute integrated/momentary/short-term LUFS and loudness range."""
-    sample_buf = _validate_samples("lufs", samples)
+    sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareLufsResult()
@@ -140,12 +140,13 @@ def lufs(
     )
 
 
+@_entry("momentary_lufs")
 def momentary_lufs(
     samples: Sequence[float] | list[float],
     sample_rate: int,
 ) -> np.ndarray:
     """Compute the per-block momentary LUFS time series as a float32 array."""
-    sample_buf = _validate_samples("momentary_lufs", samples)
+    sample_buf = _validate_samples(samples)
     return _call_float_array_transform(
         "sonare_momentary_lufs",
         sample_buf,
@@ -153,12 +154,13 @@ def momentary_lufs(
     )
 
 
+@_entry("short_term_lufs")
 def short_term_lufs(
     samples: Sequence[float] | list[float],
     sample_rate: int,
 ) -> np.ndarray:
     """Compute the per-block short-term LUFS time series as a float32 array."""
-    sample_buf = _validate_samples("short_term_lufs", samples)
+    sample_buf = _validate_samples(samples)
     return _call_float_array_transform(
         "sonare_short_term_lufs",
         sample_buf,
@@ -166,6 +168,7 @@ def short_term_lufs(
     )
 
 
+@_entry("lufs_interleaved")
 def lufs_interleaved(
     samples: Sequence[float] | list[float],
     channels: int,
@@ -182,15 +185,13 @@ def lufs_interleaved(
         A :class:`LufsResult` with integrated/momentary/short-term LUFS and
         loudness range.
     """
-    sample_buf = _validate_samples("lufs_interleaved", samples)
+    sample_buf = _validate_samples(samples)
     if channels <= 0:
-        raise SonareValueError("lufs_interleaved: channels must be > 0")
+        raise _refuse("channels must be > 0")
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
     if total % channels != 0:
-        raise SonareValueError(
-            "lufs_interleaved: interleaved samples length must be divisible by channels"
-        )
+        raise _refuse("interleaved samples length must be divisible by channels")
     frames = total // channels
     out = SonareLufsResult()
     rc = lib.sonare_lufs_interleaved(
@@ -211,6 +212,7 @@ def lufs_interleaved(
     )
 
 
+@_entry("lufs_series_interleaved")
 def lufs_series_interleaved(
     samples: Sequence[float] | list[float],
     channels: int,
@@ -234,15 +236,13 @@ def lufs_series_interleaved(
         float32 arrays. A signal shorter than a window yields an empty series for
         it, not an error.
     """
-    sample_buf = _validate_samples("lufs_series_interleaved", samples)
+    sample_buf = _validate_samples(samples)
     if channels <= 0:
-        raise SonareValueError("lufs_series_interleaved: channels must be > 0")
+        raise _refuse("channels must be > 0")
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
     if total % channels != 0:
-        raise SonareValueError(
-            "lufs_series_interleaved: interleaved samples length must be divisible by channels"
-        )
+        raise _refuse("interleaved samples length must be divisible by channels")
     frames = total // channels
     with (
         _out_float_array(lib) as (out_momentary, momentary_length),
@@ -265,12 +265,13 @@ def lufs_series_interleaved(
         )
 
 
+@_entry("ebur128_loudness_range_lu")
 def ebur128_loudness_range_lu(
     samples: Sequence[float] | list[float],
     sample_rate: int,
 ) -> float:
     """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer."""
-    sample_buf = _validate_samples("ebur128_loudness_range_lu", samples)
+    sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
@@ -296,7 +297,7 @@ def _metering_scalar(
 ) -> float:
     # ``name`` is the C symbol; validation messages quote the facade spelling
     # the caller actually invoked.
-    sample_buf = _validate_samples(name.removeprefix("sonare_"), samples)
+    sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
@@ -310,6 +311,7 @@ def _metering_scalar(
     return float(out.value)
 
 
+@_entry("metering_peak_db")
 def metering_peak_db(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -318,6 +320,7 @@ def metering_peak_db(
     return _metering_scalar("sonare_metering_peak_db", samples, sample_rate)
 
 
+@_entry("metering_rms_db")
 def metering_rms_db(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -326,6 +329,7 @@ def metering_rms_db(
     return _metering_scalar("sonare_metering_rms_db", samples, sample_rate)
 
 
+@_entry("metering_silence_ratio")
 def metering_silence_ratio(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -334,7 +338,7 @@ def metering_silence_ratio(
     hop_length: int = 256,
 ) -> float:
     """Fraction of analysis frames whose RMS is below ``threshold_db``."""
-    sample_buf = _validate_samples("metering_silence_ratio", samples)
+    sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
@@ -351,6 +355,7 @@ def metering_silence_ratio(
     return float(out.value)
 
 
+@_entry("metering_crest_factor_db")
 def metering_crest_factor_db(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -359,6 +364,7 @@ def metering_crest_factor_db(
     return _metering_scalar("sonare_metering_crest_factor_db", samples, sample_rate)
 
 
+@_entry("metering_crest_factor_db_stereo")
 def metering_crest_factor_db_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -371,15 +377,15 @@ def metering_crest_factor_db_stereo(
     :func:`metering_crest_factor_db` would need, which understates its RMS and
     so overstates the crest factor.
     """
-    left_buf = _validate_samples("metering_crest_factor_db_stereo", left, arg_name="left")
-    right_buf = _validate_samples("metering_crest_factor_db_stereo", right, arg_name="right")
+    left_buf = _validate_samples(left, arg_name="left")
+    right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_crest_factor_db_stereo"):
         raise _not_supported("libsonare was built without the stereo crest factor meter")
     left_array, left_length = _to_c_float_array(left_buf)
     right_array, right_length = _to_c_float_array(right_buf)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     out = ctypes.c_float(0.0)
     rc = lib.sonare_metering_crest_factor_db_stereo(
         left_array,
@@ -392,6 +398,7 @@ def metering_crest_factor_db_stereo(
     return float(out.value)
 
 
+@_entry("metering_dc_offset")
 def metering_dc_offset(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -400,6 +407,7 @@ def metering_dc_offset(
     return _metering_scalar("sonare_metering_dc_offset", samples, sample_rate)
 
 
+@_entry("metering_true_peak_dbtp")
 def metering_true_peak_dbtp(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -409,7 +417,7 @@ def metering_true_peak_dbtp(
 
     ``oversample_factor`` must be a power of two in [1, 16]; omit it for 4.
     """
-    sample_buf = _validate_samples("metering_true_peak_dbtp", samples)
+    sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
@@ -424,6 +432,7 @@ def metering_true_peak_dbtp(
     return float(out.value)
 
 
+@_entry("metering_detect_clipping")
 def metering_detect_clipping(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -438,7 +447,7 @@ def metering_detect_clipping(
     :class:`SonareValueError`; leave it out for the default.
     """
     c_threshold, c_min_region = _clipping_args(threshold, min_region_samples)
-    sample_buf = _validate_samples("metering_detect_clipping", samples)
+    sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareClippingResult()
@@ -479,14 +488,13 @@ def _stereo_scalar(
 ) -> float:
     # ``name`` is the C symbol; validation messages quote the facade spelling
     # the caller actually invoked.
-    fn_name = name.removeprefix("sonare_")
-    left_buf = _validate_samples(fn_name, left, arg_name="left")
-    right_buf = _validate_samples(fn_name, right, arg_name="right")
+    left_buf = _validate_samples(left, arg_name="left")
+    right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise SonareValueError(f"{fn_name}: left and right buffers must have the same length")
+        raise _refuse("left and right buffers must have the same length")
     out = ctypes.c_float(0.0)
     rc = getattr(lib, name)(
         left_array,
@@ -499,6 +507,7 @@ def _stereo_scalar(
     return float(out.value)
 
 
+@_entry("metering_stereo_correlation")
 def metering_stereo_correlation(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -513,6 +522,7 @@ def metering_stereo_correlation(
     )
 
 
+@_entry("metering_stereo_width")
 def metering_stereo_width(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -562,6 +572,7 @@ def _scope_point_columns(
     return {name: np.ascontiguousarray(table[:, index]) for index, name in enumerate(names)}
 
 
+@_entry("metering_vectorscope")
 def metering_vectorscope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -577,15 +588,13 @@ def metering_vectorscope(
     """
     if max_points is not None:
         return metering_vectorscope_decimated(left, right, sample_rate, max_points)
-    left_buf = _validate_samples("metering_vectorscope", left, arg_name="left")
-    right_buf = _validate_samples("metering_vectorscope", right, arg_name="right")
+    left_buf = _validate_samples(left, arg_name="left")
+    right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise SonareValueError(
-            "metering_vectorscope: left and right buffers must have the same length"
-        )
+        raise _refuse("left and right buffers must have the same length")
     out = SonareVectorscopeResult()
     rc = lib.sonare_metering_vectorscope(
         left_array,
@@ -602,6 +611,7 @@ def metering_vectorscope(
         lib.sonare_free_vectorscope_result(ctypes.byref(out))
 
 
+@_entry("metering_vectorscope_decimated")
 def metering_vectorscope_decimated(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -616,17 +626,15 @@ def metering_vectorscope_decimated(
     the input is deterministically decimated, keeping the largest-radius
     sample of each contiguous bucket.
     """
-    left_buf = _validate_samples("metering_vectorscope_decimated", left, arg_name="left")
-    right_buf = _validate_samples("metering_vectorscope_decimated", right, arg_name="right")
+    left_buf = _validate_samples(left, arg_name="left")
+    right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_vectorscope_decimated"):
         raise _not_supported("libsonare was built without sonare_metering_vectorscope_decimated")
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise SonareValueError(
-            "metering_vectorscope_decimated: left and right buffers must have the same length"
-        )
+        raise _refuse("left and right buffers must have the same length")
     out = SonareVectorscopeResult()
     rc = lib.sonare_metering_vectorscope_decimated(
         left_array,
@@ -644,6 +652,7 @@ def metering_vectorscope_decimated(
         lib.sonare_free_vectorscope_result(ctypes.byref(out))
 
 
+@_entry("metering_phase_scope")
 def metering_phase_scope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -660,15 +669,13 @@ def metering_phase_scope(
     """
     if max_points is not None:
         return metering_phase_scope_decimated(left, right, sample_rate, max_points)
-    left_buf = _validate_samples("metering_phase_scope", left, arg_name="left")
-    right_buf = _validate_samples("metering_phase_scope", right, arg_name="right")
+    left_buf = _validate_samples(left, arg_name="left")
+    right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise SonareValueError(
-            "metering_phase_scope: left and right buffers must have the same length"
-        )
+        raise _refuse("left and right buffers must have the same length")
     out = SonarePhaseScopeResult()
     rc = lib.sonare_metering_phase_scope(
         left_array,
@@ -693,6 +700,7 @@ def metering_phase_scope(
         lib.sonare_free_phase_scope_result(ctypes.byref(out))
 
 
+@_entry("metering_phase_scope_decimated")
 def metering_phase_scope_decimated(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -707,17 +715,15 @@ def metering_phase_scope_decimated(
     (largest-radius sample per bucket). The summary stats are always computed
     over the full-resolution signal.
     """
-    left_buf = _validate_samples("metering_phase_scope_decimated", left, arg_name="left")
-    right_buf = _validate_samples("metering_phase_scope_decimated", right, arg_name="right")
+    left_buf = _validate_samples(left, arg_name="left")
+    right_buf = _validate_samples(right, arg_name="right")
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_phase_scope_decimated"):
         raise _not_supported("libsonare was built without sonare_metering_phase_scope_decimated")
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise SonareValueError(
-            "metering_phase_scope_decimated: left and right buffers must have the same length"
-        )
+        raise _refuse("left and right buffers must have the same length")
     out = SonarePhaseScopeResult()
     rc = lib.sonare_metering_phase_scope_decimated(
         left_array,
@@ -743,6 +749,7 @@ def metering_phase_scope_decimated(
         lib.sonare_free_phase_scope_result(ctypes.byref(out))
 
 
+@_entry("metering_spectrum")
 def metering_spectrum(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -765,7 +772,7 @@ def metering_spectrum(
     n_fft_value, octave_fraction_value, db_ref_value, db_amin_value = _spectrum_args(
         n_fft, octave_fraction, db_ref, db_amin
     )
-    sample_buf = _validate_samples("metering_spectrum", samples)
+    sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareSpectrumResult()
@@ -799,6 +806,7 @@ def metering_spectrum(
         lib.sonare_free_spectrum_result(ctypes.byref(out))
 
 
+@_entry("metering_spectrum_frame")
 def metering_spectrum_frame(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -833,7 +841,6 @@ def metering_spectrum_frame(
     )
     c_n_fft = _to_c_int(n_fft_value, "n_fft")
     sample_buf = _validate_samples(
-        "metering_spectrum_frame",
         samples,
         window=(frame_offset, c_n_fft.value or _DEFAULT_SPECTRUM_N_FFT),
     )
@@ -880,6 +887,7 @@ def _waveform_peaks_from_c(out: SonareWaveformPeaksResult) -> WaveformPeaksRepor
     )
 
 
+@_entry("waveform_peaks")
 def waveform_peaks(
     samples: Sequence[float] | list[float],
     num_channels: int,
@@ -900,11 +908,11 @@ def waveform_peaks(
         num_channels: Channel count (must be > 0).
         samples_per_bucket: Bucket width in frames (default 512).
     """
-    sample_buf = _validate_samples("waveform_peaks", samples)
+    sample_buf = _validate_samples(samples)
     if num_channels <= 0 or len(sample_buf) % num_channels != 0:
-        raise SonareValueError("waveform_peaks: samples length must be a multiple of num_channels")
+        raise _refuse("samples length must be a multiple of num_channels")
     if samples_per_bucket <= 0:
-        raise SonareValueError("waveform_peaks: samples_per_bucket must be > 0")
+        raise _refuse("samples_per_bucket must be > 0")
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareWaveformPeaksResult()
@@ -922,6 +930,7 @@ def waveform_peaks(
         lib.sonare_free_waveform_peaks_result(ctypes.byref(out))
 
 
+@_entry("waveform_peak_pyramid")
 def waveform_peak_pyramid(
     samples: Sequence[float] | list[float],
     num_channels: int,
@@ -939,28 +948,22 @@ def waveform_peak_pyramid(
         samples_per_bucket_levels: Bucket widths in frames, one per zoom level
             (default ``(512, 1024, 2048, 4096)``).
     """
-    sample_buf = _validate_samples("waveform_peak_pyramid", samples)
+    sample_buf = _validate_samples(samples)
     # Narrowed per entry rather than coerced, and ahead of the positivity check
     # below: int(512.7) is 512, a width the call then runs at and reports back as
     # the one asked for, and a width past the size_t ceiling would reach the core
     # as the 0 that check refuses under someone else's name.
     levels = [
-        _narrow_int(
-            level, f"waveform_peak_pyramid: samples_per_bucket_levels[{index}]", 0, _SIZE_T_MAX
-        )
+        _narrow_int(level, f"samples_per_bucket_levels[{index}]", 0, _SIZE_T_MAX)
         for index, level in enumerate(samples_per_bucket_levels)
     ]
     if num_channels <= 0 or len(sample_buf) % num_channels != 0:
-        raise SonareValueError(
-            "waveform_peak_pyramid: samples length must be a multiple of num_channels"
-        )
+        raise _refuse("samples length must be a multiple of num_channels")
     if not levels:
-        raise SonareValueError("waveform_peak_pyramid: samples_per_bucket_levels must be non-empty")
+        raise _refuse("samples_per_bucket_levels must be non-empty")
     for index, level in enumerate(levels):
         if level <= 0:
-            raise SonareValueError(
-                f"waveform_peak_pyramid: samples_per_bucket_levels[{index}] must be > 0"
-            )
+            raise _refuse(f"samples_per_bucket_levels[{index}] must be > 0")
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     c_levels = (ctypes.c_size_t * len(levels))(*levels)
@@ -981,6 +984,7 @@ def waveform_peak_pyramid(
         lib.sonare_free_waveform_peak_pyramid_result(ctypes.byref(out))
 
 
+@_entry("metering_dynamic_range")
 def metering_dynamic_range(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -999,7 +1003,7 @@ def metering_dynamic_range(
     window_value, hop_value, low_value, high_value = _dynamic_range_args(
         window_sec, hop_sec, low_percentile, high_percentile
     )
-    sample_buf = _validate_samples("metering_dynamic_range", samples)
+    sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareDynamicRangeResult()
@@ -1047,6 +1051,7 @@ def _scale_scalar(
     return float(out.value)
 
 
+@_entry("scale_mask_for_mode")
 def scale_mask_for_mode(root: int, mode: KeyMode) -> int:
     """Return the 12-bit scale mask of a mode.
 
@@ -1071,7 +1076,7 @@ def scale_mask_for_mode(root: int, mode: KeyMode) -> int:
     return int(out.value)
 
 
-def _scale_reference(fn_name: str, value: float | None) -> float:
+def _scale_reference(value: float | None) -> float:
     """Map an absent reference onto the core's 0 (A4).
 
     MIDI note 0 is a real anchor the core still reads as A4, so an explicit 0 is
@@ -1079,15 +1084,15 @@ def _scale_reference(fn_name: str, value: float | None) -> float:
     """
     if value is None:
         return 0.0
-    reference = _validate_scalar(fn_name, value, "scale_reference_midi")
+    reference = _validate_scalar(value, "scale_reference_midi")
     if reference == 0.0:
-        raise SonareValueError(
-            f"{fn_name}: scale_reference_midi 0 is temporarily unsupported "
-            "(use None for the A4 default)"
+        raise _refuse(
+            "scale_reference_midi 0 is temporarily unsupported (use None for the A4 default)"
         )
     return reference
 
 
+@_entry("scale_quantize_midi")
 def scale_quantize_midi(
     root: int, mode_mask: int, midi: float, scale_reference_midi: float | None = None
 ) -> float:
@@ -1097,11 +1102,12 @@ def scale_quantize_midi(
     relative to ``root``. For natural C major use ``0b101010110101``.
     ``scale_reference_midi`` anchors the grid; ``None`` is A4 = 69.
     """
-    midi = _validate_scalar("scale_quantize_midi", midi, "midi")
-    reference = _scale_reference("scale_quantize_midi", scale_reference_midi)
+    midi = _validate_scalar(midi, "midi")
+    reference = _scale_reference(scale_reference_midi)
     return _scale_scalar("sonare_scale_quantize_midi", root, mode_mask, reference, midi)
 
 
+@_entry("scale_correction_semitones")
 def scale_correction_semitones(
     root: int, mode_mask: int, midi: float, scale_reference_midi: float | None = None
 ) -> float:
@@ -1109,11 +1115,12 @@ def scale_correction_semitones(
 
     ``scale_reference_midi`` as in :func:`scale_quantize_midi`.
     """
-    midi = _validate_scalar("scale_correction_semitones", midi, "midi")
-    reference = _scale_reference("scale_correction_semitones", scale_reference_midi)
+    midi = _validate_scalar(midi, "midi")
+    reference = _scale_reference(scale_reference_midi)
     return _scale_scalar("sonare_scale_correction_semitones", root, mode_mask, reference, midi)
 
 
+@_entry("scale_pitch_class_enabled")
 def scale_pitch_class_enabled(root: int, mode_mask: int, pitch_class: int) -> bool:
     """Return True if pitch_class (0..11) is enabled by mode_mask relative to root."""
     lib = _get_lib()

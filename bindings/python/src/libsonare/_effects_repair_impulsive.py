@@ -13,6 +13,7 @@ from ._effects_repair_common import (
     _run_detection,
     _run_repair,
 )
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonareClickDetection,
     SonareClipDetection,
@@ -31,7 +32,6 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    SonareValueError,
     _as_float32_buffer,
     _check,
     _from_c_float_array,
@@ -67,6 +67,7 @@ def _coerce_decrackle_mode(value: DecrackleMode) -> int:
     return _token_ordinal(value, _DECRACKLE_MODES, "decrackle mode")
 
 
+@_entry("mastering_repair_declick")
 @_guard_buffer("samples")
 def mastering_repair_declick(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -94,14 +95,10 @@ def mastering_repair_declick(
         samples, the same length as the input, and the pass's report.
     """
     # Narrowed ahead of the sign check: int() takes 8.7 as 8, a run length nobody asked for.
-    max_click_value = _narrow_int(
-        max_click_samples, "mastering_repair_declick: max_click_samples", _C_INT_MIN, _C_INT_MAX
-    )
-    lpc_order_value = _narrow_int(
-        lpc_order, "mastering_repair_declick: lpc_order", _C_INT_MIN, _C_INT_MAX
-    )
+    max_click_value = _narrow_int(max_click_samples, "max_click_samples", _C_INT_MIN, _C_INT_MAX)
+    lpc_order_value = _narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX)
     if max_click_value <= 0:
-        raise SonareValueError("max_click_samples must be positive")
+        raise _refuse("max_click_samples must be positive")
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
     config = SonareDeclickConfig(  # noqa: F405
@@ -132,6 +129,7 @@ def _extract_click_detection(raw: Any) -> ClickDetection:
     )
 
 
+@_entry("mastering_repair_detect_clicks")
 @_guard_buffer("samples")
 def mastering_repair_detect_clicks(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -179,15 +177,13 @@ def mastering_repair_detect_clicks(
     """
     max_click_value = _narrow_int(
         max_click_samples,
-        "mastering_repair_detect_clicks: max_click_samples",
+        "max_click_samples",
         _C_INT_MIN,
         _C_INT_MAX,
     )
-    lpc_order_value = _narrow_int(
-        lpc_order, "mastering_repair_detect_clicks: lpc_order", _C_INT_MIN, _C_INT_MAX
-    )
+    lpc_order_value = _narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX)
     if max_click_value <= 0:
-        raise SonareValueError("max_click_samples must be positive")
+        raise _refuse("max_click_samples must be positive")
     config = SonareDeclickConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         neighbor_ratio=_narrow_double(neighbor_ratio, "neighbor_ratio"),
@@ -216,6 +212,7 @@ def _extract_declick_report(raw: Any) -> DeclickReport:
     )
 
 
+@_entry("mastering_repair_declick_stereo")
 @_guard_buffer("left", "right")
 def mastering_repair_declick_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -254,20 +251,18 @@ def mastering_repair_declick_stereo(
     """
     max_click_value = _narrow_int(
         max_click_samples,
-        "mastering_repair_declick_stereo: max_click_samples",
+        "max_click_samples",
         _C_INT_MIN,
         _C_INT_MAX,
     )
-    lpc_order_value = _narrow_int(
-        lpc_order, "mastering_repair_declick_stereo: lpc_order", _C_INT_MIN, _C_INT_MAX
-    )
+    lpc_order_value = _narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX)
     if max_click_value <= 0:
-        raise SonareValueError("max_click_samples must be positive")
+        raise _refuse("max_click_samples must be positive")
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     config = SonareDeclickConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         neighbor_ratio=_narrow_double(neighbor_ratio, "neighbor_ratio"),
@@ -298,6 +293,7 @@ def mastering_repair_declick_stereo(
         lib.sonare_free_declick_stereo_result(ctypes.byref(out))
 
 
+@_entry("mastering_repair_declip")
 @_guard_buffer("samples")
 def mastering_repair_declip(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -322,12 +318,8 @@ def mastering_repair_declip(
     # Narrowed rather than coerced: int() takes 2.7 as 2, an iteration count nobody asked for.
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
-        lpc_order=_narrow_int(
-            lpc_order, "mastering_repair_declip: lpc_order", _C_INT_MIN, _C_INT_MAX
-        ),
-        iterations=_narrow_int(
-            iterations, "mastering_repair_declip: iterations", _C_INT_MIN, _C_INT_MAX
-        ),
+        lpc_order=_narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX),
+        iterations=_narrow_int(iterations, "iterations", _C_INT_MIN, _C_INT_MAX),
         lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     lib = _get_lib()
@@ -356,6 +348,7 @@ def _extract_clip_detection(raw: Any) -> ClipDetection:
     )
 
 
+@_entry("mastering_repair_detect_clipping")
 @_guard_buffer("samples")
 def mastering_repair_detect_clipping(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -423,12 +416,8 @@ def mastering_repair_detect_clipping(
     """
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
-        lpc_order=_narrow_int(
-            lpc_order, "mastering_repair_detect_clipping: lpc_order", _C_INT_MIN, _C_INT_MAX
-        ),
-        iterations=_narrow_int(
-            iterations, "mastering_repair_detect_clipping: iterations", _C_INT_MIN, _C_INT_MAX
-        ),
+        lpc_order=_narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX),
+        iterations=_narrow_int(iterations, "iterations", _C_INT_MIN, _C_INT_MAX),
         lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     return _extract_clip_detection(
@@ -452,6 +441,7 @@ def _extract_declip_report(raw: Any) -> DeclipReport:
     )
 
 
+@_entry("mastering_repair_declip_stereo")
 @_guard_buffer("left", "right")
 def mastering_repair_declip_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -491,15 +481,11 @@ def mastering_repair_declip_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
-        lpc_order=_narrow_int(
-            lpc_order, "mastering_repair_declip_stereo: lpc_order", _C_INT_MIN, _C_INT_MAX
-        ),
-        iterations=_narrow_int(
-            iterations, "mastering_repair_declip_stereo: iterations", _C_INT_MIN, _C_INT_MAX
-        ),
+        lpc_order=_narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX),
+        iterations=_narrow_int(iterations, "iterations", _C_INT_MIN, _C_INT_MAX),
         lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     out = SonareDeclipStereoResult()  # noqa: F405
@@ -525,6 +511,7 @@ def mastering_repair_declip_stereo(
         lib.sonare_free_declip_stereo_result(ctypes.byref(out))
 
 
+@_entry("mastering_repair_decrackle")
 @_guard_buffer("samples")
 def mastering_repair_decrackle(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -539,7 +526,7 @@ def mastering_repair_decrackle(
         threshold=_narrow_double(threshold, "threshold"),
         mode=_coerce_decrackle_mode(mode),
         # Narrowed rather than coerced: int() takes 4.7 as 4, a depth nobody asked for.
-        levels=_narrow_int(levels, "mastering_repair_decrackle: levels", _C_INT_MIN, _C_INT_MAX),
+        levels=_narrow_int(levels, "levels", _C_INT_MIN, _C_INT_MAX),
     )
     lib = _get_lib()
     audio, report = _run_repair(
@@ -562,6 +549,7 @@ def _extract_crackle_detection(raw: Any) -> CrackleDetection:
     )
 
 
+@_entry("mastering_repair_detect_crackle")
 @_guard_buffer("samples")
 def mastering_repair_detect_crackle(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -605,9 +593,7 @@ def mastering_repair_detect_crackle(
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         mode=_coerce_decrackle_mode(mode),
-        levels=_narrow_int(
-            levels, "mastering_repair_detect_crackle: levels", _C_INT_MIN, _C_INT_MAX
-        ),
+        levels=_narrow_int(levels, "levels", _C_INT_MIN, _C_INT_MAX),
     )
     return _extract_crackle_detection(
         _run_detection(
@@ -630,6 +616,7 @@ def _extract_decrackle_report(raw: Any) -> DecrackleReport:
     )
 
 
+@_entry("mastering_repair_decrackle_stereo")
 @_guard_buffer("left", "right")
 def mastering_repair_decrackle_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -667,13 +654,11 @@ def mastering_repair_decrackle_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         mode=_coerce_decrackle_mode(mode),
-        levels=_narrow_int(
-            levels, "mastering_repair_decrackle_stereo: levels", _C_INT_MIN, _C_INT_MAX
-        ),
+        levels=_narrow_int(levels, "levels", _C_INT_MIN, _C_INT_MAX),
     )
     out = SonareDecrackleStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_decrackle_stereo(

@@ -19,6 +19,7 @@ from ._cancellation import (
     make_progress_trampoline,
     raise_callback_error,
 )
+from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import (
     SONARE_MAX_METER_CANDIDATE_NUMERATORS,
     SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
@@ -37,7 +38,6 @@ from ._runtime import (
     _C_INT_MIN,
     ErrorCode,
     SonareError,
-    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -112,11 +112,11 @@ def _music_analyze_options(
     # narrowed on the C int range below so the core sees what the caller passed;
     # every other rule (non-empty, numerator domain, denominator) is the core's.
     if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
-        raise SonareValueError(
-            "analyze: meter_candidate_numerators must hold at most "
+        raise _refuse(
+            "meter_candidate_numerators must hold at most "
             f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
         )
-    tuning_value, tuning_auto = _tuning_arg("analyze", tuning_cents)
+    tuning_value, tuning_auto = _tuning_arg(tuning_cents)
     return SonareMusicAnalyzeOptions(
         struct_version=SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
         n_fft=n_fft,
@@ -143,7 +143,7 @@ def _music_analyze_options(
             *[
                 _narrow_int(
                     value,
-                    f"analyze: meter_candidate_numerators[{i}]",
+                    f"meter_candidate_numerators[{i}]",
                     _C_INT_MIN,
                     _C_INT_MAX,
                 )
@@ -157,6 +157,7 @@ def _music_analyze_options(
     )
 
 
+@_entry("analyze")
 @_guard_buffer("samples")
 def analyze(
     samples: Sequence[float] | list[float],
@@ -366,6 +367,7 @@ def _analyze_with_callbacks(
     return _parse_analysis_json(data)
 
 
+@_entry("estimate_meter")
 def estimate_meter(
     beats: Sequence[Beat],
     *,
@@ -456,8 +458,8 @@ def estimate_meter(
     # every other rule (non-empty, numerator domain, denominator, weights, beat
     # series) is the core's to enforce.
     if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
-        raise SonareValueError(
-            "estimate_meter: candidate_numerators must hold at most "
+        raise _refuse(
+            "candidate_numerators must hold at most "
             f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
         )
 
@@ -467,13 +469,9 @@ def estimate_meter(
 
     entries = list(beats)
     if not all(isinstance(entry, Beat) for entry in entries):
-        raise TypeError("estimate_meter: beats must be a sequence of Beat")
-    times = _validate_samples(
-        "estimate_meter", [entry.time_sec for entry in entries], arg_name="beats.time_sec"
-    )
-    strengths = _validate_samples(
-        "estimate_meter", [entry.strength for entry in entries], arg_name="beats.strength"
-    )
+        raise _refuse_type("beats must be a sequence of Beat")
+    times = _validate_samples([entry.time_sec for entry in entries], arg_name="beats.time_sec")
+    strengths = _validate_samples([entry.strength for entry in entries], arg_name="beats.strength")
     c_times, time_count = _to_c_float_array(times)
     c_strengths, _ = _to_c_float_array(strengths)
 
@@ -483,9 +481,7 @@ def estimate_meter(
         # set, which it rejects.
         candidate_numerators=(ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS)(
             *[
-                _narrow_int(
-                    value, f"estimate_meter: candidate_numerators[{i}]", _C_INT_MIN, _C_INT_MAX
-                )
+                _narrow_int(value, f"candidate_numerators[{i}]", _C_INT_MIN, _C_INT_MAX)
                 for i, value in enumerate(numerators)
             ]
         ),
@@ -536,6 +532,7 @@ def estimate_meter(
     )
 
 
+@_entry("analyze_bpm")
 @_guard_buffer("samples")
 def analyze_bpm(
     samples: Sequence[float] | list[float],
@@ -589,6 +586,7 @@ def analyze_bpm(
         lib.sonare_free_bpm_analysis_result(ctypes.byref(out))
 
 
+@_entry("analyze_impulse_response")
 @_guard_buffer("samples")
 def analyze_impulse_response(
     samples: Sequence[float] | list[float],
@@ -601,18 +599,14 @@ def analyze_impulse_response(
     ``min_decay_db`` selects the minimum decay range used by the native
     regression and defaults to the legacy 30 dB range.
     """
-    n_octave_bands_value = _narrow_int(
-        n_octave_bands, "analyze_impulse_response: n_octave_bands", 0, _C_INT_MAX
-    )
+    n_octave_bands_value = _narrow_int(n_octave_bands, "n_octave_bands", 0, _C_INT_MAX)
     try:
         decay_db = _narrow_double(min_decay_db, "min_decay_db")
         decay_db_c = ctypes.c_float(decay_db).value
     except (TypeError, ValueError, OverflowError) as exc:
-        raise SonareValueError(
-            "analyze_impulse_response: min_decay_db must be finite and positive"
-        ) from exc
+        raise _refuse("min_decay_db must be finite and positive") from exc
     if not math.isfinite(decay_db_c) or decay_db_c <= 0.0:
-        raise SonareValueError("analyze_impulse_response: min_decay_db must be finite and positive")
+        raise _refuse("min_decay_db must be finite and positive")
 
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -657,6 +651,7 @@ def analyze_impulse_response(
         lib.sonare_free_acoustic_result(ctypes.byref(out))
 
 
+@_entry("detect_acoustic")
 @_guard_buffer("samples")
 def detect_acoustic(
     samples: Sequence[float] | list[float],
@@ -701,6 +696,7 @@ def detect_acoustic(
         lib.sonare_free_acoustic_result(ctypes.byref(out))
 
 
+@_entry("analyze_rhythm")
 @_guard_buffer("samples")
 def analyze_rhythm(
     samples: Sequence[float] | list[float],
@@ -756,6 +752,7 @@ def analyze_rhythm(
         lib.sonare_free_rhythm_result(ctypes.byref(out))
 
 
+@_entry("analyze_dynamics")
 @_guard_buffer("samples")
 def analyze_dynamics(
     samples: Sequence[float] | list[float],
@@ -796,6 +793,7 @@ def analyze_dynamics(
         lib.sonare_free_dynamics_result(ctypes.byref(out))
 
 
+@_entry("analyze_timbre")
 @_guard_buffer("samples")
 def analyze_timbre(
     samples: Sequence[float] | list[float],

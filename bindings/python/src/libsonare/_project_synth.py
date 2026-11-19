@@ -18,13 +18,12 @@ from typing import Literal, cast, get_args
 
 import numpy as np
 
-from ._errors import _not_supported, _require_open, _unknown_error
+from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_open, _unknown_error
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._narrowing import _is_number, _narrow_double, _optional_nonzero
 from ._runtime import (
     _UINT8_MAX,
     _UINT32_MAX,
-    SonareValueError,
     _check,
     _get_lib,
     _joined_names,
@@ -127,7 +126,7 @@ def _part_rig_inserts_arg(
     for i, raw_insert in enumerate(inserts):
         insert = _mapping_keys(raw_insert, ("processor", "params"), f"inserts[{i}]")
         if "processor" not in insert:
-            raise SonareValueError(f"inserts[{i}] needs a 'processor' key")
+            raise _refuse(f"inserts[{i}] needs a 'processor' key")
         entries.append({"processor": insert["processor"], "params": insert.get("params", {})})
     return _utf8_arg(json.dumps(entries), "entries")
 
@@ -416,6 +415,7 @@ _SYNTH_ENUM_KINDS = {
 }
 
 
+@_entry("synth_enum_tables")
 def synth_enum_tables() -> dict[str, tuple[str, ...]]:
     """Canonical NativeSynth enum-name tables supplied by the C ABI."""
     lib = _get_lib()
@@ -499,16 +499,16 @@ def _unsigned(value: int, name: str, limit: int) -> int:
     """
     if isinstance(value, bool) or not isinstance(value, int):
         message = f"{name} must be an integer"
-        raise SonareValueError(message) if _is_number(value) else TypeError(message)
+        raise _refuse(message) if _is_number(value) else _refuse_type(message)
     if value < 0 or value > limit:
-        raise SonareValueError(f"{name} must be in [0, {limit}]")
+        raise _refuse(f"{name} must be in [0, {limit}]")
     return value
 
 
 def _finite(value: float, name: str) -> float:
     v = _narrow_double(value, name)
     if not np.isfinite(v):
-        raise SonareValueError(f"{name} must be a finite number")
+        raise _refuse(f"{name} must be a finite number")
     return v
 
 
@@ -547,6 +547,7 @@ class SampleBank:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("SampleBank")
     def __init__(self) -> None:
         # Set first so a failed create or a missing build leaves a valid
         # attribute for __del__/close() instead of raising AttributeError.
@@ -560,6 +561,7 @@ class SampleBank:
 
     # -- lifecycle ----------------------------------------------------------
 
+    @_entry("SampleBank.close")
     def close(self) -> None:
         """Release the native bank (idempotent). Nothing rendering may hold it."""
         if self._handle is not None:
@@ -583,6 +585,7 @@ class SampleBank:
 
     # -- content ------------------------------------------------------------
 
+    @_entry("SampleBank.add_sample")
     def add_sample(
         self,
         data: Sequence[float] | np.ndarray,
@@ -621,7 +624,7 @@ class SampleBank:
             SonareError: ``OutOfMemory`` when the bank would exceed its sample
                 budget.
         """
-        buf = _validate_samples("SampleBank.add_sample", data, arg_name="data")
+        buf = _validate_samples(data, arg_name="data")
         desc = SonareSampleDesc(
             root_key=_unsigned(root_key, "root_key", 127),
             fine_tune_cents=_finite(fine_tune_cents, "fine_tune_cents"),
@@ -646,6 +649,7 @@ class SampleBank:
         )
         return int(out_index.value)
 
+    @_entry("SampleBank.add_zone")
     def add_zone(
         self,
         set_index: int,

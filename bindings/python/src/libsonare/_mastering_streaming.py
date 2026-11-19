@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from ._errors import _not_supported, _require_open
+from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_open
 from ._ffi import (
     SonareEqSnapshot,
     SonareStreamingLoudnessGain,
@@ -20,7 +20,6 @@ from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    SonareValueError,
     _check,
     _check_realtime,
     _from_c_float_array,
@@ -59,6 +58,7 @@ def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> Streami
     )
 
 
+@_entry("streaming_loudness_gain")
 @_guard_buffer("samples")
 def streaming_loudness_gain(
     samples: Sequence[float] | list[float],
@@ -111,6 +111,7 @@ def streaming_loudness_gain(
     return _streaming_loudness_gain_result(out)
 
 
+@_entry("streaming_loudness_gain_stereo")
 @_guard_buffer("left", "right")
 def streaming_loudness_gain_stereo(
     left: Sequence[float] | list[float],
@@ -129,7 +130,7 @@ def streaming_loudness_gain_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     param_array, param_count = _chain_params(config)
     out = SonareStreamingLoudnessGain()
     rc = lib.sonare_streaming_loudness_gain_stereo(
@@ -183,6 +184,7 @@ class StreamingMasteringChain:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("StreamingMasteringChain")
     def __init__(
         self,
         config: MasteringChainConfig | None = None,
@@ -268,6 +270,7 @@ class StreamingMasteringChain:
             self.close()
             raise
 
+    @_entry("StreamingMasteringChain.process_mono")
     def process_mono(self, samples: Sequence[float] | np.ndarray) -> np.ndarray:
         """Process one mono block, returning the processed samples (length unchanged).
 
@@ -282,6 +285,7 @@ class StreamingMasteringChain:
         _check(rc)
         return _from_c_float_array(c_array, length)
 
+    @_entry("StreamingMasteringChain.process_stereo")
     def process_stereo(
         self,
         left: Sequence[float] | np.ndarray,
@@ -296,7 +300,7 @@ class StreamingMasteringChain:
         left_array, left_length = _to_c_float_array_owned(left, arg_name="left")
         right_array, right_length = _to_c_float_array_owned(right, arg_name="right")
         if left_length != right_length:
-            raise SonareValueError("left and right channel lengths must match")
+            raise _refuse("left and right channel lengths must match")
         rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
             self._handle, left_array, right_array, _to_c_size_t(left_length, "left_length")
         )
@@ -306,6 +310,7 @@ class StreamingMasteringChain:
             _from_c_float_array(right_array, right_length),
         )
 
+    @_entry("StreamingMasteringChain.flush_mono")
     def flush_mono(self) -> np.ndarray:
         """Emit delayed audio and finite processor tails after the final mono block.
 
@@ -332,6 +337,7 @@ class StreamingMasteringChain:
         _check(rc)
         return _from_c_float_array(block, written.value)
 
+    @_entry("StreamingMasteringChain.flush_stereo")
     def flush_stereo(self) -> StereoBlock:
         """Stereo counterpart of :meth:`flush_mono`."""
         self._ensure_flush_ready()
@@ -352,12 +358,14 @@ class StreamingMasteringChain:
             _from_c_float_array(right, written.value),
         )
 
+    @_entry("StreamingMasteringChain.reset")
     def reset(self) -> None:
         """Reset all processor state without rebuilding."""
         self._ensure_open()
         rc = self._lib.sonare_streaming_mastering_chain_reset(self._handle)
         _check(rc)
 
+    @_entry("StreamingMasteringChain.set_parameter")
     def set_parameter(self, key: str, value: float) -> None:
         """Update one realtime-safe full-chain parameter between processing calls.
 
@@ -371,9 +379,9 @@ class StreamingMasteringChain:
         """
         self._ensure_open()
         if not isinstance(key, str):
-            raise TypeError("key must be a string")
+            raise _refuse_type("key must be a string")
         if not key:
-            raise SonareValueError("key must not be empty")
+            raise _refuse("key must not be empty")
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_set_parameter"):
             raise _not_supported("libsonare was built without streaming parameter support")
         key_bytes = _utf8_arg(key, "key")
@@ -461,6 +469,7 @@ class StreamingMasteringChain:
         _check_realtime(rc)
         return int(out.value)
 
+    @_entry("StreamingMasteringChain.stage_names")
     def stage_names(self) -> list[str]:
         """Return the realized stage names in processing order.
 
@@ -474,6 +483,7 @@ class StreamingMasteringChain:
         raw = self._lib.sonare_streaming_mastering_chain_stage_names(self._handle)
         return raw.decode("utf-8").splitlines() if raw else []
 
+    @_entry("StreamingMasteringChain.close")
     def close(self) -> None:
         """Release the underlying C handle. Safe to call multiple times."""
         if self._handle is not None and self._handle:
@@ -512,6 +522,7 @@ class StreamingEqualizer:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("StreamingEqualizer")
     def __init__(self, *, sample_rate: int, max_block_size: int | None = None) -> None:
         """Create an equalizer; an omitted ``max_block_size`` takes the library default."""
         # Set first so a failed create or a missing build leaves a valid
@@ -536,38 +547,44 @@ class StreamingEqualizer:
         self.sample_rate = sample_rate_value
         self._sidechain_refs: object | None = None
 
+    @_entry("StreamingEqualizer.set_band")
     def set_band(self, index: int, band: EqBandInput) -> None:
         """Set one EQ band from an :data:`EqBandInput` mapping."""
         self._ensure_open()
         if not isinstance(band, Mapping):
-            raise TypeError("band must be a mapping (parse JSON text with json.loads first)")
+            raise _refuse_type("band must be a mapping (parse JSON text with json.loads first)")
         payload = json.dumps(dict(band), separators=(",", ":"))
         rc = self._lib.sonare_eq_set_band(
             self._handle, _to_c_int(index, "index"), _utf8_arg(payload, "payload")
         )
         _check(rc)
 
+    @_entry("StreamingEqualizer.clear")
     def clear(self) -> None:
         """Clear all EQ bands."""
         self._ensure_open()
         self._lib.sonare_eq_clear(self._handle)
 
+    @_entry("StreamingEqualizer.set_phase_mode")
     def set_phase_mode(self, mode: EqPhaseMode) -> None:
         """Set the global phase mode: ``"zero"``, ``"natural"`` or ``"linear"``."""
         self._ensure_open()
         value = _token_ordinal(mode, _EQ_PHASE_MODES, "EQ phase mode") + 1
         _check(self._lib.sonare_eq_set_phase_mode(self._handle, _to_c_int(value, "mode")))
 
+    @_entry("StreamingEqualizer.set_auto_gain")
     def set_auto_gain(self, enabled: bool) -> None:
         """Enable or disable auto-gain compensation."""
         self._ensure_open()
         self._lib.sonare_eq_set_auto_gain(self._handle, ctypes.c_int(1 if enabled else 0))
 
+    @_entry("StreamingEqualizer.set_gain_scale")
     def set_gain_scale(self, scale: float) -> None:
         """Set all-band EQ gain scale as a 0.0..2.0 multiplier."""
         self._ensure_open()
         _check(self._lib.sonare_eq_set_gain_scale(self._handle, _to_c_float(scale, "scale")))
 
+    @_entry("StreamingEqualizer.set_output_gain_db")
     def set_output_gain_db(self, gain_db: float) -> None:
         """Set post-EQ output gain in dB."""
         self._ensure_open()
@@ -575,11 +592,13 @@ class StreamingEqualizer:
             self._lib.sonare_eq_set_output_gain_db(self._handle, _to_c_float(gain_db, "gain_db"))
         )
 
+    @_entry("StreamingEqualizer.set_output_pan")
     def set_output_pan(self, pan: float) -> None:
         """Set post-EQ stereo balance in -1.0..1.0; mono input ignores pan."""
         self._ensure_open()
         _check(self._lib.sonare_eq_set_output_pan(self._handle, _to_c_float(pan, "pan")))
 
+    @_entry("StreamingEqualizer.set_sidechain_mono")
     @_guard_buffer("samples")
     def set_sidechain_mono(self, samples: Sequence[float] | np.ndarray) -> None:
         """Set a mono external key for dynamic bands with ``externalSidechain`` enabled.
@@ -598,6 +617,7 @@ class StreamingEqualizer:
         )
         self._sidechain_refs = (c_array, channels)
 
+    @_entry("StreamingEqualizer.set_sidechain_stereo")
     @_guard_buffer("left", "right")
     def set_sidechain_stereo(
         self,
@@ -613,7 +633,7 @@ class StreamingEqualizer:
         left_array, left_length = _to_c_float_array(left)
         right_array, right_length = _to_c_float_array(right)
         if left_length != right_length:
-            raise SonareValueError("left and right sidechain lengths must match")
+            raise _refuse("left and right sidechain lengths must match")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
         channels = channel_array_type(
             ctypes.cast(left_array, ctypes.POINTER(ctypes.c_float)),
@@ -626,12 +646,14 @@ class StreamingEqualizer:
         )
         self._sidechain_refs = (left_array, right_array, channels)
 
+    @_entry("StreamingEqualizer.clear_sidechain")
     def clear_sidechain(self) -> None:
         """Clear any pending external key buffer."""
         self._ensure_open()
         self._lib.sonare_eq_clear_sidechain(self._handle)
         self._sidechain_refs = None
 
+    @_entry("StreamingEqualizer.match")
     @_guard_buffer("source", "reference")
     def match(
         self,
@@ -671,6 +693,7 @@ class StreamingEqualizer:
         )
         _check(rc)
 
+    @_entry("StreamingEqualizer.process_mono")
     def process_mono(self, samples: Sequence[float] | np.ndarray) -> np.ndarray:
         """Process one mono block, returning processed samples.
 
@@ -689,6 +712,7 @@ class StreamingEqualizer:
         self._sidechain_refs = None
         return _from_c_float_array(c_array, length)
 
+    @_entry("StreamingEqualizer.process_stereo")
     def process_stereo(
         self,
         left: Sequence[float] | np.ndarray,
@@ -703,7 +727,7 @@ class StreamingEqualizer:
         left_array, left_length = _to_c_float_array_owned(left, arg_name="left")
         right_array, right_length = _to_c_float_array_owned(right, arg_name="right")
         if left_length != right_length:
-            raise SonareValueError("left and right channel lengths must match")
+            raise _refuse("left and right channel lengths must match")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
         channels = channel_array_type(
             ctypes.cast(left_array, ctypes.POINTER(ctypes.c_float)),
@@ -720,6 +744,7 @@ class StreamingEqualizer:
             _from_c_float_array(right_array, right_length),
         )
 
+    @_entry("StreamingEqualizer.spectrum")
     def spectrum(self) -> EqSpectrumSnapshot:
         """Return the latest pre/post sample stream and band-gain snapshot."""
         self._ensure_open()
@@ -742,6 +767,7 @@ class StreamingEqualizer:
             seq=int(out.seq),
         )
 
+    @_entry("StreamingEqualizer.magnitude_response")
     def magnitude_response(
         self,
         frequencies_hz: Sequence[float] | np.ndarray,
@@ -774,9 +800,7 @@ class StreamingEqualizer:
             raise _not_supported("libsonare was built without EQ magnitude response support")
         ordinal = _token_ordinal(placement, _EQ_STEREO_PLACEMENTS, "EQ band placement")
         # Non-finite only: an empty curve is a result, a NaN frequency is not.
-        frequencies = _validate_samples(
-            "magnitude_response", frequencies_hz, arg_name="frequencies_hz", allow_empty=True
-        )
+        frequencies = _validate_samples(frequencies_hz, arg_name="frequencies_hz", allow_empty=True)
         c_frequencies, count = _to_c_float_array(frequencies)
         out = (ctypes.c_float * count)()
         _check(
@@ -841,6 +865,7 @@ class StreamingEqualizer:
         )
         return int(out.value)
 
+    @_entry("StreamingEqualizer.close")
     def close(self) -> None:
         """Release the underlying C handle. Safe to call multiple times."""
         if self._handle is not None and self._handle:

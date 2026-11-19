@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from ._errors import _entry, _refuse, _refuse_type
 from ._project_mir import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project_mir import TakeAlignment as TakeAlignment
 from ._project_mir import align_take_to_reference as align_take_to_reference
@@ -68,7 +69,6 @@ from ._runtime import (
     SonareProjectTrackDesc,
     SonareProjectWarpAnchor,
     SonareProjectWarpMapDesc,
-    SonareValueError,
     _as_float32_buffer,
     _check,
     _get_lib,
@@ -126,6 +126,7 @@ class _ProjectEditMixin:
             self, raw: SonareProjectSource, name_or_uri: str | None = None
         ) -> ProjectSource: ...
 
+    @_entry("Project.set_sample_rate")
     def set_sample_rate(self, sample_rate: float) -> None:
         """Set the project sample rate in Hz.
 
@@ -139,6 +140,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.unresolved_audio_source_ids")
     def unresolved_audio_source_ids(self) -> np.ndarray:
         """Return the ``uint32`` ids of audio sources that need PCM after deserialization."""
         count = ctypes.c_size_t()
@@ -161,6 +163,7 @@ class _ProjectEditMixin:
             ids.append(int(source_id.value))
         return np.asarray(ids, dtype=np.uint32)
 
+    @_entry("Project.unresolved_audio_sources")
     def unresolved_audio_sources(self) -> list[ProjectSource]:
         """Return descriptors of audio sources that need PCM, with the full URI."""
         count = ctypes.c_size_t()
@@ -181,13 +184,14 @@ class _ProjectEditMixin:
             sources.append(self._source_from_raw(raw))
         return sources
 
+    @_entry("Project.set_source_audio")
     def set_source_audio(
         self, source_id: int, audio: Sequence[float] | np.ndarray, channels: int, sample_rate: int
     ) -> None:
         """Register decoded interleaved PCM for an existing audio source (undoable)."""
         backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
-            raise SonareValueError("audio length must be a multiple of channels")
+            raise _refuse("audio length must be a multiple of channels")
         # Narrowed before the frame count is derived from it, so a `channels`
         # the C type cannot hold is refused under its own name.
         channel_count = _to_c_int(channels, "channels")
@@ -202,6 +206,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_audio_source_metadata")
     def set_audio_source_metadata(
         self, source_id: int, content_hash: str | None, external_stem_role: str | None
     ) -> None:
@@ -216,12 +221,9 @@ class _ProjectEditMixin:
             ("external_stem_role", external_stem_role),
         ):
             if value is not None and not isinstance(value, str):
-                raise TypeError(f"set_audio_source_metadata: {arg_name} must be a string or None")
+                raise _refuse_type(f"{arg_name} must be a string or None")
             if value == "":
-                raise SonareValueError(
-                    f"set_audio_source_metadata: {arg_name} must not be empty; "
-                    "pass None to clear it"
-                )
+                raise _refuse(f"{arg_name} must not be empty; pass None to clear it")
         lib = _get_lib()
         _require_export(
             lib,
@@ -240,6 +242,7 @@ class _ProjectEditMixin:
 
     # -- edit ---------------------------------------------------------------
 
+    @_entry("Project.add_track")
     def add_track(self, kind: ProjectTrackKind = "audio", name: str | None = None) -> int:
         """Add a track and return its allocated stable id.
 
@@ -248,7 +251,7 @@ class _ProjectEditMixin:
             name: Optional track name.
         """
         if name == "":
-            raise SonareValueError("add_track: name must not be empty; omit it for no name")
+            raise _refuse("name must not be empty; omit it for no name")
         desc = SonareProjectTrackDesc(
             kind=_track_kind_value(kind),
             name=_utf8_arg(name, "name") if name is not None else None,
@@ -261,6 +264,7 @@ class _ProjectEditMixin:
         )
         return int(out_id.value)
 
+    @_entry("Project.add_clip")
     def add_clip(
         self,
         track_id: int,
@@ -293,12 +297,12 @@ class _ProjectEditMixin:
         rate = 0
         if audio is None:
             if audio_channels is not None or audio_sample_rate is not None:
-                raise SonareValueError(
+                raise _refuse(
                     "audio_channels and audio_sample_rate describe audio; omit them without audio"
                 )
         else:
             if audio_channels is None or audio_sample_rate is None:
-                raise SonareValueError("audio requires audio_channels and audio_sample_rate")
+                raise _refuse("audio requires audio_channels and audio_sample_rate")
             rate = _narrow_int(audio_sample_rate, "audio_sample_rate", _C_INT_MIN, _C_INT_MAX)
             backing, total = _to_c_float_array(audio, arg_name="audio")
             c_audio = backing
@@ -306,7 +310,7 @@ class _ProjectEditMixin:
             # channel count is refused rather than silently becoming its floor.
             channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
             if channels <= 0 or total % channels != 0:
-                raise SonareValueError("audio length must be a multiple of audio_channels")
+                raise _refuse("audio length must be a multiple of audio_channels")
             audio_frames = total // channels
         desc = SonareProjectClipDesc(
             track_id=track_id,
@@ -331,6 +335,7 @@ class _ProjectEditMixin:
         del backing
         return int(out_id.value)
 
+    @_entry("Project.import_external_stems")
     def import_external_stems(
         self,
         sample_rate: int,
@@ -351,21 +356,21 @@ class _ProjectEditMixin:
         sample_arrays: list[list[np.ndarray]] = []
         plane_arrays: list[ctypes.Array[ctypes._Pointer[ctypes.c_float]]] = []
         for i, raw_stem in enumerate(stems):
-            stem = _mapping_keys(raw_stem, _STEM_KEYS, f"import_external_stems: stems[{i}]")
+            stem = _mapping_keys(raw_stem, _STEM_KEYS, f"stems[{i}]")
             name = stem.get("name")
             planes = stem.get("planar_samples")
             if not isinstance(name, str) or not isinstance(planes, Sequence):
-                raise TypeError("each stem needs string name and planar_samples")
+                raise _refuse_type("each stem needs string name and planar_samples")
             layout_value = _token_ordinal(stem.get("layout"), _STEM_LAYOUTS, "stem layout") + 1
             if len(planes) != layout_value:
-                raise SonareValueError("planar_samples must match mono or stereo layout")
+                raise _refuse("planar_samples must match mono or stereo layout")
             arrays = [_as_float32_buffer(plane, arg_name="planar_samples") for plane in planes]
             if not arrays or any(array.size != arrays[0].size for array in arrays):
-                raise SonareValueError("all planar_samples entries must have equal length")
+                raise _refuse("all planar_samples entries must have equal length")
             names.append(_utf8_arg(name, "name"))
             role = stem.get("role")
             if role is not None and not isinstance(role, str):
-                raise TypeError("stem role must be a string when supplied")
+                raise _refuse_type("stem role must be a string when supplied")
             roles.append(None if role is None else _utf8_arg(role, "role"))
             sample_arrays.append(arrays)
             c_planes = (ctypes.POINTER(ctypes.c_float) * layout_value)(
@@ -410,6 +415,7 @@ class _ProjectEditMixin:
         finally:
             lib.sonare_free_external_stem_import_result(ctypes.byref(result))
 
+    @_entry("Project.add_loop_recording_takes")
     def add_loop_recording_takes(
         self,
         track_id: int,
@@ -444,31 +450,31 @@ class _ProjectEditMixin:
         elif partial_tail == "drop":
             flags = _LOOP_RECORDING_DROP_PARTIAL_TAIL
         else:
-            raise SonareValueError("partial_tail must be 'keep' or 'drop'")
+            raise _refuse("partial_tail must be 'keep' or 'drop'")
         planar = _planar_channels(audio)
         if planar is not None:
             if not planar:
-                raise SonareValueError("audio must not be empty")
+                raise _refuse("audio must not be empty")
             if any(plane.shape[0] != planar[0].shape[0] for plane in planar):
-                raise SonareValueError("planar audio channels must have equal lengths")
+                raise _refuse("planar audio channels must have equal lengths")
             if audio_channels is not None:
-                raise SonareValueError(
+                raise _refuse(
                     "audio_channels must be omitted for planar audio, whose shape carries it"
                 )
             channels = len(planar)
             audio = np.stack(planar, axis=1).reshape(-1)
         else:
             if audio_channels is None:
-                raise SonareValueError("audio_channels is required for interleaved audio")
+                raise _refuse("audio_channels is required for interleaved audio")
             # Narrowed before the frame count is derived from it, so a fractional
             # channel count is refused rather than silently becoming its floor.
             channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
         sample_rate = _narrow_int(audio_sample_rate, "audio_sample_rate", _C_INT_MIN, _C_INT_MAX)
         if sample_rate <= 0:
-            raise SonareValueError("audio_sample_rate must be positive")
+            raise _refuse("audio_sample_rate must be positive")
         backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
-            raise SonareValueError("audio length must be a multiple of audio_channels")
+            raise _refuse("audio length must be a multiple of audio_channels")
         frames = total // channels
         desc = SonareProjectLoopRecordingDesc(
             track_id=track_id,
@@ -495,6 +501,7 @@ class _ProjectEditMixin:
             clip_id=int(out_clip.value), take_count=int(out_take_count.value)
         )
 
+    @_entry("Project.add_midi_clip")
     def add_midi_clip(self, start_ppq: float, length_ppq: float) -> ProjectMidiClipResult:
         """Create a MIDI track + clip; return a :class:`ProjectMidiClipResult`.
 
@@ -515,6 +522,7 @@ class _ProjectEditMixin:
         )
         return ProjectMidiClipResult(track_id=int(out_track.value), clip_id=int(out_clip.value))
 
+    @_entry("Project.split_clip")
     def split_clip(self, clip_id: int, split_ppq: float) -> int:
         """Split a clip at ``split_ppq`` (absolute PPQ); return the new clip id."""
         out_id = ctypes.c_uint32()
@@ -528,6 +536,7 @@ class _ProjectEditMixin:
         )
         return int(out_id.value)
 
+    @_entry("Project.trim_clip")
     def trim_clip(self, clip_id: int, new_start_ppq: float, new_length_ppq: float) -> None:
         """Trim a clip's start / length (PPQ)."""
         _check(
@@ -539,6 +548,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.move_clip")
     def move_clip(
         self, clip_id: int, new_start_ppq: float, new_track_id: int | None = None
     ) -> None:
@@ -559,6 +569,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_track_kind")
     def set_track_kind(self, track_id: int, kind: ProjectTrackKind) -> None:
         """Change a track kind via an undoable edit command."""
         _check(
@@ -569,6 +580,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_clip_warp_ref")
     def set_clip_warp_ref(self, clip_id: int, warp_ref_id: int) -> None:
         """Set a clip's warp reference id (``0`` clears it)."""
         _check(
@@ -579,6 +591,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_clip_warp_mode")
     def set_clip_warp_mode(self, clip_id: int, mode: ProjectWarpMode) -> None:
         """Set a clip's warp playback mode."""
         _check(
@@ -589,6 +602,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_clip_takes")
     def set_clip_takes(
         self,
         clip_id: int,
@@ -602,15 +616,15 @@ class _ProjectEditMixin:
         ``active_take_id`` ``None`` plays the clip's base source.
         """
         if takes is None:
-            raise TypeError("set_clip_takes: takes must be a sequence; pass [] to clear the takes")
+            raise _refuse_type("takes must be a sequence; pass [] to clear the takes")
         take_items = list(takes)
         c_takes = (SonareProjectClipTake * len(take_items))()
         name_backing: list[bytes] = []
         for i, item in enumerate(take_items):
-            where = f"set_clip_takes: takes[{i}]"
+            where = f"takes[{i}]"
             take = _mapping_keys(item, _TAKE_KEYS, where)
             if take.get("id") is None:
-                raise SonareValueError(f"{where}.id is required")
+                raise _refuse(f"{where}.id is required")
             c_takes[i].id = _optional_positive_int(take["id"], f"{where}.id", _UINT32_MAX)
             c_takes[i].source_id = _optional_positive_int(
                 take.get("source_id"), f"{where}.source_id", _UINT32_MAX
@@ -621,11 +635,9 @@ class _ProjectEditMixin:
             name = take.get("name")
             if name is not None:
                 if not isinstance(name, str):
-                    raise TypeError(f"{where}.name must be a string or None")
+                    raise _refuse_type(f"{where}.name must be a string or None")
                 if not name:
-                    raise SonareValueError(
-                        f"{where}.name must not be empty; omit it for an unnamed take"
-                    )
+                    raise _refuse(f"{where}.name must not be empty; omit it for an unnamed take")
                 encoded = _utf8_arg(name, "name")
                 name_backing.append(encoded)
                 c_takes[i].name = encoded
@@ -636,15 +648,14 @@ class _ProjectEditMixin:
                 c_takes if take_items else None,
                 len(take_items),
                 _to_c_uint32(
-                    _optional_positive_int(
-                        active_take_id, "set_clip_takes: active_take_id", _UINT32_MAX
-                    ),
-                    "set_clip_takes: active_take_id",
+                    _optional_positive_int(active_take_id, "active_take_id", _UINT32_MAX),
+                    "active_take_id",
                 ),
             )
         )
         del name_backing
 
+    @_entry("Project.set_clip_comp_segments")
     def set_clip_comp_segments(
         self,
         clip_id: int,
@@ -655,32 +666,24 @@ class _ProjectEditMixin:
         A segment's ``take_id`` absent or ``None`` plays the base/active take; 0 is refused.
         """
         if segments is None:
-            raise TypeError(
-                "set_clip_comp_segments: segments must be a sequence; pass [] to clear the lane"
-            )
+            raise _refuse_type("segments must be a sequence; pass [] to clear the lane")
         segment_items = list(segments)
         c_segments = (SonareProjectClipCompSegment * len(segment_items))()
         for i, item in enumerate(segment_items):
-            segment = _mapping_keys(
-                item, _COMP_SEGMENT_KEYS, f"set_clip_comp_segments: segments[{i}]"
-            )
+            segment = _mapping_keys(item, _COMP_SEGMENT_KEYS, f"segments[{i}]")
             start_ppq = segment.get("start_ppq", 0.0)
             end_ppq = segment.get("end_ppq", 0.0)
             crossfade_ppq = segment.get("crossfade_ppq", 0.0)
-            c_segments[i].start_ppq = _narrow_double(
-                start_ppq, f"set_clip_comp_segments: segments[{i}].start_ppq"
-            )
-            c_segments[i].end_ppq = _narrow_double(
-                end_ppq, f"set_clip_comp_segments: segments[{i}].end_ppq"
-            )
+            c_segments[i].start_ppq = _narrow_double(start_ppq, f"segments[{i}].start_ppq")
+            c_segments[i].end_ppq = _narrow_double(end_ppq, f"segments[{i}].end_ppq")
             # Absent or None falls back to the base/active take.
             c_segments[i].take_id = _optional_positive_int(
                 segment.get("take_id"),
-                f"set_clip_comp_segments: segments[{i}].take_id",
+                f"segments[{i}].take_id",
                 _UINT32_MAX,
             )
             c_segments[i].crossfade_ppq = _narrow_double(
-                crossfade_ppq, f"set_clip_comp_segments: segments[{i}].crossfade_ppq"
+                crossfade_ppq, f"segments[{i}].crossfade_ppq"
             )
         _check(
             _get_lib().sonare_project_set_clip_comp_segments(
@@ -691,6 +694,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_warp_map")
     def set_warp_map(
         self,
         warp_ref_id: int,
@@ -704,15 +708,13 @@ class _ProjectEditMixin:
         count = len(anchors)
         c_anchors = (SonareProjectWarpAnchor * count)()
         for i, (warp_sample, source_sample) in enumerate(anchors):
-            c_anchors[i].warp_sample = _narrow_double(
-                warp_sample, f"set_warp_map: anchors[{i}].warp_sample"
-            )
+            c_anchors[i].warp_sample = _narrow_double(warp_sample, f"anchors[{i}].warp_sample")
             c_anchors[i].source_sample = _narrow_double(
-                source_sample, f"set_warp_map: anchors[{i}].source_sample"
+                source_sample, f"anchors[{i}].source_sample"
             )
         encoded_name = None if name is None else _utf8_arg(name, "name")
         if encoded_name == b"":
-            raise SonareValueError("set_warp_map: name must not be empty; omit it for no name")
+            raise _refuse("name must not be empty; omit it for no name")
         desc = SonareProjectWarpMapDesc(
             # Passed unconverted so the struct's own narrowing sees the caller's
             # value; int() would truncate a fraction past it.
@@ -723,6 +725,7 @@ class _ProjectEditMixin:
         )
         _check(_get_lib().sonare_project_set_warp_map(self._require_handle(), ctypes.byref(desc)))
 
+    @_entry("Project.remove_warp_map")
     def remove_warp_map(self, warp_ref_id: int) -> None:
         """Remove a first-class project warp map by id."""
         _check(
@@ -732,6 +735,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_track_midi_destination")
     def set_track_midi_destination(self, track_id: int, destination_id: int) -> None:
         """Route a track's MIDI to host-instrument ``destination_id``.
 
@@ -757,6 +761,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_part_rig")
     def set_part_rig(
         self,
         destination_id: int,
@@ -799,6 +804,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.part_rig")
     def part_rig(self, destination_id: int, part: int) -> PartRigEntry | None:
         """Read back :meth:`set_part_rig` as a :class:`PartRigEntry`, or ``None`` if unset.
 
@@ -842,6 +848,7 @@ class _ProjectEditMixin:
         )
         return PartRigEntry(mode=mode_out, inserts=inserts)
 
+    @_entry("Project.clear_part_rig")
     def clear_part_rig(self, destination_id: int, part: int) -> None:
         """Remove one part-rig entry via an undoable edit (absent entries are a no-op)."""
         lib = _get_lib()
@@ -859,6 +866,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_track_gain")
     def set_track_gain(self, track_id: int, gain: float) -> None:
         """Set a track's linear playback gain (1.0 = unity; >= 0) via an undoable edit.
 
@@ -881,13 +889,14 @@ class _ProjectEditMixin:
         # Type half shared, semantic half local: ">= 0" is this field's own rule.
         g = _narrow_float(gain, "gain")
         if g < 0.0:
-            raise SonareValueError("gain must be a finite number >= 0")
+            raise _refuse("gain must be a finite number >= 0")
         _check(
             _get_lib().sonare_project_set_track_gain(
                 self._require_handle(), _to_c_uint32(track_id, "track_id"), g
             )
         )
 
+    @_entry("Project.set_track_mute")
     def set_track_mute(self, track_id: int, mute: bool) -> None:
         """Set a track's mute flag via an undoable edit (a muted track is silent)."""
         _check(
@@ -896,6 +905,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_track_solo")
     def set_track_solo(self, track_id: int, solo: bool) -> None:
         """Set a track's solo flag via an undoable edit.
 
@@ -907,6 +917,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_track_pan")
     def set_track_pan(self, track_id: int, pan: float) -> None:
         """Set a track's stereo balance in [-1, +1] (0 = center) via an undoable edit.
 
@@ -928,6 +939,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.remove_clip")
     def remove_clip(self, clip_id: int) -> None:
         """Remove a clip via an undoable edit command (undo restores it)."""
         _check(
@@ -936,18 +948,20 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_clip_gain")
     def set_clip_gain(self, clip_id: int, gain: float) -> None:
         """Set a clip's linear playback gain (>= 0; 0 = muted) via an undoable edit."""
         # Type half shared, semantic half local: ">= 0" is this field's own rule.
         g = _narrow_float(gain, "gain")
         if g < 0.0:
-            raise SonareValueError("gain must be a finite number >= 0")
+            raise _refuse("gain must be a finite number >= 0")
         _check(
             _get_lib().sonare_project_set_clip_gain(
                 self._require_handle(), _to_c_uint32(clip_id, "clip_id"), g
             )
         )
 
+    @_entry("Project.set_clip_fade")
     def set_clip_fade(
         self,
         clip_id: int,
@@ -966,9 +980,9 @@ class _ProjectEditMixin:
         fin = _narrow_double(fade_in_length_ppq, "fade_in_length_ppq")
         fout = _narrow_double(fade_out_length_ppq, "fade_out_length_ppq")
         if not math.isfinite(fin) or fin < 0.0:
-            raise SonareValueError("fade_in_length_ppq must be a finite number >= 0")
+            raise _refuse("fade_in_length_ppq must be a finite number >= 0")
         if not math.isfinite(fout) or fout < 0.0:
-            raise SonareValueError("fade_out_length_ppq must be a finite number >= 0")
+            raise _refuse("fade_out_length_ppq must be a finite number >= 0")
         c_in = SonareProjectClipFade(length_ppq=fin, curve=_fade_curve_value(fade_in_curve))
         c_out = SonareProjectClipFade(length_ppq=fout, curve=_fade_curve_value(fade_out_curve))
         _check(
@@ -980,6 +994,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_clip_loop")
     def set_clip_loop(
         self,
         clip_id: int,
@@ -1000,9 +1015,9 @@ class _ProjectEditMixin:
         length = _narrow_double(loop_length_ppq, "loop_length_ppq")
         crossfade = _narrow_double(loop_crossfade_ppq, "loop_crossfade_ppq")
         if not math.isfinite(length) or length < 0.0:
-            raise SonareValueError("loop_length_ppq must be a finite number >= 0")
+            raise _refuse("loop_length_ppq must be a finite number >= 0")
         if not math.isfinite(crossfade) or crossfade < 0.0:
-            raise SonareValueError("loop_crossfade_ppq must be a finite number >= 0")
+            raise _refuse("loop_crossfade_ppq must be a finite number >= 0")
         _check(
             _get_lib().sonare_project_set_clip_loop(
                 self._require_handle(),
@@ -1013,6 +1028,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_clip_source")
     def set_clip_source(self, clip_id: int, source_id: int) -> None:
         """Rebind a clip to a different (already-registered) source via an undoable edit."""
         _check(
@@ -1023,6 +1039,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.duplicate_clip")
     def duplicate_clip(self, clip_id: int, new_start_ppq: float) -> int:
         """Duplicate a clip at ``new_start_ppq`` (same track); return the new clip id."""
         out_id = ctypes.c_uint32()
@@ -1036,6 +1053,7 @@ class _ProjectEditMixin:
         )
         return int(out_id.value)
 
+    @_entry("Project.remove_track")
     def remove_track(self, track_id: int) -> None:
         """Remove a track (and its clips) via an undoable edit command."""
         _check(
@@ -1044,6 +1062,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.rename_track")
     def rename_track(self, track_id: int, name: str | None = None) -> None:
         """Rename a track via an undoable edit command (``None`` = empty name)."""
         _check(
@@ -1054,6 +1073,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_track_route")
     def set_track_route(
         self, track_id: int, channel_strip_ref: str | None = None, output_target: str | None = None
     ) -> None:
@@ -1072,6 +1092,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.add_automation_lane")
     def add_automation_lane(
         self,
         track_id: int,
@@ -1126,6 +1147,7 @@ class _ProjectEditMixin:
         del _backing
         return int(out_target_param_id.value)
 
+    @_entry("Project.edit_automation_lane")
     def edit_automation_lane(
         self,
         track_id: int,
@@ -1175,6 +1197,7 @@ class _ProjectEditMixin:
             )
         del _backing
 
+    @_entry("Project.remove_automation_lane")
     def remove_automation_lane(self, track_id: int, target_param_id: int) -> None:
         """Remove the lane identified by ``target_param_id`` via an undoable edit."""
         target_id = _automation_target_param_id_value(target_param_id)
@@ -1186,18 +1209,22 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.undo")
     def undo(self) -> None:
         """Undo the most recent edit (raises when the undo stack is empty)."""
         _check(_get_lib().sonare_project_undo(self._require_handle()))
 
+    @_entry("Project.redo")
     def redo(self) -> None:
         """Redo the most recently undone edit (raises when the redo stack is empty)."""
         _check(_get_lib().sonare_project_redo(self._require_handle()))
 
+    @_entry("Project.clear_history")
     def clear_history(self) -> None:
         """Empty the undo and redo stacks without altering project state."""
         _check(_get_lib().sonare_project_clear_history(self._require_handle()))
 
+    @_entry("Project.set_max_undo_depth")
     def set_max_undo_depth(self, depth: int) -> None:
         """Clamp the undo history to ``depth`` entries (minimum 1), evicting the oldest."""
         _check(
@@ -1207,6 +1234,7 @@ class _ProjectEditMixin:
             )
         )
 
+    @_entry("Project.set_max_history_bytes")
     def set_max_history_bytes(self, bytes: int) -> None:
         """Set the combined retained undo/redo history byte cap.
 

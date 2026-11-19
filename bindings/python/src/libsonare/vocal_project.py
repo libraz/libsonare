@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast, get_args
 import numpy as np
 from numpy.typing import NDArray
 
-from ._errors import _unknown_error
+from ._errors import _refuse, _refuse_type, _unknown_error
 from ._ffi_types_vocal import (
     VOCAL_MAX_SAMPLE_RATE,
     VOCAL_MIN_SAMPLE_RATE,
@@ -31,7 +31,6 @@ from ._runtime import (
     _INT64_MAX,
     _INT64_MIN,
     _UINT32_MAX,
-    SonareValueError,
     _check,
     _get_lib,
     _ordinal_token,
@@ -157,13 +156,13 @@ def _fixed_text(value: bytes | bytearray) -> str:
 
 def _digest(value: str, name: str) -> bytes:
     if not isinstance(value, str):
-        raise TypeError(f"{name} must be a 64-character SHA-256 hexadecimal string")
+        raise _refuse_type(f"{name} must be a 64-character SHA-256 hexadecimal string")
     if len(value) != 64:
-        raise SonareValueError(f"{name} must be a 64-character SHA-256 hexadecimal string")
+        raise _refuse(f"{name} must be a 64-character SHA-256 hexadecimal string")
     try:
         return bytes.fromhex(value)
     except ValueError as exc:
-        raise SonareValueError(f"{name} must be a 64-character SHA-256 hexadecimal string") from exc
+        raise _refuse(f"{name} must be a 64-character SHA-256 hexadecimal string") from exc
 
 
 def _write_digest(destination: Any, digest: bytes) -> None:
@@ -173,11 +172,11 @@ def _write_digest(destination: Any, digest: bytes) -> None:
 
 def _byte_buffer(value: bytes | bytearray | memoryview, name: str) -> bytes:
     if not isinstance(value, (bytes, bytearray, memoryview)):
-        raise TypeError(f"{name} must be bytes-like")
+        raise _refuse_type(f"{name} must be bytes-like")
     try:
         return bytes(value)
     except (BufferError, TypeError, ValueError) as exc:
-        raise TypeError(f"{name} must be bytes-like") from exc
+        raise _refuse_type(f"{name} must be bytes-like") from exc
 
 
 def _project_handle(project: Project) -> ctypes.c_void_p:
@@ -190,7 +189,7 @@ def _id(value: object, name: str) -> int:
 
 def _token_to_c(token: VocalStateToken) -> SonareVocalStateToken:
     if not isinstance(token, VocalStateToken):
-        raise TypeError("render_token must be a VocalStateToken")
+        raise _refuse_type("render_token must be a VocalStateToken")
     return SonareVocalStateToken(
         session_epoch=_narrow_int(
             token.session_epoch, "render_token.session_epoch", 0, _UINT64_MAX
@@ -274,7 +273,7 @@ def _apply_project_vocal_edit(
     """Commit a full-source vocal render to one Project clip or take."""
 
     handle = _project_handle(project)
-    source = _validate_samples("Project.apply_vocal_edit", rendered_mono, arg_name="rendered_mono")
+    source = _validate_samples(rendered_mono, arg_name="rendered_mono")
     expected_count = _narrow_int(
         expected_source_sample_count,
         "expected_source_sample_count",
@@ -282,7 +281,7 @@ def _apply_project_vocal_edit(
         _INT64_MAX,
     )
     if source.size != expected_count:
-        raise SonareValueError(
+        raise _refuse(
             "rendered_mono length must equal expected_source_sample_count "
             f"({source.size} != {expected_count})"
         )
@@ -299,20 +298,20 @@ def _apply_project_vocal_edit(
         VOCAL_MAX_SAMPLE_RATE,
     )
     if rendered_rate != expected_rate:
-        raise SonareValueError(
+        raise _refuse(
             "rendered_sample_rate must equal expected_source_sample_rate "
             f"({rendered_rate} != {expected_rate})"
         )
     start = _narrow_int(rendered_start_sample, "rendered_start_sample", _INT64_MIN, _INT64_MAX)
     if start != 0:
-        raise SonareValueError("rendered_start_sample must be zero for the v1 Project vocal API")
+        raise _refuse("rendered_start_sample must be zero for the v1 Project vocal API")
     sve1_bytes = _byte_buffer(sve1, "sve1")
     if not sve1_bytes:
-        raise SonareValueError("sve1 must not be empty")
+        raise _refuse("sve1 must not be empty")
     _narrow_int(len(sve1_bytes), "sve1_size", 1, _UINT64_MAX)
     token = _token_to_c(render_token)
     if token.draft_id != 0 or token.generation != 0:
-        raise SonareValueError("render_token must be a committed session token")
+        raise _refuse("render_token must be a committed session token")
     desc = SonareProjectVocalEditApplyDesc()
     lib = _get_lib()
     lib.sonare_project_vocal_edit_apply_desc_init(ctypes.byref(desc))
@@ -374,7 +373,7 @@ def _original_sources_to_c(
     for index, original in enumerate(originals):
         source_id = _id(original.source_id, f"original_sources[{index}].source_id")
         if source_id in seen:
-            raise SonareValueError(f"original_sources contains duplicate source_id {source_id}")
+            raise _refuse(f"original_sources contains duplicate source_id {source_id}")
         seen.add(source_id)
         sample_rate = _narrow_int(
             original.sample_rate,
@@ -383,7 +382,6 @@ def _original_sources_to_c(
             VOCAL_MAX_SAMPLE_RATE,
         )
         buffer = _validate_samples(
-            "Project.rehydrate_vocal_edits",
             original.mono,
             arg_name=f"original_sources[{index}].mono",
         )
@@ -407,7 +405,7 @@ def _project_cancel_callback(
     """
     errors: list[BaseException] = []
     if cancel is not None and not callable(cancel):
-        raise TypeError("cancel must be callable or None")
+        raise _refuse_type("cancel must be callable or None")
 
     def probe(_: ctypes.c_void_p) -> int:
         if errors:

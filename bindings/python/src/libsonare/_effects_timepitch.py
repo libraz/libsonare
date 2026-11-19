@@ -9,7 +9,7 @@ from typing import cast
 import numpy as np
 
 from ._analysis_music import _key_pair
-from ._errors import _not_supported
+from ._errors import _entry, _not_supported, _refuse
 from ._features_metering import scale_mask_for_mode
 from ._ffi import (
     SONARE_PITCH_TARGET_FIXED_MIDI,
@@ -24,7 +24,6 @@ from ._runtime import (
     _DEFAULT_EFFECT_N_FFT,
     _PITCH_TARGET_MODES,
     _UINT32_MAX,
-    SonareValueError,
     _call_float_array_transform,
     _check,
     _from_c_float_array,
@@ -49,6 +48,7 @@ from ._types_analysis import AutoTuneResult, Key
 from ._types_enums import KeyMode, PitchClass, PitchTargetMode
 
 
+@_entry("time_stretch")
 def time_stretch(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -67,15 +67,15 @@ def time_stretch(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft / 4``
-            (at least 1), derived by the library.
+            so frames overlap by at least half a window. Default: ``n_fft / 4``,
+            derived by the library.
 
     Returns:
         ``float32`` array of time-stretched samples.
     """
-    _validate_samples("time_stretch", samples)
-    n_fft = _validate_stft_n_fft("time_stretch", n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop("time_stretch", hop_length)
+    _validate_samples(samples)
+    n_fft = _validate_stft_n_fft(n_fft)
+    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_time_stretch_ex"):
         if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0:
@@ -98,6 +98,7 @@ def time_stretch(
     )
 
 
+@_entry("pitch_shift")
 def pitch_shift(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -114,15 +115,15 @@ def pitch_shift(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft / 4``
-            (at least 1), derived by the library.
+            so frames overlap by at least half a window. Default: ``n_fft / 4``,
+            derived by the library.
 
     Returns:
         ``float32`` array of pitch-shifted samples.
     """
-    _validate_samples("pitch_shift", samples)
-    n_fft = _validate_stft_n_fft("pitch_shift", n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop("pitch_shift", hop_length)
+    _validate_samples(samples)
+    n_fft = _validate_stft_n_fft(n_fft)
+    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_pitch_shift_ex"):
         if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0:
@@ -145,6 +146,7 @@ def pitch_shift(
     )
 
 
+@_entry("pitch_correct_to_midi")
 @_guard_buffer("samples")
 def pitch_correct_to_midi(
     samples: Sequence[float] | list[float],
@@ -178,6 +180,7 @@ def pitch_correct_to_midi(
     )
 
 
+@_entry("pitch_correct_timevarying")
 @_guard_buffer("samples")
 def pitch_correct_timevarying(
     samples: Sequence[float] | list[float],
@@ -246,15 +249,11 @@ def pitch_correct_timevarying(
     config.target_midi = _narrow_double(target_midi, "target_midi")
     # Narrowed rather than coerced: int() takes 3.7 as 3, a root and a degree set
     # the caller never asked for.
-    config.scale_root = _narrow_int(
-        scale_root, "pitch_correct_timevarying: scale_root", _C_INT_MIN, _C_INT_MAX
-    )
+    config.scale_root = _narrow_int(scale_root, "scale_root", _C_INT_MIN, _C_INT_MAX)
     if isinstance(scale_mode_mask, str):
         config.scale_mode_mask = scale_mask_for_mode(0, scale_mode_mask)
     elif scale_mode_mask is not None:
-        config.scale_mode_mask = _narrow_int(
-            scale_mode_mask, "pitch_correct_timevarying: scale_mode_mask", 0, _UINT32_MAX
-        )
+        config.scale_mode_mask = _narrow_int(scale_mode_mask, "scale_mode_mask", 0, _UINT32_MAX)
     if scale_reference_midi is not None:
         config.scale_reference_midi = _narrow_double(scale_reference_midi, "scale_reference_midi")
     if retune_amount is not None:
@@ -279,12 +278,12 @@ def pitch_correct_timevarying(
         # is the one per-element hop left in an otherwise vectorised call.
         voiced_array, voiced_len = _to_c_int_array(voiced, "voiced")
         if voiced_len != n_frames:
-            raise SonareValueError("voiced must have the same length as f0_hz")
+            raise _refuse("voiced must have the same length as f0_hz")
     prob_array = None
     if voiced is None and voiced_prob is not None:
         prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
         if prob_len != n_frames:
-            raise SonareValueError("voiced_prob must have the same length as f0_hz")
+            raise _refuse("voiced_prob must have the same length as f0_hz")
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_pitch_correct_timevarying(
@@ -308,12 +307,13 @@ def _auto_tune_key(key: object) -> SonareKey | None:
     """Resolves ``key`` to the C key, or ``None`` for ``"detect"``."""
     if isinstance(key, str):
         if key != "detect":
-            raise SonareValueError("key must be 'detect' or a key with a root and a mode")
+            raise _refuse("key must be 'detect' or a key with a root and a mode")
         return None
     root, mode = _key_pair(key)
     return SonareKey(int(PitchClass(cast(int, root))), _mode_value(cast(KeyMode, mode)), 1.0)
 
 
+@_entry("auto_tune")
 @_guard_buffer("samples")
 def auto_tune(
     samples: Sequence[float] | list[float],

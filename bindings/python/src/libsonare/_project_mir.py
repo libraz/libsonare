@@ -10,7 +10,7 @@ from typing import cast
 import numpy as np
 
 from ._analysis_music import _CHORD_QUALITY_ORDINALS
-from ._errors import _not_supported
+from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._narrowing import _narrow_int
 from ._project_model import (
     _NO_PITCH_CLASS,
@@ -23,7 +23,6 @@ from ._runtime import (
     SonareProjectWarpAnchor,
     SonareTakeAlignConfig,
     SonareTakeAlignment,
-    SonareValueError,
     _check,
     _get_lib,
     _guard_buffer,
@@ -69,6 +68,7 @@ class AlignTakeToReferenceResult:
     """How well the alignment was conditioned."""
 
 
+@_entry("align_take_to_reference")
 @_guard_buffer("reference", "take")
 def align_take_to_reference(
     reference: Sequence[float] | list[float] | np.ndarray,
@@ -161,20 +161,12 @@ def align_take_to_reference(
     # Left at 0, the C spelling of "library value", when the caller supplied nothing.
     config = SonareTakeAlignConfig()
     if hop_length is not None:
-        config.hop_length = _narrow_int(
-            hop_length, "align_take_to_reference: hop_length", 1, _C_INT_MAX
-        )
+        config.hop_length = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
     if bins_per_octave is not None:
-        config.bins_per_octave = _narrow_int(
-            bins_per_octave, "align_take_to_reference: bins_per_octave", 1, _C_INT_MAX
-        )
+        config.bins_per_octave = _narrow_int(bins_per_octave, "bins_per_octave", 1, _C_INT_MAX)
 
-    reference_array, reference_len = _to_c_float_array(
-        reference, fn_name="align_take_to_reference", arg_name="reference"
-    )
-    take_array, take_len = _to_c_float_array(
-        take, fn_name="align_take_to_reference", arg_name="take"
-    )
+    reference_array, reference_len = _to_c_float_array(reference, arg_name="reference")
+    take_array, take_len = _to_c_float_array(take, arg_name="take")
     out_anchors = ctypes.POINTER(SonareProjectWarpAnchor)()
     out_count = ctypes.c_size_t()
     out_alignment = SonareTakeAlignment()
@@ -218,10 +210,11 @@ _CHORD_EXTENSION_CAPACITY = 32
 def _pitch_class_arg(value: object, name: str) -> int:
     """Return ``value`` as a pitch class 0..11, refusing anything else by name."""
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= int(value) <= 11:
-        raise SonareValueError(f"{name} {value!r} is not a pitch class (0..11)")
+        raise _refuse(f"{name} {value!r} is not a pitch class (0..11)")
     return int(value)
 
 
+@_entry("chord_symbol_from_analysis")
 def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     """Convert an analysis :class:`Chord` into the fields of a chord annotation.
 
@@ -246,7 +239,7 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
             quality that is not a chord quality name.
     """
     if not isinstance(chord, Chord):
-        raise TypeError(f"chord must be a Chord, got {type(chord).__name__}")
+        raise _refuse_type(f"chord must be a Chord, got {type(chord).__name__}")
     lib = _get_lib()
     if not hasattr(lib, "sonare_chord_symbol_from_analysis"):
         raise _not_supported(
@@ -256,7 +249,7 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     root = _pitch_class_arg(chord.root, "chord.root")
     ordinal = _CHORD_QUALITY_ORDINALS.get(chord.quality)
     if ordinal is None:
-        raise SonareValueError(f"chord.quality {chord.quality!r} is not a chord quality")
+        raise _refuse(f"chord.quality {chord.quality!r} is not a chord quality")
     bass = root if chord.bass is None else _pitch_class_arg(chord.bass, "chord.bass")
     out_root = ctypes.c_uint32()
     out_quality = ctypes.c_uint32()
@@ -286,6 +279,7 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     return fields
 
 
+@_entry("key_mode_from_analysis")
 def key_mode_from_analysis(mode: KeyMode) -> ProjectKeyMode:
     """Convert an analysis key :data:`KeyMode` token into the ``mode`` of a key annotation.
 

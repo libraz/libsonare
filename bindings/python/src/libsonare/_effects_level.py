@@ -8,6 +8,7 @@ from typing import Literal, TypeAlias
 
 import numpy as np
 
+from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import SonareNormalizeStereoResult
 from ._runtime import (
     _C_INT_MAX,
@@ -49,12 +50,12 @@ _NORMALIZE_STEREO_SYMBOLS = {
 }
 
 
-def _normalize_mode(fn_name: str, mode: object) -> str:
+def _normalize_mode(mode: object) -> str:
     """Refuse a mode outside the :data:`NormalizeMode` tokens, naming them."""
     if not isinstance(mode, str):
-        raise TypeError(f"{fn_name}: mode must be 'peak' or 'rms'")
+        raise _refuse_type("mode must be 'peak' or 'rms'")
     if mode not in _DEFAULT_NORMALIZE_TARGET_DB:
-        raise SonareValueError(f"{fn_name}: mode must be 'peak' or 'rms' (got {mode!r})")
+        raise _refuse(f"mode must be 'peak' or 'rms' (got {mode!r})")
     return mode
 
 
@@ -68,9 +69,9 @@ def _trim_length(value: int, arg_name: str) -> int:
     try:
         length = _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
-        raise _int_refusal("trim", value, arg_name, domain) from exc
+        raise _int_refusal(value, arg_name, domain) from exc
     if length <= 0:
-        raise SonareValueError(f"trim: {arg_name} {domain}")
+        raise _refuse(f"{arg_name} {domain}")
     return length
 
 
@@ -78,25 +79,22 @@ def _validate_trim_options(frame_length: int, hop_length: int) -> tuple[int, int
     return _trim_length(frame_length, "frame_length"), _trim_length(hop_length, "hop_length")
 
 
-def _normalize_target(fn_name: str, target_db: float) -> float:
+def _normalize_target(target_db: float) -> float:
     """Narrow one normalizer's ``target_db`` to the domain the C entry accepts.
 
     Refusing here names the function and the argument; the same value reaching
     the C ABI comes back as a bare ``[4] Invalid parameter``.
     """
-    target_db = _validate_scalar(fn_name, target_db, "target_db")
+    target_db = _validate_scalar(target_db, "target_db")
     target_db_c = ctypes.c_float(target_db).value
     if not np.isfinite(target_db_c):
-        raise SonareValueError(
-            f"{fn_name}: target_db must be a finite number within the 32-bit float range"
-        )
+        raise _refuse("target_db must be a finite number within the 32-bit float range")
     if target_db_c > 0.0:
-        raise SonareValueError(f"{fn_name}: target_db must be at or below 0 dBFS")
+        raise _refuse("target_db must be at or below 0 dBFS")
     return target_db_c
 
 
 def _run_normalize_stereo(
-    fn_name: str,
     symbol: str,
     left: np.ndarray,
     right: np.ndarray,
@@ -110,14 +108,14 @@ def _run_normalize_stereo(
     refuses it here instead, which is also where the pair's own precondition
     (see ``require_stereo_pair``) is expressible on this surface.
     """
-    target_db_c = _normalize_target(fn_name, target_db)
+    target_db_c = _normalize_target(target_db)
     lib = _get_lib()
     if not hasattr(lib, symbol):
         raise _unsupported_effect_symbol(symbol)
-    left_array, left_length = _to_c_float_array(left, fn_name=fn_name, arg_name="left")
-    right_array, right_length = _to_c_float_array(right, fn_name=fn_name, arg_name="right")
+    left_array, left_length = _to_c_float_array(left, arg_name="left")
+    right_array, right_length = _to_c_float_array(right, arg_name="right")
     if left_length != right_length:
-        raise SonareValueError(f"{fn_name}: left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     out = SonareNormalizeStereoResult()
     rc = getattr(lib, symbol)(
         left_array,
@@ -140,6 +138,7 @@ def _run_normalize_stereo(
         lib.sonare_free_normalize_stereo_result(ctypes.byref(out))
 
 
+@_entry("normalize")
 def normalize(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -162,10 +161,10 @@ def normalize(
     Returns:
         ``float32`` array of normalized samples.
     """
-    resolved = _normalize_mode("normalize", mode)
-    _validate_samples("normalize", samples)
+    resolved = _normalize_mode(mode)
+    _validate_samples(samples)
     target_db_c = _normalize_target(
-        "normalize", _DEFAULT_NORMALIZE_TARGET_DB[resolved] if target_db is None else target_db
+        _DEFAULT_NORMALIZE_TARGET_DB[resolved] if target_db is None else target_db
     )
     symbol = _NORMALIZE_SYMBOLS[resolved]
     lib = _get_lib()
@@ -185,6 +184,7 @@ def normalize(
         return _from_c_float_array(out, out_length.value)
 
 
+@_entry("normalize_stereo")
 @_guard_buffer("left", "right")
 def normalize_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -234,9 +234,8 @@ def normalize_stereo(
         >>> round(max(abs(v) for v in result.left), 3)  # the quiet side keeps its distance
         0.177
     """
-    resolved = _normalize_mode("normalize_stereo", mode)
+    resolved = _normalize_mode(mode)
     return _run_normalize_stereo(
-        "normalize_stereo",
         _NORMALIZE_STEREO_SYMBOLS[resolved],
         left,
         right,
@@ -245,6 +244,7 @@ def normalize_stereo(
     )
 
 
+@_entry("trim")
 def trim(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -264,7 +264,7 @@ def trim(
     Returns:
         ``float32`` array of trimmed samples.
     """
-    _validate_samples("trim", samples)
+    _validate_samples(samples)
     frame_length, hop_length = _validate_trim_options(frame_length, hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_trim_ex"):

@@ -12,7 +12,7 @@ from typing import Any, Literal, TypeAlias, cast, get_args
 
 import numpy as np
 
-from ._errors import _not_supported, _require_open
+from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_open
 from ._ffi import (
     SONARE_OK,
     SONARE_VC_PRESET_NEUTRAL_MONITOR,
@@ -23,7 +23,6 @@ from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    SonareValueError,
     _as_float32_buffer,
     _bool_flag,
     _check,
@@ -93,10 +92,10 @@ def _enum_ordinal(field: str, value: object) -> int:
     """Map an enum spelling to its C ordinal, refusing a non-string or an unknown one."""
     names = _ENUM_FIELD_NAMES[field]
     if not isinstance(value, str):
-        raise TypeError(f"{field} must be a string token, got {type(value).__name__}")
+        raise _refuse_type(f"{field} must be a string token, got {type(value).__name__}")
     if value not in names:
         expected = ", ".join(repr(n) for n in names)
-        raise SonareValueError(f"{field} must be one of {expected}, got {value!r}")
+        raise _refuse(f"{field} must be one of {expected}, got {value!r}")
     return names.index(value)
 
 
@@ -104,10 +103,11 @@ def _enum_name(field: str, ordinal: int) -> str:
     """Map a C ordinal read from the library to its spelling."""
     names = _ENUM_FIELD_NAMES[field]
     if not 0 <= int(ordinal) < len(names):
-        raise SonareValueError(f"unknown {field} ordinal: {ordinal}")
+        raise _refuse(f"unknown {field} ordinal: {ordinal}")
     return names[int(ordinal)]
 
 
+@_entry("voice_change")
 def voice_change(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -140,11 +140,9 @@ def voice_change(
             [0.55, 1.65]. The message names the reachable ``formant_factor``
             range; the request is refused, not clamped.
     """
-    _validate_samples("voice_change", samples)
+    _validate_samples(samples)
     if not isinstance(formant_mode, str) or formant_mode not in _FORMANT_MODES:
-        raise SonareValueError(
-            f"voice_change: formant_mode must be 'relative' or 'absolute', got {formant_mode!r}"
-        )
+        raise _refuse(f"formant_mode must be 'relative' or 'absolute', got {formant_mode!r}")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     config = SonareVoiceChangeConfig(
@@ -175,15 +173,15 @@ map) or a flat config. JSON text is parsed by the caller (``json.loads``) first.
 """
 
 
-def _voice_config_to_json(fn_name: str, config: object) -> bytes:
+def _voice_config_to_json(config: object) -> bytes:
     """A preset id is checked against the built-in ids; a mapping is a document."""
     if isinstance(config, str):
-        _token_ordinal(config, _VOICE_PRESET_IDS, f"{fn_name}: config preset id")
+        _token_ordinal(config, _VOICE_PRESET_IDS, "config preset id")
         return _utf8_arg(config, "config")
     if isinstance(config, Mapping):
         return _utf8_arg(json.dumps(dict(config), separators=(",", ":")), "config")
-    raise TypeError(
-        f"{fn_name}: config must be a preset id or a mapping (parse JSON text with "
+    raise _refuse_type(
+        f"config must be a preset id or a mapping (parse JSON text with "
         f"json.loads first), got {type(config).__name__}"
     )
 
@@ -194,6 +192,7 @@ class RealtimeVoiceChanger:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("RealtimeVoiceChanger")
     def __init__(
         self,
         sample_rate: int,
@@ -234,7 +233,7 @@ class RealtimeVoiceChanger:
             )
         else:
             rc = self._lib.sonare_realtime_voice_changer_create_json(
-                _voice_config_to_json("RealtimeVoiceChanger", config),
+                _voice_config_to_json(config),
                 c_sample_rate,
                 c_block,
                 c_channels,
@@ -242,6 +241,7 @@ class RealtimeVoiceChanger:
             )
         _check(rc)
 
+    @_entry("RealtimeVoiceChanger.close")
     def close(self) -> None:
         """Release the native handle. Idempotent, so a double close is a no-op."""
         if self._handle:
@@ -263,11 +263,13 @@ class RealtimeVoiceChanger:
     def _require_handle(self) -> ctypes.c_void_p:
         return _require_open(self._handle, "RealtimeVoiceChanger")
 
+    @_entry("RealtimeVoiceChanger.reset")
     def reset(self) -> None:
         """Clear the processing state. Raises ``SonareError`` (``InvalidState``) when closed."""
         rc = self._lib.sonare_realtime_voice_changer_reset(self._require_handle())
         _check(rc)
 
+    @_entry("RealtimeVoiceChanger.set_config")
     def set_config(
         self, config: VoicePresetId | RealtimeVoiceChangerPreset | RealtimeVoiceChangerConfig
     ) -> None:
@@ -284,7 +286,7 @@ class RealtimeVoiceChanger:
             return
         rc = self._lib.sonare_realtime_voice_changer_set_config_json(
             self._require_handle(),
-            _voice_config_to_json("RealtimeVoiceChanger.set_config", config),
+            _voice_config_to_json(config),
         )
         _check(rc)
 
@@ -330,6 +332,7 @@ class RealtimeVoiceChanger:
         _check_realtime(rc)
         return int(out.value)
 
+    @_entry("RealtimeVoiceChanger.config_json")
     def config_json(self) -> str:
         """Return the live (normalized) configuration as a JSON document.
 
@@ -379,6 +382,7 @@ class RealtimeVoiceChanger:
         )
         _check(rc)
 
+    @_entry("RealtimeVoiceChanger.process_mono")
     def process_mono(self, samples: Sequence[float] | list[float] | np.ndarray) -> np.ndarray:
         """Process a mono buffer block-by-block and return the result as ndarray.
 
@@ -397,6 +401,7 @@ class RealtimeVoiceChanger:
         """
         return self._process_mono(_as_float32_buffer(samples), None)
 
+    @_entry("RealtimeVoiceChanger.process_mono_with_carrier")
     def process_mono_with_carrier(
         self,
         samples: Sequence[float] | list[float] | np.ndarray,
@@ -413,7 +418,7 @@ class RealtimeVoiceChanger:
         in_buf = _as_float32_buffer(samples)
         carrier_buf = _as_float32_buffer(carrier, arg_name="carrier")
         if int(carrier_buf.shape[0]) != int(in_buf.shape[0]):
-            raise SonareValueError("carrier must have the same length as samples")
+            raise _refuse("carrier must have the same length as samples")
         return self._process_mono(in_buf, carrier_buf)
 
     def _process_mono(self, in_buf: np.ndarray, carrier_buf: np.ndarray | None) -> np.ndarray:
@@ -440,6 +445,7 @@ class RealtimeVoiceChanger:
             _check_realtime(rc)
         return out_buf
 
+    @_entry("RealtimeVoiceChanger.process_interleaved")
     def process_interleaved(
         self,
         samples: Sequence[float] | list[float] | np.ndarray,
@@ -452,6 +458,7 @@ class RealtimeVoiceChanger:
         """
         return self._process_interleaved(samples, num_channels, None)
 
+    @_entry("RealtimeVoiceChanger.process_interleaved_with_carrier")
     def process_interleaved_with_carrier(
         self,
         samples: Sequence[float] | list[float] | np.ndarray,
@@ -481,11 +488,11 @@ class RealtimeVoiceChanger:
         in_buf = _as_float32_buffer(samples)
         total_samples = int(in_buf.shape[0])
         if ch <= 0 or total_samples % ch != 0:
-            raise SonareValueError("interleaved samples length must be divisible by num_channels")
+            raise _refuse("interleaved samples length must be divisible by num_channels")
         frames = total_samples // ch
         carrier_buf = None if carrier is None else _as_float32_buffer(carrier, arg_name="carrier")
         if carrier_buf is not None and int(carrier_buf.shape[0]) != frames:
-            raise SonareValueError("carrier must hold one sample per frame of samples")
+            raise _refuse("carrier must hold one sample per frame of samples")
         out_buf = np.empty(total_samples, dtype=np.float32)
         step = self.max_block_size
         for frame in range(0, frames, step):
@@ -519,6 +526,7 @@ class RealtimeVoiceChanger:
             _check_realtime(rc)
         return out_buf
 
+    @_entry("RealtimeVoiceChanger.process_planar")
     def process_planar(self, channels: PlanarChannels) -> list[np.ndarray]:
         """Process planar audio (one buffer per channel, 1 or 2, equal lengths) block-by-block.
 
@@ -530,6 +538,7 @@ class RealtimeVoiceChanger:
         """
         return self._process_planar(channels, None)
 
+    @_entry("RealtimeVoiceChanger.process_planar_with_carrier")
     def process_planar_with_carrier(
         self,
         channels: PlanarChannels,
@@ -558,13 +567,13 @@ class RealtimeVoiceChanger:
             for plane in channels
         ]
         if len(planes) not in (1, 2):
-            raise SonareValueError(f"channels must hold 1 or 2 planes, got {len(planes)}")
+            raise _refuse(f"channels must hold 1 or 2 planes, got {len(planes)}")
         total = int(planes[0].shape[0])
         if any(int(plane.shape[0]) != total for plane in planes):
-            raise SonareValueError("all channels must have the same length")
+            raise _refuse("all channels must have the same length")
         carrier_buf = None if carrier is None else _as_float32_buffer(carrier, arg_name="carrier")
         if carrier_buf is not None and int(carrier_buf.shape[0]) != total:
-            raise SonareValueError("carrier must have the same length as the channels")
+            raise _refuse("carrier must have the same length as the channels")
         if len(planes) == 1:
             return [self._process_mono(planes[0], carrier_buf)]
         out_left, out_right = planes
@@ -589,6 +598,7 @@ class RealtimeVoiceChanger:
             _check_realtime(rc)
         return planes
 
+    @_entry("RealtimeVoiceChanger.note_on")
     def note_on(self, note: int, velocity: float = 1.0) -> None:
         """Hold MIDI ``note`` from the start of the next processed block.
 
@@ -606,6 +616,7 @@ class RealtimeVoiceChanger:
         )
         _check_realtime(rc)
 
+    @_entry("RealtimeVoiceChanger.note_off")
     def note_off(self, note: int) -> None:
         """Release MIDI ``note``; releasing a note that is not held does nothing."""
         rc = self._lib.sonare_realtime_voice_changer_note_off(
@@ -613,6 +624,7 @@ class RealtimeVoiceChanger:
         )
         _check_realtime(rc)
 
+    @_entry("RealtimeVoiceChanger.all_notes_off")
     def all_notes_off(self) -> None:
         """Release every held note; succeeds even when the event queue is full."""
         _check_realtime(
@@ -620,6 +632,7 @@ class RealtimeVoiceChanger:
         )
 
 
+@_entry("voice_change_realtime")
 def voice_change_realtime(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
@@ -644,12 +657,10 @@ def voice_change_realtime(
     working.
     """
     if channels < 1 or channels > 2:
-        raise SonareValueError("channels must be 1 or 2")
-    in_buf = _validate_samples("voice_change_realtime", samples)
+        raise _refuse("channels must be 1 or 2")
+    in_buf = _validate_samples(samples)
     if channels == 2 and int(in_buf.shape[0]) % 2 != 0:
-        raise SonareValueError(
-            "voice_change_realtime: interleaved stereo input length must be even"
-        )
+        raise _refuse("interleaved stereo input length must be even")
     lib = _get_lib()
     c_array, length = _to_c_float_array(in_buf)
     with _out_float_array(lib) as (out, out_length):
@@ -658,7 +669,7 @@ def voice_change_realtime(
                 c_array,
                 _to_c_size_t(length, "length"),
                 _to_c_int(sample_rate, "sample_rate"),
-                _voice_config_to_json("voice_change_realtime", config),
+                _voice_config_to_json(config),
                 _to_c_int(channels, "channels"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -667,6 +678,7 @@ def voice_change_realtime(
         return _from_c_float_array(out, out_length.value)
 
 
+@_entry("realtime_voice_changer_preset_names")
 def realtime_voice_changer_preset_names() -> list[str]:
     """Return the names of the built-in realtime voice-changer presets."""
     raw = _get_lib().sonare_realtime_voice_changer_preset_names()
@@ -677,6 +689,7 @@ def realtime_voice_changer_preset_names() -> list[str]:
     return [s for s in raw.decode("utf-8").split("\n") if s.strip()]
 
 
+@_entry("realtime_voice_changer_preset_json")
 def realtime_voice_changer_preset_json(name: str) -> str:
     """Return the JSON text of the named preset. Raises ``SonareError`` for an unknown name."""
     lib = _get_lib()
@@ -690,6 +703,7 @@ def realtime_voice_changer_preset_json(name: str) -> str:
             lib.sonare_free_string(out)
 
 
+@_entry("validate_realtime_voice_changer_preset_json")
 def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]:
     """Validate a preset JSON text; return the verdict as a dict rather than raising."""
     lib = _get_lib()
@@ -712,6 +726,7 @@ def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, obj
             lib.sonare_free_string(error)
 
 
+@_entry("voice_character_preset_id")
 def voice_character_preset_id(ordinal: int) -> str | None:
     """Map a voice-character preset enum ordinal to its canonical id string.
 
@@ -776,7 +791,7 @@ def _grain_size_request(grain_size_samples: int | None, name: str) -> int:
     # Narrowed rather than coerced: int() would take 0.5 as the automatic 0.
     value = _narrow_int(grain_size_samples, name, _C_INT_MIN, _C_INT_MAX)
     if value == 0:
-        raise SonareValueError(f"{name} must not be 0; omit it for the automatic grain")
+        raise _refuse(f"{name} must not be 0; omit it for the automatic grain")
     return value
 
 
@@ -1070,9 +1085,9 @@ class RealtimeVoiceChangerConfig:
             if name == "harmony_steps":
                 # An array element bypasses the struct's field guard, so narrow here.
                 if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
-                    raise TypeError("harmony_steps must be a sequence of 3 integers")
+                    raise _refuse_type("harmony_steps must be a sequence of 3 integers")
                 if len(value) != _HARMONY_STEP_COUNT:
-                    raise SonareValueError(
+                    raise _refuse(
                         f"harmony_steps must hold {_HARMONY_STEP_COUNT} integers, got {len(value)}"
                     )
                 for index, step in enumerate(value):
@@ -1096,6 +1111,7 @@ def _resolve_preset_ordinal(preset: VoicePresetId) -> int:
     return _token_ordinal(preset, _VOICE_PRESET_IDS, "voice character preset")
 
 
+@_entry("realtime_voice_changer_preset_config")
 def realtime_voice_changer_preset_config(preset: VoicePresetId) -> RealtimeVoiceChangerConfig:
     """Return the canonical (normalised) config for a built-in preset.
 
@@ -1139,6 +1155,7 @@ class StreamingRetune:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("StreamingRetune")
     def __init__(
         self,
         *,
@@ -1161,6 +1178,7 @@ class StreamingRetune:
         _check(rc)
         self._handle = handle
 
+    @_entry("StreamingRetune.close")
     def close(self) -> None:
         """Release the native handle. Idempotent, so a double close is a no-op."""
         if self._handle:
@@ -1182,6 +1200,7 @@ class StreamingRetune:
     def _require_handle(self) -> ctypes.c_void_p:
         return _require_open(self._handle, "StreamingRetune")
 
+    @_entry("StreamingRetune.prepare")
     def prepare(self, sample_rate: float, max_block_size: int) -> None:
         """Allocate native state for ``sample_rate`` and resolve the grain size."""
         _check(
@@ -1192,10 +1211,12 @@ class StreamingRetune:
             )
         )
 
+    @_entry("StreamingRetune.reset")
     def reset(self) -> None:
         """Clear grain / overlap-add state without changing the config."""
         _check(self._lib.sonare_streaming_retune_reset(self._require_handle()))
 
+    @_entry("StreamingRetune.set_config")
     def set_config(
         self,
         *,
@@ -1243,6 +1264,7 @@ class StreamingRetune:
         )
         return float(pitch_semitones.value), float(mix.value), int(grain_size_samples.value)
 
+    @_entry("StreamingRetune.config")
     def config(self) -> dict[str, float | int | None]:
         """The controls as configured; ``grain_size_samples`` is ``None`` when automatic.
 
@@ -1277,6 +1299,7 @@ class StreamingRetune:
         )
         return int(out.value)
 
+    @_entry("StreamingRetune.process_mono")
     def process_mono(self, samples: Sequence[float] | list[float] | np.ndarray) -> np.ndarray:
         """Process one mono block, returning the shifted samples (same length)."""
         # The C entry point works in place and _as_float32_buffer is zero-copy

@@ -571,7 +571,7 @@ def test_live_push_names_the_refused_argument(method: str, args: tuple, message:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         with pytest.raises(SonareValueError) as refused:
             getattr(engine, method)(*args)
-        assert str(refused.value) == f"{method}: {message}"
+        assert str(refused.value) == f"RealtimeEngine.{method}: {message}"
         assert refused.value.code == int(ErrorCode.INVALID_PARAMETER)
 
 

@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 
 from ._effects_repair_common import _linked_channel_planes
-from ._errors import _not_supported
+from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._narrowing import (
     _narrow_double,
@@ -21,7 +21,6 @@ from ._narrowing import (
 )
 from ._runtime import (
     _DEFAULT_EFFECT_N_FFT,
-    SonareValueError,
     _call_float_array_transform,
     _check,
     _from_c_float_array,
@@ -65,6 +64,7 @@ class DecomposeResult:
     """Activation matrix of shape ``(n_components, n_frames)`` as float32."""
 
 
+@_entry("decompose")
 @_guard_buffer("s")
 def decompose(
     s: Sequence[float] | list[float],
@@ -93,7 +93,7 @@ def decompose(
     lib = _get_lib()
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
-        raise SonareValueError("s length must equal n_features * n_frames")
+        raise _refuse("s length must equal n_features * n_frames")
     with (
         _out_float_array(lib) as (out_w, out_w_length),
         _out_float_array(lib) as (out_h, out_h_length),
@@ -117,6 +117,7 @@ def decompose(
         return DecomposeResult(w=w, h=h)
 
 
+@_entry("decompose_with_init")
 @_guard_buffer("s")
 def decompose_with_init(
     s: Sequence[float] | list[float],
@@ -144,7 +145,7 @@ def decompose_with_init(
         raise _not_supported("libsonare was built without sonare_decompose_with_init")
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
-        raise SonareValueError("s length must equal n_features * n_frames")
+        raise _refuse("s length must equal n_features * n_frames")
     with (
         _out_float_array(lib) as (out_w, out_w_length),
         _out_float_array(lib) as (out_h, out_h_length),
@@ -170,7 +171,6 @@ def decompose_with_init(
 
 
 def _stems_config(
-    fn_name: str,
     n_components: int | None,
     n_fft: int | None,
     hop_length: int | None,
@@ -189,19 +189,19 @@ def _stems_config(
     c_counts = {name: 0 for name in counts}
     for name, value in counts.items():
         if value is not None:
-            c_counts[name] = _validate_c_int_field(fn_name, value, name)
+            c_counts[name] = _validate_c_int_field(value, name)
             if c_counts[name] <= 0:
-                raise SonareValueError(f"{fn_name}: {name} must be positive")
+                raise _refuse(f"{name} must be positive")
     c_mask_power = 0.0
     if mask_power is not None:
         c_mask_power = _narrow_double(mask_power, "mask_power")
         if c_mask_power < 1.0:
-            raise SonareValueError(f"{fn_name}: mask_power must be >= 1")
+            raise _refuse("mask_power must be >= 1")
     return SonareDecomposeStemsConfig(
         struct_version=1,
         n_components=c_counts["n_components"],
-        n_fft=0 if n_fft is None else _validate_stft_n_fft(fn_name, n_fft),
-        hop_length=0 if hop_length is None else _validate_effect_hop(fn_name, hop_length),
+        n_fft=0 if n_fft is None else _validate_stft_n_fft(n_fft),
+        hop_length=0 if hop_length is None else _validate_effect_hop(hop_length),
         n_iter=c_counts["n_iter"],
         beta=0.0 if beta is None else _narrow_double(beta, "beta"),
         init=None if init is None else _utf8_arg(_token_arg(init, _NMF_INITS, "init"), "init"),
@@ -209,6 +209,7 @@ def _stems_config(
     )
 
 
+@_entry("decompose_stems")
 def decompose_stems(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -259,10 +260,8 @@ def decompose_stems(
         SonareError: If the library rejects a value that reaches it, such as a
             non-finite ``beta`` or ``mask_power``.
     """
-    _validate_samples("decompose_stems", samples)
-    config = _stems_config(
-        "decompose_stems", n_components, n_fft, hop_length, n_iter, beta, init, mask_power
-    )
+    _validate_samples(samples)
+    config = _stems_config(n_components, n_fft, hop_length, n_iter, beta, init, mask_power)
     lib = _get_lib()
     if not hasattr(lib, "sonare_decompose_stems"):
         raise _unsupported_effect_symbol("sonare_decompose_stems")
@@ -303,6 +302,7 @@ def decompose_stems(
         }
 
 
+@_entry("decompose_stems_linked")
 def decompose_stems_linked(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     sample_rate: int,
@@ -359,13 +359,11 @@ def decompose_stems_linked(
         SonareError: If the library rejects a value that reaches it, such as a
             non-finite ``beta`` or ``mask_power``, or more than 64 channels.
     """
-    config = _stems_config(
-        "decompose_stems_linked", n_components, n_fft, hop_length, n_iter, beta, init, mask_power
-    )
+    config = _stems_config(n_components, n_fft, hop_length, n_iter, beta, init, mask_power)
     lib = _get_lib()
     if not hasattr(lib, "sonare_decompose_stems_linked"):
         raise _unsupported_effect_symbol("sonare_decompose_stems_linked")
-    planes = _linked_channel_planes("decompose_stems_linked", channels)
+    planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     channel_count = len(arrays)
     component_count = ctypes.c_size_t()
@@ -409,6 +407,7 @@ def decompose_stems_linked(
         }
 
 
+@_entry("nn_filter")
 @_guard_buffer("s")
 def nn_filter(
     s: Sequence[float] | list[float],
@@ -439,7 +438,7 @@ def nn_filter(
     lib = _get_lib()
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
-        raise SonareValueError("s length must equal n_features * n_frames")
+        raise _refuse("s length must equal n_features * n_frames")
     aggregate_bytes = (
         None
         if aggregate is None
@@ -467,11 +466,12 @@ def _remix_interval_array(
     """Marshal an ``(n, 2)`` array of ``(start, end)`` rows, refusing any other shape."""
     shape = np.shape(intervals)
     if len(shape) != 2 or shape[1] != 2:
-        raise SonareValueError("intervals must have shape (n, 2): one (start, end) row per slice")
+        raise _refuse("intervals must have shape (n, 2): one (start, end) row per slice")
     array, n_ints = _to_c_int_array(intervals, "intervals")
     return array, n_ints // 2
 
 
+@_entry("remix")
 @_guard_buffer("samples")
 def remix(
     samples: Sequence[float] | list[float],
@@ -514,6 +514,7 @@ def remix(
         return _from_c_float_array(out, out_length.value)
 
 
+@_entry("remix_aligned_intervals")
 @_guard_buffer("samples")
 def remix_aligned_intervals(
     samples: Sequence[float] | list[float],
@@ -564,6 +565,7 @@ def remix_aligned_intervals(
         return _from_c_int_array(out, out_count.value * 2).reshape(-1, 2)
 
 
+@_entry("hpss")
 def hpss(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -586,20 +588,20 @@ def hpss(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft / 4``
-            (at least 1), derived by the library.
+            so frames overlap by at least half a window. Default: ``n_fft / 4``,
+            derived by the library.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
 
     Returns:
         HpssResult with harmonic and percussive components.
     """
-    _validate_samples("hpss", samples)
-    n_fft = _validate_stft_n_fft("hpss", n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop("hpss", hop_length)
-    kernel_harmonic = _validate_hpss_kernel("hpss", kernel_harmonic, "kernel_harmonic")
-    kernel_percussive = _validate_hpss_kernel("hpss", kernel_percussive, "kernel_percussive")
+    _validate_samples(samples)
+    n_fft = _validate_stft_n_fft(n_fft)
+    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    kernel_harmonic = _validate_hpss_kernel(kernel_harmonic, "kernel_harmonic")
+    kernel_percussive = _validate_hpss_kernel(kernel_percussive, "kernel_percussive")
     if not isinstance(hard_mask, bool):
-        raise TypeError("hpss: hard_mask must be a bool")
+        raise _refuse_type("hard_mask must be a bool")
 
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1
@@ -669,6 +671,7 @@ def _hpss_legacy(
         lib.sonare_free_hpss_result(ctypes.byref(out))
 
 
+@_entry("harmonic")
 def harmonic(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -682,12 +685,13 @@ def harmonic(
     Returns:
         ``float32`` array of harmonic component samples.
     """
-    _validate_samples("harmonic", samples)
+    _validate_samples(samples)
     return _call_float_array_transform(
         "sonare_harmonic", samples, _to_c_int(sample_rate, "sample_rate")
     )
 
 
+@_entry("percussive")
 def percussive(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -701,12 +705,13 @@ def percussive(
     Returns:
         ``float32`` array of percussive component samples.
     """
-    _validate_samples("percussive", samples)
+    _validate_samples(samples)
     return _call_float_array_transform(
         "sonare_percussive", samples, _to_c_int(sample_rate, "sample_rate")
     )
 
 
+@_entry("hpss_with_residual")
 def hpss_with_residual(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -743,25 +748,21 @@ def hpss_with_residual(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft / 4``
-            (at least 1), derived by the library.
+            so frames overlap by at least half a window. Default: ``n_fft / 4``,
+            derived by the library.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
 
     Returns:
         A dict with ``harmonic`` / ``percussive`` / ``residual`` float32 arrays
         (all the same length) plus ``sampleRate``.
     """
-    _validate_samples("hpss_with_residual", samples)
-    n_fft = _validate_stft_n_fft("hpss_with_residual", n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop("hpss_with_residual", hop_length)
-    kernel_harmonic = _validate_hpss_kernel(
-        "hpss_with_residual", kernel_harmonic, "kernel_harmonic"
-    )
-    kernel_percussive = _validate_hpss_kernel(
-        "hpss_with_residual", kernel_percussive, "kernel_percussive"
-    )
+    _validate_samples(samples)
+    n_fft = _validate_stft_n_fft(n_fft)
+    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    kernel_harmonic = _validate_hpss_kernel(kernel_harmonic, "kernel_harmonic")
+    kernel_percussive = _validate_hpss_kernel(kernel_percussive, "kernel_percussive")
     if not isinstance(hard_mask, bool):
-        raise TypeError("hpss_with_residual: hard_mask must be a bool")
+        raise _refuse_type("hard_mask must be a bool")
 
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1
@@ -843,6 +844,7 @@ def _hpss_with_residual_legacy(
         }
 
 
+@_entry("phase_vocoder")
 def phase_vocoder(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -866,7 +868,7 @@ def phase_vocoder(
     Returns:
         The time-stretched audio as a 1-D float32 array.
     """
-    _validate_samples("phase_vocoder", samples)
+    _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):

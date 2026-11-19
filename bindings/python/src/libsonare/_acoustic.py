@@ -16,7 +16,7 @@ import math
 from collections.abc import Sequence
 from typing import TypeVar
 
-from ._errors import SonareValueError, _not_supported
+from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -91,9 +91,11 @@ def _named_selector(value: str, argument: str, prefix: str) -> int:
     while (name := name_of(len(valid))) is not None:
         valid.append(name.decode())
     if not isinstance(value, str):
-        raise TypeError(f"{argument} must be one of {valid} (a name, not a number), got {value!r}")
+        raise _refuse_type(
+            f"{argument} must be one of {valid} (a name, not a number), got {value!r}"
+        )
     if value not in valid:
-        raise SonareValueError(f"{argument} must be one of {valid}, got {value!r}")
+        raise _refuse(f"{argument} must be one of {valid}, got {value!r}")
     return valid.index(value)
 
 
@@ -177,13 +179,14 @@ def _fill_room_config(
         config.seed = _to_c_uint(seed, "seed").value
     for name in ("max_sec", "mixing_time_ms"):
         if fields.get(name) == 0:
-            raise SonareValueError(f"{name} must not be 0; omit it for the automatic value")
+            raise _refuse(f"{name} must not be 0; omit it for the automatic value")
     for name, value in fields.items():
         if value is not None:
             setattr(config, name, value)
     return config
 
 
+@_entry("synthesize_rir")
 def synthesize_rir(
     length_m: float = 7.0,
     width_m: float = 5.0,
@@ -313,6 +316,7 @@ def synthesize_rir(
         lib.sonare_free_rir_synth_result(ctypes.byref(out))
 
 
+@_entry("estimate_room")
 @_guard_buffer("samples")
 def estimate_room(
     samples: Sequence[float] | list[float],
@@ -396,10 +400,11 @@ def estimate_room(
 
 def _placement(value: Sequence[float], argument: str) -> tuple[float, float, float]:
     if len(value) != 3:
-        raise SonareValueError(f"{argument} must be an (x, y, z) triple")
+        raise _refuse(f"{argument} must be an (x, y, z) triple")
     return (float(value[0]), float(value[1]), float(value[2]))
 
 
+@_entry("room_geometry_from_estimate")
 def room_geometry_from_estimate(
     estimate: RoomEstimate,
     *,
@@ -539,6 +544,7 @@ def _room_morph_config(
     return config, (bands_owner, scatter_owner)
 
 
+@_entry("room_morph")
 @_guard_buffer("samples")
 def room_morph(
     samples: Sequence[float] | list[float],
@@ -648,6 +654,7 @@ def room_morph(
             lib.sonare_free_floats(out)
 
 
+@_entry("room_morph_stereo")
 @_guard_buffer("left", "right")
 def room_morph_stereo(
     left: Sequence[float] | list[float],
@@ -701,15 +708,13 @@ def room_morph_stereo(
     if receiver_spacing_m is not None:
         spacing = _narrow_double(receiver_spacing_m, "receiver_spacing_m")
         if not math.isfinite(spacing) or not 0.0 < spacing <= 4.0:
-            raise SonareValueError(
+            raise _refuse(
                 f"receiver_spacing_m must be finite and in (0, 4], got {receiver_spacing_m!r}"
             )
     c_left, length = _to_c_float_array(left)
     c_right, right_length = _to_c_float_array(right)
     if right_length != length:
-        raise SonareValueError(
-            f"left and right must have the same length, got {length} and {right_length}"
-        )
+        raise _refuse(f"left and right must have the same length, got {length} and {right_length}")
     config, _owners = _room_morph_config(
         length_m,
         width_m,

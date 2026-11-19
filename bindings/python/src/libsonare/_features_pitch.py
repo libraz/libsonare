@@ -7,13 +7,13 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import (
     SonareNoteSegmenterConfig,
     SonareNoteSegmentsResult,
     SonarePitchResult,
 )
 from ._runtime import (
-    SonareValueError,
     _check,
     _from_c_float_array,
     _from_c_float_matrix,
@@ -29,6 +29,7 @@ from ._runtime import (
 from .types import NoteSegment, PiptrackResult, PitchResult
 
 
+@_entry("pitch_tuning")
 def pitch_tuning(
     frequencies: Sequence[float] | list[float],
     resolution: float = 0.01,
@@ -54,7 +55,7 @@ def pitch_tuning(
     # Non-finite entries are dropped like non-positive ones, so an all-NaN track
     # would report 0.0 -- a legitimate "perfectly in tune" answer -- rather than
     # signalling that nothing usable was supplied.
-    frequency_buf = _validate_samples("pitch_tuning", frequencies, arg_name="frequencies")
+    frequency_buf = _validate_samples(frequencies, arg_name="frequencies")
     c_array, length = _to_c_float_array(frequency_buf)
     out = ctypes.c_float(0.0)
     rc = lib.sonare_pitch_tuning(
@@ -68,6 +69,7 @@ def pitch_tuning(
     return float(out.value)
 
 
+@_entry("estimate_tuning")
 @_guard_buffer("samples")
 def estimate_tuning(
     samples: Sequence[float] | list[float],
@@ -117,6 +119,7 @@ def estimate_tuning(
     return float(out.value)
 
 
+@_entry("tuning_to_reference_hz")
 def tuning_to_reference_hz(tuning_cents: float, a4_hz: float = 440.0) -> float:
     """Reference frequency of an A4 raised by ``tuning_cents`` cents.
 
@@ -145,6 +148,7 @@ def tuning_to_reference_hz(tuning_cents: float, a4_hz: float = 440.0) -> float:
     return float(out.value)
 
 
+@_entry("reference_hz_to_tuning")
 def reference_hz_to_tuning(reference_hz: float, a4_hz: float = 440.0) -> float:
     """Tuning, in cents, of a recording whose A4 sits at ``reference_hz``.
 
@@ -171,6 +175,7 @@ def reference_hz_to_tuning(reference_hz: float, a4_hz: float = 440.0) -> float:
     return float(out.value)
 
 
+@_entry("piptrack")
 @_guard_buffer("samples")
 def piptrack(
     samples: Sequence[float] | list[float],
@@ -230,6 +235,7 @@ def _pitch_result(out: SonarePitchResult) -> PitchResult:
     )
 
 
+@_entry("pitch_yin")
 def pitch_yin(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -256,7 +262,7 @@ def pitch_yin(
         ``voiced_flag`` tells the threshold crossings apart.
     """
     lib = _get_lib()
-    sample_buf = _validate_samples("pitch_yin", samples)
+    sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonarePitchResult()
     rc = lib.sonare_pitch_yin(
@@ -277,6 +283,7 @@ def pitch_yin(
         lib.sonare_free_pitch_result(ctypes.byref(out))
 
 
+@_entry("pitch_pyin")
 def pitch_pyin(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -304,7 +311,7 @@ def pitch_pyin(
         PitchResult with f0, voiced probabilities, and statistics.
     """
     lib = _get_lib()
-    sample_buf = _validate_samples("pitch_pyin", samples)
+    sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonarePitchResult()
     rc = lib.sonare_pitch_pyin(
@@ -326,6 +333,7 @@ def pitch_pyin(
         lib.sonare_free_pitch_result(ctypes.byref(out))
 
 
+@_entry("note_segments")
 @_guard_buffer(shape_only=("f0_hz",))
 def note_segments(
     f0_hz: Sequence[float] | list[float],
@@ -357,7 +365,7 @@ def note_segments(
         SonareValueError: If a voicing array's length differs from ``f0_hz``.
     """
     if voiced is None and voiced_prob is None:
-        raise TypeError("note_segments() requires voiced or voiced_prob")
+        raise _refuse_type("note_segments() requires voiced or voiced_prob")
     lib = _get_lib()
     f0_array, f0_count = _to_c_float_array(f0_hz)
     probability_array = None
@@ -367,9 +375,8 @@ def note_segments(
     else:
         probability_array, voiced_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
     if voiced_count != f0_count:
-        raise SonareValueError(
-            f"note_segments: f0_hz and the voicing array must have equal length, "
-            f"got {f0_count} and {voiced_count}"
+        raise _refuse(
+            f"f0_hz and the voicing array must have equal length, got {f0_count} and {voiced_count}"
         )
     config = SonareNoteSegmenterConfig(
         2,

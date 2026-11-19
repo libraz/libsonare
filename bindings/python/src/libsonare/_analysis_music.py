@@ -7,7 +7,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from ._errors import _unknown_error
+from ._errors import _entry, _refuse, _unknown_error
 from ._ffi import (
     SONARE_CHORD_DETECTION_OPTIONS_VERSION,
     SonareBoundaryOptions,
@@ -20,7 +20,6 @@ from ._ffi import (
     SonareStringArray,
 )
 from ._runtime import (
-    SonareValueError,
     _call_string,
     _check,
     _from_c_float_array,
@@ -89,6 +88,7 @@ def _voiced_hz(value: float) -> float | None:
     return float(value) if value > 0.0 else None
 
 
+@_entry("detect_chords")
 @_guard_buffer("samples")
 def detect_chords(
     samples: Sequence[float] | list[float],
@@ -129,7 +129,7 @@ def detect_chords(
     out = SonareChordAnalysisResult()
     # The key ordinals go in unconverted: the struct's own narrowing refuses a
     # fraction, which int() truncated into a neighbouring pitch class or mode.
-    tuning_value, tuning_auto = _tuning_arg("detect_chords", tuning_cents)
+    tuning_value, tuning_auto = _tuning_arg(tuning_cents)
     options = SonareChordDetectionOptions(
         SONARE_CHORD_DETECTION_OPTIONS_VERSION,
         min_duration_sec,
@@ -163,6 +163,7 @@ def detect_chords(
         lib.sonare_free_chord_analysis_result(ctypes.byref(out))
 
 
+@_entry("chord_functional_analysis")
 @_guard_buffer("samples")
 def chord_functional_analysis(
     samples: Sequence[float] | list[float],
@@ -198,7 +199,7 @@ def chord_functional_analysis(
     functions = SonareStringArray()
     # The key ordinals go in unconverted: the struct's own narrowing refuses a
     # fraction, which int() truncated into a neighbouring pitch class or mode.
-    tuning_value, tuning_auto = _tuning_arg("chord_functional_analysis", tuning_cents)
+    tuning_value, tuning_auto = _tuning_arg(tuning_cents)
     options = SonareChordDetectionOptions(
         SONARE_CHORD_DETECTION_OPTIONS_VERSION,
         min_duration_sec,
@@ -261,10 +262,11 @@ def _key_pair(key: object) -> tuple[object, object]:
     else:
         root, mode = getattr(key, "root", None), getattr(key, "mode", None)
     if root is None or mode is None:
-        raise SonareValueError("key must have a root and a mode")
+        raise _refuse("key must have a root and a mode")
     return root, mode
 
 
+@_entry("chord_functions")
 def chord_functions(
     chords: ChordAnalysisResult | Sequence[Chord],
     key: Key | Mapping[str, object] | tuple[PitchClass, KeyMode],
@@ -292,7 +294,7 @@ def chord_functions(
     for i, chord in enumerate(entries):
         ordinal = _CHORD_QUALITY_ORDINALS.get(chord.quality)
         if ordinal is None:
-            raise SonareValueError(f"chords[{i}].quality {chord.quality!r} is not a chord quality")
+            raise _refuse(f"chords[{i}].quality {chord.quality!r} is not a chord quality")
         array[i] = SonareChord(
             _to_c_int32(chord.root, f"chords[{i}].root"),
             ordinal,
@@ -332,6 +334,7 @@ def chord_functions(
         lib.sonare_free_string_array(ctypes.byref(functions))
 
 
+@_entry("analyze_sections")
 @_guard_buffer("samples")
 def analyze_sections(
     samples: Sequence[float] | list[float],
@@ -394,6 +397,7 @@ def analyze_sections(
         lib.sonare_free_section_result(ctypes.byref(out))
 
 
+@_entry("detect_boundaries")
 @_guard_buffer("samples")
 def detect_boundaries(
     samples: Sequence[float] | list[float],
@@ -508,6 +512,7 @@ def detect_boundaries(
         lib.sonare_free_boundary_result(ctypes.byref(out))
 
 
+@_entry("analyze_melody")
 @_guard_buffer("samples")
 def analyze_melody(
     samples: Sequence[float] | list[float],
@@ -619,6 +624,7 @@ def analyze_melody(
         lib.sonare_free_melody_result(ctypes.byref(out))
 
 
+@_entry("version")
 def version() -> str:
     """Return the libsonare version string."""
     lib = _get_lib()
@@ -641,6 +647,7 @@ def _capabilities_document() -> dict[str, Any]:
     return descriptor
 
 
+@_entry("capabilities")
 def capabilities() -> Capabilities:
     """Return the native library's build, platform, and decoder capabilities.
 
@@ -650,6 +657,7 @@ def capabilities() -> Capabilities:
     return _from_wire(Capabilities, _capabilities_document())
 
 
+@_entry("abi_version")
 def abi_version() -> int:
     """Return the aggregate libsonare C ABI version.
 
@@ -663,11 +671,13 @@ def abi_version() -> int:
     return int(lib.sonare_abi_version())
 
 
+@_entry("engine_abi_version")
 def engine_abi_version() -> int:
     """Return the realtime engine ABI version used for binding compatibility checks."""
     return int(_get_lib().sonare_engine_abi_version())
 
 
+@_entry("voice_changer_abi_version")
 def voice_changer_abi_version() -> int | None:
     """Return the realtime voice-changer ABI version.
 

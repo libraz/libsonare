@@ -697,7 +697,7 @@ class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:
                 # A mono handle cannot serve two planar channels.
                 changer.process_planar([block, block.copy()])
         assert exc_info.value.code == 4
-        assert str(exc_info.value) == "Invalid parameter"
+        assert str(exc_info.value) == "RealtimeVoiceChanger.process_planar: Invalid parameter"
         assert "FFT size" not in str(exc_info.value)
 
     def test_the_return_code_mapping_has_a_single_definition(self):

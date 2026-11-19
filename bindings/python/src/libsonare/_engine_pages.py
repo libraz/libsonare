@@ -9,12 +9,11 @@ from typing import BinaryIO
 
 import numpy as np
 
-from ._errors import _invalid_state, _require_open
+from ._errors import _entry, _invalid_state, _refuse, _require_open
 from ._runtime import (
     _INT64_MAX,
     _INT64_MIN,
     ClipPageRequest,
-    SonareValueError,
     _check,
     _get_lib,
     _narrow_int,
@@ -31,6 +30,7 @@ class ClipPageProvider:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("ClipPageProvider")
     def __init__(self, *, num_channels: int, num_samples: int, page_frames: int) -> None:
         self._handle: ctypes.c_void_p | None = None
         handle = ctypes.c_void_p()
@@ -44,6 +44,7 @@ class ClipPageProvider:
         )
         self._handle = handle
 
+    @_entry("ClipPageProvider.close")
     def close(self) -> None:
         """Release the native provider; idempotent."""
         handle = getattr(self, "_handle", None)
@@ -65,6 +66,7 @@ class ClipPageProvider:
     def _require_handle(self) -> ctypes.c_void_p:
         return _require_open(self._handle, "ClipPageProvider")
 
+    @_entry("ClipPageProvider.supply")
     def supply(self, page_index: int, channels: PlanarChannels) -> None:
         """Make page ``page_index`` resident from one float sequence per channel."""
         arrays, ptrs, frames = _planar_channel_arrays(channels)
@@ -78,6 +80,7 @@ class ClipPageProvider:
             )
         )
 
+    @_entry("ClipPageProvider.clear")
     def clear(self, page_index: int) -> None:
         """Mark page ``page_index`` as not resident."""
         _check(
@@ -102,6 +105,7 @@ class FileClipPageProvider(ClipPageProvider):
     page_frames: int
     """Frames per page."""
 
+    @_entry("FileClipPageProvider")
     def __init__(
         self,
         path: str | os.PathLike[str],
@@ -112,7 +116,7 @@ class FileClipPageProvider(ClipPageProvider):
         data_offset_bytes: int = 0,
     ) -> None:
         if num_channels <= 0 or num_samples <= 0 or page_frames <= 0:
-            raise SonareValueError("num_channels, num_samples, and page_frames must be positive")
+            raise _refuse("num_channels, num_samples, and page_frames must be positive")
         super().__init__(
             num_channels=num_channels, num_samples=num_samples, page_frames=page_frames
         )
@@ -132,6 +136,7 @@ class FileClipPageProvider(ClipPageProvider):
             data_offset_bytes, "data_offset_bytes", _INT64_MIN, _INT64_MAX
         )
 
+    @_entry("FileClipPageProvider.close")
     def close(self) -> None:
         """Close the file and release the native provider; idempotent."""
         file = getattr(self, "_file", None)
@@ -140,6 +145,7 @@ class FileClipPageProvider(ClipPageProvider):
             self._file = None
         super().close()
 
+    @_entry("FileClipPageProvider.supply_page")
     def supply_page(self, page_index: int) -> bool:
         """Read page ``page_index`` from the file and supply it.
 
@@ -168,6 +174,7 @@ class FileClipPageProvider(ClipPageProvider):
         self.supply(page, channels)
         return True
 
+    @_entry("FileClipPageProvider.supply_request")
     def supply_request(self, request: ClipPageRequest) -> bool:
         """Supply the page containing ``request.sample``; same result as :meth:`supply_page`."""
         return self.supply_page(request.sample // self.page_frames)

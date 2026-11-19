@@ -14,6 +14,7 @@ from ._effects_repair_common import (
     _run_detection,
     _run_repair,
 )
+from ._errors import _entry, _refuse
 from ._ffi import (
     SONARE_REPAIR_NOISE_BAND_COUNT,
     SonareDehumConfig,
@@ -30,7 +31,6 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    SonareValueError,
     _as_float32_buffer,
     _check,
     _from_c_float_array,
@@ -75,6 +75,7 @@ def _coerce_denoise_estimator(value: DenoiseClassicalNoiseEstimator) -> int:
     return _token_ordinal(value, _DENOISE_CLASSICAL_NOISE_ESTIMATORS, "denoise noise estimator")
 
 
+@_entry("mastering_repair_denoise_classical")
 @_guard_buffer("samples")
 def mastering_repair_denoise_classical(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -124,11 +125,9 @@ def mastering_repair_denoise_classical(
     # than the shared even-size rule; check it eagerly so the message names it.
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
     # Narrowed ahead of the sign check: int() takes 256.7 as 256, a hop nobody asked for.
-    hop_length_value = _narrow_int(
-        hop_length, "mastering_repair_denoise_classical: hop_length", _C_INT_MIN, _C_INT_MAX
-    )
+    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
     if hop_length_value <= 0:
-        raise SonareValueError("hop_length must be positive")
+        raise _refuse("hop_length must be positive")
 
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
@@ -166,6 +165,7 @@ def _extract_noise_detection(raw: Any) -> NoiseDetection:
     )
 
 
+@_entry("mastering_repair_detect_noise_floor")
 @_guard_buffer("samples")
 def mastering_repair_detect_noise_floor(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -229,11 +229,9 @@ def mastering_repair_detect_noise_floor(
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
-    hop_length_value = _narrow_int(
-        hop_length, "mastering_repair_detect_noise_floor: hop_length", _C_INT_MIN, _C_INT_MAX
-    )
+    hop_length_value = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
     if hop_length_value <= 0:
-        raise SonareValueError("hop_length must be positive")
+        raise _refuse("hop_length must be positive")
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
@@ -265,6 +263,7 @@ def mastering_repair_detect_noise_floor(
 _NOISE_BAND_EDGE_COUNT = SONARE_REPAIR_NOISE_BAND_COUNT + 1
 
 
+@_entry("mastering_repair_noise_band_bins")
 def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> np.ndarray:
     """Bin boundaries of the grid a denoise noise floor is reported on.
 
@@ -328,6 +327,7 @@ def _extract_denoise_report(raw: Any) -> DenoiseReport:
     )
 
 
+@_entry("mastering_repair_denoise_classical_stereo")
 @_guard_buffer("left", "right")
 def mastering_repair_denoise_classical_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -402,18 +402,18 @@ def mastering_repair_denoise_classical_stereo(
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
     hop_length_value = _narrow_int(
         hop_length,
-        "mastering_repair_denoise_classical_stereo: hop_length",
+        "hop_length",
         _C_INT_MIN,
         _C_INT_MAX,
     )
     if hop_length_value <= 0:
-        raise SonareValueError("hop_length must be positive")
+        raise _refuse("hop_length must be positive")
 
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
@@ -451,6 +451,7 @@ def mastering_repair_denoise_classical_stereo(
         lib.sonare_free_denoise_stereo_result(ctypes.byref(out))
 
 
+@_entry("mastering_repair_denoise_classical_linked")
 def mastering_repair_denoise_classical_linked(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     sample_rate: int,
@@ -537,18 +538,18 @@ def mastering_repair_denoise_classical_linked(
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
     hop_length_value = _narrow_int(
         hop_length,
-        "mastering_repair_denoise_classical_linked: hop_length",
+        "hop_length",
         _C_INT_MIN,
         _C_INT_MAX,
     )
     if hop_length_value <= 0:
-        raise SonareValueError("hop_length must be positive")
+        raise _refuse("hop_length must be positive")
 
     lib = _get_lib()
     symbol = "sonare_mastering_repair_denoise_classical_linked"
     if not hasattr(lib, symbol):
         raise _unsupported_effect_symbol(symbol)
-    planes = _linked_channel_planes("mastering_repair_denoise_classical_linked", channels)
+    planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
@@ -588,6 +589,7 @@ def _coerce_dehum_mode(value: DehumMode) -> int:
     return _token_ordinal(value, _DEHUM_MODES, "dehum mode")
 
 
+@_entry("mastering_repair_dehum")
 @_guard_buffer("samples")
 def mastering_repair_dehum(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -611,16 +613,12 @@ def mastering_repair_dehum(
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=_narrow_double(fundamental_hz, "fundamental_hz"),
         # Narrowed rather than coerced: int() takes 4.7 as 4, a notch count nobody asked for.
-        harmonics=_narrow_int(
-            harmonics, "mastering_repair_dehum: harmonics", _C_INT_MIN, _C_INT_MAX
-        ),
+        harmonics=_narrow_int(harmonics, "harmonics", _C_INT_MIN, _C_INT_MAX),
         q=_narrow_double(q, "q"),
         adaptive=1 if adaptive else 0,
         search_range_hz=_narrow_double(search_range_hz, "search_range_hz"),
         adaptation=_narrow_double(adaptation, "adaptation"),
-        frame_size=_narrow_int(
-            frame_size, "mastering_repair_dehum: frame_size", _C_INT_MIN, _C_INT_MAX
-        ),
+        frame_size=_narrow_int(frame_size, "frame_size", _C_INT_MIN, _C_INT_MAX),
         pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
         mode=_coerce_dehum_mode(mode),
     )
@@ -646,6 +644,7 @@ def _extract_hum_detection(raw: Any) -> HumDetection:
     )
 
 
+@_entry("mastering_repair_detect_hum")
 @_guard_buffer("samples")
 def mastering_repair_detect_hum(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -705,16 +704,12 @@ def mastering_repair_detect_hum(
     """
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=_narrow_double(fundamental_hz, "fundamental_hz"),
-        harmonics=_narrow_int(
-            harmonics, "mastering_repair_detect_hum: harmonics", _C_INT_MIN, _C_INT_MAX
-        ),
+        harmonics=_narrow_int(harmonics, "harmonics", _C_INT_MIN, _C_INT_MAX),
         q=_narrow_double(q, "q"),
         adaptive=1 if adaptive else 0,
         search_range_hz=_narrow_double(search_range_hz, "search_range_hz"),
         adaptation=_narrow_double(adaptation, "adaptation"),
-        frame_size=_narrow_int(
-            frame_size, "mastering_repair_detect_hum: frame_size", _C_INT_MIN, _C_INT_MAX
-        ),
+        frame_size=_narrow_int(frame_size, "frame_size", _C_INT_MIN, _C_INT_MAX),
         pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
         mode=_coerce_dehum_mode(mode),
     )
@@ -738,6 +733,7 @@ def _extract_dehum_report(raw: Any) -> DehumReport:
     )
 
 
+@_entry("mastering_repair_dehum_stereo")
 @_guard_buffer("left", "right")
 def mastering_repair_dehum_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -789,19 +785,15 @@ def mastering_repair_dehum_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=_narrow_double(fundamental_hz, "fundamental_hz"),
-        harmonics=_narrow_int(
-            harmonics, "mastering_repair_dehum_stereo: harmonics", _C_INT_MIN, _C_INT_MAX
-        ),
+        harmonics=_narrow_int(harmonics, "harmonics", _C_INT_MIN, _C_INT_MAX),
         q=_narrow_double(q, "q"),
         adaptive=1 if adaptive else 0,
         search_range_hz=_narrow_double(search_range_hz, "search_range_hz"),
         adaptation=_narrow_double(adaptation, "adaptation"),
-        frame_size=_narrow_int(
-            frame_size, "mastering_repair_dehum_stereo: frame_size", _C_INT_MIN, _C_INT_MAX
-        ),
+        frame_size=_narrow_int(frame_size, "frame_size", _C_INT_MIN, _C_INT_MAX),
         pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
         mode=_coerce_dehum_mode(mode),
     )

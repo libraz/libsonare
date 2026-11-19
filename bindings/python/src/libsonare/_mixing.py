@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
-from ._errors import _not_supported, _require_open
+from ._errors import _entry, _not_supported, _refuse, _refuse_type, _require_open
 from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
 from ._ffi_types_analysis import SonareMixerMasterMeterConfig
 from ._narrowing import _resolve_zero_default
@@ -28,7 +28,6 @@ from ._runtime import (
     PanMode,
     SendTiming,
     SonareMixMeterSnapshot,
-    SonareValueError,
     _check,
     _check_realtime,
     _curve_value,
@@ -90,6 +89,7 @@ _MIN_SAMPLE_RATE = 8000
 _MAX_SAMPLE_RATE = 384000
 
 
+@_entry("mixing_scene_preset_names")
 def mixing_scene_preset_names() -> list[str]:
     """Return built-in mixer scene preset identifiers."""
     lib = _get_lib()
@@ -98,6 +98,7 @@ def mixing_scene_preset_names() -> list[str]:
     return _joined_names(lib.sonare_mixing_scene_preset_names(), "mixing scene preset names")
 
 
+@_entry("mixing_scene_preset")
 def mixing_scene_preset(name: str) -> MixSceneDocument:
     """Return a built-in mixer scene preset as a scene document mapping.
 
@@ -105,10 +106,10 @@ def mixing_scene_preset(name: str) -> MixSceneDocument:
     name :func:`mixing_scene_preset_names` does not list.
     """
     if not isinstance(name, str):
-        raise TypeError(f"mixing_scene_preset: name must be a string, got {type(name).__name__}")
+        raise _refuse_type(f"name must be a string, got {type(name).__name__}")
     names = mixing_scene_preset_names()
     if name not in names:
-        raise SonareValueError(f"mixing_scene_preset: name must be one of {names}, got {name!r}")
+        raise _refuse(f"name must be one of {names}, got {name!r}")
     lib = _get_lib()
     json_ptr = ctypes.c_char_p()
     _check(lib.sonare_mixing_scene_preset_json(_utf8_arg(name, "name"), ctypes.byref(json_ptr)))
@@ -156,6 +157,7 @@ class Mixer:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: int | None = None
 
+    @_entry("Mixer")
     def __init__(
         self,
         *,
@@ -178,7 +180,7 @@ class Mixer:
         naming the path.
         """
         if scene is not None and not isinstance(scene, Mapping):
-            raise TypeError("scene must be a mapping (parse JSON text with json.loads first)")
+            raise _refuse_type("scene must be a mapping (parse JSON text with json.loads first)")
         if scene is None:
             lib = _get_lib()
             if not hasattr(lib, "sonare_mixer_create"):
@@ -199,6 +201,7 @@ class Mixer:
         self._adopt(handle, sample_rate, warnings)
 
     @classmethod
+    @_entry("Mixer.from_json")
     def from_json(cls, json: str, *, sample_rate: int, max_block_size: int | None = None) -> Mixer:
         """Build a mixer from a scene's JSON text, as :meth:`to_json` writes it."""
         handle, warnings = _scene_handle(json, sample_rate, max_block_size)
@@ -211,6 +214,7 @@ class Mixer:
         self._sample_rate = sample_rate
         self._scene_warnings: list[str] = scene_warnings
 
+    @_entry("Mixer.scene_warnings")
     def scene_warnings(self) -> list[str]:
         """Non-fatal warnings captured when this mixer was built from scene JSON.
 
@@ -224,6 +228,7 @@ class Mixer:
         """
         return list(self._scene_warnings)
 
+    @_entry("Mixer.compile")
     def compile(self) -> None:
         """Rebuild the graph while preserving automation position and queued events."""
         self._require()
@@ -248,6 +253,7 @@ class Mixer:
             raise _not_supported("libsonare was built without insert-automation support")
         return int(lib.sonare_mixer_strip_count(self._handle))
 
+    @_entry("Mixer.add_strip")
     def add_strip(
         self,
         id: str,
@@ -297,6 +303,7 @@ class Mixer:
             raise _last_error(int(ErrorCode.INVALID_PARAMETER), f"failed to add strip {id!r}")
         return self.strip_by_id(id)
 
+    @_entry("Mixer.add_bus")
     def add_bus(self, id: str, role: MixBusRole = "aux") -> None:
         """Add a bus to the mixer topology.
 
@@ -317,6 +324,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.remove_bus")
     def remove_bus(self, id: str) -> None:
         """Remove a bus by id from the mixer topology."""
         self._require()
@@ -325,6 +333,7 @@ class Mixer:
             raise _not_supported("libsonare was built without mixer bus support")
         _check(lib.sonare_mixer_remove_bus(self._handle, _utf8_arg(id, "id")))
 
+    @_entry("Mixer.set_output_bus")
     def set_output_bus(self, source_id: str, bus_id: str) -> None:
         """Send a strip or bus into a submix bus, or back to the master.
 
@@ -365,6 +374,7 @@ class Mixer:
         _check(lib.sonare_mixer_bus_count(self._handle, ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("Mixer.add_vca_group")
     def add_vca_group(
         self, id: str, gain_db: float = 0.0, members: Sequence[str] | None = None
     ) -> None:
@@ -391,6 +401,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.remove_vca_group")
     def remove_vca_group(self, id: str) -> None:
         """Remove a VCA group by id from the mixer topology."""
         self._require()
@@ -399,6 +410,7 @@ class Mixer:
             raise _not_supported("libsonare was built without mixer VCA support")
         _check(lib.sonare_mixer_remove_vca_group(self._handle, _utf8_arg(id, "id")))
 
+    @_entry("Mixer.set_vca_group_gain_db")
     def set_vca_group_gain_db(self, id: str, gain_db: float) -> None:
         """Set an existing VCA group's gain in dB."""
         self._require()
@@ -413,6 +425,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.set_vca_group_members")
     def set_vca_group_members(self, id: str, members: Sequence[str]) -> None:
         """Replace an existing VCA group's strip membership."""
         self._require()
@@ -461,13 +474,14 @@ class Mixer:
         if isinstance(strip, str):
             handle = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip, "strip"))
             if not handle:
-                raise SonareValueError(f"mixer strip id not found: {strip!r}")
+                raise _refuse(f"mixer strip id not found: {strip!r}")
         else:
             handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(strip, "strip"))
             if not handle:
-                raise SonareValueError(f"mixer strip index out of range: {strip}")
+                raise _refuse(f"mixer strip index out of range: {strip}")
         return ctypes.c_void_p(int(handle))
 
+    @_entry("Mixer.strip_by_id")
     def strip_by_id(self, id: str) -> int:
         """Return the index of the strip with ``id``.
 
@@ -478,23 +492,26 @@ class Mixer:
         lib = _get_lib()
         target = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(id, "id"))
         if not target:
-            raise SonareValueError(f"mixer strip id not found: {id!r}")
+            raise _refuse(f"mixer strip id not found: {id!r}")
         for index in range(self.strip_count):
             handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(index, "index"))
             if handle and int(handle) == int(target):
                 return index
-        raise SonareValueError(f"mixer strip id not found: {id!r}")
+        raise _refuse(f"mixer strip id not found: {id!r}")
 
+    @_entry("Mixer.set_soloed")
     def set_soloed(self, strip: StripRef, soloed: bool) -> None:
         """Set a strip's solo state (takes effect without a recompile)."""
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_soloed(handle, ctypes.c_int(1 if soloed else 0)))
 
+    @_entry("Mixer.set_solo_safe")
     def set_solo_safe(self, strip: StripRef, solo_safe: bool) -> None:
         """Mark a strip solo-safe so other strips' solo never implied-mutes it."""
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_solo_safe(handle, ctypes.c_int(1 if solo_safe else 0)))
 
+    @_entry("Mixer.set_polarity_invert")
     def set_polarity_invert(self, strip: StripRef, invert_left: bool, invert_right: bool) -> None:
         """Invert the polarity of the left and/or right channel of a strip."""
         handle = self._strip_handle(strip)
@@ -506,6 +523,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.set_pan_law")
     def set_pan_law(self, strip: StripRef, pan_law: PanLaw) -> None:
         """Set a strip's pan law (a :data:`PanLaw` token such as ``"const3Db"``).
 
@@ -516,6 +534,7 @@ class Mixer:
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_pan_law(handle, ctypes.c_int(_pan_law_value(pan_law))))
 
+    @_entry("Mixer.set_channel_delay_samples")
     def set_channel_delay_samples(self, strip: StripRef, delay_samples: int) -> None:
         """Set a per-strip channel delay in samples, moving it later than the other strips."""
         handle = self._strip_handle(strip)
@@ -525,6 +544,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.set_vca_offset_db")
     def set_vca_offset_db(self, strip: StripRef, offset_db: float) -> None:
         """Set a strip's direct VCA trim in dB (persisted as the scene's ``vcaOffsetDb``)."""
         handle = self._strip_handle(strip)
@@ -532,6 +552,7 @@ class Mixer:
             _get_lib().sonare_strip_set_vca_offset_db(handle, _to_c_float(offset_db, "offset_db"))
         )
 
+    @_entry("Mixer.set_dual_pan")
     def set_dual_pan(self, strip: StripRef, left: float, right: float) -> None:
         """Set independent left/right pan positions in [-1, 1] for a strip (dual-pan mode).
 
@@ -545,6 +566,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.set_surround_pan")
     def set_surround_pan(
         self,
         strip: StripRef,
@@ -579,16 +601,19 @@ class Mixer:
         )
         _check(_get_lib().sonare_strip_set_surround_pan(handle, ctypes.byref(pan)))
 
+    @_entry("Mixer.set_fader_db")
     def set_fader_db(self, strip: StripRef, db: float) -> None:
         """Set a strip's fader gain in dB (takes effect without a recompile)."""
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_fader_db(handle, _to_c_float(db, "db")))
 
+    @_entry("Mixer.set_input_trim_db")
     def set_input_trim_db(self, strip: StripRef, db: float) -> None:
         """Set a strip's input trim in dB."""
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_input_trim_db(handle, _to_c_float(db, "db")))
 
+    @_entry("Mixer.set_pan")
     def set_pan(self, strip: StripRef, pan: float, pan_mode: PanMode | None = None) -> None:
         """Set a strip's pan position.
 
@@ -613,6 +638,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.set_width")
     def set_width(self, strip: StripRef, width: float) -> None:
         """Set a strip's stereo width in [0, 2] (0 mono, 1 unchanged, 2 widest).
 
@@ -622,11 +648,13 @@ class Mixer:
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_width(handle, _to_c_float(width, "width")))
 
+    @_entry("Mixer.set_muted")
     def set_muted(self, strip: StripRef, muted: bool) -> None:
         """Set a strip's mute state (takes effect without a recompile)."""
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_muted(handle, ctypes.c_int(1 if muted else 0)))
 
+    @_entry("Mixer.settle")
     def settle(self, strip: StripRef) -> None:
         """Snap a strip's gain smoothers to the values already set on it.
 
@@ -656,6 +684,7 @@ class Mixer:
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_settle(handle))
 
+    @_entry("Mixer.add_send")
     def add_send(
         self,
         strip: StripRef,
@@ -683,6 +712,7 @@ class Mixer:
         )
         return int(index_out.value)
 
+    @_entry("Mixer.set_send_db")
     def set_send_db(self, strip: StripRef, index: int, db: float) -> None:
         """Set the level in dB of an existing send on a strip (by send index)."""
         handle = self._strip_handle(strip)
@@ -692,6 +722,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.remove_send")
     def remove_send(self, strip: StripRef, index: int) -> None:
         """Remove a strip's send by add-order index.
 
@@ -705,6 +736,7 @@ class Mixer:
             raise _not_supported("libsonare was built without strip remove_send support")
         _check(lib.sonare_strip_remove_send(handle, _to_c_uint32(index, "index")))
 
+    @_entry("Mixer.strip_meter")
     def strip_meter(self, strip: StripRef, tap: MeterTap = "postFader") -> MixMeterSnapshot:
         """Read a per-strip meter snapshot at the given tap point.
 
@@ -729,6 +761,7 @@ class Mixer:
             _check(lib.sonare_strip_meter(handle, ctypes.byref(snapshot)))
         return _mix_meter_from_c(snapshot)
 
+    @_entry("Mixer.bus_meter")
     def bus_meter(self, bus_id: str) -> MixMeterSnapshot:
         """Read the post-insert meter for a compiled bus, including master."""
         self._require()
@@ -743,6 +776,7 @@ class Mixer:
         )
         return _mix_meter_from_c(snapshot)
 
+    @_entry("Mixer.configure_meter")
     def configure_meter(
         self,
         enabled: bool = True,
@@ -774,7 +808,7 @@ class Mixer:
         }
         for name, value in flags.items():
             if not isinstance(value, bool):
-                raise TypeError(f"configure_meter: {name} must be a bool")
+                raise _refuse_type(f"{name} must be a bool")
         lib = _get_lib()
         config = SonareMixerMasterMeterConfig()
         lib.sonare_mixer_master_meter_config_init(ctypes.byref(config))
@@ -786,6 +820,7 @@ class Mixer:
         )
         _check(lib.sonare_mixer_configure_master_meter(self._handle, ctypes.byref(config)))
 
+    @_entry("Mixer.meter_snapshot")
     def meter_snapshot(self) -> MixMeterSnapshot:
         """Read the master-output meter.
 
@@ -797,6 +832,7 @@ class Mixer:
         _check_realtime(_get_lib().sonare_mixer_master_meter(self._handle, ctypes.byref(snapshot)))
         return _mix_meter_from_c(snapshot)
 
+    @_entry("Mixer.strip_non_finite_discard_count")
     def strip_non_finite_discard_count(self, strip: StripRef) -> int:
         """Return the blocks in which the strip discarded recursive state.
 
@@ -824,6 +860,7 @@ class Mixer:
         _check_realtime(lib.sonare_strip_non_finite_discard_count(handle, ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("Mixer.bus_non_finite_discard_count")
     def bus_non_finite_discard_count(self, bus_id: str) -> int:
         """Return the blocks in which the bus discarded recursive state.
 
@@ -850,6 +887,7 @@ class Mixer:
         )
         return int(out.value)
 
+    @_entry("Mixer.read_goniometer_latest")
     def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]:
         """Read up to ``max_points`` of the latest goniometer (vectorscope) data.
 
@@ -878,6 +916,7 @@ class Mixer:
             for i in range(int(count))
         ]
 
+    @_entry("Mixer.schedule_fader_automation")
     def schedule_fader_automation(
         self,
         strip: StripRef,
@@ -896,6 +935,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.schedule_pan_automation")
     def schedule_pan_automation(
         self,
         strip: StripRef,
@@ -914,6 +954,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.schedule_width_automation")
     def schedule_width_automation(
         self,
         strip: StripRef,
@@ -932,6 +973,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.schedule_send_automation")
     def schedule_send_automation(
         self,
         strip: StripRef,
@@ -952,6 +994,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.schedule_insert_automation")
     def schedule_insert_automation(
         self,
         strip_index: StripRef,
@@ -987,6 +1030,7 @@ class Mixer:
             )
         )
 
+    @_entry("Mixer.process_stereo")
     def process_stereo(
         self,
         left_inputs: Sequence[Sequence[float]],
@@ -1003,10 +1047,10 @@ class Mixer:
         """
         self._require()
         if len(left_inputs) != len(right_inputs):
-            raise SonareValueError("left_inputs and right_inputs must have the same length")
+            raise _refuse("left_inputs and right_inputs must have the same length")
         strip_count = self.strip_count
         if len(left_inputs) > strip_count:
-            raise SonareValueError(f"got {len(left_inputs)} inputs for a {strip_count}-strip mixer")
+            raise _refuse(f"got {len(left_inputs)} inputs for a {strip_count}-strip mixer")
 
         left_arrays: list[ctypes.Array[ctypes.c_float]] = []
         right_arrays: list[ctypes.Array[ctypes.c_float]] = []
@@ -1017,11 +1061,11 @@ class Mixer:
             left_array, left_length = _to_c_float_array(left, arg_name=f"left_inputs[{index}]")
             right_array, right_length = _to_c_float_array(right, arg_name=f"right_inputs[{index}]")
             if left_length != right_length:
-                raise SonareValueError("left and right channel lengths must match")
+                raise _refuse("left and right channel lengths must match")
             if length is None:
                 length = left_length
             elif left_length != length:
-                raise SonareValueError("all strips must have the same length")
+                raise _refuse("all strips must have the same length")
             left_arrays.append(left_array)
             right_arrays.append(right_array)
 
@@ -1080,6 +1124,7 @@ class Mixer:
         _check(_get_lib().sonare_mixer_latency_samples(self._handle, ctypes.byref(out)))
         return int(out.value)
 
+    @_entry("Mixer.drain_tail_stereo")
     def drain_tail_stereo(self, num_samples: int) -> MixerStereoResult:
         """Drain ``num_samples`` of trailing effect-tail audio with no new input.
 
@@ -1109,6 +1154,7 @@ class Mixer:
             sample_rate=int(self._sample_rate),
         )
 
+    @_entry("Mixer.flush_meters")
     def flush_meters(self) -> None:
         """Mark the end of the signal for every strip, bus and master meter.
 
@@ -1121,6 +1167,7 @@ class Mixer:
         self._require()
         _check(_get_lib().sonare_mixer_flush_meters(self._handle))
 
+    @_entry("Mixer.to_json")
     def to_json(self) -> str:
         """Serialize the current scene (strips, buses, sends, connections) as JSON text."""
         self._require()
@@ -1133,6 +1180,7 @@ class Mixer:
             if json_ptr.value:
                 lib.sonare_free_string(json_ptr)
 
+    @_entry("Mixer.close")
     def close(self) -> None:
         """Release the underlying native mixer. Safe to call more than once."""
         if self._handle is not None:
@@ -1154,6 +1202,7 @@ class Mixer:
         _require_open(self._handle, "Mixer")
 
 
+@_entry("mix_stereo")
 def mix_stereo(
     strips: Sequence[tuple[Sequence[float], Sequence[float]]],
     sample_rate: int,
@@ -1199,7 +1248,7 @@ def mix_stereo(
     if not hasattr(lib, "sonare_mixer_create"):
         raise _not_supported("libsonare was built without mixing support")
     if not strips:
-        raise SonareValueError("mix_stereo: at least one strip is required")
+        raise _refuse("at least one strip is required")
     c_sample_rate = _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE)
 
     # A per-strip option may be shorter than the strip list (the remaining
@@ -1218,9 +1267,7 @@ def mix_stereo(
         ("muted", muted),
     ):
         if opt is not None and len(opt) > n_strips:
-            raise SonareValueError(
-                f"mix_stereo: '{name}' has more entries than strips ({n_strips})"
-            )
+            raise _refuse(f"'{name}' has more entries than strips ({n_strips})")
 
     left_arrays: list[ctypes.Array[ctypes.c_float]] = []
     right_arrays: list[ctypes.Array[ctypes.c_float]] = []
@@ -1229,20 +1276,16 @@ def mix_stereo(
         # A NaN loses every comparison the peak meter makes, so an unguarded
         # non-finite strip reads as the -120 dB silence floor rather than as a
         # fault; an infinity propagates into the master sum and the meter.
-        left_buf = _validate_samples(
-            "mix_stereo", left, arg_name=f"strips[{index}] left", allow_empty=True
-        )
-        right_buf = _validate_samples(
-            "mix_stereo", right, arg_name=f"strips[{index}] right", allow_empty=True
-        )
+        left_buf = _validate_samples(left, arg_name=f"strips[{index}] left", allow_empty=True)
+        right_buf = _validate_samples(right, arg_name=f"strips[{index}] right", allow_empty=True)
         left_array, left_length = _to_c_float_array(left_buf)
         right_array, right_length = _to_c_float_array(right_buf)
         if left_length != right_length:
-            raise SonareValueError("left and right channel lengths must match")
+            raise _refuse("left and right channel lengths must match")
         if length is None:
             length = left_length
         elif left_length != length:
-            raise SonareValueError("all strips must have the same length")
+            raise _refuse("all strips must have the same length")
         left_arrays.append(left_array)
         right_arrays.append(right_array)
 
@@ -1252,7 +1295,7 @@ def mix_stereo(
         # empty. The C ABI treats a zero-frame block as a valid no-op, which
         # would answer with an empty mix and meters reading the silence floor —
         # indistinguishable from a real mix of silence.
-        raise SonareValueError("mix_stereo: every strip is empty; there is no audio to mix")
+        raise _refuse("every strip is empty; there is no audio to mix")
 
     mixer_handle = ctypes.c_void_p()
     _check(

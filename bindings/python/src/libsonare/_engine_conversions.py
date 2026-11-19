@@ -8,6 +8,7 @@ import operator
 from collections.abc import Mapping, Sequence
 from typing import cast
 
+from ._errors import _refuse, _refuse_type
 from ._ffi_types_core import SonareAutomationPoint
 from ._narrowing import _narrow_double, _optional_nonzero
 from ._runtime import (
@@ -40,7 +41,6 @@ from ._runtime import (
     SonareMeterTelemetryRecordWideV2,
     SonareParameterInfo,
     SonareScopeTelemetryRecord,
-    SonareValueError,
     _curve_value,
     _from_c_float_array,
     _optional_positive_int,
@@ -94,14 +94,14 @@ def _marker_kind_name(kind: int) -> MarkerKind:
 
 def _band_json_arg(band: Mapping[str, object]) -> bytes:
     if not isinstance(band, Mapping):
-        raise TypeError(f"band must be a mapping, got {type(band).__name__}")
+        raise _refuse_type(f"band must be a mapping, got {type(band).__name__}")
     return _utf8_arg(json.dumps(dict(band)), "band")
 
 
 def _scene_entry_json(entry: Mapping[str, object], key: str, name: str) -> bytes:
     """Wrap one strip or bus mapping as the one-entry scene document the engine setters read."""
     if not isinstance(entry, Mapping):
-        raise TypeError(f"{name} must be a mapping (parse JSON text with json.loads first)")
+        raise _refuse_type(f"{name} must be a mapping (parse JSON text with json.loads first)")
     return _utf8_arg(json.dumps({key: [dict(entry)]}), name)
 
 
@@ -109,7 +109,7 @@ def _fixed_bytes(value: str, capacity: int, name: str) -> bytes:
     """Encode ``value`` for a fixed C char field; one that does not fit is refused, never cut."""
     encoded = _utf8_arg(value, name)
     if len(encoded) >= capacity:
-        raise SonareValueError(f"{name} must be at most {capacity - 1} UTF-8 bytes")
+        raise _refuse(f"{name} must be at most {capacity - 1} UTF-8 bytes")
     return encoded
 
 
@@ -152,9 +152,9 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     try:
         marker_id = operator.index(marker.id)
     except TypeError as exc:
-        raise SonareValueError("marker id must be a positive uint32 integer") from exc
+        raise _refuse("marker id must be a positive uint32 integer") from exc
     if marker_id <= 0 or marker_id > _UINT32_MAX:
-        raise SonareValueError("marker id must be a positive uint32 integer")
+        raise _refuse("marker id must be a positive uint32 integer")
     raw = SonareEngineMarker()
     raw.id = marker_id
     # Assigned unconverted so the struct's own narrowing sees each caller value;
@@ -165,7 +165,7 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
     if marker.name is not None:
         if marker.name == "":
-            raise SonareValueError("marker name must not be empty; omit it for an unnamed marker")
+            raise _refuse("marker name must not be empty; omit it for an unnamed marker")
         raw.name = _fixed_bytes(marker.name, 64, "name")
     return raw
 
@@ -187,12 +187,8 @@ def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfi
     raw.enabled = int(config.enabled)
     raw.beat_gain = _narrow_double(config.beat_gain, "config.beat_gain")
     raw.accent_gain = _narrow_double(config.accent_gain, "config.accent_gain")
-    raw.click_samples = _optional_positive_int(
-        config.click_samples, "set_metronome: click_samples", _C_INT_MAX
-    )
-    raw.click_sec = _optional_nonzero(
-        config.click_sec, "set_metronome: click_sec", "the default click length"
-    )
+    raw.click_samples = _optional_positive_int(config.click_samples, "click_samples", _C_INT_MAX)
+    raw.click_sec = _optional_nonzero(config.click_sec, "click_sec", "the default click length")
     return raw
 
 
@@ -226,7 +222,7 @@ def _clips_to_c(
         _require_instance(clip, EngineClip, "clip")
         page_provider = getattr(clip, "page_provider", None)
         if page_provider is not None and not isinstance(page_provider, ClipPageProvider):
-            raise TypeError("clip page_provider must be a ClipPageProvider")
+            raise _refuse_type("clip page_provider must be a ClipPageProvider")
         if page_provider is not None:
             raw = SonareEngineClip()
             # Assigned unconverted so the struct's own narrowing sees each
@@ -299,7 +295,7 @@ def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
     raw.id = _fixed_bytes(node.id, 64, "id")
     raw.type = _token_ordinal(node.type, _GRAPH_NODE_TYPES, "graph node type")
     raw.gain_db = _narrow_double(node.gain_db, "node.gain_db")
-    raw.num_ports = _optional_positive_int(node.num_ports, "set_graph: num_ports", _C_INT_MAX)
+    raw.num_ports = _optional_positive_int(node.num_ports, "num_ports", _C_INT_MAX)
     return raw
 
 

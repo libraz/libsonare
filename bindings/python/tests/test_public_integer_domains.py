@@ -100,12 +100,12 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     "_reject_unrepresentable_int32": ((np.array([1.5]), "probe"), (np.array([1, 2]), "probe")),
     "_to_c_int_array": (([1.5], "probe"), ([1, 2], "probe")),
     # The field and option validators, which add a domain on top of the range.
-    "_validate_c_int_field": (("probe", 1.5, "probe"), ("probe", 7, "probe")),
-    "_validate_hpss_kernel": (("probe", 31.5, "probe"), ("probe", 31, "probe")),
-    "_validate_stft_n_fft": (("probe", 2048.5), ("probe", 2048)),
-    "_validate_effect_hop": (("probe", 512.5), ("probe", 512)),
-    "_validate_scalar": (("probe", math.nan, "probe"), ("probe", 1.5, "probe")),
-    "_validate_samples": (("probe", [math.nan]), ("probe", [0.1, 0.2])),
+    "_validate_c_int_field": ((1.5, "probe"), (7, "probe")),
+    "_validate_hpss_kernel": ((31.5, "probe"), (31, "probe")),
+    "_validate_stft_n_fft": ((2048.5,), (2048,)),
+    "_validate_effect_hop": ((512.5,), (512,)),
+    "_validate_scalar": ((math.nan, "probe"), (1.5, "probe")),
+    "_validate_samples": (([math.nan],), ([0.1, 0.2],)),
     "_require_power_of_two": ((1024.5, "probe"), (1024, "probe")),
     # The closed-domain resolvers. A fraction is neither an ordinal nor a name,
     # so it leaves the domain the way an unknown spelling does.
@@ -120,7 +120,7 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     "_channel_layout_value": ((1.5,), ("5.1",)),
     "_warp_mode_value": ((1.5,), ("off",)),
     "_profile_value": (("not-a-key-profile",), ("krumhanslSchmuckler",)),
-    "_mode_values": (("detect_key", "not-a-mode"), ("detect_key", "majorMinor")),
+    "_mode_values": (("not-a-mode",), ("majorMinor",)),
     "_mode_value": (("not-a-mode",), ("dorian",)),
 }
 

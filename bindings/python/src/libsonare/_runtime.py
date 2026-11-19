@@ -15,6 +15,8 @@ from typing import Any, SupportsIndex, TypeVar, cast
 
 import numpy as np
 
+from ._errors import _BARE_TEXT, _refuse, _refuse_type
+
 # _runtime is the shared re-export hub: feature submodules do
 # `from ._runtime import *`, so forward the full C-struct and public type
 # surfaces here instead of maintaining a partial hand-written list (an
@@ -92,11 +94,15 @@ def _coded_error(code: int, message: str) -> SonareError:
 
     InvalidParameter is always a refused caller argument, so it is a
     :class:`SonareValueError` with the plain message; every other code is a coded
-    :class:`SonareError`.
+    :class:`SonareError`. Either way the calling entry prefixes its name on the way out.
     """
-    if code == int(ErrorCode.INVALID_PARAMETER):
-        return SonareValueError(message)
-    return SonareError(code, message)
+    exc = (
+        SonareValueError(message)
+        if code == int(ErrorCode.INVALID_PARAMETER)
+        else SonareError(code, message)
+    )
+    setattr(exc, _BARE_TEXT, message)
+    return exc
 
 
 def _check(rc: int) -> None:
@@ -206,7 +212,6 @@ def _check_realtime(rc: int) -> None:
 
 
 def _validate_samples(
-    fn_name: str,
     samples: object,
     *,
     scan: bool = True,
@@ -238,10 +243,10 @@ def _validate_samples(
     cost model they promise: per call the scan is bounded by the window, not by
     the buffer an analyzer is polling. The reported index stays absolute.
     """
-    buf = _as_float32_buffer(samples, fn_name=fn_name, arg_name=arg_name)
+    buf = _as_float32_buffer(samples, arg_name=arg_name)
     length = int(buf.shape[0])
     if not allow_empty and length == 0:
-        raise SonareValueError(f"{fn_name}: {arg_name} must not be empty")
+        raise _refuse(f"{arg_name} must not be empty")
     if scan:
         start, stop = 0, length
         if window is not None:
@@ -254,8 +259,8 @@ def _validate_samples(
             bad = start + int(np.argmin(finite))
             # NumPy converts a None element to NaN; name what the caller passed.
             if not isinstance(samples, np.ndarray) and _element_is_none(samples, bad):
-                raise SonareValueError(f"{fn_name}: {arg_name}[{bad}] is None, not a number")
-            raise SonareValueError(f"{fn_name}: {arg_name} contains NaN or Inf at index {bad}")
+                raise _refuse(f"{arg_name}[{bad}] is None, not a number")
+            raise _refuse(f"{arg_name} contains NaN or Inf at index {bad}")
     return buf
 
 
@@ -313,7 +318,6 @@ def _guard_buffer(
                     # ABI actually receives one conversion removed from the ones
                     # that were checked.
                     bound.arguments[arg_name] = _validate_samples(
-                        fn.__name__,
                         bound.arguments[arg_name],
                         scan=arg_name not in shape_only,
                         arg_name=arg_name,
@@ -328,7 +332,7 @@ def _guard_buffer(
     return decorate
 
 
-def _validate_scalar(fn_name: str, value: float, arg_name: str) -> float:
+def _validate_scalar(value: float, arg_name: str) -> float:
     """Reject NaN / Inf scalar inputs with :class:`SonareValueError`.
 
     The float32 range is not checked here -- :func:`_narrow_float` does that
@@ -336,13 +340,13 @@ def _validate_scalar(fn_name: str, value: float, arg_name: str) -> float:
     refusal naming the argument, so an integer too large for a double is
     refused rather than escaping as a bare ``OverflowError``.
     """
-    refusal = f"{fn_name}: {arg_name} must be a finite number"
+    refusal = f"{arg_name} must be a finite number"
     try:
         v = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise SonareValueError(refusal) from exc
+        raise _refuse(refusal) from exc
     if not np.isfinite(v):
-        raise SonareValueError(refusal)
+        raise _refuse(refusal)
     return v
 
 
@@ -354,29 +358,26 @@ def _element_is_none(samples: object, index: int) -> bool:
         return False
 
 
-def _not_a_buffer(samples: object, fn_name: str, arg_name: str) -> SonareValueError:
+def _not_a_buffer(samples: object, arg_name: str) -> SonareValueError:
     """Build the rejection for an input that is not a numeric buffer at all."""
-    prefix = f"{fn_name}: " if fn_name else ""
-    return SonareValueError(
-        f"{prefix}{arg_name} must be a sequence of numbers or a numpy array, "
-        f"not {type(samples).__name__}"
+    return _refuse(
+        f"{arg_name} must be a sequence of numbers or a numpy array, not {type(samples).__name__}"
     )
 
 
-def _integer_samples(dtype: np.dtype[Any], fn_name: str, arg_name: str) -> TypeError:
+def _integer_samples(dtype: np.dtype[Any], arg_name: str) -> TypeError:
     """Build the rejection for a typed buffer whose elements are integers or booleans.
 
     Integer audio is PCM with an implied full scale, so a plain cast would read
     16-bit codes as amplitudes up to 32767; the caller has to scale it.
     """
-    prefix = f"{fn_name}: " if fn_name else ""
-    return TypeError(
-        f"{prefix}{arg_name} must have a floating dtype (float32 or float64), not {dtype}; "
+    return _refuse_type(
+        f"{arg_name} must have a floating dtype (float32 or float64), not {dtype}; "
         "scale integer PCM to [-1, 1] first"
     )
 
 
-def _past_float32_range(samples: object, fn_name: str, arg_name: str) -> SonareValueError:
+def _past_float32_range(samples: object, arg_name: str) -> SonareValueError:
     """Build the rejection for an element the float32 cast turned into an infinity.
 
     Reported through the same builder the scalar conversions use, because it is
@@ -388,32 +389,28 @@ def _past_float32_range(samples: object, fn_name: str, arg_name: str) -> SonareV
     Only reached once the cast has already overflowed, so locating the element
     costs a pass on the failing path rather than on every call.
     """
-    prefix = f"{fn_name}: " if fn_name else ""
     element = arg_name
     try:
         wide = np.asarray(samples, dtype=np.float64).reshape(-1)
     except (OverflowError, TypeError, ValueError):
         # Too wide for a double either, so there is no index to read it at.
-        return SonareValueError(f"{prefix}{_float_narrowing_error(element)}")
+        return _refuse(f"{_float_narrowing_error(element)}")
     outside = np.isfinite(wide) & (np.abs(wide) > _FLOAT32_MAX)
     if outside.any():
         element = f"{arg_name}[{int(np.argmax(outside))}]"
-    return SonareValueError(f"{prefix}{_float_narrowing_error(element)}")
+    return _refuse(f"{_float_narrowing_error(element)}")
 
 
-def _not_one_dimensional(array: np.ndarray, fn_name: str, arg_name: str) -> SonareValueError:
+def _not_one_dimensional(array: np.ndarray, arg_name: str) -> SonareValueError:
     """Build the rejection for a buffer of the wrong rank, naming its shape."""
-    prefix = f"{fn_name}: " if fn_name else ""
-    return SonareValueError(
-        f"{prefix}{arg_name} must be a 1-D buffer, not ndim={array.ndim} "
+    return _refuse(
+        f"{arg_name} must be a 1-D buffer, not ndim={array.ndim} "
         f"shape={tuple(array.shape)}: downmix a (frames, channels) read along axis 1, "
         f"or flatten a row-major matrix argument, before passing it"
     )
 
 
-def _as_float32_buffer(
-    samples: object, *, fn_name: str = "", arg_name: str = "samples"
-) -> np.ndarray:
+def _as_float32_buffer(samples: object, *, arg_name: str = "samples") -> np.ndarray:
     """Coerce ``samples`` to a contiguous ``float32`` 1-D numpy buffer.
 
     Zero-copy when the input is already a contiguous ``float32`` ndarray; one
@@ -453,10 +450,10 @@ def _as_float32_buffer(
     if isinstance(samples, (array.array, memoryview)):
         typed = np.asarray(samples)
         if typed.dtype.kind in "biu":
-            raise _integer_samples(typed.dtype, fn_name, arg_name)
+            raise _integer_samples(typed.dtype, arg_name)
     if isinstance(samples, np.ndarray):
         if samples.dtype.kind in "biu":
-            raise _integer_samples(samples.dtype, fn_name, arg_name)
+            raise _integer_samples(samples.dtype, arg_name)
         if (
             samples.dtype == np.float32
             and samples.flags["C_CONTIGUOUS"]
@@ -465,7 +462,7 @@ def _as_float32_buffer(
         ):
             return samples
         if samples.ndim != 1:
-            raise _not_one_dimensional(samples, fn_name, arg_name)
+            raise _not_one_dimensional(samples, arg_name)
         # Read-only float32 arrays (e.g. from ``np.frombuffer``, mmap, or
         # ``setflags(write=False)``) are harmless to the C library (samples are
         # taken as ``const``) but ``ctypes.from_buffer`` requires a *writable*
@@ -479,7 +476,7 @@ def _as_float32_buffer(
             with np.errstate(over="raise"):
                 buf = np.ascontiguousarray(samples, dtype=np.float32)
         except FloatingPointError as exc:
-            raise _past_float32_range(samples, fn_name, arg_name) from exc
+            raise _past_float32_range(samples, arg_name) from exc
         if not buf.flags["WRITEABLE"]:
             buf = np.array(buf, dtype=np.float32, copy=True, order="C")
         return buf
@@ -491,15 +488,15 @@ def _as_float32_buffer(
     except (FloatingPointError, OverflowError) as exc:
         # An int too wide for a double raises rather than overflowing, and it is
         # the same refusal: a number this buffer's element type cannot hold.
-        raise _past_float32_range(samples, fn_name, arg_name) from exc
+        raise _past_float32_range(samples, arg_name) from exc
     except (TypeError, ValueError) as exc:
-        raise _not_a_buffer(samples, fn_name, arg_name) from exc
+        raise _not_a_buffer(samples, arg_name) from exc
     if converted.ndim == 0:
         # ``None`` and bare scalars land here; report the type that was passed
         # rather than the rank, which says nothing about what to fix.
-        raise _not_a_buffer(samples, fn_name, arg_name)
+        raise _not_a_buffer(samples, arg_name)
     if converted.ndim != 1:
-        raise _not_one_dimensional(converted, fn_name, arg_name)
+        raise _not_one_dimensional(converted, arg_name)
     buf = np.ascontiguousarray(converted)
     # A read-only buffer (a memoryview over bytes) comes back as a view, and
     # `ctypes.from_buffer` needs a writable one.
@@ -511,7 +508,7 @@ def _as_float32_buffer(
 def _require_instance(value: object, expected: type[_T], name: str) -> _T:
     """Return ``value`` if it is an ``expected``, else raise the wrong-type ``TypeError``."""
     if not isinstance(value, expected):
-        raise TypeError(f"{name} must be a {expected.__name__}, got {type(value).__name__}")
+        raise _refuse_type(f"{name} must be a {expected.__name__}, got {type(value).__name__}")
     return value
 
 
@@ -522,7 +519,7 @@ def _not_planar_channels(channels: object, subject: str) -> SonareValueError:
         if isinstance(channels, np.ndarray)
         else f"a {type(channels).__name__}"
     )
-    return SonareValueError(
+    return _refuse(
         f"{subject} must be a sequence of 1-D channel buffers or a 2-D "
         f"(channels, frames) array, not {detail}"
     )
@@ -567,7 +564,7 @@ def _planar_channel_arrays(
         except TypeError as exc:
             raise _not_planar_channels(channels, subject) from exc
     if channel_count == 0:
-        raise SonareValueError(f"{subject} must not be empty")
+        raise _refuse(f"{subject} must not be empty")
     arrays: list[ctypes.Array[ctypes.c_float]] = []
     frame_count = -1
     for channel in channels:
@@ -584,9 +581,9 @@ def _planar_channel_arrays(
             # check runs before anything reads a length off a non-buffer.
             frame_count = int(buf.shape[0])
             if frame_count == 0:
-                raise SonareValueError(f"{subject} must not be empty")
+                raise _refuse(f"{subject} must not be empty")
         elif int(buf.shape[0]) != frame_count:
-            raise SonareValueError(f"all {subject} must have the same length")
+            raise _refuse(f"all {subject} must have the same length")
         c_array = (ctypes.c_float * frame_count).from_buffer(buf)
         c_array._np_backing = buf  # type: ignore[attr-defined]
         arrays.append(c_array)
@@ -598,7 +595,6 @@ def _planar_channel_arrays(
 def _to_c_float_array(
     samples: Sequence[float] | list[float] | np.ndarray,
     *,
-    fn_name: str = "",
     arg_name: str = "samples",
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
     """Convert a sample sequence to a ctypes float array (zero-copy when possible).
@@ -616,7 +612,7 @@ def _to_c_float_array(
     call site coercing an unvalidated buffer under another name reports that
     name instead of this helper's ``samples`` default.
     """
-    buf = _as_float32_buffer(samples, fn_name=fn_name, arg_name=arg_name)
+    buf = _as_float32_buffer(samples, arg_name=arg_name)
     length = int(buf.shape[0])
     if length == 0:  # noqa: SIM108
         # `from_buffer` rejects zero-length buffers on some platforms; fall
@@ -630,16 +626,15 @@ def _to_c_float_array(
     return c_array, length
 
 
-def _not_two_dimensional(array: np.ndarray, fn_name: str, arg_name: str) -> SonareValueError:
+def _not_two_dimensional(array: np.ndarray, arg_name: str) -> SonareValueError:
     """Build the rejection for a matrix argument of the wrong rank, naming its shape."""
-    prefix = f"{fn_name}: " if fn_name else ""
-    return SonareValueError(
-        f"{prefix}{arg_name} must be a 2-D array (rows, cols), not ndim={array.ndim} "
+    return _refuse(
+        f"{arg_name} must be a 2-D array (rows, cols), not ndim={array.ndim} "
         f"shape={tuple(array.shape)}"
     )
 
 
-def _validate_matrix(fn_name: str, values: object, *, arg_name: str) -> np.ndarray:
+def _validate_matrix(values: object, *, arg_name: str) -> np.ndarray:
     """Coerce ``values`` to a C-contiguous ``float32`` array of shape ``(rows, cols)``.
 
     The rank is decided first and named, then the elements get the same
@@ -649,23 +644,23 @@ def _validate_matrix(fn_name: str, values: object, *, arg_name: str) -> np.ndarr
     try:
         raw = values if isinstance(values, np.ndarray) else np.asarray(values)
     except (TypeError, ValueError) as exc:
-        raise _not_a_buffer(values, fn_name, arg_name) from exc
+        raise _not_a_buffer(values, arg_name) from exc
     if raw.ndim == 0:
-        raise _not_a_buffer(values, fn_name, arg_name)
+        raise _not_a_buffer(values, arg_name)
     if raw.ndim != 2:
-        raise _not_two_dimensional(raw, fn_name, arg_name)
+        raise _not_two_dimensional(raw, arg_name)
     if raw.dtype.kind not in "biuf":
-        raise _not_a_buffer(values, fn_name, arg_name)
-    flat = _validate_samples(fn_name, np.ascontiguousarray(raw).reshape(-1), arg_name=arg_name)
+        raise _not_a_buffer(values, arg_name)
+    flat = _validate_samples(np.ascontiguousarray(raw).reshape(-1), arg_name=arg_name)
     return flat.reshape(raw.shape)
 
 
 def _to_c_float_matrix(
-    fn_name: str, values: object, *, arg_name: str
+    values: object, *, arg_name: str
 ) -> tuple[ctypes.Array[ctypes.c_float], int, int]:
     """Marshal a 2-D matrix as a row-major C buffer plus its ``(rows, cols)``."""
-    matrix = _validate_matrix(fn_name, values, arg_name=arg_name)
-    c_array, _ = _to_c_float_array(matrix.reshape(-1), fn_name=fn_name, arg_name=arg_name)
+    matrix = _validate_matrix(values, arg_name=arg_name)
+    c_array, _ = _to_c_float_array(matrix.reshape(-1), arg_name=arg_name)
     return c_array, int(matrix.shape[0]), int(matrix.shape[1])
 
 
@@ -685,7 +680,6 @@ def _from_c_float_columns(array: object, count: int, cols: int) -> np.ndarray:
 def _to_c_float_array_owned(
     samples: Sequence[float] | list[float] | np.ndarray,
     *,
-    fn_name: str = "",
     arg_name: str = "samples",
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
     """Like :func:`_to_c_float_array`, but always over a fresh writable copy.
@@ -697,7 +691,7 @@ def _to_c_float_array_owned(
     DSP work these offline/streaming calls perform.
     """
     buf = np.array(
-        _as_float32_buffer(samples, fn_name=fn_name, arg_name=arg_name),
+        _as_float32_buffer(samples, arg_name=arg_name),
         dtype=np.float32,
         copy=True,
         order="C",
@@ -784,20 +778,20 @@ def _reject_unrepresentable_int32(values: np.ndarray, name: str) -> None:
     if values.dtype.kind == "f":
         unusable = ~np.isfinite(values)
         if unusable.any():
-            raise SonareValueError(f"{name}[{int(np.argmax(unusable))}] must be a finite integer")
+            raise _refuse(f"{name}[{int(np.argmax(unusable))}] must be a finite integer")
         fractional = values != np.trunc(values)
         if fractional.any():
-            raise SonareValueError(f"{name}[{int(np.argmax(fractional))}] must be an integer")
+            raise _refuse(f"{name}[{int(np.argmax(fractional))}] must be an integer")
     elif values.dtype.kind not in "iub":
         # A Python int too wide for int64 arrives as object dtype. It IS an
         # integer, so the range refusal below has to be the one that reports it.
         try:
             values = np.array([operator.index(v) for v in values.ravel()], dtype=object)
         except TypeError as exc:
-            raise SonareValueError(f"{name} must hold integers") from exc
+            raise _refuse(f"{name} must hold integers") from exc
     outside = (values < _C_INT_MIN) | (values > _C_INT_MAX)
     if outside.any():
-        raise SonareValueError(
+        raise _refuse(
             f"{name}[{int(np.argmax(outside))}] must be an integer within "
             f"[{_C_INT_MIN}, {_C_INT_MAX}]"
         )
@@ -867,7 +861,7 @@ def _to_c_uint32(value: object, name: str) -> ctypes.c_uint32:
 def _bool_flag(value: object, name: str) -> int:
     """Map a ``bool`` to the C 0/1 flag; an ``int`` is refused rather than read as truth."""
     if not isinstance(value, (bool, np.bool_)):
-        raise TypeError(f"{name} must be a bool")
+        raise _refuse_type(f"{name} must be a bool")
     return int(value)
 
 
@@ -907,14 +901,14 @@ def _to_c_double(value: object, name: str) -> ctypes.c_double:
     return ctypes.c_double(_narrow_double(value, name))
 
 
-def _tuning_arg(fn_name: str, tuning_cents: float | str) -> tuple[float, int]:
+def _tuning_arg(tuning_cents: float | str) -> tuple[float, int]:
     """Split a ``tuning_cents`` argument into the C pair ``(tuning_cents, tuning_auto)``.
 
     A number is cents in ``[-50, 50)``; ``"auto"`` asks the analysis to measure it.
     """
     if isinstance(tuning_cents, str):
         if tuning_cents != "auto":
-            raise SonareValueError(f"{fn_name}: tuning_cents must be a number or 'auto'")
+            raise _refuse("tuning_cents must be a number or 'auto'")
         return 0.0, 1
     return tuning_cents, 0
 
@@ -963,13 +957,13 @@ def _resolve_enum(
         return cast(int, value)
     if isinstance(value, int):
         if reject_bool and isinstance(value, bool):
-            raise TypeError(_enum_error(value, names, what, verb, expected))
+            raise _refuse_type(_enum_error(value, names, what, verb, expected))
         if validate_int and value not in names.values():
-            raise SonareValueError(_enum_error(value, names, what, verb, expected))
+            raise _refuse(_enum_error(value, names, what, verb, expected))
         return value
     if not isinstance(value, str):
         message = _enum_error(value, names, what, verb, expected)
-        raise SonareValueError(message) if _is_number(value) else TypeError(message)
+        raise _refuse(message) if _is_number(value) else _refuse_type(message)
     key = value.strip() if strip else value
     if dash:
         key = key.replace("_", "-")
@@ -977,7 +971,7 @@ def _resolve_enum(
         key = key.replace("-", "_")
     key = key.lower()
     if key not in names:
-        raise SonareValueError(_enum_error(value, names, what, verb, expected))
+        raise _refuse(_enum_error(value, names, what, verb, expected))
     return names[key]
 
 
@@ -985,9 +979,7 @@ _C_INT_MAX = 2**31 - 1
 _C_INT_MIN = -(2**31)
 
 
-def _int_refusal(
-    fn_name: str, value: object, arg_name: str, domain: str
-) -> TypeError | SonareValueError:
+def _int_refusal(value: object, arg_name: str, domain: str) -> TypeError | SonareValueError:
     """Word a refusal :func:`_narrow_int` raised, keeping its two halves apart.
 
     The shared predicate words a bad type and a value out of range identically.
@@ -996,12 +988,12 @@ def _int_refusal(
     states the field's whole accepted range rather than only the C type's.
     """
     if isinstance(value, bool) or not isinstance(value, SupportsIndex):
-        message = f"{fn_name}: {arg_name} must be an integer"
-        return SonareValueError(message) if _is_number(value) else TypeError(message)
-    return SonareValueError(f"{fn_name}: {arg_name} {domain}")
+        message = f"{arg_name} must be an integer"
+        return _refuse(message) if _is_number(value) else _refuse_type(message)
+    return _refuse(f"{arg_name} {domain}")
 
 
-def _validate_c_int_field(fn_name: str, value: object, arg_name: str) -> int:
+def _validate_c_int_field(value: object, arg_name: str) -> int:
     """Narrow a config field onto a C ``int``, refusing anything that would wrap.
 
     Takes ``object``, like the :func:`_narrow_int` it wraps: refusing a value
@@ -1034,11 +1026,11 @@ def _validate_c_int_field(fn_name: str, value: object, arg_name: str) -> int:
         return _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
         raise _int_refusal(
-            fn_name, value, arg_name, "must be an integer within the signed 32-bit range"
+            value, arg_name, "must be an integer within the signed 32-bit range"
         ) from exc
 
 
-def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
+def _validate_hpss_kernel(value: int, arg_name: str) -> int:
     """Validate an HPSS median-filter kernel against the domain the core accepts.
 
     One definition for the whole binding: both HPSS entry points narrow the
@@ -1062,9 +1054,9 @@ def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
     try:
         kernel = _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
-        raise _int_refusal(fn_name, value, arg_name, domain) from exc
+        raise _int_refusal(value, arg_name, domain) from exc
     if kernel <= 0 or kernel % 2 == 0:
-        raise SonareValueError(f"{fn_name}: {arg_name} {domain}")
+        raise _refuse(f"{arg_name} {domain}")
     return kernel
 
 
@@ -1077,11 +1069,11 @@ def _require_power_of_two(value: object, name: str) -> int:
     """
     narrowed = _narrow_int(value, name, _C_INT_MIN, _C_INT_MAX)
     if narrowed <= 0 or (narrowed & (narrowed - 1)) != 0:
-        raise SonareValueError(f"{name} must be a positive power of two")
+        raise _refuse(f"{name} must be a positive power of two")
     return narrowed
 
 
-def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
+def _validate_stft_n_fft(n_fft: int) -> int:
     """Validate an STFT size against the domain the core accepts.
 
     The core FFT is mixed-radix, so any even size transforms exactly; only the
@@ -1114,9 +1106,9 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
     try:
         size = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
-        raise _int_refusal(fn_name, n_fft, "n_fft", domain) from exc
+        raise _int_refusal(n_fft, "n_fft", domain) from exc
     if size < 4 or size % 2 != 0:
-        raise SonareValueError(f"{fn_name}: n_fft {domain}")
+        raise _refuse(f"n_fft {domain}")
     return size
 
 
@@ -1124,7 +1116,7 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
 _DEFAULT_EFFECT_N_FFT = 2048
 
 
-def _validate_effect_hop(fn_name: str, hop_length: object) -> int:
+def _validate_effect_hop(hop_length: object) -> int:
     """Narrow a given STFT hop onto a positive C ``int``; 0 is refused, not a default.
 
     An omitted hop is not passed here: the caller sends the C ``0``, for which the
@@ -1134,9 +1126,9 @@ def _validate_effect_hop(fn_name: str, hop_length: object) -> int:
     try:
         hop = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
-        raise _int_refusal(fn_name, hop_length, "hop_length", domain) from exc
+        raise _int_refusal(hop_length, "hop_length", domain) from exc
     if hop <= 0:
-        raise SonareValueError(f"{fn_name}: hop_length {domain}")
+        raise _refuse(f"hop_length {domain}")
     return hop
 
 
@@ -1220,19 +1212,17 @@ def _token_ordinal(value: object, tokens: tuple[str, ...], what: str) -> int:
     :class:`SonareValueError` listing the accepted tokens.
     """
     if not isinstance(value, str):
-        raise TypeError(f"invalid {what}: expected a string token, got {type(value).__name__}")
+        raise _refuse_type(f"invalid {what}: expected a string token, got {type(value).__name__}")
     try:
         return tokens.index(value)
     except ValueError:
-        raise SonareValueError(
-            f"invalid {what}: {value!r} (expected one of {list(tokens)})"
-        ) from None
+        raise _refuse(f"invalid {what}: {value!r} (expected one of {list(tokens)})") from None
 
 
 def _midi_fx_config_json(config: Mapping[str, Any]) -> bytes:
     """Serialize a MidiFxConfig mapping for the C entry points that take it as JSON."""
     if not isinstance(config, Mapping):
-        raise TypeError("config must be a mapping (parse JSON text with json.loads first)")
+        raise _refuse_type("config must be a mapping (parse JSON text with json.loads first)")
     return _utf8_arg(json.dumps(dict(config)), "config")
 
 
@@ -1258,10 +1248,10 @@ def _mapping_keys(mapping: object, keys: tuple[str, ...], where: str) -> Mapping
     spelling of an accepted one, raises :class:`SonareValueError` naming it.
     """
     if not isinstance(mapping, Mapping):
-        raise TypeError(f"{where} must be a mapping, got {type(mapping).__name__}")
+        raise _refuse_type(f"{where} must be a mapping, got {type(mapping).__name__}")
     for key in mapping:
         if key not in keys:
-            raise SonareValueError(f"{where}: unknown key {key!r} (expected one of {list(keys)})")
+            raise _refuse(f"unknown key {key!r} (expected one of {list(keys)})")
     return cast("Mapping[str, object]", mapping)
 
 
@@ -1278,7 +1268,7 @@ _MODE_GROUPS: dict[str, tuple[KeyMode, ...]] = {
 }
 
 
-def _mode_values(fn_name: str, modes: Sequence[KeyMode] | str | None) -> list[int]:
+def _mode_values(modes: Sequence[KeyMode] | str | None) -> list[int]:
     """Resolve ``modes``: ``None`` is the core default set; an empty one is refused."""
     if modes is None:
         return []
@@ -1288,7 +1278,7 @@ def _mode_values(fn_name: str, modes: Sequence[KeyMode] | str | None) -> list[in
         return [_mode_value(cast(KeyMode, modes))]
     values = [_mode_value(mode) for mode in modes]
     if not values:
-        raise SonareValueError(f"{fn_name}: modes must not be empty")
+        raise _refuse("modes must not be empty")
     return values
 
 
@@ -1310,7 +1300,7 @@ def _profile_value(profile: KeyProfile | None) -> int:
 def _ordinal_token(ordinal: int, tokens: tuple[str, ...], what: str) -> str:
     """Convert a C ordinal to its token; an ordinal outside the table is refused."""
     if not 0 <= ordinal < len(tokens):
-        raise SonareValueError(f"unknown {what} ordinal: {ordinal}")
+        raise _refuse(f"unknown {what} ordinal: {ordinal}")
     return tokens[ordinal]
 
 

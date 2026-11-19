@@ -352,33 +352,37 @@ _REALTIME_BLOCK_PATH = {
         "silent: the caller owns the finite check on a streaming block call; one "
         "non-finite sample poisons the biquad state until clear(), not just the block"
     ),
-    "StreamingMasteringChain.process_mono": (
-        "unnamed: the caller owns the finite check on a streaming block call; "
-        "the non-finite block is refused as a bare [7] Invalid state"
-    ),
-    "StreamingMasteringChain.process_stereo": (
-        "unnamed: the caller owns the finite check on a streaming block call; "
-        "the non-finite block is refused as a bare [7] Invalid state"
-    ),
     "StreamingRetune.process_mono": (
         "unnamed: the caller owns the finite check on a streaming block call; "
-        "the non-finite block is refused as a bare [7] Invalid state"
+        "the non-finite block is refused as a coded [7] Invalid state, not a value error"
     ),
 }
 
 
-def _guard_parameters() -> list[Any]:
+# The mastering chain refuses a non-finite block by name, but takes an empty one.
+_EMPTY_BLOCK_ACCEPTED = {
+    "StreamingMasteringChain.process_mono": (
+        "silent: an empty block is accepted as a zero-frame no-op on a streaming block call"
+    ),
+    "StreamingMasteringChain.process_stereo": (
+        "silent: an empty block is accepted as a zero-frame no-op on a streaming block call"
+    ),
+}
+
+
+def _guard_parameters(known: dict[str, str]) -> list[Any]:
     """Offline guards, leaving documented realtime voice methods to their own tests."""
     return [
-        pytest.param(name, marks=pytest.mark.xfail(strict=True, reason=_REALTIME_BLOCK_PATH[name]))
-        if name in _REALTIME_BLOCK_PATH
+        pytest.param(name, marks=pytest.mark.xfail(strict=True, reason=known[name]))
+        if name in known
         else name
         for name in _GUARDED
         if name not in _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS
     ]
 
 
-_GUARD_PARAMETERS = _guard_parameters()
+_GUARD_PARAMETERS = _guard_parameters(_REALTIME_BLOCK_PATH)
+_EMPTY_GUARD_PARAMETERS = _guard_parameters(_REALTIME_BLOCK_PATH | _EMPTY_BLOCK_ACCEPTED)
 
 
 def _invoke(name: str, entry: _EntryPoint, args: list[Any], kwargs: dict[str, Any]) -> Any:
@@ -567,7 +571,7 @@ def _assert_names_the_entry_point(name: str, message: str) -> None:
     assert invoked in message, f"{name}: message does not name the entry point"
 
 
-@pytest.mark.parametrize("name", _GUARD_PARAMETERS)
+@pytest.mark.parametrize("name", _EMPTY_GUARD_PARAMETERS)
 def test_empty_buffer_is_rejected(name: str) -> None:
     entry = _ENTRY_POINTS[name]
     args, kwargs = _call_arguments(name, entry.signature, np.zeros(0, dtype=np.float32))
@@ -615,8 +619,8 @@ def _set_clip_channels(channels: Any) -> None:
 
 
 _PLANAR_ENTRY_POINTS = [
-    pytest.param(_process_channels, "channels", id="process"),
-    pytest.param(_set_clip_channels, "clip channels", id="set_clips"),
+    pytest.param(_process_channels, "RealtimeEngine.process: channels", id="process"),
+    pytest.param(_set_clip_channels, "RealtimeEngine.set_clips: clip channels", id="set_clips"),
 ]
 
 
@@ -679,4 +683,6 @@ def test_planar_rank_rejection_names_the_channels_argument(bad_side: str) -> Non
     ):
         changer.process_planar(arguments)
     message = str(excinfo.value)
-    assert message.startswith("channels must be a 1-D buffer"), message
+    assert message.startswith("RealtimeVoiceChanger.process_planar: channels must be a 1-D"), (
+        message
+    )

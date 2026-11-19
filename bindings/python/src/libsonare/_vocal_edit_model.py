@@ -9,6 +9,8 @@ from typing import Literal, TypeAlias, get_args
 import numpy as np
 from numpy.typing import NDArray
 
+from ._errors import _entry
+
 FloatArray: TypeAlias = NDArray[np.float32]
 
 
@@ -108,6 +110,7 @@ class VocalNoteEdit:
     amplitude_envelope: Sequence[float] = ()
     """Amplitude envelope multipliers over the note; empty leaves the amplitude untouched."""
 
+    @_entry("VocalNoteEdit")
     def __post_init__(self) -> None:
         object.__setattr__(self, "target_points", tuple(self.target_points))
         object.__setattr__(self, "amplitude_envelope", tuple(self.amplitude_envelope))
@@ -399,6 +402,7 @@ class VocalMergeNotes:
     """Whether the merged note keeps the first note's edit or starts from defaults
     (``VocalMergePolicy``)."""
 
+    @_entry("VocalMergeNotes")
     def __post_init__(self) -> None:
         object.__setattr__(self, "note_ids", tuple(self.note_ids))
 
@@ -428,6 +432,7 @@ class VocalResetNotes:
     note_ids: Sequence[int]
     """Ids of the notes to restore to their analysed state."""
 
+    @_entry("VocalResetNotes")
     def __post_init__(self) -> None:
         object.__setattr__(self, "note_ids", tuple(self.note_ids))
 

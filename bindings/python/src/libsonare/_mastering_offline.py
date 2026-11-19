@@ -14,7 +14,7 @@ from ._cancellation import (
     make_progress_trampoline,
     raise_callback_error,
 )
-from ._errors import ErrorCode, _not_supported
+from ._errors import ErrorCode, _entry, _not_supported, _refuse, _refuse_type
 from ._ffi import (
     SonareMasteringChainResult,
     SonareMasteringChainStereoResult,
@@ -26,9 +26,9 @@ from ._ffi import (
 )
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
-    SonareValueError,
     _call_string,
     _check,
+    _coded_error,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -56,6 +56,7 @@ from .types import (
 )
 
 
+@_entry("mastering")
 @_guard_buffer("samples")
 def mastering(
     samples: Sequence[float] | list[float],
@@ -145,29 +146,29 @@ def _insert_params(
         kind = kinds.get(key)
         if kind == "string":
             if not isinstance(value, str):
-                raise TypeError(f"params[{key!r}] must be a str")
+                raise _refuse_type(f"params[{key!r}] must be a str")
             out[key] = value
         elif kind == "array":
             if isinstance(value, str | bytes | Mapping) or not isinstance(value, Iterable):
-                raise TypeError(f"params[{key!r}] must be a sequence of numbers")
+                raise _refuse_type(f"params[{key!r}] must be a sequence of numbers")
             items = list(value)
             if any(isinstance(item, bool) or not isinstance(item, int | float) for item in items):
-                raise TypeError(f"params[{key!r}] must be a sequence of numbers")
+                raise _refuse_type(f"params[{key!r}] must be a sequence of numbers")
             if not all(math.isfinite(item) for item in items):
-                raise SonareValueError(f"params[{key!r}] must contain only finite numbers")
+                raise _refuse(f"params[{key!r}] must contain only finite numbers")
             out[key] = [float(item) for item in items]
         elif isinstance(value, str):
             if kind != "enum":
-                raise TypeError(f"params[{key!r}] must be a number or bool (got a str)")
+                raise _refuse_type(f"params[{key!r}] must be a number or bool (got a str)")
             out[key] = _enum_value(processor, key, value)
         elif isinstance(value, bool):
             out[key] = value
         elif isinstance(value, int | float):
             if not math.isfinite(value):
-                raise SonareValueError(f"params[{key!r}] must be a finite number")
+                raise _refuse(f"params[{key!r}] must be a finite number")
             out[key] = float(value)
         else:
-            raise TypeError(f"params[{key!r}] must be a number, bool or enum name")
+            raise _refuse_type(f"params[{key!r}] must be a number, bool or enum name")
     return out
 
 
@@ -218,9 +219,7 @@ def _assistant_params(
             )
             continue
         if isinstance(value, str):
-            raise SonareValueError(
-                f"{key} must be a number; only targetPlatform and preset take a name"
-            )
+            raise _refuse(f"{key} must be a number; only targetPlatform and preset take a name")
         resolved[key] = value
     return _mastering_params(resolved)
 
@@ -235,18 +234,17 @@ def _resolve_name(
 ) -> int:
     """Resolve one named assistant param to the index its C-ABI lookup returns."""
     if not isinstance(value, str):
-        raise SonareValueError(
-            f"{key} must be a {kind} name; expected one of: {', '.join(names())}"
-        )
+        raise _refuse(f"{key} must be a {kind} name; expected one of: {', '.join(names())}")
     lib = _get_lib()
     if not hasattr(lib, symbol):
         raise _not_supported("libsonare was built without mastering assistant support")
     index = getattr(lib, symbol)(_utf8_arg(value, "value"))
     if index < 0:
-        raise SonareValueError(f"unknown {noun} {value!r}; expected one of: {', '.join(names())}")
+        raise _refuse(f"unknown {noun} {value!r}; expected one of: {', '.join(names())}")
     return int(index)
 
 
+@_entry("mastering_processor_names")
 def mastering_processor_names() -> list[str]:
     """Return supported mastering processor names shared by CLI/Node/WASM/Python."""
     lib = _get_lib()
@@ -256,6 +254,7 @@ def mastering_processor_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_entry("mastering_pair_processor_names")
 def mastering_pair_processor_names() -> list[str]:
     """Return supported two-input mastering processor names."""
     lib = _get_lib()
@@ -265,6 +264,7 @@ def mastering_pair_processor_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_entry("mastering_pair_analysis_names")
 def mastering_pair_analysis_names() -> list[str]:
     """Return supported two-input mastering analysis names."""
     lib = _get_lib()
@@ -274,6 +274,7 @@ def mastering_pair_analysis_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_entry("mastering_stereo_analysis_names")
 def mastering_stereo_analysis_names() -> list[str]:
     """Return supported stereo mastering analysis names."""
     lib = _get_lib()
@@ -283,6 +284,7 @@ def mastering_stereo_analysis_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_entry("mastering_insert_names")
 def mastering_insert_names() -> list[str]:
     """Return the mastering insert (FX) names shared by CLI/Node/WASM/Python.
 
@@ -298,6 +300,7 @@ def mastering_insert_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_entry("mastering_insert_param_names")
 def mastering_insert_param_names(insert: str) -> list[str]:
     """Return the camelCase parameter names a given insert/FX processor reads.
 
@@ -320,6 +323,7 @@ def mastering_insert_param_names(insert: str) -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_entry("mastering_insert_param_info")
 def mastering_insert_param_info(
     insert: str, sample_rate: int | None = None
 ) -> list[MasteringInsertParamInfo]:
@@ -357,6 +361,7 @@ def mastering_insert_param_info(
     return [_from_wire(MasteringInsertParamInfo, entry) for entry in json.loads(raw)]
 
 
+@_entry("mastering_insert_timing")
 def mastering_insert_timing(
     insert: str, params: Mapping[str, float | bool | str | Sequence[float]], sample_rate: int
 ) -> MasteringInsertTiming:
@@ -398,6 +403,7 @@ def mastering_insert_timing(
     )
 
 
+@_entry("mastering_processor_catalog")
 def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
     """Return the full catalog of mastering processors.
 
@@ -425,6 +431,7 @@ def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
     return [_from_wire(MasteringProcessorCatalogEntry, entry) for entry in json.loads(raw)]
 
 
+@_entry("mastering_amp_preset_catalog")
 def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
     """Return the built-in amp-sim rig catalog.
 
@@ -441,6 +448,7 @@ def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
     return [_from_wire(MasteringAmpPresetCatalogEntry, entry) for entry in json.loads(raw)]
 
 
+@_entry("capability_catalog")
 def capability_catalog() -> CapabilityCatalog:
     """Return the loaded library's complete processor and preset catalog.
 
@@ -455,6 +463,7 @@ def capability_catalog() -> CapabilityCatalog:
     )
 
 
+@_entry("mastering_apply_processor")
 @_guard_buffer("samples")
 def mastering_apply_processor(
     processor: str,
@@ -498,6 +507,7 @@ def mastering_apply_processor(
         lib.sonare_free_mastering_result(ctypes.byref(out))
 
 
+@_entry("mastering_apply_processor_stereo")
 @_guard_buffer("left", "right")
 def mastering_apply_processor_stereo(
     processor: str,
@@ -516,7 +526,7 @@ def mastering_apply_processor_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     param_array, param_count = _mastering_params(_processor_params(processor, params))
     out = SonareMasteringStereoResult()
     rc = lib.sonare_mastering_apply_processor_stereo(
@@ -567,7 +577,9 @@ def _enum_value(processor: str | None, key: str, name: str) -> float:
     if rc == int(ErrorCode.INVALID_PARAMETER):
         # An unknown name is an out-of-domain argument: the core's text, as a SonareValueError.
         detail = lib.sonare_last_error_message()
-        raise SonareValueError(detail.decode("utf-8") if detail else f"{key}: unknown name")
+        if not detail:
+            raise _refuse(f"unknown name {key!r}")
+        raise _coded_error(rc, detail.decode("utf-8"))
     _check(rc)
     return value.value if is_enum.value else float(name)
 
@@ -631,13 +643,13 @@ def _nest_chain_config(flat: Mapping[str, Any]) -> dict[str, Any]:
         for part in parts[:-1]:
             child = node.setdefault(part, {})
             if not isinstance(child, dict):
-                raise SonareValueError(f"mastering config path {path!r} nests under a value")
+                raise _refuse(f"mastering config path {path!r} nests under a value")
             node = child
         leaf = parts[-1]
         if isinstance(value, Mapping):
             child = node.setdefault(leaf, {})
             if not isinstance(child, dict):
-                raise SonareValueError(f"mastering config path {path!r} nests under a value")
+                raise _refuse(f"mastering config path {path!r} nests under a value")
             for key, member in _nest_chain_config(value).items():
                 child[key] = member
         elif isinstance(value, list):
@@ -685,7 +697,7 @@ def _check_chain_document(config: Mapping[str, Any]) -> None:
 
 def _chain_params(config: Mapping[str, Any] | None) -> tuple[Any, int]:
     if config is not None and not isinstance(config, Mapping):
-        raise TypeError(
+        raise _refuse_type(
             "chain config must be a mapping (parse JSON text with json.loads first), "
             f"got {type(config).__name__}"
         )
@@ -825,6 +837,7 @@ def _chain_result_fields(out: Any) -> dict[str, Any]:
     }
 
 
+@_entry("mastering_preset_names")
 def mastering_preset_names() -> list[str]:
     """Return built-in mastering preset identifiers (e.g. ``"pop"``, ``"aiMusic"``)."""
     lib = _get_lib()
@@ -834,6 +847,7 @@ def mastering_preset_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_entry("mastering_platform_names")
 def mastering_platform_names() -> list[str]:
     """Return the delivery targets the mastering assistant accepts.
 
@@ -848,6 +862,7 @@ def mastering_platform_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_entry("master_audio")
 @_guard_buffer("samples")
 def master_audio(
     samples: Sequence[float] | list[float],
@@ -899,7 +914,7 @@ def master_audio(
     c_array, length = _to_c_float_array(samples)
     audio = (c_array, _to_c_size_t(length, "length"), _to_c_int(sample_rate, "sample_rate"))
     if preset is None and overrides is None:
-        raise SonareValueError("master_audio: give preset or overrides")
+        raise _refuse("give preset or overrides")
     head: tuple[Any, ...]
     if preset is None:
         symbol, head = "sonare_mastering_chain", audio
@@ -918,6 +933,7 @@ def master_audio(
         release(ctypes.byref(out))
 
 
+@_entry("master_audio_stereo")
 @_guard_buffer("left", "right")
 def master_audio_stereo(
     left: Sequence[float] | list[float],
@@ -940,7 +956,7 @@ def master_audio_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     audio = (
         left_array,
         right_array,
@@ -948,7 +964,7 @@ def master_audio_stereo(
         _to_c_int(sample_rate, "sample_rate"),
     )
     if preset is None and overrides is None:
-        raise SonareValueError("master_audio_stereo: give preset or overrides")
+        raise _refuse("give preset or overrides")
     head: tuple[Any, ...]
     if preset is None:
         symbol, head = "sonare_mastering_chain_stereo", audio

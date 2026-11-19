@@ -10,6 +10,7 @@ from numbers import Integral
 
 import numpy as np
 
+from ._errors import _refuse, _refuse_type
 from ._ffi import (
     SonareNoteEdit,
     SonareNoteExtractorConfig,
@@ -235,24 +236,23 @@ class PitchDecompositionResult:
 
 
 def _note_voicing_arrays(
-    fn_name: str,
     n_frames: int,
     voiced: Sequence[int] | list[int] | np.ndarray | None,
     voiced_prob: Sequence[float] | list[float] | np.ndarray | None,
 ) -> tuple[object, object]:
     """Marshal voicing arrays, with explicit flags taking precedence."""
     if voiced is None and voiced_prob is None:
-        raise SonareValueError(f"{fn_name}: pass voiced or voiced_prob")
+        raise _refuse("pass voiced or voiced_prob")
     voiced_array = None
     prob_array = None
     if voiced is not None:
         voiced_array, voiced_len = _to_c_int_array(voiced, "voiced")
         if voiced_len != n_frames:
-            raise SonareValueError(f"{fn_name}: voiced must have f0_hz's length")
+            raise _refuse("voiced must have f0_hz's length")
     else:
         prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
         if prob_len != n_frames:
-            raise SonareValueError(f"{fn_name}: voiced_prob must have f0_hz's length")
+            raise _refuse("voiced_prob must have f0_hz's length")
     return prob_array, voiced_array
 
 
@@ -296,58 +296,57 @@ class TranscribeResult:
     tuning_cents: float = 0.0
 
 
-def _transcribe_int(fn_name: str, value: object, arg_name: str, low: int, high: int) -> int:
+def _transcribe_int(value: object, arg_name: str, low: int, high: int) -> int:
     """Narrow one transcription config integer, naming the entry point it came from."""
     domain = f"must be an integer in [{low}, {high}]"
     try:
         return _narrow_int(value, arg_name, low, high)
     except (TypeError, SonareValueError) as exc:
-        raise _int_refusal(fn_name, value, arg_name, domain) from exc
+        raise _int_refusal(value, arg_name, domain) from exc
 
 
-def _transcribe_positive(fn_name: str, value: float, arg_name: str) -> float:
+def _transcribe_positive(value: float, arg_name: str) -> float:
     """Accept one transcription config float that has to be finite and positive."""
-    number = _validate_scalar(fn_name, value, arg_name)
+    number = _validate_scalar(value, arg_name)
     if number <= 0.0:
-        raise SonareValueError(f"{fn_name}: {arg_name} must be positive")
+        raise _refuse(f"{arg_name} must be positive")
     return number
 
 
-def _transcribe_ratio(fn_name: str, value: float, arg_name: str) -> float:
+def _transcribe_ratio(value: float, arg_name: str) -> float:
     """Narrow one polyphonic peak ratio to its C spelling: a real 0 travels as -1.
 
     The C field reads 0 as "the transcription default" and a negative as 0.
     A negative or a value above 1 is refused here.
     """
-    number = _validate_scalar(fn_name, value, arg_name)
+    number = _validate_scalar(value, arg_name)
     if number < 0.0:
-        raise SonareValueError(f"{fn_name}: {arg_name} must not be negative")
+        raise _refuse(f"{arg_name} must not be negative")
     if number > 1.0:
-        raise SonareValueError(f"{fn_name}: {arg_name} must be at most 1")
+        raise _refuse(f"{arg_name} must be at most 1")
     return -1.0 if number == 0.0 else number
 
 
-def _transcribe_reattack(fn_name: str, value: float) -> float:
+def _transcribe_reattack(value: float) -> float:
     """Narrow a given ``reattack_ratio``: above 1, since ``None`` is "no split"."""
-    number = _validate_scalar(fn_name, value, "reattack_ratio")
+    number = _validate_scalar(value, "reattack_ratio")
     if number <= 1.0:
-        raise SonareValueError(f"{fn_name}: reattack_ratio must be above 1 (use None for no split)")
+        raise _refuse("reattack_ratio must be above 1 (use None for no split)")
     return number
 
 
-def _transcribe_monophonic_model(fn_name: str, value: str | None) -> int:
+def _transcribe_monophonic_model(value: str | None) -> int:
     """Narrow ``monophonic_model`` to its C value; ``None`` is the segments default."""
     if value is None:
         return 0
     if not isinstance(value, str):
-        raise TypeError(f"{fn_name}: monophonic_model must be a string or None")
+        raise _refuse_type("monophonic_model must be a string or None")
     if value not in _MONOPHONIC_MODELS:
-        raise SonareValueError(f"{fn_name}: monophonic_model must be 'segments' or 'singing'")
+        raise _refuse("monophonic_model must be 'segments' or 'singing'")
     return _MONOPHONIC_MODELS[value]
 
 
 def _transcribe_config(
-    fn_name: str,
     *,
     polyphonic: bool,
     reference_hz: float | str | None,
@@ -380,7 +379,7 @@ def _transcribe_config(
     config.polyphonic = 1 if polyphonic else 0
     if isinstance(reference_hz, str):
         if reference_hz != "auto":
-            raise SonareValueError(f"{fn_name}: reference_hz must be a number or 'auto'")
+            raise _refuse("reference_hz must be a number or 'auto'")
         config.reference_auto = 1
         reference_hz = None
     for arg_name, value in (
@@ -393,65 +392,59 @@ def _transcribe_config(
         setattr(
             config,
             arg_name,
-            0.0 if value is None else _transcribe_positive(fn_name, value, arg_name),
+            0.0 if value is None else _transcribe_positive(value, arg_name),
         )
     if f0_min_hz is not None and f0_max_hz is not None and config.f0_max_hz <= config.f0_min_hz:
-        raise SonareValueError(f"{fn_name}: f0_max_hz must be above f0_min_hz")
+        raise _refuse("f0_max_hz must be above f0_min_hz")
 
     if velocity_floor_db is None:
         config.velocity_floor_db = 0.0
     else:
-        level = _validate_scalar(fn_name, velocity_floor_db, "velocity_floor_db")
+        level = _validate_scalar(velocity_floor_db, "velocity_floor_db")
         if level >= 0.0:
-            raise SonareValueError(f"{fn_name}: velocity_floor_db must be negative")
+            raise _refuse("velocity_floor_db must be negative")
         config.velocity_floor_db = level
 
     config.fixed_velocity = (
-        0
-        if fixed_velocity is None
-        else _transcribe_int(fn_name, fixed_velocity, "fixed_velocity", 1, 127)
+        0 if fixed_velocity is None else _transcribe_int(fixed_velocity, "fixed_velocity", 1, 127)
     )
-    config.group = _transcribe_int(fn_name, group, "group", 0, 15)
-    config.channel = _transcribe_int(fn_name, channel, "channel", 0, 15)
+    config.group = _transcribe_int(group, "group", 0, 15)
+    config.channel = _transcribe_int(channel, "channel", 0, 15)
 
     # Polyphonic-only fields: given on the monophonic path, the C ABI refuses
     # them by name, so nothing is pre-checked against `polyphonic` here.
     config.max_polyphony = (
-        0
-        if max_polyphony is None
-        else _transcribe_int(fn_name, max_polyphony, "max_polyphony", 1, 64)
+        0 if max_polyphony is None else _transcribe_int(max_polyphony, "max_polyphony", 1, 64)
     )
     config.min_frame_peak_ratio = (
         0.0
         if min_frame_peak_ratio is None
-        else _transcribe_ratio(fn_name, min_frame_peak_ratio, "min_frame_peak_ratio")
+        else _transcribe_ratio(min_frame_peak_ratio, "min_frame_peak_ratio")
     )
     config.min_ridge_peak_ratio = (
         0.0
         if min_ridge_peak_ratio is None
-        else _transcribe_ratio(fn_name, min_ridge_peak_ratio, "min_ridge_peak_ratio")
+        else _transcribe_ratio(min_ridge_peak_ratio, "min_ridge_peak_ratio")
     )
-    config.reattack_ratio = (
-        0.0 if reattack_ratio is None else _transcribe_reattack(fn_name, reattack_ratio)
-    )
+    config.reattack_ratio = 0.0 if reattack_ratio is None else _transcribe_reattack(reattack_ratio)
 
     # Both polyphonic and monophonic read the division; giving it together with
     # min_note_ms is refused by the C ABI, naming min_note_division.
     config.min_note_division = (
         0
         if min_note_division is None
-        else _transcribe_int(fn_name, min_note_division, "min_note_division", 1, 128)
+        else _transcribe_int(min_note_division, "min_note_division", 1, 128)
     )
 
     # Given with `polyphonic`, a non-default model is refused by the C ABI,
     # naming the field.
-    config.monophonic_model = _transcribe_monophonic_model(fn_name, monophonic_model)
+    config.monophonic_model = _transcribe_monophonic_model(monophonic_model)
     return config
 
 
-def _transcribe_sample_rate(fn_name: str, sample_rate: int) -> int:
+def _transcribe_sample_rate(sample_rate: int) -> int:
     """Refuse a non-positive rate here, where the argument still has a name."""
-    return _transcribe_int(fn_name, sample_rate, "sample_rate", 1, _C_INT_MAX)
+    return _transcribe_int(sample_rate, "sample_rate", 1, _C_INT_MAX)
 
 
 def _transcribe_result_from_c(out: SonareTranscribeResult) -> TranscribeResult:
@@ -520,17 +513,13 @@ def _note_pitch_hz(value: float | None, name: str) -> float:
     if value is None:
         return 0.0
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise TypeError(f"{name} must be a number or None")
+        raise _refuse_type(f"{name} must be a number or None")
     if not math.isfinite(value) or value <= 0.0:
-        raise SonareValueError(
-            f"{name} {value!r} must be finite and positive, or None for no pitch"
-        )
+        raise _refuse(f"{name} {value!r} must be finite and positive, or None for no pitch")
     return float(value)
 
 
-def _notes_to_c(
-    fn_name: str, notes: Sequence[NoteObject], sample_rate: int
-) -> tuple[object, int, object, int]:
+def _notes_to_c(notes: Sequence[NoteObject], sample_rate: int) -> tuple[object, int, object, int]:
     """Marshal a note list into the C note array plus its shared envelope pool.
 
     The C ABI carries every note's envelope in one array the edits index into,
@@ -548,9 +537,7 @@ def _notes_to_c(
     for i, note in enumerate(notes):
         curve = np.asarray(note.edit.amplitude_envelope, dtype=np.float32)
         if curve.ndim != 1:
-            raise SonareValueError(
-                f"{fn_name}: notes[{i}].edit.amplitude_envelope must be one-dimensional"
-            )
+            raise _refuse(f"notes[{i}].edit.amplitude_envelope must be one-dimensional")
         curves.append(curve)
         # The metrics and the amplitude offset are not marshalled: nothing on
         # the far side reads them back.
@@ -560,28 +547,28 @@ def _notes_to_c(
             note.onset_sample,
             note.onset_sec,
             sample_rate,
-            f"{fn_name}: notes[{i}].onset_sample",
-            f"{fn_name}: notes[{i}].onset_sec",
+            f"notes[{i}].onset_sample",
+            f"notes[{i}].onset_sec",
         )
         offset = _resolve_sample_bound(
             note.offset_sample,
             note.offset_sec,
             sample_rate,
-            f"{fn_name}: notes[{i}].offset_sample",
-            f"{fn_name}: notes[{i}].offset_sec",
+            f"notes[{i}].offset_sample",
+            f"notes[{i}].offset_sec",
         )
         if onset is None or offset is None:
             missing = "onset" if onset is None else "offset"
-            raise SonareValueError(f"{fn_name}: notes[{i}] needs {missing}_sample or {missing}_sec")
+            raise _refuse(f"notes[{i}] needs {missing}_sample or {missing}_sec")
         c_notes[i].onset_sample = onset
         c_notes[i].offset_sample = offset
         c_notes[i].frame_start = _narrow_int(
-            note.frame_start, f"{fn_name}: notes[{i}].frame_start", _C_INT_MIN, _C_INT_MAX
+            note.frame_start, f"notes[{i}].frame_start", _C_INT_MIN, _C_INT_MAX
         )
         c_notes[i].frame_end = _narrow_int(
-            note.frame_end, f"{fn_name}: notes[{i}].frame_end", _C_INT_MIN, _C_INT_MAX
+            note.frame_end, f"notes[{i}].frame_end", _C_INT_MIN, _C_INT_MAX
         )
-        c_notes[i].median_hz = _note_pitch_hz(note.median_hz, f"{fn_name}: notes[{i}].median_hz")
+        c_notes[i].median_hz = _note_pitch_hz(note.median_hz, f"notes[{i}].median_hz")
         c_notes[i].edit = SonareNoteEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report
@@ -592,8 +579,8 @@ def _notes_to_c(
                 note.edit.time_offset_samples,
                 note.edit.time_offset_sec,
                 sample_rate,
-                f"{fn_name}: notes[{i}].edit.time_offset_samples",
-                f"{fn_name}: notes[{i}].edit.time_offset_sec",
+                f"notes[{i}].edit.time_offset_samples",
+                f"notes[{i}].edit.time_offset_sec",
             ),
             envelope_offset=envelope_offset,
             envelope_count=int(curve.size),
@@ -619,22 +606,21 @@ def _notes_to_c(
     return c_notes, note_count, pool, pool_count
 
 
-def _note_set_index(fn_name: str, arg_name: str, value: int) -> int:
+def _note_set_index(arg_name: str, value: int) -> int:
     """Reject a negative note index before ``size_t`` wraps it into a huge one.
 
     The sign half only. Every call site hands the result to :func:`_to_c_size_t`,
     which carries the ceiling -- an index past it folds onto a live note.
     """
     if isinstance(value, bool) or not isinstance(value, Integral):
-        message = f"{fn_name}: {arg_name} must be an integer"
-        raise SonareValueError(message) if _is_number(value) else TypeError(message)
+        message = f"{arg_name} must be an integer"
+        raise _refuse(message) if _is_number(value) else _refuse_type(message)
     if int(value) < 0:
-        raise SonareValueError(f"{fn_name}: {arg_name} must be non-negative")
+        raise _refuse(f"{arg_name} must be non-negative")
     return int(value)
 
 
 def _note_set_edit(
-    fn_name: str,
     symbol: str,
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
@@ -658,8 +644,8 @@ def _note_set_edit(
 
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
-    prob_array, voiced_array = _note_voicing_arrays(fn_name, n_frames, voiced, voiced_prob)
-    c_notes, note_count, envelopes, envelope_count = _notes_to_c(fn_name, notes, sample_rate)
+    prob_array, voiced_array = _note_voicing_arrays(n_frames, voiced, voiced_prob)
+    c_notes, note_count, envelopes, envelope_count = _notes_to_c(notes, sample_rate)
 
     out = SonareNoteObjectsResult()
     rc = getattr(lib, symbol)(

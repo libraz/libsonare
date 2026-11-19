@@ -1026,8 +1026,10 @@ def test_target_size_is_refused_by_cause(name: str) -> None:
     fn = getattr(libsonare, name)
     values = np.ones(8, dtype=np.float32)
     for bad in (-1, 1.5):
-        with pytest.raises(SonareValueError, match=r"^target_size must be an integer in \[0, "):
+        with pytest.raises(
+            SonareValueError, match=rf"^{name}: target_size must be an integer in \[0, "
+        ):
             fn(values, bad)
     for bad in ("8", True):
-        with pytest.raises(TypeError, match="^target_size must be an integer"):
+        with pytest.raises(TypeError, match=f"^{name}: target_size must be an integer"):
             fn(values, bad)

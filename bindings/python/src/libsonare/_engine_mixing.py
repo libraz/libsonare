@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, cast
 
 from ._engine_conversions import _band_json_arg, _scene_entry_json
-from ._errors import SonareValueError, _unknown_error
+from ._errors import _entry, _refuse, _refuse_type, _unknown_error
 from ._ffi import SonareSurroundPan
 from ._mixing import StripRef
 from ._narrowing import _narrow_double
@@ -50,46 +50,44 @@ StripAutomationKind = Literal["faderDb", "pan", "width"]
 _STRIP_AUTOMATION_KINDS: tuple[str, ...] = ("faderDb", "pan", "width")
 
 
-def _strip_target(fn: str, ref: StripRef) -> int | None:
+def _strip_target(ref: StripRef) -> int | None:
     """Return the track id a strip reference names, or None for the master strip."""
     if isinstance(ref, str):
         if ref == "master":
             return None
-        raise SonareValueError(f"{fn}: strip must be a track id or 'master', got {ref!r}")
+        raise _refuse(f"strip must be a track id or 'master', got {ref!r}")
     return _narrow_int(ref, "strip", 0, _UINT32_MAX)
 
 
 def _track_only(fn: str, ref: StripRef) -> int:
     """Return the track id a strip reference names, refusing the master strip."""
-    track_id = _strip_target(fn, ref)
+    track_id = _strip_target(ref)
     if track_id is None:
-        raise SonareValueError(f"{fn}: the master strip has no {fn.removeprefix('set_')}")
+        raise _refuse(f"the master strip has no {fn.removeprefix('set_')}")
     return track_id
 
 
 _TRACK_SOURCE_KIND = 0
 
 
-def _sidechain_source_pair(
-    fn: str, source: SidechainSource | None, *, removable: bool
-) -> tuple[int, int]:
+def _sidechain_source_pair(source: SidechainSource | None, *, removable: bool) -> tuple[int, int]:
     """Return the C ``(kind, id)`` of a sidechain source; ``None`` removes when ``removable``."""
     if source is None:
         if not removable:
-            raise TypeError(f"{fn}: source must be a SidechainSource")
+            raise _refuse_type("source must be a SidechainSource")
         return _TRACK_SOURCE_KIND, 0
     if not isinstance(source, SidechainSource):
-        raise TypeError(f"{fn}: source must be a SidechainSource or None")
+        raise _refuse_type("source must be a SidechainSource or None")
     kind = _sidechain_source_kind_value(source.kind)
     source_id = _narrow_int(source.id, "source.id", 0, _UINT32_MAX)
     if source_id == 0:
-        raise SonareValueError(f"{fn}: source.id must not be 0 (pass None to remove the binding)")
+        raise _refuse("source.id must not be 0 (pass None to remove the binding)")
     return kind, source_id
 
 
-def _require_track_source(fn: str, kind: int) -> None:
+def _require_track_source(kind: int) -> None:
     if kind != _TRACK_SOURCE_KIND:
-        raise SonareValueError(f"{fn}: a track strip accepts only a source of kind 'track'")
+        raise _refuse("a track strip accepts only a source of kind 'track'")
 
 
 def _optional_bus_id(value: object, name: str) -> int:
@@ -138,6 +136,7 @@ class _EngineMixingMixin:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
 
+    @_entry("RealtimeEngine.set_track_lanes")
     def set_track_lanes(self, lanes: Sequence[Mapping[str, object]]) -> None:
         """Declare the mixer track lanes in their order.
 
@@ -151,7 +150,7 @@ class _EngineMixingMixin:
             # stereo so callers that omit it keep the
             # prior stereo behavior.
             raw[i].source_channel_layout = 1
-            where = f"set_track_lanes: lanes[{i}]"
+            where = f"lanes[{i}]"
             lane = _mapping_keys(lane, _LANE_KEYS, where)
             # Assigned unconverted so the struct's own narrowing sees the
             # caller value; int() would truncate a fraction past it.
@@ -175,6 +174,7 @@ class _EngineMixingMixin:
         _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
         self._lane_order = [int(raw[i].track_id) for i in range(len(lanes))]
 
+    @_entry("RealtimeEngine.set_track_sends")
     def set_track_sends(self, track_id: int, sends: Sequence[Mapping[str, object]]) -> None:
         """Replace one track lane's sends, leaving its output bus and every other lane as published.
 
@@ -186,7 +186,7 @@ class _EngineMixingMixin:
         an undeclared or duplicate send bus, or a level outside the allowed range.
         Control thread only; not concurrent with processing.
         """
-        send_array = _marshal_sends(sends, "set_track_sends: sends") if sends else None
+        send_array = _marshal_sends(sends, "sends") if sends else None
         _check(
             _get_lib().sonare_engine_set_track_sends(
                 self._require_handle(),
@@ -196,6 +196,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_track_output_bus")
     def set_track_output_bus(self, track_id: int, bus_id: int | None) -> None:
         """Route one track lane to a bus, leaving its sends and every other lane as published.
 
@@ -211,6 +212,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_sidechain")
     def set_strip_sidechain(
         self, ref: StripRef, insert_index: int, source: SidechainSource | None
     ) -> None:
@@ -225,9 +227,8 @@ class _EngineMixingMixin:
         depends on neither lane order nor block size. Control thread only; not
         concurrent with processing.
         """
-        fn = "set_strip_sidechain"
-        track_id = _strip_target(fn, ref)
-        kind, source_id = _sidechain_source_pair(fn, source, removable=True)
+        track_id = _strip_target(ref)
+        kind, source_id = _sidechain_source_pair(source, removable=True)
         if track_id is None:
             rc = _get_lib().sonare_engine_set_master_sidechain(
                 self._require_handle(),
@@ -236,7 +237,7 @@ class _EngineMixingMixin:
                 _to_c_uint32(source_id, "source.id"),
             )
         else:
-            _require_track_source(fn, kind)
+            _require_track_source(kind)
             rc = _get_lib().sonare_engine_set_lane_sidechain(
                 self._require_handle(),
                 _to_c_uint32(track_id, "strip"),
@@ -245,6 +246,7 @@ class _EngineMixingMixin:
             )
         _check(rc)
 
+    @_entry("RealtimeEngine.can_set_strip_sidechain")
     def can_set_strip_sidechain(
         self, ref: StripRef, insert_index: int, source: SidechainSource
     ) -> SidechainCheck:
@@ -252,9 +254,8 @@ class _EngineMixingMixin:
 
         Changes nothing; same threading contract as the setter.
         """
-        fn = "can_set_strip_sidechain"
-        track_id = _strip_target(fn, ref)
-        kind, source_id = _sidechain_source_pair(fn, source, removable=False)
+        track_id = _strip_target(ref)
+        kind, source_id = _sidechain_source_pair(source, removable=False)
         refusal = ctypes.c_int()
         if track_id is None:
             rc = _get_lib().sonare_engine_can_set_master_sidechain(
@@ -265,7 +266,7 @@ class _EngineMixingMixin:
                 ctypes.byref(refusal),
             )
         else:
-            _require_track_source(fn, kind)
+            _require_track_source(kind)
             rc = _get_lib().sonare_engine_can_set_lane_sidechain(
                 self._require_handle(),
                 _to_c_uint32(track_id, "strip"),
@@ -276,6 +277,7 @@ class _EngineMixingMixin:
         _check(rc)
         return _sidechain_check(refusal.value)
 
+    @_entry("RealtimeEngine.set_bus_sidechain")
     def set_bus_sidechain(
         self, bus_id: int, insert_index: int, source: SidechainSource | None
     ) -> None:
@@ -284,7 +286,7 @@ class _EngineMixingMixin:
         The key is taken before the source's lane fader or bus gain. Control thread
         only; not concurrent with processing.
         """
-        kind, source_id = _sidechain_source_pair("set_bus_sidechain", source, removable=True)
+        kind, source_id = _sidechain_source_pair(source, removable=True)
         _check(
             _get_lib().sonare_engine_set_bus_sidechain(
                 self._require_handle(),
@@ -295,11 +297,12 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.can_set_bus_sidechain")
     def can_set_bus_sidechain(
         self, bus_id: int, insert_index: int, source: SidechainSource
     ) -> SidechainCheck:
         """Report whether :meth:`set_bus_sidechain` would accept a binding."""
-        kind, source_id = _sidechain_source_pair("can_set_bus_sidechain", source, removable=False)
+        kind, source_id = _sidechain_source_pair(source, removable=False)
         refusal = ctypes.c_int()
         _check(
             _get_lib().sonare_engine_can_set_bus_sidechain(
@@ -313,11 +316,12 @@ class _EngineMixingMixin:
         )
         return _sidechain_check(refusal.value)
 
+    @_entry("RealtimeEngine.set_track_buses")
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         raw = (SonareEngineBus * len(buses))()
         send_arrays: list[object] = []
         for i, raw_bus in enumerate(buses):
-            where = f"set_track_buses: buses[{i}]"
+            where = f"buses[{i}]"
             bus = _mapping_keys(raw_bus, _BUS_KEYS, where)
             # Assigned unconverted so the struct's own narrowing sees the caller
             # value; int() would truncate a fraction past it.
@@ -345,6 +349,7 @@ class _EngineMixingMixin:
             )
         _check(_get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses)))
 
+    @_entry("RealtimeEngine.set_bus_strip")
     def set_bus_strip(self, bus_id: int, settings: MixSceneBusInput) -> None:
         """Replace a bus's strip with ``settings``; the bus must exist via :meth:`set_track_buses`.
 
@@ -358,13 +363,14 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip")
     def set_strip(self, ref: StripRef, settings: MixSceneStripInput) -> None:
         """Replace a strip with ``settings``: a track id or ``"master"`` names the strip.
 
         ``settings`` is a :data:`MixSceneStripInput` mapping; anything else raises ``TypeError``.
         The mapping carries its own ``id``; the engine applies it to the addressed strip.
         """
-        track_id = _strip_target("set_strip", ref)
+        track_id = _strip_target(ref)
         payload = _scene_entry_json(settings, "strips", "settings")
         if track_id is None:
             rc = _get_lib().sonare_engine_set_master_strip_json(self._require_handle(), payload)
@@ -374,10 +380,10 @@ class _EngineMixingMixin:
             )
         _check(rc)
 
+    @_entry("RealtimeEngine.set_strip_eq_band")
     def set_strip_eq_band(self, ref: StripRef, band_index: int, band: EqBandInput) -> None:
         """Replace one equalizer band of a strip in realtime; a track id or ``"master"``."""
-        fn = "set_strip_eq_band"
-        track_id = _strip_target(fn, ref)
+        track_id = _strip_target(ref)
         if track_id is None:
             rc = _get_lib().sonare_engine_set_master_strip_eq_band_json(
                 self._require_handle(), _to_c_int(band_index, "band_index"), _band_json_arg(band)
@@ -391,6 +397,7 @@ class _EngineMixingMixin:
             )
         _check(rc)
 
+    @_entry("RealtimeEngine.set_bus_eq_band")
     def set_bus_eq_band(self, bus_id: int, band_index: int, band: EqBandInput) -> None:
         """Replace one equalizer band of a bus strip in realtime."""
         _check(
@@ -402,6 +409,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_insert_bypassed")
     def set_strip_insert_bypassed(
         self, ref: StripRef, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
     ) -> None:
@@ -410,7 +418,7 @@ class _EngineMixingMixin:
         For the master strip ``insert_index`` counts the pre-fader inserts first, then the
         post-fader inserts.
         """
-        track_id = _strip_target("set_strip_insert_bypassed", ref)
+        track_id = _strip_target(ref)
         if track_id is None:
             rc = _get_lib().sonare_engine_set_master_strip_insert_bypassed(
                 self._require_handle(),
@@ -428,6 +436,7 @@ class _EngineMixingMixin:
             )
         _check(rc)
 
+    @_entry("RealtimeEngine.set_bus_insert_bypassed")
     def set_bus_insert_bypassed(
         self, bus_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
     ) -> None:
@@ -445,6 +454,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_insert_param")
     def set_strip_insert_param(
         self, ref: StripRef, insert_index: int, name: str, value: float
     ) -> None:
@@ -454,7 +464,7 @@ class _EngineMixingMixin:
         playback. Raises if the strip, insert or name is unknown, the parameter is not
         realtime-safe, or the queue is full.
         """
-        track_id = _strip_target("set_strip_insert_param", ref)
+        track_id = _strip_target(ref)
         if track_id is None:
             rc = _get_lib().sonare_engine_set_master_strip_insert_param_by_name(
                 self._require_handle(),
@@ -472,6 +482,7 @@ class _EngineMixingMixin:
             )
         _check(rc)
 
+    @_entry("RealtimeEngine.set_bus_insert_param")
     def set_bus_insert_param(self, bus_id: int, insert_index: int, name: str, value: float) -> None:
         """Bus counterpart of :meth:`set_strip_insert_param`.
 
@@ -487,6 +498,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.apply_strip_insert_param_now")
     def apply_strip_insert_param_now(
         self, ref: StripRef, insert_index: int, name: str, value: float
     ) -> bool:
@@ -498,7 +510,7 @@ class _EngineMixingMixin:
         concurrently with :meth:`process`.
         """
         out_applied = ctypes.c_int()
-        track_id = _strip_target("apply_strip_insert_param_now", ref)
+        track_id = _strip_target(ref)
         if track_id is None:
             rc = _get_lib().sonare_engine_apply_master_strip_insert_param_by_name_now(
                 self._require_handle(),
@@ -519,6 +531,7 @@ class _EngineMixingMixin:
         _check(rc)
         return bool(out_applied.value)
 
+    @_entry("RealtimeEngine.apply_bus_insert_param_now")
     def apply_bus_insert_param_now(
         self, bus_id: int, insert_index: int, name: str, value: float
     ) -> bool:
@@ -536,6 +549,7 @@ class _EngineMixingMixin:
         )
         return bool(out_applied.value)
 
+    @_entry("RealtimeEngine.restore_strip_insert_param")
     def restore_strip_insert_param(
         self, ref: StripRef, insert_index: int, name: str, value: float
     ) -> None:
@@ -546,7 +560,7 @@ class _EngineMixingMixin:
         replaced the strip. Raises if the strip, insert or name is unknown; not safe
         concurrently with :meth:`process`.
         """
-        track_id = _strip_target("restore_strip_insert_param", ref)
+        track_id = _strip_target(ref)
         if track_id is None:
             rc = _get_lib().sonare_engine_restore_master_strip_insert_param_by_name(
                 self._require_handle(),
@@ -564,6 +578,7 @@ class _EngineMixingMixin:
             )
         _check(rc)
 
+    @_entry("RealtimeEngine.restore_bus_insert_param")
     def restore_bus_insert_param(
         self, bus_id: int, insert_index: int, name: str, value: float
     ) -> None:
@@ -578,6 +593,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.clear_strip_insert_parameter_bases")
     def clear_strip_insert_parameter_bases(self, ref: StripRef) -> None:
         """Forget the remembered manual insert-parameter values of one strip.
 
@@ -586,7 +602,7 @@ class _EngineMixingMixin:
         does this itself, since a queued edit may already target the new chain. Raises
         if a track is not a published lane; not safe concurrently with :meth:`process`.
         """
-        track_id = _strip_target("clear_strip_insert_parameter_bases", ref)
+        track_id = _strip_target(ref)
         if track_id is None:
             rc = _get_lib().sonare_engine_clear_master_insert_parameter_bases(
                 self._require_handle()
@@ -597,6 +613,7 @@ class _EngineMixingMixin:
             )
         _check(rc)
 
+    @_entry("RealtimeEngine.clear_bus_insert_parameter_bases")
     def clear_bus_insert_parameter_bases(self, bus_id: int) -> None:
         """Bus counterpart of :meth:`clear_strip_insert_parameter_bases`.
 
@@ -609,6 +626,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_pan")
     def set_strip_pan(self, ref: StripRef, pan: float) -> None:
         """Set a track strip's pan position (-1.0 hard left .. 1.0 hard right).
 
@@ -623,6 +641,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_pan_law")
     def set_strip_pan_law(self, ref: StripRef, pan_law: PanLaw) -> None:
         """Set a track strip's pan law (a :data:`PanLaw` token such as ``"const3Db"``).
 
@@ -638,6 +657,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_pan_mode")
     def set_strip_pan_mode(self, ref: StripRef, pan_mode: PanMode) -> None:
         """Set a track strip's pan mode (a :data:`PanMode` token)."""
         _check(
@@ -648,6 +668,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_dual_pan")
     def set_strip_dual_pan(self, ref: StripRef, left_pan: float, right_pan: float) -> None:
         """Set a track strip's dual-pan positions for the left and right channels."""
         _check(
@@ -659,6 +680,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_surround_pan")
     def set_strip_surround_pan(
         self,
         ref: StripRef,
@@ -690,6 +712,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_strip_channel_delay_samples")
     def set_strip_channel_delay_samples(self, ref: StripRef, delay_samples: int) -> None:
         """Set a track strip's alignment delay in samples, moving it later than the other lanes."""
         _check(
@@ -700,6 +723,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_bus_pan")
     def set_bus_pan(self, bus_id: int, pan: float) -> None:
         """Set a bus strip's pan position (-1.0 hard left .. 1.0 hard right).
 
@@ -713,6 +737,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_bus_pan_law")
     def set_bus_pan_law(self, bus_id: int, pan_law: PanLaw) -> None:
         """Set a bus strip's pan law (a :data:`PanLaw` token); rejected on a surround bus."""
         _check(
@@ -723,6 +748,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_bus_pan_mode")
     def set_bus_pan_mode(self, bus_id: int, pan_mode: PanMode) -> None:
         """Set a bus strip's pan mode (a :data:`PanMode` token); rejected on a surround bus."""
         _check(
@@ -733,6 +759,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_bus_dual_pan")
     def set_bus_dual_pan(self, bus_id: int, left_pan: float, right_pan: float) -> None:
         """Set a bus strip's dual-pan positions; rejected on a surround bus."""
         _check(
@@ -744,6 +771,7 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.resolve_strip_insert_automation_id")
     def resolve_strip_insert_automation_id(
         self, ref: StripRef, insert_index: int, param_name: str
     ) -> int:
@@ -777,7 +805,7 @@ class _EngineMixingMixin:
         that would take the engine past its 8192 insert-id entries is refused.
         """
         out_id = ctypes.c_uint32()
-        track_id = _strip_target("resolve_strip_insert_automation_id", ref)
+        track_id = _strip_target(ref)
         if track_id is None:
             rc = _get_lib().sonare_engine_resolve_master_insert_automation_id(
                 self._require_handle(),
@@ -796,6 +824,7 @@ class _EngineMixingMixin:
         _check(rc)
         return int(out_id.value)
 
+    @_entry("RealtimeEngine.resolve_bus_insert_automation_id")
     def resolve_bus_insert_automation_id(
         self, bus_id: int, insert_index: int, param_name: str
     ) -> int:
@@ -815,6 +844,7 @@ class _EngineMixingMixin:
         )
         return int(out_id.value)
 
+    @_entry("RealtimeEngine.resolve_strip_automation_id")
     def resolve_strip_automation_id(self, ref: StripRef, kind: StripAutomationKind) -> int:
         """Resolve a strip's ``"faderDb"``, ``"pan"`` or, for the master only, ``"width"``.
 
@@ -825,8 +855,7 @@ class _EngineMixingMixin:
         :class:`SonareValueError` when the track has no lane, the kind is unknown, or
         ``"width"`` is asked of a track.
         """
-        fn = "resolve_strip_automation_id"
-        track_id = _strip_target(fn, ref)
+        track_id = _strip_target(ref)
         token = _token_arg(kind, _STRIP_AUTOMATION_KINDS, "kind")
         out_id = ctypes.c_uint32()
         if track_id is None:
@@ -835,7 +864,7 @@ class _EngineMixingMixin:
             )
         else:
             if token == "width":
-                raise SonareValueError(f"{fn}: a track strip has no 'width' parameter")
+                raise _refuse("a track strip has no 'width' parameter")
             rc = _get_lib().sonare_engine_resolve_track_lane_automation_id(
                 self._require_handle(),
                 _to_c_uint32(track_id, "strip"),
@@ -845,6 +874,7 @@ class _EngineMixingMixin:
         _check(rc)
         return int(out_id.value)
 
+    @_entry("RealtimeEngine.resolve_bus_automation_id")
     def resolve_bus_automation_id(self, bus_id: int, param_name: str) -> int:
         """Resolve a bus's fader to its reserved automation id.
 

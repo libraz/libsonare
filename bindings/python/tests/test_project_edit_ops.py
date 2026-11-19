@@ -159,7 +159,9 @@ def test_set_max_history_bytes_rejects_invalid_values_without_mutating_history()
 
     for invalid in (True, 1.0, -1, size_t_max + 1):
         expected = TypeError if isinstance(invalid, bool) else ValueError
-        with pytest.raises(expected, match=r"^bytes must be an integer in \[0, "):
+        with pytest.raises(
+            expected, match=r"^Project\.set_max_history_bytes: bytes must be an integer in \[0, "
+        ):
             p.set_max_history_bytes(invalid)
         assert p.to_json() == before
 

@@ -12,6 +12,7 @@ from ._effects_repair_common import (
     _run_detection,
     _run_repair,
 )
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonareTrimRange,
     SonareTrimSilenceConfig,
@@ -21,7 +22,6 @@ from ._ffi import (
 from ._narrowing import _narrow_double
 from ._runtime import (
     _SIZE_T_MAX,
-    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -55,7 +55,7 @@ def _resolve_padding(
     if resolved is None:
         return 0
     if resolved > _SIZE_T_MAX:
-        raise SonareValueError("padding_samples must fit a size_t")
+        raise _refuse("padding_samples must fit a size_t")
     return resolved
 
 
@@ -63,6 +63,7 @@ def _coerce_trim_silence_mode(value: TrimSilenceMode) -> int:
     return _token_ordinal(value, _TRIM_SILENCE_MODES, "trim_silence mode")
 
 
+@_entry("mastering_repair_trim_silence")
 @_guard_buffer("samples")
 def mastering_repair_trim_silence(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -113,6 +114,7 @@ def _extract_trim_report(raw: Any) -> TrimReport:
     )
 
 
+@_entry("mastering_repair_detect_trim_range")
 @_guard_buffer("samples")
 def mastering_repair_detect_trim_range(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -184,6 +186,7 @@ def mastering_repair_detect_trim_range(
     )
 
 
+@_entry("mastering_repair_detect_trim_range_stereo")
 @_guard_buffer("left", "right")
 def mastering_repair_detect_trim_range_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -245,7 +248,7 @@ def mastering_repair_detect_trim_range_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
@@ -266,6 +269,7 @@ def mastering_repair_detect_trim_range_stereo(
     return _extract_trim_range(out)
 
 
+@_entry("mastering_repair_trim_silence_stereo")
 @_guard_buffer("left", "right")
 def mastering_repair_trim_silence_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -339,7 +343,7 @@ def mastering_repair_trim_silence_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),

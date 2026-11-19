@@ -9,10 +9,10 @@ from typing import Literal, get_args
 import numpy as np
 import numpy.typing as npt
 
+from ._errors import _entry, _refuse
 from ._ffi import SonareSegmentIndices, SonareSegmentMatrix
 from ._narrowing import _resolve_zero_default
 from ._runtime import (
-    SonareValueError,
     _check,
     _from_c_float_matrix,
     _from_c_int_array,
@@ -34,9 +34,9 @@ _SEGMENT_LINKAGES: tuple[str, ...] = get_args(Literal["average", "single", "comp
 def _square_input(
     name: str, matrix: npt.ArrayLike, *, arg_name: str
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
-    c_matrix, rows, cols = _to_c_float_matrix(name, matrix, arg_name=arg_name)
+    c_matrix, rows, cols = _to_c_float_matrix(matrix, arg_name=arg_name)
     if rows != cols:
-        raise SonareValueError(f"{name}: {arg_name} must be square, got shape ({rows}, {cols})")
+        raise _refuse(f"{arg_name} must be square, got shape ({rows}, {cols})")
     return c_matrix, rows
 
 
@@ -54,6 +54,7 @@ def _segment_indices_result(lib: ctypes.CDLL, out: SonareSegmentIndices) -> np.n
         lib.sonare_free_segment_indices(ctypes.byref(out))
 
 
+@_entry("segment_cross_similarity")
 def segment_cross_similarity(
     x: npt.ArrayLike,
     y: npt.ArrayLike,
@@ -67,8 +68,8 @@ def segment_cross_similarity(
     result is a float32 array of shape ``(frames_y, frames_x)``. ``k`` is the
     neighbour count; ``None`` derives it from the frame count as librosa does.
     """
-    x_array, x_rows, x_cols = _to_c_float_matrix("segment_cross_similarity", x, arg_name="x")
-    y_array, y_rows, y_cols = _to_c_float_matrix("segment_cross_similarity", y, arg_name="y")
+    x_array, x_rows, x_cols = _to_c_float_matrix(x, arg_name="x")
+    y_array, y_rows, y_cols = _to_c_float_matrix(y, arg_name="y")
     out = SonareSegmentMatrix()
     rc = _get_lib().sonare_segment_cross_similarity(
         x_array,
@@ -86,6 +87,7 @@ def segment_cross_similarity(
     return _segment_matrix_result(_get_lib(), out)
 
 
+@_entry("segment_recurrence_matrix")
 def segment_recurrence_matrix(
     data: npt.ArrayLike,
     k: int | None = None,
@@ -100,7 +102,7 @@ def segment_recurrence_matrix(
     a float32 array of shape ``(frames, frames)``. ``k`` is the neighbour count;
     ``None`` derives it from the frame count as librosa does.
     """
-    c_data, rows, cols = _to_c_float_matrix("segment_recurrence_matrix", data, arg_name="data")
+    c_data, rows, cols = _to_c_float_matrix(data, arg_name="data")
     lib = _get_lib()
     out = SonareSegmentMatrix()
     rc = lib.sonare_segment_recurrence_matrix(
@@ -118,6 +120,7 @@ def segment_recurrence_matrix(
     return _segment_matrix_result(lib, out)
 
 
+@_entry("segment_recurrence_to_lag")
 def segment_recurrence_to_lag(
     recurrence: npt.ArrayLike,
     pad: bool = True,
@@ -139,13 +142,14 @@ def segment_recurrence_to_lag(
     return _segment_matrix_result(lib, out)
 
 
+@_entry("segment_lag_to_recurrence")
 def segment_lag_to_recurrence(lag: npt.ArrayLike) -> np.ndarray:
     """Convert a lag matrix back to an ``(n, n)`` recurrence matrix.
 
     ``lag`` is a 2-D array of shape ``(n_lags, n)``, where ``n_lags`` is ``n`` for the
     unpadded layout and ``2 * n`` for the padded one.
     """
-    c_lag, n_lags, n_rows = _to_c_float_matrix("segment_lag_to_recurrence", lag, arg_name="lag")
+    c_lag, n_lags, n_rows = _to_c_float_matrix(lag, arg_name="lag")
     lib = _get_lib()
     out = SonareSegmentMatrix()
     _check(
@@ -156,6 +160,7 @@ def segment_lag_to_recurrence(lag: npt.ArrayLike) -> np.ndarray:
     return _segment_matrix_result(lib, out)
 
 
+@_entry("segment_subsegment")
 def segment_subsegment(
     data: npt.ArrayLike,
     boundaries: Sequence[int] | list[int],
@@ -166,7 +171,7 @@ def segment_subsegment(
     ``data`` is a 2-D feature array of shape ``(features, frames)``. Returns an
     int32 array of frame indices.
     """
-    c_data, rows, cols = _to_c_float_matrix("segment_subsegment", data, arg_name="data")
+    c_data, rows, cols = _to_c_float_matrix(data, arg_name="data")
     c_boundaries, count = _to_c_int_array(boundaries, "boundaries")
     lib = _get_lib()
     out = SonareSegmentIndices()
@@ -184,6 +189,7 @@ def segment_subsegment(
     return _segment_indices_result(lib, out)
 
 
+@_entry("segment_agglomerative")
 def segment_agglomerative(
     data: npt.ArrayLike,
     k: int,
@@ -193,7 +199,7 @@ def segment_agglomerative(
 
     ``data`` is a 2-D feature array of shape ``(features, frames)``.
     """
-    c_data, rows, cols = _to_c_float_matrix("segment_agglomerative", data, arg_name="data")
+    c_data, rows, cols = _to_c_float_matrix(data, arg_name="data")
     lib = _get_lib()
     out = SonareSegmentIndices()
     _check(
@@ -209,6 +215,7 @@ def segment_agglomerative(
     return _segment_indices_result(lib, out)
 
 
+@_entry("segment_path_enhance")
 def segment_path_enhance(
     recurrence: npt.ArrayLike,
     win: int,

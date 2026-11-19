@@ -12,7 +12,14 @@ import numpy as np
 from . import _ffi_types_core as _ffi_core
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
-from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
+from ._errors import (
+    _entry,
+    _not_supported,
+    _refuse,
+    _refuse_type,
+    _require_open,
+    _unknown_error,
+)
 from ._features_metering import (
     _clipping_args,
     _dynamic_range_args,
@@ -210,6 +217,7 @@ class DecodedChannels:
     """Channel-planar float32 array of shape ``(num_channels, frames)``."""
 
 
+@_entry("decode_channels")
 def decode_channels(data: bytes) -> DecodedChannels:
     """Decode audio bytes once and keep every source channel.
 
@@ -264,6 +272,7 @@ def decode_channels(data: bytes) -> DecodedChannels:
         )
 
 
+@_entry("downmix")
 def downmix(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     target_layout: ChannelLayout,
@@ -317,14 +326,14 @@ def downmix(
             "rebuild or install a newer native library"
         )
     if not isinstance(normalize, bool):
-        raise TypeError("downmix: normalize must be a bool")
+        raise _refuse_type("normalize must be a bool")
     if not isinstance(include_lfe, bool):
-        raise TypeError("downmix: include_lfe must be a bool")
+        raise _refuse_type("include_lfe must be a bool")
     layout = _channel_layout_value(target_layout)
-    planes = _linked_channel_planes("downmix", channels)
+    planes = _linked_channel_planes(channels)
     frame_count = int(planes[0].shape[0])
     if any(int(plane.shape[0]) != frame_count for plane in planes):
-        raise SonareValueError("downmix: channels must all be the same length")
+        raise _refuse("channels must all be the same length")
     packed = np.ascontiguousarray(np.stack(planes), dtype=np.float32)
     fold = _ffi_core.SonareDownmixOptions()
     lib.sonare_downmix_options_init(ctypes.byref(fold))
@@ -355,11 +364,13 @@ class Audio:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
+    @_entry("Audio")
     def __init__(self, handle: ctypes.c_void_p, lib: ctypes.CDLL) -> None:
         self._handle = handle
         self._lib = lib
 
     @classmethod
+    @_entry("Audio.from_file")
     def from_file(cls, path: str) -> Audio:
         """Load audio from a file path.
 
@@ -382,6 +393,7 @@ class Audio:
         return cls(handle, lib)
 
     @classmethod
+    @_entry("Audio.from_file_channel")
     def from_file_channel(cls, path: str, channel_index: int) -> Audio:
         """Load one channel of a file, leaving the others out of it.
 
@@ -417,6 +429,7 @@ class Audio:
         return cls(handle, lib)
 
     @classmethod
+    @_entry("Audio.file_num_channels")
     def file_num_channels(cls, path: str) -> int:
         """Return the source channel count encoded in an audio file.
 
@@ -450,6 +463,7 @@ class Audio:
         return channels
 
     @classmethod
+    @_entry("Audio.from_buffer")
     @_guard_buffer("samples")
     def from_buffer(
         cls,
@@ -485,6 +499,7 @@ class Audio:
         return cls(handle, lib)
 
     @classmethod
+    @_entry("Audio.from_memory")
     def from_memory(cls, data: bytes) -> Audio:
         """Create audio from in-memory encoded audio bytes.
 
@@ -570,6 +585,7 @@ class Audio:
         """
         return float(self._lib.sonare_audio_duration_sec(self._require_handle()))
 
+    @_entry("Audio.detect_bpm")
     def detect_bpm(self, *, bpm_min: float | None = None, bpm_max: float | None = None) -> float:
         """Detect BPM (tempo).
 
@@ -595,6 +611,7 @@ class Audio:
             _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
         )
 
+    @_entry("Audio.detect_key")
     def detect_key(
         self,
         n_fft: int = 2048,
@@ -627,6 +644,7 @@ class Audio:
             tuning_cents=tuning_cents,
         )
 
+    @_entry("Audio.detect_key_candidates")
     def detect_key_candidates(
         self,
         n_fft: int = 2048,
@@ -654,6 +672,7 @@ class Audio:
             tuning_cents=tuning_cents,
         )
 
+    @_entry("Audio.detect_beats")
     def detect_beats(
         self, *, bpm_min: float | None = None, bpm_max: float | None = None
     ) -> np.ndarray:
@@ -687,6 +706,7 @@ class Audio:
             _check(rc)
             return _from_c_float_array(out_times, out_count.value)
 
+    @_entry("Audio.detect_downbeats")
     def detect_downbeats(self) -> np.ndarray:
         """Detect downbeat times in seconds.
 
@@ -711,6 +731,7 @@ class Audio:
             _check(rc)
             return _from_c_float_array(out_times, out_count.value)
 
+    @_entry("Audio.detect_onsets")
     def detect_onsets(self) -> np.ndarray:
         """Detect onset times in seconds as a float32 array.
 
@@ -730,6 +751,7 @@ class Audio:
             if out_times and out_count.value > 0:
                 self._lib.sonare_free_floats(out_times)
 
+    @_entry("Audio.analyze")
     def analyze(self, **kwargs: Any) -> AnalysisResult:
         """Run full music analysis, forwarding to the module-level :func:`libsonare.analyze`.
 
@@ -752,6 +774,7 @@ class Audio:
         # RuntimeError here without a second explicit check.
         return _analyze(self.data, self.sample_rate, **kwargs)
 
+    @_entry("Audio.analyze_bpm")
     def analyze_bpm(
         self,
         bpm_min: float | None = None,
@@ -773,10 +796,12 @@ class Audio:
             max_candidates,
         )
 
+    @_entry("Audio.analyze_impulse_response")
     def analyze_impulse_response(self, n_octave_bands: int = 6) -> AcousticResult:
         """Analyze RT60, EDT, and clarity metrics treating this audio as an impulse response."""
         return _analyze_impulse_response(self.data, self.sample_rate, n_octave_bands)
 
+    @_entry("Audio.detect_acoustic")
     def detect_acoustic(
         self,
         n_octave_bands: int = 6,
@@ -794,6 +819,7 @@ class Audio:
             noise_floor_margin_db,
         )
 
+    @_entry("Audio.analyze_rhythm")
     def analyze_rhythm(
         self,
         bpm_min: float | None = None,
@@ -813,6 +839,7 @@ class Audio:
             hop_length,
         )
 
+    @_entry("Audio.analyze_dynamics")
     def analyze_dynamics(
         self,
         window_sec: float = 0.4,
@@ -828,6 +855,7 @@ class Audio:
             compression_threshold_db,
         )
 
+    @_entry("Audio.analyze_timbre")
     def analyze_timbre(
         self,
         n_fft: int = 2048,
@@ -847,6 +875,7 @@ class Audio:
             window_sec,
         )
 
+    @_entry("Audio.detect_chords")
     def detect_chords(
         self,
         min_duration_sec: float = 0.3,
@@ -888,6 +917,7 @@ class Audio:
 
     # --- Effects ---
 
+    @_entry("Audio.hpss")
     def hpss(
         self,
         kernel_harmonic: int = 31,
@@ -896,28 +926,34 @@ class Audio:
         """Perform harmonic-percussive source separation."""
         return _hpss(self.data, self.sample_rate, kernel_harmonic, kernel_percussive)
 
+    @_entry("Audio.harmonic")
     def harmonic(self) -> np.ndarray:
         """Extract the harmonic component."""
         return _harmonic(self.data, self.sample_rate)
 
+    @_entry("Audio.percussive")
     def percussive(self) -> np.ndarray:
         """Extract the percussive component."""
         return _percussive(self.data, self.sample_rate)
 
+    @_entry("Audio.time_stretch")
     def time_stretch(self, speed_ratio: float) -> np.ndarray:
         """Time-stretch audio without changing pitch; ``speed_ratio`` > 1 shortens."""
         return _time_stretch(self.data, self.sample_rate, speed_ratio)
 
+    @_entry("Audio.pitch_shift")
     def pitch_shift(self, pitch_semitones: float) -> np.ndarray:
         """Shift the pitch of audio by ``pitch_semitones`` (positive = up)."""
         return _pitch_shift(self.data, self.sample_rate, pitch_semitones)
 
+    @_entry("Audio.pitch_correct_to_midi")
     def pitch_correct_to_midi(
         self, current_midi: float = 69.0, target_midi: float = 69.0
     ) -> np.ndarray:
         """Pitch-correct audio from a current MIDI note to a target MIDI note."""
         return _pitch_correct_to_midi(self.data, self.sample_rate, current_midi, target_midi)
 
+    @_entry("Audio.note_stretch")
     def note_stretch(
         self,
         onset_sample: int | None = None,
@@ -938,6 +974,7 @@ class Audio:
             offset_sec=offset_sec,
         )
 
+    @_entry("Audio.note_move")
     def note_move(
         self,
         onset_sample: int | None = None,
@@ -960,6 +997,7 @@ class Audio:
             target_onset_sec=target_onset_sec,
         )
 
+    @_entry("Audio.voice_change")
     def voice_change(
         self,
         pitch_semitones: float = 0.0,
@@ -971,6 +1009,7 @@ class Audio:
             self.data, self.sample_rate, pitch_semitones, formant_factor, formant_mode
         )
 
+    @_entry("Audio.voice_change_realtime")
     def voice_change_realtime(
         self, *, config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor"
     ) -> np.ndarray:
@@ -984,12 +1023,14 @@ class Audio:
         """
         return _voice_change_realtime(self.data, self.sample_rate, config=config)
 
+    @_entry("Audio.normalize")
     def normalize(
         self, *, mode: NormalizeMode = "peak", target_db: float | None = None
     ) -> np.ndarray:
         """Normalize the peak or RMS level; see :func:`libsonare.normalize`."""
         return _normalize(self.data, self.sample_rate, mode=mode, target_db=target_db)
 
+    @_entry("Audio.mastering")
     def mastering(
         self,
         target_lufs: float = -14.0,
@@ -1009,12 +1050,14 @@ class Audio:
             apply_gain_at_input_rate,
         )
 
+    @_entry("Audio.mastering_apply_processor")
     def mastering_apply_processor(
         self, processor: str, params: dict[str, float | int | bool | str] | None = None
     ) -> MasteringResult:
         """Apply a named mastering processor."""
         return _mastering_process(processor, self.data, self.sample_rate, params)
 
+    @_entry("Audio.master_audio")
     def master_audio(
         self,
         *,
@@ -1037,16 +1080,19 @@ class Audio:
             cancel=cancel,
         )
 
+    @_entry("Audio.trim")
     def trim(self, threshold_db: float = -60.0) -> np.ndarray:
         """Trim silence from the beginning and end."""
         return _trim(self.data, self.sample_rate, threshold_db)
 
     # --- Features - Spectrogram ---
 
+    @_entry("Audio.stft")
     def stft(self, n_fft: int = 2048, hop_length: int = 512) -> StftResult:
         """Compute the short-time Fourier transform."""
         return _stft(self.data, self.sample_rate, n_fft, hop_length)
 
+    @_entry("Audio.stft_db")
     def stft_db(
         self,
         n_fft: int = 2048,
@@ -1057,6 +1103,7 @@ class Audio:
 
     # --- Features - Mel ---
 
+    @_entry("Audio.mel_spectrogram")
     def mel_spectrogram(
         self,
         n_fft: int = 2048,
@@ -1066,6 +1113,7 @@ class Audio:
         """Compute a Mel spectrogram."""
         return _mel_spectrogram(self.data, self.sample_rate, n_fft, hop_length, n_mels)
 
+    @_entry("Audio.mfcc")
     def mfcc(
         self,
         n_fft: int = 2048,
@@ -1078,16 +1126,19 @@ class Audio:
 
     # --- Features - Chroma ---
 
+    @_entry("Audio.chroma")
     def chroma(self, n_fft: int = 2048, hop_length: int = 512) -> ChromaResult:
         """Compute chroma features."""
         return _chroma(self.data, self.sample_rate, n_fft, hop_length)
 
+    @_entry("Audio.nnls_chroma")
     def nnls_chroma(self) -> np.ndarray:
         """Compute NNLS chroma as a float32 array of shape ``(12, n_frames)``."""
         return _nnls_chroma(self.data, self.sample_rate)
 
     # --- Features - Onset ---
 
+    @_entry("Audio.onset_strength")
     def onset_strength(
         self,
         n_fft: int = 2048,
@@ -1099,20 +1150,24 @@ class Audio:
 
     # --- Loudness (LUFS) ---
 
+    @_entry("Audio.lufs")
     def lufs(self) -> LufsResult:
         """Compute integrated/momentary/short-term LUFS and loudness range."""
         return _lufs(self.data, self.sample_rate)
 
+    @_entry("Audio.momentary_lufs")
     def momentary_lufs(self) -> np.ndarray:
         """Compute the per-block momentary LUFS time series as a float32 array."""
         return _momentary_lufs(self.data, self.sample_rate)
 
+    @_entry("Audio.short_term_lufs")
     def short_term_lufs(self) -> np.ndarray:
         """Compute the per-block short-term LUFS time series as a float32 array."""
         return _short_term_lufs(self.data, self.sample_rate)
 
     # --- Features - Spectral ---
 
+    @_entry("Audio.spectral_centroid")
     def spectral_centroid(
         self,
         n_fft: int = 2048,
@@ -1121,6 +1176,7 @@ class Audio:
         """Compute the spectral centroid per frame as a float32 array."""
         return _spectral_centroid(self.data, self.sample_rate, n_fft, hop_length)
 
+    @_entry("Audio.spectral_bandwidth")
     def spectral_bandwidth(
         self,
         n_fft: int = 2048,
@@ -1130,6 +1186,7 @@ class Audio:
         """Compute the spectral bandwidth per frame as a float32 array."""
         return _spectral_bandwidth(self.data, self.sample_rate, n_fft, hop_length, p)
 
+    @_entry("Audio.spectral_rolloff")
     def spectral_rolloff(
         self,
         n_fft: int = 2048,
@@ -1139,6 +1196,7 @@ class Audio:
         """Compute the spectral rolloff per frame as a float32 array."""
         return _spectral_rolloff(self.data, self.sample_rate, n_fft, hop_length, roll_percent)
 
+    @_entry("Audio.spectral_flatness")
     def spectral_flatness(
         self,
         n_fft: int = 2048,
@@ -1147,6 +1205,7 @@ class Audio:
         """Compute the spectral flatness per frame as a float32 array."""
         return _spectral_flatness(self.data, self.sample_rate, n_fft, hop_length)
 
+    @_entry("Audio.zero_crossing_rate")
     def zero_crossing_rate(
         self,
         frame_length: int = 2048,
@@ -1155,6 +1214,7 @@ class Audio:
         """Compute the zero-crossing rate per frame as a float32 array."""
         return _zero_crossing_rate(self.data, self.sample_rate, frame_length, hop_length)
 
+    @_entry("Audio.rms_energy")
     def rms_energy(
         self,
         frame_length: int = 2048,
@@ -1165,6 +1225,7 @@ class Audio:
 
     # --- Features - Pitch ---
 
+    @_entry("Audio.pitch_yin")
     def pitch_yin(
         self,
         frame_length: int = 2048,
@@ -1184,6 +1245,7 @@ class Audio:
             threshold,
         )
 
+    @_entry("Audio.pitch_pyin")
     def pitch_pyin(
         self,
         frame_length: int = 2048,
@@ -1207,6 +1269,7 @@ class Audio:
 
     # --- Core - Resample ---
 
+    @_entry("Audio.resample")
     def resample(self, target_sample_rate: int) -> np.ndarray:
         """Resample audio to a different sample rate; returns a float32 array."""
         return _resample(self.data, self.sample_rate, target_sample_rate)
@@ -1219,22 +1282,27 @@ class Audio:
     # free-function twins pay. Parameters, order and defaults mirror those
     # twins; see :mod:`libsonare._features_metering`.
 
+    @_entry("Audio.peak_db")
     def peak_db(self) -> float:
         """Sample-peak in dBFS over the buffer."""
         return self._audio_float("sonare_audio_peak_db", self._require_handle())
 
+    @_entry("Audio.rms_db")
     def rms_db(self) -> float:
         """RMS level in dBFS over the buffer."""
         return self._audio_float("sonare_audio_rms_db", self._require_handle())
 
+    @_entry("Audio.dc_offset")
     def dc_offset(self) -> float:
         """DC offset (mean) of the buffer in linear amplitude."""
         return self._audio_float("sonare_audio_dc_offset", self._require_handle())
 
+    @_entry("Audio.crest_factor_db")
     def crest_factor_db(self) -> float:
         """Crest factor in dB (peak_db - rms_db)."""
         return self._audio_float("sonare_audio_crest_factor_db", self._require_handle())
 
+    @_entry("Audio.silence_ratio")
     def silence_ratio(
         self,
         threshold_db: float = -45.0,
@@ -1250,6 +1318,7 @@ class Audio:
             _to_c_int(hop_length, "hop_length"),
         )
 
+    @_entry("Audio.true_peak_dbtp")
     def true_peak_dbtp(self, oversample_factor: int | None = None) -> float:
         """Inter-sample (true) peak in dBFS.
 
@@ -1261,6 +1330,7 @@ class Audio:
             _to_c_int(_oversample_factor(oversample_factor), "oversample_factor"),
         )
 
+    @_entry("Audio.detect_clipping")
     def detect_clipping(
         self,
         threshold: float | None = None,
@@ -1298,6 +1368,7 @@ class Audio:
         finally:
             self._lib.sonare_free_clipping_result(ctypes.byref(out))
 
+    @_entry("Audio.dynamic_range")
     def dynamic_range(
         self,
         window_sec: float | None = None,
@@ -1340,6 +1411,7 @@ class Audio:
         finally:
             self._lib.sonare_free_dynamic_range_result(ctypes.byref(out))
 
+    @_entry("Audio.spectrum")
     def spectrum(
         self,
         n_fft: int | None = None,
@@ -1389,6 +1461,7 @@ class Audio:
         finally:
             self._lib.sonare_free_spectrum_result(ctypes.byref(out))
 
+    @_entry("Audio.spectrum_frame")
     def spectrum_frame(
         self,
         frame_offset: int = 0,
@@ -1447,6 +1520,7 @@ class Audio:
         finally:
             self._lib.sonare_free_spectrum_result(ctypes.byref(out))
 
+    @_entry("Audio.ebur128_loudness_range_lu")
     def ebur128_loudness_range_lu(self) -> float:
         """EBU R128 / Tech 3342 Loudness Range (LRA) in LU."""
         out = ctypes.c_float(0.0)
@@ -1456,6 +1530,7 @@ class Audio:
         _check(rc)
         return float(out.value)
 
+    @_entry("Audio.close")
     def close(self) -> None:
         """Free the underlying audio resource."""
         if self._handle:

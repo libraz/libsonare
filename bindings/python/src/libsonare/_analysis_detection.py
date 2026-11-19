@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from ._errors import _entry, _refuse
 from ._ffi_types_core import (
     SonareKey,
     SonareKeyCandidate,
@@ -15,7 +16,6 @@ from ._ffi_types_core import (
 )
 from ._narrowing import _narrow_double, _optional_nonzero
 from ._runtime import (
-    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -67,6 +67,7 @@ _DEFAULT_BPM_MIN = 60.0
 _DEFAULT_BPM_MAX = 200.0
 
 
+@_entry("detect_bpm")
 @_guard_buffer("samples")
 def detect_bpm(
     samples: Sequence[float] | list[float],
@@ -111,6 +112,7 @@ def detect_bpm(
     return float(out_bpm.value)
 
 
+@_entry("detect_key")
 @_guard_buffer("samples")
 def detect_key(
     samples: Sequence[float] | list[float],
@@ -164,11 +166,11 @@ def detect_key(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    mode_values = _mode_values("detect_key", modes)
+    mode_values = _mode_values(modes)
     mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_key = SonareKey()
     out_tuning = ctypes.c_float()
-    tuning_value, tuning_auto = _tuning_arg("detect_key", tuning_cents)
+    tuning_value, tuning_auto = _tuning_arg(tuning_cents)
     rc = lib.sonare_detect_key_with_tuning(
         c_array,
         _to_c_size_t(length, "length"),
@@ -198,6 +200,7 @@ def detect_key(
     )
 
 
+@_entry("detect_key_candidates")
 @_guard_buffer("samples")
 def detect_key_candidates(
     samples: Sequence[float] | list[float],
@@ -219,11 +222,11 @@ def detect_key_candidates(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    mode_values = _mode_values("detect_key_candidates", modes)
+    mode_values = _mode_values(modes)
     mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_candidates = ctypes.POINTER(SonareKeyCandidate)()
     out_count = ctypes.c_size_t()
-    tuning_value, tuning_auto = _tuning_arg("detect_key_candidates", tuning_cents)
+    tuning_value, tuning_auto = _tuning_arg(tuning_cents)
     rc = lib.sonare_detect_key_candidates_with_tuning(
         c_array,
         _to_c_size_t(length, "length"),
@@ -263,6 +266,7 @@ def detect_key_candidates(
             lib.sonare_free_key_candidates(out_candidates)
 
 
+@_entry("detect_beats")
 @_guard_buffer("samples")
 def detect_beats(
     samples: Sequence[float] | list[float],
@@ -302,6 +306,7 @@ def detect_beats(
         return _from_c_float_array(out_times, count)
 
 
+@_entry("detect_downbeats")
 @_guard_buffer("samples")
 def detect_downbeats(
     samples: Sequence[float] | list[float],
@@ -323,6 +328,7 @@ def detect_downbeats(
         return _from_c_float_array(out_times, count)
 
 
+@_entry("detect_onsets")
 @_guard_buffer("samples")
 def detect_onsets(
     samples: Sequence[float] | list[float],
@@ -408,7 +414,7 @@ def _section_type_from_ordinal(raw: Any) -> SectionType:
     :raises SonareValueError: the field is absent or names no known section type.
     """
     if raw is None:
-        raise SonareValueError("analysis result section is missing its type field")
+        raise _refuse("analysis result section is missing its type field")
     return _section_type_token(int(raw))
 
 
@@ -492,7 +498,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             # -- the mirror has drifted -- and folding the two together would
             # present that as a detection result.
             if not 0 <= q_raw < len(CHORD_QUALITIES):
-                raise SonareValueError(f"unknown analysis chord quality ordinal: {q_raw}")
+                raise _refuse(f"unknown analysis chord quality ordinal: {q_raw}")
             quality_str = CHORD_QUALITIES[q_raw]
         else:
             quality_str = str(q_raw) if str(q_raw) in CHORD_QUALITIES else "unknown"

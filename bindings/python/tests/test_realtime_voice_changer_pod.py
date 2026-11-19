@@ -113,7 +113,8 @@ def test_config_returns_the_live_normalized_record() -> None:
         assert libsonare.RealtimeVoiceChangerConfig().retune_grain_size_samples is None
         with pytest.raises(
             libsonare.SonareValueError,
-            match="^retune_grain_size_samples must not be 0; omit it for the automatic grain$",
+            match="^RealtimeVoiceChanger.set_config: retune_grain_size_samples must not be 0; "
+            "omit it for the automatic grain$",
         ):
             changer.set_config(dataclasses.replace(cfg, retune_grain_size_samples=0))
     finally:

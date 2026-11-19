@@ -48,7 +48,7 @@ def test_warp_map_name_is_none_or_a_real_name() -> None:
     with Project() as project:
         project.set_warp_map(1, [(0.0, 0.0), (100.0, 100.0)])
         project.set_warp_map(2, [(0.0, 0.0), (100.0, 100.0)], "w2")
-        with pytest.raises(SonareValueError, match="^set_warp_map: name must not be empty"):
+        with pytest.raises(SonareValueError, match="^Project.set_warp_map: name must not be empty"):
             project.set_warp_map(3, [(0.0, 0.0), (100.0, 100.0)], "")
 
 
@@ -59,7 +59,9 @@ def test_project_marker_name_is_none_when_unnamed_and_empty_is_refused() -> None
         by_id = {marker.id: marker for marker in project.markers()}
         assert by_id[unnamed].name is None
         assert by_id[named].name == "chorus"
-        with pytest.raises(SonareValueError, match="^marker name must not be empty"):
+        with pytest.raises(
+            SonareValueError, match="^Project.set_marker: marker name must not be empty"
+        ):
             project.set_marker(3.0, name="")
 
 
@@ -101,9 +103,14 @@ def test_engine_marker_name_is_none_when_unnamed_and_is_never_cut() -> None:
         engine.set_markers([EngineMarker(1, 0.0), EngineMarker(2, 1.0, longest)])
         names = {marker.id: marker.name for marker in engine.markers()}
         assert names == {1: None, 2: longest}
-        with pytest.raises(SonareValueError, match="^marker name must not be empty"):
+        with pytest.raises(
+            SonareValueError, match="^RealtimeEngine.set_markers: marker name must not be empty"
+        ):
             engine.set_markers([EngineMarker(3, 0.0, "")])
-        with pytest.raises(SonareValueError, match="^name must be at most 63 UTF-8 bytes$"):
+        with pytest.raises(
+            SonareValueError,
+            match="^RealtimeEngine.set_markers: name must be at most 63 UTF-8 bytes$",
+        ):
             engine.set_markers([EngineMarker(4, 0.0, longest + "m")])
         # A multi-byte name that does not fit is refused, not cut at a codepoint.
         with pytest.raises(SonareValueError, match="at most 63 UTF-8 bytes"):
@@ -113,7 +120,10 @@ def test_engine_marker_name_is_none_when_unnamed_and_is_never_cut() -> None:
 def test_engine_fixed_identifiers_are_refused_rather_than_cut() -> None:
     with (
         RealtimeEngine(sample_rate=SR, max_block_size=128) as engine,
-        pytest.raises(SonareValueError, match="^unit must be at most 15 UTF-8 bytes$"),
+        pytest.raises(
+            SonareValueError,
+            match="^RealtimeEngine.add_parameter: unit must be at most 15 UTF-8 bytes$",
+        ),
     ):
         engine.add_parameter(
             ParameterInfo(
@@ -136,9 +146,11 @@ def test_clip_take_and_comp_lists_are_required_and_empty_clears() -> None:
         clip = project.add_midi_clip(0.0, 4.0).clip_id
         project.set_clip_takes(clip, [])
         project.set_clip_comp_segments(clip, [])
-        with pytest.raises(TypeError, match="^set_clip_takes: takes must be a sequence"):
+        with pytest.raises(TypeError, match="^Project.set_clip_takes: takes must be a sequence"):
             project.set_clip_takes(clip, None)  # type: ignore[arg-type]
-        with pytest.raises(TypeError, match="^set_clip_comp_segments: segments must be a sequence"):
+        with pytest.raises(
+            TypeError, match="^Project.set_clip_comp_segments: segments must be a sequence"
+        ):
             project.set_clip_comp_segments(clip, None)  # type: ignore[arg-type]
 
 
@@ -149,7 +161,9 @@ def test_take_ids_and_names_are_none_when_absent_and_never_zero_or_empty() -> No
             track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=SR
         )
         project.set_clip_takes(clip, [{"id": 1}, {"id": 2, "name": "B"}], active_take_id=None)
-        with pytest.raises(SonareValueError, match=r"^set_clip_takes: takes\[0\]\.id is required$"):
+        with pytest.raises(
+            SonareValueError, match=r"^Project\.set_clip_takes: takes\[0\]\.id is required$"
+        ):
             project.set_clip_takes(clip, [{"name": "A"}])
         with pytest.raises(SonareValueError, match=r"takes\[0\]\.id must be"):
             project.set_clip_takes(clip, [{"id": 0}])
@@ -157,23 +171,28 @@ def test_take_ids_and_names_are_none_when_absent_and_never_zero_or_empty() -> No
             project.set_clip_takes(clip, [{"id": 1}], active_take_id=0)
         with pytest.raises(
             SonareValueError,
-            match=r"^set_clip_takes: takes\[0\]\.name must not be empty; omit it for an unnamed",
+            match=r"^Project\.set_clip_takes: takes\[0\]\.name must not be empty; "
+            "omit it for an unnamed",
         ):
             project.set_clip_takes(clip, [{"id": 1, "name": ""}])
-        with pytest.raises(TypeError, match=r"^set_clip_takes: takes\[0\]\.name must be a string"):
+        with pytest.raises(
+            TypeError, match=r"^Project\.set_clip_takes: takes\[0\]\.name must be a string"
+        ):
             project.set_clip_takes(clip, [{"id": 1, "name": 7}])
 
 
 def test_track_name_and_graph_endpoints_refuse_an_empty_string() -> None:
     with Project() as project:
         assert project.add_track("audio", None) > 0
-        with pytest.raises(SonareValueError, match="^add_track: name must not be empty"):
+        with pytest.raises(SonareValueError, match="^Project.add_track: name must not be empty"):
             project.add_track("audio", "")
     spec = EngineGraphSpec(
         nodes=[EngineGraphNode(id="n")], connections=[], input_node="", output_node="n"
     )
     with (
         RealtimeEngine(sample_rate=SR, max_block_size=128) as engine,
-        pytest.raises(SonareValueError, match="^set_graph: input_node must not be empty$"),
+        pytest.raises(
+            SonareValueError, match="^RealtimeEngine.set_graph: input_node must not be empty$"
+        ),
     ):
         engine.set_graph(spec)

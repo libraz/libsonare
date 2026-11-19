@@ -19,14 +19,13 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from ._errors import _not_supported
+from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._mastering_offline import _mastering_params
 from ._narrowing import _narrow_double
 from ._result_records import _fields
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    SonareValueError,
     _as_float32_buffer,
     _check,
     _get_lib,
@@ -122,9 +121,7 @@ class _TrackArrays(NamedTuple):
     pins: list[Any]
 
 
-def _build_track_arrays(
-    fn_name: str, tracks: Sequence[MixAssistantTrack], sample_rate: int
-) -> _TrackArrays:
+def _build_track_arrays(tracks: Sequence[MixAssistantTrack], sample_rate: int) -> _TrackArrays:
     """Validate ``tracks`` and marshal them into the parallel C arrays.
 
     Every allocated buffer is pinned in the returned tuple, so the caller keeps
@@ -147,9 +144,9 @@ def _build_track_arrays(
     for index, track in enumerate(tracks):
         track_id = track.id
         if not isinstance(track_id, str) or not track_id:
-            raise SonareValueError(f"{fn_name}: tracks[{index}].id must be a non-empty string")
+            raise _refuse(f"tracks[{index}].id must be a non-empty string")
         if track_id in seen:
-            raise SonareValueError(f"{fn_name}: duplicate track id {track_id!r}")
+            raise _refuse(f"duplicate track id {track_id!r}")
         seen.add(track_id)
 
         if track.sample_rate is None:
@@ -158,12 +155,12 @@ def _build_track_arrays(
             # Refused like the call's own rate: narrowed first, then the sign.
             track_rate = _narrow_int(
                 track.sample_rate,
-                f"{fn_name}: tracks[{index}].sample_rate",
+                f"tracks[{index}].sample_rate",
                 _C_INT_MIN,
                 _C_INT_MAX,
             )
             if track_rate <= 0:
-                raise SonareValueError(f"{fn_name}: tracks[{index}].sample_rate must be positive")
+                raise _refuse(f"tracks[{index}].sample_rate must be positive")
             sample_rates.append(track_rate)
             any_rate = True
 
@@ -174,31 +171,23 @@ def _build_track_arrays(
         # unreachable. Rank and type are still named by the coercion.
         channels = track.channels
         if not isinstance(channels, (list, tuple)):
-            raise TypeError(
-                f"{fn_name}: tracks[{index}].channels must be a list or tuple of planes, "
+            raise _refuse_type(
+                f"tracks[{index}].channels must be a list or tuple of planes, "
                 f"got {type(channels).__name__}"
             )
         if len(channels) not in (1, 2):
-            raise SonareValueError(
-                f"{fn_name}: tracks[{index}].channels must hold 1 or 2 planes, got {len(channels)}"
-            )
-        left = _as_float32_buffer(
-            channels[0], fn_name=fn_name, arg_name=f"tracks[{index}].channels[0]"
-        )
+            raise _refuse(f"tracks[{index}].channels must hold 1 or 2 planes, got {len(channels)}")
+        left = _as_float32_buffer(channels[0], arg_name=f"tracks[{index}].channels[0]")
         left_array, left_length = _to_c_float_array(left)
         if len(channels) == 1:
             right_array = None
             right_length = left_length
         else:
-            right = _as_float32_buffer(
-                channels[1], fn_name=fn_name, arg_name=f"tracks[{index}].channels[1]"
-            )
+            right = _as_float32_buffer(channels[1], arg_name=f"tracks[{index}].channels[1]")
             right_array, right_length = _to_c_float_array(right)
             any_right = True
         if right_length != left_length:
-            raise SonareValueError(
-                f"{fn_name}: tracks[{index}].channels planes must have equal lengths"
-            )
+            raise _refuse(f"tracks[{index}].channels planes must have equal lengths")
 
         left_arrays.append(left_array)
         right_arrays.append(right_array)
@@ -225,7 +214,7 @@ def _build_track_arrays(
     )
     length_array = (ctypes.c_size_t * count)(*lengths)
     # NULL when no track names its own rate: every track is at the call's rate.
-    rate_array = _to_c_int_array(sample_rates, f"{fn_name}: sample_rates")[0] if any_rate else None
+    rate_array = _to_c_int_array(sample_rates, "sample_rates")[0] if any_rate else None
 
     pins: list[Any] = [left_arrays, right_arrays, id_buffers, name_buffers]
     return _TrackArrays(
@@ -233,9 +222,7 @@ def _build_track_arrays(
     )
 
 
-def _assistant_params(
-    fn_name: str, options: dict[str, float | int | bool | None]
-) -> tuple[Any, int]:
+def _assistant_params(options: dict[str, float | int | bool | None]) -> tuple[Any, int]:
     """Marshal the supplied options, leaving unset ones to the core defaults.
 
     An option left at ``None`` is not placed in the param array at all, so the
@@ -248,20 +235,19 @@ def _assistant_params(
             continue
         if name in _INTEGER_PARAMS:
             # Ahead of the bool branch, so `True` is refused rather than read as 1.
-            params[_PARAM_KEYS[name]] = _validate_c_int_field(fn_name, value, name)
+            params[_PARAM_KEYS[name]] = _validate_c_int_field(value, name)
             continue
         if isinstance(value, bool):
             params[_PARAM_KEYS[name]] = value
             continue
-        number = _narrow_double(value, f"{fn_name}: {name}")
+        number = _narrow_double(value, f"{name}")
         if not np.isfinite(number):
-            raise SonareValueError(f"{fn_name}: {name} must be a finite number")
+            raise _refuse(f"{name} must be a finite number")
         params[_PARAM_KEYS[name]] = number
     return _mastering_params(params)
 
 
 def _suggest(
-    fn_name: str,
     tracks: Sequence[MixAssistantTrack],
     sample_rate: int,
     options: dict[str, float | int | bool | None],
@@ -274,11 +260,11 @@ def _suggest(
     lib = _get_lib()
     # Narrowed ahead of the sign check: int() takes 44100.7 as 44100, a rate the
     # whole suggestion would then be computed at.
-    sample_rate_value = _narrow_int(sample_rate, f"{fn_name}: sample_rate", _C_INT_MIN, _C_INT_MAX)
+    sample_rate_value = _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX)
     if sample_rate_value <= 0:
-        raise SonareValueError(f"{fn_name}: sample_rate must be positive")
-    arrays = _build_track_arrays(fn_name, tracks, sample_rate_value)
-    param_array, param_count = _assistant_params(fn_name, options)
+        raise _refuse("sample_rate must be positive")
+    arrays = _build_track_arrays(tracks, sample_rate_value)
+    param_array, param_count = _assistant_params(options)
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mixing_assistant_suggest(
         arrays.left_ptrs,
@@ -370,6 +356,7 @@ def _mix_assistant_result_from_wire(wire: dict[str, Any]) -> MixAssistantResult:
     )
 
 
+@_entry("mixing_assistant_suggest")
 def mixing_assistant_suggest(
     tracks: Sequence[MixAssistantTrack],
     *,
@@ -454,9 +441,8 @@ def mixing_assistant_suggest(
     """
     # None is the fallback; 0 is the C entry's spelling of it and is not a tempo here.
     if tempo_bpm is not None and tempo_bpm <= 0:
-        raise SonareValueError("mixing_assistant_suggest: tempo_bpm must be positive")
+        raise _refuse("tempo_bpm must be positive")
     wire = _suggest(
-        "mixing_assistant_suggest",
         tracks,
         sample_rate,
         {
@@ -479,6 +465,7 @@ def mixing_assistant_suggest(
     return _mix_assistant_result_from_wire(wire)
 
 
+@_entry("mixing_assistant_source_class_names")
 def mixing_assistant_source_class_names() -> list[str]:
     """Return the source-class identifiers the assistant can report.
 
@@ -501,6 +488,7 @@ def mixing_assistant_source_class_names() -> list[str]:
     return names
 
 
+@_entry("mixing_assistant_source_class_from_name")
 def mixing_assistant_source_class_from_name(name: str) -> int:
     """Resolve a source-class identifier to its enum value.
 
@@ -510,7 +498,5 @@ def mixing_assistant_source_class_from_name(name: str) -> int:
     lib = _get_lib()
     value = int(lib.sonare_mixing_assistant_source_class_from_name(_utf8_arg(name, "name")))
     if value < 0:
-        raise SonareValueError(
-            f"mixing_assistant_source_class_from_name: unknown source class {name!r}"
-        )
+        raise _refuse(f"unknown source class {name!r}")
     return value

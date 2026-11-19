@@ -10,7 +10,7 @@ from typing import Any, cast
 import numpy as np
 
 from ._effects_repair_session import _audio_defects_from_wire
-from ._errors import _not_supported
+from ._errors import _entry, _not_supported, _refuse, _refuse_type
 from ._ffi import (
     SonareLoudnessMatch,
     SonareMasteringResult,
@@ -24,7 +24,6 @@ from ._mastering_offline import (
 from ._narrowing import _narrow_double
 from ._result_records import _record
 from ._runtime import (
-    SonareValueError,
     _check,
     _finite_or_none,
     _from_c_float_array,
@@ -66,7 +65,7 @@ from .types import (
 def _reject_nul(value: str, argument: str) -> None:
     """Reject an embedded NUL that the C string would silently truncate."""
     if "\x00" in value:
-        raise SonareValueError(f"{argument} must not contain NUL")
+        raise _refuse(f"{argument} must not contain NUL")
 
 
 def _stereo_pair_params(params: dict[str, float | int | bool] | None) -> tuple[Any, int]:
@@ -76,6 +75,7 @@ def _stereo_pair_params(params: dict[str, float | int | bool] | None) -> tuple[A
     return _mastering_params(params)
 
 
+@_entry("mastering_apply_pair_processor")
 @_guard_buffer("source", "reference")
 def mastering_apply_pair_processor(
     processor: str,
@@ -132,6 +132,7 @@ def mastering_apply_pair_processor(
         lib.sonare_free_mastering_result(ctypes.byref(out))
 
 
+@_entry("mastering_apply_pair_processor_stereo")
 @_guard_buffer("source_left", "source_right", "reference_left", "reference_right")
 def mastering_apply_pair_processor_stereo(
     processor: str,
@@ -153,7 +154,7 @@ def mastering_apply_pair_processor_stereo(
     and applies one mix to both channels.
     """
     if not isinstance(processor, str):
-        raise TypeError("processor must be a string")
+        raise _refuse_type("processor must be a string")
     _reject_nul(processor, "processor")
     param_array, param_count = _stereo_pair_params(params)
     lib = _get_lib()
@@ -170,9 +171,9 @@ def mastering_apply_pair_processor_stereo(
         reference_right, arg_name="reference_right"
     )
     if source_left_length != source_right_length:
-        raise SonareValueError("source_left and source_right channel lengths must match")
+        raise _refuse("source_left and source_right channel lengths must match")
     if reference_left_length != reference_right_length:
-        raise SonareValueError("reference_left and reference_right channel lengths must match")
+        raise _refuse("reference_left and reference_right channel lengths must match")
     out = SonareMasteringStereoResult()
     try:
         rc = lib.sonare_mastering_apply_pair_processor_stereo_ex(
@@ -208,6 +209,7 @@ def mastering_apply_pair_processor_stereo(
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
 
 
+@_entry("mastering_analyze_pair")
 @_guard_buffer("source", "reference")
 def mastering_analyze_pair(
     analysis: str,
@@ -262,6 +264,7 @@ def mastering_analyze_pair(
     return _pair_analysis_from_wire(analysis, _take_json(lib, json_ptr))
 
 
+@_entry("mastering_ab_match_loudness")
 @_guard_buffer("source", "reference")
 def mastering_ab_match_loudness(
     source: Sequence[float] | list[float] | np.ndarray,
@@ -335,6 +338,7 @@ def mastering_ab_match_loudness(
     )
 
 
+@_entry("mastering_ab_match_loudness_stereo")
 @_guard_buffer("source_left", "source_right", "reference_left", "reference_right")
 def mastering_ab_match_loudness_stereo(
     source_left: Sequence[float] | list[float] | np.ndarray,
@@ -368,9 +372,9 @@ def mastering_ab_match_loudness_stereo(
         reference_right, arg_name="reference_right"
     )
     if source_left_length != source_right_length:
-        raise SonareValueError("source_left and source_right channel lengths must match")
+        raise _refuse("source_left and source_right channel lengths must match")
     if reference_left_length != reference_right_length:
-        raise SonareValueError("reference_left and reference_right channel lengths must match")
+        raise _refuse("reference_left and reference_right channel lengths must match")
     out = SonareMasteringStereoResult()
     match = SonareLoudnessMatch()
     try:
@@ -407,6 +411,7 @@ def mastering_ab_match_loudness_stereo(
     )
 
 
+@_entry("mastering_analyze_stereo")
 @_guard_buffer("left", "right")
 def mastering_analyze_stereo(
     analysis: str,
@@ -426,7 +431,7 @@ def mastering_analyze_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_analyze_stereo(
@@ -456,20 +461,18 @@ _PLATFORM_RENAMED = {
 def _platform_fields(platform: Mapping[str, Any]) -> tuple[str, float, float]:
     """Read one :class:`StreamingPlatform` record, refusing any other key by name."""
     if not isinstance(platform, Mapping):
-        raise TypeError("platforms: each platform must be a mapping")
+        raise _refuse_type("each platform must be a mapping")
     for key in platform:
         if key in _PLATFORM_RENAMED:
-            raise SonareValueError(
-                f"platforms: unknown key {key!r}; use {_PLATFORM_RENAMED[key]!r}"
-            )
+            raise _refuse(f"platform has unknown key {key!r}; use {_PLATFORM_RENAMED[key]!r}")
         if key not in _PLATFORM_KEYS:
-            raise SonareValueError(f"platforms: unknown key {key!r}")
+            raise _refuse(f"platform has unknown key {key!r}")
     missing = [key for key in _PLATFORM_KEYS if key not in platform]
     if missing:
-        raise SonareValueError(f"platforms: missing {', '.join(missing)}")
+        raise _refuse(f"platform is missing {', '.join(missing)}")
     name = platform["name"]
     if not isinstance(name, str):
-        raise TypeError("platforms: name must be a string")
+        raise _refuse_type("platform name must be a string")
     return (
         name,
         _narrow_double(platform["target_lufs"], "target_lufs"),
@@ -478,7 +481,7 @@ def _platform_fields(platform: Mapping[str, Any]) -> tuple[str, float, float]:
 
 
 def _streaming_platforms(
-    fn_name: str, platforms: Sequence[StreamingPlatform] | None
+    platforms: Sequence[StreamingPlatform] | None,
 ) -> tuple[Any, int, list[bytes]]:
     """Build the C platform array, keeping the name buffers alive for the call.
 
@@ -488,7 +491,7 @@ def _streaming_platforms(
         return None, 0, []
     fields = [_platform_fields(platform) for platform in platforms]
     if not fields:
-        raise SonareValueError(f"{fn_name}: platforms must not be empty")
+        raise _refuse("platforms must not be empty")
     array_type = SonareStreamingPlatform * len(fields)
     platform_buffers = [_utf8_arg(name, "name") for name, _, _ in fields]
     platform_array = array_type(
@@ -614,6 +617,7 @@ def _audio_profile_from_wire(wire: Mapping[str, Any]) -> MasteringAudioProfile:
     )
 
 
+@_entry("mastering_streaming_preview")
 @_guard_buffer("samples")
 def mastering_streaming_preview(
     samples: Sequence[float] | list[float],
@@ -629,9 +633,7 @@ def mastering_streaming_preview(
     if not hasattr(lib, "sonare_mastering_streaming_preview"):
         raise _not_supported("libsonare was built without mastering streaming preview support")
     c_array, length = _to_c_float_array(samples)
-    platform_array, platform_count, _buffers = _streaming_platforms(
-        "mastering_streaming_preview", platforms
-    )
+    platform_array, platform_count, _buffers = _streaming_platforms(platforms)
 
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_streaming_preview(
@@ -646,6 +648,7 @@ def mastering_streaming_preview(
     return _streaming_preview_from_wire(_take_json(lib, json_ptr))
 
 
+@_entry("mastering_assistant_suggest")
 @_guard_buffer("samples")
 def mastering_assistant_suggest(
     samples: Sequence[float] | list[float],
@@ -688,6 +691,7 @@ def _chain_config_from_document(json_text: str) -> MasteringChainConfig:
     return _document_params(json.loads(json_text))
 
 
+@_entry("mastering_assistant_suggest_chain")
 @_guard_buffer("samples")
 def mastering_assistant_suggest_chain(
     samples: Sequence[float] | list[float],
@@ -722,6 +726,7 @@ def mastering_assistant_suggest_chain(
     return _chain_config_from_document(json_text)
 
 
+@_entry("mastering_audio_profile")
 @_guard_buffer("samples")
 def mastering_audio_profile(
     samples: Sequence[float] | list[float],
@@ -758,7 +763,7 @@ def _stereo_channels(
     left_array, left_length = _to_c_float_array(left, arg_name="left")
     right_array, right_length = _to_c_float_array(right, arg_name="right")
     if left_length != right_length:
-        raise SonareValueError("left and right channel lengths must match")
+        raise _refuse("left and right channel lengths must match")
     return left_array, right_array, left_length
 
 
@@ -793,6 +798,7 @@ def _stereo_analysis_json(
             lib.sonare_free_string(json_ptr)
 
 
+@_entry("mastering_streaming_preview_stereo")
 @_guard_buffer("left", "right")
 def mastering_streaming_preview_stereo(
     left: Sequence[float] | list[float],
@@ -809,9 +815,7 @@ def mastering_streaming_preview_stereo(
     ceiling-risk flag follow from that measurement. ``platforms`` is as for
     :func:`mastering_streaming_preview`.
     """
-    platform_array, platform_count, _buffers = _streaming_platforms(
-        "mastering_streaming_preview_stereo", platforms
-    )
+    platform_array, platform_count, _buffers = _streaming_platforms(platforms)
     json_text = _stereo_analysis_json(
         "sonare_mastering_streaming_preview_stereo",
         "libsonare was built without mastering streaming preview support",
@@ -824,6 +828,7 @@ def mastering_streaming_preview_stereo(
     return _streaming_preview_from_wire(json.loads(json_text))
 
 
+@_entry("mastering_assistant_suggest_stereo")
 @_guard_buffer("left", "right")
 def mastering_assistant_suggest_stereo(
     left: Sequence[float] | list[float],
@@ -851,6 +856,7 @@ def mastering_assistant_suggest_stereo(
     return _assistant_result_from_wire(json.loads(json_text))
 
 
+@_entry("mastering_assistant_suggest_chain_stereo")
 @_guard_buffer("left", "right")
 def mastering_assistant_suggest_chain_stereo(
     left: Sequence[float] | list[float],
@@ -872,6 +878,7 @@ def mastering_assistant_suggest_chain_stereo(
     return _chain_config_from_document(json_text)
 
 
+@_entry("mastering_preset_params")
 def mastering_preset_params(preset: str) -> MasteringChainConfig:
     """Return a built-in preset's chain configuration document's params.
 
@@ -902,6 +909,7 @@ def mastering_preset_params(preset: str) -> MasteringChainConfig:
     return _chain_config_from_document(json_text)
 
 
+@_entry("mastering_chain_config_from_json")
 def mastering_chain_config_from_json(document: str) -> MasteringChainConfig:
     """Validate a chain configuration document and return its params.
 
@@ -934,6 +942,7 @@ def mastering_chain_config_from_json(document: str) -> MasteringChainConfig:
     return _document_params(_take_json(lib, json_ptr))
 
 
+@_entry("mastering_audio_profile_stereo")
 @_guard_buffer("left", "right")
 def mastering_audio_profile_stereo(
     left: Sequence[float] | list[float],
