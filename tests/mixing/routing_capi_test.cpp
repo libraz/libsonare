@@ -1247,8 +1247,8 @@ TEST_CASE("C-API scene mixer bounds a strip equalizer insert by the mixer rate's
 
   SonareMixer* narrow = sonare_mixer_from_scene_json(json.c_str(), 48000, kBlock);
   REQUIRE(narrow == nullptr);
-  REQUIRE(std::string(sonare_last_error_message())
-              .find("must be below 24000 Hz (Nyquist at 48000 Hz)") != std::string::npos);
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          "strips[0].inserts[0].params.band0.frequencyHz must be finite and in (0, 24000)");
 }
 
 namespace {

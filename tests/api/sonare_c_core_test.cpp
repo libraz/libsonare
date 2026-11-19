@@ -433,7 +433,7 @@ TEST_CASE("sonare_downmix refuses an upmix, an unknown layout and malformed argu
   const std::vector<float> stereo(16, 0.25f);
   float* out = reinterpret_cast<float*>(0x1);
   REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_5_1, nullptr, &out) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(out == nullptr);
   REQUIRE(sonare_downmix(stereo.data(), 8, 2, 4, nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_downmix(stereo.data(), 8, 2, -1, nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
