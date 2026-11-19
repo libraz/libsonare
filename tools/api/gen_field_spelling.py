@@ -11,7 +11,9 @@ parameters (``ts_request_fields.cjs``), by canonical name
 and then, on every surface, by the per-surface ruled renames in
 ``field_spelling_renames.toml``, which bind only where the entry carries the
 renamed spelling unpaired. A subject still unbound is reported, not tabled, and a
-ruled rename that binds nowhere fails the run.
+ruled rename that binds nowhere fails the run. Every unbound parameter carries a
+reason in ``field_spelling_unbound.toml``; unbound record fields are output records
+and are counted only.
 
 Usage: python3 tools/api/gen_field_spelling.py [--check] [--report]
 """
@@ -36,6 +38,8 @@ CPP_TARGETS = {
 }
 PY_TARGET = ROOT / "bindings/python/src/libsonare/_field_spelling.py"
 RENAMES = ROOT / "tools/api/field_spelling_renames.toml"
+UNBOUND = ROOT / "tools/api/field_spelling_unbound.toml"
+UNBOUND_KINDS = ("derived length", "output", "C-only plumbing", "folded into ")
 SURFACES = ("node", "wasm", "python")
 
 
@@ -88,8 +92,8 @@ def entry_key(entry: str) -> str:
 def derive(
     bindings: Iterable,
     request_fields: dict[str, list[dict]] | None = None,
-    renames: dict[str, dict[str, str]] | None = None,
-) -> tuple[dict[str, list[Row]], list[Unbound], list[tuple[str, str]]]:
+    renames: dict[str, dict[str, str | list[str]]] | None = None,
+) -> tuple[dict[str, list[Row]], list[Unbound], list[tuple[str, str, str]]]:
     """Table rows per surface, the subjects no facade binds, and the ruled renames that bound nothing."""
     bindings = list(bindings)
     request_fields = request_fields or {}
@@ -103,7 +107,11 @@ def derive(
             names[(b.surface, b.c_key)].add(b.surface_spelling)
     rows: dict[str, set[Row]] = {s: set() for s in SURFACES}
     unbound: list[Unbound] = []
-    used: set[tuple[str, str]] = set()
+    used: set[tuple[str, str, str]] = set()
+
+    def spellings(surface: str, subject: str) -> list[str]:
+        value = renames.get(surface, {}).get(subject, [])
+        return [value] if isinstance(value, str) else list(value)
 
     def bind(surface: str, key: str, subject: str, spelling: str) -> None:
         if spelling != mechanical(subject, surface):
@@ -117,20 +125,21 @@ def derive(
             continue
         known = names[(b.surface, b.c_key)]
         by_canonical = {camel_to_snake(f): f for f in known}
-        renamed = renames.get(b.surface, {}).get(b.c_subject)
+        renamed = [r for r in spellings(b.surface, b.c_subject) if r in known]
         if b.c_subject in by_canonical:
             bind(b.surface, b.c_key, b.c_subject, by_canonical[b.c_subject])
-        elif renamed in known:
-            bind(b.surface, b.c_key, b.c_subject, renamed)
-            used.add((b.surface, b.c_subject))
+        elif len(renamed) == 1:
+            bind(b.surface, b.c_key, b.c_subject, renamed[0])
+            used.add((b.surface, b.c_subject, renamed[0]))
         else:
             unbound.append(Unbound(b.surface, b.c_key, b.c_subject, b.kind, f"{b.file}:{b.line}"))
     unbound.sort(key=lambda u: (u.surface, u.c_key, u.c_subject))
     idle = sorted(
-        (surface, subject)
+        (surface, subject, spelling)
         for surface, table in renames.items()
         for subject in table
-        if (surface, subject) not in used
+        for spelling in spellings(surface, subject)
+        if (surface, subject, spelling) not in used
     )
     return (
         {s: sorted(r, key=lambda x: (x.c_key, x.c_subject)) for s, r in rows.items()},
@@ -203,6 +212,28 @@ def surface_spelling(entry: str, subject: str) -> str:
 '''
 
 
+def classify(
+    unbound: list[Unbound], table: dict[str, str], pending: dict[str, str] | None = None
+) -> list[str]:
+    """Problems with the unbound-parameter classification: missing, stale or of no known kind."""
+    pending = pending or {}
+    problems = []
+    live = {f"{u.c_key}.{u.c_subject}" for u in unbound if u.kind == "param"}
+    for u in unbound:
+        name = f"{u.c_key}.{u.c_subject}"
+        if u.kind == "param" and name not in table and name not in pending:
+            problems.append(f"unclassified unbound {u.surface} parameter {name} ({u.location})")
+    for name in sorted(pending):
+        if name not in live:
+            problems.append(f"{name} is pending but every surface binds it; drop the entry")
+    for name, reason in sorted(table.items()):
+        if name not in live:
+            problems.append(f"{name} is classified but every surface binds it; drop the entry")
+        elif not reason.startswith(UNBOUND_KINDS):
+            problems.append(f"{name}: '{reason}' starts with none of {', '.join(UNBOUND_KINDS)}")
+    return sorted(set(problems))
+
+
 def load_bindings() -> Callable[[Path], list]:
     try:
         from facts import field_bindings
@@ -235,6 +266,8 @@ def main(argv: list[str], field_bindings: Callable[[Path], list] | None = None) 
         return 1
     renames = tomllib.loads(RENAMES.read_text(encoding="utf-8"))
     rows, unbound, idle = derive(bindings, load_request_fields(), renames)
+    classified = tomllib.loads(UNBOUND.read_text(encoding="utf-8"))
+    problems = classify(unbound, classified["params"], classified["pending"])
     outputs = {CPP_TARGETS[s]: render_cpp(s, rows[s]) for s in CPP_TARGETS}
     outputs[PY_TARGET] = render_py(rows["python"])
     check = "--check" in argv
@@ -255,15 +288,19 @@ def main(argv: list[str], field_bindings: Callable[[Path], list] | None = None) 
         f"{s}={per_surface[(s, 'param')]}+{per_surface[(s, 'record_field')]}" for s in SURFACES
     )
     print(
-        f"field spelling: overrides {counts}; subjects with no facade binding (param+record_field) {unbound_counts}"
+        f"field spelling: overrides {counts}; subjects with no facade binding (param+record_field) "
+        f"{unbound_counts}; the record fields are output records a refusal never names; "
+        f"{len(classified['pending'])} pending a rename"
     )
     if "--report" in argv:
         for u in unbound:
             print(f"  unbound {u.surface} {u.kind} {u.c_key}.{u.c_subject} ({u.location})")
+    for problem in problems:
+        print(f"field spelling: {problem}", file=sys.stderr)
     if idle:
         print(
             "field spelling: renames that bind no subject: "
-            + ", ".join(f"{s}.{subject}" for s, subject in idle),
+            + ", ".join(f"{s}.{subject}->{spelling}" for s, subject, spelling in idle),
             file=sys.stderr,
         )
     if stale:
@@ -272,7 +309,7 @@ def main(argv: list[str], field_bindings: Callable[[Path], list] | None = None) 
             file=sys.stderr,
         )
         return 1
-    return 1 if idle else 0
+    return 1 if idle or problems else 0
 
 
 if __name__ == "__main__":

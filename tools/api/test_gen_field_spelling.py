@@ -90,7 +90,7 @@ class RequestFieldTest(unittest.TestCase):
         rows, unbound, idle = gen.derive(facts, {}, {"node": {"target_sr": "targetSampleRate"}})
         self.assertEqual(rows["node"], [])
         self.assertEqual([u.c_subject for u in unbound], ["target_sr"])
-        self.assertEqual(idle, [("node", "target_sr")])
+        self.assertEqual(idle, [("node", "target_sr", "targetSampleRate")])
 
     def test_a_rename_binds_an_unpaired_positional_name(self) -> None:
         facts = [
@@ -109,6 +109,51 @@ class RequestFieldTest(unittest.TestCase):
         rows, unbound, _ = gen.derive(facts, {}, {"python": {"fmin_hz": "fmin"}})
         self.assertEqual(rows["node"], [])
         self.assertEqual([u.c_subject for u in unbound], ["fmin_hz"])
+
+    def test_a_rename_list_binds_the_spelling_each_entry_carries(self) -> None:
+        facts = [
+            Fact("tone", "frequency_hz", "param", "python", None),
+            Fact("tone", None, "param", "python", "frequency"),
+            Fact("clicks", "frequency_hz", "param", "python", None),
+            Fact("clicks", None, "param", "python", "click_freq"),
+        ]
+        rule = {"python": {"frequency_hz": ["click_freq", "frequency"]}}
+        rows, _, idle = gen.derive(facts, {}, rule)
+        self.assertEqual(
+            rows["python"],
+            [
+                gen.Row("clicks", "frequency_hz", "click_freq"),
+                gen.Row("tone", "frequency_hz", "frequency"),
+            ],
+        )
+        self.assertEqual(idle, [])
+
+
+class ClassifyTest(unittest.TestCase):
+    def _unbound(self, kind: str = "param") -> list:
+        return [gen.Unbound("node", "downmix", "frames", kind, "h:1")]
+
+    def test_an_unclassified_unbound_parameter_fails(self) -> None:
+        self.assertEqual(len(gen.classify(self._unbound(), {})), 1)
+
+    def test_a_classified_parameter_passes(self) -> None:
+        self.assertEqual(gen.classify(self._unbound(), {"downmix.frames": "derived length: x"}), [])
+
+    def test_an_entry_every_surface_binds_is_stale(self) -> None:
+        problems = gen.classify([], {"downmix.frames": "output"})
+        self.assertIn("every surface binds it", problems[0])
+
+    def test_a_reason_of_no_known_kind_fails(self) -> None:
+        problems = gen.classify(self._unbound(), {"downmix.frames": "harmless"})
+        self.assertIn("starts with none of", problems[0])
+
+    def test_a_pending_parameter_passes_until_it_binds(self) -> None:
+        pending = {"downmix.frames": "unit split"}
+        self.assertEqual(gen.classify(self._unbound(), {}, pending), [])
+        self.assertIn("is pending but every surface binds it", gen.classify([], {}, pending)[0])
+
+    def test_an_unbound_record_field_needs_no_entry(self) -> None:
+        self.assertEqual(gen.classify(self._unbound("record_field"), {}), [])
 
 
 class RenderTest(unittest.TestCase):

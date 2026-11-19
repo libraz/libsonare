@@ -1,23 +1,31 @@
 # C-ABI subject -> facade spelling, per surface, where a facade deliberately names a
 # field other than the mechanical spelling of its C name. A row binds only on an entry
-# whose facade actually carries the renamed spelling and leaves the C subject unpaired;
+# whose facade actually carries the renamed spelling and leaves the C subject unpaired
+# (a list names the spellings different entries use);
 # gen_field_spelling.py fails on a row that binds nowhere, which is how a row retires
 # once the C name or the facade name moves to meet the other.
 [node]
 frame_offset = "startSample"
 preset = "config"
+bytes = "data"
+mel = "power"
 
 [wasm]
 frame_offset = "startSample"
 preset = "config"
+bytes = "data"
+mel = "power"
 
 # The librosa-mirror keywords.
 [python]
 fmin_hz = "fmin"
 fmax_hz = "fmax"
 duration_sec = "duration"
-frequency_hz = "click_freq"
+frequency_hz = ["click_freq", "frequency"]
 click_duration_sec = "click_duration"
+phase = "phi"
+bpm_min = "tempo_min"
+bpm_max = "tempo_max"
 bytes = "data"
 # Retires when the C argument is renamed num_channels.
 channels = "num_channels"
