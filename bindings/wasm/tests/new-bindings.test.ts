@@ -404,7 +404,7 @@ describe('newly exposed WASM functions', () => {
     (field) => {
       const x = makeSine(0.1, 440);
       expect(() => spectralEdit(x, SR, { ops: [], [field]: 0 })).toThrow(
-        new RangeError(`spectralEdit: ${field} must not be 0 (omit it for the default)`),
+        new RangeError(`spectralEdit: ${field} must not be 0; omit it for the default`),
       );
     },
   );

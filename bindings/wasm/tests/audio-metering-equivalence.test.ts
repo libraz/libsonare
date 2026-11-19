@@ -202,7 +202,7 @@ const METERING_REFUSALS: [string, (audio: Audio) => unknown, string, string][] =
     'spectrum nFft 0',
     (a) => a.spectrum({ nFft: 0 }),
     'RangeError',
-    'Audio.spectrum: nFft must not be 0 (omit it for the default)',
+    'Audio.spectrum: nFft must not be 0; omit it for the default',
   ],
   [
     'spectrumFrame unknown key',
@@ -220,7 +220,7 @@ const METERING_REFUSALS: [string, (audio: Audio) => unknown, string, string][] =
     'spectrumFrame nFft 0',
     (a) => a.spectrumFrame(0, { nFft: 0 }),
     'RangeError',
-    'Audio.spectrumFrame: nFft must not be 0 (omit it for the default)',
+    'Audio.spectrumFrame: nFft must not be 0; omit it for the default',
   ],
   [
     'dynamicRange unknown key',

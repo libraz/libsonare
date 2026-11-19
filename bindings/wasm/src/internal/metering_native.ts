@@ -21,7 +21,7 @@ export function refuseZeroSentinel(request: object, fields: readonly string[]): 
       continue;
     }
     if (value === 0) {
-      throw refuse(`${field} must not be 0 (omit it for the default)`);
+      throw refuse(`${field} must not be 0; omit it for the default`);
     }
   }
 }

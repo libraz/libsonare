@@ -202,7 +202,7 @@ describe('spectralEdit (Node)', () => {
     'refuses %s 0 instead of reading it as the default',
     (field) => {
       expect(() => spectralEdit(sine(440, 0.1), SR, { ops: [], [field]: 0 })).toThrow(
-        new RangeError(`spectralEdit: ${field} must not be 0 (omit it for the default)`),
+        new RangeError(`spectralEdit: ${field} must not be 0; omit it for the default`),
       );
     },
   );
