@@ -109,6 +109,46 @@ _NON_REPAIR_CHAIN_DISABLE_OVERRIDES: dict[str, float] = {
 }
 
 
+# The stage vocabulary ``repair --stages`` accepts; the chain, not this tuple,
+# decides the order they run in.
+_REPAIR_STAGE_NAMES: tuple[str, ...] = (
+    "declip",
+    "declick",
+    "decrackle",
+    "dehum",
+    "denoise",
+    "dereverb",
+)
+
+
+def _parse_repair_stages(raw: str) -> list[str]:
+    """Parse ``repair --stages`` into lower-cased stage names.
+
+    The set is closed; an empty entry or a repeated stage is refused rather than
+    ignored.
+    """
+    stages: list[str] = []
+    for entry in (part.strip().lower() for part in raw.split(",")):
+        if not entry:
+            raise ValueError("--stages has an empty entry")
+        if entry not in _REPAIR_STAGE_NAMES:
+            raise ValueError(
+                f"--stages: unknown stage '{entry}' (expected {', '.join(_REPAIR_STAGE_NAMES)})"
+            )
+        if entry in stages:
+            raise ValueError(f"--stages names {entry} twice")
+        stages.append(entry)
+    return stages
+
+
+def _reject_unlisted_stage_params(params: dict[str, float | str], stages: list[str]) -> None:
+    """Refuse a ``--params`` key reaching a stage ``--stages`` leaves out."""
+    for key in params:
+        stage = key[len("repair.") :].split(".", 1)[0]
+        if stage in _REPAIR_STAGE_NAMES and stage not in stages:
+            raise ValueError(f"{key} names a stage --stages does not run")
+
+
 def _parse_repair_params(raw: str) -> dict[str, float | str]:
     """Parse ``repair --params`` into the chain's flat ``repair.*`` dict.
 
@@ -277,6 +317,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
     detect_only = bool(getattr(args, "detect", False))
     preset = getattr(args, "preset", "") or ""
+    stages_raw: str | None = args.stages if _option_supplied(args, "stages") else None
     params_raw = getattr(args, "params", "") or ""
     explain = bool(getattr(args, "explain", False))
     output = getattr(args, "output", "") or ""
@@ -288,11 +329,21 @@ def cmd_repair(args: argparse.Namespace) -> int:
                 "runs, so none was chosen -- drop --detect to see why the assistant "
                 "would pick a stage"
             )
-        for name in ("preset", "params", "bits", "output"):
+        for name in ("preset", "stages", "params", "bits", "output"):
             if _option_supplied(args, name):
                 raise ValueError(f"--{name} cannot be combined with --detect")
     elif not output:
         raise ValueError("repair requires --output unless --detect is given")
+
+    if stages_raw is not None and preset:
+        raise ValueError("--stages cannot be combined with --preset")
+    if stages_raw is not None and explain:
+        raise ValueError(
+            "--explain has nothing to explain under --stages: the stages are named "
+            "directly, not chosen by measurement -- drop --stages to see why the "
+            "assistant would pick a stage"
+        )
+    stage_list = _parse_repair_stages(stages_raw) if stages_raw is not None else []
 
     if preset and explain:
         raise ValueError(
@@ -320,11 +371,23 @@ def cmd_repair(args: argparse.Namespace) -> int:
         return 0
 
     params = _parse_repair_params(params_raw) if params_raw else {}
+    if stages_raw is not None:
+        _reject_unlisted_stage_params(params, stage_list)
     bits = _wav_bits(args)
     explanation: list[str] = []
     result: Any
 
-    if preset:
+    if stages_raw is not None:
+        # Exactly the listed stages at the library's defaults.
+        stage_config: dict[str, float | str] = {
+            f"repair.{stage}.enabled": 1.0 for stage in stage_list
+        }
+        stage_config.update(params)
+        result = master_audio(
+            samples, sample_rate=sr, preset=None, overrides=_nest_chain_config(stage_config)
+        )
+        mode = "stages"
+    elif preset:
         overrides: dict[str, float | str] = dict(_NON_REPAIR_CHAIN_DISABLE_OVERRIDES)
         overrides.update(params)
         result = master_audio(
@@ -405,6 +468,14 @@ def register_repair_parsers(
         type=_token_of(_library_catalog("mastering_preset_names")),
         default="",
         help="Repair preset name (omitted: measure and choose)",
+    )
+    repair_p.add_argument(
+        "--stages",
+        default="",
+        help=(
+            "Run exactly these repair stages at the library's defaults, as a comma "
+            "list of declip,declick,decrackle,dehum,denoise,dereverb"
+        ),
     )
     repair_p.add_argument(
         "--params",

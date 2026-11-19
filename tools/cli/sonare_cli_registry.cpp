@@ -1037,8 +1037,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "mastering-streaming", true,
                 {nullable_string_value("platforms"), path_value("platforms-file")});
     add_command(commands, "repair", true,
-                {string_value("preset"), string_value("params"), bits_value(), output_value(),
-                 flag("detect"), flag("explain")},
+                {string_value("preset"), string_value("stages"), string_value("params"),
+                 bits_value(), output_value(), flag("detect"), flag("explain")},
                 {}, validate_repair_output);
 #endif
 #ifdef SONARE_WITH_MIXING

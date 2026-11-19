@@ -1304,6 +1304,74 @@ TEST_CASE("CLI repair --params stays inside the repair config", "[cli][mastering
       CLI + " repair " + TEST_WAV + " --params repair.denoise.enabled=1 -o " + TEST_OUT + " -q");
   REQUIRE(ok_code == 0);
 }
+
+TEST_CASE("CLI repair --stages runs exactly the named stages", "[cli][mastering][repair]") {
+  const std::string input = unique_temp_path("_stages_clipped.wav");
+  create_clipped_wav(input);
+
+  SECTION("--stages declip writes what the declip processor writes on a fixture with no overs") {
+    const std::string via_stages = unique_temp_path("_stages_declip.wav");
+    const std::string via_processor = unique_temp_path("_processor_declip.wav");
+    auto [code, output] =
+        exec_command(CLI + " repair " + input + " --stages declip -o " + via_stages + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["mode"].as_string() == "stages");
+    REQUIRE(payload["stages"].as_array().size() == 1);
+    REQUIRE(payload["stages"].as_array()[0].as_string() == "repair.declip");
+    REQUIRE(payload["output_gain_db"].as_number() == 0.0);
+
+    auto [processor_code, processor_output] =
+        exec_command(CLI + " mastering-processor " + input + " --processor repair.declip -o " +
+                     via_processor + " --json -q");
+    REQUIRE(processor_code == 0);
+    auto [stages_samples, stages_rate, stages_channels] = load_audio_interleaved(via_stages);
+    auto [processor_samples, processor_rate, processor_channels] =
+        load_audio_interleaved(via_processor);
+    auto [source_samples, source_rate, source_channels] = load_audio_interleaved(input);
+    // The control: the repair changed the file, so equality is not two copies.
+    CHECK(stages_samples != source_samples);
+    CHECK(stages_samples == processor_samples);
+    std::remove(via_stages.c_str());
+    std::remove(via_processor.c_str());
+  }
+
+  SECTION("a stage name is taken in any letter case") {
+    auto [code, output] = exec_command(CLI + " repair " + input +
+                                       " --stages \"DeHum, Declip\" -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    const auto& stages = payload["stages"].as_array();
+    REQUIRE(stages.size() == 2);
+    CHECK(stages[0].as_string() == "repair.declip");
+    CHECK(stages[1].as_string() == "repair.dehum");
+  }
+
+  SECTION("each malformed list and each conflicting option is refused by name") {
+    const std::vector<std::pair<std::string, std::string>> refusals = {
+        {"--stages declip,reverb", "--stages: unknown stage 'reverb' (expected declip, "},
+        {"--stages declip,Declip", "--stages names declip twice"},
+        {"--stages declip,,dehum", "--stages has an empty entry"},
+        {"--stages \"\"", "--stages has an empty entry"},
+        {"--stages declip --preset speech", "--stages cannot be combined with --preset"},
+        {"--stages declip --explain", "--explain requires the default preset selection"},
+        {"--stages dehum --params repair.declip.lpcOrder=24",
+         "repair.declip.lpcOrder names a stage --stages does not run"},
+    };
+    for (const auto& [extra, message] : refusals) {
+      CAPTURE(extra);
+      auto [code, output] =
+          exec_command(CLI + " repair " + input + " " + extra + " -o " + TEST_OUT + " -q");
+      CHECK(code == 3);
+      CHECK_THAT(output, ContainsSubstring(message));
+    }
+    auto [detect_code, detect_output] =
+        exec_command(CLI + " repair " + input + " --detect --stages declip -q");
+    CHECK(detect_code == 3);
+    CHECK_THAT(detect_output, ContainsSubstring("--stages cannot be combined with --detect"));
+  }
+  std::remove(input.c_str());
+}
 #endif
 
 #ifdef SONARE_WITH_MIXING

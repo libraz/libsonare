@@ -3850,6 +3850,16 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        },
+        {
+          "name": "stages",
+          "type": "string",
+          "default": "",
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
         }
       ],
       "resample": [
@@ -15309,6 +15319,16 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        },
+        {
+          "name": "stages",
+          "type": "string",
+          "default": "",
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -15442,6 +15462,69 @@
               }
             }
           }
+        },
+        "stages": {
+          "keys": {
+            "mode": "string",
+            "stages": "array:string",
+            "output": "path",
+            "output_gain_db": "number",
+            "defects": {
+              "keys": {
+                "click": {
+                  "keys": {
+                    "count": "integer",
+                    "rejected": "integer",
+                    "longest_run_samples": "integer",
+                    "per_second": "number"
+                  }
+                },
+                "clip": {
+                  "keys": {
+                    "clipped_samples": "integer",
+                    "clipped_ratio": "number",
+                    "run_count": "integer",
+                    "longest_run_samples": "integer",
+                    "flat_run_count": "integer",
+                    "longest_flat_run_samples": "integer",
+                    "flat_sample_count": "integer"
+                  }
+                },
+                "crackle": {
+                  "keys": {
+                    "sample_count": "integer",
+                    "sample_fraction": "number",
+                    "per_second": "number"
+                  }
+                },
+                "noise": {
+                  "keys": {
+                    "floor_dbfs": "number",
+                    "band_floor_dbfs": {
+                      "type": "array",
+                      "items": "number"
+                    }
+                  }
+                },
+                "hum": {
+                  "keys": {
+                    "fundamental_hz": "number",
+                    "fundamental_prominence": "number",
+                    "harmonics": "integer",
+                    "harmonic_dbfs": {
+                      "type": "array",
+                      "items": "number"
+                    }
+                  }
+                },
+                "reverb": {
+                  "keys": {
+                    "late_decay_ratio_db": "number"
+                  }
+                }
+              }
+            }
+          }
         }
       },
       "cases": [
@@ -15471,6 +15554,22 @@
           ],
           "exit": 0,
           "payload": "preset",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "stages",
+          "argv": [
+            "repair",
+            "{audio}",
+            "--stages",
+            "declip,dehum",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "stages",
           "artifact": "none",
           "stdout": "json"
         }
