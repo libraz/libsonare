@@ -70,6 +70,11 @@ TrimRange union_range(const TrimRange& left, const TrimRange& right) {
 
 }  // namespace
 
+float trim_threshold_from_db(float threshold_db, const char* subject) {
+  check::in_range(threshold_db, kMinPositiveGainDb, 0.0, subject);
+  return db_to_linear(threshold_db);
+}
+
 void validate_config(const TrimSilenceConfig& config) {
   check::in_range(config.threshold, 0.0, 1.0, "threshold");
   check::integer_in_range(static_cast<long long>(config.padding_samples), 0,

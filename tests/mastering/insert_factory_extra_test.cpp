@@ -391,7 +391,7 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
   REQUIRE(
       make_insert(
           "effects.modulation.pitchShifter",
-          R"({"semitones":7,"cents":-20,"pan":-0.5,"semitones2":-5,"cents2":10,"level2":0.6,"pan2":0.5,"preDelayMs":12,"preDelay2Ms":30,"feedback":0.3,"mixLaw":1})") !=
+          R"({"pitchSemitones":7,"pitchCents":-20,"pan":-0.5,"pitchSemitones2":-5,"pitchCents2":10,"level2":0.6,"pan2":0.5,"preDelayMs":12,"preDelay2Ms":30,"feedback":0.3,"mixLaw":1})") !=
       nullptr);
   REQUIRE(make_insert("effects.modulation.wah",
                       R"({"filterType":1,"sweepLaw":1,"rateHz":2,"minHz":300,"maxHz":2500})") !=
@@ -628,7 +628,7 @@ TEST_CASE("acoustic room inserts reject an invalid RIR length cap and air climat
   // which yields an empty IR and therefore a silently inert (dry passthrough)
   // insert. Both inserts must refuse them at construction instead.
   const char* room = R"({"lengthM":8,"widthM":6,"heightM":3.5,"dryWet":1,)";
-  for (const char* tail : {R"("maxSeconds":-1})", R"("maxSeconds":1000})",
+  for (const char* tail : {R"("maxSec":-1})", R"("maxSec":1000})",
                            R"("airAbsorptionEnabled":true,"airTemperatureC":-500})",
                            R"("airAbsorptionEnabled":true,"airHumidityPercent":150})"}) {
     for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
@@ -651,9 +651,8 @@ TEST_CASE("an accepted effects.reverb.room insert is not a dry passthrough",
   // The counterpart of the rejection cases: a configuration the factory accepts
   // must actually convolve. A dry passthrough (empty IR) would leave the impulse
   // exactly where it was written.
-  auto processor =
-      make_insert("effects.reverb.room",
-                  R"({"lengthM":8,"widthM":6,"heightM":3.5,"maxSeconds":0.5,"dryWet":1})");
+  auto processor = make_insert("effects.reverb.room",
+                               R"({"lengthM":8,"widthM":6,"heightM":3.5,"maxSec":0.5,"dryWet":1})");
   REQUIRE(processor != nullptr);
 
   constexpr int block = 256;
@@ -701,33 +700,33 @@ TEST_CASE("effects.acoustic.roomMorph insert reaches acoustic facade options",
   };
 
   constexpr const char* base =
-      R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7})";
+      R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSec":0.3,"seed":7})";
   const std::vector<float> baseline = render(base);
 
   REQUIRE(differs(
       baseline,
       render(
-          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"preferEyring":false})")));
+          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSec":0.3,"seed":7,"preferEyring":false})")));
   REQUIRE(differs(
       baseline,
       render(
-          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"mixingTimeMs":60})")));
+          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSec":0.3,"seed":7,"mixingTimeMs":60})")));
   REQUIRE(differs(
       baseline,
       render(
-          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"crossfadeMs":35})")));
+          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSec":0.3,"seed":7,"crossfadeMs":35})")));
   REQUIRE(differs(
       baseline,
       render(
-          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"bandAbsorption":[0.75,0.75,0.75,0.75,0.75,0.75]})")));
+          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSec":0.3,"seed":7,"bandAbsorption":[0.75,0.75,0.75,0.75,0.75,0.75]})")));
   REQUIRE(differs(
       baseline,
       render(
-          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"bandAbsorption":[0.4,0.4,0.4,0.4,0.4,0.4],"bandScattering":[0.8,0.8,0.8,0.8,0.8,0.8]})")));
+          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSec":0.3,"seed":7,"bandAbsorption":[0.4,0.4,0.4,0.4,0.4,0.4],"bandScattering":[0.8,0.8,0.8,0.8,0.8,0.8]})")));
   REQUIRE(differs(
       baseline,
       render(
-          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"materialPreset":3})")));
+          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSec":0.3,"seed":7,"materialPreset":3})")));
 }
 
 TEST_CASE("effects.reverb.room and effects.acoustic.roomMorph reach air absorption options",
@@ -772,7 +771,7 @@ TEST_CASE("acoustic inserts resolve a zero air climate to the ISO reference clim
 
   constexpr const char* geometry =
       R"("lengthM":14,"widthM":10,"heightM":5,"absorption":0.15,"sourceX":2,"sourceY":2,)"
-      R"("sourceZ":1.5,"listenerX":9,"listenerY":7,"listenerZ":1.7,"maxSeconds":0.4,"seed":5,)"
+      R"("sourceZ":1.5,"listenerX":9,"listenerY":7,"listenerZ":1.7,"maxSec":0.4,"seed":5,)"
       R"("dryWet":1,"sourceTailSuppression":0,"airAbsorptionEnabled":1)";
   const std::string zero_climate =
       std::string("{") + geometry + R"(,"airTemperatureC":0,"airHumidityPercent":0})";
@@ -800,7 +799,7 @@ TEST_CASE("effects.acoustic.roomMorph rejects a crossfade the caller cannot see 
   // reach the synthesizer as the default and report success.
   constexpr const char* geometry =
       R"("lengthM":12,"widthM":9,"heightM":5,"absorption":0.2,"dryWet":1,)"
-      R"("sourceTailSuppression":0,"maxSeconds":0.3,"seed":7)";
+      R"("sourceTailSuppression":0,"maxSec":0.3,"seed":7)";
   for (const char* crossfade :
        {R"("crossfadeMs":-5)", R"("crossfadeMs":-0.001)", R"("crossfadeMs":100000)"}) {
     DYNAMIC_SECTION(crossfade) {
@@ -837,7 +836,7 @@ TEST_CASE("effects.acoustic.roomMorph rejects a crossfade the caller cannot see 
 TEST_CASE("acoustic room inserts read receiverSpacingM with 0 as the library default",
           "[mastering][insert_factory][effects][acoustic][stereo]") {
   constexpr const char* geometry =
-      R"("lengthM":8,"widthM":6,"heightM":3.5,"absorption":0.15,"maxSeconds":0.3,"seed":3,)"
+      R"("lengthM":8,"widthM":6,"heightM":3.5,"absorption":0.15,"maxSec":0.3,"seed":3,)"
       R"("dryWet":1,"sourceTailSuppression":0)";
   constexpr int block = 256;
   // Stereo, since one channel runs the mono RIR whatever the spacing.
@@ -1531,10 +1530,10 @@ TEST_CASE("processor_names() lists every effects insert the apply path dispatche
 TEST_CASE("velvet insert factory refuses an out-of-range reverb time",
           "[mastering][insert_factory][reverb]") {
   REQUIRE_THROWS_AS(
-      make_insert("effects.reverb.velvet", R"({"reverbTimeS":40,"densityHz":3000,"decay":1})"),
+      make_insert("effects.reverb.velvet", R"({"reverbTimeSec":40,"densityHz":3000,"decay":1})"),
       sonare::SonareException);
   auto processor =
-      make_insert("effects.reverb.velvet", R"({"reverbTimeS":12,"densityHz":3000,"decay":1})");
+      make_insert("effects.reverb.velvet", R"({"reverbTimeSec":12,"densityHz":3000,"decay":1})");
   REQUIRE(processor != nullptr);
   processor->prepare(48000.0, 512);
   // The 18 s effective T60 at the cap, followed by the 20 Hz DC blocker's ring (under 100 ms).

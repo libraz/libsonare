@@ -161,7 +161,7 @@ bool DeEsser::apply_parameter(DeEsserConfig& config, unsigned int param_id, floa
 
 std::vector<rt::ParamDescriptor> DeEsser::parameter_descriptors() const {
   return {{"frequencyHz", 0}, {"thresholdDb", 1}, {"ratio", 2},    {"attackMs", 3},
-          {"releaseMs", 4},   {"rangeDb", 5},     {"bandpassQ", 6}};
+          {"releaseMs", 4},   {"rangeDb", 5},     {"bandPassQ", 6}};
 }
 
 void DeEsser::validate_config(const DeEsserConfig& config) {

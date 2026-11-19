@@ -175,7 +175,7 @@ TEST_CASE("repair.trimSilence cuts both channels to one range",
   for (size_t i = 4000; i < 8000; ++i) left[i] = 0.4f;
   for (size_t i = 14000; i < 22000; ++i) right[i] = 0.4f;
 
-  const std::vector<api::Param> params = {{"threshold", 0.05}};
+  const std::vector<api::Param> params = {{"thresholdDb", -26.0206}};
   const api::StereoResult stereo = run_stereo("repair.trimSilence", left, right, params);
 
   // One range, so one length -- and the range spans from the left channel's

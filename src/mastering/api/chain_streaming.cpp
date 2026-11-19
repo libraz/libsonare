@@ -200,7 +200,7 @@ void validate_realtime_parameter_domain(const std::string& key, float value, dou
                             key + " is outside the prepared processor frequency range");
     }
   }
-  if (key == "dynamics.deesser.bandpassQ" && value < 1.0e-3f) {
+  if (key == "dynamics.deesser.bandPassQ" && value < 1.0e-3f) {
     throw SonareException(ErrorCode::InvalidParameter, key + " must be >= 0.001");
   }
   if (key == "dynamics.compressor.sidechainHighPassHz" && value < 1.0f) {

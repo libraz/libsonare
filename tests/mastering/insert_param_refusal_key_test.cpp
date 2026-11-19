@@ -22,7 +22,7 @@ using sonare::mastering::api::insert_param_info_json;
 using sonare::mastering::api::make_insert;
 
 // The count may only fall.
-constexpr std::size_t kKeylessCeiling = 6;
+constexpr std::size_t kKeylessCeiling = 0;
 
 constexpr double kBeyondBound = 1.0e6;
 constexpr const char* kMakeInsertPrefix = "make_insert: ";

@@ -669,8 +669,8 @@ class BindingRowHeaderTest(unittest.TestCase):
     def test_the_out_selector_follows_the_key(self) -> None:
         self.assertEqual(bindings_header.out_of("drumUndershootHz"), "GsEfxOut::kUndershootHz")
         self.assertEqual(bindings_header.out_of("undershootHz"), "GsEfxOut::kUndershootHz")
-        self.assertEqual(bindings_header.out_of("decelTauS"), "GsEfxOut::kDecelTau")
-        self.assertEqual(bindings_header.out_of("accelTauS"), "GsEfxOut::kAccelTau")
+        self.assertEqual(bindings_header.out_of("decelTauSec"), "GsEfxOut::kDecelTau")
+        self.assertEqual(bindings_header.out_of("accelTauSec"), "GsEfxOut::kAccelTau")
         self.assertEqual(bindings_header.out_of("rateHz"), "GsEfxOut::kValue")
 
     def test_the_join_header_carries_the_new_forms(self) -> None:

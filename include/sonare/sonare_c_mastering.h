@@ -582,9 +582,9 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 ///   processor reads the key, not measured. `unit` is null for a non-number and,
 ///   for a number, one of `dB`, `dBFS`, `LUFS`, `Hz`, `ms`, `s`, `samples`, `m`,
 ///   `cm`, `mm`, `deg`, `percent`, `degC`, `V`, `inPerSec`, `dBPerOct`, `semitones`,
-///   `cents`, `ratio`, `bits`, `count`, `N`, `midiNote` or `none` (a fraction, a selector index or
-///   a seed). `uiMin` and `uiMax` are a display range inside `[min, max]`, or null
-///   where the accepted range is also the display range. `scale` is `"linear"` or
+///   `cents`, `ratio`, `bits`, `count`, `N`, `midiNote`, `bpm` or `none` (a fraction, a selector
+///   index or a seed). `uiMin` and `uiMax` are a display range inside `[min, max]`, or null where
+///   the accepted range is also the display range. `scale` is `"linear"` or
 ///   `"log"`, the axis a control draws the key on. `dependsOn` lists
 ///   `[{"key","relation","factor"}]`, each naming a sibling whose live value bounds this
 ///   key (`relation` `lt`, `le`, `gt` or `ge` reads as `this <relation> factor * sibling`,
@@ -2122,7 +2122,7 @@ SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
 
 /// @brief Flat POD mirror of @c mastering::repair::TrimSilenceConfig.
 typedef struct {
-  float threshold_db;      ///< peak threshold in dBFS (default -60 for Peak mode)
+  float threshold_db;      ///< peak threshold in dBFS, in [-890, 0] (default -60 for Peak mode)
   size_t padding_samples;  ///< leading/trailing samples to retain (default 0)
   int mode;                ///< SONARE_TRIM_SILENCE_MODE_*
   float gate_lufs;         ///< LUFS gate threshold (default -60 for LufsGated mode)

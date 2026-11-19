@@ -1043,7 +1043,7 @@ inline double field_as_double(Enum value) {
   X("attackMs", attack_ms, kMsLog)                                   \
   X("releaseMs", release_ms, kMsLog)                                 \
   X("rangeDb", range_db, kDb)                                        \
-  X("bandpassQ", bandpass_q, kNone)
+  X("bandPassQ", bandpass_q, kNone)
 
 #define SONARE_FIELDS_EXPANDER(X)     \
   X("thresholdDb", threshold_db, kDb) \
@@ -1380,7 +1380,6 @@ inline double field_as_double(Enum value) {
   X("wpeStrength", wpe_strength, kNone)
 
 #define SONARE_FIELDS_TRIM_SILENCE(X)                                     \
-  X("threshold", threshold, display_range(kNone, 0, 0.1))                 \
   X("paddingSamples", padding_samples, display_range(kSamples, 0, 48000)) \
   X("mode", mode, kNone)                                                  \
   X("gateLufs", gate_lufs, kLufs)                                         \
@@ -1413,16 +1412,16 @@ inline double field_as_double(Enum value) {
   X("inputGainDb", input_gain_db, display_range(kDb, -12, 12))                                 \
   X("outputGainDb", output_gain_db, display_range(kDb, -24, 12))                               \
   X("wetMix", wet_mix, display_range(kNone, 0, 1))                                             \
-  X("retuneSemitones", retune.semitones, display_range(kSemitones, -12, 12))                   \
+  X("retunePitchSemitones", retune.semitones, display_range(kSemitones, -12, 12))              \
   X("retuneMix", retune.mix, display_range(kNone, 0, 1))                                       \
-  X("retuneGrainSize", retune.grain_size, display_range(kSamples, 0, 4096))                    \
+  X("retuneGrainSizeSamples", retune.grain_size, display_range(kSamples, 0, 4096))             \
   X("formantFactor", formant.factor, display_range(kRatio, 0.55, 1.65))                        \
   X("formantAmount", formant.amount, display_range(kNone, 0, 1))                               \
   X("formantBody", formant.body, display_range(kNone, -1, 1))                                  \
   X("formantBrightness", formant.brightness, display_range(kNone, -1, 1))                      \
   X("formantNasal", formant.nasal, display_range(kNone, -1, 1))                                \
   X("formantMode", formant_mode, kNone)                                                        \
-  X("eqHighpassHz", eq.highpass_hz, display_range(kHzLog, 20, 300))                            \
+  X("eqHighPassHz", eq.highpass_hz, display_range(kHzLog, 20, 300))                            \
   X("eqBodyDb", eq.body_db, display_range(kDb, -12, 12))                                       \
   X("eqPresenceDb", eq.presence_db, display_range(kDb, -12, 12))                               \
   X("eqAirDb", eq.air_db, display_range(kDb, -12, 12))                                         \
@@ -1478,6 +1477,6 @@ inline double field_as_double(Enum value) {
   X("reverbVariationVariation", reverb_variation.variation, kNone)                             \
   X("reverbVariationDelayMs", reverb_variation.delay_ms, display_range(kMsLog, 1, 3000))       \
   X("reverbVariationFeedback", reverb_variation.feedback, display_range(kNone, 0, 0.95))       \
-  X("reverbVariationTempoBpm", reverb_variation.tempo_bpm, display_range(kNone, 30, 300))      \
+  X("reverbVariationTempoBpm", reverb_variation.tempo_bpm, display_range(kBpm, 30, 300))       \
   X("reverbVariationDivision", reverb_variation.division, kNone)                               \
   X("midiRelease", midi.release, kNone)

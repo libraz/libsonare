@@ -278,7 +278,7 @@ bool VelvetReverb::parameter_is_realtime_safe(unsigned int param_id) const noexc
 }
 
 std::vector<rt::ParamDescriptor> VelvetReverb::parameter_descriptors() const {
-  return {{"decay", 0}, {"reverbTimeS", 1}, {"dryWet", 2}, {"densityHz", 3}};
+  return {{"decay", 0}, {"reverbTimeSec", 1}, {"dryWet", 2}, {"densityHz", 3}};
 }
 
 void VelvetReverb::reset() {

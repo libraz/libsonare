@@ -229,7 +229,7 @@ TEST_CASE("binding_value picks the acceleration quantity from the row's out", "[
     const auto make = [](synth::GsEfxOut out) {
       return class_row(synth::kGsEfxClassAccel, 0, out);
     };
-    // Both time-constant keys (accelTauS and decelTauS) read the divisor table as a time.
+    // Both time-constant keys (accelTauSec and decelTauSec) read the divisor table as a time.
     CHECK(synth::gs_efx_binding_value(make(synth::GsEfxOut::kAccelTau), b) ==
           gs_efx_accel_tau_s(b));
     CHECK(synth::gs_efx_binding_value(make(synth::GsEfxOut::kDecelTau), b) ==

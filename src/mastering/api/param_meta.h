@@ -42,6 +42,7 @@ enum class Unit : std::uint8_t {
   Count,
   Newtons,
   MidiNote,
+  Bpm,
 };
 
 /// @brief Axis a control draws the parameter on.
@@ -103,6 +104,8 @@ constexpr const char* unit_name(Unit unit) {
       return "N";
     case Unit::MidiNote:
       return "midiNote";
+    case Unit::Bpm:
+      return "bpm";
   }
   return nullptr;
 }
@@ -222,5 +225,6 @@ inline constexpr ParamMeta kRatio{Unit::Ratio};
 inline constexpr ParamMeta kBits{Unit::Bits};
 inline constexpr ParamMeta kCount{Unit::Count};
 inline constexpr ParamMeta kNewtons{Unit::Newtons};
+inline constexpr ParamMeta kBpm{Unit::Bpm};
 
 }  // namespace sonare::mastering::api::detail

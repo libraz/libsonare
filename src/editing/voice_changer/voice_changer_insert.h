@@ -25,7 +25,7 @@ namespace sonare::editing::voice_changer {
 ///          internal; the vocoder then plays the voices' own targets. In absolute formant mode
 ///          (@c formantMode, @c relative or @c absolute) @c formantAmount is ignored; with the
 ///          grain engine construction refuses a @c formantFactor the warp cannot reach at the
-///          configured @c retuneSemitones, and automation refuses a value that would leave the
+///          configured @c retunePitchSemitones, and automation refuses a value that would leave the
 ///          warp out of reach. Every other field is an automatable parameter (see
 ///          @ref parameter_descriptors); an integer, enum or switch takes its wire value, and a
 ///          fraction is refused.

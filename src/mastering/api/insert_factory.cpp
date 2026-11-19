@@ -136,6 +136,7 @@ using detail::compressor_config;
 using detail::crossover_config;
 using detail::display_range;
 using detail::f;
+using detail::kBpm;
 using detail::kCents;
 using detail::kCount;
 using detail::kDb;
@@ -861,9 +862,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       }
       config.reverb_time_s = decay_sec / decay_factor;
     } else {
-      config.reverb_time_s = f(params, "reverbTimeS", config.reverb_time_s, kSecondsLog);
+      params.note_member("reverb_time_s", "reverbTimeSec");
+      config.reverb_time_s = f(params, "reverbTimeSec", config.reverb_time_s, kSecondsLog);
     }
-    params.note_effective("reverbTimeS", config.reverb_time_s);
+    params.note_effective("reverbTimeSec", config.reverb_time_s);
     config.density_hz = f(params, "densityHz", config.density_hz, kHz);
     config.enable_shelf = b(params, "enableShelf", config.enable_shelf);
     return make<VelvetReverb>(config);
@@ -917,7 +919,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     sonare::acoustic::validate_material_coefficient(config.absorption, "absorption");
     config.ism_order = detail::i(params, "ismOrder", config.ism_order, kCount);
     config.seed = detail::u32(params, "seed", config.seed, kNone);
-    config.max_seconds = f(params, "maxSeconds", config.max_seconds, kSeconds);
+    params.note_member("max_seconds", "maxSec");
+    config.max_seconds = f(params, "maxSec", config.max_seconds, kSeconds);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
@@ -950,7 +953,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.wet = f(params, "dryWet", config.wet, kNone);
     config.ism_order = detail::i(params, "ismOrder", config.ism_order, kCount);
     config.seed = detail::u32(params, "seed", config.seed, kNone);
-    config.max_seconds = f(params, "maxSeconds", config.max_seconds, kSeconds);
+    params.note_member("max_seconds", "maxSec");
+    config.max_seconds = f(params, "maxSec", config.max_seconds, kSeconds);
     config.late_model = b(params, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                         : sonare::acoustic::ReverbModel::Sabine;
     config.mixing_time_ms = f(params, "mixingTimeMs", config.mixing_time_ms, kMs);
@@ -1071,8 +1075,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.tremolo = f(params, "tremolo", config.tremolo, kNone);
     config.stereo_spread = f(params, "stereoSpread", config.stereo_spread, kNone);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
-    config.accel_tau_s = f(params, "accelTauS", config.accel_tau_s, kSeconds);
-    config.decel_tau_s = f(params, "decelTauS", config.decel_tau_s, kSeconds);
+    params.note_member("accel_tau_s", "accelTauSec");
+    params.note_member("decel_tau_s", "decelTauSec");
+    config.accel_tau_s = f(params, "accelTauSec", config.accel_tau_s, kSeconds);
+    config.decel_tau_s = f(params, "decelTauSec", config.decel_tau_s, kSeconds);
     config.undershoot_hz = f(params, "undershootHz", config.undershoot_hz, kHz);
     config.drum_undershoot_hz = f(params, "drumUndershootHz", config.drum_undershoot_hz, kHz);
     config.horn_slow_hz = f(params, "hornSlowHz", config.horn_slow_hz, kHz);
@@ -1098,13 +1104,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   }
   if (name == "effects.modulation.pitchShifter") {
     effects::modulation::PitchShifterConfig config;
-    config.semitones = f(params, "semitones", config.semitones, kSemitones);
+    config.semitones = f(params, "pitchSemitones", config.semitones, kSemitones);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     config.window_ms = f(params, "windowMs", config.window_ms, kMs);
-    config.cents = f(params, "cents", config.cents, kCents);
+    config.cents = f(params, "pitchCents", config.cents, kCents);
     config.pan = f(params, "pan", config.pan, kNone);
-    config.semitones2 = f(params, "semitones2", config.semitones2, kSemitones);
-    config.cents2 = f(params, "cents2", config.cents2, kCents);
+    config.semitones2 = f(params, "pitchSemitones2", config.semitones2, kSemitones);
+    config.cents2 = f(params, "pitchCents2", config.cents2, kCents);
     config.level2 = f(params, "level2", config.level2, kNone);
     config.pan2 = f(params, "pan2", config.pan2, kNone);
     config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms, kMs);
@@ -1238,7 +1244,7 @@ std::unique_ptr<Processor> build_voice(const std::string& name, const ParamMap& 
   // Only the grain engine warps the formants ahead of the retune, so only there does the formant
   // mode bound the shift; psola resamples its grains and takes every shift in either mode.
   if (config.voice_engine.engine == sonare::editing::voice_changer::PitchEngine::Grain) {
-    params.note_coupled("retuneSemitones", "formantMode");
+    params.note_coupled("retunePitchSemitones", "formantMode");
   }
   return make<sonare::editing::voice_changer::VoiceChangerInsert>(config);
 }

@@ -116,8 +116,8 @@ TEST_CASE("GS-bound insert controls publish realtime descriptors", "[fx][gs][aut
 
   Rotary rotary;
   require_descriptor(rotary, "stereoSpread", 14);
-  require_descriptor(rotary, "accelTauS", 15);
-  require_descriptor(rotary, "decelTauS", 16);
+  require_descriptor(rotary, "accelTauSec", 15);
+  require_descriptor(rotary, "decelTauSec", 16);
   require_descriptor(rotary, "undershootHz", 17);
   require_descriptor(rotary, "drumUndershootHz", 18);
 
@@ -140,8 +140,8 @@ TEST_CASE("GS-bound insert controls publish realtime descriptors", "[fx][gs][aut
        {"windowMs", "preDelayMs", "preDelay2Ms", nullptr, nullptr},
        3},
       {"effects.modulation.rotary",
-       R"({"stereoSpread":0.25,"accelTauS":0.003,"decelTauS":0.004,"undershootHz":2,"drumUndershootHz":3})",
-       {"stereoSpread", "accelTauS", "decelTauS", "undershootHz", "drumUndershootHz"},
+       R"({"stereoSpread":0.25,"accelTauSec":0.003,"decelTauSec":0.004,"undershootHz":2,"drumUndershootHz":3})",
+       {"stereoSpread", "accelTauSec", "decelTauSec", "undershootHz", "drumUndershootHz"},
        5},
       {"saturation.bitcrusher",
        R"({"typeLadder":4})",

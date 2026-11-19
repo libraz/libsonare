@@ -626,12 +626,12 @@ struct DomainRow {
 };
 
 const DomainRow kDomainRows[] = {
-    {"semitones", &PitchShifterConfig::semitones, 0, -24.0f, 24.0f},
+    {"pitchSemitones", &PitchShifterConfig::semitones, 0, -24.0f, 24.0f},
     {"dry_wet", &PitchShifterConfig::dry_wet, 1, 0.0f, 1.0f},
-    {"cents", &PitchShifterConfig::cents, 2, -100.0f, 100.0f},
+    {"pitchCents", &PitchShifterConfig::cents, 2, -100.0f, 100.0f},
     {"pan", &PitchShifterConfig::pan, 3, -1.0f, 1.0f},
-    {"semitones2", &PitchShifterConfig::semitones2, 4, -24.0f, 24.0f},
-    {"cents2", &PitchShifterConfig::cents2, 5, -100.0f, 100.0f},
+    {"pitchSemitones2", &PitchShifterConfig::semitones2, 4, -24.0f, 24.0f},
+    {"pitchCents2", &PitchShifterConfig::cents2, 5, -100.0f, 100.0f},
     {"level2", &PitchShifterConfig::level2, 6, 0.0f, 1.0f},
     {"pan2", &PitchShifterConfig::pan2, 7, -1.0f, 1.0f},
     {"feedback", &PitchShifterConfig::feedback, 8, -sonare::effects::common::kMaxFeedback,

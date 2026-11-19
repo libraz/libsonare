@@ -298,9 +298,10 @@ TEST_CASE("the GS-EFX modulation inserts build through the insert factory",
       dynamic_cast<Wah*>(
           sonare::mastering::api::make_insert("effects.modulation.wah", R"({"rateHz":3})").get()) !=
       nullptr);
-  REQUIRE(dynamic_cast<PitchShifter*>(sonare::mastering::api::make_insert(
-                                          "effects.modulation.pitchShifter", R"({"semitones":7})")
-                                          .get()) != nullptr);
+  REQUIRE(
+      dynamic_cast<PitchShifter*>(sonare::mastering::api::make_insert(
+                                      "effects.modulation.pitchShifter", R"({"pitchSemitones":7})")
+                                      .get()) != nullptr);
 }
 #endif
 

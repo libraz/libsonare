@@ -42,6 +42,10 @@ struct TrimRange {
 /// cannot drift between surfaces.
 void validate_config(const TrimSilenceConfig& config);
 
+/// @brief The trim threshold given in dBFS peak as the linear TrimSilenceConfig::threshold.
+/// @details Refused unless finite and in [kMinPositiveGainDb, 0], the declip threshold's domain.
+float trim_threshold_from_db(float threshold_db, const char* subject);
+
 /// @brief What a trim pass kept and what it dropped.
 struct TrimReport {
   TrimRange range;                  ///< The kept range, padding included.

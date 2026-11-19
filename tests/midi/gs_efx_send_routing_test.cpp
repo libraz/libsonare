@@ -2620,7 +2620,7 @@ TEST_CASE("the measured EFX translations reach automatable insert parameters",
 
   SECTION("a rotary acceleration edit rebuilds, because the glide is structure") {
     // Rotary (01 22), EFX PARAMETER 7 at 40 03 09: the horn rotor's acceleration
-    // byte. It reaches accelTauS / undershootHz, neither of which the rotary
+    // byte. It reaches accelTauSec / undershootHz, neither of which the rotary
     // publishes as an automatable parameter, so the edit costs a rebuild. Pinned
     // rather than fixed: a time constant read on the audio thread mid-glide has
     // no defined arrival, and the insert says so by not offering the id.

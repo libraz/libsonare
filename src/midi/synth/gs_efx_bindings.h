@@ -50,7 +50,7 @@ inline constexpr std::array<std::string_view, 25> kGsEfxRowStages = {{
 
 inline constexpr std::array<std::string_view, 121> kGsEfxRowKeys = {{
     "accelMs",
-    "accelTauS",
+    "accelTauSec",
     "amount",
     "attackMs",
     "autoTurn",
@@ -78,14 +78,12 @@ inline constexpr std::array<std::string_view, 121> kGsEfxRowKeys = {{
     "cab",
     "carrierHz",
     "centerDelayMs",
-    "cents",
-    "cents2",
     "character",
     "clockwise",
     "crossMode",
     "dampingHz",
     "decay",
-    "decelTauS",
+    "decelTauSec",
     "delayTimeLMs",
     "delayTimeRMs",
     "depth",
@@ -134,6 +132,10 @@ inline constexpr std::array<std::string_view, 121> kGsEfxRowKeys = {{
     "pan2",
     "panDev",
     "phaseDeg",
+    "pitchCents",
+    "pitchCents2",
+    "pitchSemitones",
+    "pitchSemitones2",
     "postFilterHz",
     "postGainDb",
     "preDelay2Ms",
@@ -147,8 +149,6 @@ inline constexpr std::array<std::string_view, 121> kGsEfxRowKeys = {{
     "ratio",
     "releaseMs",
     "resonance",
-    "semitones",
-    "semitones2",
     "sensitivity",
     "shape",
     "speed",
@@ -240,7 +240,7 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      17, 0},
     // level.output -> utility.gain.levelDb
     {0x0100, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, '+'},
+     0, 67, '+'},
     // gain.tone -> eq.graphic.band11GainDb
     {0x0101, 0, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 14, 0,
      12, 0},
@@ -267,16 +267,16 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      22, 0},
     // width.section -> eq.graphic.q
     {0x0101, 8, kGsEfxRowDesigned, 5, 0, kGsEfxLawNone, 0x00, 0x04, 0, 0, GsEfxOut::kValue, 14, 0,
-     92, 0},
+     94, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x0101, 18, kGsEfxRowTranslated, 7, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 23,
      0, 6, '+'},
     // level.output -> utility.gain.levelDb
     {0x0101, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, '#'},
+     0, 67, '#'},
     // d.unit -> spectral.presenceEnhancer.drive
     {0x0102, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
-     47, '+'},
+     45, '+'},
     // d.unit -> spectral.presenceEnhancer.amount
     {0x0102, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
      2, '#'},
@@ -288,13 +288,13 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0102, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.unit -> effects.filter.vowel.drive
     {0x0103, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 3, 0,
-     47, 0},
+     45, 0},
     // d.enum2 -> effects.filter.vowel.driveOn
     {0x0103, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 3, 0,
-     48, 0},
+     46, 0},
     // d.enum5 -> effects.filter.vowel.vowel
     {0x0103, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum5, 0x00, 0x04, 0, 0, GsEfxOut::kValue, 3, 0,
      116, '+'},
@@ -312,10 +312,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 6, 0},
     // level.output -> utility.gain.levelDb
     {0x0103, 19, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, '#'},
+     67, '#'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x0110, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x0110, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -339,10 +339,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, '#'},
     // level.output -> utility.gain.levelDb
     {0x0110, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x0111, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x0111, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -366,22 +366,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, '#'},
     // level.output -> utility.gain.levelDb
     {0x0111, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.manual_hz -> effects.modulation.phaser.minHz
     {0x0120, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawManualHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 73, '+'},
+     0, 71, '+'},
     // rate.wide -> effects.modulation.phaser.rateHz
     {0x0120, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 8, 0,
-     94, '#'},
+     96, '#'},
     // d.unit -> effects.modulation.phaser.depth
     {0x0120, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     39, 0},
+     37, 0},
     // d.feedback -> effects.modulation.phaser.feedback
     {0x0120, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.modulation.phaser.dryWet
     {0x0120, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     53, 0},
+     51, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0120, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -390,28 +390,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0120, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.enum2 -> effects.modulation.autoWah.filterType
     {0x0121, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 4, 0,
-     55, 0},
+     53, 0},
     // d.unit -> effects.modulation.autoWah.sensitivity
     {0x0121, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
      100, 0},
     // d.wah_hz -> effects.modulation.autoWah.minHz
     {0x0121, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawWahHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
-     73, '+'},
+     71, '+'},
     // d.q -> effects.modulation.autoWah.resonance
-    {0x0121, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0, 97,
+    {0x0121, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0, 99,
      0},
     // rate.wide -> effects.modulation.autoWah.lfoRateHz
     {0x0121, 4, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
-     71, '#'},
+     69, '#'},
     // d.unit -> effects.modulation.autoWah.lfoDepth
     {0x0121, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
-     70, 0},
+     68, 0},
     // d.enum2 -> effects.modulation.autoWah.direction
     {0x0121, 6, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 4, 0,
-     43, 0},
+     41, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0121, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -423,37 +423,37 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x0121, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // rate.wide -> effects.modulation.rotary.drumSlowHz
     {0x0122, 0, kGsEfxRowDesigned, 0, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     51, 0},
+     49, 0},
     // rate.wide -> effects.modulation.rotary.drumFastHz
     {0x0122, 1, kGsEfxRowDesigned, 0, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     49, 0},
+     47, 0},
     // accel.rotor -> effects.modulation.rotary.drumUndershootHz
     {0x0122, 2, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
-     GsEfxOut::kUndershootHz, 11, 0, 52, 0},
+     GsEfxOut::kUndershootHz, 11, 0, 50, 0},
     // level.output -> effects.modulation.rotary.drumLevelDb
     {0x0122, 3, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     50, 0},
+     48, 0},
     // rate.wide -> effects.modulation.rotary.hornSlowHz
     {0x0122, 4, kGsEfxRowDesigned, 0, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     62, 0},
+     60, 0},
     // rate.wide -> effects.modulation.rotary.hornFastHz
     {0x0122, 5, kGsEfxRowDesigned, 0, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     60, 0},
-    // accel.rotor -> effects.modulation.rotary.accelTauS
-    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
-     11, 0, 1, 0},
-    // accel.rotor -> effects.modulation.rotary.decelTauS
-    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
-     11, 0, 36, 0},
+     58, 0},
+    // accel.rotor -> effects.modulation.rotary.accelTauSec
+    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 1, 0},
+    // accel.rotor -> effects.modulation.rotary.decelTauSec
+    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 34, 0},
     // accel.rotor -> effects.modulation.rotary.undershootHz
     {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
      GsEfxOut::kUndershootHz, 11, 0, 115, 0},
     // level.output -> effects.modulation.rotary.hornLevelDb
     {0x0122, 7, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     61, 0},
+     59, 0},
     // d.unit -> effects.modulation.rotary.stereoSpread
     {0x0122, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
      104, 0},
@@ -468,31 +468,31 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0122, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, '#'},
+     0, 67, '#'},
     // d.enum3 -> effects.modulation.flanger.preFilterMode
     {0x0123, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum3, 0x00, 0x02, 0, 0, GsEfxOut::kValue, 7, 0,
-     91, 0},
+     93, 0},
     // freq.pre_filter -> effects.modulation.flanger.preFilterHz
     {0x0123, 1, kGsEfxRowTranslated, 2, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     90, 0},
+     92, 0},
     // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
     {0x0123, 2, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x0123, 3, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, '+'},
+     96, '+'},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0123, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0123, 5, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, '#'},
+     0, 52, '#'},
     // d.phase_deg -> effects.modulation.flanger.phaseDeg
     {0x0123, 6, kGsEfxRowDesigned, 0, 0, kGsEfxLawPhaseDeg, 0x00, 0x5A, 0, 0, GsEfxOut::kValue, 7,
-     0, 84, 0},
+     0, 82, 0},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x0123, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, 0},
+     51, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0123, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -501,28 +501,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0123, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
     {0x0124, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x0124, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0124, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0124, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, '+'},
+     0, 52, '+'},
     // d.phase_deg -> effects.modulation.flanger.phaseDeg
     {0x0124, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawPhaseDeg, 0x00, 0x5A, 0, 0, GsEfxOut::kValue, 7,
-     0, 84, 0},
+     0, 82, 0},
     // rate.wide -> effects.modulation.flanger.stepRateHz
     {0x0124, 5, kGsEfxRowDesigned, 0, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
      103, '#'},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x0124, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, 0},
+     51, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0124, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -531,7 +531,7 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0124, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // wave.modulator -> effects.modulation.ringModulator.shape
     {0x0125, 0, kGsEfxRowTranslated, 6, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
      101, 0},
@@ -540,7 +540,7 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      27, '+'},
     // d.tremolo_depth -> effects.modulation.ringModulator.dryWet
     {0x0125, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawTremoloDepth, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     10, 0, 53, '#'},
+     10, 0, 51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0125, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -549,16 +549,16 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0125, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // wave.modulator -> stereo.autoPan.shape
     {0x0126, 0, kGsEfxRowTranslated, 6, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 21, 0,
      101, 0},
     // rate.wide -> stereo.autoPan.rateHz
     {0x0126, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 21, 0,
-     94, '+'},
+     96, '+'},
     // d.unit -> stereo.autoPan.depth
     {0x0126, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 21, 0,
-     39, '#'},
+     37, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0126, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -567,16 +567,16 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0126, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.attack_ms -> dynamics.compressor.attackMs
     {0x0130, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawAttackMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
      0, 3, 0},
     // d.sustain_ms -> dynamics.compressor.releaseMs
     {0x0130, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawSustainMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
-     0, 96, 0},
+     0, 98, 0},
     // post_gain.makeup -> dynamics.compressor.makeupGainDb
     {0x0130, 2, kGsEfxRowTranslated, 11, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 0, 0,
-     72, 0},
+     70, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0130, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -588,19 +588,19 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 6, '+'},
     // level.output -> utility.gain.levelDb
     {0x0130, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, '#'},
+     0, 67, '#'},
     // d.threshold_db -> dynamics.limiter.thresholdDb
     {0x0131, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawThresholdDb, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
      1, 0, 111, 0},
     // d.limiter_ratio -> dynamics.limiter.ratio
     {0x0131, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawLimiterRatio, 0x00, 0x03, 0, 0, GsEfxOut::kValue,
-     1, 0, 95, 0},
+     1, 0, 97, 0},
     // d.release_ms -> dynamics.limiter.releaseMs
     {0x0131, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawReleaseMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 1,
-     0, 96, 0},
+     0, 98, 0},
     // post_gain.makeup -> dynamics.limiter.postGainDb
     {0x0131, 3, kGsEfxRowTranslated, 11, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
-     86, 0},
+     88, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0131, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -612,28 +612,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, '+'},
     // level.output -> utility.gain.levelDb
     {0x0131, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, '#'},
+     0, 67, '#'},
     // delay_time.pre_delay -> effects.modulation.ensemble.centerDelayMs
     {0x0140, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 6, 0,
      28, 0},
     // rate.wide -> effects.modulation.ensemble.rateHz
     {0x0140, 1, kGsEfxRowDesigned, 0, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 6, 0,
-     94, '+'},
+     96, '+'},
     // d.chorus_depth_ms -> effects.modulation.ensemble.depthSlowMs
     {0x0140, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     6, 0, 42, 0},
+     6, 0, 40, 0},
     // d.dev_ms -> effects.modulation.ensemble.preDelayDevMs
     {0x0140, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawDevMs, 0x00, 0x14, 0, 0, GsEfxOut::kValue, 6, 0,
-     88, 0},
+     90, 0},
     // d.dev_ratio -> effects.modulation.ensemble.depthDev
     {0x0140, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawDevRatio, 0x2C, 0x54, 0, 0, GsEfxOut::kValue, 6,
-     0, 40, 0},
+     0, 38, 0},
     // d.unit -> effects.modulation.ensemble.panDev
     {0x0140, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x14, 0, 0, GsEfxOut::kValue, 6, 0,
-     83, 0},
+     81, 0},
     // balance.effect -> effects.modulation.ensemble.dryWet
     {0x0140, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 6, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0140, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -642,19 +642,19 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0140, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x0141, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x0141, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0141, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // d.phase_deg -> effects.modulation.ringModulator.phaseDeg
     {0x0141, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawPhaseDeg, 0x00, 0x5A, 0, 0, GsEfxOut::kValue, 10,
-     0, 84, 0},
+     0, 82, 0},
     // rate.wide -> effects.modulation.ringModulator.carrierHz
     {0x0141, 4, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
      27, '+'},
@@ -663,7 +663,7 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      104, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x0141, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0141, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -672,28 +672,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0141, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.enum3 -> effects.modulation.chorus.preFilterMode
     {0x0142, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum3, 0x00, 0x02, 0, 0, GsEfxOut::kValue, 5, 0,
-     91, 0},
+     93, 0},
     // freq.pre_filter -> effects.modulation.chorus.preFilterHz
     {0x0142, 1, kGsEfxRowTranslated, 2, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     90, 0},
+     92, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x0142, 2, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x0142, 3, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, '+'},
+     96, '+'},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0142, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // d.phase_deg -> effects.modulation.chorus.phaseDeg
     {0x0142, 6, kGsEfxRowDesigned, 0, 0, kGsEfxLawPhaseDeg, 0x00, 0x5A, 0, 0, GsEfxOut::kValue, 5,
-     0, 84, 0},
+     0, 82, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x0142, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0142, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -702,22 +702,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0142, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x0143, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x0143, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, '+'},
+     96, '+'},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0143, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // d.phase_deg -> effects.modulation.chorus.phaseDeg
     {0x0143, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawPhaseDeg, 0x00, 0x5A, 0, 0, GsEfxOut::kValue, 5,
-     0, 84, 0},
+     0, 82, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x0143, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0143, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -726,22 +726,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0143, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x0144, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x0144, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, '+'},
+     96, '+'},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0144, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // d.enum2 -> stereo.binaural.output
     {0x0144, 14, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 22, 0,
-     80, 0},
+     78, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x0144, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0144, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -750,31 +750,31 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0144, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0150, 0, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x0150, 1, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0150, 2, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, '+'},
+     0, 52, '+'},
     // d.enum2 -> effects.delay.stereo.crossMode
     {0x0150, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 2, 0,
-     33, 0},
+     31, 0},
     // d.enum2 -> effects.delay.stereo.invertL
     {0x0150, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 2, 0,
-     66, 0},
+     64, 0},
     // d.enum2 -> effects.delay.stereo.invertR
     {0x0150, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 2, 0,
-     67, 0},
+     65, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0150, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0150, 15, kGsEfxRowTranslated, 8, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0150, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -783,34 +783,34 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0150, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0151, 0, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x0151, 1, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0151, 2, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // d.enum2 -> effects.delay.stereo.crossMode
     {0x0151, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 2, 0,
-     33, 0},
+     31, 0},
     // rate.wide -> effects.delay.stereo.modRateHz
     {0x0151, 4, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     77, '+'},
+     75, '+'},
     // d.chorus_depth_ms -> effects.delay.stereo.modDepthMs
     {0x0151, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     2, 0, 75, 0},
+     2, 0, 73, 0},
     // d.phase_deg -> effects.delay.stereo.modPhaseDeg
     {0x0151, 6, kGsEfxRowDesigned, 0, 0, kGsEfxLawPhaseDeg, 0x00, 0x5A, 0, 0, GsEfxOut::kValue, 2,
-     0, 76, 0},
+     0, 74, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0151, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0151, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0151, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -819,19 +819,19 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0151, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.time1 -> effects.delay.stereo.delayTimeLMs
     {0x0152, 0, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time1 -> effects.delay.stereo.delayTimeRMs
     {0x0152, 1, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // delay_time.time1 -> effects.delay.stereo.tap3Ms
     {0x0152, 2, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
      108, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0152, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, '+'},
+     0, 52, '+'},
     // level.output -> effects.delay.stereo.tap1LevelDb
     {0x0152, 4, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
      105, 0},
@@ -843,10 +843,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      107, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0152, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0152, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0152, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -855,13 +855,13 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0152, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.time1 -> effects.delay.stereo.delayTimeLMs
     {0x0153, 0, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time1 -> effects.delay.stereo.delayTimeRMs
     {0x0153, 1, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // delay_time.time1 -> effects.delay.stereo.tap3Ms
     {0x0153, 2, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
      108, 0},
@@ -882,13 +882,13 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      109, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0153, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, '+'},
+     0, 52, '+'},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0153, 9, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0153, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0153, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -897,28 +897,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0153, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.time2 -> effects.delay.stereo.delayTimeLMs
     {0x0154, 0, kGsEfxRowTranslated, 1, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, '+'},
+     35, '+'},
     // delay_time.time2 -> effects.delay.stereo.delayTimeRMs
     {0x0154, 0, kGsEfxRowTranslated, 1, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, '+'},
+     36, '+'},
     // d.glide_ms -> effects.delay.stereo.glideMs
     {0x0154, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawGlideMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     59, 0},
+     57, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0154, 2, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, '#'},
+     0, 52, '#'},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0154, 3, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x0154, 4, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0154, 15, kGsEfxRowTranslated, 8, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, 0},
+     51, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0154, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -927,22 +927,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0154, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.type_index6 -> effects.reverb.plate.character
     {0x0155, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawTypeIndex6, 0x00, 0x05, 0, 0, GsEfxOut::kValue,
-     13, 0, 31, 0},
+     13, 0, 29, 0},
     // delay_time.pre_delay -> effects.reverb.plate.preDelayMs
     {0x0155, 1, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13, 0,
-     89, 0},
+     91, 0},
     // d.tank_decay -> effects.reverb.plate.decay
     {0x0155, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawTankDecay, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 13,
-     0, 35, '+'},
+     0, 33, '+'},
     // freq.damping -> effects.reverb.plate.dampingHz
     {0x0155, 3, kGsEfxRowDesigned, 2, 2, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 13, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.reverb.plate.dryWet
     {0x0155, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 13, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0155, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -951,19 +951,19 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0155, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.enum4 -> effects.reverb.plate.gateType
     {0x0156, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum4, 0x00, 0x03, 0, 0, GsEfxOut::kValue, 13, 0,
-     58, 0},
+     56, 0},
     // delay_time.pre_delay -> effects.reverb.plate.preDelayMs
     {0x0156, 1, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13, 0,
-     89, 0},
+     91, 0},
     // d.gate_ms -> effects.reverb.plate.gateHoldMs
     {0x0156, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawGateMs, 0x00, 0x63, 0, 0, GsEfxOut::kValue, 13, 0,
-     57, 0},
+     55, 0},
     // balance.effect -> effects.reverb.plate.dryWet
     {0x0156, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 13, 0,
-     53, '+'},
+     51, '+'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0156, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -972,19 +972,19 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0156, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, '#'},
+     0, 67, '#'},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0157, 0, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x0157, 1, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // delay_time.time3 -> effects.delay.stereo.tap3Ms
     {0x0157, 2, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
      108, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0157, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, '+'},
+     0, 52, '+'},
     // level.output -> effects.delay.stereo.tap1LevelDb
     {0x0157, 4, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
      105, 0},
@@ -996,13 +996,13 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      107, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0157, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // d.enum2 -> stereo.binaural.output
     {0x0157, 14, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 22, 0,
-     80, 0},
+     78, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0157, 15, kGsEfxRowTranslated, 8, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0157, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1011,40 +1011,40 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0157, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
-    // ratio.semitone -> effects.modulation.pitchShifter.semitones
+     0, 67, 0},
+    // ratio.semitone -> effects.modulation.pitchShifter.pitchSemitones
     {0x0160, 0, kGsEfxRowTranslated, 14, 1, kGsEfxLawNone, 0x28, 0x4C, -24, 12, GsEfxOut::kValue, 9,
-     0, 98, '+'},
-    // ratio.cent -> effects.modulation.pitchShifter.cents
+     0, 85, '+'},
+    // ratio.cent -> effects.modulation.pitchShifter.pitchCents
     {0x0160, 1, kGsEfxRowTranslated, 14, 2, kGsEfxLawNone, 0x0E, 0x72, -100, 100, GsEfxOut::kValue,
-     9, 0, 29, 0},
+     9, 0, 83, 0},
     // delay_time.pre_delay -> effects.modulation.pitchShifter.preDelayMs
     {0x0160, 2, kGsEfxRowDesigned, 1, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     89, 0},
+     91, 0},
     // pan.output -> effects.modulation.pitchShifter.pan
     {0x0160, 3, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     81, 0},
-    // ratio.semitone -> effects.modulation.pitchShifter.semitones2
+     79, 0},
+    // ratio.semitone -> effects.modulation.pitchShifter.pitchSemitones2
     {0x0160, 4, kGsEfxRowTranslated, 14, 1, kGsEfxLawNone, 0x28, 0x4C, -24, 12, GsEfxOut::kValue, 9,
-     0, 99, '#'},
-    // ratio.cent -> effects.modulation.pitchShifter.cents2
+     0, 86, '#'},
+    // ratio.cent -> effects.modulation.pitchShifter.pitchCents2
     {0x0160, 5, kGsEfxRowTranslated, 14, 2, kGsEfxLawNone, 0x0E, 0x72, -100, 100, GsEfxOut::kValue,
-     9, 0, 30, 0},
+     9, 0, 84, 0},
     // delay_time.pre_delay -> effects.modulation.pitchShifter.preDelay2Ms
     {0x0160, 6, kGsEfxRowDesigned, 1, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     87, 0},
+     89, 0},
     // pan.output -> effects.modulation.pitchShifter.pan2
     {0x0160, 7, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     82, 0},
+     80, 0},
     // window.splice -> effects.modulation.pitchShifter.windowMs
     {0x0160, 8, kGsEfxRowTranslated, 12, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 9, 0,
      117, 0},
     // balance.effect -> effects.modulation.pitchShifter.level2
     {0x0160, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     68, 0},
+     66, 0},
     // balance.effect -> effects.modulation.pitchShifter.dryWet
     {0x0160, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     53, 0},
+     51, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0160, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1053,28 +1053,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0160, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
-    // ratio.semitone -> effects.modulation.pitchShifter.semitones
+     0, 67, 0},
+    // ratio.semitone -> effects.modulation.pitchShifter.pitchSemitones
     {0x0161, 0, kGsEfxRowTranslated, 14, 1, kGsEfxLawNone, 0x28, 0x4C, -24, 12, GsEfxOut::kValue, 9,
-     0, 98, '+'},
-    // ratio.cent -> effects.modulation.pitchShifter.cents
+     0, 85, '+'},
+    // ratio.cent -> effects.modulation.pitchShifter.pitchCents
     {0x0161, 1, kGsEfxRowTranslated, 14, 2, kGsEfxLawNone, 0x0E, 0x72, -100, 100, GsEfxOut::kValue,
-     9, 0, 29, 0},
+     9, 0, 83, 0},
     // ratio.percent -> effects.modulation.pitchShifter.feedback
     {0x0161, 2, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 9,
-     0, 54, '#'},
+     0, 52, '#'},
     // delay_time.pre_delay -> effects.modulation.pitchShifter.preDelayMs
     {0x0161, 3, kGsEfxRowDesigned, 1, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     89, 0},
+     91, 0},
     // window.splice -> effects.modulation.pitchShifter.windowMs
     {0x0161, 4, kGsEfxRowTranslated, 12, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 9, 0,
      117, 0},
     // pan.output -> effects.modulation.pitchShifter.pan
     {0x0161, 5, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     81, 0},
+     79, 0},
     // balance.effect -> effects.modulation.pitchShifter.dryWet
     {0x0161, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     53, 0},
+     51, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0161, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1083,7 +1083,7 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0161, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // azimuth.placement -> stereo.binaural.azimuthDeg
     {0x0170, 0, kGsEfxRowTranslated, 9, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 22, 0,
      5, 0},
@@ -1092,37 +1092,37 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      113, '+'},
     // d.enum2 -> stereo.binaural.clockwise
     {0x0170, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 22, 0,
-     32, 0},
+     30, 0},
     // d.enum2 -> stereo.binaural.autoTurn
     {0x0170, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 22, 0,
      4, '#'},
     // d.enum2 -> stereo.binaural.output
     {0x0170, 14, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 22, 0,
-     80, 0},
+     78, 0},
     // level.output -> utility.gain.levelDb
     {0x0170, 19, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // azimuth.placement -> stereo.binaural.azimuthDeg
     {0x0171, 0, kGsEfxRowTranslated, 9, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 22, 0,
      5, '+'},
     // d.enum2 -> stereo.binaural.output
     {0x0171, 14, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 22, 0,
-     80, 0},
+     78, 0},
     // level.output -> utility.gain.levelDb
     {0x0171, 19, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, '#'},
+     67, '#'},
     // d.lofi_filter_hz -> saturation.bitcrusher.preFilterHz
     {0x0172, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawLofiFilterHz, 0x00, 0x05, 0, 0, GsEfxOut::kValue,
-     17, 0, 90, 0},
+     17, 0, 92, 0},
     // d.type_index9 -> saturation.bitcrusher.typeLadder
     {0x0172, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawTypeIndex9, 0x00, 0x08, 0, 0, GsEfxOut::kValue,
      17, 0, 114, 0},
     // d.lofi_filter_hz -> saturation.bitcrusher.postFilterHz
     {0x0172, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawLofiFilterHz, 0x00, 0x05, 0, 0, GsEfxOut::kValue,
-     17, 0, 85, 0},
+     17, 0, 87, 0},
     // balance.effect -> saturation.bitcrusher.mix
     {0x0172, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17, 0,
-     74, '+'},
+     72, '+'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0172, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1134,22 +1134,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, '#'},
     // level.output -> utility.gain.levelDb
     {0x0172, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.type_index6 -> saturation.bitcrusher.typeLadder
     {0x0173, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawTypeIndex6, 0x00, 0x05, 0, 0, GsEfxOut::kValue,
      17, 0, 114, 0},
     // d.enum3 -> saturation.bitcrusher.filterType
     {0x0173, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum3, 0x00, 0x02, 0, 0, GsEfxOut::kValue, 17, 0,
-     55, 0},
+     53, 0},
     // freq.pre_filter -> saturation.bitcrusher.postFilterHz
     {0x0173, 2, kGsEfxRowDesigned, 2, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17, 0,
-     85, 0},
+     87, 0},
     // d.unit -> saturation.bitcrusher.noiseDetune
     {0x0173, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17, 0,
-     79, '+'},
+     77, '+'},
     // d.unit -> saturation.bitcrusher.radioNoiseLevel
     {0x0173, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17, 0,
-     93, 0},
+     95, 0},
     // d.enum2 -> saturation.bitcrusher.wpNoisePink
     {0x0173, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 17, 0,
      120, 0},
@@ -1161,28 +1161,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      118, 0},
     // d.enum4 -> saturation.bitcrusher.discType
     {0x0173, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum4, 0x00, 0x03, 0, 0, GsEfxOut::kValue, 17, 0,
-     46, 0},
+     44, 0},
     // d.cutoff_hz -> saturation.bitcrusher.discNoiseLpfHz
     {0x0173, 9, kGsEfxRowDesigned, 0, 0, kGsEfxLawCutoffHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17,
-     0, 45, 0},
+     0, 43, 0},
     // d.unit -> saturation.bitcrusher.discNoiseLevel
     {0x0173, 10, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17, 0,
-     44, 0},
+     42, 0},
     // d.hum_hz -> saturation.bitcrusher.humHz
     {0x0173, 11, kGsEfxRowDesigned, 0, 0, kGsEfxLawHumHz, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 17, 0,
-     63, 0},
+     61, 0},
     // d.cutoff_hz -> saturation.bitcrusher.humLpfHz
     {0x0173, 12, kGsEfxRowDesigned, 0, 0, kGsEfxLawCutoffHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17,
-     0, 65, 0},
+     0, 63, 0},
     // d.unit -> saturation.bitcrusher.humLevel
     {0x0173, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17, 0,
-     64, 0},
+     62, 0},
     // d.enum2 -> saturation.bitcrusher.mono
     {0x0173, 14, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 17, 0,
-     78, 0},
+     76, 0},
     // balance.effect -> saturation.bitcrusher.mix
     {0x0173, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 17, 0,
-     74, '#'},
+     72, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0173, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1194,10 +1194,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x0173, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x0200, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, 0},
+     54, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x0200, 1, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, '+'},
@@ -1218,13 +1218,13 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x0200, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0200, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x0200, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0200, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1233,10 +1233,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0200, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x0201, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, 0},
+     54, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x0201, 1, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, '+'},
@@ -1257,16 +1257,16 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x0201, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0201, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0201, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, 0},
+     0, 52, 0},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x0201, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0201, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1275,10 +1275,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0201, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x0202, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, 0},
+     54, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x0202, 1, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, '+'},
@@ -1296,19 +1296,19 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      26, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0202, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x0202, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0202, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0202, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0202, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0202, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1317,10 +1317,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0202, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x0203, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, 0},
+     54, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x0203, 1, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, '+'},
@@ -1341,13 +1341,13 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x0203, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0203, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x0203, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0203, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1356,10 +1356,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0203, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x0204, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, 0},
+     54, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x0204, 1, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, '+'},
@@ -1380,16 +1380,16 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x0204, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0204, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0204, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, 0},
+     0, 52, 0},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x0204, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0204, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1398,10 +1398,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0204, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x0205, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, 0},
+     54, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x0205, 1, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, '+'},
@@ -1419,19 +1419,19 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      26, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0205, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x0205, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0205, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0205, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0205, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0205, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1440,10 +1440,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0205, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.unit -> spectral.presenceEnhancer.drive
     {0x0206, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
-     47, '+'},
+     45, '+'},
     // d.unit -> spectral.presenceEnhancer.amount
     {0x0206, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
      2, 0},
@@ -1452,13 +1452,13 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x0206, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0206, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x0206, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0206, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1467,10 +1467,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0206, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.unit -> spectral.presenceEnhancer.drive
     {0x0207, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
-     47, '+'},
+     45, '+'},
     // d.unit -> spectral.presenceEnhancer.amount
     {0x0207, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
      2, 0},
@@ -1479,16 +1479,16 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x0207, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0207, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0207, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, 0},
+     0, 52, 0},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x0207, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0207, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1497,28 +1497,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0207, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.unit -> spectral.presenceEnhancer.drive
     {0x0208, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
-     47, '+'},
+     45, '+'},
     // d.unit -> spectral.presenceEnhancer.amount
     {0x0208, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
      2, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0208, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x0208, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0208, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0208, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0208, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0208, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1527,34 +1527,34 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0208, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x0209, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x0209, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0209, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x0209, 4, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '+'},
+     51, '+'},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0209, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x0209, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x0209, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0209, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x0209, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0209, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1563,37 +1563,37 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x0209, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
     {0x020A, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x020A, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x020A, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x020A, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, '+'},
+     0, 52, '+'},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x020A, 4, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, 0},
+     51, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x020A, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x020A, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x020A, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x020A, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x020A, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x020A, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1602,34 +1602,34 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x020A, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x020B, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x020B, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x020B, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x020B, 4, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '+'},
+     51, '+'},
     // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
     {0x020B, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x020B, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x020B, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x020B, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, 0},
+     0, 52, 0},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x020B, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x020B, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15,
      0, 8, 0},
@@ -1638,10 +1638,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 10, 0},
     // level.output -> utility.gain.levelDb
     {0x020B, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x020C, 0, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x020C, 2, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15, 0,
      8, 0},
@@ -1659,34 +1659,34 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      17, 0},
     // rate.wide -> effects.modulation.rotary.drumSlowHz
     {0x020C, 7, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
-     51, 0},
+     49, 0},
     // rate.wide -> effects.modulation.rotary.drumFastHz
     {0x020C, 8, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
-     49, 0},
+     47, 0},
     // accel.rotor -> effects.modulation.rotary.drumUndershootHz
     {0x020C, 9, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
-     GsEfxOut::kUndershootHz, 11, 0, 52, 0},
+     GsEfxOut::kUndershootHz, 11, 0, 50, 0},
     // level.output -> effects.modulation.rotary.drumLevelDb
     {0x020C, 10, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     50, 0},
+     48, 0},
     // rate.wide -> effects.modulation.rotary.hornSlowHz
     {0x020C, 11, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 62, 0},
+     0, 60, 0},
     // rate.wide -> effects.modulation.rotary.hornFastHz
     {0x020C, 12, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 60, 0},
-    // accel.rotor -> effects.modulation.rotary.accelTauS
-    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
-     11, 0, 1, 0},
-    // accel.rotor -> effects.modulation.rotary.decelTauS
-    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
-     11, 0, 36, 0},
+     0, 58, 0},
+    // accel.rotor -> effects.modulation.rotary.accelTauSec
+    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 1, 0},
+    // accel.rotor -> effects.modulation.rotary.decelTauSec
+    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 34, 0},
     // accel.rotor -> effects.modulation.rotary.undershootHz
     {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
      GsEfxOut::kUndershootHz, 11, 0, 115, 0},
     // level.output -> effects.modulation.rotary.hornLevelDb
     {0x020C, 14, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     61, 0},
+     59, 0},
     // d.unit -> effects.modulation.rotary.stereoSpread
     {0x020C, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
      104, 0},
@@ -1695,22 +1695,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      102, '#'},
     // level.output -> utility.gain.levelDb
     {0x020C, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.attack_ms -> dynamics.compressor.attackMs
     {0x0400, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawAttackMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
      0, 3, 0},
     // d.sustain_ms -> dynamics.compressor.releaseMs
     {0x0400, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawSustainMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
-     0, 96, 0},
+     0, 98, 0},
     // level.output -> dynamics.compressor.makeupGainDb
     {0x0400, 2, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0, 0,
-     72, 0},
+     70, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x0400, 5, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '+'},
+     54, '+'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x0400, 5, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x0400, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -1749,58 +1749,58 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      112, 0},
     // rate.narrow -> effects.modulation.chorus.rateHz
     {0x0400, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // rate.narrow -> effects.modulation.flanger.rateHz
     {0x0400, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0400, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 5, 0, 41, 0},
+     GsEfxOut::kValue, 5, 0, 39, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0400, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.chorus.feedback
     {0x0400, 14, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     5, 0, 54, 0},
+     5, 0, 52, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0400, 14, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     7, 0, 54, 0},
+     7, 0, 52, 0},
     // d.unit -> effects.modulation.chorus.dryWet
     {0x0400, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, 0},
+     51, 0},
     // d.unit -> effects.modulation.flanger.dryWet
     {0x0400, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, 0},
+     51, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
     {0x0400, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
     {0x0400, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // d.feedback -> effects.delay.stereo.feedback
     {0x0400, 17, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.delay.stereo.dryWet
     {0x0400, 18, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // level.output -> utility.gain.levelDb
     {0x0400, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.attack_ms -> dynamics.compressor.attackMs
     {0x0401, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawAttackMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
      0, 3, 0},
     // d.sustain_ms -> dynamics.compressor.releaseMs
     {0x0401, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawSustainMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
-     0, 96, 0},
+     0, 98, 0},
     // level.output -> dynamics.compressor.makeupGainDb
     {0x0401, 2, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0, 0,
-     72, 0},
+     70, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x0401, 5, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '+'},
+     54, '+'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x0401, 5, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x0401, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -1830,46 +1830,46 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 17, 0},
     // rate.narrow -> effects.modulation.chorus.rateHz
     {0x0401, 15, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // rate.narrow -> effects.modulation.flanger.rateHz
     {0x0401, 15, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0401, 16, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 5, 0, 41, 0},
+     GsEfxOut::kValue, 5, 0, 39, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0401, 16, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.chorus.feedback
     {0x0401, 17, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     5, 0, 54, 0},
+     5, 0, 52, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0401, 17, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     7, 0, 54, 0},
+     7, 0, 52, 0},
     // d.unit -> effects.modulation.chorus.dryWet
     {0x0401, 18, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // d.unit -> effects.modulation.flanger.dryWet
     {0x0401, 18, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '#'},
+     51, '#'},
     // level.output -> utility.gain.levelDb
     {0x0401, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.enum2 -> effects.modulation.wah.filterType
     {0x0402, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 12, 0,
-     55, 0},
+     53, 0},
     // d.wah_hz -> effects.modulation.wah.minHz
     {0x0402, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawWahHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 12, 0,
-     73, '+'},
+     71, '+'},
     // d.q -> effects.modulation.wah.resonance
-    {0x0402, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 12, 0, 97,
+    {0x0402, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 12, 0, 99,
      0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x0402, 5, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '#'},
+     54, '#'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x0402, 5, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '#'},
+     54, '#'},
     // d.enum2 -> saturation.ampSim.cab
     {0x0402, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -1908,52 +1908,52 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      112, 0},
     // rate.narrow -> effects.modulation.chorus.rateHz
     {0x0402, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // rate.narrow -> effects.modulation.flanger.rateHz
     {0x0402, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0402, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 5, 0, 41, 0},
+     GsEfxOut::kValue, 5, 0, 39, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0402, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.chorus.feedback
     {0x0402, 14, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     5, 0, 54, 0},
+     5, 0, 52, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0402, 14, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     7, 0, 54, 0},
+     7, 0, 52, 0},
     // d.unit -> effects.modulation.chorus.dryWet
     {0x0402, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, 0},
+     51, 0},
     // d.unit -> effects.modulation.flanger.dryWet
     {0x0402, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, 0},
+     51, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
     {0x0402, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
     {0x0402, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // d.feedback -> effects.delay.stereo.feedback
     {0x0402, 17, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.delay.stereo.dryWet
     {0x0402, 18, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, 0},
+     51, 0},
     // level.output -> utility.gain.levelDb
     {0x0402, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.attack_ms -> dynamics.compressor.attackMs
     {0x0403, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawAttackMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
      0, 3, 0},
     // d.sustain_ms -> dynamics.compressor.releaseMs
     {0x0403, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawSustainMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
-     0, 96, 0},
+     0, 98, 0},
     // level.output -> dynamics.compressor.makeupGainDb
     {0x0403, 2, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0, 0,
-     72, 0},
+     70, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0403, 4, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15, 0,
      8, 0},
@@ -1971,61 +1971,61 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      17, 0},
     // rate.narrow -> effects.modulation.chorus.rateHz
     {0x0403, 10, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // rate.narrow -> effects.modulation.flanger.rateHz
     {0x0403, 10, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0403, 11, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 5, 0, 41, 0},
+     GsEfxOut::kValue, 5, 0, 39, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0403, 11, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.chorus.feedback
     {0x0403, 12, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     5, 0, 54, 0},
+     5, 0, 52, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0403, 12, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     7, 0, 54, 0},
+     7, 0, 52, 0},
     // d.unit -> effects.modulation.chorus.dryWet
     {0x0403, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '+'},
+     51, '+'},
     // d.unit -> effects.modulation.flanger.dryWet
     {0x0403, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '+'},
+     51, '+'},
     // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
     {0x0403, 14, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
     {0x0403, 14, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // d.feedback -> effects.delay.stereo.feedback
     {0x0403, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x0403, 16, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // d.unit -> effects.delay.stereo.dryWet
     {0x0403, 17, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // level.output -> utility.gain.levelDb
     {0x0403, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.enum2 -> effects.modulation.autoWah.filterType
     {0x0404, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 4, 0,
-     55, 0},
+     53, 0},
     // d.wah_hz -> effects.modulation.autoWah.minHz
     {0x0404, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawWahHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
-     73, '+'},
+     71, '+'},
     // d.q -> effects.modulation.autoWah.resonance
-    {0x0404, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0, 97,
+    {0x0404, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0, 99,
      0},
     // rate.narrow -> effects.modulation.autoWah.lfoRateHz
     {0x0404, 3, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
-     71, 0},
+     69, 0},
     // d.unit -> effects.modulation.autoWah.lfoDepth
     {0x0404, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
-     70, 0},
+     68, 0},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0404, 6, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15, 0,
      8, 0},
@@ -2043,58 +2043,58 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 17, 0},
     // rate.narrow -> effects.modulation.chorus.rateHz
     {0x0404, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // rate.narrow -> effects.modulation.flanger.rateHz
     {0x0404, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0404, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 5, 0, 41, 0},
+     GsEfxOut::kValue, 5, 0, 39, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0404, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.chorus.feedback
     {0x0404, 14, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     5, 0, 54, 0},
+     5, 0, 52, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0404, 14, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     7, 0, 54, 0},
+     7, 0, 52, 0},
     // d.unit -> effects.modulation.chorus.dryWet
     {0x0404, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, 0},
+     51, 0},
     // d.unit -> effects.modulation.flanger.dryWet
     {0x0404, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, 0},
+     51, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
     {0x0404, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
     {0x0404, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // d.feedback -> effects.delay.stereo.feedback
     {0x0404, 17, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.delay.stereo.dryWet
     {0x0404, 18, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // level.output -> utility.gain.levelDb
     {0x0404, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.attack_ms -> dynamics.compressor.attackMs
     {0x0405, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawAttackMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
      0, 3, 0},
     // d.sustain_ms -> dynamics.compressor.releaseMs
     {0x0405, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawSustainMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0,
-     0, 96, 0},
+     0, 98, 0},
     // level.output -> dynamics.compressor.makeupGainDb
     {0x0405, 2, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 0, 0,
-     72, 0},
+     70, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x0405, 5, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '+'},
+     54, '+'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x0405, 5, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x0405, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -2121,58 +2121,58 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 17, 0},
     // rate.narrow -> effects.modulation.chorus.rateHz
     {0x0405, 15, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // rate.narrow -> effects.modulation.flanger.rateHz
     {0x0405, 15, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0405, 16, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 5, 0, 41, 0},
+     GsEfxOut::kValue, 5, 0, 39, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0405, 16, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.chorus.feedback
     {0x0405, 17, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     5, 0, 54, 0},
+     5, 0, 52, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0405, 17, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     7, 0, 54, 0},
+     7, 0, 52, 0},
     // d.unit -> effects.modulation.chorus.dryWet
     {0x0405, 18, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '#'},
+     51, '#'},
     // d.unit -> effects.modulation.flanger.dryWet
     {0x0405, 18, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '#'},
+     51, '#'},
     // level.output -> utility.gain.levelDb
     {0x0405, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.unit -> spectral.presenceEnhancer.drive
     {0x0406, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
-     47, 0},
+     45, 0},
     // d.unit -> spectral.presenceEnhancer.amount
     {0x0406, 1, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 20, 0,
      2, 0},
     // d.manual_hz -> effects.modulation.phaser.minHz
     {0x0406, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawManualHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 73, 0},
+     0, 71, 0},
     // rate.narrow -> effects.modulation.phaser.rateHz
     {0x0406, 3, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 8, 0,
-     94, 0},
+     96, 0},
     // d.unit -> effects.modulation.phaser.depth
     {0x0406, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     39, 0},
+     37, 0},
     // d.feedback -> effects.modulation.phaser.feedback
     {0x0406, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.modulation.phaser.dryWet
     {0x0406, 6, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     53, 0},
+     51, 0},
     // d.cutoff_hz -> effects.modulation.chorus.preFilterHz
     {0x0406, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawCutoffHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5,
-     0, 90, 0},
+     0, 92, 0},
     // d.cutoff_hz -> effects.modulation.flanger.preFilterHz
     {0x0406, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawCutoffHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7,
-     0, 90, 0},
+     0, 92, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x0406, 9, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
@@ -2181,28 +2181,28 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      28, 0},
     // rate.narrow -> effects.modulation.chorus.rateHz
     {0x0406, 10, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // rate.narrow -> effects.modulation.flanger.rateHz
     {0x0406, 10, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x0406, 11, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 5, 0, 41, 0},
+     GsEfxOut::kValue, 5, 0, 39, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x0406, 11, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.chorus.feedback
     {0x0406, 12, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     5, 0, 54, 0},
+     5, 0, 52, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x0406, 12, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue,
-     7, 0, 54, 0},
+     7, 0, 52, 0},
     // d.unit -> effects.modulation.chorus.dryWet
     {0x0406, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, 0},
+     51, 0},
     // d.unit -> effects.modulation.flanger.dryWet
     {0x0406, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, 0},
+     51, 0},
     // wave.modulator -> effects.modulation.ringModulator.shape
     {0x0406, 15, kGsEfxRowTranslated, 6, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10,
      0, 101, 0},
@@ -2214,22 +2214,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      0, 27, '+'},
     // rate.narrow -> stereo.autoPan.rateHz
     {0x0406, 16, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 21,
-     0, 94, '+'},
+     0, 96, '+'},
     // d.tremolo_depth -> effects.modulation.ringModulator.dryWet
     {0x0406, 17, kGsEfxRowDesigned, 0, 0, kGsEfxLawTremoloDepth, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     10, 0, 53, '#'},
+     10, 0, 51, '#'},
     // d.unit -> stereo.autoPan.depth
     {0x0406, 17, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 21, 0,
-     39, '#'},
+     37, '#'},
     // level.output -> utility.gain.levelDb
     {0x0406, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // d.ring_hz -> effects.modulation.ringModulator.carrierHz
     {0x0500, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawRingHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 10, 0,
      27, '+'},
     // balance.effect -> effects.modulation.ringModulator.dryWet
     {0x0500, 1, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 10, 0,
-     53, '#'},
+     51, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
     {0x0500, 2, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15, 0,
      8, 0},
@@ -2245,183 +2245,183 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
     // gain.tone -> eq.parametric.band2.gainDb
     {0x0500, 6, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 15, 0,
      17, 0},
-    // ratio.semitone -> effects.modulation.pitchShifter.semitones
+    // ratio.semitone -> effects.modulation.pitchShifter.pitchSemitones
     {0x0500, 7, kGsEfxRowTranslated, 14, 1, kGsEfxLawNone, 0x28, 0x4C, -24, 12, GsEfxOut::kValue, 9,
-     0, 98, 0},
-    // ratio.cent -> effects.modulation.pitchShifter.cents
+     0, 85, 0},
+    // ratio.cent -> effects.modulation.pitchShifter.pitchCents
     {0x0500, 8, kGsEfxRowTranslated, 14, 2, kGsEfxLawNone, 0x0E, 0x72, -100, 100, GsEfxOut::kValue,
-     9, 0, 29, 0},
+     9, 0, 83, 0},
     // window.splice -> effects.modulation.pitchShifter.windowMs
     {0x0500, 9, kGsEfxRowTranslated, 12, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 9, 0,
      117, 0},
     // balance.effect -> effects.modulation.pitchShifter.dryWet
     {0x0500, 10, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 9, 0,
-     53, 0},
+     51, 0},
     // d.manual_hz -> effects.modulation.phaser.minHz
     {0x0500, 11, kGsEfxRowDesigned, 0, 0, kGsEfxLawManualHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 73, 0},
+     0, 71, 0},
     // rate.narrow -> effects.modulation.phaser.rateHz
     {0x0500, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 8, 0,
-     94, 0},
+     96, 0},
     // d.unit -> effects.modulation.phaser.depth
     {0x0500, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     39, 0},
+     37, 0},
     // d.feedback -> effects.modulation.phaser.feedback
     {0x0500, 14, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.modulation.phaser.dryWet
     {0x0500, 15, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     53, 0},
+     51, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
     {0x0500, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
     {0x0500, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // d.feedback -> effects.delay.stereo.feedback
     {0x0500, 17, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.delay.stereo.dryWet
     {0x0500, 18, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, 0},
+     51, 0},
     // level.output -> utility.gain.levelDb
     {0x0500, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     0, 69, 0},
+     0, 67, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x1100, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x1100, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x1100, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x1100, 4, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '+'},
+     51, '+'},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x1100, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x1100, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x1100, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x1100, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x1100, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // pan.output -> stereo.stereoBalance.balance
     {0x1100, 15, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1100, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1100, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1100, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1100, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
     // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
     {0x1101, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x1101, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x1101, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x1101, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, 0},
+     0, 52, 0},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x1101, 4, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '+'},
+     51, '+'},
     // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x1101, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     37, 0},
+     35, 0},
     // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x1101, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     38, 0},
+     36, 0},
     // ratio.percent -> effects.delay.stereo.feedback
     {0x1101, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 2,
-     0, 54, 0},
+     0, 52, 0},
     // freq.damping -> effects.delay.stereo.dampingHz
     {0x1101, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
-     34, 0},
+     32, 0},
     // balance.effect -> effects.delay.stereo.dryWet
     {0x1101, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 2, 0,
-     53, '#'},
+     51, '#'},
     // pan.output -> stereo.stereoBalance.balance
     {0x1101, 15, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1101, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1101, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1101, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1101, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
     // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
     {0x1102, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
      28, 0},
     // rate.wide -> effects.modulation.chorus.rateHz
     {0x1102, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
-     94, 0},
+     96, 0},
     // d.chorus_depth_ms -> effects.modulation.chorus.depthMs
     {0x1102, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawChorusDepthMs, 0x00, 0x7F, 0, 0, GsEfxOut::kValue,
-     5, 0, 41, 0},
+     5, 0, 39, 0},
     // balance.effect -> effects.modulation.chorus.dryWet
     {0x1102, 4, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 5, 0,
-     53, '+'},
+     51, '+'},
     // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
     {0x1102, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
      28, 0},
     // rate.wide -> effects.modulation.flanger.rateHz
     {0x1102, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
-     94, 0},
+     96, 0},
     // d.flanger_depth_ms -> effects.modulation.flanger.depthMs
     {0x1102, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawFlangerDepthMs, 0x00, 0x7F, 0, 0,
-     GsEfxOut::kValue, 7, 0, 41, 0},
+     GsEfxOut::kValue, 7, 0, 39, 0},
     // ratio.percent -> effects.modulation.flanger.feedback
     {0x1102, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 7,
-     0, 54, 0},
+     0, 52, 0},
     // balance.effect -> effects.modulation.flanger.dryWet
     {0x1102, 9, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 7, 0,
-     53, '#'},
+     51, '#'},
     // pan.output -> stereo.stereoBalance.balance
     {0x1102, 15, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1102, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1102, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1102, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1102, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x1103, 1, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '+'},
+     54, '+'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x1103, 1, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x1103, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -2436,10 +2436,10 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      26, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x1103, 6, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 1,
-     56, '#'},
+     54, '#'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x1103, 6, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 1,
-     56, '#'},
+     54, '#'},
     // d.enum2 -> saturation.ampSim.cab
     {0x1103, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 4,
      26, 0},
@@ -2457,22 +2457,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1103, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1103, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1103, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1103, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x1104, 1, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '+'},
+     54, '+'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x1104, 1, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x1104, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -2487,34 +2487,34 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      26, 0},
     // rate.wide -> effects.modulation.rotary.drumSlowHz
     {0x1104, 5, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
-     51, 0},
+     49, 0},
     // rate.wide -> effects.modulation.rotary.drumFastHz
     {0x1104, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
-     49, 0},
+     47, 0},
     // accel.rotor -> effects.modulation.rotary.drumUndershootHz
     {0x1104, 7, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
-     GsEfxOut::kUndershootHz, 11, 0, 52, 0},
+     GsEfxOut::kUndershootHz, 11, 0, 50, 0},
     // level.output -> effects.modulation.rotary.drumLevelDb
     {0x1104, 8, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     50, 0},
+     48, 0},
     // rate.wide -> effects.modulation.rotary.hornSlowHz
     {0x1104, 9, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
-     62, 0},
+     60, 0},
     // rate.wide -> effects.modulation.rotary.hornFastHz
     {0x1104, 10, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 60, 0},
-    // accel.rotor -> effects.modulation.rotary.accelTauS
-    {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
-     11, 0, 1, 0},
-    // accel.rotor -> effects.modulation.rotary.decelTauS
-    {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
-     11, 0, 36, 0},
+     0, 58, 0},
+    // accel.rotor -> effects.modulation.rotary.accelTauSec
+    {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 1, 0},
+    // accel.rotor -> effects.modulation.rotary.decelTauSec
+    {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 34, 0},
     // accel.rotor -> effects.modulation.rotary.undershootHz
     {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
      GsEfxOut::kUndershootHz, 11, 0, 115, 0},
     // level.output -> effects.modulation.rotary.hornLevelDb
     {0x1104, 12, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     61, 0},
+     59, 0},
     // d.unit -> effects.modulation.rotary.stereoSpread
     {0x1104, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
      104, 0},
@@ -2526,22 +2526,22 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1104, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1104, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1104, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1104, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x1105, 1, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '+'},
+     54, '+'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x1105, 1, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x1105, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -2556,40 +2556,40 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      26, 0},
     // d.manual_hz -> effects.modulation.phaser.minHz
     {0x1105, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawManualHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 73, 0},
+     0, 71, 0},
     // rate.wide -> effects.modulation.phaser.rateHz
     {0x1105, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 8, 0,
-     94, '#'},
+     96, '#'},
     // d.unit -> effects.modulation.phaser.depth
     {0x1105, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     39, 0},
+     37, 0},
     // d.feedback -> effects.modulation.phaser.feedback
     {0x1105, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.modulation.phaser.dryWet
     {0x1105, 9, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     53, 0},
+     51, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1105, 15, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1105, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1105, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1105, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1105, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
     // drive.pedal -> saturation.distortion.gainDb
     {0x1106, 1, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 18, 0,
-     56, '+'},
+     54, '+'},
     // drive.pedal -> saturation.overdrive.gainDb
     {0x1106, 1, kGsEfxRowDesigned, 15, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 19, 0,
-     56, '+'},
+     54, '+'},
     // d.enum2 -> saturation.ampSim.cab
     {0x1106, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 16, 0,
      26, 0},
@@ -2604,85 +2604,85 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      26, 0},
     // d.enum2 -> effects.modulation.autoWah.filterType
     {0x1106, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 4, 0,
-     55, 0},
+     53, 0},
     // d.unit -> effects.modulation.autoWah.sensitivity
     {0x1106, 6, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
      100, 0},
     // d.wah_hz -> effects.modulation.autoWah.minHz
     {0x1106, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawWahHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
-     73, '#'},
+     71, '#'},
     // d.q -> effects.modulation.autoWah.resonance
-    {0x1106, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0, 97,
+    {0x1106, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0, 99,
      0},
     // rate.wide -> effects.modulation.autoWah.lfoRateHz
     {0x1106, 9, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
-     71, 0},
+     69, 0},
     // d.unit -> effects.modulation.autoWah.lfoDepth
     {0x1106, 10, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
-     70, 0},
+     68, 0},
     // d.enum2 -> effects.modulation.autoWah.direction
     {0x1106, 11, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 4, 0,
-     43, 0},
+     41, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1106, 15, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1106, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1106, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1106, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1106, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
     // d.manual_hz -> effects.modulation.phaser.minHz
     {0x1107, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawManualHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 73, 0},
+     0, 71, 0},
     // rate.wide -> effects.modulation.phaser.rateHz
     {0x1107, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 8, 0,
-     94, '+'},
+     96, '+'},
     // d.unit -> effects.modulation.phaser.depth
     {0x1107, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     39, 0},
+     37, 0},
     // d.feedback -> effects.modulation.phaser.feedback
     {0x1107, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.modulation.phaser.dryWet
     {0x1107, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     53, 0},
+     51, 0},
     // rate.wide -> effects.modulation.rotary.drumSlowHz
     {0x1107, 5, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
-     51, 0},
+     49, 0},
     // rate.wide -> effects.modulation.rotary.drumFastHz
     {0x1107, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
-     49, 0},
+     47, 0},
     // accel.rotor -> effects.modulation.rotary.drumUndershootHz
     {0x1107, 7, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
-     GsEfxOut::kUndershootHz, 11, 0, 52, 0},
+     GsEfxOut::kUndershootHz, 11, 0, 50, 0},
     // level.output -> effects.modulation.rotary.drumLevelDb
     {0x1107, 8, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     50, 0},
+     48, 0},
     // rate.wide -> effects.modulation.rotary.hornSlowHz
     {0x1107, 9, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
-     62, 0},
+     60, 0},
     // rate.wide -> effects.modulation.rotary.hornFastHz
     {0x1107, 10, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 60, 0},
-    // accel.rotor -> effects.modulation.rotary.accelTauS
-    {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
-     11, 0, 1, 0},
-    // accel.rotor -> effects.modulation.rotary.decelTauS
-    {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
-     11, 0, 36, 0},
+     0, 58, 0},
+    // accel.rotor -> effects.modulation.rotary.accelTauSec
+    {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 1, 0},
+    // accel.rotor -> effects.modulation.rotary.decelTauSec
+    {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 34, 0},
     // accel.rotor -> effects.modulation.rotary.undershootHz
     {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
      GsEfxOut::kUndershootHz, 11, 0, 115, 0},
     // level.output -> effects.modulation.rotary.hornLevelDb
     {0x1107, 12, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
-     61, 0},
+     59, 0},
     // d.unit -> effects.modulation.rotary.stereoSpread
     {0x1107, 13, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
      104, 0},
@@ -2694,67 +2694,67 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1107, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1107, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1107, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1107, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
     // d.manual_hz -> effects.modulation.phaser.minHz
     {0x1108, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawManualHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 73, 0},
+     0, 71, 0},
     // rate.wide -> effects.modulation.phaser.rateHz
     {0x1108, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 8, 0,
-     94, '+'},
+     96, '+'},
     // d.unit -> effects.modulation.phaser.depth
     {0x1108, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     39, 0},
+     37, 0},
     // d.feedback -> effects.modulation.phaser.feedback
     {0x1108, 3, kGsEfxRowDesigned, 0, 0, kGsEfxLawFeedback, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8,
-     0, 54, 0},
+     0, 52, 0},
     // d.unit -> effects.modulation.phaser.dryWet
     {0x1108, 4, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 8, 0,
-     53, 0},
+     51, 0},
     // d.enum2 -> effects.modulation.autoWah.filterType
     {0x1108, 5, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 4, 0,
-     55, 0},
+     53, 0},
     // d.unit -> effects.modulation.autoWah.sensitivity
     {0x1108, 6, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
      100, 0},
     // d.wah_hz -> effects.modulation.autoWah.minHz
     {0x1108, 7, kGsEfxRowDesigned, 0, 0, kGsEfxLawWahHz, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
-     73, '#'},
+     71, '#'},
     // d.q -> effects.modulation.autoWah.resonance
-    {0x1108, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0, 97,
+    {0x1108, 8, kGsEfxRowDesigned, 0, 0, kGsEfxLawQ, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0, 99,
      0},
     // rate.wide -> effects.modulation.autoWah.lfoRateHz
     {0x1108, 9, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
-     71, 0},
+     69, 0},
     // d.unit -> effects.modulation.autoWah.lfoDepth
     {0x1108, 10, kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 4, 0,
-     70, 0},
+     68, 0},
     // d.enum2 -> effects.modulation.autoWah.direction
     {0x1108, 11, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum2, 0x00, 0x01, 0, 0, GsEfxOut::kValue, 4, 0,
-     43, 0},
+     41, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1108, 15, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 0,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1108, 16, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 0,
-     69, 0},
+     67, 0},
     // pan.output -> stereo.stereoBalance.balance
     {0x1108, 17, kGsEfxRowDesigned, 7, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 23, 1,
      6, 0},
     // level.output -> utility.gain.levelDb
     {0x1108, 18, kGsEfxRowDesigned, 4, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 24, 1,
-     69, 0},
+     67, 0},
     // level.output -> utility.gain.levelDb
     {0x1108, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
-     2, 69, 0},
+     2, 67, 0},
 }};
 
 // The switches and selectors: which stages a byte turns on. Sorted by (type, slot).

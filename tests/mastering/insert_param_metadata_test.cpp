@@ -928,7 +928,7 @@ const std::set<std::string>& unit_vocabulary() {
   static const std::set<std::string> units = {
       "dB",        "dBFS",  "dBTP",  "LUFS",    "Hz",    "ms",  "s",        "samples",
       "m",         "cm",    "deg",   "percent", "degC",  "V",   "inPerSec", "dBPerOct",
-      "semitones", "cents", "ratio", "bits",    "count", "none"};
+      "semitones", "cents", "ratio", "bits",    "count", "bpm", "none"};
   return units;
 }
 
@@ -1116,8 +1116,8 @@ TEST_CASE("declared units follow what each reader declared, not the key's spelli
   CHECK(unit_of("effects.reverb.room", "airHumidityPercent") == "percent");
   CHECK(unit_of("effects.reverb.room", "airTemperatureC") == "degC");
   CHECK(unit_of("effects.reverb.fdn", "decaySec") == "s");
-  CHECK(unit_of("effects.modulation.pitchShifter", "cents") == "cents");
-  CHECK(unit_of("effects.modulation.pitchShifter", "semitones") == "semitones");
+  CHECK(unit_of("effects.modulation.pitchShifter", "pitchCents") == "cents");
+  CHECK(unit_of("effects.modulation.pitchShifter", "pitchSemitones") == "semitones");
   CHECK(unit_of("effects.reverb.plate", "modDepthSamples") == "samples");
   CHECK(unit_of("saturation.ampSim", "micDistanceCm") == "cm");
 #endif
@@ -1406,7 +1406,7 @@ TEST_CASE("each repair bound is published and enforced by the stage", "[masterin
       {"repair.denoiseClassical", "reductionDb", 120.0},
       {"repair.dereverbClassical", "t60Sec", 10.0},
       {"repair.dereverbClassical", "lateDelayMs", 500.0},
-      {"repair.trimSilence", "threshold", 1.0},
+      {"repair.trimSilence", "thresholdDb", 0.0},
       {"repair.trimSilence", "paddingSamples", 960000.0},
       {"repair.trimSilence", "gateLufs", 0.0},
       {"repair.trimSilence", "windowMs", 10000.0},

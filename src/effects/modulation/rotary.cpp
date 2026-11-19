@@ -494,8 +494,8 @@ std::vector<rt::ParamDescriptor> Rotary::parameter_descriptors() const {
   return {{"rateHz", 0},         {"depthMs", 1},       {"tremolo", 2},          {"dryWet", 3},
           {"drumRateHz", 4},     {"hornSlowHz", 5},    {"hornFastHz", 6},       {"drumSlowHz", 7},
           {"drumFastHz", 8},     {"speed", 9},         {"hornLevelDb", 10},     {"drumLevelDb", 11},
-          {"interpolation", 12}, {"model", 13},        {"stereoSpread", 14},    {"accelTauS", 15},
-          {"decelTauS", 16},     {"undershootHz", 17}, {"drumUndershootHz", 18}};
+          {"interpolation", 12}, {"model", 13},        {"stereoSpread", 14},    {"accelTauSec", 15},
+          {"decelTauSec", 16},   {"undershootHz", 17}, {"drumUndershootHz", 18}};
 }
 
 }  // namespace sonare::effects::modulation

@@ -20,14 +20,14 @@ constexpr int kMaxChannels = 2;
   X("inputGainDb", input_gain_db)                                \
   X("outputGainDb", output_gain_db)                              \
   X("wetMix", wet_mix)                                           \
-  X("retuneSemitones", retune.semitones)                         \
+  X("retunePitchSemitones", retune.semitones)                    \
   X("retuneMix", retune.mix)                                     \
   X("formantFactor", formant.factor)                             \
   X("formantAmount", formant.amount)                             \
   X("formantBody", formant.body)                                 \
   X("formantBrightness", formant.brightness)                     \
   X("formantNasal", formant.nasal)                               \
-  X("eqHighpassHz", eq.highpass_hz)                              \
+  X("eqHighPassHz", eq.highpass_hz)                              \
   X("eqBodyDb", eq.body_db)                                      \
   X("eqPresenceDb", eq.presence_db)                              \
   X("eqAirDb", eq.air_db)                                        \

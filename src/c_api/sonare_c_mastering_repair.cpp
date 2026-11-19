@@ -32,15 +32,6 @@ using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
 
-/// Converts a dBFS threshold to linear amplitude; it must be finite and at most 0 dBFS.
-float threshold_db_to_linear(float threshold_db, const char* field) {
-  if (!std::isfinite(threshold_db) || threshold_db > 0.0f) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(field) + " must be finite and at most 0 dBFS");
-  }
-  return sonare::db_to_linear(threshold_db);
-}
-
 sonare::mastering::repair::DeclickConfig to_cpp_declick_config(const SonareDeclickConfig* config) {
   sonare::mastering::repair::DeclickConfig cpp;
   if (!config) return cpp;
@@ -186,7 +177,8 @@ sonare::mastering::repair::TrimSilenceConfig to_cpp_trim_silence_config(
     const SonareTrimSilenceConfig* config) {
   sonare::mastering::repair::TrimSilenceConfig cpp;
   if (!config) return cpp;
-  cpp.threshold = threshold_db_to_linear(config->threshold_db, "threshold_db");
+  cpp.threshold =
+      sonare::mastering::repair::trim_threshold_from_db(config->threshold_db, "threshold_db");
   cpp.padding_samples = config->padding_samples;
   cpp.mode = to_cpp_trim_silence_mode(config->mode);
   cpp.gate_lufs = config->gate_lufs;

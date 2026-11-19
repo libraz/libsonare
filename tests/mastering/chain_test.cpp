@@ -2746,7 +2746,7 @@ TEST_CASE("parse_chain_config_params refuses a repair mode past the last enumera
 TEST_CASE("parse_chain_config_params handles new dynamics keys", "[mastering][chain]") {
   Param params[] = {
       {"dynamics.deesser.thresholdDb", -30.0},
-      {"dynamics.deesser.bandpassQ", 2.25},
+      {"dynamics.deesser.bandPassQ", 2.25},
       {"dynamics.transientShaper.attackGainDb", 4.0},
       {"dynamics.multibandComp.cutoff0Hz", 200.0},
       {"dynamics.multibandComp.cutoff1Hz", 5000.0},

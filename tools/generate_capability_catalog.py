@@ -34,6 +34,7 @@ PARAMETER_UNITS = {
     "count",
     "N",
     "midiNote",
+    "bpm",
     "none",
 }
 DEPENDENCY_RELATIONS = {"lt", "le", "gt", "ge"}

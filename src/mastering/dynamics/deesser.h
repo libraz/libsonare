@@ -60,7 +60,7 @@ class DeEsser : public rt::RtConfigLifecycle<DeEsser, DeEsserConfig> {
   //   5 = range_db (refused unless >= 0)
   //   6 = bandpass_q (refused unless > 0)
   // Automatable parameters: 0=frequencyHz, 1=thresholdDb, 2=ratio, 3=attackMs, 4=releaseMs,
-  // 5=rangeDb, 6=bandpassQ
+  // 5=rangeDb, 6=bandPassQ
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   static void validate_config(const DeEsserConfig& config);

@@ -211,8 +211,8 @@ TEST_CASE("voice.changer publishes real bounds and says what is construction-onl
   REQUIRE(params.size() == 71);
 
   const std::vector<std::string> construction_only = {
-      "retuneGrainSize",   "formantMode",        "reverbSeed",   "limiterEnableIspLimiter",
-      "voiceEngineEngine", "voiceEngineF0MinHz", "vocoderBands", "vocoderCarrierSource"};
+      "retuneGrainSizeSamples", "formantMode",        "reverbSeed",   "limiterEnableIspLimiter",
+      "voiceEngineEngine",      "voiceEngineF0MinHz", "vocoderBands", "vocoderCarrierSource"};
   const std::vector<std::string> enums = {
       "formantMode",          "voiceEngineEngine",        "pitchCorrectionMode",
       "pitchCorrectionScale", "vocoderCarrierSource",     "vocoderCarrierWave",
@@ -394,7 +394,7 @@ TEST_CASE(
 TEST_CASE("voice.changer automation refuses an out-of-range value and keeps the config",
           "[voice_changer][insert]") {
   VoiceChangerInsert insert;
-  const unsigned int semitones_id = descriptor_id(insert, "retuneSemitones");
+  const unsigned int semitones_id = descriptor_id(insert, "retunePitchSemitones");
   const unsigned int factor_id = descriptor_id(insert, "formantFactor");
   const unsigned int ceiling_id = descriptor_id(insert, "limiterCeilingDb");
   CHECK_FALSE(insert.set_parameter(semitones_id, 99.0f));
@@ -568,7 +568,7 @@ TEST_CASE("voice.changer is reachable from the one-shot named-processor path",
 
   const std::vector<float> left = tone(9000, 0.3f, 0);
   const std::vector<float> right = tone(9000, 0.3f, 1);
-  const std::vector<sonare::mastering::api::Param> params = {{"retuneSemitones", 3.0}};
+  const std::vector<sonare::mastering::api::Param> params = {{"retunePitchSemitones", 3.0}};
 
   const auto mono = sonare::mastering::api::apply_named_processor("voice.changer", left.data(),
                                                                   left.size(), 48000, params);
@@ -584,7 +584,7 @@ TEST_CASE("voice.changer is reachable from the one-shot named-processor path",
 
   CHECK_THROWS_AS(
       sonare::mastering::api::apply_named_processor("voice.changer", left.data(), left.size(),
-                                                    48000, {{"retuneSemitones", 40.0}}),
+                                                    48000, {{"retunePitchSemitones", 40.0}}),
       SonareException);
 }
 
@@ -776,7 +776,7 @@ TEST_CASE("voice.changer is silent after its reported latency and tail",
       bool returned = false;
       for (size_t pos = 0; pos < program.size(); pos += kBlock) {
         if (!returned && pos >= static_cast<size_t>(rate)) {
-          insert.set_parameter(parameter_id(insert, "retuneSemitones"), 0.0f);
+          insert.set_parameter(parameter_id(insert, "retunePitchSemitones"), 0.0f);
           returned = true;
         }
         float* plane = program.data() + pos;
@@ -852,7 +852,7 @@ TEST_CASE("voice.changer refuses an unreachable absolute warp at construction an
   config.retune.semitones = 0.0f;
   VoiceChangerInsert insert(config);
   insert.prepare(kRate, kBlock, 1);
-  const unsigned int semitones_id = descriptor_id(insert, "retuneSemitones");
+  const unsigned int semitones_id = descriptor_id(insert, "retunePitchSemitones");
   std::vector<float> signal = tone(kBlock * 30, 0.3f, 0);
   for (int pos = 0; pos < static_cast<int>(signal.size()); pos += kBlock) {
     if (pos == kBlock * 4) REQUIRE_FALSE(insert.set_parameter(semitones_id, -20.0f));

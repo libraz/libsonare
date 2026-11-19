@@ -652,7 +652,7 @@ TEST_CASE("EFX parameter translations move their insert control monotonically",
       efx.params[0] = static_cast<uint8_t>(value);
       double semitones = 0.0;
       REQUIRE(json_number(stage_params(gs_efx_insert_chain(efx), "effects.modulation.pitchShifter"),
-                          "semitones", semitones));
+                          "pitchSemitones", semitones));
       INFO("PARAMETER 1 = " << value);
       REQUIRE(semitones >= previous);
       previous = semitones;
@@ -660,7 +660,7 @@ TEST_CASE("EFX parameter translations move their insert control monotonically",
     efx.params[0] = 64;
     double centre = 1.0;
     REQUIRE(json_number(stage_params(gs_efx_insert_chain(efx), "effects.modulation.pitchShifter"),
-                        "semitones", centre));
+                        "pitchSemitones", centre));
     REQUIRE(centre == 0.0);
   }
 }

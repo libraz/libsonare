@@ -162,7 +162,7 @@ struct GsEfxDesignedLaw {
 
 /// Which quantity an accel-class row reads out of the shared divisor table.
 /// Both time-constant outputs read the same table as a time: the rotary's
-/// accelTauS and decelTauS keys are both time constants, and only the
+/// accelTauSec and decelTauSec keys are both time constants, and only the
 /// drum/horn undershoot keys (suffix Hz) are frequencies.
 enum class GsEfxOut : uint8_t { kValue, kAccelTau, kDecelTau, kUndershootHz };
 

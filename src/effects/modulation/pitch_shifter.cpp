@@ -88,12 +88,12 @@ struct FieldDomain {
 
 // The single definition of each field's domain, shared by validate_config and live automation.
 constexpr FieldDomain kFields[] = {
-    {"semitones", &PitchShifterConfig::semitones, 0, -kMaxSemitones, kMaxSemitones},
+    {"pitchSemitones", &PitchShifterConfig::semitones, 0, -kMaxSemitones, kMaxSemitones},
     {"dry_wet", &PitchShifterConfig::dry_wet, 1, 0.0f, 1.0f},
-    {"cents", &PitchShifterConfig::cents, 2, -kMaxCents, kMaxCents},
+    {"pitchCents", &PitchShifterConfig::cents, 2, -kMaxCents, kMaxCents},
     {"pan", &PitchShifterConfig::pan, 3, -1.0f, 1.0f},
-    {"semitones2", &PitchShifterConfig::semitones2, 4, -kMaxSemitones, kMaxSemitones},
-    {"cents2", &PitchShifterConfig::cents2, 5, -kMaxCents, kMaxCents},
+    {"pitchSemitones2", &PitchShifterConfig::semitones2, 4, -kMaxSemitones, kMaxSemitones},
+    {"pitchCents2", &PitchShifterConfig::cents2, 5, -kMaxCents, kMaxCents},
     {"level2", &PitchShifterConfig::level2, 6, 0.0f, 1.0f},
     {"pan2", &PitchShifterConfig::pan2, 7, -1.0f, 1.0f},
     {"feedback", &PitchShifterConfig::feedback, 8, -kMaxFeedback, kMaxFeedback},
@@ -527,10 +527,10 @@ bool PitchShifter::parameter_is_realtime_safe(unsigned int param_id) const noexc
 }
 
 std::vector<rt::ParamDescriptor> PitchShifter::parameter_descriptors() const {
-  return {{"semitones", 0},  {"dryWet", 1},      {"cents", 2},          {"pan", 3},
-          {"semitones2", 4}, {"cents2", 5},      {"level2", 6},         {"pan2", 7},
-          {"feedback", 8},   {"mixLaw", 9},      {"interpolation", 10}, {"antiAlias", 11},
-          {"windowMs", 12},  {"preDelayMs", 13}, {"preDelay2Ms", 14}};
+  return {{"pitchSemitones", 0},  {"dryWet", 1},      {"pitchCents", 2},     {"pan", 3},
+          {"pitchSemitones2", 4}, {"pitchCents2", 5}, {"level2", 6},         {"pan2", 7},
+          {"feedback", 8},        {"mixLaw", 9},      {"interpolation", 10}, {"antiAlias", 11},
+          {"windowMs", 12},       {"preDelayMs", 13}, {"preDelay2Ms", 14}};
 }
 
 }  // namespace sonare::effects::modulation

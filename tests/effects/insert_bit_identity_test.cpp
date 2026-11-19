@@ -191,7 +191,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.rotary", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.rotary",
-        R"({"rateHz":6.0,"drumRateHz":4.44,"depthMs":1.2,"tremolo":0.5,"stereoSpread":1.0,"dryWet":1.0,"accelTauS":0.0,"decelTauS":0.0,"undershootHz":0.0,"drumUndershootHz":0.0,"hornSlowHz":0.8,"hornFastHz":6.0,"drumSlowHz":0.6,"drumFastHz":4.44,"speed":-1.0,"hornLevelDb":0.0,"drumLevelDb":0.0,"interpolation":0,"model":0})");
+        R"({"rateHz":6.0,"drumRateHz":4.44,"depthMs":1.2,"tremolo":0.5,"stereoSpread":1.0,"dryWet":1.0,"accelTauSec":0.0,"decelTauSec":0.0,"undershootHz":0.0,"drumUndershootHz":0.0,"hornSlowHz":0.8,"hornFastHz":6.0,"drumSlowHz":0.6,"drumFastHz":4.44,"speed":-1.0,"hornLevelDb":0.0,"drumLevelDb":0.0,"interpolation":0,"model":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -284,7 +284,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.pitchShifter", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.pitchShifter",
-        R"({"semitones":0.0,"dryWet":1.0,"windowMs":22.5,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0,"interpolation":0,"antiAlias":0})");
+        R"({"pitchSemitones":0.0,"dryWet":1.0,"windowMs":22.5,"pitchCents":0.0,"pan":0.0,"pitchSemitones2":0.0,"pitchCents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0,"interpolation":0,"antiAlias":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -292,10 +292,10 @@ TEST_CASE(
 
     // A shifted voice, where the grain path runs: the new keys at their defaults change nothing.
     const RenderResult shifted_empty =
-        render("effects.modulation.pitchShifter", R"({"semitones":7})");
+        render("effects.modulation.pitchShifter", R"({"pitchSemitones":7})");
     const RenderResult shifted_explicit = render(
         "effects.modulation.pitchShifter",
-        R"({"semitones":7,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0,"interpolation":0,"antiAlias":0})");
+        R"({"pitchSemitones":7,"pitchCents":0.0,"pan":0.0,"pitchSemitones2":0.0,"pitchCents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0,"interpolation":0,"antiAlias":0})");
     REQUIRE(shifted_empty.left == shifted_explicit.left);
     REQUIRE(shifted_empty.right == shifted_explicit.right);
   }
