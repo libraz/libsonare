@@ -25,7 +25,7 @@ type NativeSampleBank = InstanceType<typeof addon.SampleBank>;
  * {@link destroy} (or `using`, which calls it for you).
  *
  * @example
- * ```typescript
+ * ```ts
  * using bank = new SampleBank();
  * const index = bank.addSample(samples, { rootKey: 60, sourceRate: 44100 });
  * bank.addZone({ sampleIndex: index });  // the whole keyboard

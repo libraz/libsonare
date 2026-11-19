@@ -24,7 +24,7 @@ import { projectModule, type WasmSampleBank } from './project_internal.js';
  * {@link SampleBank.destroy} once every bounce that names it has finished.
  *
  * @example
- * ```typescript
+ * ```ts
  * const bank = new SampleBank();
  * try {
  *   const index = bank.addSample(samples, { rootKey: 60, sourceRate: 44100 });

@@ -302,7 +302,7 @@ export class ProjectTimeline {
  * object — the embind handle is not garbage-collected automatically.
  *
  * @example
- * ```typescript
+ * ```ts
  * const project = new Project();
  * try {
  *   project.setSampleRate(48000);
@@ -1002,7 +1002,7 @@ export class Project {
    * sample rate; a bounce is never resampled.
    *
    * @example
-   * ```typescript
+   * ```ts
    * const { channels, sampleRate } = project.bounce({ numChannels: 2 });
    * ```
    */
@@ -1023,7 +1023,7 @@ export class Project {
    * the arrangement plus the synth's release tail.
    *
    * @example
-   * ```typescript
+   * ```ts
    * // MIDI-only project -> non-silent stereo audio.
    * const { channels } = project.bounceWithBuiltinInstruments(
    *   [{ instrument: { waveform: 'saw' } }],

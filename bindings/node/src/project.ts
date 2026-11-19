@@ -559,7 +559,7 @@ export class ProjectTimeline {
  * state within one build). Musical positions are PPQ (quarter notes).
  *
  * @example
- * ```typescript
+ * ```ts
  * const project = new Project();
  * const track = project.addTrack({ kind: 'audio', name: 'lead' });
  * const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });

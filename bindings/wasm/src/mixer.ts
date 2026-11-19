@@ -235,7 +235,7 @@ export interface MixerRealtimeBuffer {
  * object — the embind handle is not garbage-collected automatically.
  *
  * @example
- * ```typescript
+ * ```ts
  * const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
  *   sampleRate: 48000,
  * });
@@ -710,7 +710,7 @@ export class Mixer {
    * @param strip - Strip index or id
    *
    * @example
-   * ```typescript
+   * ```ts
    * mixer.setFaderDb(0, -3);
    * mixer.setPan(0, 0.3);
    * mixer.settle(0);
