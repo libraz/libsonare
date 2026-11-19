@@ -1,15 +1,17 @@
-// Type-checks every fenced TypeScript example in the Node and WASM doc comments against the
-// built declarations (`dist/index.d.ts`), so an example calling a function or passing a field
-// the package does not export fails here instead of in a reader's editor.
+// Type-checks every `@example` in the Node and WASM doc comments against the package sources
+// its entry points declare, so an example calling a function or passing a field the package does
+// not export fails here instead of in a reader's editor. Needs each package's node_modules (for
+// typescript), not a build.
 //
-// usage (repo root, after `yarn build:ts` / `yarn build:js`):
-//   node tools/api/check_doc_examples.mjs [node|wasm ...]
+// usage (repo root): node tools/api/check_doc_examples.mjs [node|wasm ...]
 //
+// An `@example` is one ```ts fence; an unfenced one, or another fence spelling, is a finding.
 // Each example runs as the body of an async function with every package export in scope.
 // Its `import ... from '<package>'` lines are checked against the exports and dropped; its other
 // imports and its `declare` lines (the inputs it names for itself) move to module level. Names an
-// example takes as given (the audio it works on) are declared in PLACEHOLDERS; any other free
-// name is a finding. Exit 1 on any finding, or when a package yields no examples.
+// example takes as given (the audio it works on) are declared in PLACEHOLDERS unless it declares
+// them itself; any other free name is a finding. Exit 1 on any finding, or when a package yields
+// no examples.
 
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -45,7 +47,9 @@ declare const engine: RealtimeEngine;
 declare const changer: RealtimeVoiceChanger;
 `;
 
-const FENCE = /```(?:ts|typescript)\n([\s\S]*?)```/g;
+const FENCE = /```ts\n([\s\S]*?)```/g;
+// The line after an `@example` tag (blank lines skipped) opens its fence.
+const OPENING_FENCE = /^\s*```(ts|typescript)\s*$/;
 // Module-level lines an example may carry: its own imports, and `declare` lines naming its inputs.
 const HOISTED = /^\s*(import|declare)\s/;
 const PKG_IMPORT = /^\s*import\s+(type\s+)?\{([^}]*)\}\s+from\s+'([^']+)';?\s*$/;
@@ -63,8 +67,11 @@ function sourceFiles(dir) {
   return out.sort();
 }
 
-/** Every fenced TS block inside a doc comment: { file, line (1-based, first code line), code }. */
-function examples(pkgDir) {
+/**
+ * Every fenced TS block inside a doc comment: { file, line (1-based, first code line), code },
+ * plus a finding for each `@example` that is not one ```ts fence and each other fence spelling.
+ */
+function examples(pkgDir, problems) {
   const found = [];
   for (const file of sourceFiles(path.join(ROOT, pkgDir, 'src'))) {
     const text = fs.readFileSync(file, 'utf8');
@@ -73,6 +80,16 @@ function examples(pkgDir) {
       const body = lines.map((l) => l.replace(/^\s*\/?\*+\/?\s?/, '').replace(/\*\/\s*$/, ''));
       const joined = body.join('\n');
       const docLine = text.slice(0, doc.index).split('\n').length;
+      body.forEach((l, k) => {
+        const at = `${path.relative(ROOT, file)}:${docLine + k}`;
+        if (/^\s*```typescript\s*$/.test(l)) problems.push(`${at}: spell the fence \`\`\`ts`);
+        if (!l.startsWith('@example')) return;
+        let next = k + 1;
+        while (next < body.length && body[next].trim() === '') next++;
+        if (l.trim() !== '@example' || !OPENING_FENCE.test(body[next] ?? '')) {
+          problems.push(`${at}: an @example is one \`\`\`ts fence`);
+        }
+      });
       for (const block of joined.matchAll(FENCE)) {
         const fenceLine = joined.slice(0, block.index).split('\n').length;
         found.push({
@@ -97,17 +114,34 @@ function check(surface) {
         .filter(([, v]) => v && typeof v === 'object' && v.types)
         .map(([k, v]) => [k === '.' ? name : `${name}/${k.slice(2)}`, v.types])
     : [[name, pkg.types]];
-  const dists = entries.map(([spec, types]) => [spec, path.join(ROOT, dir, types)]);
-  for (const [, d] of dists) {
-    if (!fs.existsSync(d)) return [`${surface}: ${path.relative(ROOT, d)} is missing; build first`];
+  // The source each entry's declarations are emitted from: dist/<x>.d.ts <- src/<x>.ts.
+  const dists = entries.map(([spec, types]) => [
+    spec,
+    path.join(ROOT, dir, types.replace(/^(\.\/)?dist\//, 'src/').replace(/\.d\.ts$/, '.ts')),
+  ]);
+  for (const [spec, d] of dists) {
+    if (!fs.existsSync(d)) {
+      return [`${surface}: ${spec} has no source at ${path.relative(ROOT, d)}`];
+    }
   }
 
+  // The package's own module resolution, so the sources resolve as they do in its build.
+  const cfgPath = path.join(ROOT, dir, 'tsconfig.json');
+  const cfg = ts.parseJsonConfigFileContent(
+    ts.readConfigFile(cfgPath, ts.sys.readFile).config,
+    ts.sys,
+    path.dirname(cfgPath),
+  );
   const options = {
+    ...cfg.options,
     target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
     strict: true,
     noEmit: true,
+    rootDir: undefined,
+    outDir: undefined,
+    declaration: false,
+    declarationMap: false,
+    sourceMap: false,
     skipLibCheck: true,
     lib: ['lib.es2022.d.ts', 'lib.esnext.disposable.d.ts', 'lib.dom.d.ts'],
     types: surface === 'node' ? ['node'] : [],
@@ -137,14 +171,14 @@ function check(surface) {
     for (const n of names) seen.add(n);
     if (names.length)
       scope.push(
-        `import { ${names.join(', ')} } from ${JSON.stringify(d.replace(/\.d\.ts$/, '.js'))};`,
+        `import { ${names.join(', ')} } from ${JSON.stringify(d.replace(/\.ts$/, '.js'))};`,
       );
   }
 
   const problems = [];
   const virtual = new Map();
   const origin = new Map();
-  examples(dir).forEach((ex, i) => {
+  examples(dir, problems).forEach((ex, i) => {
     const kept = [];
     const body = ex.code.split('\n').map((l, j) => {
       const m = PKG_IMPORT.exec(l);
@@ -168,10 +202,18 @@ function check(surface) {
       return '';
     });
     for (const l of body) if (HOISTED.test(l)) kept.push(l);
+    // A placeholder the example declares for itself gives way to the example's declaration.
+    const own = new Set(
+      kept.flatMap((l) => [...l.matchAll(/\b([A-Za-z_$][\w$]*)\s*:/g)].map((m) => m[1])),
+    );
+    const placeholders = PLACEHOLDERS.split('\n').filter((l) => {
+      const m = /^declare (?:let|const) ([A-Za-z_$][\w$]*):/.exec(l);
+      return !m || !own.has(m[1]);
+    });
     const head = [
       ...scope,
       ...kept,
-      PLACEHOLDERS,
+      ...placeholders,
       'export async function example(): Promise<void> {',
     ].join('\n');
     const file = path.join(ROOT, dir, `__doc_example_${i}.ts`);

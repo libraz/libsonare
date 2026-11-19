@@ -169,6 +169,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 
 - C++17. No C++20 or later features, including `<numbers>`.
 - Comments and documentation in English, in the language's standard doc-comment format: Doxygen for C and C++, TSDoc for TypeScript, PEP 257 docstrings for Python.
+- Write a TSDoc `@example` as one ```ts fence that compiles as written, declaring any input it assumes beyond the audio it works on; `make doc-examples` type-checks every one against the package sources.
 - Keep C++ comments terse: at most three lines above a constant (the measurement that set it), one line inside a function. A binding's public API documentation is the exception.
 - Never hard-wrap Markdown. One bullet is one logical line.
 - No per-file licence headers; the licence lives in `LICENSE` and `NOTICE`.

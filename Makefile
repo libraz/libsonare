@@ -1,6 +1,6 @@
 .PHONY: all build fixtures release install test-install test refusal-spelling test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance conformance-checks test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
+       test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
        surface-coverage surface-coverage-check surface-check upgrade-notes \
@@ -739,6 +739,12 @@ surface-check:
 	python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py
 	python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
 
+# Type-checks every TSDoc @example on the Node and WASM facades against the package
+# sources; an unfenced example or a fence other than ```ts is a finding. Needs each
+# package's node_modules, not a build. Also part of `conformance`.
+doc-examples:
+	node tools/api/check_doc_examples.mjs
+
 # UPGRADING.md is generated from tools/api/migration/rules.toml and the ledgers.
 upgrade-notes:
 	python3 tools/api/upgrade_notes.py -o UPGRADING.md
@@ -919,6 +925,7 @@ conformance-checks:
 	$(CHECK) python3 tools/conformance/check_public_contracts.py
 	$(CHECK) python3 -m unittest tools/api/test_check_request_object_coverage.py
 	$(CHECK) python3 tools/api/check_request_object_coverage.py
+	$(CHECK) node tools/api/check_doc_examples.mjs
 	$(CHECK) python3 tools/conformance/check_cli_contract.py --schema
 	$(CHECK) python3 tools/conformance/check_repair_cli_param_keys.py
 	$(CHECK) python3 tools/conformance/check_lint_scope.py
