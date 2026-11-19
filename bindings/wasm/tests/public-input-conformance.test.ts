@@ -19,6 +19,7 @@ import {
   mixStereo,
   perNoteControllerName,
   RealtimeEngine,
+  StreamingRetune,
 } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
@@ -320,5 +321,57 @@ describe('an integer and a float field refuse a wrong type by type and a wrong v
         testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
       );
     });
+  }
+});
+
+type RetuneSection = {
+  entries: ('constructor' | 'set_config')[];
+  base: Record<string, unknown>;
+  cases: ReaderSplitCase[];
+};
+
+/** The corpus spells keys in snake case; this surface spells them in camel case. */
+function camelKey(key: string): string {
+  return key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+}
+
+function camelRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).map(([k, v]) => [camelKey(k), v]));
+}
+
+describe('the streaming retune controls answer the shared corpus on construction and on setConfig', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  const section = (corpus as unknown as { streaming_retune: RetuneSection }).streaming_retune;
+  const base = camelRecord(section.base);
+  for (const entry of section.entries) {
+    for (const testCase of section.cases) {
+      it(`${entry} ${testCase.id}`, () => {
+        const key = camelKey(testCase.key);
+        const config = { [key]: corpusValue(testCase.value) };
+        const live = entry === 'set_config' ? new StreamingRetune(base as never) : undefined;
+        const call = () =>
+          live
+            ? live.setConfig(config as never)
+            : new StreamingRetune({ ...base, ...config } as never);
+        if (testCase.accepted) {
+          expect(call).not.toThrow();
+          if (live) {
+            expect(live.config()).toEqual({ ...base, ...config });
+          }
+          return;
+        }
+        const fn = live ? 'StreamingRetune.setConfig' : 'StreamingRetune';
+        const refusal = `${fn}: ${key} ${testCase.predicate}`;
+        expect(call).toThrow(
+          testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
+        );
+        if (live) {
+          expect(live.config()).toEqual(base);
+        }
+      });
+    }
   }
 });

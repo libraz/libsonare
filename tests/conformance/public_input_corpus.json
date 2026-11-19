@@ -329,5 +329,24 @@
       { "id": "velocity_wrong_type", "key": "velocity", "value": null, "refused": "type", "predicate": "must be an integer" },
       { "id": "velocity_above_domain", "key": "velocity", "value": 128, "refused": "range", "predicate": "must be an integer in [0, 127]" }
     ]
+  },
+  "streaming_retune": {
+    "fn": "StreamingRetune",
+    "entries": ["constructor", "set_config"],
+    "base": {"pitch_semitones": 0, "mix": 1},
+    "cases": [
+      { "id": "pitch_semitones_top", "key": "pitch_semitones", "value": 24, "accepted": true },
+      { "id": "pitch_semitones_bottom", "key": "pitch_semitones", "value": -24, "accepted": true },
+      { "id": "pitch_semitones_above", "key": "pitch_semitones", "value": 24.5, "refused": "range", "predicate": "must be finite and in [-24, 24]" },
+      { "id": "pitch_semitones_below", "key": "pitch_semitones", "value": -24.5, "refused": "range", "predicate": "must be finite and in [-24, 24]" },
+      { "id": "pitch_semitones_nan", "key": "pitch_semitones", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in [-24, 24]" },
+      { "id": "pitch_semitones_wrong_type", "key": "pitch_semitones", "value": "1", "refused": "type", "predicate": "must be a number" },
+      { "id": "pitch_semitones_boolean", "key": "pitch_semitones", "value": true, "refused": "type", "predicate": "must be a number" },
+      { "id": "mix_dry", "key": "mix", "value": 0, "accepted": true },
+      { "id": "mix_wet", "key": "mix", "value": 1, "accepted": true },
+      { "id": "mix_above", "key": "mix", "value": 1.5, "refused": "range", "predicate": "must be finite and in [0, 1]" },
+      { "id": "mix_below", "key": "mix", "value": -0.5, "refused": "range", "predicate": "must be finite and in [0, 1]" },
+      { "id": "mix_nan", "key": "mix", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and in [0, 1]" }
+    ]
   }
 }
