@@ -143,37 +143,34 @@ def test_public_api_stub_reexports_all() -> None:
     )
 
 
-def test_loaded_library_exports_every_guarded_symbol() -> None:
-    """The loaded dylib must export every symbol the binding probes for.
+def test_loaded_library_exports_every_declared_symbol() -> None:
+    """The loaded dylib must export every symbol the binding declares a signature for.
 
-    ``_ffi_signatures_*.py`` wraps most C symbols in ``if hasattr(lib, ...)`` so
-    an older library keeps loading, and the tests that exercise those code paths
-    skip themselves the same way. That combination makes a build with a C-ABI
-    translation unit missing from the source list look completely green: the
-    facade raises "libsonare was built without the ... ABI" at runtime while
-    every test that would have caught it opted out.
-
-    This asserts the inventory instead. The expected set is derived from the
-    guards themselves, so it cannot fall behind the binding, and a missing
-    symbol is a failure rather than a skip. Symbol lookup only -- nothing here
-    calls into the library.
+    A build with a C-ABI translation unit missing from the source list would
+    otherwise surface only as an AttributeError on first use, or as a skip in a
+    test that probes for the symbol. The expected set is derived from the
+    ``_ffi_signatures_*.py`` declarations themselves, so it cannot fall behind
+    the binding, and a missing symbol is a failure rather than a skip. Symbol
+    lookup only -- nothing here calls into the library.
     """
     from libsonare._runtime import _get_lib
 
     signature_dir = Path(__file__).resolve().parent.parent / "src" / "libsonare"
-    guarded: set[str] = set()
+    declared: set[str] = set()
     for path in sorted(signature_dir.glob("_ffi_signatures_*.py")):
-        guarded |= set(re.findall(r"""hasattr\(lib,\s*["'](sonare_\w+)["']\)""", path.read_text()))
+        text = path.read_text()
+        declared |= set(re.findall(r"\blib\.(sonare_\w+)\b", text))
+        declared |= set(re.findall(r"""["'](sonare_\w+)["']""", text))
 
     # The derivation must not collapse silently: an empty or tiny set would make
     # this pass vacuously, which is the failure mode it exists to remove.
-    assert len(guarded) >= 150, (
-        f"only {len(guarded)} guarded symbols found in _ffi_signatures_*.py; "
+    assert len(declared) >= 600, (
+        f"only {len(declared)} declared symbols found in _ffi_signatures_*.py; "
         "the scan broke rather than the binding shrinking"
     )
 
     lib = _get_lib()
-    missing = sorted(name for name in guarded if not hasattr(lib, name))
+    missing = sorted(name for name in declared if not hasattr(lib, name))
     assert not missing, (
         f"the loaded libsonare is missing {len(missing)} symbol(s) the Python facade "
         f"declares and ships as public API: {missing}. This usually means a C-ABI "

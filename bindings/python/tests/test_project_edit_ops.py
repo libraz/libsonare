@@ -262,7 +262,7 @@ def _require_typed_automation_api() -> None:
     """Fail, rather than skip, when the typed-lane C ABI is missing.
 
     These symbols are asserted present for the whole suite by
-    test_imports.py::test_loaded_library_exports_every_guarded_symbol, so an
+    test_imports.py::test_loaded_library_exports_every_declared_symbol, so an
     absence here is a broken build, not a configuration to opt out of. Skipping
     made a dylib missing the ABI look green while the shipped facade raised.
     """
