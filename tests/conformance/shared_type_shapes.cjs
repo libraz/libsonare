@@ -20,6 +20,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { exportedTypeFields } = require('./ts_exported_fields.cjs');
+
 const root = path.resolve(__dirname, '..', '..');
 const CORPUS = path.join(__dirname, 'shared_type_shapes.json');
 const PACKAGES = {
@@ -28,40 +30,7 @@ const PACKAGES = {
 };
 
 function deriveShapes(pkg, typeNames) {
-  const dir = path.join(root, pkg);
-  const ts = require(path.join(dir, 'node_modules/typescript'));
-  const configPath = path.join(dir, 'tsconfig.json');
-  const parsed = ts.getParsedCommandLineOfConfigFile(configPath, {}, {
-    ...ts.sys,
-    onUnRecoverableConfigFileDiagnostic: () => {},
-  });
-  const entry = path.join(dir, 'src/index.ts');
-  const program = ts.createProgram({ rootNames: [entry], options: { ...parsed.options, noEmit: true } });
-  const checker = program.getTypeChecker();
-  const sf = program.getSourceFile(entry);
-  const moduleSymbol = sf && checker.getSymbolAtLocation(sf);
-  if (!moduleSymbol) throw new Error(`${pkg}: cannot read the exports of src/index.ts`);
-  const exports = new Map();
-  for (const sym of checker.getExportsOfModule(moduleSymbol)) exports.set(sym.name, sym);
-
-  const shapes = {};
-  const missing = [];
-  for (const name of typeNames) {
-    let sym = exports.get(name);
-    if (!sym) {
-      missing.push(name);
-      continue;
-    }
-    if (sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
-    const type = checker.getDeclaredTypeOfSymbol(sym);
-    const fields = {};
-    for (const prop of checker.getPropertiesOfType(type)) {
-      fields[prop.name] = (prop.flags & ts.SymbolFlags.Optional) !== 0;
-    }
-    if (Object.keys(fields).length === 0) throw new Error(`${pkg}: ${name} declares no field`);
-    shapes[name] = fields;
-  }
-  return { shapes, missing };
+  return exportedTypeFields(path.join(root, pkg), typeNames);
 }
 
 /** The corpus view of one derived shape: sorted names and sorted optional names. */
