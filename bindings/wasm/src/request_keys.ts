@@ -232,6 +232,7 @@ import type {
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineFreezeOptions,
+  EngineGraphSpec,
   EngineLoop,
   EngineMetronomeConfig,
   RealtimeEngineConfig,
@@ -2222,6 +2223,14 @@ const EngineConfigRequestKeys = keysOf<RealtimeEngineConfig>()([
   'maxChannels',
 ]);
 const SidechainSourceRequestKeys = keysOf<SidechainSource>()(['kind', 'id']);
+const SetGraphRequestKeys = keysOf<EngineGraphSpec>()([
+  'nodes',
+  'connections',
+  'inputNode',
+  'outputNode',
+  'numChannels',
+  'parameterBindings',
+]);
 const InsertBypassRequestKeys = keysOf<{ bypassed: boolean; resetOnBypass?: boolean }>()([
   'bypassed',
   'resetOnBypass',
@@ -2682,6 +2691,7 @@ export const REQUEST_SHAPES = {
   prepare: { keys: EngineConfigRequestKeys },
   setBusSidechain: { keys: SidechainSourceRequestKeys },
   setStripSidechain: { keys: SidechainSourceRequestKeys },
+  setGraph: { keys: SetGraphRequestKeys },
   canSetBusSidechain: { keys: SidechainSourceRequestKeys },
   canSetStripSidechain: { keys: SidechainSourceRequestKeys },
   setStripInsertBypassed: { keys: InsertBypassRequestKeys },

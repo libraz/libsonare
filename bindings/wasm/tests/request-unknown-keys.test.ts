@@ -81,6 +81,7 @@ const METHOD_SHAPES = [
   'setPolarityInvert',
   'setStripInsertBypassed',
   'setStripInsertParam',
+  'setGraph',
   'setStripSidechain',
   'setStripSurroundPan',
   'setSurroundPan',
@@ -161,6 +162,17 @@ describe('a class-method request refuses its keys through an instance', () => {
       expect(() =>
         engine.configureCapture({ capacityFrames: 128, inputMonitor: { notAnOption: 1 } } as never),
       ).toThrow("configureCapture: unknown option 'notAnOption' in 'inputMonitor'");
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('setGraph refuses an undeclared key by name before reading the graph', () => {
+    const engine = new api.RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      expect(() => engine.setGraph({ bogus: 1 } as never)).toThrow(
+        new TypeError("RealtimeEngine.setGraph: unknown request key 'bogus'"),
+      );
     } finally {
       engine.destroy();
     }

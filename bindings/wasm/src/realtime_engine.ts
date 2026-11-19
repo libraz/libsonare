@@ -1872,7 +1872,7 @@ export class RealtimeEngine {
    * `TypeError` / `RangeError`. Control thread only; do not call concurrently with {@link process}.
    */
   setGraph(spec: EngineGraphSpec): void {
-    requireObject('spec', spec);
+    requestObject('setGraph', spec, 'spec', true);
     graphName('inputNode', spec.inputNode);
     graphName('outputNode', spec.outputNode);
     const { numChannels: requestedChannels, ...base } = spec;

@@ -202,6 +202,17 @@ describe('a class-method request refuses nested keys through an engine instance'
       engine.destroy();
     }
   });
+
+  it('setGraph refuses an undeclared key by name before reading the graph', () => {
+    const engine = new sonare.RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      expect(() => engine.setGraph({ bogus: 1 } as never)).toThrow(
+        new TypeError("RealtimeEngine.setGraph: unknown request key 'bogus'"),
+      );
+    } finally {
+      engine.destroy();
+    }
+  });
 });
 
 describe('reported repros', () => {
