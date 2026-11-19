@@ -463,7 +463,7 @@ class _ProjectEditMixin:
             audio = np.stack(planar, axis=1).reshape(-1)
         else:
             if audio_channels is None:
-                raise _refuse("audio_channels is required for interleaved audio")
+                raise _refuse("audio_channels must be given for interleaved audio")
             # Narrowed before the frame count is derived from it, so a fractional
             # channel count is refused rather than silently becoming its floor.
             channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
@@ -620,7 +620,7 @@ class _ProjectEditMixin:
             where = f"takes[{i}]"
             take = _mapping_keys(item, _TAKE_KEYS, where)
             if take.get("id") is None:
-                raise _refuse(f"{where}.id is required")
+                raise _refuse(f"{where}.id must be given")
             c_takes[i].id = _optional_positive_int(take["id"], f"{where}.id", _UINT32_MAX)
             c_takes[i].source_id = _optional_positive_int(
                 take.get("source_id"), f"{where}.source_id", _UINT32_MAX

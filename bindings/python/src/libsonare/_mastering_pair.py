@@ -465,16 +465,16 @@ def _platform_fields(platform: Mapping[str, Any], where: str) -> tuple[str, floa
             )
         if key not in _PLATFORM_KEYS:
             raise _refuse(f"unknown key {where}.{key} (expected {', '.join(_PLATFORM_KEYS)})")
-    missing = [key for key in _PLATFORM_KEYS if key not in platform]
-    if missing:
-        raise _refuse(f"platform is missing {', '.join(missing)}")
+    for key in _PLATFORM_KEYS:
+        if key not in platform:
+            raise _refuse(f"{where}.{key} must be given")
     name = platform["name"]
     if not isinstance(name, str):
-        raise _refuse_type("platform name must be a string")
+        raise _refuse_type(f"{where}.name must be a string")
     return (
         name,
-        _narrow_double(platform["target_lufs"], "target_lufs"),
-        _narrow_double(platform["ceiling_dbtp"], "ceiling_dbtp"),
+        _narrow_double(platform["target_lufs"], f"{where}.target_lufs"),
+        _narrow_double(platform["ceiling_dbtp"], f"{where}.ceiling_dbtp"),
     )
 
 

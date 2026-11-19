@@ -1226,7 +1226,7 @@ def mix_stereo(
     lib = _get_lib()
     _require_export(lib, "sonare_mixer_create", _WITHOUT_MIXING)
     if not strips:
-        raise _refuse("at least one strip is required")
+        raise _refuse("strips must not be empty")
     c_sample_rate = _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE)
 
     # A per-strip option may be shorter than the strip list (the remaining

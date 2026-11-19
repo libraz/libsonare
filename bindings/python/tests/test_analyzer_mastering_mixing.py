@@ -381,7 +381,8 @@ def test_mastering_pair_and_stereo_analysis() -> None:
             {"name": "S", "target_lufs": -14.0, "ceiling_db": -1.0},
             "unknown key platforms[0].ceiling_db (renamed to platforms[0].ceiling_dbtp)",
         ),
-        ({"name": "S", "target_lufs": -14.0}, "platform is missing ceiling_dbtp"),
+        ({"name": "S", "target_lufs": -14.0}, "platforms[0].ceiling_dbtp must be given"),
+        ({"target_lufs": -14.0}, "platforms[0].name must be given"),
         (
             {"name": "S", "target_lufs": -14.0, "ceiling_dbtp": -1.0, "gain": 0.0},
             "unknown key platforms[0].gain (expected name, target_lufs, ceiling_dbtp)",

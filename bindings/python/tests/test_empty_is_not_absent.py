@@ -165,7 +165,7 @@ def test_take_ids_and_names_are_none_when_absent_and_never_zero_or_empty() -> No
         )
         project.set_clip_takes(clip, [{"id": 1}, {"id": 2, "name": "B"}], active_take_id=None)
         with pytest.raises(
-            SonareValueError, match=r"^Project\.set_clip_takes: takes\[0\]\.id is required$"
+            SonareValueError, match=r"^Project\.set_clip_takes: takes\[0\]\.id must be given$"
         ):
             project.set_clip_takes(clip, [{"name": "A"}])
         with pytest.raises(SonareValueError, match=r"takes\[0\]\.id must be"):

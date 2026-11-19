@@ -981,7 +981,7 @@ def test_mix_stereo_rejects_a_scene_with_no_audio() -> None:
     """
     from libsonare import SonareValueError, mix_stereo
 
-    with pytest.raises(SonareValueError, match="at least one strip is required"):
+    with pytest.raises(SonareValueError, match="^mix_stereo: strips must not be empty$"):
         mix_stereo([], sample_rate=48000)
 
     with pytest.raises(SonareValueError, match="no audio to mix"):
