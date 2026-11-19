@@ -200,7 +200,7 @@ def _seconds_to_samples(seconds: object, sample_rate: float, name: str) -> int:
     """
     samples = math.floor(_narrow_double(seconds, name) * sample_rate + 0.5)
     if not _INT64_MIN <= samples <= _INT64_MAX:
-        raise _refuse(f"{name} is out of range at {sample_rate} Hz")
+        raise _refuse(f"{name} must fit a 64-bit sample position at {sample_rate} Hz")
     return samples
 
 

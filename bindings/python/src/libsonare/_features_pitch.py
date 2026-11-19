@@ -375,9 +375,8 @@ def note_segments(
     else:
         probability_array, voiced_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
     if voiced_count != f0_count:
-        raise _refuse(
-            f"f0_hz and the voicing array must have equal length, got {f0_count} and {voiced_count}"
-        )
+        voicing = "voiced" if voiced is not None else "voiced_prob"
+        raise _refuse(f"f0_hz and {voicing} must have the same length")
     config = SonareNoteSegmenterConfig(
         2,
         0.0 if segmentation_threshold_cents is None else segmentation_threshold_cents,

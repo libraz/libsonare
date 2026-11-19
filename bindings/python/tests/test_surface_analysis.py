@@ -303,10 +303,22 @@ def test_mirror_absent_is_none_not_zero() -> None:
     assert libsonare.frames_to_samples(3, hop_length=512, n_fft=None) == 3 * 512
     assert libsonare.frames_to_samples(3, hop_length=512, n_fft=2048) == 3 * 512 + 1024
     assert libsonare.samples_to_frames(3 * 512, hop_length=512, n_fft=None) == 3
-    with pytest.raises(SonareValueError):
-        libsonare.frames_to_samples(3, hop_length=512, n_fft=0)
-    with pytest.raises(SonareValueError):
-        libsonare.samples_to_frames(3 * 512, hop_length=512, n_fft=0)
+    for convert in (libsonare.frames_to_samples, libsonare.samples_to_frames):
+        name = convert.__name__
+        with pytest.raises(
+            SonareValueError, match=f"^{name}: n_fft must not be 0; omit it for no centring$"
+        ):
+            convert(3, hop_length=512, n_fft=0)
+        with pytest.raises(
+            SonareValueError, match=rf"^{name}: n_fft must be an integer in \[1, 2147483647\]$"
+        ):
+            convert(3, hop_length=512, n_fft=-5)
+        for hop in (0, -5):
+            with pytest.raises(
+                SonareValueError,
+                match=rf"^{name}: hop_length must be an integer in \[1, 2147483647\]$",
+            ):
+                convert(4, hop_length=hop)
     with pytest.raises(SonareValueError):
         libsonare.clicks([0.0], sr=SR, length=0)
     y = _tone()
@@ -773,7 +785,7 @@ def test_note_segments_takes_voiced_or_voiced_prob_by_keyword() -> None:
 
     with pytest.raises(TypeError, match="voiced"):
         libsonare.note_segments(f0, 100.0)
-    with pytest.raises(SonareValueError, match="equal length"):
+    with pytest.raises(SonareValueError, match="f0_hz and voiced must have the same length$"):
         libsonare.note_segments(f0, 100.0, voiced=flags[:-1])
     with pytest.raises(TypeError):
         libsonare.note_segments(f0, probability, 100.0)  # type: ignore[misc]

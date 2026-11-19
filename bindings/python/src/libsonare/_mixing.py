@@ -106,11 +106,11 @@ def mixing_scene_preset(name: str) -> MixSceneDocument:
     Raises ``TypeError`` for a non-string ``name`` and ``SonareValueError`` for a
     name :func:`mixing_scene_preset_names` does not list.
     """
-    if not isinstance(name, str):
-        raise _refuse_type(f"name must be a string, got {type(name).__name__}")
     names = mixing_scene_preset_names()
+    if not isinstance(name, str):
+        raise _refuse_type(f"name must be one of {', '.join(names)}")
     if name not in names:
-        raise _refuse(f"name must be one of {names}, got {name!r}")
+        raise _refuse(f"name must be one of {', '.join(names)}")
     lib = _get_lib()
     json_ptr = ctypes.c_char_p()
     _check(lib.sonare_mixing_scene_preset_json(_utf8_arg(name, "name"), ctypes.byref(json_ptr)))
@@ -463,7 +463,7 @@ class Mixer:
         else:
             handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(strip, "strip"))
             if not handle:
-                raise _refuse(f"mixer strip index out of range: {strip}")
+                raise _refuse(f"strip must be an integer in [0, {self.strip_count - 1}]")
         return ctypes.c_void_p(int(handle))
 
     @_entry("Mixer.strip_by_id")
@@ -1025,7 +1025,7 @@ class Mixer:
             raise _refuse("left_inputs and right_inputs must have the same length")
         strip_count = self.strip_count
         if len(left_inputs) > strip_count:
-            raise _refuse(f"got {len(left_inputs)} inputs for a {strip_count}-strip mixer")
+            raise _refuse(f"left_inputs must hold at most {strip_count} inputs, one per strip")
 
         left_arrays: list[ctypes.Array[ctypes.c_float]] = []
         right_arrays: list[ctypes.Array[ctypes.c_float]] = []

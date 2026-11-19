@@ -160,7 +160,7 @@ def _insert_params(
             out[key] = [float(item) for item in items]
         elif isinstance(value, str):
             if kind != "enum":
-                raise _refuse_type(f"params[{key!r}] must be a number or bool (got a str)")
+                raise _refuse_type(f"params[{key!r}] must be a number or bool")
             out[key] = _enum_value(processor, key, value)
         elif isinstance(value, bool):
             out[key] = value
@@ -679,12 +679,9 @@ def _check_chain_document(config: Mapping[str, Any]) -> None:
         lib.sonare_free_string(json_ptr)
 
 
-def _chain_params(config: Mapping[str, Any] | None) -> tuple[Any, int]:
+def _chain_params(config: Mapping[str, Any] | None, name: str) -> tuple[Any, int]:
     if config is not None and not isinstance(config, Mapping):
-        raise _refuse_type(
-            "chain config must be a mapping (parse JSON text with json.loads first), "
-            f"got {type(config).__name__}"
-        )
+        raise _refuse_type(f"{name} must be a mapping (parse JSON text with json.loads first)")
     if config:
         _check_chain_document(config)
     flat = _flatten_chain_config(config)
@@ -773,7 +770,7 @@ def _run_mastering(
     release: Callable[[Any], None],
 ) -> None:
     """Call ``symbol`` or its progress variant with ``head`` plus the chain params into ``out``."""
-    param_array, param_count = _chain_params(overrides)
+    param_array, param_count = _chain_params(overrides, "overrides")
     tail = (param_array, _to_c_size_t(param_count, "param_count"))
     state = CancellationState(cancel)
     if on_progress is None and cancel is None:

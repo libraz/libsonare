@@ -95,7 +95,7 @@ def _marker_kind_name(kind: int) -> MarkerKind:
 
 def _band_json_arg(band: Mapping[str, object]) -> bytes:
     if not isinstance(band, Mapping):
-        raise _refuse_type(f"band must be a mapping, got {type(band).__name__}")
+        raise _refuse_type("band must be a mapping")
     return _utf8_arg(json.dumps(dict(band)), "band")
 
 

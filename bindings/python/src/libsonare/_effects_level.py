@@ -52,9 +52,9 @@ _NORMALIZE_STEREO_SYMBOLS = {
 def _normalize_mode(mode: object) -> str:
     """Refuse a mode outside the :data:`NormalizeMode` tokens, naming them."""
     if not isinstance(mode, str):
-        raise _refuse_type("mode must be 'peak' or 'rms'")
+        raise _refuse_type("mode must be one of peak, rms")
     if mode not in _DEFAULT_NORMALIZE_TARGET_DB:
-        raise _refuse(f"mode must be 'peak' or 'rms' (got {mode!r})")
+        raise _refuse("mode must be one of peak, rms")
     return mode
 
 

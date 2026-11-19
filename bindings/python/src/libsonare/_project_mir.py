@@ -205,7 +205,7 @@ _CHORD_EXTENSION_CAPACITY = 32
 def _pitch_class_arg(value: object, name: str) -> int:
     """Return ``value`` as a pitch class 0..11, refusing anything else by name."""
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= int(value) <= 11:
-        raise _refuse(f"{name} {value!r} is not a pitch class (0..11)")
+        raise _refuse(f"{name} must be an integer in [0, 11]")
     return int(value)
 
 
@@ -234,12 +234,12 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
             quality that is not a chord quality name.
     """
     if not isinstance(chord, Chord):
-        raise _refuse_type(f"chord must be a Chord, got {type(chord).__name__}")
+        raise _refuse_type("chord must be a Chord")
     lib = _get_lib()
     root = _pitch_class_arg(chord.root, "chord.root")
     ordinal = _CHORD_QUALITY_ORDINALS.get(chord.quality)
     if ordinal is None:
-        raise _refuse(f"chord.quality {chord.quality!r} is not a chord quality")
+        raise _refuse(f"chord.quality must be one of {', '.join(_CHORD_QUALITY_ORDINALS)}")
     bass = root if chord.bass is None else _pitch_class_arg(chord.bass, "chord.bass")
     out_root = ctypes.c_uint32()
     out_quality = ctypes.c_uint32()

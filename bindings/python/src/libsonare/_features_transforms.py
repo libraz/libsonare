@@ -346,7 +346,7 @@ def griffin_lim(
     if n_fft is None:
         n_fft = implied
     elif n_fft != implied:
-        raise _refuse(f"n_fft must equal (n_bins - 1) * 2 (got {n_fft} for {n_bins} bins)")
+        raise _refuse("n_fft must equal (n_bins - 1) * 2")
     hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
     length = n_bins * n_frames
     with _out_float_array(lib) as (out, out_length):

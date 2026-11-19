@@ -554,7 +554,7 @@ def test_griffin_lim_infers_n_fft_from_the_bin_count() -> None:
     np.testing.assert_array_equal(inferred, given)
     with pytest.raises(
         SonareValueError,
-        match=r"^griffin_lim: n_fft must equal \(n_bins - 1\) \* 2 \(got 2048 for 513 bins\)$",
+        match=r"^griffin_lim: n_fft must equal \(n_bins - 1\) \* 2$",
     ):
         griffin_lim(magnitude, 22050, n_fft=2048, hop_length=256, n_iter=1)
 

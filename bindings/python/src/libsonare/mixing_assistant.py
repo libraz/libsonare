@@ -168,12 +168,9 @@ def _build_track_arrays(tracks: Sequence[MixAssistantTrack], sample_rate: int) -
         # unreachable. Rank and type are still named by the coercion.
         channels = track.channels
         if not isinstance(channels, (list, tuple)):
-            raise _refuse_type(
-                f"tracks[{index}].channels must be a list or tuple of planes, "
-                f"got {type(channels).__name__}"
-            )
+            raise _refuse_type(f"tracks[{index}].channels must be a list or tuple of planes")
         if len(channels) not in (1, 2):
-            raise _refuse(f"tracks[{index}].channels must hold 1 or 2 planes, got {len(channels)}")
+            raise _refuse(f"tracks[{index}].channels must hold 1 or 2 planes")
         left = _as_float32_buffer(channels[0], arg_name=f"tracks[{index}].channels[0]")
         left_array, left_length = _to_c_float_array(left)
         if len(channels) == 1:

@@ -94,10 +94,9 @@ def _enum_ordinal(field: str, value: object) -> int:
     """Map an enum spelling to its C ordinal, refusing a non-string or an unknown one."""
     names = _ENUM_FIELD_NAMES[field]
     if not isinstance(value, str):
-        raise _refuse_type(f"{field} must be a string token, got {type(value).__name__}")
+        raise _refuse_type(f"{field} must be one of {', '.join(names)}")
     if value not in names:
-        expected = ", ".join(repr(n) for n in names)
-        raise _refuse(f"{field} must be one of {expected}, got {value!r}")
+        raise _refuse(f"{field} must be one of {', '.join(names)}")
     return names.index(value)
 
 
@@ -144,7 +143,7 @@ def voice_change(
     """
     _validate_samples(samples)
     if not isinstance(formant_mode, str) or formant_mode not in _FORMANT_MODES:
-        raise _refuse(f"formant_mode must be 'relative' or 'absolute', got {formant_mode!r}")
+        raise _refuse(f"formant_mode must be one of {', '.join(_FORMANT_MODES)}")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     config = SonareVoiceChangeConfig(
@@ -183,8 +182,7 @@ def _voice_config_to_json(config: object) -> bytes:
     if isinstance(config, Mapping):
         return _utf8_arg(json.dumps(dict(config), separators=(",", ":")), "config")
     raise _refuse_type(
-        f"config must be a preset id or a mapping (parse JSON text with "
-        f"json.loads first), got {type(config).__name__}"
+        "config must be a preset id or a mapping (parse JSON text with json.loads first)"
     )
 
 
@@ -554,7 +552,7 @@ class RealtimeVoiceChanger:
             for plane in channels
         ]
         if len(planes) not in (1, 2):
-            raise _refuse(f"channels must hold 1 or 2 planes, got {len(planes)}")
+            raise _refuse("channels must hold 1 or 2 planes")
         total = int(planes[0].shape[0])
         if any(int(plane.shape[0]) != total for plane in planes):
             raise _refuse("all channels must have the same length")
@@ -1096,9 +1094,7 @@ class RealtimeVoiceChangerConfig:
                 if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
                     raise _refuse_type("harmony_steps must be a sequence of 3 integers")
                 if len(value) != _HARMONY_STEP_COUNT:
-                    raise _refuse(
-                        f"harmony_steps must hold {_HARMONY_STEP_COUNT} integers, got {len(value)}"
-                    )
+                    raise _refuse(f"harmony_steps must hold {_HARMONY_STEP_COUNT} integers")
                 for index, step in enumerate(value):
                     out.harmony_steps[index] = _narrow_int(
                         step, f"harmony_steps[{index}]", _C_INT_MIN, _C_INT_MAX

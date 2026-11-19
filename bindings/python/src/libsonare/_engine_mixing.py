@@ -55,7 +55,7 @@ def _strip_target(ref: StripRef) -> int | None:
     if isinstance(ref, str):
         if ref == "master":
             return None
-        raise _refuse(f"strip must be a track id or 'master', got {ref!r}")
+        raise _refuse("strip must be a track id or 'master'")
     return _narrow_int(ref, "strip", 0, _UINT32_MAX)
 
 

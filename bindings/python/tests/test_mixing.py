@@ -106,7 +106,9 @@ def test_strip_by_id_returns_index_and_raises_on_unknown(mixer) -> None:
     # A strip reference taken by any other method is refused the same way.
     with pytest.raises(SonareValueError, match="does-not-exist"):
         mixer.set_soloed("does-not-exist", True)
-    with pytest.raises(SonareValueError, match="out of range"):
+    with pytest.raises(
+        SonareValueError, match=rf"strip must be an integer in \[0, {mixer.strip_count - 1}\]$"
+    ):
         mixer.set_soloed(mixer.strip_count, True)
 
 
@@ -1104,7 +1106,7 @@ def test_process_stereo_input_count_rule(mixer) -> None:
     mixer.process_stereo([block], [block])
     mixer.process_stereo([block] * strips, [block] * strips)
     with pytest.raises(
-        SonareValueError, match=f"got {strips + 1} inputs for a {strips}-strip mixer"
+        SonareValueError, match=f"left_inputs must hold at most {strips} inputs, one per strip$"
     ):
         mixer.process_stereo(
             left_inputs=[block] * (strips + 1), right_inputs=[block] * (strips + 1)
@@ -1127,5 +1129,5 @@ def test_mixing_scene_preset_returns_a_scene_document_mapping() -> None:
             mixer.close()
     with pytest.raises(SonareValueError, match="must be one of"):
         mixing_scene_preset("noSuchScene")
-    with pytest.raises(TypeError, match="name must be a string"):
+    with pytest.raises(TypeError, match="^mixing_scene_preset: name must be one of "):
         mixing_scene_preset(0)  # type: ignore[arg-type]

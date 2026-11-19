@@ -622,21 +622,38 @@ def test_each_material_preset_name_builds_its_own_rir() -> None:
 
 @acoustic
 def test_a_number_for_a_preset_or_mode_is_a_type_error_naming_the_names() -> None:
-    with pytest.raises(TypeError, match="'concrete'.*'glass'"):
+    with pytest.raises(
+        TypeError,
+        match=(
+            "^synthesize_rir: material_preset must be one of "
+            "none, concrete, wood, curtain, carpet, glass$"
+        ),
+    ):
         libsonare.synthesize_rir(material_preset=2, sample_rate=48000)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="material_preset"):
         libsonare.room_morph([0.0] * 100, 48000, 7.0, 5.0, 3.0, material_preset=1)  # type: ignore[arg-type]
-    with pytest.raises(TypeError, match="'blind'.*'impulseResponse'"):
+    with pytest.raises(
+        TypeError, match="^estimate_room: mode must be one of auto, blind, impulseResponse$"
+    ):
         libsonare.estimate_room([0.0] * 1000, mode=2, sample_rate=48000)  # type: ignore[arg-type]
 
 
 @acoustic
 def test_an_unknown_preset_or_mode_name_is_refused_naming_the_valid_set() -> None:
-    with pytest.raises(libsonare.SonareValueError, match="'concrete'.*'glass'"):
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match=(
+            "^synthesize_rir: material_preset must be one of "
+            "none, concrete, wood, curtain, carpet, glass$"
+        ),
+    ):
         libsonare.synthesize_rir(material_preset="marble", sample_rate=48000)
     with pytest.raises(libsonare.SonareValueError, match="material_preset"):
         libsonare.room_morph([0.0] * 100, 48000, 7.0, 5.0, 3.0, material_preset="Concrete")
-    with pytest.raises(libsonare.SonareValueError, match="'blind'.*'impulseResponse'"):
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match="^estimate_room: mode must be one of auto, blind, impulseResponse$",
+    ):
         libsonare.estimate_room([0.0] * 1000, mode="impulse_response", sample_rate=48000)
 
 

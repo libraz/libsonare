@@ -309,9 +309,9 @@ class TestMode:
     def test_a_mode_outside_the_tokens_is_refused_by_name(self, call: object) -> None:
         left, right = _pair()
         args = (right, SR) if call is libsonare.normalize else (left, right, SR)
-        with pytest.raises(SonareValueError, match="mode must be 'peak' or 'rms'"):
+        with pytest.raises(SonareValueError, match="mode must be one of peak, rms$"):
             call(*args, mode="RMS")  # type: ignore[operator]
-        with pytest.raises(TypeError, match="mode must be 'peak' or 'rms'"):
+        with pytest.raises(TypeError, match="mode must be one of peak, rms$"):
             call(*args, mode=1)  # type: ignore[operator]
 
     @pytest.mark.parametrize("mode", ["peak", "rms"])

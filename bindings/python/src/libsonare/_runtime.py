@@ -535,7 +535,7 @@ def _as_float32_buffer(samples: object, *, arg_name: str = "samples") -> np.ndar
 def _require_instance(value: object, expected: type[_T], name: str) -> _T:
     """Return ``value`` if it is an ``expected``, else raise the wrong-type ``TypeError``."""
     if not isinstance(value, expected):
-        raise _refuse_type(f"{name} must be a {expected.__name__}, got {type(value).__name__}")
+        raise _refuse_type(f"{name} must be a {expected.__name__}")
     return value
 
 

@@ -247,7 +247,7 @@ _GS_EFX_REALIZATIONS = {"modern": 0, "classic": 1}
 
 def _gs_efx_realization_value(name: str) -> int:
     if not isinstance(name, str) or name not in _GS_EFX_REALIZATIONS:
-        raise _refuse(f"gs_efx_realization must be 'modern' or 'classic', got {name!r}")
+        raise _refuse(f"gs_efx_realization must be one of {', '.join(_GS_EFX_REALIZATIONS)}")
     return _GS_EFX_REALIZATIONS[name]
 
 

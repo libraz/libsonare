@@ -36,7 +36,7 @@ def _square_input(
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
     c_matrix, rows, cols = _to_c_float_matrix(matrix, arg_name=arg_name)
     if rows != cols:
-        raise _refuse(f"{arg_name} must be square, got shape ({rows}, {cols})")
+        raise _refuse(f"{arg_name} must be square")
     return c_matrix, rows
 
 

@@ -33,7 +33,6 @@ from ._runtime import (
     _out_float_array,
     _out_int_array,
     _resolve_optional_non_negative,
-    _resolve_zero_default,
     _strip_c_entry,
     _to_c_float,
     _to_c_float_array,
@@ -111,7 +110,7 @@ def note_to_hz(note: str) -> float:
     lib = _get_lib()
     hz = float(lib.sonare_note_to_hz(_utf8_arg(note, "note")))
     if math.isnan(hz):
-        raise _refused_argument(f"cannot parse note name: {note!r}")
+        raise _refused_argument("note must be a note name such as A4")
     return hz
 
 
@@ -149,18 +148,31 @@ def time_to_frames(time_sec: float, sr: int = 22050, hop_length: int = 512) -> i
     )
 
 
+def _centring_n_fft(n_fft: int | None) -> int:
+    """The C field's ``n_fft``: 0 when omitted (no centring), else a positive frame size."""
+    if n_fft is None:
+        return 0
+    if isinstance(n_fft, int) and not isinstance(n_fft, bool) and n_fft == 0:
+        raise _refuse("n_fft must not be 0; omit it for no centring")
+    return _narrow_int(n_fft, "n_fft", 1, _C_INT_MAX)
+
+
 @_entry("frames_to_samples")
 def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int | None = None) -> int:
     """Convert frame count to sample index.
 
     With ``n_fft`` the result is offset by ``n_fft // 2`` (librosa's centring).
+
+    Raises:
+        SonareValueError: If ``hop_length`` or a given ``n_fft`` is not an integer in
+            ``[1, 2147483647]``.
     """
     lib = _get_lib()
     return int(
         lib.sonare_frames_to_samples(
             _to_c_int(frames, "frames"),
-            _to_c_int(hop_length, "hop_length"),
-            _to_c_int(_resolve_zero_default(n_fft, "n_fft"), "n_fft"),
+            _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX),
+            _centring_n_fft(n_fft),
         )
     )
 
@@ -170,13 +182,17 @@ def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int | None = N
     """Convert sample index to frame count.
 
     With ``n_fft``, ``n_fft // 2`` is subtracted from the sample first (librosa's centring).
+
+    Raises:
+        SonareValueError: If ``hop_length`` or a given ``n_fft`` is not an integer in
+            ``[1, 2147483647]``.
     """
     lib = _get_lib()
     return int(
         lib.sonare_samples_to_frames(
             _to_c_int(samples, "samples"),
-            _to_c_int(hop_length, "hop_length"),
-            _to_c_int(_resolve_zero_default(n_fft, "n_fft"), "n_fft"),
+            _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX),
+            _centring_n_fft(n_fft),
         )
     )
 

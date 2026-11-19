@@ -98,7 +98,7 @@ def streaming_loudness_gain(
     lib = _get_lib()
     _require_export(lib, "sonare_streaming_loudness_gain", _WITHOUT_MASTERING)
     c_array, length = _to_c_float_array(samples)
-    param_array, param_count = _chain_params(config)
+    param_array, param_count = _chain_params(config, "config")
     out = SonareStreamingLoudnessGain()
     rc = lib.sonare_streaming_loudness_gain(
         c_array,
@@ -131,7 +131,7 @@ def streaming_loudness_gain_stereo(
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
         raise _refuse("left and right channel lengths must match")
-    param_array, param_count = _chain_params(config)
+    param_array, param_count = _chain_params(config, "config")
     out = SonareStreamingLoudnessGain()
     rc = lib.sonare_streaming_loudness_gain_stereo(
         left_array,
@@ -228,7 +228,7 @@ class StreamingMasteringChain:
         # layout remembered here would then differ from the one asked for.
         max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
         channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
-        param_array, param_count = _chain_params(config)
+        param_array, param_count = _chain_params(config, "config")
         handle = ctypes.c_void_p()
         if loudness_static_gain_db is not None:
             _require_export(lib, "sonare_streaming_mastering_chain_create_ex", _WITHOUT_MASTERING)

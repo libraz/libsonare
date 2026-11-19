@@ -293,7 +293,9 @@ def chord_functions(
     for i, chord in enumerate(entries):
         ordinal = _CHORD_QUALITY_ORDINALS.get(chord.quality)
         if ordinal is None:
-            raise _refuse(f"chords[{i}].quality {chord.quality!r} is not a chord quality")
+            raise _refuse(
+                f"chords[{i}].quality must be one of {', '.join(_CHORD_QUALITY_ORDINALS)}"
+            )
         array[i] = SonareChord(
             _to_c_int32(chord.root, f"chords[{i}].root"),
             ordinal,

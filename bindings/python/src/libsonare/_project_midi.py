@@ -871,7 +871,7 @@ class _ProjectMidiMixin:
         """
         return _found_index(
             _get_lib().sonare_midi_gm_family_first_program(_to_c_int(family, "family")),
-            f"family {family!r} is out of range",
+            "family must be an integer in [0, 15]",
         )
 
     @staticmethod

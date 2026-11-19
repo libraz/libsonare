@@ -91,11 +91,9 @@ def _named_selector(value: str, argument: str, prefix: str) -> int:
     while (name := name_of(len(valid))) is not None:
         valid.append(name.decode())
     if not isinstance(value, str):
-        raise _refuse_type(
-            f"{argument} must be one of {valid} (a name, not a number), got {value!r}"
-        )
+        raise _refuse_type(f"{argument} must be one of {', '.join(valid)}")
     if value not in valid:
-        raise _refuse(f"{argument} must be one of {valid}, got {value!r}")
+        raise _refuse(f"{argument} must be one of {', '.join(valid)}")
     return valid.index(value)
 
 
@@ -700,13 +698,11 @@ def room_morph_stereo(
     if receiver_spacing_m is not None:
         spacing = _narrow_double(receiver_spacing_m, "receiver_spacing_m")
         if not math.isfinite(spacing) or not 0.0 < spacing <= 4.0:
-            raise _refuse(
-                f"receiver_spacing_m must be finite and in (0, 4], got {receiver_spacing_m!r}"
-            )
+            raise _refuse("receiver_spacing_m must be finite and in (0, 4]")
     c_left, length = _to_c_float_array(left)
     c_right, right_length = _to_c_float_array(right)
     if right_length != length:
-        raise _refuse(f"left and right must have the same length, got {length} and {right_length}")
+        raise _refuse("left and right must have the same length")
     config, _owners = _room_morph_config(
         length_m,
         width_m,
