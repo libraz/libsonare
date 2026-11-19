@@ -1,8 +1,10 @@
 #include "sonare_c_internal.h"
 
 #include <cmath>
+#include <optional>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_api/sonare_c_last_refusal.h"
 #include "util/error_classification.h"
 
 namespace sonare_c_detail {
@@ -14,6 +16,11 @@ constexpr const char* kErrorDetailUnavailable = "Error detail unavailable";
 const char*& last_error_fallback_storage() noexcept {
   static thread_local const char* fallback = nullptr;
   return fallback;
+}
+
+std::optional<sonare::SonareParameterRefusal>& last_refusal_storage() noexcept {
+  static thread_local std::optional<sonare::SonareParameterRefusal> refusal;
+  return refusal;
 }
 
 }  // namespace
@@ -35,6 +42,7 @@ const char* last_error_message() noexcept {
 
 void set_last_error(SonareError code, const char* msg) noexcept {
   last_error_code_storage() = code;
+  last_refusal_storage().reset();
   last_error_fallback_storage() = nullptr;
   try {
     last_error_storage().assign(msg != nullptr ? msg : "");
@@ -45,11 +53,13 @@ void set_last_error(SonareError code, const char* msg) noexcept {
 
 void set_last_error_static(SonareError code, const char* msg) noexcept {
   last_error_code_storage() = code;
+  last_refusal_storage().reset();
   last_error_fallback_storage() = msg;
 }
 
 void clear_last_error() noexcept {
   last_error_code_storage() = SONARE_OK;
+  last_refusal_storage().reset();
   last_error_storage().clear();
   last_error_fallback_storage() = nullptr;
 }
@@ -70,6 +80,11 @@ void add_last_warning(const char* code, std::string message) {
       sonare::Diagnostic{sonare::Diagnostic::Severity::Warning, code, std::move(message)});
 }
 
+const sonare::SonareParameterRefusal* last_parameter_refusal() noexcept {
+  const auto& refusal = last_refusal_storage();
+  return refusal.has_value() ? &*refusal : nullptr;
+}
+
 SonareError map_sonare_exception(const SonareException& e) {
   return c_error_from_error_code(e.code());
 }
@@ -77,6 +92,15 @@ SonareError map_sonare_exception(const SonareException& e) {
 SonareError record_current_exception() noexcept {
   try {
     throw;
+  } catch (const sonare::SonareParameterRefusal& e) {
+    const SonareError code = map_sonare_exception(e);
+    set_last_error(code, e.what());
+    try {
+      last_refusal_storage() = e;
+    } catch (...) {
+      // The flat message is already recorded; a binding then renders it as C spells it.
+    }
+    return code;
   } catch (const SonareException& e) {
     const SonareError code = map_sonare_exception(e);
     set_last_error(code, e.what());

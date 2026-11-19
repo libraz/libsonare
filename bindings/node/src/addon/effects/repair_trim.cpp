@@ -11,7 +11,6 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
-#include "util/parameter_checks.h"
 
 using namespace sonare_node;
 using namespace sonare_node::repair_detail;
@@ -75,8 +74,7 @@ sonare::mastering::repair::TrimSilenceConfig ReadTrimConfig(const Napi::Object& 
   config.mode = parse_trim_silence_mode(options, config.mode);
   config.gate_lufs = DomainFloatProperty(options, "gateLufs", config.gate_lufs);
   config.window_ms = DomainFloatProperty(options, "windowMs", config.window_ms);
-  sonare::util::check::with_camel_paths(
-      [&] { sonare::mastering::repair::validate_config(config); });
+  sonare::mastering::repair::validate_config(config);
   return config;
 }
 

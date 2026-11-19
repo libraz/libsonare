@@ -177,25 +177,34 @@ inline std::string camel_path(const std::string& path) {
 /// @brief A core member path and the request key that spells it where @ref camel_path does not.
 using MemberKey = std::pair<const char*, const char*>;
 
-/// @brief Runs @p call, rethrowing a refusal not yet in the caller's spelling with each subject
-///        in @ref camel_path spelling, the member spelling of a JS request object, or as the key
-///        @p renamed lists for it.
-template <typename Call, std::size_t N = 0>
-auto with_camel_paths(Call&& call,
-                      const std::array<MemberKey, N>& renamed = {}) -> decltype(call()) {
+/// @brief @p refusal in a JS request object's spelling: each subject through @p renamed when it
+///        lists the subject, else through @ref camel_path. A refusal already in the caller's
+///        spelling is returned as it is, so rendering twice changes nothing.
+/// @details The one renderer behind both JS translation points (WASM's exception info and the
+///          Node addon's error builder) and @ref with_camel_paths.
+template <std::size_t N = 0>
+SonareParameterRefusal camel_spelled(const SonareParameterRefusal& refusal,
+                                     const std::array<MemberKey, N>& renamed = {}) {
+  if (refusal.caller_spelled()) return refusal;
+  return refusal.respelled(
+      refusal.code(),
+      [&renamed](const std::string& subject) {
+        for (const MemberKey& row : renamed) {
+          if (subject == row.first) return std::string(row.second);
+        }
+        return camel_path(subject);
+      },
+      true);
+}
+
+/// @brief Runs @p call, rethrowing a refusal it raises through @ref camel_spelled with the
+///        subjects @p renamed spells; an entry needs it only for those rows.
+template <typename Call, std::size_t N>
+auto with_camel_paths(Call&& call, const std::array<MemberKey, N>& renamed) -> decltype(call()) {
   try {
     return call();
   } catch (const SonareParameterRefusal& e) {
-    if (e.caller_spelled()) throw;
-    throw e.respelled(
-        e.code(),
-        [&renamed](const std::string& subject) {
-          for (const MemberKey& row : renamed) {
-            if (subject == row.first) return std::string(row.second);
-          }
-          return camel_path(subject);
-        },
-        true);
+    throw camel_spelled(e, renamed);
   }
 }
 

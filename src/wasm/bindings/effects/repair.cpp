@@ -9,7 +9,6 @@
 #include "mastering/common/noise_profile.h"
 #include "mastering/repair/declip.h"
 #include "mastering/repair/trim_silence.h"
-#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -546,8 +545,7 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
   }
   config.gate_lufs = domainFloatProperty(options, "gateLufs", config.gate_lufs);
   config.window_ms = domainFloatProperty(options, "windowMs", config.window_ms);
-  // Validated here, inside the respelling, so the core's refusal names the request's keys.
-  sonare::util::check::with_camel_paths([&] { mastering::repair::validate_config(config); });
+  mastering::repair::validate_config(config);
   return config;
 }
 

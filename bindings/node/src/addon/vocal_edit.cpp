@@ -629,9 +629,8 @@ Napi::Object RenderResultToObject(Napi::Env env, const SonareVocalRenderResult& 
 
 Napi::Error MakeVocalError(Napi::Env env, SonareError error,
                            const SonareVocalErrorDetail* detail = nullptr) {
-  const char* message = sonare_node::ErrorMessageForCode(error);
   Napi::Error js_error =
-      sonare_node::MakeSonareError(env, error, message == nullptr ? "libsonare error" : message);
+      sonare_node::MakeSonareError(env, error, sonare_node::ErrorMessageForCode(error));
   Napi::Object object = js_error.Value();
   object.Set("reason", detail == nullptr ? 0u : detail->reason);
   object.Set("field", detail == nullptr ? "" : detail->field);
@@ -1001,8 +1000,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
     sonare_vocal_error_detail_init(&detail_);
     sonare_vocal_last_error_detail(&detail_);
     // Runs on the render worker thread, whose thread-local holds the refusal's detail.
-    const char* message = sonare_node::ErrorMessageForCode(error);
-    SetError(message == nullptr ? "vocal render failed" : message);
+    SetError(sonare_node::ErrorMessageForCode(error));
   }
 
   void DetachSignal() {

@@ -5,17 +5,23 @@
 #include <string>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_api/sonare_c_last_refusal.h"
 #include "c_entry_names.h"
 #include "effects/hpss.h"
 #include "sonare_wrap_options.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_node {
 
 using sonare::constants::kDefaultHopLength;
 using sonare::constants::kDefaultNFft;
 
-const char* ErrorMessageForCode(SonareError err) {
+std::string ErrorMessageForCode(SonareError err) {
+  // A recorded parameter refusal is rendered in request keys from its subjects, never parsed.
+  if (const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal()) {
+    return sonare::util::check::camel_spelled(*refusal).what();
+  }
   const char* detail = sonare_last_error_message();
   if (detail != nullptr && detail[0] != '\0') {
     return detail + sonare_c_entries::CEntryPrefixLength(detail);
@@ -121,6 +127,9 @@ void ThrowCurrentException(Napi::Env env) {
     throw;
   } catch (const Napi::Error& e) {
     e.ThrowAsJavaScriptException();
+  } catch (const sonare::SonareParameterRefusal& e) {
+    ThrowSonareErrorMessage(env, CErrorFromException(e),
+                            sonare::util::check::camel_spelled(e).what());
   } catch (const sonare::SonareException& e) {
     ThrowSonareErrorMessage(env, CErrorFromException(e), ExceptionMessage(e));
   } catch (const std::exception& e) {

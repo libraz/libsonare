@@ -11,6 +11,7 @@
 #include "c_api/sonare_c_error_mapping.h"
 #include "c_entry_names.h"
 #include "util/error_classification.h"
+#include "util/parameter_checks.h"
 
 // Pulled in for the compile-time SONARE_ABI_VERSION macro only. The macro packs
 // the per-subsystem ABI versions into one 32-bit value with no link dependency
@@ -238,6 +239,10 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   auto* base = reinterpret_cast<std::exception*>(exception_ptr);
   if (base != nullptr) {
     message = base->what();
+    // A core refusal not yet in the caller's spelling is rendered in request-object keys.
+    if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(base)) {
+      message = sonare::util::check::camel_spelled(*refusal).what();
+    }
     // A refused argument surfaces as the native JS class, not a coded SonareError;
     // code and codeName below still read InvalidParameter.
     if (const auto* argument = dynamic_cast<const WasmArgumentError*>(base)) {

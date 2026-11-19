@@ -1,7 +1,11 @@
 /// @file sonare_c_mastering_repair_test.cpp
 /// @brief Mastering repair and dynamics C API tests.
 
+#include <string>
+
+#include "c_api/sonare_c_last_refusal.h"
 #include "sonare_c_test_helpers.h"
+#include "util/parameter_checks.h"
 
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("sonare_mastering_repair_declick", "[c_api][mastering]") {
@@ -1807,6 +1811,45 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
     REQUIRE(result.samples == nullptr);
     REQUIRE(result.length == 0);
   }
+}
+
+TEST_CASE("a parameter refusal is kept beside the flat message and cleared with it",
+          "[c_api][mastering]") {
+  const int sr = 48000;
+  auto samples = generate_sine(440.0f, sr, 0.1f);
+  SonareTrimSilenceConfig config = {};
+  config.threshold_db = -60.0f;
+  config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
+  config.gate_lufs = -60.0f;
+  config.window_ms = 0.0f;
+  SonareTrimSilenceResult result{};
+  REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config,
+                                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+  // C reads the core's own spelling; a JS binding renders the same refusal in request keys.
+  CHECK(std::string(sonare_last_error_message()) == "window_ms must be finite and in (0, 10000]");
+  const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
+  REQUIRE(refusal != nullptr);
+  CHECK(refusal->subject() == "window_ms");
+  CHECK(std::string(sonare::util::check::camel_spelled(*refusal).what()) ==
+        "windowMs must be finite and in (0, 10000]");
+
+  // A later failure that is no parameter refusal replaces it rather than leaving it behind.
+  config.window_ms = 400.0f;
+  config.mode = 999;
+  REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config,
+                                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_c_detail::last_parameter_refusal() == nullptr);
+
+  config.window_ms = 0.0f;
+  config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
+  REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config,
+                                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_c_detail::last_parameter_refusal() != nullptr);
+  config.window_ms = 400.0f;
+  REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config,
+                                               &result) == SONARE_OK);
+  sonare_free_trim_silence_result(&result);
+  CHECK(sonare_c_detail::last_parameter_refusal() == nullptr);
 }
 
 namespace {

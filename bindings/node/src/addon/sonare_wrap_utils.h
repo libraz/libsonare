@@ -15,7 +15,10 @@
 #include "util/exception.h"
 namespace sonare_node {
 
-const char* ErrorMessageForCode(SonareError err);
+/// @brief The calling thread's last C-ABI failure as a JS message: a recorded parameter refusal
+///        rendered in request keys, else the flat detail without its C-entry prefix, else the
+///        generic text for @p err.
+std::string ErrorMessageForCode(SonareError err);
 
 /// The exception text without a leading C-entry prefix, which the public entry replaces.
 const char* ExceptionMessage(const std::exception& e);

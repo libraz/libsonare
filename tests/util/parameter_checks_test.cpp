@@ -3,6 +3,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <stdexcept>
 #include <string>
 
 #include "util/db.h"
@@ -112,7 +113,44 @@ TEST_CASE("a refusal is respelled into request keys, camel case unless renamed",
           check::with_camel_paths(
               [] { check::in_range(200.0f, 0.0, 100.0, "air.humidity_percent"); }, kRenamed);
         }) == "air.humidityPercent must be finite and in [0, 100]");
-  CHECK(refusal_text([] {
-          check::with_camel_paths([] { check::in_range(2.0f, 0.0, 1.0, "gate_lufs"); });
-        }) == "gateLufs must be finite and in [0, 1]");
+}
+
+namespace {
+
+sonare::SonareParameterRefusal caught_refusal(void (*call)()) {
+  try {
+    call();
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    return refusal;
+  }
+  FAIL("the call did not refuse");
+  throw std::logic_error("unreachable");
+}
+
+}  // namespace
+
+TEST_CASE("the JS refusal renderer renders once and leaves a caller-spelled refusal alone",
+          "[util][refusal]") {
+  const auto core = caught_refusal([] { check::in_range(2.0f, 0.0, 1.0, "gate_lufs"); });
+  REQUIRE_FALSE(core.caller_spelled());
+  const auto rendered = check::camel_spelled(core);
+  CHECK(std::string(rendered.what()) == "gateLufs must be finite and in [0, 1]");
+  CHECK(rendered.caller_spelled());
+  CHECK(std::string(check::camel_spelled(rendered).what()) == rendered.what());
+
+  // A subject the caller already spelled keeps its underscores; camel case would rename it.
+  const auto keyed = caught_refusal([] {
+    throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter,
+                                                    "strips[0].inserts[0].params.snake_key",
+                                                    "must be finite")
+        .as_caller_spelled();
+  });
+  CHECK(std::string(check::camel_spelled(keyed).what()) ==
+        "strips[0].inserts[0].params.snake_key must be finite");
+
+  const auto relation = caught_refusal([] {
+    check::refuse_relation({"fundamental_hz", "search_range_hz"}, "{0} + {1} must be at least 1");
+  });
+  CHECK(std::string(check::camel_spelled(relation).what()) ==
+        "fundamentalHz + searchRangeHz must be at least 1");
 }

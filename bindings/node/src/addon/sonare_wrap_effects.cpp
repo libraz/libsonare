@@ -31,7 +31,6 @@
 #include "sonare_wrap_key_options.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
-#include "util/parameter_checks.h"
 
 using namespace sonare_node;
 
@@ -648,10 +647,8 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
   config.formant_mode = sonare::editing::voice_changer::parse_formant_mode(formant_mode);
-  const sonare::Audio result = sonare::util::check::with_camel_paths([&] {
-    sonare::editing::voice_changer::VoiceChanger changer(config);
-    return changer.process(audio);
-  });
+  sonare::editing::voice_changer::VoiceChanger changer(config);
+  const sonare::Audio result = changer.process(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)
