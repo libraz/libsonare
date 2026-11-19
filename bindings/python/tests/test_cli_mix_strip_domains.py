@@ -131,5 +131,6 @@ def test_malformed_user_scene_remains_invalid_format(stereo_source: Path, tmp_pa
     )
 
     assert result.returncode == 5
-    assert "scene" in result.stderr
+    # The caller wrote the document whole, so the refusal is rooted at its own root.
+    assert "strips[0].pan must be finite and in [-1, 1]" in result.stderr
     assert not output.exists()
