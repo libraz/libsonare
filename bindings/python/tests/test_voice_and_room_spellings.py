@@ -99,8 +99,8 @@ def _flat(config: RealtimeVoiceChangerConfig) -> dict[str, object]:
     for f in dataclasses.fields(config):
         head, *rest = f.name.split("_")
         value = getattr(config, f.name)
-        if value is None:  # the document spells an automatic grain 0
-            value = 0
+        if value is None:  # an automatic grain is spelled by omission
+            continue
         if isinstance(value, tuple):
             value = list(value)
         elif f.name in ("limiter_enable_isp_limiter", "vocoder_enabled"):

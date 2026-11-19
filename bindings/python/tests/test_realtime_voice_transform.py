@@ -43,8 +43,8 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
             part if i == 0 else part.capitalize() for i, part in enumerate(f.name.split("_"))
         )
         value = getattr(config, f.name)
-        if value is None:  # the document spells an automatic grain 0
-            value = 0
+        if value is None:  # an automatic grain is spelled by omission
+            continue
         if f.name == "harmony_steps":
             out["harmonySteps"] = list(value)
         elif camel in ("limiterEnableIspLimiter", "vocoderEnabled"):

@@ -771,7 +771,7 @@ def _grain_size_request(grain_size_samples: int | None, name: str) -> int:
     # Narrowed rather than coerced: int() would take 0.5 as the automatic 0.
     value = _narrow_int(grain_size_samples, name, _C_INT_MIN, _C_INT_MAX)
     if value == 0:
-        raise SonareValueError(f"{name} must not be 0; omit it for automatic")
+        raise SonareValueError(f"{name} must not be 0; omit it for the automatic grain")
     return value
 
 

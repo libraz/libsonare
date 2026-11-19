@@ -65,7 +65,8 @@ def test_streaming_retune_config_round_trips_through_set_config() -> None:
         retune.set_config(**before)  # type: ignore[arg-type]
         assert retune.config() == before
         with pytest.raises(
-            SonareValueError, match="^grain_size_samples must not be 0; omit it for automatic$"
+            SonareValueError,
+            match="^grain_size_samples must not be 0; omit it for the automatic grain$",
         ):
             retune.set_config(grain_size_samples=0)
 

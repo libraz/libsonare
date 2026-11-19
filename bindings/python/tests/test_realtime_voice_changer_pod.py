@@ -113,7 +113,7 @@ def test_config_returns_the_live_normalized_record() -> None:
         assert libsonare.RealtimeVoiceChangerConfig().retune_grain_size_samples is None
         with pytest.raises(
             libsonare.SonareValueError,
-            match="^retune_grain_size_samples must not be 0; omit it for automatic$",
+            match="^retune_grain_size_samples must not be 0; omit it for the automatic grain$",
         ):
             changer.set_config(dataclasses.replace(cfg, retune_grain_size_samples=0))
     finally:
@@ -177,8 +177,8 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
             part if i == 0 else part.capitalize() for i, part in enumerate(f.name.split("_"))
         )
         value = getattr(config, f.name)
-        if value is None:  # the document spells an automatic grain 0
-            value = 0
+        if value is None:  # an automatic grain is spelled by omission
+            continue
         if f.name == "harmony_steps":
             out["harmonySteps"] = list(value)
         elif camel in ("limiterEnableIspLimiter", "vocoderEnabled"):
