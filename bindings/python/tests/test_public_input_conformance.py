@@ -167,6 +167,17 @@ def test_midi_cc_to_breakpoint_byte_fields_follow_the_corpus(case: dict[str, Any
             Project.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
 
 
+@pytest.mark.parametrize("case", _MIDI_CC_CASES, ids=lambda case: case["id"])
+def test_midi_param_to_cc_byte_fields_follow_the_corpus(case: dict[str, Any]) -> None:
+    if case["accepted"]:
+        Project.midi_param_to_cc([_midi_cc_binding(case)], 1, 0.5, 0)
+    else:
+        with pytest.raises(
+            SonareValueError, match=rf"^\S+: {_python_field(case)} must be an integer in \[0, "
+        ):
+            Project.midi_param_to_cc([_midi_cc_binding(case)], 1, 0.5, 0)
+
+
 _STREAMING = _CORPUS["streaming_contract"]
 # The facade folds the band counts into the matrix shapes and the flags into None.
 _STREAM_FOLDED = {"n_mels", "n_chroma", "feature_flags"}
