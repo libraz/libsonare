@@ -336,3 +336,24 @@ def test_project_markers_keep_explicit_ids_across_a_round_trip() -> None:
     restored = Project.from_json(project.to_json())
     assert restored.markers() == before
     assert restored.set_marker(1440.0) > max(ids)
+
+
+_GM_REFUSALS: dict[str, type[Exception]] = {"range": SonareValueError, "type": TypeError}
+
+
+@pytest.mark.parametrize("case", _CORPUS["gm_lookup"]["cases"], ids=lambda case: case["id"])
+def test_gm_lookup_follows_the_corpus(case: dict[str, Any]) -> None:
+    lookup = getattr(Project, case["lookup"])
+    if "refused" in case:
+        refusal = f"{case['key']} {case['predicate']}"
+        with pytest.raises(
+            _GM_REFUSALS[case["refused"]],
+            match=rf"^Project\.{case['lookup']}: {re.escape(refusal)}$",
+        ):
+            lookup(**case["args"])
+    elif case.get("absent"):
+        assert lookup(**case["args"]) is None
+    elif "value" in case:
+        assert lookup(**case["args"]) == case["value"]
+    else:
+        assert lookup(**case["args"]) == case["name"]
