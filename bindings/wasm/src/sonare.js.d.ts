@@ -63,7 +63,7 @@ export interface WasmRealtimeVoiceChangerPodConfig {
   wetMix: number;
   retunePitchSemitones: number;
   retuneMix: number;
-  retuneGrainSizeSamples: number;
+  retuneGrainSizeSamples?: number;
   formantFactor: number;
   formantAmount: number;
   formantBody: number;

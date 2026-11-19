@@ -196,8 +196,8 @@ export class RealtimeVoiceChanger {
 
   /**
    * The applied configuration as a flat record, in the form {@link setConfig} and the
-   * constructor accept, so `other.setConfig(changer.config())` reproduces it. A retune
-   * grain left at 0 reads back as the grain the changer resolved.
+   * constructor accept, so `other.setConfig(changer.config())` reproduces it. An automatic
+   * retune grain reads back as an absent `retuneGrainSizeSamples`.
    */
   config(): RealtimeVoiceChangerConfig {
     return this.changer.config();

@@ -55,7 +55,7 @@ function isFlatConfig(config: unknown): config is Record<string, unknown> {
 
 let flatReference: RealtimeVoiceChangerConfig | undefined;
 
-/** Every flat-config field with a value of its type; the fields do not vary by preset. */
+/** Every required flat-config field with a value of its type; they do not vary by preset. */
 function flatConfigReference(): RealtimeVoiceChangerConfig {
   flatReference ??= realtimeVoiceChangerPresetConfig('neutralMonitor');
   return flatReference;
@@ -68,6 +68,9 @@ function flatConfigReference(): RealtimeVoiceChangerConfig {
 function assertFlatConfigFields(fnName: string, config: Record<string, unknown>): void {
   for (const [key, sample] of Object.entries(flatConfigReference())) {
     const value = config[key];
+    if (key === 'retuneGrainSizeSamples') {
+      continue;
+    }
     if (key !== 'harmonySteps' && typeof value !== typeof sample) {
       throw new TypeError(`${fnName}: ${key} must be a ${typeof sample}`);
     }
@@ -75,12 +78,35 @@ function assertFlatConfigFields(fnName: string, config: Record<string, unknown>)
 }
 
 /**
- * The flat config as the addon reads it. Every field is required, as in the native parser.
+ * The one optional flat field: an omitted (`undefined` or `null`) retune grain is the
+ * automatic grain and leaves the key out; an explicit 0 is refused rather than read as it.
+ */
+function withRetuneGrain(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
+  const grain = config.retuneGrainSizeSamples;
+  if (grain === undefined || grain === null) {
+    const { retuneGrainSizeSamples: _omitted, ...rest } = config;
+    return rest;
+  }
+  if (typeof grain !== 'number') {
+    throw new TypeError(`${fnName}: retuneGrainSizeSamples must be a number`);
+  }
+  if (grain === 0) {
+    throw new RangeError(
+      `${fnName}: retuneGrainSizeSamples must not be 0; omit it for the automatic grain`,
+    );
+  }
+  return config;
+}
+
+/**
+ * The flat config as the addon reads it. Every field but the retune grain is required, as in
+ * the native parser.
  *
  * @throws TypeError for a missing or wrong-typed field; RangeError for a `harmonySteps` of
- *   another length.
+ *   another length or a retune grain of 0.
  */
 function nativePodConfig(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
+  config = withRetuneGrain(fnName, config);
   assertFlatConfigFields(fnName, config);
   const steps = config.harmonySteps;
   if (!Array.isArray(steps)) {
@@ -231,8 +257,8 @@ export class RealtimeVoiceChanger {
 
   /**
    * The applied configuration as a flat record, in the form {@link setConfig} and the
-   * constructor accept, so `other.setConfig(changer.config())` reproduces it. A retune
-   * grain left at 0 reads back as the grain the changer resolved.
+   * constructor accept, so `other.setConfig(changer.config())` reproduces it. An automatic
+   * retune grain reads back as an absent `retuneGrainSizeSamples`.
    */
   config(): RealtimeVoiceChangerConfig {
     return this.native.config() as RealtimeVoiceChangerConfig;

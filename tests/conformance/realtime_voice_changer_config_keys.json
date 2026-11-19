@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "optional_keys": ["retuneGrainSizeSamples"],
   "keys": [
     "characterAmount",
     "characterTone",
@@ -46,7 +47,6 @@
     "pitchCorrectionRobotOctave",
     "pitchCorrectionScale",
     "pitchCorrectionSpeedMs",
-    "retuneGrainSizeSamples",
     "retuneMix",
     "retunePitchSemitones",
     "reverbDamping",

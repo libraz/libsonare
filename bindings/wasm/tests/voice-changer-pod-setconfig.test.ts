@@ -221,7 +221,7 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
     const vc = make('neutralMonitor');
     expect(() =>
       // @ts-expect-error preset metadata is deliberately omitted; the runtime rejects it
-      vc.setConfig({ schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } }),
+      vc.setConfig({ schemaVersion: 4, dsp: { retune: { pitchSemitones: 3 } } }),
     ).toThrow(/missing field|field must/i);
     vc.destroy();
   });
@@ -345,7 +345,8 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
   it('requires every voice transformer key in both flat POD paths', () => {
     const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     const keys = Object.keys(pod);
-    expect(keys).toHaveLength(69);
+    // 69 fields; the automatic retune grain is the one optional key, absent here.
+    expect(keys).toHaveLength(68);
     const changer = make(pod);
     try {
       for (const key of keys) {
@@ -411,7 +412,7 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
   it('describes every preset as a complete flat POD', () => {
     for (const id of realtimeVoiceChangerPresetNames()) {
       const pod = realtimeVoiceChangerPresetConfig(id);
-      expect(Object.keys(pod), id).toHaveLength(69);
+      expect(Object.keys(pod), id).toHaveLength(68);
       const changer = make(pod);
       try {
         changer.setConfig(pod);
@@ -424,37 +425,69 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
 
 // The same key list the other package's suite reads: the record config() returns
 // is one shape across the two packages, not a table per surface.
-const sharedConfigKeys = (
-  JSON.parse(
-    readFileSync(
-      new URL(
-        '../../../tests/conformance/realtime_voice_changer_config_keys.json',
-        import.meta.url,
-      ),
-      'utf8',
-    ),
-  ) as { keys: string[] }
-).keys;
+const sharedConfigFixture = JSON.parse(
+  readFileSync(
+    new URL('../../../tests/conformance/realtime_voice_changer_config_keys.json', import.meta.url),
+    'utf8',
+  ),
+) as { keys: string[]; optional_keys: string[] };
+const sharedConfigKeys = sharedConfigFixture.keys;
+const sharedOptionalKeys = sharedConfigFixture.optional_keys;
 
 describe('RealtimeVoiceChanger config read', () => {
   beforeAll(async () => {
     await init();
   });
 
-  it('reads back each preset as its preset record with the grain it resolved', () => {
+  it('reads back each preset as its preset record, the automatic grain absent', () => {
     for (const name of realtimeVoiceChangerPresetNames()) {
       const changer = make(name);
       try {
-        // A preset leaves the retune grain to the changer, which reports the grain it resolved.
-        const { retuneGrainSizeSamples, ...rest } = changer.config();
-        const { retuneGrainSizeSamples: presetGrain, ...presetRest } =
-          realtimeVoiceChangerPresetConfig(name);
-        expect(rest).toEqual(presetRest);
-        expect(presetGrain).toBe(0);
-        expect(retuneGrainSizeSamples).toBeGreaterThan(0);
+        // A preset leaves the retune grain automatic, which reads back as the absent key.
+        const config = changer.config();
+        expect(config).toEqual(realtimeVoiceChangerPresetConfig(name));
+        expect('retuneGrainSizeSamples' in config).toBe(false);
       } finally {
         changer.destroy();
       }
+    }
+  });
+
+  it('reads an omitted or null retune grain as automatic and refuses 0 by name', () => {
+    const base = realtimeVoiceChangerPresetConfig('brightIdol');
+    for (const grain of [undefined, null]) {
+      const changer = make('neutralMonitor');
+      try {
+        changer.setConfig({ ...base, retuneGrainSizeSamples: grain as never });
+        expect('retuneGrainSizeSamples' in changer.config(), String(grain)).toBe(false);
+      } finally {
+        changer.destroy();
+      }
+    }
+    const changer = make('neutralMonitor');
+    try {
+      expect(() => changer.setConfig({ ...base, retuneGrainSizeSamples: 0 })).toThrow(
+        new RangeError(
+          'RealtimeVoiceChanger.setConfig: retuneGrainSizeSamples must not be 0; omit it for the automatic grain',
+        ),
+      );
+      expect(() => changer.setConfig({ ...base, retuneGrainSizeSamples: '512' as never })).toThrow(
+        TypeError,
+      );
+      changer.setConfig({ ...base, retuneGrainSizeSamples: 1024 });
+      const explicit = changer.config();
+      expect(explicit.retuneGrainSizeSamples).toBe(1024);
+      expect(Object.keys(explicit).sort()).toEqual(
+        [...sharedConfigKeys, ...sharedOptionalKeys].sort(),
+      );
+      const copy = make(explicit);
+      try {
+        expect(copy.config()).toEqual(explicit);
+      } finally {
+        copy.destroy();
+      }
+    } finally {
+      changer.destroy();
     }
   });
 

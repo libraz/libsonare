@@ -42,13 +42,13 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1 });
     expect(() =>
       // @ts-expect-error deliberately partial nested preset; setConfig must reject it, not fill in defaults.
-      vc.setConfig({ schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } }),
+      vc.setConfig({ schemaVersion: 4, dsp: { retune: { pitchSemitones: 3 } } }),
     ).toThrow(/missing field|field must/i);
     vc.destroy();
   });
 
   it('reports a refused preset-or-config document as InvalidFormat', () => {
-    const partial = { schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } } as never;
+    const partial = { schemaVersion: 4, dsp: { retune: { pitchSemitones: 3 } } } as never;
     expectRefusal(
       () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: partial }),
       ErrorCode.InvalidFormat,
@@ -173,33 +173,65 @@ function make(config: RealtimeVoiceChangerConfigInput): RealtimeVoiceChanger {
 
 // The same key list the other package's suite reads: the record config() returns
 // is one shape across the two packages, not a table per surface.
-const sharedConfigKeys = (
-  JSON.parse(
-    readFileSync(
-      new URL(
-        '../../../tests/conformance/realtime_voice_changer_config_keys.json',
-        import.meta.url,
-      ),
-      'utf8',
-    ),
-  ) as { keys: string[] }
-).keys;
+const sharedConfigFixture = JSON.parse(
+  readFileSync(
+    new URL('../../../tests/conformance/realtime_voice_changer_config_keys.json', import.meta.url),
+    'utf8',
+  ),
+) as { keys: string[]; optional_keys: string[] };
+const sharedConfigKeys = sharedConfigFixture.keys;
+const sharedOptionalKeys = sharedConfigFixture.optional_keys;
 
 describe('RealtimeVoiceChanger config read', () => {
-  it('reads back each preset as its preset record with the grain it resolved', () => {
+  it('reads back each preset as its preset record, the automatic grain absent', () => {
     for (const name of realtimeVoiceChangerPresetNames()) {
       const changer = make(name);
       try {
-        // A preset leaves the retune grain to the changer, which reports the grain it resolved.
-        const { retuneGrainSizeSamples, ...rest } = changer.config();
-        const { retuneGrainSizeSamples: presetGrain, ...presetRest } =
-          realtimeVoiceChangerPresetConfig(name);
-        expect(rest).toEqual(presetRest);
-        expect(presetGrain).toBe(0);
-        expect(retuneGrainSizeSamples).toBeGreaterThan(0);
+        // A preset leaves the retune grain automatic, which reads back as the absent key.
+        const config = changer.config();
+        expect(config).toEqual(realtimeVoiceChangerPresetConfig(name));
+        expect('retuneGrainSizeSamples' in config).toBe(false);
       } finally {
         changer.destroy();
       }
+    }
+  });
+
+  it('reads an omitted or null retune grain as automatic and refuses 0 by name', () => {
+    const base = realtimeVoiceChangerPresetConfig('brightIdol');
+    for (const grain of [undefined, null]) {
+      const changer = make('neutralMonitor');
+      try {
+        changer.setConfig({ ...base, retuneGrainSizeSamples: grain as never });
+        expect('retuneGrainSizeSamples' in changer.config(), String(grain)).toBe(false);
+      } finally {
+        changer.destroy();
+      }
+    }
+    const changer = make('neutralMonitor');
+    try {
+      expect(() => changer.setConfig({ ...base, retuneGrainSizeSamples: 0 })).toThrow(
+        new RangeError(
+          'RealtimeVoiceChanger.setConfig: retuneGrainSizeSamples must not be 0; omit it for the automatic grain',
+        ),
+      );
+      expect(() => changer.setConfig({ ...base, retuneGrainSizeSamples: '512' as never })).toThrow(
+        TypeError,
+      );
+      changer.setConfig({ ...base, retuneGrainSizeSamples: 1024 });
+      const explicit = changer.config();
+      expect(explicit.retuneGrainSizeSamples).toBe(1024);
+      expect(Object.keys(explicit).sort()).toEqual(
+        [...sharedConfigKeys, ...sharedOptionalKeys].sort(),
+      );
+      const copy = make(explicit);
+      try {
+        expect(copy.config()).toEqual(explicit);
+      } finally {
+        copy.destroy();
+      }
+    } finally {
+      changer.destroy();
     }
   });
 

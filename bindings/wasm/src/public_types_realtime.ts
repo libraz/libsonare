@@ -197,8 +197,8 @@ export type VoicePresetCategory =
 
 /** Metadata shared by every preset document. */
 export interface RealtimeVoiceChangerPresetMetadata {
-  /** Preset document schema version; always `3`. */
-  schemaVersion: 3;
+  /** Preset document schema version; always `4`. */
+  schemaVersion: 4;
   /** Preset id. */
   id: string;
   /** Display name. */
@@ -277,8 +277,8 @@ export interface RealtimeVoiceChangerConfig {
   retunePitchSemitones: number;
   /** Wet/dry mix of the retune stage. */
   retuneMix: number;
-  /** Retune grain length in samples. */
-  retuneGrainSizeSamples: number;
+  /** Retune grain length in samples; omitted for the automatic grain, and never 0. */
+  retuneGrainSizeSamples?: number;
   /** Formant shift factor; 1 leaves the formants unchanged. */
   formantFactor: number;
   /** Strength of the formant displacement in [0, 1]. Ignored when `formantMode` is `'absolute'`. */

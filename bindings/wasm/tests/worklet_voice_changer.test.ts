@@ -17,7 +17,6 @@ function workletPod(): RealtimeVoiceChangerConfig {
     wetMix: 1,
     retunePitchSemitones: 0,
     retuneMix: 0,
-    retuneGrainSizeSamples: 0,
     formantFactor: 1,
     formantAmount: 0,
     formantBody: 0,

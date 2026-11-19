@@ -78,7 +78,9 @@ describe('voice transformer presets and flat config', () => {
     expect(pod.voiceEngine).toBe('psola');
     expect(pod.pitchCorrectionMode).toBe('off');
     expect(pod.vocoderEnabled).toBe(false);
-    expect(Object.keys(pod)).toHaveLength(69);
+    // 69 fields; the automatic retune grain is the one left out.
+    expect(Object.keys(pod)).toHaveLength(68);
+    expect('retuneGrainSizeSamples' in pod).toBe(false);
   });
 
   it('round-trips a changed transformer config through setConfig and configJson', () => {

@@ -447,7 +447,6 @@ describe('newly exposed Node functions', () => {
       'outputGainDb',
       'wetMix',
       'retunePitchSemitones',
-      'retuneGrainSizeSamples',
       'formantFactor',
       'compressorThresholdDb',
       'reverbSeed',

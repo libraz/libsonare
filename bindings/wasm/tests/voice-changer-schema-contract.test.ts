@@ -105,13 +105,15 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
 
   it('rejects representative schema violations through both validators', () => {
     const factoryPreset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor')) as {
-      dsp: { retune: { grainSizeSamples: number } };
+      dsp: { retune: { grainSizeSamples?: number } };
       id: string;
       schemaVersion: number;
     };
 
-    expect(factoryPreset.schemaVersion).toBe(3);
-    expectBothValidatorsToReject({ ...factoryPreset, schemaVersion: 4 });
+    expect(factoryPreset.schemaVersion).toBe(4);
+    expect('grainSizeSamples' in factoryPreset.dsp.retune).toBe(false);
+    expectBothValidatorsToReject({ ...factoryPreset, schemaVersion: 3 });
+    expectBothValidatorsToReject({ ...factoryPreset, schemaVersion: 5 });
     expectBothValidatorsToReject({ ...factoryPreset, schemaVersion: 0 });
     expectBothValidatorsToReject({ ...factoryPreset, id: 'Invalid ID' });
     expectBothValidatorsToReject({ ...factoryPreset, unexpected: true });
@@ -120,6 +122,13 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
       dsp: {
         ...factoryPreset.dsp,
         retune: { ...factoryPreset.dsp.retune, grainSizeSamples: 1.5 },
+      },
+    });
+    expectBothValidatorsToReject({
+      ...factoryPreset,
+      dsp: {
+        ...factoryPreset.dsp,
+        retune: { ...factoryPreset.dsp.retune, grainSizeSamples: 0 },
       },
     });
   });

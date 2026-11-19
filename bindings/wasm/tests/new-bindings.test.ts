@@ -318,7 +318,6 @@ describe('newly exposed WASM functions', () => {
       'wetMix',
       'retunePitchSemitones',
       'retuneMix',
-      'retuneGrainSizeSamples',
       'formantFactor',
       'eqHighPassHz',
       'gateThresholdDb',

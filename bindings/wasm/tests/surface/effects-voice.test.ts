@@ -411,7 +411,6 @@ describe('voice changer surface', () => {
         'reverbVariation',
         'eqHighPassHz',
         'retunePitchSemitones',
-        'retuneGrainSizeSamples',
         'harmonySteps',
         'formantMode',
       ]) {
