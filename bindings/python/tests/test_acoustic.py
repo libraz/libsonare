@@ -789,10 +789,13 @@ def test_room_morph_stereo_default_spacing_equals_explicit_half_metre() -> None:
 
 
 @acoustic
-@pytest.mark.parametrize("spacing", [0.0, -1.0, 4.5, float("nan"), float("inf")])
+@pytest.mark.parametrize("spacing", [0.0, -1.0, 4.5, 1e40, float("nan"), float("inf")])
 def test_room_morph_stereo_refuses_an_out_of_range_spacing(spacing: float) -> None:
     samples = _impulse(100)
-    with pytest.raises(libsonare.SonareValueError, match="receiver_spacing_m"):
+    libsonare.room_morph_stereo(samples, samples, receiver_spacing_m=4.0, **_STEREO_ROOM)
+    with pytest.raises(
+        libsonare.SonareValueError, match=r": receiver_spacing_m must be finite and in \(0, 4\]$"
+    ):
         libsonare.room_morph_stereo(samples, samples, receiver_spacing_m=spacing, **_STEREO_ROOM)
 
 

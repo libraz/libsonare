@@ -20,7 +20,7 @@ from ._ffi import (
     SonareRealtimeVoiceChangerConfig,
     SonareVoiceChangeConfig,
 )
-from ._narrowing import _domain_checked_float, _is_number, _resolve_zero_default
+from ._narrowing import _domain_float, _is_number, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -1142,14 +1142,6 @@ _RETUNE_MAX_SEMITONES = 24
 _RETUNE_MAX_MIX = 1
 
 
-def _retune_control(value: object, name: str, low: int, high: int) -> float:
-    """A retune control as a plain float, refused with its domain when outside it."""
-    number = _domain_checked_float(value, name)
-    if not low <= number <= high:
-        raise _refuse(f"{name} must be finite and in [{low}, {high}]")
-    return number
-
-
 class StreamingRetune:
     """Block-by-block mono pitch shifter (grain overlap-add).
 
@@ -1187,7 +1179,7 @@ class StreamingRetune:
         handle = ctypes.c_void_p()
         rc = self._lib.sonare_streaming_retune_create(
             _to_c_float(
-                _retune_control(
+                _domain_float(
                     pitch_semitones,
                     "pitch_semitones",
                     -_RETUNE_MAX_SEMITONES,
@@ -1195,7 +1187,7 @@ class StreamingRetune:
                 ),
                 "pitch_semitones",
             ),
-            _to_c_float(_retune_control(mix, "mix", 0, _RETUNE_MAX_MIX), "mix"),
+            _to_c_float(_domain_float(mix, "mix", 0, _RETUNE_MAX_MIX), "mix"),
             _to_c_int(requested_grain_size, "grain_size_samples"),
             ctypes.byref(handle),
         )
@@ -1269,7 +1261,7 @@ class StreamingRetune:
             self._lib.sonare_streaming_retune_set_config(
                 self._require_handle(),
                 _to_c_float(
-                    _retune_control(
+                    _domain_float(
                         current_pitch if pitch_semitones is None else pitch_semitones,
                         "pitch_semitones",
                         -_RETUNE_MAX_SEMITONES,
@@ -1278,7 +1270,7 @@ class StreamingRetune:
                     "pitch_semitones",
                 ),
                 _to_c_float(
-                    _retune_control(current_mix if mix is None else mix, "mix", 0, _RETUNE_MAX_MIX),
+                    _domain_float(current_mix if mix is None else mix, "mix", 0, _RETUNE_MAX_MIX),
                     "mix",
                 ),
                 _to_c_int(requested_grain_size, "grain_size_samples"),

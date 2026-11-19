@@ -176,6 +176,36 @@ def test_a_saturating_retune_control_is_refused_on_the_argument_that_carried_it(
         _refuses("mix", ("pitch_semitones",), ls.StreamingRetune, mix=value)
 
 
+_TRIM_ENTRIES = (
+    lambda x, **k: ls.mastering_repair_trim_silence(x, SAMPLE_RATE, **k),
+    lambda x, **k: ls.mastering_repair_detect_trim_range(x, SAMPLE_RATE, **k),
+    lambda x, **k: ls.mastering_repair_trim_silence_stereo(x, x, SAMPLE_RATE, **k),
+    lambda x, **k: ls.mastering_repair_detect_trim_range_stereo(x, x, SAMPLE_RATE, **k),
+)
+
+
+@pytest.mark.parametrize("entry", _TRIM_ENTRIES, ids=["mono", "detect", "stereo", "detect_stereo"])
+@pytest.mark.parametrize(
+    ("key", "domain", "accepted", "refused"),
+    [
+        ("threshold_db", r"\[-890, 0\]", (-890.0, 0.0), (0.5, -890.5)),
+        ("gate_lufs", r"\[-144, 0\]", (-144.0, 0.0), (0.5, -144.5)),
+        ("window_ms", r"\(0, 10000\]", (10000.0, 1.0), (0.0, 10000.5)),
+    ],
+)
+def test_a_trim_detector_control_is_refused_with_its_domain_whatever_the_value(
+    entry, key: str, domain: str, accepted: tuple[float, ...], refused: tuple[float, ...]
+) -> None:
+    """A non-finite or saturating value reads the core's domain, not the float range."""
+    signal = np.r_[np.zeros(480), np.full(480, 0.5), np.zeros(480)].astype(np.float32)
+    mode = {} if key == "threshold_db" else {"mode": "lufsGated"}
+    for value in accepted:
+        entry(signal, **{key: value}, **mode)  # the copied bounds are no stricter than the core
+    for value in (*refused, *REFUSED):
+        with pytest.raises(SonareValueError, match=rf": {key} must be finite and in {domain}$"):
+            entry(signal, **{key: value}, **mode)
+
+
 def test_a_saturating_project_edit_control_is_refused_on_its_own_argument() -> None:
     """The project edit ops, whose own finiteness check ran before the conversion.
 

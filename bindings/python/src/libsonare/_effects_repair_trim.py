@@ -19,7 +19,7 @@ from ._ffi import (
     SonareTrimSilenceResult,
     SonareTrimSilenceStereoResult,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _domain_float
 from ._runtime import (
     _SIZE_T_MAX,
     _check,
@@ -39,6 +39,11 @@ from .types import (
     TrimSilenceResult,
     TrimSilenceStereoResult,
 )
+
+# The detector domains as the core states them, checked before the float narrowing.
+_TRIM_MIN_THRESHOLD_DB = -890
+_TRIM_MIN_GATE_LUFS = -144
+_TRIM_MAX_WINDOW_MS = 10000
 
 
 def _resolve_padding(
@@ -82,12 +87,12 @@ def mastering_repair_trim_silence(
     not both.
     """
     config = SonareTrimSilenceConfig(  # noqa: F405
-        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        threshold_db=_domain_float(threshold_db, "threshold_db", _TRIM_MIN_THRESHOLD_DB, 0),
         # Narrowed rather than coerced: int() takes 0.5 as 0, which is "no padding at all".
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode, "mode"),
-        gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
-        window_ms=_narrow_double(window_ms, "window_ms"),
+        gate_lufs=_domain_float(gate_lufs, "gate_lufs", _TRIM_MIN_GATE_LUFS, 0),
+        window_ms=_domain_float(window_ms, "window_ms", 0, _TRIM_MAX_WINDOW_MS, low_open=True),
     )
     lib = _get_lib()
     audio, report = _run_repair(
@@ -169,11 +174,11 @@ def mastering_repair_detect_trim_range(
         SonareError: If the C call rejects the request.
     """
     config = SonareTrimSilenceConfig(  # noqa: F405
-        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        threshold_db=_domain_float(threshold_db, "threshold_db", _TRIM_MIN_THRESHOLD_DB, 0),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode, "mode"),
-        gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
-        window_ms=_narrow_double(window_ms, "window_ms"),
+        gate_lufs=_domain_float(gate_lufs, "gate_lufs", _TRIM_MIN_GATE_LUFS, 0),
+        window_ms=_domain_float(window_ms, "window_ms", 0, _TRIM_MAX_WINDOW_MS, low_open=True),
     )
     return _extract_trim_range(
         _run_detection(
@@ -250,11 +255,11 @@ def mastering_repair_detect_trim_range_stereo(
     if left_length != right_length:
         raise _refuse("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
-        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        threshold_db=_domain_float(threshold_db, "threshold_db", _TRIM_MIN_THRESHOLD_DB, 0),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode, "mode"),
-        gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
-        window_ms=_narrow_double(window_ms, "window_ms"),
+        gate_lufs=_domain_float(gate_lufs, "gate_lufs", _TRIM_MIN_GATE_LUFS, 0),
+        window_ms=_domain_float(window_ms, "window_ms", 0, _TRIM_MAX_WINDOW_MS, low_open=True),
     )
     out = SonareTrimRange()  # noqa: F405
     rc = lib.sonare_mastering_repair_detect_trim_range_stereo(
@@ -345,11 +350,11 @@ def mastering_repair_trim_silence_stereo(
     if left_length != right_length:
         raise _refuse("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
-        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        threshold_db=_domain_float(threshold_db, "threshold_db", _TRIM_MIN_THRESHOLD_DB, 0),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode, "mode"),
-        gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
-        window_ms=_narrow_double(window_ms, "window_ms"),
+        gate_lufs=_domain_float(gate_lufs, "gate_lufs", _TRIM_MIN_GATE_LUFS, 0),
+        window_ms=_domain_float(window_ms, "window_ms", 0, _TRIM_MAX_WINDOW_MS, low_open=True),
     )
     out = SonareTrimSilenceStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_trim_silence_stereo(

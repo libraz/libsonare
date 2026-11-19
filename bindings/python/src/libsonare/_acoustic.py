@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import TypeVar
 
 from ._errors import _entry, _refuse, _refuse_type
-from ._narrowing import _narrow_double, _resolve_zero_default
+from ._narrowing import _domain_float, _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     SonareRirSynthConfig,
@@ -696,9 +696,7 @@ def room_morph_stereo(
     lib = _get_lib()
     spacing: float | None = None
     if receiver_spacing_m is not None:
-        spacing = _narrow_double(receiver_spacing_m, "receiver_spacing_m")
-        if not math.isfinite(spacing) or not 0.0 < spacing <= 4.0:
-            raise _refuse("receiver_spacing_m must be finite and in (0, 4]")
+        spacing = _domain_float(receiver_spacing_m, "receiver_spacing_m", 0, 4, low_open=True)
     c_left, length = _to_c_float_array(left)
     c_right, right_length = _to_c_float_array(right)
     if right_length != length:
