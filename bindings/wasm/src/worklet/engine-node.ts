@@ -154,7 +154,7 @@ function workletBlockSize(maxBlockSize: number | undefined): number {
   const resolved = maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
   if (!Number.isSafeInteger(resolved) || resolved < AUDIO_WORKLET_RENDER_QUANTUM) {
     throw refuse(
-      `maxBlockSize must be an integer of at least ${AUDIO_WORKLET_RENDER_QUANTUM} frames`,
+      `maxBlockSize must be an integer in [${AUDIO_WORKLET_RENDER_QUANTUM}, ${Number.MAX_SAFE_INTEGER}]`,
     );
   }
   return resolved;

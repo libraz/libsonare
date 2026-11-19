@@ -418,8 +418,8 @@ function scheduleSampleCount(
   if (value === 0) {
     throw refuse(`${where} must not be 0 (omit it for ${meaning})`);
   }
-  if (!Number.isInteger(value) || value < 0) {
-    throw refuse(`${where} must be an integer of at least 1`);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw refuse(`${where} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);
   }
   return value;
 }

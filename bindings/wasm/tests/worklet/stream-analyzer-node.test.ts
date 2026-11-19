@@ -91,7 +91,7 @@ describe('SonareStreamAnalyzerWorkletProcessor', () => {
       RangeError,
     );
     expect(() => new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 300.5, port })).toThrow(
-      /chunkFrames must be an integer of at least 128/,
+      /chunkFrames must be an integer in \[128, 9007199254740991\]/,
     );
   });
 

@@ -67,7 +67,7 @@ describe('meterIntervalFrames forwarding', () => {
 
   it.each(invalidMeterIntervals)('rejects invalid node option %p', async (meterIntervalFrames) => {
     await expect(captureNodeOptions({ meterIntervalFrames })).rejects.toThrow(
-      'meterIntervalFrames must be an integer of at least 0',
+      'meterIntervalFrames must be an integer in [0, 9007199254740991]',
     );
   });
 
@@ -105,7 +105,7 @@ describe('meterIntervalFrames forwarding', () => {
             throw new Error('nodeFactory should not be reached');
           },
         }),
-      ).rejects.toThrow('meterIntervalFrames must be an integer of at least 0');
+      ).rejects.toThrow('meterIntervalFrames must be an integer in [0, 9007199254740991]');
     },
   );
 });

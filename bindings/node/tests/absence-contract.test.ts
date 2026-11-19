@@ -357,7 +357,7 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
         for (const bad of [-1, 1.5]) {
           expect(() => engine.setMidiClips([clip({ [field]: bad })] as never)).toThrow(
             new RangeError(
-              `RealtimeEngine.setMidiClips: clips[0].${field} must be an integer of at least 1`,
+              `RealtimeEngine.setMidiClips: clips[0].${field} must be an integer in [1, 9007199254740991]`,
             ),
           );
         }

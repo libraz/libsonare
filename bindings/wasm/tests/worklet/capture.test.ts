@@ -175,14 +175,14 @@ describe('buildCaptureConfig', () => {
     (capacityFrames) => {
       expect(() => buildConfig({ capacityFrames }, 2)).toThrow(RangeError);
       expect(() => buildConfig({ capacityFrames }, 2)).toThrow(
-        /capacityFrames must be an integer of at least 1/,
+        /capacityFrames must be an integer in \[1, 9007199254740991\]/,
       );
     },
   );
 
   it('refuses an absent capacityFrames, which has no default', () => {
     expect(() => buildConfig({ capacityFrames: undefined as unknown as number }, 2)).toThrow(
-      /capacityFrames must be an integer of at least 1/,
+      /capacityFrames must be an integer in \[1, 9007199254740991\]/,
     );
   });
 
@@ -207,7 +207,7 @@ describe('buildCaptureConfig', () => {
 
   it.each([2.5, 0, -2, Number.NaN])('refuses a capture plane count of %p', (numChannels) => {
     expect(() => buildConfig({ ...base, numChannels }, 2)).toThrow(
-      /numChannels must be an integer of at least 1/,
+      /numChannels must be an integer in \[1, 9007199254740991\]/,
     );
   });
 

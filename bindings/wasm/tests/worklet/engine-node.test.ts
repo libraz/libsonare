@@ -85,7 +85,7 @@ describe('SonareRealtimeEngineNode numChannels', () => {
     async (numChannels) => {
       await expect(capture(numChannels)).rejects.toThrow(RangeError);
       await expect(capture(numChannels)).rejects.toThrow(
-        /numChannels must be an integer of at least 1/,
+        /numChannels must be an integer in \[1, 9007199254740991\]/,
       );
     },
   );
@@ -137,7 +137,7 @@ describe('SonareRealtimeEngineNode integer ring options', () => {
     'refuses a scopeIntervalFrames of %p',
     async (scopeIntervalFrames) => {
       await expect(capture({ scopeIntervalFrames })).rejects.toThrow(
-        /scopeIntervalFrames must be an integer of at least 0/,
+        /scopeIntervalFrames must be an integer in \[0, 9007199254740991\]/,
       );
     },
   );
@@ -162,17 +162,17 @@ describe('SonareRealtimeEngineNode integer ring options', () => {
     async (meterRingCapacity) => {
       await expect(capture({ meterRingCapacity })).rejects.toThrow(RangeError);
       await expect(capture({ meterRingCapacity })).rejects.toThrow(
-        /meterRingCapacity must be an integer of at least 1/,
+        /meterRingCapacity must be an integer in \[1, 9007199254740991\]/,
       );
     },
   );
 
   it('refuses a scope capacity even when the scope ring is never created', async () => {
     await expect(capture({ scopeRingCapacity: 8.5 })).rejects.toThrow(
-      /scopeRingCapacity must be an integer of at least 1/,
+      /scopeRingCapacity must be an integer in \[1, 9007199254740991\]/,
     );
     await expect(capture({ mode: 'postMessage', scopeBands: 0 })).rejects.toThrow(
-      /scopeBands must be an integer of at least 1/,
+      /scopeBands must be an integer in \[1, 9007199254740991\]/,
     );
   });
 });

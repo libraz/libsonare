@@ -536,10 +536,10 @@ describe('SonareWorkletProcessor', () => {
 
     for (const frames of [2048.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => counts({ meterIntervalFrames: frames })).toThrow(
-        /meterIntervalFrames must be an integer of at least 0/,
+        /meterIntervalFrames must be an integer in \[0, 9007199254740991\]/,
       );
       expect(() => counts({ spectrumIntervalFrames: frames })).toThrow(
-        /spectrumIntervalFrames must be an integer of at least 0/,
+        /spectrumIntervalFrames must be an integer in \[0, 9007199254740991\]/,
       );
     }
   });

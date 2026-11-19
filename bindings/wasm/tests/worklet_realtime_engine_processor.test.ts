@@ -182,7 +182,9 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
 
       for (const channelCount of [2.7, 0, -1, Number.NaN]) {
-        expect(() => build(channelCount)).toThrow(/numChannels must be an integer of at least 1/);
+        expect(() => build(channelCount)).toThrow(
+          /numChannels must be an integer in \[1, 9007199254740991\]/,
+        );
       }
       // The ceiling is the engine's, so a count past it is refused there.
       expect(() => build(1e9)).toThrow(/^RealtimeEngine: maxChannels must be within 1\.\./);
@@ -220,7 +222,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
       for (const meterIntervalFrames of [2048.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
         expect(() => meterCount(meterIntervalFrames)).toThrow(
-          /meterIntervalFrames must be an integer of at least 0/,
+          /meterIntervalFrames must be an integer in \[0, 9007199254740991\]/,
         );
       }
     });
@@ -264,7 +266,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
       for (const scopeIntervalFrames of [256.5, -1, Number.NaN]) {
         expect(() => scopeCount(scopeIntervalFrames)).toThrow(
-          /scopeIntervalFrames must be an integer of at least 0/,
+          /scopeIntervalFrames must be an integer in \[0, 9007199254740991\]/,
         );
       }
     });

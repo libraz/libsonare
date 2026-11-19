@@ -547,7 +547,7 @@ export function requireIntegerOption(
 ): number {
   const resolved = value ?? fallback;
   if (!Number.isSafeInteger(resolved) || resolved < minimum) {
-    throw refuse(`${name} must be an integer of at least ${minimum}`);
+    throw refuse(`${name} must be an integer in [${minimum}, ${Number.MAX_SAFE_INTEGER}]`);
   }
   return resolved;
 }
