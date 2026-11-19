@@ -593,22 +593,28 @@ describe('extractPercussiveEvents', () => {
     }
   });
 
-  it('takes every default at 0 and at absent, and at the documented value', () => {
-    // The zero-is-default rule, and what the defaults actually are: a zeroed
-    // request, an absent one and the documented values are one result.
-    const zeroed = extractPercussiveEvents({
-      samples: three,
-      sampleRate,
-      nFft: 0,
-      hopLength: 0,
-      hpssKernelHarmonic: 0,
-      hpssKernelPercussive: 0,
-      onsetWait: 0,
-      onsetDelta: 0,
-      maxEventMs: 0,
-      minPercussiveRatio: 0,
-    });
-    expect(zeroed).toEqual(threeEvents);
+  it('takes every default when absent and at the documented value, and refuses an explicit 0', () => {
+    // A field the native config reads 0 as its default for refuses an explicit 0
+    // by name; leaving it out is the only way to ask for the default.
+    for (const field of [
+      'nFft',
+      'hopLength',
+      'hpssKernelHarmonic',
+      'hpssKernelPercussive',
+      'onsetWait',
+      'onsetDelta',
+      'maxEventMs',
+    ]) {
+      expect(() => extractPercussiveEvents({ samples: three, sampleRate, [field]: 0 })).toThrow(
+        new RangeError(
+          `extractPercussiveEvents: ${field} must not be 0; omit it for the library value`,
+        ),
+      );
+    }
+    // 0 is a real ratio, the default included.
+    expect(extractPercussiveEvents({ samples: three, sampleRate, minPercussiveRatio: 0 })).toEqual(
+      threeEvents,
+    );
 
     const spelled = extractPercussiveEvents({
       samples: three,
@@ -691,9 +697,8 @@ describe('extractPercussiveEvents', () => {
     }
 
     // Positive controls: both ends of the documented ratio range are values, an
-    // odd kernel at the minimum is one, a hop of exactly half the window is
-    // inside the overlap rule, and 0 is the default rather than the rejected "no
-    // span at all" the core reads it as.
+    // odd kernel at the minimum is one, and a hop of exactly half the window is
+    // inside the overlap rule.
     for (const good of [0, 1]) {
       expect(() => extractPercussiveEvents({ ...base, minPercussiveRatio: good })).not.toThrow();
     }
@@ -703,7 +708,6 @@ describe('extractPercussiveEvents', () => {
     for (const framing of validFramings) {
       expect(() => extractPercussiveEvents({ ...base, ...framing })).not.toThrow();
     }
-    expect(() => extractPercussiveEvents({ ...base, maxEventMs: 0 })).not.toThrow();
   });
 });
 
@@ -907,8 +911,7 @@ describe('renderPercussiveEvents', () => {
     // The fade shapes the tail of the lifted span, so a longer one leaves more of
     // the hit behind at the span's end.
     expect(renderPercussiveEvents({ ...base, fadeMs: 50 })).not.toEqual(defaults);
-    // 0 and the documented 5 ms are both the default.
-    expect(renderPercussiveEvents({ ...base, fadeMs: 0 })).toEqual(defaults);
+    // The documented 5 ms is the default; an explicit 0 is refused by name.
     expect(renderPercussiveEvents({ ...base, fadeMs: 5 })).toEqual(defaults);
 
     // The separation the events are lifted with, which a render must be given
@@ -938,16 +941,20 @@ describe('renderPercussiveEvents', () => {
       expect(changed).not.toEqual(layeredDefaults);
     }
     expect(kernelRenders[0]).not.toEqual(kernelRenders[1]);
-    // And the zero-is-default rule on the same four fields.
-    expect(
-      renderPercussiveEvents({
-        ...base,
-        nFft: 0,
-        hopLength: 0,
-        hpssKernelHarmonic: 0,
-        hpssKernelPercussive: 0,
-      }),
-    ).toEqual(defaults);
+    // An explicit 0 in any of the same four fields, or in fadeMs, is refused by name.
+    for (const field of [
+      'nFft',
+      'hopLength',
+      'hpssKernelHarmonic',
+      'hpssKernelPercussive',
+      'fadeMs',
+    ]) {
+      expect(() => renderPercussiveEvents({ ...base, [field]: 0 })).toThrow(
+        new RangeError(
+          `renderPercussiveEvents: ${field} must not be 0; omit it for the library value`,
+        ),
+      );
+    }
   });
 
   it('rejects a malformed request', () => {
@@ -1018,9 +1025,7 @@ describe('renderPercussiveEvents', () => {
       expectCoreRefusal(() => render([edited(4410, 15435)], options));
     }
 
-    // A zero-length fade is the default here rather than the hard cut the core
-    // rejects, and the span it is applied to still renders.
-    expect(() => render([edited(4410, 15435)], { fadeMs: 0 })).not.toThrow();
+    // An omitted fade is the default, and the span it is applied to still renders.
     expect(() => render([edited(4410, 15435)])).not.toThrow();
   });
 

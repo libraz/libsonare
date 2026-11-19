@@ -207,17 +207,18 @@ describe('the facade and the reader refuse the same inputs', () => {
     value: number;
     refused: boolean;
     why: string;
-    /** Who refuses on the facade layer: its own check (prefixed with the entry name), or the reader behind it (range). */
-    facade?: 'range';
-    /** The reader-only entry point refuses an explicit 0 where the facade-checked one keeps it as the default. */
-    readerRefuses?: boolean;
+    /**
+     * Who refuses on the facade layer: its integrality check (the default), its
+     * explicit-0 check, or the reader behind it (range).
+     */
+    facade?: 'range' | 'zero';
   }> = [
     { value: 1024, refused: false, why: 'an ordinary legal size' },
     {
       value: 0,
-      refused: false,
-      readerRefuses: true,
-      why: 'the default sentinel on the analyzer, a RangeError on the spectrum meter',
+      refused: true,
+      why: 'the native default sentinel, refused by name on the analyzer',
+      facade: 'zero',
     },
     { value: 1024.5, refused: true, why: 'fractional, in range' },
     { value: -0.5, refused: true, why: 'fractional, truncates onto the default' },
@@ -236,17 +237,13 @@ describe('the facade and the reader refuse the same inputs', () => {
     i % 2205 < 200 ? Math.sin((2 * Math.PI * 900 * i) / sampleRate) : 0,
   );
 
-  for (const { value, refused, why, facade, readerRefuses } of PROBES) {
+  for (const { value, refused, why, facade } of PROBES) {
     it(`${refused ? 'refuses' : 'accepts'} nFft = ${value} on both layers (${why})`, () => {
       const facadeChecked = capture(() =>
         extractPercussiveEvents({ samples: hits, sampleRate, nFft: value }),
       );
       const readerOnly = capture(() => meteringSpectrum(tone, sampleRate, { nFft: value }));
       expect(facadeChecked === undefined).toBe(!refused);
-      if (readerRefuses) {
-        expect(expectParameterRefusal(readerOnly)).toBeInstanceOf(RangeError);
-        return;
-      }
       expect(readerOnly === undefined).toBe(!refused);
       if (refused) {
         const facadeError = expectParameterRefusal(facadeChecked);
@@ -257,11 +254,16 @@ describe('the facade and the reader refuse the same inputs', () => {
         if (facade === 'range') {
           expect(facadeError.message).not.toContain('extractPercussiveEvents: nFft');
           expect(facadeError.message).toContain('within the 32-bit integer range');
+        } else if (facade === 'zero') {
+          expect(facadeError.message).toContain('extractPercussiveEvents: nFft must not be 0');
         } else {
           expect(facadeError.message).toContain('extractPercussiveEvents: nFft must be an integer');
         }
         expect(readerError.message).toContain('nFft');
-        expect(readerError.message).not.toContain('meteringSpectrum: nFft');
+        // An explicit 0 is refused by both facades, so only the other probes reach the reader.
+        if (facade !== 'zero') {
+          expect(readerError.message).not.toContain('meteringSpectrum: nFft');
+        }
       }
     });
   }

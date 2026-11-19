@@ -148,7 +148,7 @@ describe('extractPercussiveEvents reads onsetWait through the same guard', () =>
     extractPercussiveEvents({ samples: hits, sampleRate, onsetWait }).length;
 
   it('two legal waits keep a different number of events', () => {
-    expect(count(0)).toBeGreaterThan(count(20));
+    expect(count(1)).toBeGreaterThan(count(20));
   });
 
   it('refuses every value that used to arrive as INT_MAX', () => {

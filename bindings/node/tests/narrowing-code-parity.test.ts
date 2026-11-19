@@ -134,8 +134,9 @@ describe('a kernel past the signed range is refused alike on every surface', () 
     },
     {
       name: 'extractPercussiveEvents hpssKernelPercussive',
-      passed: 2 ** 32,
-      wrapsTo: 0,
+      // An explicit 0 is refused on every surface, so the wrap lands on an accepted odd kernel.
+      passed: 2 ** 32 + 31,
+      wrapsTo: 31,
       node: (kernel: number) =>
         nodeExtractPercussiveEvents({ samples: hits, sampleRate, hpssKernelPercussive: kernel }),
       wasm: (kernel: number) =>

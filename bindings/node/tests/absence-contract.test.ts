@@ -5,7 +5,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Project, RealtimeEngine } from '../src/index.js';
+import {
+  extractPercussiveEvents,
+  Project,
+  RealtimeEngine,
+  renderPercussiveEvents,
+} from '../src/index.js';
 
 const AUDIO = [new Float32Array(480).fill(0.25)];
 
@@ -366,5 +371,49 @@ describe('a required id of the wrong type is a TypeError with the facade text', 
         new TypeError('renameTrack: name must be a string'),
       );
     });
+  });
+});
+
+describe('a percussive-event field whose native 0 is the default refuses an explicit 0', () => {
+  const sampleRate = 22050;
+  const hits = new Float32Array(sampleRate).map((_, i) =>
+    i % 4410 < 200 ? Math.sin((2 * Math.PI * 900 * i) / sampleRate) : 0,
+  );
+  const EXTRACT = [
+    'nFft',
+    'hopLength',
+    'hpssKernelHarmonic',
+    'hpssKernelPercussive',
+    'onsetWait',
+    'onsetDelta',
+    'maxEventMs',
+  ] as const;
+  const RENDER = [
+    'nFft',
+    'hopLength',
+    'hpssKernelHarmonic',
+    'hpssKernelPercussive',
+    'fadeMs',
+  ] as const;
+  const zeroText = (fnName: string, field: string) =>
+    `${fnName}: ${field} must not be 0; omit it for the library value`;
+
+  it.each(EXTRACT)('extractPercussiveEvents %s', (field) => {
+    expect(() => extractPercussiveEvents({ samples: hits, sampleRate, [field]: 0 })).toThrow(
+      new RangeError(zeroText('extractPercussiveEvents', field)),
+    );
+    expect(extractPercussiveEvents({ samples: hits, sampleRate, [field]: undefined })).toEqual(
+      extractPercussiveEvents({ samples: hits, sampleRate }),
+    );
+  });
+
+  it.each(RENDER)('renderPercussiveEvents %s', (field) => {
+    const events = [{ onsetSample: 0, offsetSample: 200, edit: { muted: true } }];
+    expect(() => renderPercussiveEvents({ samples: hits, sampleRate, events, [field]: 0 })).toThrow(
+      new RangeError(zeroText('renderPercussiveEvents', field)),
+    );
+    expect(
+      renderPercussiveEvents({ samples: hits, sampleRate, events, [field]: undefined }),
+    ).toEqual(renderPercussiveEvents({ samples: hits, sampleRate, events }));
   });
 });

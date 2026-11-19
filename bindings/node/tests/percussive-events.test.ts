@@ -477,9 +477,9 @@ describe('extractPercussiveEvents', () => {
     expect(
       extractPercussiveEvents({ samples: three, sampleRate: SR, onsetDelta: 1e9 }),
     ).toHaveLength(0);
-    // 0 selects the documented default rather than a detector with no offset.
+    // The documented default, spelled out, is the omitted run.
     expect(
-      measuredSet(extractPercussiveEvents({ samples: three, sampleRate: SR, onsetDelta: 0 })),
+      measuredSet(extractPercussiveEvents({ samples: three, sampleRate: SR, onsetDelta: 0.06 })),
     ).toEqual(measuredSet(threeEvents));
   });
 
@@ -604,29 +604,29 @@ describe('extractPercussiveEvents', () => {
       extractPercussiveEvents({ samples: two, sampleRate: SR, hpssKernelPercussive: -1 }),
     );
 
-    // Both ends of the documented ratio range are inside it, and a zeroed knob
-    // is the default rather than an error.
+    // Both ends of the documented ratio range are inside it; 0 is a real ratio.
     for (const minPercussiveRatio of [0, 1]) {
       expect(() =>
         extractPercussiveEvents({ samples: two, sampleRate: SR, minPercussiveRatio }),
       ).not.toThrow();
     }
-    expect(
-      measuredSet(
-        extractPercussiveEvents({
-          samples: two,
-          sampleRate: SR,
-          nFft: 0,
-          hopLength: 0,
-          hpssKernelHarmonic: 0,
-          hpssKernelPercussive: 0,
-          onsetWait: 0,
-          onsetDelta: 0,
-          maxEventMs: 0,
-          minPercussiveRatio: 0,
-        }),
-      ),
-    ).toEqual(measuredSet(twoEvents));
+    // A field the native config reads 0 as its default for refuses an explicit 0
+    // by name; leaving it out is the only way to ask for the default.
+    for (const field of [
+      'nFft',
+      'hopLength',
+      'hpssKernelHarmonic',
+      'hpssKernelPercussive',
+      'onsetWait',
+      'onsetDelta',
+      'maxEventMs',
+    ]) {
+      expect(() => extractPercussiveEvents({ samples: two, sampleRate: SR, [field]: 0 })).toThrow(
+        new RangeError(
+          `extractPercussiveEvents: ${field} must not be 0; omit it for the library value`,
+        ),
+      );
+    }
   });
 
   it('accepts a plain number array as its audio', () => {
@@ -897,9 +897,9 @@ describe('renderPercussiveEvents', () => {
     const short = renderWith(1);
     const long = renderWith(20);
 
-    // 0 selects the documented 5 ms rather than a hard cut, so it is the default
-    // render exactly and neither of the other two.
-    expectIdentical(renderWith(0), byDefault);
+    // The documented 5 ms, spelled out, is the default render exactly and neither
+    // of the other two.
+    expectIdentical(renderWith(5), byDefault);
     expect(firstMismatch(short, byDefault)).not.toBe(-1);
     expect(firstMismatch(long, byDefault)).not.toBe(-1);
     expect(firstMismatch(short, long)).not.toBe(-1);
@@ -1060,11 +1060,26 @@ describe('renderPercussiveEvents', () => {
       );
     }
 
-    // A negative or non-finite fade is rejected; 0 is the default rather than a
-    // hard cut, which the fadeMs case above pins.
+    // A negative or non-finite fade is rejected, and an explicit 0 is refused by
+    // name rather than read as the default.
     for (const fadeMs of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
       expectInvalidParameter(() =>
         renderPercussiveEvents({ samples: three, sampleRate: SR, events: edited, fadeMs }),
+      );
+    }
+    for (const field of [
+      'nFft',
+      'hopLength',
+      'hpssKernelHarmonic',
+      'hpssKernelPercussive',
+      'fadeMs',
+    ]) {
+      expect(() =>
+        renderPercussiveEvents({ samples: three, sampleRate: SR, events: edited, [field]: 0 }),
+      ).toThrow(
+        new RangeError(
+          `renderPercussiveEvents: ${field} must not be 0; omit it for the library value`,
+        ),
       );
     }
     for (const hpssKernelHarmonic of [-1, -31]) {

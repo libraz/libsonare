@@ -390,6 +390,10 @@ export function assertPercussiveSeparation(
     const value = options[field];
     if (value !== undefined) {
       assertIntegralField(fnName, value, field);
+      // 0 is the native default, so an explicit 0 would separate on it while reporting success.
+      if (value === 0) {
+        throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the library value`);
+      }
     }
   }
 }

@@ -27,7 +27,8 @@ function percussiveRequest<
 /**
  * Check the separation an extracted or rendered event set is measured against
  * before the addon narrows it. Every field defaults at 0 here, so a value that
- * wrapped to 0 would select the default and report success.
+ * wrapped to 0 would select the default and report success, and an explicit 0
+ * is refused for the same reason.
  *
  * Either refusal is an argument refusal, a `RangeError`, as the WASM reader
  * raises it and Python raises `SonareValueError`; the integer past the 32-bit
@@ -46,6 +47,9 @@ function assertPercussiveSeparation(fnName: string, options: PercussiveSeparatio
       );
     }
     assertInt32(fnName, value, field);
+    if (value === 0) {
+      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the library value`);
+    }
   }
 }
 
@@ -65,10 +69,11 @@ export interface PercussiveSeparationOptions {
   /**
    * FFT size and hop the separation and the onset detector share. They cannot be
    * set apart: an event measured on one framing and lifted out on another is not
-   * the same signal. Default 2048 and 512.
+   * the same signal. Default 2048 and a quarter of `nFft`. An explicit 0 in any
+   * separation field is refused; leave the field out for its default.
    */
   nFft?: number;
-  /** Hop length in samples, at most half of `nFft`. Default `512`. */
+  /** Hop length in samples, at most half of `nFft`. Default a quarter of `nFft`. */
   hopLength?: number;
   /**
    * Median filter lengths the separation runs, along time and along frequency. A
@@ -92,21 +97,21 @@ export interface ExtractPercussiveEventsRequest extends PercussiveSeparationOpti
    */
   sampleRate: number;
   /**
-   * Minimum frames between consecutive onsets. Default 1, and a whole number:
-   * 0 is how the default is spelled, so a fractional wait is refused rather
-   * than truncated onto it.
+   * Minimum frames between consecutive onsets, a positive whole number. Default
+   * 1; an explicit 0 is refused, and a fractional wait is refused rather than
+   * truncated.
    */
   onsetWait?: number;
   /**
    * Offset added to the detector's adaptive threshold; raising it finds fewer,
-   * stronger hits. Default 0.06, and 0 selects that default rather than a
-   * detector with no offset at all.
+   * stronger hits. Default 0.06. An explicit 0 is refused because the native
+   * configuration would read it as the default; a negative one is accepted.
    */
   onsetDelta?: number;
   /**
    * Caps a span that no onset follows. It binds at the end of a phrase and at
    * the end of the track; anywhere else the next onset closes the span first.
-   * Default 500 ms.
+   * Default 500 ms; an explicit 0 is refused.
    */
   maxEventMs?: number;
   /**
@@ -138,8 +143,9 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
    */
   events: readonly PercussiveEventInput[];
   /**
-   * Fade-out at the tail of each lifted span. Default 5 ms; 0 selects that
-   * default rather than a hard cut, which would leave a step in the output.
+   * Fade-out at the tail of each lifted span. Default 5 ms; an explicit 0 is
+   * refused rather than read as that default, and a hard cut would leave a step
+   * in the output.
    *
    * There is deliberately no matching fade-in: a span opens on an onset, where
    * the percussive component is near-silent the sample before, so cutting square
@@ -147,6 +153,19 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
    * fade.
    */
   fadeMs?: number;
+}
+
+/** Refuse an explicit 0 in fields the native config reads 0 as "use the default" for. */
+function refuseZeroDefaults<T extends object>(
+  fnName: string,
+  options: T,
+  fields: readonly (keyof T & string)[],
+): void {
+  for (const field of fields) {
+    if (options[field] === 0) {
+      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the library value`);
+    }
+  }
 }
 
 /**
@@ -173,8 +192,9 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
  *   optional detection tuning.
  * @returns One {@link PercussiveEvent} per detected hit, in time order. Audio in
  *   which nothing was detected returns an empty array rather than throwing.
- * @throws {RangeError} `samples` is empty or holds a non-finite sample, or
- *   `sampleRate` is out of the supported range.
+ * @throws {RangeError} `samples` is empty or holds a non-finite sample,
+ *   `sampleRate` is out of the supported range, or a separation field,
+ *   `onsetWait`, `onsetDelta` or `maxEventMs` is an explicit 0.
  * @throws {SonareError} A separation field is not an
  *   integer within the signed 32-bit range, the framing breaks constant
  *   overlap-add, `maxEventMs` is not positive and finite, or
@@ -210,6 +230,7 @@ export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
     // this field's default, and the addon's narrowing truncates onto it.
     assertInt32('extractPercussiveEvents', options.onsetWait, 'onsetWait');
   }
+  refuseZeroDefaults('extractPercussiveEvents', options, ['onsetWait', 'onsetDelta', 'maxEventMs']);
   return addon.extractPercussiveEvents(samples, sampleRate, options);
 }
 
@@ -244,8 +265,9 @@ export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
  * @returns The rendered audio, the same length as `samples`.
  * @throws {TypeError} `events` is not an array, or one of its entries is not a
  *   plain object.
- * @throws {RangeError} `samples` is empty or holds a non-finite sample, or
- *   `sampleRate` is out of the supported range.
+ * @throws {RangeError} `samples` is empty or holds a non-finite sample,
+ *   `sampleRate` is out of the supported range, or a separation field is an
+ *   explicit 0.
  * @throws {SonareError} A separation field is not an integer
  *   within the signed 32-bit range, an event's span is empty, reversed or
  *   outside the audio, two source spans overlap, a `gainDb` is not finite, the
@@ -277,6 +299,7 @@ export function renderPercussiveEvents(...args: unknown[]): Float32Array {
     throw new TypeError('renderPercussiveEvents: events must be an array');
   }
   assertPercussiveSeparation('renderPercussiveEvents', options);
+  refuseZeroDefaults('renderPercussiveEvents', options, ['fadeMs']);
   const nativeEvents = resolveEntryTimes(
     'renderPercussiveEvents',
     events,

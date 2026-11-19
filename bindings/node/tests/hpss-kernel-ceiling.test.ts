@@ -280,7 +280,7 @@ describe('percussive-event separation kernel', () => {
         const outcome = eventOutcome({ [key]: passed });
         expect(outcome).toBe(REFUSED);
         expect(outcome).not.toBe(eventOutcome({}));
-        if (wrapsTo >= 0 && (wrapsTo === 0 || wrapsTo % 2 === 1)) {
+        if (wrapsTo > 0 && wrapsTo % 2 === 1) {
           expect(outcome).not.toBe(eventOutcome({ [key]: wrapsTo }));
         }
       });
@@ -311,17 +311,15 @@ describe('percussive-event separation kernel', () => {
       );
     });
 
-    // Every field of the versioned separation config takes its default at 0, so
-    // an explicit 0 is indistinguishable from an omitted option — it is not the
-    // odd-and-positive refusal the same value draws from hpss. Compared against
-    // the default run rather than just "it did not throw", so a 0 that quietly
-    // selected something else would still fail.
-    it(`treats a zero ${direction} kernel as the default rather than refusing it`, () => {
-      const fallback = extractPercussiveEvents({ samples: hits, sampleRate });
-      const zeroed = extractPercussiveEvents({ samples: hits, sampleRate, [key]: 0 });
-      expect(fallback.length).toBeGreaterThan(0);
-      expect(zeroed.map((event) => [event.onsetSample, event.offsetSample])).toEqual(
-        fallback.map((event) => [event.onsetSample, event.offsetSample]),
+    // The native config reads 0 as "use the default", so an explicit 0 would
+    // separate on the default while reporting success; it is refused by name.
+    it(`refuses an explicit zero ${direction} kernel by name`, () => {
+      const caught = capture(() =>
+        extractPercussiveEvents({ samples: hits, sampleRate, [key]: 0 }),
+      );
+      expect(caught).toBeInstanceOf(RangeError);
+      expect((caught as RangeError).message).toBe(
+        `extractPercussiveEvents: ${key} must not be 0; omit it for the library value`,
       );
     });
 
