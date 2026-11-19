@@ -37,7 +37,15 @@ def test_param_pairs_by_canonical_name_and_reports_a_rename_as_two_rows():
     rows = {(b.c_subject, b.surface_spelling) for b in facts._param_rows(c, node, "node")}
     assert ("hop_length", "hopLength") in rows, rows
     assert ("sr", None) in rows and (None, "sampleRate") in rows, rows
-    assert not any("config" in (b or "") or "request" in (s or "") for b, s in rows), rows
+    assert ("config", None) not in rows, rows
+    assert (None, "request") in rows, rows
+
+
+def test_facade_bag_is_unpaired_unless_c_takes_the_same_bag():
+    c = _sig("c", ("preset", "preset"), ("options", "options"))
+    py = _sig("python", ("config", "config"), ("options", "options"))
+    rows = {(b.c_subject, b.surface_spelling) for b in facts._param_rows(c, py, "python")}
+    assert rows == {("preset", None), (None, "config")}, rows
 
 
 def test_structural_sample_rate_pairs_with_the_facade_spelling_only_when_bound():

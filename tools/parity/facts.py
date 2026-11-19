@@ -10,10 +10,12 @@ same key; nothing here guesses that the two are the same subject.
 
 Only keys a surface declares are reported for it: a function or record the
 facade omits entirely is the coverage check's business, not a binding.
-A config struct or options bag (``config``, ``request``, ...) is not a subject
-on either side: its interior is reached through the record rows, so
-request-object keys appear only where the request type mirrors a C struct and
-is extracted as one.
+A C config struct (``config``, ``options``, ...) is not a subject: its interior
+is reached through the record rows, so request-object keys appear only where the
+request type mirrors a C struct and is extracted as one. A facade bag-named
+parameter (``config``, ``request``, ...) that C does not also take under that
+name is reported as an unpaired facade name, since it may be where a C
+parameter was folded (a C ``preset`` taken as keyword ``config``).
 """
 
 from __future__ import annotations
@@ -65,11 +67,13 @@ class FieldBinding:
 
 def _param_rows(c_sig: FunctionSig, sig: FunctionSig, surface: Surface) -> list[FieldBinding]:
     rows: list[FieldBinding] = []
-    skip = compare._CALLBACK_NAMES | compare._STRUCT_BAG_NAMES
-    facade = {p.name: p for p in sig.core_params() if p.name not in skip}
+    facade = {p.name: p for p in sig.core_params() if p.name not in compare._CALLBACK_NAMES}
     c_names = set()
     for p in c_sig.core_params():
         if p.name in compare._STRUCT_BAG_NAMES:
+            # A C struct argument is reached through the record rows; a facade bag of
+            # the same name is that struct, not an unpaired name.
+            facade.pop(p.name, None)
             continue
         c_names.add(p.name)
         bound = facade.get(p.name)
