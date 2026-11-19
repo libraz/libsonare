@@ -79,7 +79,7 @@ describe('WASM Project vocal input number errors', () => {
     expect(() => apply({ takeId: 0 })).toThrow(
       new RangeError('takeId must not be 0; omit it for the base source'),
     );
-    expect(() => apply({ takeId: '1' })).toThrow(new TypeError('takeId must be a number'));
+    expect(() => apply({ takeId: '1' })).toThrow(new TypeError('takeId must be an integer'));
   });
 
   it('refuses the removed renderedStartSample as an unknown key', () => {

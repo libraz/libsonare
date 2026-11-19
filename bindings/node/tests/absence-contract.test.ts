@@ -194,7 +194,7 @@ describe('a take id is required and 0 is refused by name', () => {
   it('on the take, its source, the active take and a comp segment', () => {
     withProject((project, _track, clipId) => {
       expect(() => project.setClipTakes(clipId, [{} as never])).toThrow(
-        new TypeError('Project.setClipTakes: takes[0].id must be a number'),
+        new TypeError('Project.setClipTakes: takes[0].id must be an integer'),
       );
       expect(() => project.setClipTakes(clipId, [{ id: 0 }])).toThrow(
         new RangeError('Project.setClipTakes: takes[0].id must not be 0'),
@@ -375,7 +375,7 @@ describe('a required id of the wrong type is a TypeError with the facade text', 
   it('on setClipSource and setSourceAudio', () => {
     withProject((project, _track, clipId) => {
       expect(() => project.setClipSource(clipId, undefined as never)).toThrow(
-        new TypeError('Project.setClipSource: sourceId must be a number'),
+        new TypeError('Project.setClipSource: sourceId must be an integer'),
       );
       expect(() =>
         project.setSourceAudio({
@@ -383,9 +383,9 @@ describe('a required id of the wrong type is a TypeError with the facade text', 
           channels: AUDIO,
           sampleRate: 48000,
         }),
-      ).toThrow(new TypeError('Project.setSourceAudio: sourceId must be a number'));
+      ).toThrow(new TypeError('Project.setSourceAudio: sourceId must be an integer'));
       expect(() => project.setAudioSourceMetadata({ sourceId: 'x' as never })).toThrow(
-        new TypeError('Project.setAudioSourceMetadata: sourceId must be a number'),
+        new TypeError('Project.setAudioSourceMetadata: sourceId must be an integer'),
       );
       expect(() => project.renameTrack(1, undefined as never)).toThrow(
         new TypeError('Project.renameTrack: name must be a string'),

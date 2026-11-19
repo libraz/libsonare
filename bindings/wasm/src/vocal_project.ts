@@ -44,7 +44,7 @@ function uint32(value: unknown, field: string, allowZero = true): number {
 
 function requestUint32(value: unknown, field: string, allowZero = true): number {
   if (typeof value !== 'number') {
-    throw refuseType(`${field} must be a number`);
+    throw refuseType(`${field} must be an integer`);
   }
   return uint32(value, field, allowZero);
 }
@@ -52,7 +52,7 @@ function requestUint32(value: unknown, field: string, allowZero = true): number 
 /** A take id of an apply request: a number, and never `0`, which is spelt by leaving it out. */
 function requestTakeId(value: unknown): number {
   if (typeof value !== 'number') {
-    throw refuseType('takeId must be a number');
+    throw refuseType('takeId must be an integer');
   }
   if (value === 0) {
     throw refuse('takeId must not be 0; omit it for the base source');
@@ -81,7 +81,7 @@ function nativeInt64(value: unknown, field: string): number {
 
 function positiveSampleCount(value: unknown, field: string): number {
   if (typeof value !== 'number') {
-    throw refuseType(`${field} must be a number`);
+    throw refuseType(`${field} must be an integer`);
   }
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw refuse(`${field} must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`);

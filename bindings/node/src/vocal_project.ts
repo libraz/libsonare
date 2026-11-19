@@ -96,7 +96,7 @@ function requestSafeInteger(
   maximum = Number.MAX_SAFE_INTEGER,
 ): number {
   if (typeof value !== 'number') {
-    throw refuseType(`${field} must be a number`);
+    throw refuseType(`${field} must be an integer`);
   }
   return safeInteger(value, field, minimum, maximum);
 }
@@ -112,7 +112,7 @@ function requestProjectId(value: unknown, field: string, allowZero = false): num
 /** A take id of an apply request: a number, and never `0`, which is spelt by leaving it out. */
 function requestTakeId(value: unknown): number {
   if (typeof value !== 'number') {
-    throw refuseType('takeId must be a number');
+    throw refuseType('takeId must be an integer');
   }
   if (value === 0) {
     throw refuse('takeId must not be 0; omit it for the base source');

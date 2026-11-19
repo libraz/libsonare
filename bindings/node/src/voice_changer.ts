@@ -16,6 +16,7 @@ import type {
 import {
   assertAudioChannels,
   assertAudioInput,
+  assertBoundedInteger,
   assertKnownRequestKeys,
   assertPositiveInteger,
   assertRetuneGrain,
@@ -228,9 +229,6 @@ export class RealtimeVoiceChanger {
     assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
     if (maxBlockSize !== undefined) {
-      if (typeof maxBlockSize !== 'number') {
-        throw refuseType(`maxBlockSize must be a number`);
-      }
       assertPositiveInteger(maxBlockSize, 'maxBlockSize');
     }
     const numChannels = options.numChannels;
@@ -590,12 +588,7 @@ export function realtimeVoiceChangerValidatePresetJson(
  */
 export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
   return withEntry('voiceCharacterPresetId', () => {
-    if (typeof ordinal !== 'number') {
-      throw refuseType('ordinal must be a number');
-    }
-    if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= PRESET_IDS.length) {
-      throw refuse(`ordinal must be an integer in [0, ${PRESET_IDS.length - 1}]`);
-    }
+    assertBoundedInteger(ordinal, 'ordinal', 0, PRESET_IDS.length - 1);
     return addon.voiceCharacterPresetId(ordinal) as VoicePresetId;
   });
 }

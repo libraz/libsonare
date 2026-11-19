@@ -729,7 +729,7 @@ function sidechainKey(method: RequestFn, source: SidechainSource): { kind: numbe
     throw refuseType(`source.kind must be a string`);
   }
   if (typeof source.id !== 'number') {
-    throw refuseType(`source.id must be a number`);
+    throw refuseType(`source.id must be an integer`);
   }
   if (source.id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);

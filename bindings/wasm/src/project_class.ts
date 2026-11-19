@@ -123,6 +123,7 @@ import {
   assertSampleRate,
   assertSamples,
   assertU7,
+  assertU32,
   C_INT_MAX,
   optionalBoolean,
   requestObject,
@@ -458,7 +459,7 @@ export class Project {
   addClip(desc: ProjectClipDesc): number {
     const { channels, sampleRate, ...rest } = requestObject('Project.addClip', desc, 'desc', true);
     if (typeof rest.trackId !== 'number') {
-      throw refuseType('trackId must be a number');
+      throw refuseType('trackId must be an integer');
     }
     if (rest.trackId === 0) {
       throw refuse('trackId must not be 0; a clip needs an existing track');
@@ -696,12 +697,7 @@ export class Project {
 
   /** Set the combined undo/redo history byte cap. Zero disables retention. */
   setMaxHistoryBytes(bytes: number): void {
-    if (typeof bytes !== 'number') {
-      throw refuseType('bytes must be a number');
-    }
-    if (!Number.isFinite(bytes) || !Number.isInteger(bytes) || bytes < 0 || bytes > 0xffff_ffff) {
-      throw refuse('bytes must be a finite integer in the uint32 range');
-    }
+    assertU32(bytes, 'bytes');
     this.native.setMaxHistoryBytes(bytes);
   }
 
@@ -980,7 +976,7 @@ export class Project {
     if (request.instrumentLatencySamples !== undefined) {
       const latency = request.instrumentLatencySamples;
       if (typeof latency !== 'number') {
-        throw refuseType('instrumentLatencySamples must be a number');
+        throw refuseType('instrumentLatencySamples must be an integer');
       }
       native.instrumentLatencySamples = latency;
     }
@@ -1233,7 +1229,7 @@ export class Project {
       true,
     );
     if (typeof sourceId !== 'number') {
-      throw refuseType('sourceId must be a number');
+      throw refuseType('sourceId must be an integer');
     }
     const planar = interleaveChannels(channels, sampleRate);
     this.native.setSourceAudio(sourceId, planar.audio, planar.numChannels, sampleRate);
@@ -1248,7 +1244,7 @@ export class Project {
       true,
     );
     if (typeof sourceId !== 'number') {
-      throw refuseType('sourceId must be a number');
+      throw refuseType('sourceId must be an integer');
     }
     this.native.setAudioSourceMetadata(
       sourceId,
@@ -1305,7 +1301,7 @@ export class Project {
   /** Rebind a clip to a different (already-registered) source (undoable). */
   setClipSource(clipId: number, sourceId: number): void {
     if (typeof sourceId !== 'number') {
-      throw refuseType('sourceId must be a number');
+      throw refuseType('sourceId must be an integer');
     }
     this.native.setClipSource(clipId, sourceId);
   }

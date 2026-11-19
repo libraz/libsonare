@@ -711,13 +711,14 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
       throw refuseType(`${prefix} must be a { ppq, word0, word1? } object`);
     }
     const record = event as ProjectMidiEvent;
-    for (const key of ['ppq', 'word0'] as const) {
-      if (typeof record[key] !== 'number') {
-        throw refuseType(`${prefix}.${key} must be a number`);
-      }
+    if (typeof record.ppq !== 'number') {
+      throw refuseType(`${prefix}.ppq must be a number`);
+    }
+    if (typeof record.word0 !== 'number') {
+      throw refuseType(`${prefix}.word0 must be an integer`);
     }
     if (record.word1 !== undefined && typeof record.word1 !== 'number') {
-      throw refuseType(`${prefix}.word1 must be a number`);
+      throw refuseType(`${prefix}.word1 must be an integer`);
     }
     if (!Number.isFinite(record.ppq) || record.ppq < 0) {
       throw refuse(`${prefix}.ppq must be finite and at least 0`);
@@ -811,7 +812,7 @@ export function optionalId(
     return undefined;
   }
   if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (value === 0 && !allowZero) {
     throw refuse(`${argName} must not be 0; omit it ${hint}`);
@@ -865,7 +866,7 @@ export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
     refuseUnknownFields(entry, where, TAKE_KEYS);
     const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
     if (typeof id !== 'number') {
-      throw refuseType(`${where}.id must be a number`);
+      throw refuseType(`${where}.id must be an integer`);
     }
     if (id === 0) {
       throw refuse(`${where}.id must not be 0`);
@@ -908,7 +909,7 @@ export function optionalPositiveInt(
     return undefined;
   }
   if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (value === 0) {
     throw refuse(`${argName} must not be 0; omit it for the default`);

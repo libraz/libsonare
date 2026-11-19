@@ -46,7 +46,7 @@ beforeAll(async () => {
 describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
   it('requires numChannels rather than following the destination', async () => {
     await expect(newEngine({ numChannels: undefined })).rejects.toThrow(
-      /SonareEngine\.create: numChannels must be a number/,
+      /SonareEngine\.create: numChannels must be an integer/,
     );
   });
 

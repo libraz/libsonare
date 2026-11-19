@@ -284,11 +284,17 @@ describe('mixer worklet true-peak metering', () => {
       }
     };
     const bad = [Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY, undefined, '256'];
+    const refusal = (frames: unknown) =>
+      typeof frames === 'number'
+        ? new RangeError(
+            `setMeterInterval frames must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`,
+          )
+        : new TypeError('setMeterInterval frames must be an integer');
     try {
       for (const frames of bad) {
         expect(() =>
           processor.receiveMessage({ type: 'setMeterInterval', frames: frames as number }),
-        ).toThrow(RangeError);
+        ).toThrow(refusal(frames));
       }
       // The meter stayed off: a NaN interval used to publish every quantum.
       run(4);
@@ -300,7 +306,7 @@ describe('mixer worklet true-peak metering', () => {
       for (const frames of bad) {
         expect(() =>
           processor.receiveMessage({ type: 'setMeterInterval', frames: frames as number }),
-        ).toThrow(RangeError);
+        ).toThrow(refusal(frames));
       }
       run(8);
       expect(meters).toHaveLength(4);

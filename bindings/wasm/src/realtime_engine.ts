@@ -304,7 +304,7 @@ function optionalBusId(argName: string, value: unknown): number {
     return 0;
   }
   if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
+    throw refuseType(`${argName} must be an integer`);
   }
   if (value === 0) {
     throw refuse(`${argName} must not be 0; omit it to route to the master mix`);
@@ -417,7 +417,7 @@ function scheduleSampleCount(
   }
   const where = `clips[${index}].${field}`;
   if (typeof value !== 'number') {
-    throw refuseType(`${where} must be a number`);
+    throw refuseType(`${where} must be an integer`);
   }
   if (value === 0) {
     throw refuse(`${where} must not be 0; omit it for ${meaning}`);
@@ -590,7 +590,7 @@ function sidechainSourceArg(
   requestObject(requestName, source, 'source', true);
   const kind = sidechainSourceKindCode(source.kind, 'source.kind');
   if (typeof source.id !== 'number') {
-    throw refuseType(`source.id must be a number`);
+    throw refuseType(`source.id must be an integer`);
   }
   if (source.id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
@@ -776,7 +776,7 @@ export class RealtimeEngine {
   /** Lane index of a declared track; the native setters still address lanes by position. */
   private laneIndexOf(trackId: number): number {
     if (typeof trackId !== 'number') {
-      throw refuseType(`trackId must be a number`);
+      throw refuseType(`trackId must be an integer`);
     }
     if (this.laneOrder === undefined) {
       throw invalidState(
@@ -2596,13 +2596,13 @@ export class RealtimeEngine {
   configureCapture(options: CaptureOptions): void {
     requestObject('configureCapture', options, 'options', true);
     if (typeof options.capacityFrames !== 'number') {
-      throw refuseType('capacityFrames must be a number');
+      throw refuseType('capacityFrames must be an integer');
     }
     const numChannels = optionalCount('numChannels', options.numChannels) ?? 2;
     const source = tokenCode('source', options.source ?? 'output', CAPTURE_SOURCES);
     const offset = options.recordOffsetSamples ?? 0;
     if (typeof offset !== 'number') {
-      throw refuseType('recordOffsetSamples must be a number');
+      throw refuseType('recordOffsetSamples must be an integer');
     }
     let monitor = { enabled: true, gain: 1 };
     if (options.inputMonitor !== undefined && options.inputMonitor !== null) {

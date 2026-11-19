@@ -147,7 +147,7 @@ export function requireRingDimension(
   maximum = Number.MAX_SAFE_INTEGER,
 ): number {
   if (typeof value !== 'number') {
-    throw refuseType(`${name} must be a number`);
+    throw refuseType(`${name} must be an integer`);
   }
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
     throw refuse(`${name} must be an integer in [${minimum}, ${maximum}]`);
@@ -181,7 +181,7 @@ export function resolveRingOptions<K extends string>(
   for (const key of Object.keys(defaults) as K[]) {
     const value = given[key] ?? defaults[key];
     if (value === undefined) {
-      throw refuseType(`${key} must be a number`);
+      throw refuseType(`${key} must be an integer`);
     }
     resolved[key] = value;
   }

@@ -217,7 +217,7 @@ describe('Project edit ops (new bindings)', () => {
         [{ sourceId: 5 }, { id: 2 }] as unknown as Parameters<typeof project.setClipTakes>[1],
         { activeTakeId: 1 },
       ),
-    ).toThrow(/id must be a number/);
+    ).toThrow(/id must be an integer/);
     expect(project.toJson()).toBe(before);
 
     expect(() =>

@@ -128,9 +128,6 @@ export class PlaybackRenderer {
     assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
     if (maxBlockSize !== undefined) {
-      if (typeof maxBlockSize !== 'number') {
-        throw refuseType(`maxBlockSize must be a number`);
-      }
       if (maxBlockSize === 0) {
         throw refuse(`maxBlockSize must not be 0; omit it for the default`);
       }

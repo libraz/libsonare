@@ -111,6 +111,29 @@ function requireFinite(value: unknown, argName: string): number {
   return value;
 }
 
+/** An integer-typed field: a non-number is a `TypeError`, and a non-finite number a `RangeError`. */
+function requireFiniteInteger(value: unknown, argName: string): number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be an integer`);
+  }
+  if (!Number.isFinite(value)) {
+    throw refuse(`${argName} must be finite`);
+  }
+  return value;
+}
+
+/** An optional integer on a field where `0` would mean "the default": absent stays absent, `0` is refused. */
+function optionalNonZeroInteger(value: unknown, argName: string): number | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  const number = requireFiniteInteger(value, argName);
+  if (number === 0) {
+    throw refuse(`${argName} must not be 0; omit it for the default`);
+  }
+  return number;
+}
+
 /** An optional number on a field where `0` would mean "the default": absent stays absent, `0` is refused. */
 function optionalNonZero(value: unknown, argName: string): number | undefined {
   if (isAbsent(value)) {
@@ -128,7 +151,7 @@ function optionalId(argName: string, value: unknown): number | undefined {
   if (isAbsent(value)) {
     return undefined;
   }
-  const number = requireFinite(value, argName);
+  const number = requireFiniteInteger(value, argName);
   if (number === 0) {
     throw refuse(`${argName} must not be 0; omit it for the default`);
   }
@@ -143,7 +166,7 @@ function optionalCount(argName: string, value: unknown): number | undefined {
   if (isAbsent(value)) {
     return undefined;
   }
-  const number = requireFinite(value, argName);
+  const number = requireFiniteInteger(value, argName);
   if (number === 0) {
     throw refuse(`${argName} must not be 0; omit it for the default`);
   }
@@ -245,10 +268,10 @@ function resolveEngineConfig(
   const sampleRate = requireFinite(request.sampleRate, 'sampleRate');
   return {
     sampleRate,
-    maxBlockSize: optionalNonZero(request.maxBlockSize, 'maxBlockSize'),
-    commandCapacity: optionalNonZero(request.commandCapacity, 'commandCapacity'),
-    telemetryCapacity: optionalNonZero(request.telemetryCapacity, 'telemetryCapacity'),
-    maxChannels: optionalNonZero(request.maxChannels, 'maxChannels'),
+    maxBlockSize: optionalNonZeroInteger(request.maxBlockSize, 'maxBlockSize'),
+    commandCapacity: optionalNonZeroInteger(request.commandCapacity, 'commandCapacity'),
+    telemetryCapacity: optionalNonZeroInteger(request.telemetryCapacity, 'telemetryCapacity'),
+    maxChannels: optionalNonZeroInteger(request.maxChannels, 'maxChannels'),
   };
 }
 
@@ -284,7 +307,7 @@ function normalizeSends(sends: EngineTrackSend[], where: string): EngineTrackSen
 
 /** Output bus of a lane or bus: absent is the master mix, an explicit `0` is refused. */
 function outputBusField(value: unknown, label: string): number | undefined {
-  return optionalNonZero(value, `${label}.outputBusId`);
+  return optionalNonZeroInteger(value, `${label}.outputBusId`);
 }
 
 function laneToNative(requestName: 'setTrackLanes', lane: EngineTrackLane, index: number): unknown {
@@ -369,7 +392,7 @@ function sidechainSourcePair(
   }
   const record = requestObject(requestName, source, 'source', true);
   const kind = requireToken(record.kind, SIDECHAIN_SOURCE_KIND, 'source.kind');
-  const id = requireFinite(record.id, 'source.id');
+  const id = requireFiniteInteger(record.id, 'source.id');
   if (id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
   }
@@ -500,7 +523,7 @@ function scheduleSampleCount(
   }
   const where = `clips[${index}].${field}`;
   if (typeof value !== 'number') {
-    throw refuseType(`${where} must be a number`);
+    throw refuseType(`${where} must be an integer`);
   }
   if (value === 0) {
     throw refuse(`${where} must not be 0; omit it for ${meaning}`);
@@ -651,7 +674,7 @@ function bounceToNative(options: EngineBounceOptions): Record<string, unknown> {
   const request = requestObject(fnName, options, 'options', true);
   const native: Record<string, unknown> = { ...request };
   for (const key of ['blockSize', 'targetSampleRate', 'sourceSampleRate'] as const) {
-    if (optionalNonZero(request[key], key) === undefined) {
+    if (optionalNonZeroInteger(request[key], key) === undefined) {
       delete native[key];
     }
   }
@@ -721,8 +744,8 @@ function bankFields(
   const record = requestObject(requestName, bank, 'bank', true);
   return {
     bankValid: true,
-    msb: requireFinite(record.msb, 'bank.msb'),
-    lsb: requireFinite(record.lsb, 'bank.lsb'),
+    msb: requireFiniteInteger(record.msb, 'bank.msb'),
+    lsb: requireFiniteInteger(record.lsb, 'bank.lsb'),
   };
 }
 
@@ -859,7 +882,7 @@ export class RealtimeEngine {
    *   channel count, or the engine was never prepared
    */
   primeOfflineParameters(numChannels: number, blockSize?: number): void {
-    this.native.primeOfflineParameters(numChannels, optionalNonZero(blockSize, 'blockSize'));
+    this.native.primeOfflineParameters(numChannels, optionalNonZeroInteger(blockSize, 'blockSize'));
   }
 
   /**
@@ -1094,7 +1117,7 @@ export class RealtimeEngine {
     const request = requestObject('setMetronome', config, 'config', true);
     const { clickSec, ...rest } = request;
     const native: Record<string, unknown> = { ...rest };
-    const samples = optionalNonZero(request.clickSamples, 'clickSamples');
+    const samples = optionalNonZeroInteger(request.clickSamples, 'clickSamples');
     const seconds = optionalNonZero(clickSec, 'clickSec');
     if (samples !== undefined && seconds !== undefined) {
       throw refuse('give clickSamples or clickSec, not both');
@@ -1214,7 +1237,7 @@ export class RealtimeEngine {
    * membership and threading contract as {@link setTrackSends}.
    */
   setTrackOutputBus(trackId: number, busId: number | null): void {
-    this.native.setTrackOutputBus(trackId, optionalNonZero(busId, 'busId') ?? 0);
+    this.native.setTrackOutputBus(trackId, optionalNonZeroInteger(busId, 'busId') ?? 0);
   }
 
   /**
@@ -1821,7 +1844,7 @@ export class RealtimeEngine {
     const fnName = 'configureCapture';
     const request = requestObject(fnName, options, 'options', true);
     if (isAbsent(request.capacityFrames)) {
-      throw refuseType(`capacityFrames must be a number`);
+      throw refuseType(`capacityFrames must be an integer`);
     }
     const capacityFrames = request.capacityFrames as number;
     const numChannels = isAbsent(request.numChannels) ? 2 : (request.numChannels as number);
@@ -1839,7 +1862,7 @@ export class RealtimeEngine {
     assertClosedToken(source, CAPTURE_SOURCES, 'source');
     const offset = isAbsent(request.recordOffsetSamples)
       ? 0
-      : requireFinite(request.recordOffsetSamples, 'recordOffsetSamples');
+      : requireFiniteInteger(request.recordOffsetSamples, 'recordOffsetSamples');
     let monitor = { enabled: true, gain: 1 };
     if (!isAbsent(request.inputMonitor)) {
       const inputMonitor = request.inputMonitor;
@@ -1993,7 +2016,7 @@ export class RealtimeEngine {
     }
     return this.native.renderOffline(
       record.channels,
-      optionalNonZero(record.blockSize, 'blockSize'),
+      optionalNonZeroInteger(record.blockSize, 'blockSize'),
       record.finalize ?? true,
     );
   }
@@ -2043,7 +2066,7 @@ export class RealtimeEngine {
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     const fnName = 'freezeOffline';
     const native: Record<string, unknown> = { ...requestObject(fnName, options, 'options', true) };
-    if (optionalNonZero(native.blockSize, 'blockSize') === undefined) {
+    if (optionalNonZeroInteger(native.blockSize, 'blockSize') === undefined) {
       delete native.blockSize;
     }
     if (optionalId('clipId', native.clipId) === undefined) {

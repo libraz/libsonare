@@ -61,7 +61,6 @@ function requireNumber(value: unknown, argName: string): number {
   return value;
 }
 
-/** A lookup index: `TypeError` unless a number, `RangeError` unless an integer in `[0, max]`. */
 /** An integer in `[0, max]`: a non-number is a `TypeError`, anything else outside a `RangeError`. */
 function boundedInt(value: unknown, argName: string, max: number): number {
   assertBoundedInteger(value, argName, 0, max);

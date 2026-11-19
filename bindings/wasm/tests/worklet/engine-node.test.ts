@@ -93,7 +93,7 @@ describe('SonareRealtimeEngineNode numChannels', () => {
   it('requires a count instead of following the destination', async () => {
     await expect(capture(undefined)).rejects.toThrow(TypeError);
     await expect(capture(undefined)).rejects.toThrow(
-      /SonareRealtimeEngineNode\.create: numChannels must be a number/,
+      /SonareRealtimeEngineNode\.create: numChannels must be an integer/,
     );
   });
 

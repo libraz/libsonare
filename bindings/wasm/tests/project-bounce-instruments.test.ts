@@ -438,7 +438,7 @@ describe('bounceWithInstruments', () => {
         project.bounceWithInstruments(instruments, {
           blockSize: 'x',
         } as unknown as ProjectBounceOptions),
-      ).toThrow(/blockSize must be a number/);
+      ).toThrow(/blockSize must be an integer/);
     }
   });
 

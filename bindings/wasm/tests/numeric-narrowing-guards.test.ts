@@ -439,7 +439,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     // both refuse a fraction or an out-of-range value equally, but only the
     // former refuses a wrong JS type instead of coercing it through as<double>().
     // @ts-expect-error deliberately wrong type
-    expect(() => bounceAt('256')).toThrow(/must be a number/);
+    expect(() => bounceAt('256')).toThrow(/must be an integer/);
   });
 
   // spectralEdit's region bounds (spectral_edit.cpp) had the same raw-cast

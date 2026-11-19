@@ -9,6 +9,7 @@ import type {
   SonareWorkletProcessorOptions,
   WorkletPort,
 } from '../public_types_worklet.js';
+import { assertBoundedInteger } from '../validation.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import {
@@ -215,8 +216,9 @@ export class SonareWorkletProcessor {
       return;
     }
     if (message.type === 'setMeterInterval') {
-      // The constructor option's domain; a bad value is refused before any state changes.
-      const frames = requireIntegerOption(message.frames, Number.NaN, 'setMeterInterval frames', 0);
+      // Required here (no default to fall back on); a bad value is refused before any state changes.
+      const frames: unknown = message.frames;
+      assertBoundedInteger(frames, 'setMeterInterval frames', 0, Number.MAX_SAFE_INTEGER);
       // Toggling metering also toggles the mixer's meter, so a disabled meter
       // costs nothing per block. Re-enabling restarts it: the filter history and
       // the published snapshot are from before the gap, and carrying them

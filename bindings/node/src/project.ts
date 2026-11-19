@@ -152,12 +152,19 @@ function requireNumber(value: unknown, argName: string): number {
   return value;
 }
 
+function requireInteger(value: unknown, argName: string): number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be an integer`);
+  }
+  return value;
+}
+
 /** An optional field where `0` would mean "the default": absent stays absent, `0` is refused. */
 function optionalNonZero(value: unknown, argName: string, max: number): number | undefined {
   if (isAbsent(value)) {
     return undefined;
   }
-  const number = requireNumber(value, argName);
+  const number = requireInteger(value, argName);
   if (number === 0) {
     throw refuse(`${argName} must not be 0; omit it for the default`);
   }
@@ -175,7 +182,7 @@ function optionalId(argName: string, value: unknown, hint = 'for the default'): 
   if (isAbsent(value)) {
     return undefined;
   }
-  const number = requireNumber(value, argName);
+  const number = requireInteger(value, argName);
   assertU32(number, argName);
   if (number === 0) {
     throw refuse(`${argName} must not be 0; omit it ${hint}`);
@@ -222,7 +229,7 @@ function takesToNative(takes: unknown): Array<Record<string, unknown>> {
     }
     refuseUnknownFields(entry, where, TAKE_KEYS);
     const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
-    const takeId = requireNumber(id, `${where}.id`);
+    const takeId = requireInteger(id, `${where}.id`);
     assertU32(takeId, `${where}.id`);
     if (takeId === 0) {
       throw refuse(`${where}.id must not be 0`);
@@ -308,7 +315,7 @@ function bindInstruments<T extends object>(
       return resolved;
     }
     const where = `${label}.destinationId`;
-    assertU32(requireNumber(binding.destinationId, where), where);
+    assertU32(requireInteger(binding.destinationId, where), where);
     return withDestination(resolved, binding.destinationId as number);
   });
 }
@@ -808,7 +815,7 @@ export class Project {
     assertSampleRate(record.sampleRate);
     const { data, numChannels } = interleavePlanar(record.channels);
     this.native.setSourceAudio(
-      requireNumber(record.sourceId, 'sourceId'),
+      requireInteger(record.sourceId, 'sourceId'),
       data,
       numChannels,
       record.sampleRate,
@@ -823,7 +830,7 @@ export class Project {
       (field) => optionalName(field, record[field], 'to clear it'),
     );
     this.native.setAudioSourceMetadata(
-      requireNumber(record.sourceId, 'sourceId'),
+      requireInteger(record.sourceId, 'sourceId'),
       contentHash ?? '',
       externalStemRole ?? '',
     );
@@ -850,7 +857,7 @@ export class Project {
   addClip(desc: ProjectClipDesc): number {
     const fnName = 'addClip';
     const { channels, sampleRate, ...rest } = requestObject(fnName, desc, 'desc', true);
-    if (requireNumber(rest.trackId, 'trackId') === 0) {
+    if (requireInteger(rest.trackId, 'trackId') === 0) {
       throw refuse(`trackId must not be 0; a clip needs an existing track`);
     }
     if (channels === undefined) {
@@ -999,8 +1006,8 @@ export class Project {
   partRig(key: PartRigKey): PartRigEntry | null {
     const record = requestObject('partRig', key, 'key', true);
     const raw = this.native.getPartRig(
-      requireNumber(record.destinationId, 'destinationId'),
-      requireNumber(record.part, 'part'),
+      requireInteger(record.destinationId, 'destinationId'),
+      requireInteger(record.part, 'part'),
     );
     if (raw === null) {
       return null;
@@ -1016,8 +1023,8 @@ export class Project {
   clearPartRig(key: PartRigKey): void {
     const record = requestObject('clearPartRig', key, 'key', true);
     this.native.clearPartRig(
-      requireNumber(record.destinationId, 'destinationId'),
-      requireNumber(record.part, 'part'),
+      requireInteger(record.destinationId, 'destinationId'),
+      requireInteger(record.part, 'part'),
     );
   }
 
@@ -1142,7 +1149,7 @@ export class Project {
 
   /** Rebind a clip to a different already-registered source via an undoable edit. */
   setClipSource(clipId: number, sourceId: number): void {
-    this.native.setClipSource(clipId, requireNumber(sourceId, 'sourceId'));
+    this.native.setClipSource(clipId, requireInteger(sourceId, 'sourceId'));
   }
 
   /**
@@ -1304,15 +1311,15 @@ export class Project {
     const record = requestObject(fnName, request, 'request', true);
     let bank = -1;
     if (!isAbsent(record.bank)) {
-      const msb = assertU7(requireNumber(record.bank.msb, 'bank.msb'), 'bank.msb');
-      const lsb = assertU7(requireNumber(record.bank.lsb, 'bank.lsb'), 'bank.lsb');
+      const msb = assertU7(requireInteger(record.bank.msb, 'bank.msb'), 'bank.msb');
+      const lsb = assertU7(requireInteger(record.bank.lsb, 'bank.lsb'), 'bank.lsb');
       bank = (msb << 7) | lsb;
     }
     this.native.setProgramOnChannel(
       clipId,
-      requireNumber(record.group, 'group'),
-      requireNumber(record.channel, 'channel'),
-      requireNumber(record.program, 'program'),
+      requireInteger(record.group, 'group'),
+      requireInteger(record.channel, 'channel'),
+      requireInteger(record.program, 'program'),
       bank,
     );
   }
