@@ -60,7 +60,7 @@ import {
   assertFloatValue,
   assertFrequencyBounds,
   assertNonNegativeFloatValue,
-  assertNonNegativeInteger,
+  assertNonNegativeSafeInteger,
   assertNumber,
   assertSampleRate,
   assertU32,
@@ -1191,7 +1191,7 @@ export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
   return withEntry('analyzeBpm', () => {
     const request = sampleOneShot<AnalyzeBpmRequest>('analyzeBpm', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    assertNonNegativeInteger(request.maxCandidates ?? 5, 'maxCandidates');
+    assertNonNegativeSafeInteger(request.maxCandidates ?? 5, 'maxCandidates');
     return requireModule().analyzeBpm(
       request.samples,
       request.sampleRate,

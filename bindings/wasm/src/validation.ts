@@ -305,7 +305,7 @@ export function assertInt32(value: number, argName: string): void {
     throw refuseType(`${argName} must be a number`);
   }
   if (!Number.isInteger(value) || value < C_INT_MIN || value > C_INT_MAX) {
-    throw refuse(`${argName} must be an integer within the signed 32-bit range`);
+    throw refuse(`${argName} must be an integer in [${C_INT_MIN}, ${C_INT_MAX}]`);
   }
 }
 
@@ -367,12 +367,6 @@ export function assertPercussiveSeparation(options: PercussiveSeparationFields):
         throw refuse(`${field} must not be 0; omit it for the library value`);
       }
     }
-  }
-}
-
-export function assertNonNegativeInteger(value: number, argName: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw refuse(`${argName} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
   }
 }
 
@@ -476,9 +470,7 @@ export function assertNonNegativeSafeInteger(value: number, argName: string): vo
     throw refuseType(`${argName} must be an integer`);
   }
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw refuse(
-      `${argName} must be a non-negative integer no greater than Number.MAX_SAFE_INTEGER`,
-    );
+    throw refuse(`${argName} must be an integer in [0, ${Number.MAX_SAFE_INTEGER}]`);
   }
 }
 

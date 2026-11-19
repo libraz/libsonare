@@ -11,7 +11,7 @@ import { getSonareModule } from './module_state.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
-  assertNonNegativeInteger,
+  assertNonNegativeSafeInteger,
   assertNumber,
   assertPositiveFloatValue,
   assertPositiveInteger,
@@ -325,7 +325,7 @@ export function meteringDetectClipping(...args: unknown[]): ClippingReport {
     assertAudioInput(r.samples, r.sampleRate, r);
     refuseZeroSentinel(r, ['minRegionSamples']);
     if (r.minRegionSamples !== undefined && r.minRegionSamples !== null) {
-      assertNonNegativeInteger(r.minRegionSamples, 'minRegionSamples');
+      assertNonNegativeSafeInteger(r.minRegionSamples, 'minRegionSamples');
     }
     // Native still takes the linear threshold.
     const threshold = clipThresholdLinear(r.thresholdDb);
@@ -581,7 +581,7 @@ function scopeRequest(
   assertAudioInput(r.right, r.sampleRate, r, 'right');
   refuseZeroSentinel(r, ['maxPoints']);
   const maxPoints = r.maxPoints ?? 0;
-  assertNonNegativeInteger(maxPoints, 'maxPoints');
+  assertNonNegativeSafeInteger(maxPoints, 'maxPoints');
   return { ...r, maxPoints };
 }
 
@@ -673,7 +673,7 @@ export function meteringSpectrumFrame(...args: unknown[]): SpectrumReport {
     assertAudioInput(r.samples, r.sampleRate, { scanFinite: false });
     const native = nativeSpectrumOptions(r);
     const startSample = r.startSample ?? 0;
-    assertNonNegativeInteger(startSample, 'startSample');
+    assertNonNegativeSafeInteger(startSample, 'startSample');
     const nFft = (native.nFft as number | undefined) ?? DEFAULT_SPECTRUM_N_FFT;
     assertSamplesInWindow(r.samples, true, startSample, nFft);
     // Native takes the start as the positional `frame_offset`.

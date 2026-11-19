@@ -14,7 +14,7 @@ import {
   assertHpssKernels,
   assertIntegerValue,
   assertMatrix2D,
-  assertNonNegativeInteger,
+  assertNonNegativeSafeInteger,
   assertPositiveInteger,
   optionalBoolean,
   optionalToken,
@@ -547,7 +547,7 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
     if (r.k !== undefined) {
       assertPositiveInteger(r.k, 'k');
     }
-    assertNonNegativeInteger(r.width ?? 1, 'width');
+    assertNonNegativeSafeInteger(r.width ?? 1, 'width');
     const native = requireModule().segmentRecurrenceMatrix(
       data.data,
       data.rows,
@@ -644,7 +644,7 @@ export function segmentPathEnhance(...args: unknown[]): Matrix2D {
     assertSquare(recurrence, 'recurrence');
     assertPositiveInteger(r.win, 'win');
     assertPositiveInteger(r.maxRatio ?? 2, 'maxRatio');
-    assertNonNegativeInteger(r.minRatio ?? 0, 'minRatio');
+    assertNonNegativeSafeInteger(r.minRatio ?? 0, 'minRatio');
     assertPositiveInteger(r.nFilters ?? 7, 'nFilters');
     const native = requireModule().segmentPathEnhance(
       recurrence.data,

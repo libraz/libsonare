@@ -116,7 +116,7 @@ describe('a sentinel-bearing count', () => {
 
   it('meteringTruePeakDbtp refuses a factor that would truncate onto its 0 default', () => {
     expect(() => meteringTruePeakDbtp(tone, 22050, { oversampleFactor: 0.5 })).toThrow(
-      /oversampleFactor must be a non-negative integer/,
+      /oversampleFactor must be an integer in \[0, 9007199254740991\]/,
     );
   });
 
@@ -133,13 +133,13 @@ describe('a sentinel-bearing count', () => {
     for (const maxPoints of [-1, 0.5]) {
       expect(() =>
         meteringVectorscope({ left: tone, right, sampleRate: 22050, maxPoints }),
-      ).toThrow(/maxPoints must be a non-negative integer/);
+      ).toThrow(/maxPoints must be an integer in \[0, 9007199254740991\]/);
     }
   });
 
   it('meteringSpectrumFrame refuses a fractional start sample', () => {
     expect(() => meteringSpectrumFrame(tone, 22050, { startSample: 100.5 })).toThrow(
-      /startSample must be a non-negative integer/,
+      /startSample must be an integer in \[0, 9007199254740991\]/,
     );
   });
 });

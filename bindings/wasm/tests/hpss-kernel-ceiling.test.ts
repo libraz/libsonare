@@ -224,7 +224,7 @@ describe('HPSS kernel ceiling', () => {
           // The facade's own refusal, ahead of the narrowing, so it names the
           // argument rather than the median filter the value never reached.
           expect(error.message).toContain(
-            `${entry.name}: kernel${direction === 'harmonic' ? 'Harmonic' : 'Percussive'} must be an integer within the signed 32-bit range`,
+            `${entry.name}: kernel${direction === 'harmonic' ? 'Harmonic' : 'Percussive'} must be an integer in [-2147483648, 2147483647]`,
           );
           expect(error.message).not.toContain('exceeds the maximum');
         });

@@ -9,7 +9,7 @@ import { OwnerEpoch } from './owner_epoch.js';
 import type { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
 import {
   assertKnownRequestKeys,
-  assertNonNegativeInteger,
+  assertNonNegativeSafeInteger,
   assertPositiveInteger,
 } from './validation.js';
 
@@ -129,8 +129,8 @@ export class ClipPageStreamer {
     this.readAheadPages = options.readAheadPages ?? 2;
     this.retainBehindPages = options.retainBehindPages ?? 1;
     this.maxRequestsPerPump = options.maxRequestsPerPump ?? 256;
-    assertNonNegativeInteger(this.readAheadPages, 'readAheadPages');
-    assertNonNegativeInteger(this.retainBehindPages, 'retainBehindPages');
+    assertNonNegativeSafeInteger(this.readAheadPages, 'readAheadPages');
+    assertNonNegativeSafeInteger(this.retainBehindPages, 'retainBehindPages');
     assertPositiveInteger(this.maxRequestsPerPump, 'maxRequestsPerPump');
   }
 
