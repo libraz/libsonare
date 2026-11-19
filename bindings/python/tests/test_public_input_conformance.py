@@ -47,11 +47,8 @@ def _snapshot(engine: RealtimeEngine) -> bytes:
 
 
 def _mix_option_value(raw: object) -> object:
-    return {
-        "nan": math.nan,
-        "inf": math.inf,
-        "neg_inf": -math.inf,
-    }.get(raw, raw)
+    specials = {"nan": math.nan, "inf": math.inf, "neg_inf": -math.inf}
+    return specials[raw] if isinstance(raw, str) and raw in specials else raw
 
 
 @pytest.mark.parametrize(
@@ -138,3 +135,107 @@ def test_midi_cc_to_breakpoint_byte_fields_follow_the_corpus(case: dict[str, Any
             SonareValueError, match=rf"^\S+: {_python_field(case)} must be an integer in \[0, "
         ):
             Project.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
+
+
+_STREAMING = _CORPUS["streaming_contract"]
+# The facade folds the band counts into the matrix shapes and the flags into None.
+_STREAM_FOLDED = {"n_mels", "n_chroma", "feature_flags"}
+_STREAM_CHORD_FIELDS = {"chord_root", "chord_quality", "chord_confidence"}
+_STREAM_FEATURE_FIELDS = {
+    "mel": {"mel"},
+    "chroma": {"chroma"} | _STREAM_CHORD_FIELDS,
+    "onset": {"onset_strength"},
+    "spectral": {"spectral_centroid", "spectral_flatness"},
+}
+
+
+def _small_analyzer(**options: Any) -> Any:
+    from libsonare import StreamAnalyzer
+
+    return StreamAnalyzer(sample_rate=8000, n_fft=256, hop_length=64, n_mels=8, **options)
+
+
+def _stream_tone(n_samples: int) -> list[float]:
+    return [0.5 * math.sin(2.0 * math.pi * 440.0 * i / 8000) for i in range(n_samples)]
+
+
+def test_stream_feature_flags_follow_the_corpus() -> None:
+    from libsonare import streaming
+
+    bits = {
+        "mel": streaming._FEATURE_MEL,
+        "chroma": streaming._FEATURE_CHROMA,
+        "onset": streaming._FEATURE_ONSET,
+        "spectral": streaming._FEATURE_SPECTRAL,
+    }
+    assert bits == _STREAMING["feature_flags"]
+
+
+def test_stream_frames_fields_follow_the_corpus() -> None:
+    import dataclasses
+
+    from libsonare import StreamFrames
+
+    fields = {field.name for field in dataclasses.fields(StreamFrames)}
+    expected = set(_STREAMING["frame_fields"]) - _STREAM_FOLDED
+    assert fields - _STREAM_CHORD_FIELDS == expected
+
+
+def test_stream_output_format_is_the_float_default_and_unreachable() -> None:
+    import ctypes
+    import inspect
+
+    from libsonare import StreamAnalyzer
+    from libsonare._ffi_types_streaming import SonareStreamConfig
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    raw = SonareStreamConfig()
+    assert lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)) == 0
+    assert raw.output_format == _STREAMING["output_format_default"]
+    # The analyzer never offers the generic output format, so a legacy one cannot be asked for.
+    assert "output_format" not in inspect.signature(StreamAnalyzer).parameters
+    for legacy in _STREAMING["legacy_output_formats_rejected"]:
+        raw.sample_rate = 8000
+        raw.output_format = legacy
+        handle = ctypes.c_void_p()
+        assert lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)) != 0
+        assert not handle.value
+
+
+@pytest.mark.parametrize("feature", sorted(_STREAMING["feature_flags"]))
+def test_stream_disabled_feature_reads_as_none(feature: str) -> None:
+    assert _STREAMING["disabled_feature_shape"] == "empty"
+    switches = {f"compute_{name}": name != feature for name in _STREAM_FEATURE_FIELDS}
+    with _small_analyzer(**switches) as analyzer:
+        analyzer.process(_stream_tone(4096))
+        frames = analyzer.read_frames(1024)
+    assert frames.n_frames > 0
+    for name, fields in _STREAM_FEATURE_FIELDS.items():
+        for field in fields:
+            value = getattr(frames, field)
+            if name == feature:
+                assert value is None, field
+            else:
+                assert value is not None and value.shape[-1] == frames.n_frames, field
+
+
+def test_stream_overflow_drops_the_newest_frames() -> None:
+    import numpy as np
+
+    assert _STREAMING["overflow_policy"] == "drop_newest"
+    tone = _stream_tone(4096)
+    with _small_analyzer() as unbounded:
+        unbounded.process(tone)
+        reference = unbounded.read_frames(1024)
+    cap = 3
+    with _small_analyzer(max_pending_frames=cap) as bounded:
+        bounded.process(tone)
+        stats = bounded.stats()
+        kept = bounded.read_frames(1024)
+    assert reference.n_frames > cap
+    assert stats.dropped_output_frames == reference.n_frames - cap
+    assert kept.n_frames == cap
+    # The retained frames are the oldest ones, sample for sample.
+    np.testing.assert_array_equal(kept.timestamps_sec, reference.timestamps_sec[:cap])
+    np.testing.assert_array_equal(kept.rms_energy, reference.rms_energy[:cap])
