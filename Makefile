@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install test test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install test refusal-spelling test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -558,6 +558,18 @@ test-wasm: build-wasm-binding
 	cd bindings/wasm && yarn test
 	cd bindings/wasm && yarn test:types
 
+# Runs each JS suite with its public exports wrapped and ratchets how many of the
+# refusals it provokes name a field in C spelling (tests/conformance/
+# refusal_spelling_ratchet.json). Test failures are the test targets' business;
+# a capture holding no refusal fails the checker.
+refusal-spelling: build-node build-wasm-binding
+	@dir=$$(mktemp -d) && \
+	(cd bindings/node && SONARE_REFUSAL_CAPTURE=$$dir/node.jsonl npx vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/node.log 2>&1; true) && \
+	(cd bindings/wasm && SONARE_REFUSAL_CAPTURE=$$dir/wasm.jsonl npx vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/wasm.log 2>&1; true) && \
+	touch $$dir/node.jsonl $$dir/wasm.jsonl && \
+	python3 tools/api/refusal_spelling.py --surface node $$dir/node.jsonl && \
+	python3 tools/api/refusal_spelling.py --surface wasm $$dir/wasm.jsonl
+
 # Focused security-hardening gates. Each test command writes its complete log
 # under the matching build directory, and --no-tests=error prevents a renamed
 # or accidentally undiscovered regression test from passing silently.
@@ -973,6 +985,7 @@ conformance-checks:
 	$(CHECK) python3 tools/parity/test_comparison_reach.py
 	$(CHECK) python3 tools/parity/test_c_return_type_coverage.py
 	$(CHECK) python3 tools/parity/test_native_defaults.py
+	$(CHECK) python3 tools/parity/test_facts.py
 	$(CHECK) python3 tools/eval/test_summarize_accuracy.py
 	$(CHECK) python3 tools/eval/test_prepare_vocadito.py
 	$(CHECK) python3 tools/eval/test_timed_keys.py
