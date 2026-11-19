@@ -182,7 +182,7 @@ describe('NaN/Inf guards (WASM)', () => {
   });
   it('analyzeBpm rejects negative maxCandidates before native analysis', () => {
     expect(() => analyzeBpm(sine(SR), SR, { maxCandidates: -1 })).toThrow(
-      /analyzeBpm: maxCandidates must be a non-negative integer/,
+      /analyzeBpm: maxCandidates must be an integer of at least 0$/,
     );
   });
   it('lufsMultichannel rejects planes of unequal length', () => {

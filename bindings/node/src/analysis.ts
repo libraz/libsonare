@@ -1244,10 +1244,10 @@ export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
   return withEntry('analyzeImpulseResponse', () => {
     const request = audioCall<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
     const minDecayDb = request.minDecayDb ?? 30.0;
-    assertFiniteScalar(minDecayDb, 'minDecayDb');
-    if (minDecayDb <= 0) {
-      throw refuse('minDecayDb must be greater than zero');
+    if (typeof minDecayDb === 'number' && !(Number.isFinite(minDecayDb) && minDecayDb > 0)) {
+      throw refuse('minDecayDb must be finite and greater than 0');
     }
+    assertFiniteScalar(minDecayDb, 'minDecayDb');
     // Zero is degenerate but legal: the C ABI refuses only a negative count, so
     // refusing it here would narrow the domain the other surfaces accept.
     assertNonNegativeSafeInteger(request.nOctaveBands ?? 6, 'nOctaveBands');

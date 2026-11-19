@@ -421,7 +421,11 @@ describe('WASM transcribe', () => {
     // parameter". The field name is asserted rather than the whole sentence, so
     // this pins the seam without owning the C ABI's prose.
     const named: Array<[string, TranscribeOptions, RegExp]> = [
-      ['f0MaxHz below f0MinHz', { f0MinHz: 500, f0MaxHz: 400 }, /f0MaxHz must be above f0MinHz/],
+      [
+        'f0MaxHz below f0MinHz',
+        { f0MinHz: 500, f0MaxHz: 400 },
+        /f0MaxHz must be greater than f0MinHz/,
+      ],
       ['group above 15', { group: 16 }, /group/],
       ['channel above 15', { channel: 16 }, /channel/],
     ];

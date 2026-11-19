@@ -178,12 +178,14 @@ describe('analyzeMelody reports invalid params as a RangeError (WASM)', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
-    expect((caught as Error).message).toMatch(/analyzeMelody: f0MinHz must be positive/);
+    expect((caught as Error).message).toMatch(
+      /analyzeMelody: f0MinHz must be finite and greater than 0$/,
+    );
   });
 
   it('throws a RangeError when f0MinHz is above f0MaxHz', () => {
     expect(() => analyzeMelody(sine(), sampleRate, { f0MinHz: 800, f0MaxHz: 400 })).toThrow(
-      /analyzeMelody: f0MaxHz must be above f0MinHz/,
+      /analyzeMelody: f0MaxHz must be greater than f0MinHz$/,
     );
     expect(() => analyzeMelody(sine(), sampleRate, { f0MinHz: 800, f0MaxHz: 400 })).toThrow(
       RangeError,

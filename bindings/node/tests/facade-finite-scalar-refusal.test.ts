@@ -109,7 +109,7 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     for (const bad of NON_FINITE) {
       expect(() => timeStretch(tone.samples, SR, { speedRatio: bad })).toThrow(RangeError);
       expect(() => timeStretch(tone.samples, SR, { speedRatio: bad })).toThrow(
-        /timeStretch: speedRatio must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
+        /timeStretch: speedRatio must be finite and greater than 0$/,
       );
     }
     expect(() => timeStretch(tone.samples, SR, { speedRatio: PAST_FLT_MAX })).toThrow(

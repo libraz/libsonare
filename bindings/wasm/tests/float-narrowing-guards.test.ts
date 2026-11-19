@@ -102,9 +102,29 @@ function capture(run: () => unknown): unknown {
 }
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
-function expectRangeRefusal(caught: unknown, entry: string, key: string, context: string): void {
+/**
+ * Fields whose facade also states a floor. A value below it, or one that is not
+ * finite, is refused with that domain instead of the float range; only a value
+ * inside the domain but past the float range reads the float-range text.
+ */
+const FLOORS: Record<string, { text: string; holds: (value: number) => boolean }> = {
+  'masteringDynamicsGate.keyHighPassHz': { text: 'at least 0', holds: (value) => value >= 0 },
+};
+
+function expectRangeRefusal(
+  caught: unknown,
+  entry: string,
+  key: string,
+  value: number,
+  context: string,
+): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  expect(error.message, context).toBe(`${entry}: ${key} ${RANGE_MESSAGE}`);
+  const floor = FLOORS[`${entry}.${key}`];
+  const predicate =
+    floor && !(Number.isFinite(value) && floor.holds(value))
+      ? `must be finite and ${floor.text}`
+      : RANGE_MESSAGE;
+  expect(error.message, context).toBe(`${entry}: ${key} ${predicate}`);
 }
 
 const compressorWith = (options: CompressorOptions, samples = tone): Float32Array =>
@@ -223,6 +243,7 @@ describe('every float field refuses a value the float type cannot hold', () => {
           capture(() => run(value)),
           entry,
           key,
+          value,
           `${key} = ${value}`,
         );
       }

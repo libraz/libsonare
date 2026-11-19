@@ -41,19 +41,11 @@ function maxAbsDiff(a: Float32Array, b: Float32Array): number {
 // The facade refuses every value that is not a positive finite float, an explicit
 // 0 included: the default is reached by omitting the field.
 const NON_SENTINEL_REFUSED: [string, number, RegExp][] = [
-  ['zero', 0, /releaseMs must be positive/],
-  ['a negative value', -5, /releaseMs must be positive/],
-  ['NaN', Number.NaN, /releaseMs must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/],
-  [
-    'positive infinity',
-    Number.POSITIVE_INFINITY,
-    /releaseMs must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
-  ],
-  [
-    'negative infinity',
-    Number.NEGATIVE_INFINITY,
-    /releaseMs must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
-  ],
+  ['zero', 0, /releaseMs must be finite and greater than 0$/],
+  ['a negative value', -5, /releaseMs must be finite and greater than 0$/],
+  ['NaN', Number.NaN, /releaseMs must be finite and greater than 0$/],
+  ['positive infinity', Number.POSITIVE_INFINITY, /releaseMs must be finite and greater than 0$/],
+  ['negative infinity', Number.NEGATIVE_INFINITY, /releaseMs must be finite and greater than 0$/],
 ];
 
 describe('masteringNormalizeLoudness releaseMs', () => {

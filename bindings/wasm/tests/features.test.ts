@@ -755,14 +755,10 @@ describe('Feature API precision (reference compatibility)', () => {
       // assertion that accepts any throw cannot hold that agreement, and this
       // one went on passing when the class moved underneath it.
       expect(() => timeStretch(tone, SR, { speedRatio: Number.NaN })).toThrow(
-        new RangeError(
-          'timeStretch: speedRatio must be finite and in [-3.4028235e38, 3.4028235e38]',
-        ),
+        new RangeError('timeStretch: speedRatio must be finite and greater than 0'),
       );
       expect(() => timeStretch(tone, SR, { speedRatio: Number.POSITIVE_INFINITY })).toThrow(
-        new RangeError(
-          'timeStretch: speedRatio must be finite and in [-3.4028235e38, 3.4028235e38]',
-        ),
+        new RangeError('timeStretch: speedRatio must be finite and greater than 0'),
       );
       // Finite, so the facade passes it on and the core refuses the projected
       // length instead: the same class, told apart by the core's own wording.

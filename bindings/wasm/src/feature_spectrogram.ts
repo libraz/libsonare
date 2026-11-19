@@ -22,6 +22,7 @@ import {
   assertFiniteScalar,
   assertFloatFields,
   assertMatrix2D,
+  assertNonNegativeScalar,
   assertPositiveFloatValue,
   assertPositiveInteger,
   requestOnly,
@@ -521,10 +522,7 @@ export function reassignedSpectrogram(...args: unknown[]): ReassignedSpectrogram
     const refPower = r.refPower ?? 1e-6;
     assertPositiveInteger(nFft, 'nFft');
     assertPositiveInteger(hopLength, 'hopLength');
-    assertFiniteScalar(refPower, 'refPower');
-    if (refPower < 0) {
-      throw refuse('refPower must be non-negative');
-    }
+    assertNonNegativeScalar(refPower, 'refPower');
     const native = requireModule().reassignedSpectrogram(
       r.samples,
       r.sampleRate,

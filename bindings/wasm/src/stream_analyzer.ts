@@ -306,10 +306,13 @@ export class StreamAnalyzer {
       assertFloatValue(config.fminHz, 'fminHz');
     }
     if (config.fmaxHz !== undefined) {
-      assertFloatValue(config.fmaxHz, 'fmaxHz');
-      if (!(config.fmaxHz > 0)) {
-        throw refuse('fmaxHz must be positive (omit it for Nyquist)');
+      if (
+        typeof config.fmaxHz === 'number' &&
+        !(Number.isFinite(config.fmaxHz) && config.fmaxHz > 0)
+      ) {
+        throw refuse('fmaxHz must be finite and greater than 0; omit it for Nyquist');
       }
+      assertFloatValue(config.fmaxHz, 'fmaxHz');
     }
     if (config.referenceHz !== undefined) {
       assertReferenceHz(config.referenceHz);

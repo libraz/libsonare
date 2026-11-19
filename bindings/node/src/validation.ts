@@ -112,9 +112,11 @@ export function assertFiniteScalar(value: number, argName: string): void {
 
 /** {@link assertFiniteScalar} plus a floor of zero, for a quantity that is a magnitude. */
 export function assertNonNegativeScalar(value: number, argName: string): void {
-  assertFiniteScalar(value, argName);
-  if (value < 0) {
-    throw refuse(`${argName} must be non-negative`);
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be a number`);
+  }
+  if (!(Number.isFinite(value) && value >= 0)) {
+    throw refuse(`${argName} must be finite and at least 0`);
   }
 }
 
@@ -132,18 +134,18 @@ export function assertFloatValue(value: unknown, argName: string): void {
 
 /** {@link assertFloatValue} plus a floor: strictly positive. */
 export function assertPositiveFloatValue(value: unknown, argName: string): void {
-  assertFloatValue(value, argName);
-  if ((value as number) <= 0) {
-    throw refuse(`${argName} must be positive`);
+  if (typeof value === 'number' && !(Number.isFinite(value) && value > 0)) {
+    throw refuse(`${argName} must be finite and greater than 0`);
   }
+  assertFloatValue(value, argName);
 }
 
 /** {@link assertFloatValue} plus a floor of zero. */
 export function assertNonNegativeFloatValue(value: unknown, argName: string): void {
-  assertFloatValue(value, argName);
-  if ((value as number) < 0) {
-    throw refuse(`${argName} must be non-negative`);
+  if (typeof value === 'number' && !(Number.isFinite(value) && value >= 0)) {
+    throw refuse(`${argName} must be finite and at least 0`);
   }
+  assertFloatValue(value, argName);
 }
 
 /** {@link assertFloatValue} over every entry of `fields`, each named by its key. */
@@ -169,7 +171,7 @@ export function assertFrequencyBounds(
     assertPositiveFloatValue(max, maxName);
   }
   if (hasMin && hasMax && !((max as number) > (min as number))) {
-    throw refuse(`${maxName} must be above ${minName}`);
+    throw refuse(`${maxName} must be greater than ${minName}`);
   }
 }
 
@@ -383,14 +385,8 @@ export function assertString(value: unknown, argName: string): void {
 
 /** Integer strictly greater than zero, up to the native `int` ceiling. */
 export function assertPositiveInteger(value: number, argName: string): void {
-  // Two refusals, not one: 512.7 is positive, so reporting it as non-positive
-  // names a property it has. The ceiling travels with the sign rather than with
-  // integrality, because both describe a value the native `int` can carry.
-  if (!Number.isInteger(value)) {
-    throw refuse(`${argName} must be an integer`);
-  }
-  if (value <= 0 || value > C_INT_MAX) {
-    throw refuse(`${argName} must be a positive integer`);
+  if (!Number.isInteger(value) || value < 1 || value > C_INT_MAX) {
+    throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
   }
 }
 
@@ -407,7 +403,7 @@ export function assertEvenIntegerAtLeast(
     throw refuse(`${argName} must be an integer in [${min}, ${max}]`);
   }
   if (value % 2 !== 0) {
-    throw refuse(`${argName} must be an even integer >= ${min}`);
+    throw refuse(`${argName} must be an even integer in [${min}, ${max}]`);
   }
 }
 
@@ -431,10 +427,7 @@ export function midi1Event(
   data1: number,
   data2 = 0,
 ): ProjectMidiEvent {
-  assertFiniteScalar(ppq, 'ppq');
-  if (ppq < 0) {
-    throw refuse(`ppq must be non-negative`);
-  }
+  assertNonNegativeScalar(ppq, 'ppq');
   const g = assertNibble(group, 'group');
   const ch = assertNibble(channel, 'channel');
   const d1 = assertU7(data1, 'data1');
@@ -555,10 +548,7 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
     if (record.word1 !== undefined && typeof record.word1 !== 'number') {
       throw refuseType(`${prefix}.word1 must be a number`);
     }
-    assertFiniteScalar(record.ppq, `${prefix}.ppq`);
-    if (record.ppq < 0) {
-      throw refuse(`${prefix}.ppq must be non-negative`);
-    }
+    assertNonNegativeScalar(record.ppq, `${prefix}.ppq`);
     assertU32(record.word0, `${prefix}.word0`);
     if (record.word1 !== undefined) {
       assertU32(record.word1, `${prefix}.word1`);
@@ -638,7 +628,7 @@ export function resolveSampleBound(
     return value;
   }
   if (sign === 'non-negative' && value < 0) {
-    throw refuse(`${name} must be non-negative`);
+    throw refuse(`${name} must be at least 0`);
   }
   return value === 0 ? 0 : value;
 }
@@ -657,9 +647,8 @@ export function resolveRenderFrame(renderFrame: number | null | undefined): numb
   if (typeof renderFrame !== 'number') {
     throw refuseType(`renderFrame must be a number`);
   }
-  assertFiniteScalar(renderFrame, 'renderFrame');
-  if (renderFrame < 0) {
-    throw refuse(`renderFrame must not be negative (omit it to apply immediately)`);
+  if (!(Number.isFinite(renderFrame) && renderFrame >= 0)) {
+    throw refuse(`renderFrame must be finite and at least 0; omit it to apply immediately`);
   }
   return renderFrame;
 }
@@ -682,9 +671,8 @@ export function resolveOptionalNonNegative(
   if (typeof value !== 'number') {
     throw refuseType(`${argName} must be a number`);
   }
-  assertFiniteScalar(value, argName);
-  if (value < 0) {
-    throw refuse(`${argName} must not be negative (omit it for the default)`);
+  if (!(Number.isFinite(value) && value >= 0)) {
+    throw refuse(`${argName} must be finite and at least 0; omit it for the default`);
   }
   return value;
 }

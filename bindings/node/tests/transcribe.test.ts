@@ -118,7 +118,7 @@ describe('transcribe', () => {
       expect(() => transcribe({ samples: audio, sampleRate: SR, tempoBpm })).toThrow(
         expect.objectContaining({
           name: 'RangeError',
-          message: 'transcribe: tempoBpm must be positive',
+          message: 'transcribe: tempoBpm must be finite and greater than 0',
         }),
       );
     }
@@ -272,8 +272,8 @@ describe('transcribe', () => {
       /velocityFloorDb must be finite and less than 0/,
     );
     expect(zeroed({ referenceHz: 0 })).toThrow(/referenceHz must be finite and greater than 0/);
-    expect(zeroed({ f0MinHz: 0 })).toThrow(/f0MinHz must be positive/);
-    expect(zeroed({ f0MaxHz: 0 })).toThrow(/f0MaxHz must be positive/);
+    expect(zeroed({ f0MinHz: 0 })).toThrow(/f0MinHz must be finite and greater than 0/);
+    expect(zeroed({ f0MaxHz: 0 })).toThrow(/f0MaxHz must be finite and greater than 0/);
     expect(zeroed({ minNoteMs: 0 })).toThrow(/minNoteMs must be finite and greater than 0/);
     expect(zeroed({ segmentationThresholdCents: 0 })).toThrow(
       /segmentationThresholdCents must be finite and greater than 0/,
@@ -344,7 +344,7 @@ describe('transcribe', () => {
     // throws, with the same code, carrying a message that names nothing.
     expect(() =>
       transcribe({ samples: audio, sampleRate: SR, f0MinHz: 900, f0MaxHz: 200 }),
-    ).toThrow(/^transcribe: f0MaxHz must be above f0MinHz$/);
+    ).toThrow(/^transcribe: f0MaxHz must be greater than f0MinHz$/);
     expect(() => transcribe({ samples: audio, sampleRate: SR, group: 99 })).toThrow(
       /^transcribe: group must be an integer in \[0, 15\]$/,
     );
@@ -530,7 +530,7 @@ describe('Project.transcribeToClip', () => {
           f0MinHz: 900,
           f0MaxHz: 200,
         }),
-      ).toThrow(/^Project\.transcribeToClip: f0MaxHz must be above f0MinHz$/);
+      ).toThrow(/^Project\.transcribeToClip: f0MaxHz must be greater than f0MinHz$/);
     });
   });
 });

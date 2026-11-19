@@ -49,10 +49,10 @@ describe('phaseVocoder speedRatio guard matches the C ABI (no upper cap)', () =>
     // it. The wording is that guard's own and says only what it checked: the
     // finiteness of the rate is a separate question, answered below.
     expect(() => phaseVocoder({ samples: sine(), sampleRate: SR, speedRatio: 0 })).toThrow(
-      /phaseVocoder: speedRatio must be positive/,
+      /phaseVocoder: speedRatio must be finite and greater than 0$/,
     );
     expect(() => phaseVocoder({ samples: sine(), sampleRate: SR, speedRatio: -1 })).toThrow(
-      /phaseVocoder: speedRatio must be positive/,
+      /phaseVocoder: speedRatio must be finite and greater than 0$/,
     );
   });
   it('still rejects a non-finite speedRatio before allocating an enormous buffer', () => {

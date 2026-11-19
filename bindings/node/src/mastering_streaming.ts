@@ -594,10 +594,10 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
     native.fmin = fminHz;
   }
   if (fmaxHz !== undefined) {
-    assertFloatValue(fmaxHz, 'fmaxHz');
-    if (!(fmaxHz > 0)) {
-      throw refuse('fmaxHz must be positive (omit it for Nyquist)');
+    if (typeof fmaxHz === 'number' && !(Number.isFinite(fmaxHz) && fmaxHz > 0)) {
+      throw refuse('fmaxHz must be finite and greater than 0; omit it for Nyquist');
     }
+    assertFloatValue(fmaxHz, 'fmaxHz');
     native.fmax = fmaxHz;
   }
   if (referenceHz !== undefined) {

@@ -124,7 +124,7 @@ describe('masteringRepairNoiseBandBins', () => {
       expect(
         () => masteringRepairNoiseBandBins({ sampleRate }),
         `sampleRate ${sampleRate} should be refused`,
-      ).toThrow(/sampleRate must be a positive integer/);
+      ).toThrow(/sampleRate must be an integer in \[1, 2147483647\]/);
     }
   });
 

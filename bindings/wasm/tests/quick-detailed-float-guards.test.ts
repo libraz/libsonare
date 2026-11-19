@@ -49,11 +49,25 @@ function capture(run: () => unknown): unknown {
   }
 }
 
-/** Asserts the caught value is the float-range refusal naming `key`. */
-function expectRangeRefusal(caught: unknown, key: string, context: string): void {
+/**
+ * Fields whose facade also states a floor. A value below it, or one that is not
+ * finite, is refused with that domain instead of the float range; only a value
+ * inside the domain but past the float range reads the float-range text.
+ */
+const FLOORS: Record<string, { text: string; holds: (value: number) => boolean }> = {
+  compressionThresholdDb: { text: 'at least 0', holds: (value) => value >= 0 },
+};
+
+/** Asserts the caught value is the float-range refusal naming `key`, or its floor's refusal. */
+function expectRangeRefusal(caught: unknown, key: string, value: number, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
+  const floor = FLOORS[key];
+  const predicate =
+    floor && !(Number.isFinite(value) && floor.holds(value))
+      ? `must be finite and ${floor.text}`
+      : RANGE_MESSAGE;
   expect(error.message, context).toMatch(
-    new RegExp(`^(?:[A-Za-z0-9]+: )?${key} ${RANGE_MESSAGE.replace(/[[\].]/g, '\\$&')}$`),
+    new RegExp(`^(?:[A-Za-z0-9]+: )?${key} ${predicate.replace(/[[\].]/g, '\\$&')}$`),
   );
 }
 
@@ -162,6 +176,7 @@ describe('every converted quick-detailed float parameter refuses a value the flo
       expectRangeRefusal(
         capture(() => run(value)),
         key,
+        value,
         `${key} = ${value}`,
       );
     }

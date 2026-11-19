@@ -336,7 +336,7 @@ describe('masteringRepairTrimSilence (Node)', () => {
       /mode/,
     );
     expect(() => masteringRepairTrimSilence(samples, SR, { paddingSamples: -1 })).toThrow(
-      /paddingSamples must be non-negative/i,
+      /paddingSamples must be at least 0$/,
     );
   });
 });

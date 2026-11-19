@@ -20,6 +20,7 @@ import {
   assertFiniteScalar,
   assertFrequencyBounds,
   assertMatrix2D,
+  assertNonNegativeScalar,
   assertPositiveFloatValue,
   assertPositiveInteger,
   assertSampleRate,
@@ -405,10 +406,7 @@ export function analyzeSections(...args: unknown[]): Section[] {
       nFft: request.nFft ?? 2048,
       hopLength: request.hopLength ?? 512,
     });
-    assertFiniteScalar(request.minSectionSec ?? 4.0, 'minSectionSec');
-    if ((request.minSectionSec ?? 4.0) < 0) {
-      throw refuse('minSectionSec must be non-negative');
-    }
+    assertNonNegativeScalar(request.minSectionSec ?? 4.0, 'minSectionSec');
     // The embind value marshalling returns an array whose constructor is not this
     // realm's Array; chaining .map() onto it propagates that constructor via
     // Symbol.species, leaving a result that structuredClone (and so postMessage to
@@ -484,10 +482,7 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
       if (value == null) {
         continue;
       }
-      assertFiniteScalar(value, name);
-      if (value < 0) {
-        throw refuse(`${name} must be non-negative`);
-      }
+      assertNonNegativeScalar(value, name);
     }
     // Only an explicit pair of falses; either one omitted leaves the other stream
     // on, so there is still something to combine.

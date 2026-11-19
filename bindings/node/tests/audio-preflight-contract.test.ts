@@ -731,6 +731,16 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
       [fn, Number.NEGATIVE_INFINITY, 'gain'],
       [fn, -1, 'gain'],
     ],
+    assertNonNegativeScalar: [
+      [fn, undefined, 'gain'],
+      [fn, '1', 'gain'],
+      [fn, Number.NaN, 'gain'],
+      [fn, Number.POSITIVE_INFINITY, 'gain'],
+      [fn, -1, 'gain'],
+      [fn, -0, 'gain'],
+      [fn, 0, 'gain'],
+      [fn, 2.5, 'gain'],
+    ],
     assertSampleRate: [
       [fn, '44100'],
       [fn, 44100.5],
