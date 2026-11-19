@@ -835,11 +835,9 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     if (args.has("set"))
       config_text = apply_voice_preset_sets(config_text, args.get_string_list("set"));
 
-    // Route through the same strict validator as the C ABI / Python entry
-    // points (realtime_voice_changer_config_from_input) instead of the
-    // tolerant realtime_voice_changer_config_from_json: a mistyped section
-    // name, a missing "dsp" wrapper, or a partial hand-written preset must
-    // fail loudly rather than silently render with unrelated defaults.
+    // The library's one preset reader, as the C ABI and Python use it: an unknown,
+    // missing or duplicate key and any value outside its domain are refused, so a
+    // hand-written preset never renders with defaults or a clamped value.
     editing::voice_changer::RealtimeVoiceChangerConfig config;
     std::string config_error;
     if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,

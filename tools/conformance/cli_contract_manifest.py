@@ -464,7 +464,15 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
     """The audio, melody, project, preset and config-document fixtures the cases name."""
     if _exact(
         fixtures,
-        {"audio", "melodies", "projects", "presets", "chain_configs", "playback_configs"},
+        {
+            "audio",
+            "melodies",
+            "projects",
+            "presets",
+            "preset_grain_sizes",
+            "chain_configs",
+            "playback_configs",
+        },
         "manifest.fixtures",
         errors,
     ):
@@ -583,13 +591,18 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
         presets = fixtures["presets"]
         if _exact(
             presets,
-            {"valid", "invalid", "custom", "earlier", "grain_automatic", "grain_zero"},
+            {"valid", "invalid", "custom", "earlier", "grain_automatic"},
             "manifest.fixtures.presets",
             errors,
         ):
-            for key in ("valid", "invalid", "custom", "earlier", "grain_automatic", "grain_zero"):
+            for key in ("valid", "invalid", "custom", "earlier", "grain_automatic"):
                 if not isinstance(presets[key], dict):
                     errors.append(f"manifest.fixtures.presets.{key}: expected an object")
+        grain_sizes = fixtures["preset_grain_sizes"]
+        if not isinstance(grain_sizes, list) or not all(
+            isinstance(size, int) and not isinstance(size, bool) for size in grain_sizes
+        ):
+            errors.append("manifest.fixtures.preset_grain_sizes: expected a list of integers")
         # Chain-config documents the --chain-config cases read; each is a {version, params}
         # object, so a fixture that is not one would fail on a parse rather than on the rule.
         chain_configs = fixtures["chain_configs"]

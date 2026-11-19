@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import re
@@ -121,6 +122,14 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         preset_path = directory / f"preset_{name}.json"
         preset_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
         paths[f"preset_{name}"] = str(preset_path)
+    # The custom preset with only its retune grain changed, one document per size.
+    for size in fixtures["preset_grain_sizes"]:
+        preset = copy.deepcopy(fixtures["presets"]["custom"])
+        preset["id"] = f"contract-grain-{size}"
+        preset["dsp"]["retune"]["grainSizeSamples"] = size
+        preset_path = directory / f"preset_grain_{size}.json"
+        preset_path.write_text(json.dumps(preset, separators=(",", ":")), encoding="utf-8")
+        paths[f"preset_grain_{size}"] = str(preset_path)
     for name, value in fixtures["chain_configs"].items():
         chain_config_path = directory / f"chain_config_{name}.json"
         chain_config_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")

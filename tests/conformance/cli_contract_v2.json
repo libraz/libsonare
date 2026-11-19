@@ -1956,7 +1956,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": -1,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "pan-mode",
@@ -1985,7 +1992,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 2,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         }
       ],
       "mixing-preset": [
@@ -2056,7 +2070,17 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "peak",
+              "rms"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -4363,7 +4387,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 64,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "min-frame-peak-ratio",
@@ -4372,7 +4403,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "min-note-division",
@@ -4381,7 +4419,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 128,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "min-note-ms",
@@ -4399,7 +4444,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "monophonic-model",
@@ -7070,7 +7122,7 @@
             "-o",
             "{output}",
             "--preset-json",
-            "{preset_grain_zero}",
+            "{preset_grain_0}",
             "--json"
           ],
           "exit": 5,
@@ -7079,7 +7131,105 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "dsp.retune.grainSizeSamples"
+            "dsp.retune.grainSizeSamples must not be 0"
+          ]
+        },
+        {
+          "id": "grain_1_refused",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_grain_1}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "dsp.retune.grainSizeSamples must be a multiple of 4 in [4, 8192]"
+          ]
+        },
+        {
+          "id": "grain_6_refused",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_grain_6}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "dsp.retune.grainSizeSamples must be a multiple of 4 in [4, 8192]"
+          ]
+        },
+        {
+          "id": "grain_8196_refused",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_grain_8196}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "dsp.retune.grainSizeSamples must be a multiple of 4 in [4, 8192]"
+          ]
+        },
+        {
+          "id": "grain_4_accepted",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_grain_4}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "custom",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "grain_set_refused",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_custom}",
+            "--set",
+            "dsp.retune.grainSizeSamples=6",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "dsp.retune.grainSizeSamples must be a multiple of 4 in [4, 8192]"
           ]
         }
       ],
@@ -8799,7 +8949,17 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "peak",
+              "rms"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -16643,7 +16803,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 64,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "min-frame-peak-ratio",
@@ -16652,7 +16819,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "min-note-division",
@@ -16661,7 +16835,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 128,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "min-note-ms",
@@ -16679,7 +16860,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "monophonic-model",
@@ -17173,7 +17361,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": -1,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         },
         {
           "name": "pan-mode",
@@ -17202,7 +17397,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 2,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
         }
       ],
       "positionals": [
@@ -18689,116 +18891,9 @@
         "name": "Contract Custom",
         "category": "custom",
         "schemaVersion": 4
-      },
-      "grain_zero": {
-        "dsp": {
-          "compressor": {
-            "attackMs": 8,
-            "makeupGainDb": 0.5,
-            "ratio": 1.8,
-            "releaseMs": 120,
-            "thresholdDb": -24
-          },
-          "deesser": {
-            "frequencyHz": 7200,
-            "rangeDb": 8,
-            "ratio": 4,
-            "thresholdDb": -28
-          },
-          "eq": {
-            "airDb": 0.5,
-            "bodyDb": 0,
-            "highPassHz": 75,
-            "presenceDb": 1.2
-          },
-          "formant": {
-            "amount": 0,
-            "body": 0,
-            "brightness": 0.1,
-            "factor": 1,
-            "nasal": 0
-          },
-          "gate": {
-            "attackMs": 2,
-            "rangeDb": 18,
-            "releaseMs": 100,
-            "thresholdDb": -55
-          },
-          "inputGainDb": 0,
-          "limiter": {
-            "ceilingDb": -1,
-            "releaseMs": 50
-          },
-          "outputGainDb": 0,
-          "retune": {
-            "grainSizeSamples": 0,
-            "mix": 0,
-            "pitchSemitones": 0
-          },
-          "pitchCorrection": {
-            "mode": "off",
-            "amount": 1,
-            "speedMs": 20,
-            "keyRoot": 0,
-            "scale": "major",
-            "robotOctave": 0
-          },
-          "harmony": {
-            "voices": 0,
-            "steps": [
-              2,
-              4,
-              -3
-            ],
-            "level": 0.7,
-            "leadLevel": 1,
-            "detuneCents": 6,
-            "delayMs": 12
-          },
-          "vocoder": {
-            "enabled": false,
-            "bands": 20,
-            "attackMs": 2,
-            "releaseMs": 20,
-            "sibilance": 0.3,
-            "carrierSource": "internal",
-            "carrierWave": "saw",
-            "ensembleDetuneCents": 12,
-            "level": 1
-          },
-          "character": {
-            "type": "none",
-            "amount": 0.5,
-            "tone": 0
-          },
-          "reverbVariation": {
-            "variation": "reverb",
-            "delayMs": 250,
-            "feedback": 0.35,
-            "tempoBpm": 120,
-            "division": "eighth"
-          },
-          "midi": {
-            "release": "hold"
-          },
-          "voiceEngine": {
-            "engine": "grain",
-            "f0MinHz": 70
-          },
-          "reverb": {
-            "damping": 0.55,
-            "mix": 0,
-            "seed": 1,
-            "timeMs": 320
-          },
-          "wetMix": 1
-        },
-        "id": "contract-grain-zero",
-        "name": "Contract Custom",
-        "category": "custom",
-        "schemaVersion": 4
       }
     },
+    "preset_grain_sizes": [0, 1, 4, 6, 8196],
     "chain_configs": {
       "mixed_spelling": {
         "version": 2,
