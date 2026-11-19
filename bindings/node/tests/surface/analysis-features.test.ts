@@ -285,6 +285,21 @@ describe('sample-taking functions', () => {
     expectThrows(() => sonare.framesToSamples(10, 512, -5), RangeError);
   });
 
+  it('refuses a hop that is not a positive integer on every frame conversion', () => {
+    const calls: Array<[string, (hop: number) => number]> = [
+      ['framesToTime', (hop) => sonare.framesToTime(4, sampleRate, hop)],
+      ['timeToFrames', (hop) => sonare.timeToFrames(1, sampleRate, hop)],
+      ['framesToSamples', (hop) => sonare.framesToSamples(4, hop)],
+      ['samplesToFrames', (hop) => sonare.samplesToFrames(2048, hop)],
+    ];
+    for (const [name, call] of calls) {
+      for (const hop of [0, -5]) {
+        expect(() => call(hop)).toThrow(`${name}: hopLength must be an integer in [1, 2147483647]`);
+      }
+      expectThrows(() => call(1.5), RangeError);
+    }
+  });
+
   it('takes the scalar unit conversions positionally only', () => {
     expect(sonare.framesToTime(43, sampleRate, 512)).toBeCloseTo((43 * 512) / sampleRate, 6);
     expect(sonare.timeToFrames(1, sampleRate, 512)).toBe(Math.floor(sampleRate / 512));

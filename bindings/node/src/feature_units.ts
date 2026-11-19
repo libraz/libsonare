@@ -154,13 +154,13 @@ function resolveCentringNFft(nFft: number | null | undefined): number {
  * Frame index to the sample it starts at, optionally shifted by the centring
  * offset of an `nFft`-sample window.
  *
+ * @param hopLength Positive integer in samples. Default 512.
  * @param nFft Absent means no centring offset.
- * @throws `RangeError` for an explicit `nFft` that is not a positive integer.
+ * @throws `RangeError` for a hop or an explicit `nFft` that is not a positive integer.
  */
 export function framesToSamples(frames: number, hopLength = 512, nFft?: number): number {
   return withEntry('framesToSamples', () => {
-    // Integrality only for the hop: this conversion saturates rather than refusing.
-    const resolvedHopLength = resolveIntegerOption('hopLength', hopLength, 512);
+    const resolvedHopLength = resolvePositiveIntegerOption('hopLength', hopLength, 512);
     return addon.framesToSamples(frames, resolvedHopLength, resolveCentringNFft(nFft));
   });
 }
@@ -169,13 +169,13 @@ export function framesToSamples(frames: number, hopLength = 512, nFft?: number):
  * Sample count to the frame count it spans, optionally shifted by the centring
  * offset of an `nFft`-sample window.
  *
+ * @param hopLength Positive integer in samples. Default 512.
  * @param nFft Absent means no centring offset.
- * @throws `RangeError` for an explicit `nFft` that is not a positive integer.
+ * @throws `RangeError` for a hop or an explicit `nFft` that is not a positive integer.
  */
 export function samplesToFrames(samples: number, hopLength = 512, nFft?: number): number {
   return withEntry('samplesToFrames', () => {
-    // Integrality only for the hop: a non-positive hop answers 0 frames rather than failing.
-    const resolvedHopLength = resolveIntegerOption('hopLength', hopLength, 512);
+    const resolvedHopLength = resolvePositiveIntegerOption('hopLength', hopLength, 512);
     return addon.samplesToFrames(samples, resolvedHopLength, resolveCentringNFft(nFft));
   });
 }

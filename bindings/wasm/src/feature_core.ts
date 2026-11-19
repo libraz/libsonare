@@ -626,12 +626,13 @@ function resolveOptionalFft(nFft: number | undefined | null): number {
 /**
  * Convert frame index to a sample index.
  *
- * @param nFft - FFT size of a centred analysis; absent applies no centring offset, an explicit 0 throws `RangeError`.
+ * @param hopLength - Hop length in samples, a positive integer (default: 512)
+ * @param nFft - FFT size of a centred analysis; absent applies no centring offset, an explicit 0 or negative throws `RangeError`.
  */
 export function framesToSamples(frames: number, hopLength = 512, nFft?: number): number {
   return withEntry('framesToSamples', () => {
     assertNumber(frames, 'frames');
-    assertNumber(hopLength, 'hopLength');
+    assertPositiveInteger(hopLength, 'hopLength');
     const fft = resolveOptionalFft(nFft);
     return requireModule().framesToSamples(frames, hopLength, fft);
   });
@@ -640,12 +641,13 @@ export function framesToSamples(frames: number, hopLength = 512, nFft?: number):
 /**
  * Convert a sample index to a frame index.
  *
- * @param nFft - FFT size of a centred analysis; absent applies no centring offset, an explicit 0 throws `RangeError`.
+ * @param hopLength - Hop length in samples, a positive integer (default: 512)
+ * @param nFft - FFT size of a centred analysis; absent applies no centring offset, an explicit 0 or negative throws `RangeError`.
  */
 export function samplesToFrames(samples: number, hopLength = 512, nFft?: number): number {
   return withEntry('samplesToFrames', () => {
     assertNumber(samples, 'samples');
-    assertNumber(hopLength, 'hopLength');
+    assertPositiveInteger(hopLength, 'hopLength');
     const fft = resolveOptionalFft(nFft);
     return requireModule().samplesToFrames(samples, hopLength, fft);
   });

@@ -367,6 +367,21 @@ describe('analysis features: scalar conversions are positional only', () => {
     expect(samplesToFrames(2048, 512)).toBe(4);
   });
 
+  it('refuses a hop that is not a positive integer on every frame conversion', () => {
+    const calls: Array<[string, (hop: number) => number]> = [
+      ['framesToTime', (hop) => framesToTime(4, sr, hop)],
+      ['timeToFrames', (hop) => timeToFrames(1, sr, hop)],
+      ['framesToSamples', (hop) => framesToSamples(4, hop)],
+      ['samplesToFrames', (hop) => samplesToFrames(2048, hop)],
+    ];
+    for (const [name, call] of calls) {
+      for (const hop of [0, -5]) {
+        expect(() => call(hop)).toThrow(`${name}: hopLength must be an integer in [1, 2147483647]`);
+      }
+      expect(caught(() => call(1.5))).toBeInstanceOf(RangeError);
+    }
+  });
+
   it('treats an absent nFft as no centring and refuses an explicit zero or negative', () => {
     expect(framesToSamples(4, 512, 2048)).toBe(4 * 512 + 1024);
     expect(caught(() => framesToSamples(4, 512, 0))).toBeInstanceOf(RangeError);

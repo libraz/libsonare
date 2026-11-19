@@ -1432,6 +1432,14 @@ rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
+old = "framesToSamples(hopLength)"
+changed = "a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index"
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/surface/analysis-features.test.ts::refuses a hop that is not a positive integer on every frame conversion"
+
+[[entry]]
+kind = "option"
 old = "framesToSamples(nFft)"
 changed = "absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring)"
 domain = "analysis"
@@ -2501,6 +2509,14 @@ changed = "required second argument (was optional / later position)"
 domain = "analysis"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "samplesToFrames(hopLength)"
+changed = "a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index"
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/surface/analysis-features.test.ts::refuses a hop that is not a positive integer on every frame conversion"
 
 [[entry]]
 kind = "option"
