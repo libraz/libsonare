@@ -132,7 +132,7 @@ def cmd_key(args: argparse.Namespace) -> int:
     if args.json:
         payload: dict[str, object] = {
             "root": key.root.value,
-            "mode": _mode_value(key.mode),
+            "mode": _mode_value(key.mode, "key.mode"),
             "confidence": key.confidence,
             "name": name,
         }
@@ -140,7 +140,7 @@ def cmd_key(args: argparse.Namespace) -> int:
             payload["candidates"] = [
                 {
                     "root": candidate.key.root.value,
-                    "mode": _mode_value(candidate.key.mode),
+                    "mode": _mode_value(candidate.key.mode, "key.mode"),
                     "confidence": candidate.key.confidence,
                     "name": f"{PITCH_NAMES[candidate.key.root.value]} {candidate.key.mode}",
                     "correlation": candidate.correlation,
@@ -372,7 +372,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                     "bpm_confidence": r.bpm_confidence,
                     "key": {
                         "root": r.key.root.value,
-                        "mode": _mode_value(r.key.mode),
+                        "mode": _mode_value(r.key.mode, "key.mode"),
                         "confidence": r.key.confidence,
                         "name": key_name,
                     },
