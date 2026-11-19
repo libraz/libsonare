@@ -421,5 +421,28 @@
       { "id": "unknown_beside_a_known_key", "processor": "saturation.softClipper", "params": {"driveDb": 1.0, "notAKey": 1.0}, "message": "unknown key notAKey (expected aliasing, ceiling, driveDb, mix)" },
       { "id": "unknown_band_field_lists_the_templates", "processor": "eq.parametric", "params": {"band0.nope": 1.0}, "message": "unknown key band0.nope (expected band{i}.attackMs, band{i}.autoThreshold, band{i}.bypassed, band{i}.coeffMode, band{i}.detectorDelayMs, band{i}.dynamic, band{i}.enabled, band{i}.frequencyHz, band{i}.gainDb, band{i}.phase, band{i}.placement, band{i}.proportionalQ, band{i}.proportionalQStrength, band{i}.q, band{i}.rangeDb, band{i}.ratio, band{i}.releaseMs, band{i}.sidechainFreqHz, band{i}.sidechainQ, band{i}.slopeDbOct, band{i}.soloed, band{i}.thresholdDb, band{i}.type)" }
     ]
+  },
+  "cqt_family": {
+    "entries": ["cqt", "vqt", "pseudo_cqt", "hybrid_cqt"],
+    "sample_rate": 22050,
+    "samples": 22050,
+    "fill": 0.1,
+    "cases": [
+      { "id": "hop_length_default", "key": "hop_length", "value": 512, "accepted": true },
+      { "id": "hop_length_zero", "key": "hop_length", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "hop_length_fraction", "key": "hop_length", "value": 1.5, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "hop_length_past_int32", "key": "hop_length", "value": 2147483648, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "hop_length_wrong_type", "key": "hop_length", "value": "512", "refused": "type", "predicate": "must be an integer" },
+      { "id": "fmin_hz_c1", "key": "fmin_hz", "value": 32.7, "accepted": true },
+      { "id": "fmin_hz_zero", "key": "fmin_hz", "value": 0, "refused": "range", "predicate": "must be finite and greater than 0" },
+      { "id": "fmin_hz_nan", "key": "fmin_hz", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and greater than 0" },
+      { "id": "fmin_hz_inf", "key": "fmin_hz", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and greater than 0" },
+      { "id": "fmin_hz_wrong_type", "key": "fmin_hz", "value": "30", "refused": "type", "predicate": "must be a number" },
+      { "id": "gamma_constant_q", "key": "gamma", "value": 0, "only": ["vqt"], "accepted": true },
+      { "id": "gamma_negative", "key": "gamma", "value": -1, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0; omit it for the default" },
+      { "id": "gamma_nan", "key": "gamma", "value": {"$number": "nan"}, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0; omit it for the default" },
+      { "id": "gamma_inf", "key": "gamma", "value": {"$number": "inf"}, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0; omit it for the default" },
+      { "id": "gamma_wrong_type", "key": "gamma", "value": "1", "only": ["vqt"], "refused": "type", "predicate": "must be a number" }
+    ]
   }
 }

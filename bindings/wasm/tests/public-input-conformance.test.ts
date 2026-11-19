@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { MixStereoStrip } from '../dist/index.js';
 import {
+  cqt,
   gm2DrumName,
   gm2DrumSetName,
   gm2InstrumentName,
@@ -9,6 +10,7 @@ import {
   gmFamilyFirstProgram,
   gmFamilyName,
   gmInstrumentName,
+  hybridCqt,
   init,
   Mixer,
   masteringApplyProcessor,
@@ -26,10 +28,12 @@ import {
   midiParamToCc,
   mixStereo,
   perNoteControllerName,
+  pseudoCqt,
   RealtimeEngine,
   roomMorphStereo,
   SonareError,
   StreamingRetune,
+  vqt,
 } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
@@ -513,6 +517,9 @@ type SceneInsertSection = {
 };
 
 describe('a scene insert refusal reaches the caller with its document path untouched', () => {
+  beforeAll(async () => {
+    await init();
+  });
   const section = (corpus as unknown as { scene_insert_refusal: SceneInsertSection })
     .scene_insert_refusal;
   const options = camelRecord(section.options);
@@ -557,6 +564,9 @@ type InsertUnknownKeySection = {
 };
 
 describe('an unknown insert key is refused with one class and text on every param-bag entry', () => {
+  beforeAll(async () => {
+    await init();
+  });
   const section = (corpus as unknown as { insert_unknown_key: InsertUnknownKeySection })
     .insert_unknown_key;
   const sampleRate = section.sample_rate;
@@ -588,6 +598,48 @@ describe('an unknown insert key is refused with one class and text on every para
         }
         expect((caught as Error | undefined)?.constructor.name).toBe(section.error[SURFACE]);
         expect((caught as Error).message).toBe(`${camelKey(entry)}: ${testCase.message}`);
+      });
+    }
+  }
+});
+
+type CqtFamilyCase = PendingCase & { only?: string[] };
+type CqtFamilySection = {
+  entries: string[];
+  sample_rate: number;
+  samples: number;
+  fill: number;
+  cases: CqtFamilyCase[];
+};
+
+describe('the constant-Q family answers the shared corpus with one text on every entry', () => {
+  beforeAll(async () => {
+    await init();
+  });
+  const section = (corpus as unknown as { cqt_family: CqtFamilySection }).cqt_family;
+  const samples = new Float32Array(section.samples).fill(section.fill);
+  const sampleRate = section.sample_rate;
+  const calls: Record<string, (options: Record<string, unknown>) => unknown> = {
+    cqt: (o) => cqt({ samples, sampleRate, ...o } as never),
+    vqt: (o) => vqt({ samples, sampleRate, ...o } as never),
+    pseudo_cqt: (o) => pseudoCqt({ samples, sampleRate, ...o } as never),
+    hybrid_cqt: (o) => hybridCqt({ samples, sampleRate, ...o } as never),
+  };
+  for (const entry of section.entries) {
+    for (const testCase of section.cases.filter((c) => !c.only || c.only.includes(entry))) {
+      const pending = testCase.pending?.[SURFACE];
+      const test = pending ? it.fails : it;
+      test(`${entry} ${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
+        const key = camelKey(testCase.key);
+        const call = () => calls[entry]({ [key]: corpusValue(testCase.value) });
+        if (testCase.accepted) {
+          expect(call).not.toThrow();
+          return;
+        }
+        const refusal = `${camelKey(entry)}: ${key} ${testCase.predicate}`;
+        expect(call).toThrow(
+          testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
+        );
       });
     }
   }
