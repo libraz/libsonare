@@ -6,7 +6,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, Mixer, meteringTruePeakDbtp, mixingScenePreset, mixStereo } from '../dist/index.js';
-import { assertStripIndex, expectRefusalOf, sine } from './_helpers';
+import { assertStripIndex, expectRefusalOf, sine, unknownKeyError } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -141,7 +141,7 @@ describe('Mixer runtime controls (WASM)', () => {
         ).not.toThrow();
         for (const key of ['elevation', 'distance']) {
           expect(() => mixer.setSurroundPan(vocal, { [key]: 0 } as never)).toThrow(
-            new TypeError(`Mixer.setSurroundPan: unknown request key '${key}'`),
+            unknownKeyError(`Mixer.setSurroundPan: unknown key ${key}`),
           );
         }
 

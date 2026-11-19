@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { noteSegments } from '../src/index.js';
+import { unknownKeyText } from './_helpers.js';
 
 describe('request contract gaps', () => {
   it('normalizes canonical flat noteSegments tuning fields without mutation', () => {
@@ -36,6 +37,6 @@ describe('request contract gaps', () => {
         minNoteMs: 10,
         config: { minNoteMs: 20 },
       } as never),
-    ).toThrow("noteSegments: unknown request key 'config'");
+    ).toThrow(unknownKeyText('noteSegments: unknown key config'));
   });
 });

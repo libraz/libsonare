@@ -6,7 +6,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, RealtimeEngine } from '../dist/index.js';
-import { expectArgumentRefusal } from './_helpers';
+import { expectArgumentRefusal, unknownKeyError } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 256;
@@ -122,7 +122,7 @@ describe('RealtimeEngine.setTrackStripSurroundPan (WASM)', () => {
       expect(() => engine.setStripSurroundPan(TRACK, {})).not.toThrow();
       for (const key of ['elevation', 'distance']) {
         expect(() => engine.setStripSurroundPan(TRACK, { [key]: 0 } as never)).toThrow(
-          new TypeError(`RealtimeEngine.setStripSurroundPan: unknown request key '${key}'`),
+          unknownKeyError(`RealtimeEngine.setStripSurroundPan: unknown key ${key}`),
         );
       }
 

@@ -500,7 +500,7 @@ describe('bounce fields whose value the render cannot report', () => {
     expect(omitted.sampleRate).toBe(PROJECT_SAMPLE_RATE);
     for (const sampleRate of [0, PROJECT_SAMPLE_RATE, 1.5]) {
       expect(() => onProject(({ project }) => project.bounce({ sampleRate } as never))).toThrow(
-        /unknown request key 'sampleRate'/,
+        /unknown key sampleRate \(expected /,
       );
     }
   });

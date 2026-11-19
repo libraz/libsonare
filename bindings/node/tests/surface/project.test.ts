@@ -325,7 +325,7 @@ describe('edits', () => {
       expect(() => project.importExternalStems(stem({ layout: 2 }) as never)).toThrow(TypeError);
       expect(() =>
         project.addClip({ trackId, lengthPpq: 4, audio: left, audioSampleRate: SR } as never),
-      ).toThrow(/unknown request key 'audio'/);
+      ).toThrow(/unknown key audio \(expected /);
     });
   });
 
@@ -394,7 +394,7 @@ describe('compile and bounce', () => {
   it('bounces with no sample-rate option and refuses an explicit zero setting', () => {
     withProject((project) => {
       expect(() => project.bounce({ totalFrames: 128, sampleRate: SR } as never)).toThrow(
-        /unknown request key 'sampleRate'/,
+        /unknown key sampleRate \(expected /,
       );
       const zeroBlock = caught(() => project.bounce({ totalFrames: 128, blockSize: 0 }));
       expect(zeroBlock).toBeInstanceOf(RangeError);

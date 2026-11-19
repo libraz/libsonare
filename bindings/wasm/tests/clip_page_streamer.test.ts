@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ClipPageStreamer } from '../dist/index.js';
+import { unknownKeyError } from './_helpers';
 
 interface ClipPageRequest {
   clipId: number;
@@ -328,7 +329,7 @@ describe('ClipPageStreamer', () => {
   it('takes one options object holding the engine and refuses any other shape', () => {
     const engine = fakeEngine([]);
     expect(() => new ClipPageStreamer(engine as never)).toThrow(
-      new TypeError("ClipPageStreamer: unknown request key 'popClipPageRequest'"),
+      unknownKeyError('ClipPageStreamer: unknown key popClipPageRequest'),
     );
     expect(() => new ClipPageStreamer({ readAheadPages: 1 } as never)).toThrow(
       new TypeError('ClipPageStreamer: engine must provide popClipPageRequest()'),
@@ -337,7 +338,7 @@ describe('ClipPageStreamer', () => {
       new TypeError('ClipPageStreamer: options must be an object holding the engine'),
     );
     expect(() => new ClipPageStreamer({ engine, readAhead: 1 } as never)).toThrow(
-      new TypeError("ClipPageStreamer: unknown request key 'readAhead'"),
+      unknownKeyError('ClipPageStreamer: unknown key readAhead'),
     );
   });
 

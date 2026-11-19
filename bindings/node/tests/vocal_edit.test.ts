@@ -650,7 +650,7 @@ describe('Node vocal edit facade', () => {
       }),
     ).toThrow(/non-finite sample at index 10/);
     expect(() => createVocalEditSession({ ...request(), validate: false } as never)).toThrow(
-      /createVocalEditSession: unknown request key 'validate'/,
+      /createVocalEditSession: unknown key validate \(expected /,
     );
     expect(() =>
       restoreVocalEditSession({
@@ -659,7 +659,7 @@ describe('Node vocal edit facade', () => {
         state: new Uint8Array(8),
         validate: false,
       } as never),
-    ).toThrow(/unknown request key 'validate'/);
+    ).toThrow(/unknown key validate \(expected /);
   });
 
   it('reads the limits byte fields as numbers and refuses a decimal string', () => {

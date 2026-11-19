@@ -12,6 +12,7 @@ import {
   renderPlayback,
   SonareError,
 } from '../dist/index.js';
+import { unknownKeyError } from './_helpers';
 
 const SR = 48000;
 const packageRoot = new URL('../', import.meta.url);
@@ -146,7 +147,7 @@ describe('playback renderer (WASM)', () => {
       new RangeError('renderPlayback: samples contains a non-finite sample at index 3'),
     );
     expect(() => renderPlayback({ ...request, validate: false } as never)).toThrow(
-      new TypeError("renderPlayback: unknown request key 'validate'"),
+      unknownKeyError('renderPlayback: unknown key validate'),
     );
   });
 
@@ -675,10 +676,10 @@ describe('playback constructors take one options object', () => {
   it('refuse an undeclared key by name', () => {
     expect(
       () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000, bogus: 1 } as never),
-    ).toThrow(new TypeError("PlaybackLoudnessMeter: unknown request key 'bogus'"));
+    ).toThrow(unknownKeyError('PlaybackLoudnessMeter: unknown key bogus'));
     expect(
       () => new PlaybackRenderer({ sampleRate: 48000, config: {}, bogus: 1 } as never),
-    ).toThrow(new TypeError("PlaybackRenderer: unknown request key 'bogus'"));
+    ).toThrow(unknownKeyError('PlaybackRenderer: unknown key bogus'));
   });
 
   it('refuse an undeclared key inside an object config as InvalidFormat, and a JSON string config', () => {

@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, isSonareError } from '../../dist/index.js';
 import { init, SonareEngine } from '../../dist/worklet.js';
+import { unknownKeyText } from '../_helpers';
 
 type Port = { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
   string,
@@ -193,7 +194,7 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
       expect(() => engine.setStripInsertBypassed(3, 0, true as never)).toThrow(TypeError);
       expect(() =>
         engine.setStripInsertParam(3, 0, { name: 'a', value: 1, extra: 1 } as never),
-      ).toThrow(/setStripInsertParam: unknown request key 'extra'/);
+      ).toThrow(/setStripInsertParam: unknown key extra \(expected /);
       expect(() => engine.setBusInsertBypassed(1, 0, { bypassed: 'yes' } as never)).toThrow();
       for (const old of [
         'setTrackStripJson',
@@ -325,7 +326,7 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
         }),
       ).toBeUndefined();
       expect(() => engine.configureCapture({ bufferFrames: 128 } as never)).toThrow(
-        /configureCapture: unknown request key 'bufferFrames'/,
+        /configureCapture: unknown key bufferFrames \(expected /,
       );
       expect(() => engine.configureCapture({ capacityFrames: 128, source: 1 as never })).toThrow(
         TypeError,
@@ -354,11 +355,11 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
       expect(planes[0]).toHaveLength(256);
       await expect(
         engine.renderOffline({ totalFrames: 256, validate: false } as never),
-      ).rejects.toThrow("renderOffline: unknown request key 'validate'");
+      ).rejects.toThrow(unknownKeyText('renderOffline: unknown key validate'));
       await expect(engine.renderOffline(256 as never)).rejects.toThrow(TypeError);
       await expect(
         engine.renderOffline({ totalFrames: 256, sampleRate: 48000 } as never),
-      ).rejects.toThrow(/SonareEngine.renderOffline: unknown request key 'sampleRate'/);
+      ).rejects.toThrow(/SonareEngine.renderOffline: unknown key sampleRate \(expected /);
     } finally {
       engine.destroy();
     }

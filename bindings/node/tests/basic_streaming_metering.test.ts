@@ -22,6 +22,7 @@ import {
   tempogramRatio,
 } from '../src/index.js';
 import type { MasteringChainConfig, StreamFramesI16, StreamFramesU8 } from '../src/types.js';
+import { unknownKeyError } from './_helpers.js';
 
 const SR = 22050;
 
@@ -948,7 +949,7 @@ describe('StreamAnalyzer quantize-config override', () => {
       ).toThrow(TypeError);
     }
     expect(() => new StreamAnalyzer({ sampleRate: SR, computeMagnitude: true } as never)).toThrow(
-      /unknown config key 'computeMagnitude'/,
+      /unknown key computeMagnitude \(expected /,
     );
   });
 
@@ -956,7 +957,7 @@ describe('StreamAnalyzer quantize-config override', () => {
     // The analyzer emits no magnitude spectrum, so the factor had nothing to act on.
     for (const magnitudeDownsample of [1, 2]) {
       expect(() => new StreamAnalyzer({ sampleRate: SR, magnitudeDownsample } as never)).toThrow(
-        new TypeError("StreamAnalyzer: unknown config key 'magnitudeDownsample'"),
+        unknownKeyError('StreamAnalyzer: unknown key magnitudeDownsample'),
       );
     }
   });
@@ -964,7 +965,7 @@ describe('StreamAnalyzer quantize-config override', () => {
   it('rejects legacy outputFormat selectors', () => {
     for (const value of [1, 2, 0.5, Number.NaN, Number.POSITIVE_INFINITY, '0']) {
       expect(() => new StreamAnalyzer({ sampleRate: SR, outputFormat: value } as never)).toThrow(
-        /unknown config key 'outputFormat'/,
+        /unknown key outputFormat \(expected /,
       );
     }
   });

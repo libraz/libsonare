@@ -305,7 +305,7 @@ describe('engine punch-in window', () => {
         ),
       );
       expect(() => configure({ startSample: 1, endSample: 2, enabled: false } as never)).toThrow(
-        /unknown option 'enabled' in 'punch'/,
+        /unknown key punch.enabled \(expected /,
       );
     } finally {
       engine.destroy();

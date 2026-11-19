@@ -181,7 +181,7 @@ describe('analysis features: sample-taking one-shots', () => {
 
   it.each(sampleTaking)('%s refuses validate as an unknown option', (_name, fn, extra) => {
     expect(() => fn(samples, sr, { ...extra, validate: false } as never)).toThrow(
-      /unknown option 'validate'/,
+      /unknown key validate \(expected /,
     );
   });
 

@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as api from '../dist/index.js';
 import { REQUEST_SHAPES, type RequestFn } from '../src/request_keys';
+import { unknownKeyError, unknownKeyText } from './_helpers';
 
 type Entry = (request: unknown, ...rest: unknown[]) => unknown;
 
@@ -108,12 +109,12 @@ describe('request objects refuse unknown keys', () => {
     const payload = takesEstimate ? { estimate: {}, bogus: 1 } : { bogus: 1 };
     const call = () => entry(name)(payload);
     expect(call).toThrow(TypeError);
-    expect(message(call)).toBe(`${name}: unknown request key 'bogus'`);
+    expect(message(call)).toMatch(unknownKeyText(`${name}: unknown key bogus`));
   });
 
   it.each(names)('%s does not refuse any declared key', (name) => {
     for (const key of REQUEST_SHAPES[name].keys) {
-      expect(message(() => entry(name)({ [key]: undefined }))).not.toMatch(/unknown request key/);
+      expect(message(() => entry(name)({ [key]: undefined }))).not.toMatch(/unknown key /);
     }
   });
 
@@ -158,10 +159,10 @@ describe('a class-method request refuses its keys through an instance', () => {
     try {
       expect(() =>
         engine.configureCapture({ capacityFrames: 128, punch: { notAnOption: 1 } } as never),
-      ).toThrow("configureCapture: unknown option 'notAnOption' in 'punch'");
+      ).toThrow(unknownKeyText('configureCapture: unknown key punch.notAnOption'));
       expect(() =>
         engine.configureCapture({ capacityFrames: 128, inputMonitor: { notAnOption: 1 } } as never),
-      ).toThrow("configureCapture: unknown option 'notAnOption' in 'inputMonitor'");
+      ).toThrow(unknownKeyText('configureCapture: unknown key inputMonitor.notAnOption'));
     } finally {
       engine.destroy();
     }
@@ -171,7 +172,7 @@ describe('a class-method request refuses its keys through an instance', () => {
     const engine = new api.RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() => engine.setGraph({ bogus: 1 } as never)).toThrow(
-        new TypeError("RealtimeEngine.setGraph: unknown request key 'bogus'"),
+        unknownKeyError('RealtimeEngine.setGraph: unknown key bogus'),
       );
     } finally {
       engine.destroy();
@@ -188,7 +189,7 @@ describe('a class-method request refuses its keys through an instance', () => {
       ];
       const call = () => method.call(project, ...(PROJECT_LEADING_ARGS[name] ?? []), { bogus: 1 });
       expect(call).toThrow(TypeError);
-      expect(message(call)).toBe(`${name}: unknown request key 'bogus'`);
+      expect(message(call)).toMatch(unknownKeyText(`${name}: unknown key bogus`));
     } finally {
       project.destroy();
     }
@@ -196,10 +197,10 @@ describe('a class-method request refuses its keys through an instance', () => {
 
   it('the engine and mixer constructors refuse an undeclared key by name', () => {
     expect(() => new api.RealtimeEngine({ sampleRate: 48000, bogus: 1 } as never)).toThrow(
-      "RealtimeEngine: unknown request key 'bogus'",
+      unknownKeyText('RealtimeEngine: unknown key bogus'),
     );
     expect(() => new api.Mixer({ sampleRate: 48000, bogus: 1 } as never)).toThrow(
-      "Mixer: unknown request key 'bogus'",
+      unknownKeyText('Mixer: unknown key bogus'),
     );
     expect(
       () =>
@@ -209,7 +210,7 @@ describe('a class-method request refuses its keys through an instance', () => {
           pageFrames: 4,
           bogus: 1,
         } as never),
-    ).toThrow("ClipPageProvider: unknown request key 'bogus'");
+    ).toThrow(unknownKeyText('ClipPageProvider: unknown key bogus'));
   });
 });
 
@@ -300,7 +301,7 @@ describe('sample-taking options bags refuse unknown keys', () => {
     const call = () =>
       (entry(name) as (...a: unknown[]) => unknown)(new Float32Array(2205), 22050, { bogus: 1 });
     expect(call).toThrow(TypeError);
-    expect(message(call)).toBe(`${name}: unknown option 'bogus'`);
+    expect(message(call)).toMatch(unknownKeyText(`${name}: unknown key bogus`));
   });
 });
 
@@ -348,11 +349,13 @@ describe('request-only entry points refuse unknown keys', () => {
   it.each(REQUEST_ONLY)('%s refuses an undeclared key by name', (name, body) => {
     const call = () => entry(name)({ ...body(), bogus: 1 });
     expect(call).toThrow(TypeError);
-    expect(message(call)).toBe(`${name}: unknown request key 'bogus'`);
+    expect(message(call)).toMatch(unknownKeyText(`${name}: unknown key bogus`));
   });
 
   it.each(REQUEST_ONLY)('%s reports an unknown key before a missing field', (name) => {
-    expect(message(() => entry(name)({ bogus: 1 }))).toBe(`${name}: unknown request key 'bogus'`);
+    expect(message(() => entry(name)({ bogus: 1 }))).toMatch(
+      unknownKeyText(`${name}: unknown key bogus`),
+    );
   });
 
   it.each(REQUEST_ONLY)('%s takes no positional form', (name) => {
@@ -373,7 +376,7 @@ describe('request-only entry points refuse unknown keys', () => {
         sampleRate: 22050,
         bogus: 1,
       } as never);
-    expect(message(call)).toBe("pitchCorrectTimevarying: unknown request key 'bogus'");
+    expect(message(call)).toMatch(unknownKeyText('pitchCorrectTimevarying: unknown key bogus'));
   });
 });
 
@@ -389,13 +392,13 @@ describe('reported mistakes', () => {
       message(() =>
         api.streamingLoudnessGain({ samples, sampleRate: 22050, loudness: {} } as never),
       ),
-    ).toBe("streamingLoudnessGain: unknown request key 'loudness'");
+    ).toMatch(unknownKeyText('streamingLoudnessGain: unknown key loudness'));
   });
 
   it('masterAudio refuses a chain section left at the top level', () => {
     expect(
       message(() => api.masterAudio({ samples, sampleRate: 22050, loudness: {} } as never)),
-    ).toBe("masterAudio: unknown request key 'loudness'");
+    ).toMatch(unknownKeyText('masterAudio: unknown key loudness'));
   });
 
   it('analyze takes analysis options and progress callbacks flat', () => {
@@ -413,8 +416,8 @@ describe('reported mistakes', () => {
   });
 
   it('autoTune points a key field at key', () => {
-    expect(message(() => api.autoTune({ samples, sampleRate: 22050, root: 0 } as never))).toBe(
-      "autoTune: unknown request key 'root' ('root' belongs under 'key')",
+    expect(message(() => api.autoTune({ samples, sampleRate: 22050, root: 0 } as never))).toMatch(
+      unknownKeyText('autoTune: unknown key root', 'key.root'),
     );
   });
 
@@ -424,7 +427,7 @@ describe('reported mistakes', () => {
     ).not.toMatch(/unknown/);
     expect(
       message(() => api.detectBpm({ samples, sampleRate: 22050, hopLength: 512 } as never)),
-    ).toBe("detectBpm: unknown request key 'hopLength'");
+    ).toMatch(unknownKeyText('detectBpm: unknown key hopLength'));
   });
 
   it('detectBeats takes a tempo range', () => {
@@ -436,6 +439,49 @@ describe('reported mistakes', () => {
   it('a declared key set to undefined is absent', () => {
     expect(() => api.detectBpm({ samples, sampleRate: 22050, bpmMin: undefined })).not.toThrow(
       /unknown request key/,
+    );
+  });
+});
+
+describe('record fields inside a request refuse an undeclared key by its path', () => {
+  const samples = new Float32Array(22050).fill(0.1);
+  const platform = { name: 'Unit Test', targetLufs: -14, ceilingDbtp: -1 };
+  const placement = { x: 1, y: 1, z: 1.2 };
+
+  beforeAll(async () => {
+    await api.init();
+  });
+
+  it('masteringStreamingPreview refuses a key no platform declares', () => {
+    expect(() =>
+      api.masteringStreamingPreview({
+        samples,
+        sampleRate: 22050,
+        platforms: [platform, { ...platform, ceiling: -1 }],
+      } as never),
+    ).toThrow(
+      new TypeError(
+        'masteringStreamingPreview: unknown key platforms[1].ceiling (expected name, targetLufs, ceilingDbtp)',
+      ),
+    );
+  });
+
+  it('synthesizeRir and roomGeometryFromEstimate refuse a key no placement declares', () => {
+    expect(() =>
+      api.synthesizeRir({
+        sampleRate: 22050,
+        lengthM: 7,
+        widthM: 5,
+        heightM: 3,
+        listener: { ...placement, w: 0 },
+      } as never),
+    ).toThrow(new TypeError('synthesizeRir: unknown key listener.w (expected x, y, z)'));
+    const rir = api.synthesizeRir({ sampleRate: 48000, lengthM: 7, widthM: 5, heightM: 3 });
+    const estimate = api.estimateRoom(rir.rir, 48000);
+    expect(() =>
+      api.roomGeometryFromEstimate({ estimate, source: { ...placement, height: 1 } } as never),
+    ).toThrow(
+      new TypeError('roomGeometryFromEstimate: unknown key source.height (expected x, y, z)'),
     );
   });
 });

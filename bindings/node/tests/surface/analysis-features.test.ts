@@ -16,6 +16,7 @@ import type {
   WindowType,
 } from '../../dist/index.js';
 import * as sonare from '../../dist/index.js';
+import { unknownKeyText } from '../_helpers.js';
 
 const sampleRate = 22050;
 // Any exported function by name, for tables that sweep many entry points.
@@ -156,10 +157,10 @@ describe('sample-taking functions', () => {
 
   it.each(SAMPLE_FUNCTIONS)('%s refuses validate as an unknown request key', (name, options) => {
     const fn = api[name] as (...args: unknown[]) => unknown;
-    const message = `${name}: unknown request key 'validate'`;
+    const message = unknownKeyText(`${name}: unknown key validate`);
     expect(() => fn({ samples, sampleRate, ...options, validate: false })).toThrow(message);
     expect(() => fn(samples, sampleRate, { ...options, validate: true })).toThrow(
-      `${name}: unknown option 'validate'`,
+      unknownKeyText(`${name}: unknown key validate`),
     );
   });
 

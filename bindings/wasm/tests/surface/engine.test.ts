@@ -8,6 +8,7 @@ import {
   RealtimeEngine,
   SampleBank,
 } from '../../dist/index.js';
+import { unknownKeyError } from '../_helpers';
 
 interface MarkerIdStep {
   set: Array<{ ppq: number; id?: number }>;
@@ -807,7 +808,7 @@ describe('offline render and process', () => {
       expect(error).toBeInstanceOf(RangeError);
       expect((error as Error).message).toContain('index 3');
       expect(() => engine.renderOffline({ channels: [plane()], validate: false } as never)).toThrow(
-        new TypeError("RealtimeEngine.renderOffline: unknown request key 'validate'"),
+        unknownKeyError('RealtimeEngine.renderOffline: unknown key validate'),
       );
     });
   });

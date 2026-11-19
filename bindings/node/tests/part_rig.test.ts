@@ -222,9 +222,9 @@ describe('part rig request form', () => {
     using project = new Project();
     expect(() =>
       project.setPartRig({ destinationId: 4, part: 0, mode: 'none', extra: 1 } as never),
-    ).toThrow(/unknown request key 'extra'/);
+    ).toThrow(/unknown key extra \(expected /);
     expect(() => project.partRig({ destinationId: 4, part: 0, extra: 1 } as never)).toThrow(
-      /unknown request key 'extra'/,
+      /unknown key extra \(expected /,
     );
   });
 
@@ -247,7 +247,7 @@ describe('part rig request form', () => {
     );
     expect(() =>
       engine.setPartRig({ destinationId: 3, part: 0, mode: 'bank', extra: 1 } as never),
-    ).toThrow(/unknown request key 'extra'/);
+    ).toThrow(/unknown key extra \(expected /);
     expect(() =>
       engine.setPartRig({
         destinationId: 3,

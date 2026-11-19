@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { StreamingRetune, type StreamingRetuneConfig } from '../src/index.js';
+import { unknownKeyError } from './_helpers.js';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -169,12 +170,12 @@ describe('StreamingRetune', () => {
 
   it('refuses an unknown config key by name on the constructor and setConfig', () => {
     expect(() => new StreamingRetune({ pitch: 3 } as never)).toThrow(
-      new TypeError("StreamingRetune: unknown request key 'pitch'"),
+      unknownKeyError('StreamingRetune: unknown key pitch'),
     );
     const retune = new StreamingRetune({ pitchSemitones: 3 });
     try {
       expect(() => retune.setConfig({ pitchSemitones: 5, bogus: 1 } as never)).toThrow(
-        new TypeError("StreamingRetune.setConfig: unknown request key 'bogus'"),
+        unknownKeyError('StreamingRetune.setConfig: unknown key bogus'),
       );
       // A refused config leaves the current one in place.
       expect(retune.config().pitchSemitones).toBeCloseTo(3, 5);

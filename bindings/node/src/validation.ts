@@ -1,4 +1,4 @@
-import { refuse, refuseType } from './internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
 import { NESTED_REQUEST_KEYS, REQUEST_KEYS, type RequestFn } from './request_keys.js';
 import type { ProjectMidiEvent } from './types.js';
@@ -735,8 +735,7 @@ export function assertKnownRequestKeys(
       continue;
     }
     const owner = Object.entries(nested).find(([, set]) => ownKey(set, key));
-    const hint = owner ? ` ('${key}' belongs under '${owner[0]}')` : '';
-    throw refuseType(`unknown request key '${key}'${hint}`);
+    throw refuseUnknownKey(key, Object.keys(keys), owner && `${owner[0]}.${key}`);
   }
   for (const [field, set] of Object.entries(nested)) {
     const options = value[field];
@@ -745,10 +744,18 @@ export function assertKnownRequestKeys(
     }
     for (const key of Object.keys(options)) {
       if (!ownKey(set, key)) {
-        throw refuseType(`unknown option '${key}' in '${field}'`);
+        throw refuseUnknownKey(`${field}.${key}`, Object.keys(set));
       }
     }
   }
+}
+
+/** The request fields a positional `(samples, sampleRate, options?)` call passes by position. */
+const POSITIONAL_KEYS = ['samples', 'sampleRate'];
+
+/** The keys an options bag may carry: the request's, less the ones passed by position. */
+function bagKeys(keys: object): string[] {
+  return Object.keys(keys).filter((key) => !POSITIONAL_KEYS.includes(key));
 }
 
 /**
@@ -760,7 +767,7 @@ export function optionsBag<O>(requestName: RequestFn, options: O): O {
     const keys: object = REQUEST_KEYS[requestName];
     for (const key of Object.keys(options)) {
       if (!ownKey(keys, key)) {
-        throw refuseType(`unknown option '${key}'`);
+        throw refuseUnknownKey(key, bagKeys(keys));
       }
     }
   }
@@ -841,9 +848,9 @@ export function sampleOneShot<R extends SampleRequest>(
     if (!plainObject(options)) {
       throw refuseType(`options must be an object`);
     }
-    for (const key of ['samples', 'sampleRate']) {
+    for (const key of POSITIONAL_KEYS) {
       if (Object.keys(options).includes(key)) {
-        throw refuseType(`unknown option '${key}'`);
+        throw refuseUnknownKey(key, bagKeys(REQUEST_KEYS[requestName]));
       }
     }
     optionsBag(requestName, options);

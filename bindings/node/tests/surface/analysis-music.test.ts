@@ -50,6 +50,7 @@ import {
   streamAnalyzerConfigDefault,
   transcribe,
 } from '../../dist/index.js';
+import { unknownKeyError } from '../_helpers.js';
 
 const sampleRate = 22050;
 
@@ -128,7 +129,7 @@ describe('one positional form, sampleRate required', () => {
     bad[10] = Number.NaN;
     expect(errorOf(() => fn({ samples: bad, sampleRate }))).toBeInstanceOf(RangeError);
     expect(errorOf(() => fn({ samples, sampleRate, validate: false }))).toEqual(
-      new TypeError(`${name}: unknown request key 'validate'`),
+      unknownKeyError(`${name}: unknown key validate`),
     );
   });
 

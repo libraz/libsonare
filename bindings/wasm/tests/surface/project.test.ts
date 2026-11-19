@@ -237,7 +237,7 @@ describe('edits', () => {
       expect(project.sources().find((s) => s.id === clip?.sourceId)?.numChannels).toBe(2);
       expect(() =>
         project.addClip({ trackId, lengthPpq: 4, audio: left, audioSampleRate: SR } as never),
-      ).toThrow(/unknown request key 'audio'/);
+      ).toThrow(/unknown key audio \(expected /);
 
       const result = project.importExternalStems({
         sampleRate: SR,
@@ -346,7 +346,7 @@ describe('compile and bounce', () => {
       expect(result.channels[0].length).toBe(256);
       expect(result.channels[1].length).toBe(256);
       expect(() => project.bounce({ totalFrames: 128, sampleRate: SR } as never)).toThrow(
-        /unknown request key 'sampleRate'/,
+        /unknown key sampleRate \(expected /,
       );
     });
   });

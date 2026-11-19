@@ -7,6 +7,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as api from '../dist/index.js';
+import { unknownKeyError, unknownKeyText } from './_helpers';
 
 const SR = 22050;
 
@@ -263,7 +264,7 @@ describe('the validate option is refused', () => {
   it.each(Object.keys(ROSTER))('%s refuses validate as an unknown request key', async (name) => {
     const error = await errorOf(() => entry(name)({ validate: false }));
     expect(error).toBeInstanceOf(TypeError);
-    expect((error as Error).message).toBe(`${name}: unknown request key 'validate'`);
+    expect((error as Error).message).toMatch(unknownKeyText(`${name}: unknown key validate`));
   });
 
   it.each(Object.entries(ROSTER).filter(([name]) => name !== 'mixingAssistantSuggest'))(
@@ -289,7 +290,7 @@ describe('the validate option is refused', () => {
     try {
       const block = new Float32Array(128);
       expect(() => engine.renderOffline({ channels: [block], validate: false } as never)).toThrow(
-        new TypeError("RealtimeEngine.renderOffline: unknown request key 'validate'"),
+        unknownKeyError('RealtimeEngine.renderOffline: unknown key validate'),
       );
       const poisoned = new Float32Array(128);
       poisoned[5] = Number.NaN;
@@ -309,10 +310,10 @@ describe('the validate option is refused', () => {
       SR,
     );
     expect(() => audio.spectrum({ validate: false } as never)).toThrow(
-      new TypeError("Audio.spectrum: unknown request key 'validate'"),
+      unknownKeyError('Audio.spectrum: unknown key validate'),
     );
     expect(() => audio.spectrumFrame(0, { validate: false } as never)).toThrow(
-      new TypeError("Audio.spectrumFrame: unknown request key 'validate'"),
+      unknownKeyError('Audio.spectrumFrame: unknown key validate'),
     );
     expect(() => api.Audio.fromBuffer(nanSamples(), SR)).toThrow(RangeError);
   });

@@ -31,6 +31,7 @@ import {
 } from '../../dist/index.js';
 import { init as initSource } from '../../src/index';
 import { getSonareModule } from '../../src/module_state';
+import { unknownKeyText } from '../_helpers';
 
 const sampleRate = 22050;
 
@@ -557,7 +558,7 @@ describe('polyphonic analysis and transcription', () => {
     expect(result.tempoBpm).toBe(100);
     expect(() =>
       transcribe({ samples: triad(), sampleRate, tempoBpm: 100, validate: false } as never),
-    ).toThrow("transcribe: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('transcribe: unknown key validate'));
   });
 });
 

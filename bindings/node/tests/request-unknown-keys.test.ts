@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as sonare from '../src/index.js';
 import { NESTED_REQUEST_KEYS, REQUEST_KEYS } from '../src/request_keys.js';
+import { unknownKeyError, unknownKeyText } from './_helpers.js';
 
 type Entry = (request: unknown) => unknown;
 
@@ -25,7 +26,7 @@ async function outcome(name: string, request: unknown): Promise<Error | undefine
 const declared = (keys: object): Record<string, undefined> =>
   Object.fromEntries(Object.keys(keys).map((key) => [key, undefined]));
 
-const refusals = /unknown (request key|option)/;
+const refusals = /unknown key /;
 
 /** Shapes of class-method requests; they are not index functions and carry their own unknown-key cases. */
 const methodShapes = [
@@ -125,7 +126,7 @@ describe('request objects refuse keys outside their declared set', () => {
         : { notAField: 1 };
     const error = await outcome(name, request);
     expect(error).toBeInstanceOf(TypeError);
-    expect(error?.message).toBe(`${name}: unknown request key 'notAField'`);
+    expect(error?.message).toMatch(unknownKeyText(`${name}: unknown key notAField`));
   });
 
   it.each(names)('%s accepts every declared key', async (name) => {
@@ -135,7 +136,7 @@ describe('request objects refuse keys outside their declared set', () => {
 
   it('refuses the first unknown key in the order the caller wrote them', async () => {
     const error = await outcome('detectBpm', { samples: new Float32Array(8), second: 1, first: 2 });
-    expect(error?.message).toBe("detectBpm: unknown request key 'second'");
+    expect(error?.message).toMatch(unknownKeyText('detectBpm: unknown key second'));
   });
 
   it('refuses before any other validation of the request', async () => {
@@ -144,7 +145,7 @@ describe('request objects refuse keys outside their declared set', () => {
       sampleRate: -1,
       x: 1,
     });
-    expect(error?.message).toBe("detectBpm: unknown request key 'x'");
+    expect(error?.message).toMatch(unknownKeyText('detectBpm: unknown key x'));
   });
 });
 
@@ -158,7 +159,7 @@ describe('nested options objects refuse keys outside their declared set', () => 
   it.each(nested)('$name.$field refuses an unknown key, naming it', async ({ name, field }) => {
     const error = await outcome(name, { [field]: { notAnOption: 1 } });
     expect(error).toBeInstanceOf(TypeError);
-    expect(error?.message).toBe(`${name}: unknown option 'notAnOption' in '${field}'`);
+    expect(error?.message).toMatch(unknownKeyText(`${name}: unknown key ${field}.notAnOption`));
   });
 
   it.each(nested)('$name.$field accepts every declared key', async ({ name, field, keys }) => {
@@ -182,8 +183,8 @@ describe('a misplaced key points at the object it belongs under', () => {
       return;
     }
     const error = await outcome(name, { [misplaced as string]: {} });
-    expect(error?.message).toBe(
-      `${name}: unknown request key '${misplaced}' ('${misplaced}' belongs under '${field}')`,
+    expect(error?.message).toMatch(
+      unknownKeyText(`${name}: unknown key ${misplaced}`, `${field}.${misplaced}`),
     );
   });
 });
@@ -194,10 +195,10 @@ describe('a class-method request refuses nested keys through an engine instance'
     try {
       expect(() =>
         engine.configureCapture({ capacityFrames: 128, punch: { notAnOption: 1 } } as never),
-      ).toThrow("configureCapture: unknown option 'notAnOption' in 'punch'");
+      ).toThrow(unknownKeyText('configureCapture: unknown key punch.notAnOption'));
       expect(() =>
         engine.configureCapture({ capacityFrames: 128, inputMonitor: { notAnOption: 1 } } as never),
-      ).toThrow("configureCapture: unknown option 'notAnOption' in 'inputMonitor'");
+      ).toThrow(unknownKeyText('configureCapture: unknown key inputMonitor.notAnOption'));
     } finally {
       engine.destroy();
     }
@@ -207,7 +208,7 @@ describe('a class-method request refuses nested keys through an engine instance'
     const engine = new sonare.RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() => engine.setGraph({ bogus: 1 } as never)).toThrow(
-        new TypeError("RealtimeEngine.setGraph: unknown request key 'bogus'"),
+        unknownKeyError('RealtimeEngine.setGraph: unknown key bogus'),
       );
     } finally {
       engine.destroy();
@@ -221,7 +222,7 @@ describe('reported repros', () => {
   it('masterAudio refuses a loudness section left at the top level', () => {
     expect(() =>
       sonare.masterAudio({ samples, sampleRate: 22050, loudness: { targetLufs: -14 } } as never),
-    ).toThrow(/^masterAudio: unknown request key 'loudness'$/);
+    ).toThrow(/^masterAudio: unknown key loudness \(expected [^)]*\)$/);
   });
 
   it('analyze with onProgress refuses an unknown request key and a nested options object', () => {
@@ -232,7 +233,7 @@ describe('reported repros', () => {
         onProgress: () => {},
         tunning: 'auto',
       } as never),
-    ).toThrow("analyze: unknown request key 'tunning'");
+    ).toThrow(unknownKeyText('analyze: unknown key tunning'));
     expect(() =>
       sonare.analyze({
         samples,
@@ -240,16 +241,16 @@ describe('reported repros', () => {
         onProgress: () => {},
         options: { bogus: 1 },
       } as never),
-    ).toThrow("analyze: unknown request key 'options'");
+    ).toThrow(unknownKeyText('analyze: unknown key options'));
   });
 
   it('detectBpm refuses a key it does not take', () => {
     expect(() => sonare.detectBpm({ samples, sampleRate: 22050, bpmMin: 60 })).not.toThrow();
     expect(() => sonare.detectBpm({ samples, sampleRate: 22050, hopLength: 512 } as never)).toThrow(
-      "detectBpm: unknown request key 'hopLength'",
+      unknownKeyText('detectBpm: unknown key hopLength'),
     );
     expect(() => sonare.detectBpm({ samples, sampleRate: 22050, bogus: 1 } as never)).toThrow(
-      "detectBpm: unknown request key 'bogus'",
+      unknownKeyText('detectBpm: unknown key bogus'),
     );
   });
 
@@ -269,7 +270,9 @@ describe('reported repros', () => {
       'detectOnsets',
       'masteringRepairDeclick',
     ]) {
-      expect(await refused(name, { bogus: 1 }), name).toBe(`${name}: unknown option 'bogus'`);
+      expect(await refused(name, { bogus: 1 }), name).toMatch(
+        unknownKeyText(`${name}: unknown key bogus`),
+      );
     }
     expect(() => sonare.analyze(samples, 22050, { nFft: 1024 })).not.toThrow();
   });
@@ -331,7 +334,7 @@ describe('a Project request method refuses an unknown key', () => {
     const project = new sonare.Project();
     try {
       expect(() => call(project)).toThrow(
-        new TypeError(`Project.${entryOf[name] ?? name}: unknown request key 'notAField'`),
+        unknownKeyError(`Project.${entryOf[name] ?? name}: unknown key notAField`),
       );
     } finally {
       project.destroy();
@@ -343,12 +346,51 @@ describe('a Project request method refuses an unknown key', () => {
     try {
       expect(() =>
         project.setProgramOnChannel(1, { program: 0, bank: { notAnOption: 1 } } as never),
-      ).toThrow("setProgramOnChannel: unknown option 'notAnOption' in 'bank'");
+      ).toThrow(unknownKeyText('setProgramOnChannel: unknown key bank.notAnOption'));
       expect(() => project.setProgramOnChannel(1, { program: 0, msb: 0 } as never)).toThrow(
-        "setProgramOnChannel: unknown request key 'msb' ('msb' belongs under 'bank')",
+        unknownKeyText('setProgramOnChannel: unknown key msb', 'bank.msb'),
       );
     } finally {
       project.destroy();
     }
+  });
+});
+
+describe('record fields inside a request refuse an undeclared key by its path', () => {
+  const samples = new Float32Array(22050).fill(0.1);
+  const platform = { name: 'Unit Test', targetLufs: -14, ceilingDbtp: -1 };
+  const placement = { x: 1, y: 1, z: 1.2 };
+
+  it('masteringStreamingPreview refuses a key no platform declares', () => {
+    expect(() =>
+      sonare.masteringStreamingPreview({
+        samples,
+        sampleRate: 22050,
+        platforms: [platform, { ...platform, ceiling: -1 }],
+      } as never),
+    ).toThrow(
+      new TypeError(
+        'masteringStreamingPreview: unknown key platforms[1].ceiling (expected name, targetLufs, ceilingDbtp)',
+      ),
+    );
+  });
+
+  it('synthesizeRir and roomGeometryFromEstimate refuse a key no placement declares', () => {
+    expect(() =>
+      sonare.synthesizeRir({
+        sampleRate: 22050,
+        lengthM: 7,
+        widthM: 5,
+        heightM: 3,
+        listener: { ...placement, w: 0 },
+      } as never),
+    ).toThrow(new TypeError('synthesizeRir: unknown key listener.w (expected x, y, z)'));
+    const rir = sonare.synthesizeRir({ sampleRate: 48000, lengthM: 7, widthM: 5, heightM: 3 });
+    const estimate = sonare.estimateRoom(rir.rir, 48000);
+    expect(() =>
+      sonare.roomGeometryFromEstimate({ estimate, source: { ...placement, height: 1 } } as never),
+    ).toThrow(
+      new TypeError('roomGeometryFromEstimate: unknown key source.height (expected x, y, z)'),
+    );
   });
 });

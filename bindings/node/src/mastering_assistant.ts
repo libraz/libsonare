@@ -1,5 +1,5 @@
 import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_config.js';
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { masteringPlatformNames } from './mastering_catalog.js';
@@ -114,6 +114,9 @@ export interface MasteringStreamingPreviewRequest {
   platforms?: StreamingPlatform[];
 }
 
+/** The fields of a streaming platform record. */
+const PLATFORM_KEYS = ['name', 'targetLufs', 'ceilingDbtp'];
+
 /** The preview targets in the native spelling: absent is the built-in set, an empty list is refused. */
 function previewPlatforms(platforms: unknown): StreamingPlatform[] {
   if (platforms === undefined || platforms === null) {
@@ -128,6 +131,11 @@ function previewPlatforms(platforms: unknown): StreamingPlatform[] {
   platforms.forEach((platform, i) => {
     if (typeof platform !== 'object' || platform === null || Array.isArray(platform)) {
       throw refuseType(`platforms[${i}] must be an object`);
+    }
+    for (const key of Object.keys(platform)) {
+      if (!PLATFORM_KEYS.includes(key)) {
+        throw refuseUnknownKey(`platforms[${i}].${key}`, PLATFORM_KEYS);
+      }
     }
     const { name, targetLufs, ceilingDbtp } = platform as Record<string, unknown>;
     if (typeof name !== 'string') {

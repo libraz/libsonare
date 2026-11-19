@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectVocalEditApplyRequest } from '../src/types_vocal_project.js';
 import { projectApplyVocalEdit, projectRehydrateVocalEdits } from '../src/vocal_project.js';
+import { unknownKeyError } from './_helpers.js';
 
 const SHA = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const TOKEN = {
@@ -79,7 +80,7 @@ describe('Node Project vocal input number errors', () => {
 
   it('refuses the removed renderedStartSample as an unknown key', () => {
     expect(() => apply({ renderedStartSample: 0 })).toThrow(
-      new TypeError("unknown request key 'renderedStartSample'"),
+      unknownKeyError('unknown key renderedStartSample'),
     );
   });
 

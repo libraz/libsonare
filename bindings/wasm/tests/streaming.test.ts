@@ -10,6 +10,7 @@ import {
   StreamAnalyzer,
   streamAnalyzerConfigDefault,
 } from '../dist/index.js';
+import { unknownKeyError } from './_helpers';
 
 const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -102,7 +103,7 @@ describe('StreamAnalyzer', () => {
       for (const magnitudeDownsample of [1, 2]) {
         expect(
           () => new StreamAnalyzer({ sampleRate: 22050, magnitudeDownsample } as never),
-        ).toThrow(new TypeError("StreamAnalyzer: unknown config key 'magnitudeDownsample'"));
+        ).toThrow(unknownKeyError('StreamAnalyzer: unknown key magnitudeDownsample'));
       }
     });
 

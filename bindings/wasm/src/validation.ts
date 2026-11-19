@@ -1,4 +1,4 @@
-import { refuse, refuseType } from './internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
 import type { Matrix2D } from './public_types.js';
 import { REQUEST_SHAPES, type RequestFn, type RequestShape } from './request_keys.js';
@@ -668,8 +668,7 @@ export function assertKnownRequestKeys(requestName: RequestFn, request: object):
     const owner = Object.entries({ ...shape.nested, ...shape.hints }).find(([, keys]) =>
       keys.includes(key),
     );
-    const hint = owner === undefined ? '' : ` ('${key}' belongs under '${owner[0]}')`;
-    throw refuseType(`unknown request key '${key}'${hint}`);
+    throw refuseUnknownKey(key, shape.keys, owner && `${owner[0]}.${key}`);
   }
   for (const [field, keys] of Object.entries(shape.nested ?? {})) {
     const value = (request as Record<string, unknown>)[field];
@@ -678,10 +677,18 @@ export function assertKnownRequestKeys(requestName: RequestFn, request: object):
     }
     for (const key of Object.keys(value)) {
       if (!keys.includes(key)) {
-        throw refuseType(`unknown option '${key}' in '${field}'`);
+        throw refuseUnknownKey(`${field}.${key}`, keys);
       }
     }
   }
+}
+
+/** The request fields a positional `(samples, sampleRate, options?)` call passes by position. */
+const POSITIONAL_KEYS = ['samples', 'sampleRate'];
+
+/** The keys an options bag may carry: the request's, less the ones passed by position. */
+function bagKeys(keys: readonly string[]): string[] {
+  return keys.filter((key) => !POSITIONAL_KEYS.includes(key));
 }
 
 /**
@@ -693,7 +700,7 @@ export function optionsBag<T extends object>(requestName: RequestFn, options: T)
   const shape: RequestShape = REQUEST_SHAPES[requestName];
   for (const key of Object.keys(options ?? {})) {
     if (!shape.keys.includes(key)) {
-      throw refuseType(`unknown option '${key}'`);
+      throw refuseUnknownKey(key, bagKeys(shape.keys));
     }
   }
   return options;
@@ -864,9 +871,9 @@ export function sampleOneShot<R extends SampleRequest>(
     if (!plainObject(options)) {
       throw refuseType(`options must be an object`);
     }
-    for (const key of ['samples', 'sampleRate']) {
+    for (const key of POSITIONAL_KEYS) {
       if (Object.keys(options).includes(key)) {
-        throw refuseType(`unknown option '${key}'`);
+        throw refuseUnknownKey(key, bagKeys(REQUEST_SHAPES[requestName].keys));
       }
     }
     optionsBag(requestName, options);

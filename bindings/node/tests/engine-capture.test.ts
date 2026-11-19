@@ -39,7 +39,7 @@ describe('RealtimeEngine native binding', () => {
     );
     expect(() => engine.configureCapture({ capacityFrames: 0 })).toThrow(RangeError);
     expect(() => engine.configureCapture({ capacityFrames: 128, numChannel: 2 } as never)).toThrow(
-      /unknown request key 'numChannel'/,
+      /unknown key numChannel \(expected /,
     );
     engine.destroy();
   });

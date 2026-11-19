@@ -1,5 +1,5 @@
 import { chainConfigJson } from './internal/chain_config.js';
-import { entryClass, refuse, refuseType } from './internal/entry.js';
+import { entryClass, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
@@ -583,7 +583,7 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
   }
   for (const key of Object.keys(config)) {
     if (!STREAM_CONFIG_KEYS.has(key)) {
-      throw refuseType(`unknown config key '${key}'`);
+      throw refuseUnknownKey(key, [...STREAM_CONFIG_KEYS]);
     }
   }
   assertSampleRate(config.sampleRate);

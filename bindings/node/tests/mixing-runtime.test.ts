@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Mixer, mixingScenePreset } from '../src/index.js';
-import { expectRefusal } from './_helpers.js';
+import { expectRefusal, unknownKeyError } from './_helpers.js';
 
 const BLOCK_SIZE = 8;
 const SAMPLE_RATE = 48000;
@@ -119,7 +119,7 @@ describe('Mixer runtime methods', () => {
   it('refuses elevation and distance as unknown surround pan keys', () => {
     for (const key of ['elevation', 'distance']) {
       expect(() => mixer.setSurroundPan('host', { [key]: 0 } as never)).toThrow(
-        new TypeError(`Mixer.setSurroundPan: unknown request key '${key}'`),
+        unknownKeyError(`Mixer.setSurroundPan: unknown key ${key}`),
       );
     }
   });

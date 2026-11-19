@@ -8,6 +8,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, masteringNormalizeLoudness } from '../src/index';
+import { unknownKeyText } from './_helpers';
 
 const SR = 44100;
 
@@ -93,7 +94,7 @@ describe('masteringNormalizeLoudness() knobs (WASM)', () => {
       Math.max(...masteringNormalizeLoudness(x, SR, { targetLufs: 0, ceilingDbtp }).samples);
     expect(peakOf(-6)).toBeLessThan(peakOf(-1));
     expect(() => masteringNormalizeLoudness(x, SR, { ceilingDb: -1 } as never)).toThrow(
-      "masteringNormalizeLoudness: unknown option 'ceilingDb'",
+      unknownKeyText('masteringNormalizeLoudness: unknown key ceilingDb'),
     );
   });
 });

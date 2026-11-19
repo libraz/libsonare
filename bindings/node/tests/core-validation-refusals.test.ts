@@ -741,7 +741,7 @@ describe('zeroCrossings refuses a non-finite sample in the core', () => {
     expectRefusal(
       () => zeroCrossings(samples, 22050, { validate: false } as never),
       TypeError,
-      /zeroCrossings: unknown option 'validate'/,
+      /zeroCrossings: unknown key validate \(expected /,
     );
   });
 });

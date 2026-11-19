@@ -31,6 +31,7 @@ import {
 } from '../../dist/index.js';
 import { init as initSource } from '../../src/index';
 import { getSonareModule } from '../../src/module_state';
+import { unknownKeyError } from '../_helpers';
 
 const sampleRate = 22050;
 // Any exported function by name, for tables that sweep many entry points.
@@ -525,7 +526,7 @@ describe('mastering metering surface', () => {
       expect(thrown(() => api.meteringSpectrum(bad, sampleRate))).toBeInstanceOf(RangeError);
       expect(
         thrown(() => api.meteringSpectrum(bad, sampleRate, { validate: false } as never)),
-      ).toEqual(new TypeError("meteringSpectrum: unknown option 'validate'"));
+      ).toEqual(unknownKeyError('meteringSpectrum: unknown key validate'));
     });
   });
 

@@ -8,7 +8,7 @@ import {
   renderPlayback,
 } from '../src/index.js';
 import type { PlaybackRendererConfig } from '../src/types_playback.js';
-import { sine } from './_helpers.js';
+import { sine, unknownKeyError } from './_helpers.js';
 
 function stereoBlock(frames: number): [Float32Array, Float32Array] {
   const tone = sine(440, frames / 48000, { sampleRate: 48000, amp: 0.2 });
@@ -417,7 +417,7 @@ describe('renderPlayback', () => {
       new RangeError('renderPlayback: samples contains a non-finite sample at index 3'),
     );
     expect(() => renderPlayback({ ...request, validate: false } as never)).toThrow(
-      new TypeError("renderPlayback: unknown request key 'validate'"),
+      unknownKeyError('renderPlayback: unknown key validate'),
     );
   });
 
@@ -561,10 +561,10 @@ describe('playback constructors take one options object', () => {
   it('refuse an undeclared key by name', () => {
     expect(
       () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000, bogus: 1 } as never),
-    ).toThrow(new TypeError("PlaybackLoudnessMeter: unknown request key 'bogus'"));
+    ).toThrow(unknownKeyError('PlaybackLoudnessMeter: unknown key bogus'));
     expect(
       () => new PlaybackRenderer({ sampleRate: 48000, config: {}, bogus: 1 } as never),
-    ).toThrow(new TypeError("PlaybackRenderer: unknown request key 'bogus'"));
+    ).toThrow(unknownKeyError('PlaybackRenderer: unknown key bogus'));
   });
 
   it('refuse an undeclared key inside an object config as InvalidFormat, and a JSON string config', () => {

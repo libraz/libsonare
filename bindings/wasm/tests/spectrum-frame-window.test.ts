@@ -15,6 +15,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, meteringSpectrum, meteringSpectrumFrame } from '../src/index';
+import { unknownKeyText } from './_helpers';
 
 const SR = 22050;
 const LENGTH = 8192;
@@ -191,7 +192,7 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
         nFft: N_FFT,
         validate: false,
       } as never),
-    ).toThrow("meteringSpectrumFrame: unknown option 'validate'");
+    ).toThrow(unknownKeyText('meteringSpectrumFrame: unknown key validate'));
   });
 });
 

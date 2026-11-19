@@ -22,6 +22,7 @@ import {
   splitNote,
   timeStretch,
 } from '../../dist/index.js';
+import { unknownKeyError } from '../_helpers.js';
 
 const sampleRate = 22050;
 const hop = 512;
@@ -434,7 +435,7 @@ describe('effects notes surface', () => {
     '%s refuses validate as an unknown request key',
     (name, fn, extra) => {
       expect(thrown(() => fn({ samples, sampleRate, ...extra, validate: false } as never))).toEqual(
-        new TypeError(`${name}: unknown request key 'validate'`),
+        unknownKeyError(`${name}: unknown key validate`),
       );
     },
   );

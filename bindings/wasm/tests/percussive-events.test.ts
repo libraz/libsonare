@@ -21,7 +21,7 @@ import {
   type PercussiveEventInput,
   renderPercussiveEvents,
 } from '../src/index';
-import { expectRefusalOf } from './_helpers';
+import { expectRefusalOf, unknownKeyText } from './_helpers';
 
 const sampleRate = 22050;
 const hopLength = 512;
@@ -1114,7 +1114,7 @@ describe('renderPercussiveEvents', () => {
     );
     expect(() =>
       extractPercussiveEvents({ samples: compact, sampleRate, validate: false } as never),
-    ).toThrow("extractPercussiveEvents: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('extractPercussiveEvents: unknown key validate'));
     expect(() =>
       renderPercussiveEvents({
         samples: compact,
@@ -1122,6 +1122,6 @@ describe('renderPercussiveEvents', () => {
         events: [],
         validate: false,
       } as never),
-    ).toThrow("renderPercussiveEvents: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('renderPercussiveEvents: unknown key validate'));
   });
 });

@@ -348,9 +348,10 @@ describe('the refusal is the same one the shared readers already raised', () => 
       fromBag,
       'masteringDynamicsCompressor',
       'thresholdDb',
+      1e300,
       'compressor thresholdDb',
     );
-    expectRangeRefusal(fromPositional, 'preemphasis', 'zi', 'preemphasis zi');
+    expectRangeRefusal(fromPositional, 'preemphasis', 'zi', 1e300, 'preemphasis zi');
     expect((fromBag as SonareError).code).toBe((fromPositional as SonareError).code);
     const wording = (error: unknown, key: string) =>
       (error as SonareError).message.replace(/^\w+: /, '').replace(key, '<key>');

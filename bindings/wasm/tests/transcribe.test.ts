@@ -16,7 +16,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ProjectMidiEvent, TranscribeOptions, TranscribeRequest } from '../src/index';
 import { init, midiNoteOff, midiNoteOn, Project, transcribe } from '../src/index';
-import { expectArgumentRefusal } from './_helpers';
+import { expectArgumentRefusal, unknownKeyText } from './_helpers';
 
 const sampleRate = 44100;
 const noteSeconds = 0.5;
@@ -361,7 +361,7 @@ describe('WASM transcribe', () => {
       sampleRate,
       validate: false,
     } as unknown as TranscribeRequest;
-    expect(() => transcribe(bypass)).toThrow("transcribe: unknown request key 'validate'");
+    expect(() => transcribe(bypass)).toThrow(unknownKeyText('transcribe: unknown key validate'));
     const allNan = new Float32Array(samples.length).fill(Number.NaN);
     expect(() => transcribe({ samples: allNan, sampleRate })).toThrow(RangeError);
   });

@@ -71,7 +71,7 @@ describe('wrong-typed option values are refused by name', () => {
     it('refuses the removed per-field options and positional arguments', () => {
       expectInvalid(
         () => mixStereo({ strips: [], sampleRate: SR, faderDb: [0] } as never),
-        /unknown request key 'faderDb'/,
+        /unknown key faderDb \(expected /,
       );
       expectInvalid(() => oneStrip(SR, { gain: 1 }), /unknown option 'gain' in 'strips\[0\]'/);
       expectInvalid(

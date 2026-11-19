@@ -10,6 +10,7 @@ import {
   SR,
   sine,
 } from './_boundary_fixtures.mjs';
+import { unknownKeyText } from './_helpers';
 
 describe('boundary regressions (WASM)', () => {
   beforeAll(async () => {
@@ -188,7 +189,7 @@ describe('boundary regressions (WASM)', () => {
         sampleRate: SR,
         validate: false,
       } as never),
-    ).toThrow("meteringStereoCorrelation: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('meteringStereoCorrelation: unknown key validate'));
   });
 
   it('validates drainTailStereo before allocation at both facade and raw boundaries', () => {

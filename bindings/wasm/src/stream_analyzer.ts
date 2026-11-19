@@ -1,5 +1,5 @@
 import { chordQualityToken } from './analysis_helpers.js';
-import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
+import { entryClass, refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { WINDOW_TYPES, windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
@@ -295,7 +295,7 @@ export class StreamAnalyzer {
     }
     for (const key of Object.keys(config)) {
       if (!CONFIG_KEYS.has(key)) {
-        throw refuseType(`unknown config key '${key}'`);
+        throw refuseUnknownKey(key, [...CONFIG_KEYS]);
       }
     }
     assertSampleRate(config.sampleRate);

@@ -79,6 +79,19 @@ export function refuseType(text: string): TypeError {
   return mark(new TypeError(text), text);
 }
 
+/**
+ * Refusal of a key outside a declared set, named by its path from the request
+ * root and listing the set; `also` names the one other place the key is read.
+ */
+export function refuseUnknownKey(
+  path: string,
+  allowed: readonly string[],
+  also?: string,
+): TypeError {
+  const expected = also === undefined ? allowed.join(', ') : `${allowed.join(', ')}, or ${also}`;
+  return refuseType(`unknown key ${path} (expected ${expected})`);
+}
+
 /** A call the object's current state refuses (released, closed, not prepared). */
 export function invalidState(text: string): SonareError {
   return codedError(ErrorCode.InvalidState, text);

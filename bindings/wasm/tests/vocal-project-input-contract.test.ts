@@ -5,6 +5,7 @@ import {
   projectRehydrateVocalEdits,
   type VocalProjectNative,
 } from '../src/vocal_project';
+import { unknownKeyError } from './_helpers';
 
 const SHA = 'ab'.repeat(32);
 const TOKEN = {
@@ -83,7 +84,7 @@ describe('WASM Project vocal input number errors', () => {
 
   it('refuses the removed renderedStartSample as an unknown key', () => {
     expect(() => apply({ renderedStartSample: 0 })).toThrow(
-      new TypeError("unknown request key 'renderedStartSample'"),
+      unknownKeyError('unknown key renderedStartSample'),
     );
   });
 

@@ -32,6 +32,7 @@ import {
   vectorNormalize,
   zeroCrossings,
 } from '../src/index';
+import { unknownKeyText } from './_helpers';
 
 const sampleRate = 22050;
 const samples = Float32Array.from({ length: 8192 }, (_, i) =>
@@ -83,7 +84,7 @@ describe('remaining feature request-object compatibility', () => {
     expect(shortTermLufs({ samples, sampleRate })).toEqual(shortTermLufs(samples, sampleRate));
     expect(() =>
       lufsMultichannel({ channels: [samples], sampleRate, validate: true } as never),
-    ).toThrow("lufsMultichannel: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('lufsMultichannel: unknown key validate'));
     const onset = new Float32Array(512).fill(0.2);
     const tempoGrid = tempogram({
       onsetEnvelope: onset,
@@ -190,7 +191,7 @@ describe('remaining feature request-object compatibility', () => {
     const unknown = captureThrow(() =>
       phaseVocoder({ samples: dirty, speedRatio: 1.1, sampleRate, validate: false } as never),
     );
-    expect(unknown.message).toBe("phaseVocoder: unknown request key 'validate'");
+    expect(unknown.message).toMatch(unknownKeyText('phaseVocoder: unknown key validate'));
     expect(posRate.threw).toBe(true);
     expect(reqRate.threw).toBe(true);
     expect(reqRate.message).toBe(posRate.message);

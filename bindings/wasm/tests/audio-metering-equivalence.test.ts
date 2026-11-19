@@ -24,6 +24,7 @@ import {
   meteringSpectrumFrame,
   meteringTruePeakDbtp,
 } from '../src/index';
+import { textMatcher, unknownKeyText } from './_helpers';
 
 const SR = 22050;
 
@@ -185,18 +186,18 @@ describe('Audio metering methods (WASM)', () => {
  * The metering methods answer an unknown key, a `validate` key and a zero `nFft`
  * exactly as their facades do, each text naming the `Audio` member; the Node suite pins the same table.
  */
-const METERING_REFUSALS: [string, (audio: Audio) => unknown, string, string][] = [
+const METERING_REFUSALS: [string, (audio: Audio) => unknown, string, string | RegExp][] = [
   [
     'spectrum unknown key',
     (a) => a.spectrum({ bogus: 1 } as never),
     'TypeError',
-    "Audio.spectrum: unknown request key 'bogus'",
+    unknownKeyText('Audio.spectrum: unknown key bogus'),
   ],
   [
     'spectrum validate',
     (a) => a.spectrum({ validate: false } as never),
     'TypeError',
-    "Audio.spectrum: unknown request key 'validate'",
+    unknownKeyText('Audio.spectrum: unknown key validate'),
   ],
   [
     'spectrum nFft 0',
@@ -208,13 +209,13 @@ const METERING_REFUSALS: [string, (audio: Audio) => unknown, string, string][] =
     'spectrumFrame unknown key',
     (a) => a.spectrumFrame(0, { bogus: 1 } as never),
     'TypeError',
-    "Audio.spectrumFrame: unknown request key 'bogus'",
+    unknownKeyText('Audio.spectrumFrame: unknown key bogus'),
   ],
   [
     'spectrumFrame validate',
     (a) => a.spectrumFrame(0, { validate: false } as never),
     'TypeError',
-    "Audio.spectrumFrame: unknown request key 'validate'",
+    unknownKeyText('Audio.spectrumFrame: unknown key validate'),
   ],
   [
     'spectrumFrame nFft 0',
@@ -226,25 +227,25 @@ const METERING_REFUSALS: [string, (audio: Audio) => unknown, string, string][] =
     'dynamicRange unknown key',
     (a) => a.dynamicRange({ bogus: 1 } as never),
     'TypeError',
-    "Audio.dynamicRange: unknown request key 'bogus'",
+    unknownKeyText('Audio.dynamicRange: unknown key bogus'),
   ],
   [
     'dynamicRange validate',
     (a) => a.dynamicRange({ validate: false } as never),
     'TypeError',
-    "Audio.dynamicRange: unknown request key 'validate'",
+    unknownKeyText('Audio.dynamicRange: unknown key validate'),
   ],
   [
     'detectClipping unknown key',
     (a) => a.detectClipping({ bogus: 1 } as never),
     'TypeError',
-    "Audio.detectClipping: unknown request key 'bogus'",
+    unknownKeyText('Audio.detectClipping: unknown key bogus'),
   ],
   [
     'detectClipping validate',
     (a) => a.detectClipping({ validate: false } as never),
     'TypeError',
-    "Audio.detectClipping: unknown request key 'validate'",
+    unknownKeyText('Audio.detectClipping: unknown key validate'),
   ],
 ];
 
@@ -265,6 +266,6 @@ describe('the metering methods refuse as their facades do (WASM)', () => {
     expect({
       errorClass: (caught as object).constructor.name,
       message: (caught as Error).message,
-    }).toEqual({ errorClass, message });
+    }).toEqual({ errorClass, message: textMatcher(message) });
   });
 });

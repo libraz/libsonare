@@ -20,6 +20,7 @@ import {
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index.js';
+import { unknownKeyText } from './_helpers.js';
 
 const SR = 22050;
 
@@ -190,13 +191,13 @@ describe('non-finite audio is always refused (Node)', () => {
   it('lufs refuses NaN and a validate option', () => {
     expect(() => lufs(withNaN(), SR)).toThrow(RangeError);
     expect(() => lufs(withNaN(), SR, { validate: false } as never)).toThrow(
-      "lufs: unknown option 'validate'",
+      unknownKeyText('lufs: unknown key validate'),
     );
   });
   it('masteringDynamicsCompressor refuses NaN and a validate option', () => {
     expect(() => masteringDynamicsCompressor(withNaN(), SR)).toThrow(RangeError);
     expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false } as never)).toThrow(
-      /unknown option 'validate'/,
+      /unknown key validate \(expected /,
     );
   });
   it('waveformPeaks refuses NaN rather than drawing it as silence', () => {
@@ -210,13 +211,13 @@ describe('non-finite audio is always refused (Node)', () => {
     );
     expect(() =>
       waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256, validate: false } as never),
-    ).toThrow(/unknown request key 'validate'/);
+    ).toThrow(/unknown key validate \(expected /);
   });
   it('waveformPeakPyramid refuses NaN and a validate option', () => {
     const request = { channels: [withNaN()], samplesPerBucketLevels: [256, 512] };
     expect(() => waveformPeakPyramid(request)).toThrow(RangeError);
     expect(() => waveformPeakPyramid({ ...request, validate: false } as never)).toThrow(
-      /unknown request key 'validate'/,
+      /unknown key validate \(expected /,
     );
   });
 });

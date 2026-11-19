@@ -137,3 +137,32 @@ export function expectRefusal(
   expect(caught).toBeInstanceOf(expected);
   expect(isSonareError(caught)).toBe(false);
 }
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Pattern for an unknown-key refusal whose message starts with `head`
+ * (`"<entry>: unknown key <path>"`); `also` is the nested path a misplaced key belongs under.
+ */
+export function unknownKeyText(head: string, also?: string): RegExp {
+  const tail = also === undefined ? '' : `, or ${escapeRegExp(also)}`;
+  return new RegExp(`${escapeRegExp(head)} \\(expected [^)]*${tail}\\)`);
+}
+
+/** Matcher for the TypeError carrying exactly that refusal, for `toThrow` / `rejects.toThrow`. */
+export function unknownKeyError(head: string, also?: string) {
+  const pattern = new RegExp(`^${unknownKeyText(head, also).source}$`);
+  return {
+    asymmetricMatch: (actual: unknown) =>
+      actual instanceof TypeError && pattern.test(actual.message),
+    toString: () => `TypeError matching ${pattern}`,
+    toAsymmetricMatcher: () => `TypeError matching ${pattern}`,
+  };
+}
+
+/** A literal message compares equal; a pattern from {@link unknownKeyText} compares by match. */
+export function textMatcher(message: string | RegExp): unknown {
+  return typeof message === 'string' ? message : expect.stringMatching(message);
+}

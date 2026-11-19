@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ErrorCode, isSonareError, RealtimeEngine, SampleBank } from '../../dist/index.js';
 import type { EngineLoop, MixSceneStrip, RealtimeEngineConfig } from '../../dist/types.js';
+import { unknownKeyError } from '../_helpers.js';
 
 interface MarkerIdStep {
   set: Array<{ ppq: number; id?: number }>;
@@ -661,7 +662,7 @@ describe('RealtimeEngine strip addressing', () => {
       expect(caught(() => engine.setStripSurroundPan('master', {}))).toBeInstanceOf(RangeError);
       for (const key of ['elevation', 'distance']) {
         expect(() => engine.setStripSurroundPan(10, { [key]: 0 } as never)).toThrow(
-          new TypeError(`RealtimeEngine.setStripSurroundPan: unknown request key '${key}'`),
+          unknownKeyError(`RealtimeEngine.setStripSurroundPan: unknown key ${key}`),
         );
       }
       for (const name of [
@@ -864,7 +865,7 @@ describe('RealtimeEngine offline render and bounce', () => {
       bad[0][3] = Number.NaN;
       expect(caught(() => engine.renderOffline({ channels: bad }))).toBeInstanceOf(RangeError);
       expect(() => engine.renderOffline({ channels: block(), validate: false } as never)).toThrow(
-        new TypeError("RealtimeEngine.renderOffline: unknown request key 'validate'"),
+        unknownKeyError('RealtimeEngine.renderOffline: unknown key validate'),
       );
     });
   });

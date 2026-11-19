@@ -23,6 +23,7 @@ import {
   splitNote,
   timeStretch,
 } from '../../dist/index.js';
+import { unknownKeyText } from '../_helpers';
 
 const sampleRate = 22050;
 const hop = 512;
@@ -490,7 +491,9 @@ describe('effects notes surface', () => {
       (s: Float32Array, x: object) => extractPercussiveEvents({ samples: s, sampleRate, ...x }),
     ],
   ])('%s refuses a validate key and non-finite samples', (name, call) => {
-    expect(() => call(samples, NOT_AN_OPTION)).toThrow(`${name}: unknown request key 'validate'`);
+    expect(() => call(samples, NOT_AN_OPTION)).toThrow(
+      unknownKeyText(`${name}: unknown key validate`),
+    );
     const bad = Float32Array.from(samples);
     bad[10] = Number.NaN;
     expect(() => call(bad, {})).toThrow(RangeError);

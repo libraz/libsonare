@@ -18,7 +18,7 @@ import {
   zeroCrossings,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
-import { expectRefusalOf } from './_helpers';
+import { expectRefusalOf, unknownKeyText } from './_helpers';
 
 // The core function owns each refusal in this corpus. The embind wrappers call the
 // core directly, so the refusal is asserted on the raw module as well as on the facade.
@@ -778,7 +778,7 @@ describe('zeroCrossings refuses a non-finite sample', () => {
       () => zeroCrossings(samples, 22050, { validate: false } as never),
       TypeError,
     );
-    expect(error.message).toBe("zeroCrossings: unknown option 'validate'");
+    expect(error.message).toMatch(unknownKeyText('zeroCrossings: unknown key validate'));
   });
 });
 

@@ -84,7 +84,7 @@ describe('RealtimeEngine live program change', () => {
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, { msb: 8 } as never)).toThrow(TypeError);
       expect(() =>
         engine.pushMidiProgram(DEST, 0, 0, 5, { msb: 8, lsb: 0, extra: 1 } as never),
-      ).toThrow(/unknown request key 'extra'/);
+      ).toThrow(/unknown key extra \(expected /);
       expect(() => engine.pushMidiInputProgram(0, 0, 5, 3 as never)).toThrow(TypeError);
     } finally {
       engine.destroy();

@@ -63,6 +63,7 @@ import {
   vqtToAudio,
   zeroCrossingRate,
 } from '../src/index.js';
+import { unknownKeyText } from './_helpers.js';
 
 const SR = 22050;
 
@@ -575,7 +576,7 @@ describe('features', () => {
     ).toThrow(/melToAudio: power\.data contains a non-finite value at index 3/);
     expect(() =>
       melToStft({ power: mel, sampleRate: SR, nFft: 256, validate: false } as never),
-    ).toThrow("melToStft: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('melToStft: unknown key validate'));
 
     const coeffData = new Float32Array(5 * 4).fill(0.1);
     coeffData[7] = Number.POSITIVE_INFINITY;
@@ -595,7 +596,7 @@ describe('features', () => {
     ).toThrow(/mfccToAudio: coefficients\.data contains a non-finite value at index 7/);
     expect(() =>
       mfccToMel({ coefficients: mfccCoeffs, nMels: 8, validate: false } as never),
-    ).toThrow("mfccToMel: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('mfccToMel: unknown key validate'));
 
     const magnitude = new Float32Array(3 * 5).fill(1);
     magnitude[4] = Number.NaN;

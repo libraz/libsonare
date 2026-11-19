@@ -12,7 +12,7 @@ import {
   pitchClassOrdinal,
 } from './analysis_helpers.js';
 import { ErrorCode, SonareError } from './errors.js';
-import { codedError, refuse, refuseType, withEntry } from './internal/entry.js';
+import { codedError, refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AcousticOptions,
@@ -117,6 +117,9 @@ function optionalRoomNumber(options: object, field: string): number | undefined 
   return value;
 }
 
+/** The coordinates of a room placement. */
+const PLACEMENT_KEYS = ['x', 'y', 'z'];
+
 /** A placement the caller gave, checked; absent (`undefined` / `null`) stays `undefined`. */
 function checkedPlacement(
   name: 'source' | 'listener',
@@ -127,6 +130,11 @@ function checkedPlacement(
   }
   if (typeof placement !== 'object') {
     throw refuseType(`${name} must be an object with x, y and z`);
+  }
+  for (const key of Object.keys(placement)) {
+    if (!PLACEMENT_KEYS.includes(key)) {
+      throw refuseUnknownKey(`${name}.${key}`, PLACEMENT_KEYS);
+    }
   }
   const { x, y, z } = placement as Record<string, unknown>;
   assertFloatValue(x, `${name}.x`);

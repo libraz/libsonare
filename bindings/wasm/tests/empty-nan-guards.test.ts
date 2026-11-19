@@ -30,6 +30,7 @@ import {
   waveformPeaks,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
+import { unknownKeyText } from './_helpers';
 
 const SR = 22050;
 
@@ -201,13 +202,13 @@ describe('non-finite samples are always refused and validate is not an option (W
   it('lufs refuses NaN with the indexed message and refuses a validate option', () => {
     expect(() => lufs(withNaN(), SR)).toThrow(/samples contains a non-finite sample at index/);
     expect(() => lufs(withNaN(), SR, { validate: false } as never)).toThrow(
-      "lufs: unknown option 'validate'",
+      unknownKeyText('lufs: unknown key validate'),
     );
   });
   it('masteringDynamicsCompressor refuses NaN and a validate option', () => {
     expect(() => masteringDynamicsCompressor(withNaN(), SR)).toThrow(RangeError);
     expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false } as never)).toThrow(
-      "masteringDynamicsCompressor: unknown option 'validate'",
+      unknownKeyText('masteringDynamicsCompressor: unknown key validate'),
     );
   });
   it('waveformPeaks rejects NaN rather than drawing it as silence', () => {
@@ -222,7 +223,7 @@ describe('non-finite samples are always refused and validate is not an option (W
     );
     expect(() =>
       waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256, validate: false } as never),
-    ).toThrow("waveformPeaks: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('waveformPeaks: unknown key validate'));
   });
   it('waveformPeakPyramid rejects NaN and a validate key', () => {
     expect(() =>
@@ -234,7 +235,7 @@ describe('non-finite samples are always refused and validate is not an option (W
         samplesPerBucketLevels: [256, 512],
         validate: false,
       } as never),
-    ).toThrow("waveformPeakPyramid: unknown request key 'validate'");
+    ).toThrow(unknownKeyText('waveformPeakPyramid: unknown key validate'));
   });
 });
 

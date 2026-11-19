@@ -1,4 +1,4 @@
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
 import { tempoRange } from './internal/tempo_range.js';
@@ -88,6 +88,9 @@ const ZERO_IS_DEFAULT_FIELDS = [
 
 const ACOUSTIC_MODES = ['auto', 'blind', 'impulseResponse'] as const;
 
+/** The coordinates of a room placement. */
+const PLACEMENT_KEYS = ['x', 'y', 'z'];
+
 /** A placement the caller gave, checked; absent (`undefined` / `null`) stays `undefined`. */
 function checkedPlacement(
   name: 'source' | 'listener',
@@ -98,6 +101,11 @@ function checkedPlacement(
   }
   if (typeof placement !== 'object') {
     throw refuseType(`${name} must be an object with x, y and z`);
+  }
+  for (const key of Object.keys(placement)) {
+    if (!PLACEMENT_KEYS.includes(key)) {
+      throw refuseUnknownKey(`${name}.${key}`, PLACEMENT_KEYS);
+    }
   }
   const { x, y, z } = placement as Record<string, unknown>;
   assertFloatValue(x, `${name}.x`);
