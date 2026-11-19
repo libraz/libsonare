@@ -17,9 +17,8 @@ constexpr uint32_t kExpectedEngineAbiVersion = 3;
 inline bool CopyString(Napi::Env env, char* dest, size_t capacity, const std::string& value,
                        const char* what) {
   if (value.size() >= capacity) {
-    Napi::RangeError::New(env, std::string(what) + " must be at most " +
-                                   std::to_string(capacity - 1) + " bytes, got " +
-                                   std::to_string(value.size()))
+    Napi::RangeError::New(
+        env, std::string(what) + " must be at most " + std::to_string(capacity - 1) + " bytes")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -299,6 +298,7 @@ using sonare_node::OptionalStringArg;
 using sonare_node::OptionalUint16Arg;
 using sonare_node::OptionalUint32Arg;
 using sonare_node::ReadBuiltinWaveform;
+using sonare_node::RefuseUnknownDocumentKeys;
 using sonare_node::RequiredArrayValue;
 using sonare_node::RequiredBoolArg;
 using sonare_node::RequiredDoubleArg;

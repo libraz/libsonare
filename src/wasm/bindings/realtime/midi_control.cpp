@@ -227,10 +227,11 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
   // caller never asked for.
   int input = 0;
   int axis = 0;
-  sonare_wasm_synth::requiredEnumProperty(binding, "input", sonare_wasm_synth::kControllerInputs,
-                                          SONARE_CONTROLLER_INPUT_COUNT, "controller input",
-                                          &input);
-  sonare_wasm_synth::requiredEnumProperty(binding, "axis", sonare_wasm_synth::kControllerAxes,
+  sonare_wasm_synth::requiredEnumProperty(
+      binding, "binding", "input", sonare_wasm_synth::kControllerInputs,
+      SONARE_CONTROLLER_INPUT_COUNT, "controller input", &input);
+  sonare_wasm_synth::requiredEnumProperty(binding, "binding", "axis",
+                                          sonare_wasm_synth::kControllerAxes,
                                           SONARE_CONTROLLER_AXIS_COUNT, "controller axis", &axis);
   entry.input = static_cast<sonare::midi::ControllerInput>(input);
   entry.axis = static_cast<sonare::midi::ControllerAxis>(axis);
@@ -473,7 +474,8 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
                                      sonare_wasm_synth::kPartRigModeCount, "part rig mode"));
   const bool has_inserts = !inserts_json.isUndefined() && !inserts_json.isNull();
   if ((rig.mode == sonare::midi::PartRigMode::kChain) != has_inserts) {
-    throw WasmRangeError("insertsJson is required for the chain mode and only then");
+    throw WasmRangeError(has_inserts ? "insertsJson must be omitted unless mode is chain"
+                                     : "insertsJson must be given when mode is chain");
   }
   if (has_inserts) {
     const std::string json = inserts_json.as<std::string>();

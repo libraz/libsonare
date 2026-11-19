@@ -24,6 +24,37 @@ using namespace sonare_node;
 
 namespace {
 
+/// Reads streaming platform targets, refusing a missing or wrong-typed field by its path.
+void ReadStreamingPlatforms(const Napi::Array& input,
+                            std::vector<sonare::mastering::maximizer::StreamingPlatform>* out) {
+  const Napi::Env env = input.Env();
+  out->reserve(input.Length());
+  for (uint32_t index = 0; index < input.Length(); ++index) {
+    const std::string subject = "platforms[" + std::to_string(index) + "]";
+    const Napi::Value value = input.Get(index);
+    if (!value.IsObject()) throw Napi::TypeError::New(env, subject + " must be an object");
+    const Napi::Object object = value.As<Napi::Object>();
+    const auto field = [&](const char* key) {
+      const Napi::Value v = object.Get(key);
+      if (v.IsUndefined() || v.IsNull()) {
+        throw Napi::TypeError::New(env, subject + "." + key + " must be given");
+      }
+      return v;
+    };
+    std::string name;
+    float target_lufs = 0.0f;
+    float ceiling_dbtp = 0.0f;
+    if (!RequiredStringValue(env, field("name"), subject + ".name", &name) ||
+        !RequiredFiniteFloatValue(env, field("targetLufs"), subject + ".targetLufs",
+                                  &target_lufs) ||
+        !RequiredFiniteFloatValue(env, field("ceilingDbtp"), subject + ".ceilingDbtp",
+                                  &ceiling_dbtp)) {
+      throw env.GetAndClearPendingException();
+    }
+    out->push_back({name, target_lufs, ceiling_dbtp});
+  }
+}
+
 struct StereoResultGuard {
   SonareMasteringStereoResult* result;
   ~StereoResultGuard() { sonare_free_mastering_stereo_result(result); }
@@ -602,28 +633,7 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
   if (has_platforms && !info[2].IsArray()) {
     throw Napi::TypeError::New(env, "platforms must be an array");
   }
-  if (has_platforms) {
-    Napi::Array input = info[2].As<Napi::Array>();
-    platforms.reserve(input.Length());
-    for (uint32_t index = 0; index < input.Length(); ++index) {
-      Napi::Value value = input.Get(index);
-      if (!value.IsObject()) {
-        Napi::TypeError::New(env, "platforms entries must be objects").ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Object object = value.As<Napi::Object>();
-      if (!object.Get("name").IsString() || !object.Get("targetLufs").IsNumber() ||
-          !object.Get("ceilingDbtp").IsNumber()) {
-        Napi::TypeError::New(env, "platforms entries require name, targetLufs, ceilingDbtp")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      platforms.push_back(
-          {StringProperty(object, "name", ""),
-           node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
-           node_narrow_finite_float(env, object.Get("ceilingDbtp"), "ceilingDbtp")});
-    }
-  }
+  if (has_platforms) ReadStreamingPlatforms(info[2].As<Napi::Array>(), &platforms);
   const sonare::Audio audio = sonare::Audio::from_buffer(
       samples.Data(), samples.ElementLength(), node_narrow_int(env, info[1], "sampleRate"));
   const auto results = platforms.empty()
@@ -695,27 +705,9 @@ Napi::Value SonareWrap::MasteringStreamingPreviewStereo(const Napi::CallbackInfo
     return env.Undefined();
   }
   std::vector<sonare::mastering::maximizer::StreamingPlatform> platforms;
-  if (info.Length() >= 4 && info[3].IsArray()) {
-    Napi::Array input = info[3].As<Napi::Array>();
-    platforms.reserve(input.Length());
-    for (uint32_t index = 0; index < input.Length(); ++index) {
-      Napi::Value value = input.Get(index);
-      if (!value.IsObject()) {
-        Napi::TypeError::New(env, "platforms entries must be objects").ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Object object = value.As<Napi::Object>();
-      if (!object.Get("name").IsString() || !object.Get("targetLufs").IsNumber() ||
-          !object.Get("ceilingDbtp").IsNumber()) {
-        Napi::TypeError::New(env, "platforms entries require name, targetLufs, ceilingDbtp")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      platforms.push_back(
-          {StringProperty(object, "name", ""),
-           node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
-           node_narrow_finite_float(env, object.Get("ceilingDbtp"), "ceilingDbtp")});
-    }
+  if (info.Length() >= 4 && !info[3].IsUndefined() && !info[3].IsNull()) {
+    if (!info[3].IsArray()) throw Napi::TypeError::New(env, "platforms must be an array");
+    ReadStreamingPlatforms(info[3].As<Napi::Array>(), &platforms);
   }
   const auto results = platforms.empty()
                            ? sonare::mastering::maximizer::streaming_preview_interleaved(

@@ -73,7 +73,7 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   if (!has_voiced && !has_prob) {
-    throw WasmRangeError("voiced or voicedProb is required");
+    throw WasmRangeError("voiced or voicedProb must be given");
   }
   if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
     throw WasmRangeError("frameRate must be finite and greater than 0");

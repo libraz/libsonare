@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <memory>
 #include <new>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -658,6 +659,7 @@ TEST_CASE("sonare_engine_bounce_offline refuses a source rate other than the pre
   SonareEngineBounceOptions options{};
   REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
   options.total_frames = 441;
+  options.num_channels = 2;
   options.block_size = 128;
   options.source_sample_rate = 48000;
   options.target_sample_rate = 48000;
@@ -666,10 +668,14 @@ TEST_CASE("sonare_engine_bounce_offline refuses a source rate other than the pre
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(result.interleaved == nullptr);
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          std::string("source_sample_rate must equal the prepared sample rate 44100"));
 
   options.source_sample_rate = -1;
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          std::string("source_sample_rate must be an integer in [0, 2147483647]"));
 
   sonare_engine_destroy(engine);
 }

@@ -250,11 +250,11 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
       sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate);
   Napi::Object opts = info.Length() >= 3 && info[2].IsObject() ? info[2].As<Napi::Object>()
                                                                : Napi::Object::New(env);
-  // samples, sampleRate and validate ride along from the request object and are not read here.
+  // samples and sampleRate ride along from the request object and are not read here.
   RefuseUnknownKeys(
       opts, "options",
       {"aspectHintLw", "aspectHintLh", "referenceAbsorption", "preferEyring", "nOctaveBands",
-       "minDecayDb", "noiseFloorMarginDb", "mode", "samples", "sampleRate", "validate"});
+       "minDecayDb", "noiseFloorMarginDb", "mode", "samples", "sampleRate"});
 
   sonare::RoomEstimateConfig cfg;
   // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
@@ -404,7 +404,7 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   Napi::Object opts = info[2].As<Napi::Object>();
   RefuseUnknownKeys(opts, "options", RoomKeys(),
-                    {"wet", "sourceTailSuppression", "samples", "sampleRate", "validate"});
+                    {"wet", "sourceTailSuppression", "samples", "sampleRate"});
 
   const sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
 
@@ -451,9 +451,9 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
   const sonare::Audio right_audio =
       sonare::Audio::from_buffer(right.Data(), right.ElementLength(), sr);
   Napi::Object opts = info[3].As<Napi::Object>();
-  RefuseUnknownKeys(opts, "options", RoomKeys(),
-                    {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right",
-                     "sampleRate", "validate"});
+  RefuseUnknownKeys(
+      opts, "options", RoomKeys(),
+      {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right", "sampleRate"});
 
   sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
   cfg.receiver_spacing_m = FiniteFloatProperty(opts, "receiverSpacingM", cfg.receiver_spacing_m);

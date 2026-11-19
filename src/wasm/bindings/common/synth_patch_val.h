@@ -94,8 +94,8 @@ inline emscripten::val synthEnumTablesToVal() {
 /// enumProperty for a field that has no "keep base" reading, so absence is
 /// refused rather than defaulted: where ordinal 0 is itself a working value, a
 /// caller who omitted the key would get a selection they never asked for.
-inline void requiredEnumProperty(emscripten::val object, const char* key, const char* const* names,
-                                 int count, const char* what, int* out);
+inline void requiredEnumProperty(emscripten::val object, const char* subject, const char* key,
+                                 const char* const* names, int count, const char* what, int* out);
 
 /// Resolves an enum value accepting the C ordinal or a name; throws on an
 /// unknown name and on an ordinal outside [0, @p count). Shared with @ref
@@ -140,10 +140,10 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
   *out = enumFromVal(object[key], names, count, what);
 }
 
-inline void requiredEnumProperty(emscripten::val object, const char* key, const char* const* names,
-                                 int count, const char* what, int* out) {
+inline void requiredEnumProperty(emscripten::val object, const char* subject, const char* key,
+                                 const char* const* names, int count, const char* what, int* out) {
   if (!hasProperty(object, key)) {
-    throw WasmTypeError(std::string("Missing required ") + what + ": '" + key + "'");
+    throw WasmTypeError(std::string(subject) + "." + key + " must be given");
   }
   enumProperty(object, key, names, count, what, out);
 }

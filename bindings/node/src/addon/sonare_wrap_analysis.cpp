@@ -767,7 +767,7 @@ Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
   result.Set("peakDb", Napi::Number::New(env, dynamics.peak_db));
   result.Set("rmsDb", Napi::Number::New(env, dynamics.rms_db));
   result.Set("crestFactor", Napi::Number::New(env, dynamics.crest_factor));
-  result.Set("loudnessRangeDb", Napi::Number::New(env, dynamics.loudness_range_lu));
+  result.Set("loudnessRangeLu", Napi::Number::New(env, dynamics.loudness_range_lu));
   result.Set("isCompressed", Napi::Boolean::New(env, dynamics.is_compressed != 0));
 
   auto times = Napi::Float32Array::New(env, dynamics.loudness_count);

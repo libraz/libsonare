@@ -299,7 +299,7 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   }
   if (options->source_sample_rate < 0) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "engine_bounce_offline: options->source_sample_rate must not be negative");
+                   "source_sample_rate must be an integer in [0, 2147483647]");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (options->dither_bits < 0) {
@@ -316,8 +316,7 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
       options->target_sample_rate == 0 ? source_sample_rate : options->target_sample_rate;
   if (source_sample_rate <= 0) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "engine_bounce_offline: options->source_sample_rate is 0 and the engine has no "
-                   "prepared sample rate");
+                   "source_sample_rate is 0 and the engine has no prepared sample rate");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (!resource::engine_bounce_shape_fits(options->total_frames, options->num_channels,
@@ -403,8 +402,7 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   if (options->source_sample_rate > 0 &&
       engine->engine.sample_rate() != static_cast<double>(options->source_sample_rate)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   ("engine_bounce_offline: options->source_sample_rate does not match the "
-                    "prepared sample rate " +
+                   ("source_sample_rate must equal the prepared sample rate " +
                     std::to_string(static_cast<long long>(engine->engine.sample_rate())))
                        .c_str());
     return SONARE_ERROR_INVALID_PARAMETER;

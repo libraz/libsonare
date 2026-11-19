@@ -14,6 +14,7 @@
 #include <string>
 
 #include "midi/live_push_args.h"
+#include "util/json_schema.h"
 #include "util/numeric_validation.h"
 
 // ============================================================================
@@ -369,10 +370,27 @@ void refuseUnknownKeys(val object, const std::vector<const char*>& allowed,
   }
 }
 
+void refuseUnknownDocumentKeys(const val& object, const std::string& path,
+                               std::initializer_list<const char*> allowed) {
+  if (object.isNull() || object.isUndefined() || object.typeOf().as<std::string>() != "object") {
+    return;
+  }
+  const val keys = val::global("Object").call<val>("keys", object);
+  const unsigned count = keys["length"].as<unsigned>();
+  for (unsigned i = 0; i < count; ++i) {
+    const std::string key = keys[i].as<std::string>();
+    const auto matches = [&key](const char* name) { return key == name; };
+    if (std::none_of(allowed.begin(), allowed.end(), matches)) {
+      namespace schema = sonare::util::json::schema;
+      throw WasmTypeError(schema::unknown_key(schema::child_path(path, key)));
+    }
+  }
+}
+
 val requireTypedProperty(const val& object, const char* key, const char* subject,
                          const char* js_type, const char* article_type) {
   if (!hasProperty(object, key)) {
-    throw WasmTypeError(std::string(subject) + "." + key + " is required");
+    throw WasmTypeError(std::string(subject) + "." + key + " must be given");
   }
   val value = object[key];
   if (value.typeOf().as<std::string>() != js_type) {

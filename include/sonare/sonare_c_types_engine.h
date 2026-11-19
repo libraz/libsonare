@@ -509,7 +509,8 @@ typedef struct {
   int target_sample_rate;
   /// Rate total_frames is counted in. 0 means the engine's prepared rate. A
   /// non-zero value must equal the prepared rate, because the render always runs
-  /// there; a different one is refused with SONARE_ERROR_INVALID_PARAMETER.
+  /// there; a different one, or a negative one, is refused with
+  /// SONARE_ERROR_INVALID_PARAMETER.
   int source_sample_rate;
   int normalize_lufs;  ///< Non-zero normalizes the result to target_lufs.
   /// Target integrated loudness in LUFS when normalize_lufs != 0. The value

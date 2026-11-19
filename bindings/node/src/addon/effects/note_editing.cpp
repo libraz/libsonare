@@ -117,7 +117,7 @@ void RequireSpanKey(const char* subject, const Napi::Object& row, const char* ke
   const Napi::Value value = row.Get(key);
   if (value.IsUndefined() || value.IsNull()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(subject) + "." + key + " is required");
+                                  std::string(subject) + "." + key + " must be given");
   }
   if (!value.IsNumber()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

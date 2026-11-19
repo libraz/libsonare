@@ -872,7 +872,6 @@ StreamingRetuneWrap::StreamingRetuneWrap(const Napi::CallbackInfo& info)
   if (info.Length() >= 1) {
     ReadRetuneConfig(info[0], &semitones, &mix, &grain_size);
   }
-  requested_grain_size_ = grain_size;
   const SonareError create_err =
       sonare_streaming_retune_create(semitones, mix, grain_size, &retune_);
   if (create_err != SONARE_OK) {
@@ -929,20 +928,14 @@ Napi::Value StreamingRetuneWrap::SetConfig(const Napi::CallbackInfo& info) {
   // key leaves the others alone, matching every other setConfig on this surface.
   float semitones = 0.0f;
   float mix = 1.0f;
-  int effective_grain_size = 0;
-  ThrowIfError(env,
-               sonare_streaming_retune_config(retune_, &semitones, &mix, &effective_grain_size));
+  // config() reports the requested grain (0 = automatic), so an omitted key keeps the sentinel.
+  int grain_size = 0;
+  ThrowIfError(env, sonare_streaming_retune_config(retune_, &semitones, &mix, &grain_size));
   if (env.IsExceptionPending()) return env.Undefined();
-  // grainSizeSamples is the exception: it is seeded from the last REQUESTED value, not
-  // from the effective one config() reports, so an omitted key preserves the 0
-  // sentinel and the next prepare re-derives the grain from its sample rate.
-  int grain_size = requested_grain_size_;
   if (info.Length() >= 1) {
     ReadRetuneConfig(info[0], &semitones, &mix, &grain_size);
   }
   ThrowIfError(env, sonare_streaming_retune_set_config(retune_, semitones, mix, grain_size));
-  if (env.IsExceptionPending()) return env.Undefined();
-  requested_grain_size_ = grain_size;
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

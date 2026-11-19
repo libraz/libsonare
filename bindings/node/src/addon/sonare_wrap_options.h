@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "util/db.h"
+#include "util/json_schema.h"
 
 namespace sonare_node {
 
@@ -317,6 +318,22 @@ inline void RefuseUnknownKeys(const Napi::Object& obj, const char* field,
       continue;
     }
     throw Napi::TypeError::New(obj.Env(), std::string(field) + ": unknown option '" + key + "'");
+  }
+}
+
+/// @brief Refuses an own enumerable key of the document object @p obj at @p path that is not in
+///        @p allowed, naming it by its path from the document root.
+/// @throws Napi::TypeError "unknown key <path>.<key>".
+inline void RefuseUnknownDocumentKeys(const Napi::Object& obj, const std::string& path,
+                                      std::initializer_list<const char*> allowed) {
+  const Napi::Array names = obj.GetPropertyNames();
+  for (uint32_t i = 0; i < names.Length(); ++i) {
+    const std::string key = names.Get(i).ToString().Utf8Value();
+    const auto matches = [&key](const char* name) { return key == name; };
+    if (std::none_of(allowed.begin(), allowed.end(), matches)) {
+      namespace schema = sonare::util::json::schema;
+      throw Napi::TypeError::New(obj.Env(), schema::unknown_key(schema::child_path(path, key)));
+    }
   }
 }
 

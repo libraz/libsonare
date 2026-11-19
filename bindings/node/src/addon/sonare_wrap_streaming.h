@@ -147,14 +147,6 @@ class StreamingRetuneWrap : public Napi::ObjectWrap<StreamingRetuneWrap> {
   Napi::Value Destroy(const Napi::CallbackInfo& info);
 
   SonareStreamingRetune* retune_ = nullptr;
-  /// The grain size the caller last ASKED for, which is not what
-  /// sonare_streaming_retune_config reports once prepared: that reports the
-  /// EFFECTIVE grain. Seeding an omitted grainSizeSamples from the effective value
-  /// froze the 0 "derive from the sample rate" sentinel into a literal, so a
-  /// re-prepare at another rate kept the first rate's grain. The core keeps the
-  /// same distinction in StreamingRetune::requested_grain_size_, which has no
-  /// accessor across the C ABI.
-  int requested_grain_size_ = 0;
 };
 
 class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWrap> {

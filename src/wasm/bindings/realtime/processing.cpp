@@ -7,6 +7,8 @@
 #include <string>
 
 #include "realtime_engine_wasm.h"
+#include "sonare/sonare_c_types_engine.h"
+#include "util/json_schema.h"
 #include "util/resource_limits.h"
 
 namespace {
@@ -99,6 +101,8 @@ mastering::final::DitherType RealtimeEngineWasm::ditherTypeFromInt(int value) {
 
 void RealtimeEngineWasm::setGraph(val spec) {
 #if defined(SONARE_WITH_GRAPH)
+  refuseUnknownKeys(spec, {"nodes", "connections", "inputNode", "outputNode", "numChannels",
+                           "parameterBindings"});
   auto graph = std::make_unique<sonare::graph::Graph>();
   val nodes = spec["nodes"];
   const int node_count = static_cast<int>(wasmArrayLikeLength(nodes, "nodes"));
@@ -108,11 +112,19 @@ void RealtimeEngineWasm::setGraph(val spec) {
   const int num_channels = intProperty(spec, "numChannels", 2);
   for (int i = 0; i < node_count; ++i) {
     val node = nodes[i];
+    refuseUnknownDocumentKeys(node, sonare::util::json::schema::index_path("nodes", i),
+                              {"id", "type", "numPorts", "gainDb"});
     auto processor = makeWasmGraphProcessor(node);
     if (!processor) {
       throw WasmRangeError("unsupported graph node type");
     }
     const std::string id = stringProperty(node, "id", "");
+    // The C ABI holds a node id in a fixed field; the same id is refused on every surface.
+    constexpr size_t kMaxNodeIdBytes = sizeof(SonareEngineGraphNode{}.id) - 1;
+    if (id.size() > kMaxNodeIdBytes) {
+      throw WasmRangeError("graph node id must be at most " + std::to_string(kMaxNodeIdBytes) +
+                           " bytes");
+    }
     // Match the C ABI (sonare_engine_set_graph): an explicit `numPorts: 0`, which
     // intProperty passes through as-is, asks for num_channels. A negative count
     // is refused there and must be refused here for the same value.
@@ -129,6 +141,8 @@ void RealtimeEngineWasm::setGraph(val spec) {
   const int connection_count = static_cast<int>(wasmArrayLikeLength(connections, "connections"));
   for (int i = 0; i < connection_count; ++i) {
     val connection = connections[i];
+    refuseUnknownDocumentKeys(connection, sonare::util::json::schema::index_path("connections", i),
+                              {"sourceNode", "sourcePort", "destNode", "destPort", "mix"});
     sonare::graph::Connection graph_connection{};
     graph_connection.source_node = stringProperty(connection, "sourceNode", "");
     graph_connection.source_port = intProperty(connection, "sourcePort", 0);
@@ -159,6 +173,9 @@ void RealtimeEngineWasm::setGraph(val spec) {
     parameter_bindings.reserve(static_cast<size_t>(std::max(binding_count, 0)));
     for (int i = 0; i < binding_count; ++i) {
       val binding = bindings[i];
+      refuseUnknownDocumentKeys(binding,
+                                sonare::util::json::schema::index_path("parameterBindings", i),
+                                {"paramId", "nodeId"});
       parameter_bindings.push_back(
           {uintProperty(binding, "paramId", 0), stringProperty(binding, "nodeId", "")});
     }
@@ -397,12 +414,23 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // it renders anything rather than silently mapping it to None, which would
   // hand back undithered audio with no way to tell the request was ignored.
   const int dither = intProperty(options_val, "dither", 0);
-  if (total_frames <= 0 || block_size < 0 || num_channels <= 0 || requested_source_rate < 0 ||
-      requested_target_rate < 0 || source_sample_rate <= 0 || dither_bits < 0 || dither < 0 ||
-      dither > 3 ||
-      !sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
+  if (total_frames <= 0) throw WasmRangeError("totalFrames must be positive");
+  if (block_size < 0) throw WasmRangeError("blockSize must not be negative");
+  if (num_channels <= 0) throw WasmRangeError("numChannels must be positive");
+  if (requested_target_rate < 0) throw WasmRangeError("targetSampleRate must not be negative");
+  if (requested_source_rate < 0) {
+    throw WasmRangeError("source_sample_rate must be an integer in [0, 2147483647]");
+  }
+  if (dither_bits < 0) throw WasmRangeError("ditherBits must not be negative");
+  if (source_sample_rate <= 0) {
+    throw WasmRangeError("source_sample_rate is 0 and the engine has no prepared sample rate");
+  }
+  if (dither < 0 || dither > 3) throw WasmRangeError("dither must be an ordinal in [0, 3]");
+  if (!sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
                                                   target_sample_rate, dither != 0)) {
-    throw WasmRangeError("invalid bounce options");
+    throw WasmRangeError(
+        "totalFrames, numChannels and the sample rates give a result larger than the supported "
+        "size");
   }
   // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
   // 6 = 5.1, 8 = 7.1); counts like 3/4/5/7 have no layout and would silently
@@ -426,7 +454,8 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // The render runs at the prepared rate, which an explicit sourceSampleRate must name exactly.
   if (requested_source_rate > 0 &&
       engine_.sample_rate() != static_cast<double>(requested_source_rate)) {
-    throw WasmRangeError("bounce source sample rate must match the prepared rate");
+    throw WasmRangeError("source_sample_rate must equal the prepared sample rate " +
+                         std::to_string(static_cast<long long>(engine_.sample_rate())));
   }
   if (dither != 0 && dither_bits != 0 &&
       (dither_bits < mastering::final::kMinDitherTargetBits ||

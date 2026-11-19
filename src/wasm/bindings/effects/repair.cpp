@@ -738,7 +738,7 @@ val js_mastering_repair_dereverb_classical_linked(val channels, const val& sampl
 
 val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
   if (estimate.isUndefined() || estimate.isNull()) {
-    throw WasmTypeError("a room estimate is required");
+    throw WasmTypeError("estimate must be given");
   }
   // Read AND written: the caller's config is the base, and only the two fields
   // the measurement determines come back changed.

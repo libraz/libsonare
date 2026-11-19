@@ -275,7 +275,7 @@ SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
     val desc, std::vector<SonareAutomationPoint>* storage) {
   SonareAutomationLaneDesc d{};
   if (desc.isUndefined() || desc.isNull()) {
-    throw WasmTypeError("automation lane descriptor required");
+    throw WasmTypeError("desc must be given");
   }
   d.target_param_id = uintProperty(desc, "targetParamId", 0);
   *storage = automationPointsFromVal(hasProperty(desc, "points") ? desc["points"] : val::array());

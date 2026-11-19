@@ -259,10 +259,10 @@ val js_synthesize_rir(val opts) {
 val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  // samples, sampleRate and validate ride along from the request object and are not read here.
+  // samples and sampleRate ride along from the request object and are not read here.
   refuseUnknownKeys(
       opts, {"aspectHintLw", "aspectHintLh", "referenceAbsorption", "preferEyring", "nOctaveBands",
-             "minDecayDb", "noiseFloorMarginDb", "mode", "samples", "sampleRate", "validate"});
+             "minDecayDb", "noiseFloorMarginDb", "mode", "samples", "sampleRate"});
   Audio audio = loadAcousticAudio("samples", samples, sample_rate);
   sonare::RoomEstimateConfig config;
   // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
@@ -343,8 +343,7 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opt
 val js_room_morph(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  refuseUnknownKeys(opts, roomKeys(),
-                    {"wet", "sourceTailSuppression", "samples", "sampleRate", "validate"});
+  refuseUnknownKeys(opts, roomKeys(), {"wet", "sourceTailSuppression", "samples", "sampleRate"});
   Audio audio = loadAcousticAudio("samples", samples, sample_rate);
   const auto config = roomMorphConfigFromVal(opts);
 
@@ -363,9 +362,9 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
 val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  refuseUnknownKeys(opts, roomKeys(),
-                    {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right",
-                     "sampleRate", "validate"});
+  refuseUnknownKeys(
+      opts, roomKeys(),
+      {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right", "sampleRate"});
   std::vector<float> left_data = float32ArrayToVector(left);
   std::vector<float> right_data = float32ArrayToVector(right);
   if (left_data.size() != right_data.size()) {
