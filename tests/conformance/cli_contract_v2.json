@@ -5861,7 +5861,7 @@
       "status": "intentional_variant",
       "option_status": "pending",
       "reason_kind": "by_design",
-      "reason": "both front-ends carry the name over different option sets, and neither shape is the one the other should take"
+      "reason": "both front-ends take the same options, but the Python section result does not carry the form yet, so the Python payload has no form key"
     },
     "melody": {
       "classification": "native_only",
