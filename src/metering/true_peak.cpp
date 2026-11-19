@@ -1,6 +1,7 @@
 #include "metering/true_peak.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <string>
@@ -12,6 +13,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
@@ -110,18 +112,21 @@ float upsampled_peak(const float* data, size_t length, int oversample_factor) {
 
 float true_peak(const float* data, size_t length, int oversample_factor) {
   // A factor without a dedicated polyphase design is refused, never run at another factor.
-  SONARE_CHECK_MSG(::sonare::rt::is_supported_polyphase_oversample_factor(oversample_factor),
-                   ErrorCode::InvalidParameter,
-                   "true_peak: oversample_factor must be one of 1, 2, 4, 8, 16, got " +
-                       std::to_string(oversample_factor));
-  SONARE_CHECK_MSG(data != nullptr || length == 0, ErrorCode::InvalidParameter,
-                   "true_peak: data must not be NULL with a non-zero length");
+  if (!::sonare::rt::is_supported_polyphase_oversample_factor(oversample_factor)) {
+    util::check::one_of(oversample_factor, std::array<int, 5>{1, 2, 4, 8, 16}, "oversample_factor");
+  }
+  if (data == nullptr && length != 0) {
+    util::check::refuse_relation({"samples", "length"},
+                                 "{0} must not be null when {1} is greater than 0");
+  }
   if (length == 0) return 0.0f;
   // peak_abs absorbs a non-finite sample, and the skip test below compares an
   // interpolation bound against the running peak, so one would be dropped twice
   // over and reported as a finite true peak. There is no peak to report.
-  SONARE_CHECK_MSG(numeric::all_finite(data, length), ErrorCode::InvalidParameter,
-                   "true_peak: audio contains a non-finite sample");
+  if (!numeric::all_finite(data, length)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "audio",
+                                            "contains a non-finite sample");
+  }
 
   if (oversample_factor == 1 || length < 2) {
     return peak_abs(data, length);

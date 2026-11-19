@@ -11,6 +11,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
@@ -22,9 +23,11 @@ namespace {
 // The level meters here report a finite dB floor for silence, so absorbing a
 // non-finite sample publishes -120 dB for audio that was never silent. A buffer
 // holding one has no measurable level; refusing beats inventing one.
-void require_measurable(const float* data, size_t n, const char* fn) {
-  SONARE_CHECK_MSG(numeric::all_finite(data, n), ErrorCode::InvalidParameter,
-                   std::string(fn) + ": audio contains a non-finite sample");
+void require_measurable(const float* data, size_t n) {
+  if (!numeric::all_finite(data, n)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "audio",
+                                            "contains a non-finite sample");
+  }
 }
 
 float frame_rms_db(const float* data, size_t start, size_t end) {
@@ -44,7 +47,7 @@ float peak_db(const Audio& audio) {
   if (audio.empty()) return kFloorDb;
 
   const float* data = audio.data();
-  require_measurable(data, audio.size(), "peak_db");
+  require_measurable(data, audio.size());
   const float peak = peak_abs(data, audio.size());
 
   if (peak < kEpsilon) return kFloorDb;
@@ -56,7 +59,7 @@ float rms_db(const Audio& audio) {
   if (audio.empty()) return kFloorDb;
 
   const float* data = audio.data();
-  require_measurable(data, audio.size(), "rms_db");
+  require_measurable(data, audio.size());
   const float audio_rms = rms(data, audio.size());
   if (audio_rms < kEpsilon) return kFloorDb;
   return linear_to_db(audio_rms);
@@ -66,8 +69,8 @@ namespace {
 
 // Silent input has no meaningful peak-to-RMS ratio; both crest meters report the
 // same 0 dB neutral, decided on the linear levels rather than on the dB floors.
-float crest_from_samples(const float* samples, std::size_t total, const char* fn) {
-  require_measurable(samples, total, fn);
+float crest_from_samples(const float* samples, std::size_t total) {
+  require_measurable(samples, total);
   const float peak = peak_abs(samples, total);
   const float level = rms(samples, total);
   if (peak < kEpsilon || level < kEpsilon) return 0.0f;
@@ -78,13 +81,13 @@ float crest_from_samples(const float* samples, std::size_t total, const char* fn
 
 float crest_factor_db(const Audio& audio) {
   if (audio.empty()) return 0.0f;
-  return crest_from_samples(audio.data(), audio.size(), "crest_factor_db");
+  return crest_from_samples(audio.data(), audio.size());
 }
 
 float crest_factor_db_interleaved(const float* samples, std::size_t frames, int channels) {
   if (samples == nullptr || frames == 0 || channels <= 0) return 0.0f;
   const std::size_t total = frames * static_cast<std::size_t>(channels);
-  return crest_from_samples(samples, total, "crest_factor_db_interleaved");
+  return crest_from_samples(samples, total);
 }
 
 float clipping_ratio(const Audio& audio, float threshold) {
@@ -92,14 +95,13 @@ float clipping_ratio(const Audio& audio, float threshold) {
 }
 
 float silence_ratio(const Audio& audio, float threshold_db, int frame_length, int hop_length) {
-  SONARE_CHECK_MSG(frame_length > 0, ErrorCode::InvalidParameter, "frame_length must be > 0");
-  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
+  util::check::integer_at_least(frame_length, 1, "frame_length");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   // A NaN threshold makes every comparison below false, so the function reports
   // "no silence at all" for a request it could not evaluate. The check belongs
   // here rather than in the C-ABI wrapper: WASM calls this core function
   // directly, the way detect_clipping's sibling guard is already inherited.
-  SONARE_CHECK_MSG(std::isfinite(threshold_db), ErrorCode::InvalidParameter,
-                   "threshold_db must be finite, got " + util::to_text(threshold_db));
+  util::check::finite_float(threshold_db, "threshold_db");
   if (audio.empty()) return 0.0f;
 
   size_t silent_frames = 0;
@@ -120,7 +122,7 @@ float dc_offset(const Audio& audio) {
   if (audio.empty()) return 0.0f;
 
   const float* data = audio.data();
-  require_measurable(data, audio.size(), "dc_offset");
+  require_measurable(data, audio.size());
   double sum = 0.0;
   for (size_t i = 0; i < audio.size(); ++i) {
     sum += static_cast<double>(data[i]);
