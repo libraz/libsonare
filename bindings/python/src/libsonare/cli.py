@@ -81,9 +81,6 @@ from ._cli_common import (
     _load_voice_preset_pack as _load_voice_preset_pack,
 )
 from ._cli_common import (
-    _parse_json_config as _parse_json_config,
-)
-from ._cli_common import (
     _parse_json_list as _parse_json_list,
 )
 from ._cli_common import (
@@ -312,10 +309,7 @@ def _build_parser() -> _ContractArgumentParser:
         "mastering-pair-analyze",
         "mastering-pair-processor",
         "mastering-stereo-analyze",
-        "mastering-chain",
-        "master",
         "mastering-streaming",
-        "declip",
         "repair",
         "mastering-suggest",
         "mastering-profile",
@@ -432,10 +426,7 @@ def _dispatch() -> None:
         "mastering-pair-analyze": cmd_mastering_pair_analyze,
         "mastering-pair-processor": cmd_mastering_pair_processor,
         "mastering-stereo-analyze": cmd_mastering_stereo_analyze,
-        "mastering-chain": cmd_mastering_chain,
-        "master": cmd_master,
         "mastering-streaming": cmd_mastering_streaming,
-        "declip": cmd_declip,
         "repair": cmd_repair,
         "mastering-presets": cmd_mastering_presets,
         "mastering-suggest": cmd_mastering_suggest,

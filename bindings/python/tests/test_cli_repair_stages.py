@@ -27,15 +27,20 @@ def _clipped_source(tmp_path: Path) -> Path:
     return source
 
 
-def test_repair_stages_declip_writes_what_declip_writes(tmp_path) -> None:
+def test_repair_stages_declip_writes_what_the_declip_entry_writes(tmp_path) -> None:
+    from libsonare import mastering_repair_declip
+    from libsonare._cli_output import _write_channel_output
+    from libsonare.audio import Audio
+
     source = _clipped_source(tmp_path)
     via_declip = tmp_path / "declip.wav"
     via_stages = tmp_path / "stages.wav"
 
-    declip = _run_cli(
-        ["declip", str(source), "-o", str(via_declip), "--clip-threshold-db", str(_DETECT_AT_DB)],
-    )
-    assert declip.returncode == 0, declip.stderr
+    with Audio.from_file(str(source)) as audio:
+        mono = mastering_repair_declip(
+            audio.data, sample_rate=audio.sample_rate, clip_threshold_db=_DETECT_AT_DB
+        )
+        _write_channel_output(str(via_declip), [mono.samples], audio.sample_rate)
     repaired = _run_cli(
         [
             "repair",

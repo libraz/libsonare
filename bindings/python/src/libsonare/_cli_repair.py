@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import inspect
 import math
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
 from ._cli_common import (
-    _audio_array,
     _load_channels_or_downmix,
     _strict_json_dumps,
     _write_channel_output,
@@ -19,10 +17,7 @@ from ._cli_inventory import _token_of
 from ._cli_options import (
     SharedParsers,
     _add_wav_bits_argument,
-    _c_int,
     _ContractArgumentParser,
-    _finite_float,
-    _given,
     _library_catalog,
     _option_supplied,
     _wav_bits,
@@ -33,55 +28,6 @@ from ._result_records import _result_to_json_dict
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset
     from .types import AudioDefects
-
-
-def cmd_declip(args: argparse.Namespace) -> int:
-    from . import mastering_repair_declip, mastering_repair_declip_stereo
-    from ._effects_repair_impulsive import mastering_repair_declip as _declip_facade
-
-    planes, sr = _load_channels_or_downmix(args.file)
-    # A knob the caller left out is not passed, so the library chooses it.
-    knobs: dict[str, Any] = _given(args, "lpc_order", "iterations", "lpc_blend")
-    if args.clip_threshold_db is not None:
-        knobs["clip_threshold_db"] = args.clip_threshold_db
-    if len(planes) == 2:
-        # The stereo entry repairs the union of both channels' clipped runs, so
-        # a plateau one channel alone reaches is still reconstructed against the
-        # other's unclipped extent. Declipping the channels separately cannot
-        # see that and is what the mono loader used to force.
-        stereo = mastering_repair_declip_stereo(planes[0], planes[1], sample_rate=sr, **knobs)
-        rendered = [_audio_array(stereo.left), _audio_array(stereo.right)]
-    else:
-        mono = mastering_repair_declip(planes[0], sample_rate=sr, **knobs)
-        rendered = [_audio_array(mono.samples)]
-    # The facade as shipped, not the name the caller resolved: the defaults read are its own.
-    parameters = inspect.signature(_declip_facade).parameters
-    repaired = rendered[0]
-
-    if args.output:
-        _write_channel_output(args.output, rendered, sr)
-
-    if args.json:
-        payload: dict[str, object] = {
-            "sample_rate": sr,
-            "samples": len(repaired),
-            # The values in effect, so a default the caller left out is read off the library.
-            **{
-                name: knobs.get(name, parameters[name].default)
-                for name in ("lpc_order", "iterations", "lpc_blend")
-            },
-        }
-        if args.clip_threshold_db is not None:
-            payload["clip_threshold_db"] = args.clip_threshold_db
-        if args.output:
-            payload["output"] = args.output
-        print(_strict_json_dumps(payload))
-    else:
-        print("  Declip:")
-        print(f"    Samples: {len(repaired)}")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
 
 
 # Every ".enabled" flag build_chain_params() (chain_json.cpp) emits under a
@@ -517,23 +463,3 @@ def register_repair_parsers(
         "--explain", action="store_true", help="Say why each repair stage was chosen"
     )
     _add_wav_bits_argument(repair_p)
-    declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
-    declip_p.add_argument(
-        "--clip-threshold-db",
-        type=_finite_float,
-        default=None,
-        help="Level in dBFS at or above which a sample counts as clipped "
-        "(default: the library's, 0.98 of full scale, about -0.18 dBFS)",
-    )
-    declip_p.add_argument(
-        "--lpc-order", type=_c_int, default=None, help="LPC predictor order (default: 36)"
-    )
-    declip_p.add_argument(
-        "--iterations", type=_c_int, default=None, help="Reconstruction passes (default: 2)"
-    )
-    declip_p.add_argument(
-        "--lpc-blend",
-        type=_finite_float,
-        default=None,
-        help="Weight of the LPC prediction against interpolation (default: 0.65)",
-    )

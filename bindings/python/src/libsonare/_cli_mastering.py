@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, cast
 from ._cli_common import (
     _atomic_write_bytes,
     _load_channels_or_downmix,
-    _parse_json_config,
     _parse_json_list,
     _parse_kv_params,
     _strict_json_dumps,
@@ -31,9 +30,6 @@ from ._cli_options import (
     _wav_bits,
 )
 from ._cli_repair import (
-    cmd_declip as cmd_declip,
-)
-from ._cli_repair import (
     cmd_repair as cmd_repair,
 )
 from ._cli_repair import (
@@ -45,7 +41,7 @@ from ._result_records import _result_to_json_dict
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
-    from .types import MasteringChainResult, MasteringChainStereoResult, StreamingPlatform
+    from .types import StreamingPlatform
 
 
 def _mastering_report_payload(report: Any) -> dict[str, object]:
@@ -770,185 +766,6 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_mastering_chain(args: argparse.Namespace) -> int:
-    from . import master_audio, master_audio_stereo
-
-    planes, sr = _load_channels_or_downmix(args.file)
-    config = _parse_json_config(args.config, args.config_file)
-    if args.params:
-        config.update(_parse_kv_params(args.params, names=True))
-    # Declared across the branches rather than inferred from the first one: the
-    # two results share the metrics this function goes on to read, and differ
-    # only in which buffers they carry.
-    result: MasteringChainStereoResult | MasteringChainResult
-    if len(planes) == 2:
-        result = master_audio_stereo(
-            planes[0], planes[1], sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
-        )
-        rendered = [result.left, result.right]
-    else:
-        result = master_audio(
-            planes[0], sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
-        )
-        rendered = [result.samples]
-    report_path = getattr(args, "report", "")
-
-    if args.output:
-        _write_channel_output(args.output, rendered, result.sample_rate)
-    if report_path:
-        _write_mastering_report(report_path, result.report)
-
-    if args.json:
-        payload: dict[str, object] = {
-            "input_lufs": round(result.input_lufs, 4),
-            "output_lufs": round(result.output_lufs, 4),
-            "applied_gain_db": round(result.applied_gain_db, 4),
-            "sample_rate": result.sample_rate,
-            "stages": result.stages,
-        }
-        if args.output:
-            payload["output"] = args.output
-        print(_strict_json_dumps(payload))
-    else:
-        print("  Mastering chain:")
-        print(f"    Stages:      {', '.join(result.stages) if result.stages else '(none)'}")
-        print(f"    Input LUFS:  {result.input_lufs:.2f}")
-        print(f"    Output LUFS: {result.output_lufs:.2f}")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
-
-
-def cmd_master(args: argparse.Namespace) -> int:
-    from . import (
-        master_audio,
-        master_audio_stereo,
-        mastering_assistant_suggest_chain,
-        mastering_assistant_suggest_chain_stereo,
-    )
-
-    planes, sr = _load_channels_or_downmix(args.file)
-    stereo = len(planes) == 2
-    overrides = _parse_json_config(args.config, args.config_file)
-    if args.params:
-        overrides.update(_parse_kv_params(args.params, names=True))
-    chain_config_path = getattr(args, "chain_config", None) or ""
-    assistant = bool(getattr(args, "assistant", False))
-    # --preset carries a default, so whether the caller chose it is decided by
-    # what was spelled rather than by the value that reached the namespace. The
-    # same exclusion the `mastering` handlers enforce: alongside --assistant,
-    # --preset names the base the suggestion starts from, so only --chain-config
-    # excludes the other two. --config / --config-file / --params stay overrides
-    # on top of whichever route built the chain.
-    preset_supplied = _option_supplied(args, "preset")
-    if chain_config_path and (preset_supplied or assistant):
-        raise ValueError("--chain-config is mutually exclusive with --preset and --assistant")
-
-    def _run_chain(
-        config: dict[str, Any],
-    ) -> tuple[MasteringChainStereoResult | MasteringChainResult, list[Any]]:
-        """Run one complete chain config over however many channels the source has.
-
-        Returns the channels to write beside the result, because which attribute
-        carries them is what the two chain entry points differ in.
-        """
-        if stereo:
-            pair = master_audio_stereo(
-                planes[0],
-                planes[1],
-                sample_rate=sr,
-                preset=None,
-                overrides=_nest_chain_config(config),
-            )
-            return pair, [pair.left, pair.right]
-        mono = master_audio(
-            planes[0], sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
-        )
-        return mono, [mono.samples]
-
-    result: MasteringChainStereoResult | MasteringChainResult
-    rendered: list[Any]
-    mode = "preset"
-    if chain_config_path:
-        # A complete chain, so it runs as the chain rather than as overrides over
-        # a preset the caller never named -- the file states every stage.
-        config = _chain_config_document(chain_config_path)
-        config.update(overrides)
-        result, rendered = _run_chain(config)
-        # `mode` names the option that chose the chain, in lowerCamel like every
-        # closed-set value in output; the native CLI reports the same token.
-        mode = "chainConfig"
-    elif assistant:
-        # The assistant reads the material to decide the chain, so it is handed
-        # the same channels the chain will run over rather than a fold of them.
-        suggestion_params: dict[str, float | int | bool | str] = (
-            {"preset": args.preset} if preset_supplied else {}
-        )
-        # Flattened to paths so a nested --config override merges leaf by leaf.
-        suggested: dict[str, Any] = _chain_config_paths(
-            mastering_assistant_suggest_chain_stereo(
-                planes[0], planes[1], sample_rate=sr, params=suggestion_params
-            )
-            if stereo
-            else mastering_assistant_suggest_chain(
-                planes[0], sample_rate=sr, params=suggestion_params
-            )
-        )
-        suggested.update(overrides)
-        result, rendered = _run_chain(suggested)
-        mode = "assistant"
-    elif stereo:
-        stereo_result = master_audio_stereo(
-            planes[0],
-            planes[1],
-            sample_rate=sr,
-            preset=args.preset,
-            overrides=_nest_chain_config(overrides),
-        )
-        result, rendered = stereo_result, [stereo_result.left, stereo_result.right]
-    else:
-        mono_result = master_audio(
-            planes[0], sample_rate=sr, preset=args.preset, overrides=_nest_chain_config(overrides)
-        )
-        result, rendered = mono_result, [mono_result.samples]
-    report_path = getattr(args, "report", "")
-
-    if args.output:
-        _write_channel_output(args.output, rendered, result.sample_rate)
-    if report_path:
-        _write_mastering_report(report_path, result.report)
-
-    if args.json:
-        payload: dict[str, object] = {}
-        # A preset name only describes the preset route; the other two chose
-        # every stage themselves, so they name the route instead of reporting a
-        # preset that took no part in the render.
-        if mode == "preset":
-            payload["preset"] = args.preset
-        else:
-            payload["mode"] = mode
-        payload.update(
-            {
-                "input_lufs": round(result.input_lufs, 4),
-                "output_lufs": round(result.output_lufs, 4),
-                "applied_gain_db": round(result.applied_gain_db, 4),
-                "sample_rate": result.sample_rate,
-                "stages": result.stages,
-            }
-        )
-        if args.output:
-            payload["output"] = args.output
-        print(_strict_json_dumps(payload))
-    else:
-        print(f"  Master preset: {args.preset}" if mode == "preset" else f"  Master {mode}:")
-        print(f"    Stages:      {', '.join(result.stages) if result.stages else '(none)'}")
-        print(f"    Input LUFS:  {result.input_lufs:.2f}")
-        print(f"    Output LUFS: {result.output_lufs:.2f}")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
-
-
 def cmd_mastering_streaming(args: argparse.Namespace) -> int:
     from . import mastering_streaming_preview
 
@@ -1219,37 +1036,6 @@ def register_mastering_parsers(
         help="Analysis name",
     )
     msa_p.add_argument("--params", default="")
-    mchain_p = sub.add_parser(
-        "mastering-chain", parents=[common], help="Run a configurable mastering chain"
-    )
-    mchain_p.add_argument("--config", default=None, help="Chain config as a JSON object")
-    mchain_p.add_argument("--config-file", default=None, help="Chain config JSON file")
-    mchain_p.add_argument("--params", default="", help="Flat params as k=v,k=v (floats)")
-    mchain_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
-    master_p = sub.add_parser("master", parents=[common], help="Apply a named mastering preset")
-    master_p.add_argument(
-        "--preset",
-        type=_token_of(_library_catalog("mastering_preset_names")),
-        default="pop",
-        help="Mastering preset name",
-    )
-    master_p.add_argument("--config", default=None, help="Preset overrides as a JSON object")
-    master_p.add_argument("--config-file", default=None, help="Preset override JSON file")
-    # A whole chain rather than a base to override: the file is a complete chain
-    # config in the core's own ``{params, version}`` form, the one
-    # ``mastering-suggest --config-out`` writes and the native CLI reads. It
-    # replaces the preset instead of layering on it, which is why it is a third
-    # spelling rather than a meaning added to --config / --config-file.
-    master_p.add_argument(
-        "--chain-config", default=None, help="Complete chain config JSON file (replaces --preset)"
-    )
-    master_p.add_argument(
-        "--assistant",
-        action="store_true",
-        help="Master with the chain the assistant suggests; --preset names its base",
-    )
-    master_p.add_argument("--params", default="", help="Flat overrides as k=v,k=v (floats)")
-    master_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
     mstream_p = sub.add_parser(
         "mastering-streaming",
         parents=[stdout_options],

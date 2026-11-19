@@ -6294,20 +6294,6 @@
         "pitchEditor"
       ]
     },
-    "mastering-chain": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the native CLI spells this mastering --chain-config; the capability is on both front-ends under the name each already had"
-    },
-    "master": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the native CLI spells this mastering --preset; the capability is on both front-ends under the name each already had"
-    },
     "mastering-streaming": {
       "classification": "shared",
       "status": "active",
@@ -6315,13 +6301,6 @@
       "requires": [
         "mastering"
       ]
-    },
-    "declip": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the native CLI spells the repair stages as one repair command selecting stages through --params, rather than one command per stage"
     },
     "mastering-presets": {
       "classification": "shared",

@@ -723,17 +723,6 @@ def _load_json_object(path: str) -> dict[str, Any]:
     return loaded
 
 
-def _parse_json_config(raw: str, path: str) -> dict[str, Any]:
-    if path:
-        return _load_json_object(path)
-    if not raw:
-        return {}
-    loaded = json.loads(raw)
-    if not isinstance(loaded, dict):
-        raise ValueError("--config must be a JSON object")
-    return loaded
-
-
 def _parse_json_list(raw: str, path: str) -> list[dict[str, Any]]:
     if path:
         with open(path, encoding="utf-8") as fh:

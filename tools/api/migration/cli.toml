@@ -81,16 +81,6 @@ test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_fl
 
 [[entry]]
 kind = "flag"
-old = "declip --clip-threshold"
-changed = "the threshold is given in dBFS rather than as a linear amplitude; left out, the library default (0.98 of full scale) applies"
-to = "declip --clip-threshold-db"
-domain = "effects"
-frontend = "python"
-rule = "unit-in-name"
-test = "bindings/python/tests/test_cli_declip.py::test_declip_threshold_is_given_in_dbfs"
-
-[[entry]]
-kind = "flag"
 old = "note-move --onset"
 new = "note-move --onset-sample"
 domain = "effects"
@@ -758,6 +748,30 @@ old = "mastering --config"
 removed = "use --chain-config"
 domain = "mastering"
 rule = "aliases-removed"
+
+[[entry]]
+kind = "command"
+old = "master"
+removed = "use mastering with --preset (master's default was pop), --chain-config or --assistant; each --config leaf goes to --params as path=value"
+domain = "mastering"
+rule = "cli-front-end-parity"
+frontend = "python"
+
+[[entry]]
+kind = "command"
+old = "mastering-chain"
+removed = "use mastering --chain-config with a version-2 document, {\"version\":2,\"params\":<the old config>}"
+domain = "mastering"
+rule = "cli-front-end-parity"
+frontend = "python"
+
+[[entry]]
+kind = "command"
+old = "declip"
+removed = "use repair --stages declip; its four options are the --params keys repair.declip.clipThresholdDb, lpcOrder, iterations and lpcBlend"
+domain = "effects"
+rule = "cli-front-end-parity"
+frontend = "python"
 
 [[entry]]
 kind = "command"

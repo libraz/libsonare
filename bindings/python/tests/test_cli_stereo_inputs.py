@@ -31,31 +31,6 @@ def _side_energy(path: str) -> float:
     return sum(abs(values[index] - values[index + 1]) for index in range(0, len(values), 2))
 
 
-def test_master_cli_keeps_a_stereo_input_stereo(tmp_path) -> None:
-    """A stereo file is mastered as a pair, not folded to mono and written back.
-
-    The channel count alone would pass on a mono result duplicated across two
-    channels, so the side energy is read too: it must survive, and the stage
-    list must carry a stage the mono chain has no way to run.
-    """
-    source = tmp_path / "mix.wav"
-    output = tmp_path / "master.wav"
-    length = 48000
-    left = [0.2 * math.sin(2.0 * math.pi * 220.0 * i / 48000) for i in range(length)]
-    right = [0.2 * math.sin(2.0 * math.pi * 330.0 * i / 48000) for i in range(length)]
-    _write_stereo_wav(str(source), left, right, 48000)
-
-    result = _run_cli(["master", str(source), "-o", str(output), "--preset", "pop", "--json"])
-
-    assert result.returncode == 0, result.stderr
-    with wave.open(str(output), "rb") as wav:
-        assert wav.getnchannels() == 2
-    assert _side_energy(str(output)) > 0
-    assert any(stage.startswith("stereo.") for stage in json.loads(result.stdout)["stages"])
-    # Nothing was dropped, so the downmix warning must not be printed.
-    assert "downmixed to mono" not in result.stderr
-
-
 @pytest.mark.parametrize(
     ("command", "selector"),
     [
@@ -94,13 +69,13 @@ def test_mastering_cli_keeps_a_stereo_input_stereo(tmp_path, command, selector) 
     assert "downmixed to mono" not in result.stderr
 
 
-def test_master_cli_keeps_a_mono_input_mono(tmp_path) -> None:
+def test_mastering_cli_keeps_a_mono_input_mono(tmp_path) -> None:
     """The stereo path is taken from the source, not applied to everything."""
     source = tmp_path / "take.wav"
     output = tmp_path / "master.wav"
     _write_test_wav(str(source), _generate_sine(220, 48000, 1.0), 48000)
 
-    result = _run_cli(["master", str(source), "-o", str(output), "--preset", "pop", "--json"])
+    result = _run_cli(["mastering", str(source), "-o", str(output), "--preset", "pop", "--json"])
 
     assert result.returncode == 0, result.stderr
     with wave.open(str(output), "rb") as wav:
@@ -295,83 +270,6 @@ def test_normalize_carries_a_stereo_source_through_on_one_gain(tmp_path) -> None
     assert peak_db(left) - peak_db(right) == pytest.approx(12.04, abs=0.02)
 
 
-def test_declip_cli_repairs_a_stereo_pair_as_a_pair(tmp_path) -> None:
-    """declip runs the stereo entry, not the mono one twice.
-
-    The stereo entry repairs the union of both channels' clipped runs, so the
-    shallower channel's reconstruction is constrained by the deeper one's
-    extent. That is what separates it from a per-channel loop, and it is what
-    this reads: the right channel of the pair must differ from the same channel
-    declipped on its own. The fixture clips the left hard and the right barely,
-    which is the configuration the entry documents as the one that links.
-
-    The threshold is below the written plateau on purpose: a level written as
-    0.98 comes back from 16-bit as 0.97999, so a detector asked for 0.98 finds
-    no clipping at all and every assertion below would pass over an untouched
-    file.
-    """
-    from libsonare import mastering_repair_declip
-    from libsonare.audio import Audio
-
-    sample_rate = 22050
-    length = 4410
-    threshold = 0.98
-    detect_at = 0.95
-    left = [
-        max(-threshold, min(threshold, 1.6 * math.sin(2.0 * math.pi * 220.0 * i / sample_rate)))
-        for i in range(length)
-    ]
-    right = [
-        max(
-            -threshold,
-            min(threshold, 1.02 * threshold * math.sin(2.0 * math.pi * 220.0 * i / sample_rate)),
-        )
-        for i in range(length)
-    ]
-    source = tmp_path / "clipped.wav"
-    output = tmp_path / "declipped.wav"
-    _write_stereo_wav(str(source), left, right, sample_rate)
-
-    detect_at_db = 20.0 * math.log10(detect_at)
-    result = _run_cli(
-        # fmt: off
-        [
-            "declip",
-            str(source),
-            "-o",
-            str(output),
-            "--clip-threshold-db",
-            str(detect_at_db),
-            "--json",
-        ],
-        # fmt: on
-    )
-    assert result.returncode == 0, result.stderr
-
-    with wave.open(str(output), "rb") as wav:
-        assert wav.getnchannels() == 2
-    assert _side_energy(str(output)) > 0
-
-    # The control is this file's own right channel, declipped alone through the
-    # mono entry: same samples in, so the only thing that can differ is whether
-    # the other channel was in the call.
-    with Audio.from_file_channel(str(source), 1) as channel:
-        alone = list(
-            mastering_repair_declip(
-                channel.data,
-                sample_rate=sample_rate,
-                clip_threshold_db=detect_at_db,
-            ).samples
-        )
-    with wave.open(str(output), "rb") as wav:
-        frames = wav.readframes(wav.getnframes())
-    rendered_right = [
-        struct.unpack_from("<h", frames, offset)[0] / 32767.0 for offset in range(2, len(frames), 4)
-    ]
-    worst = max(abs(a - b) for a, b in zip(rendered_right, alone, strict=True))
-    assert worst > 0.05
-
-
 _ROOM_MORPH_ARGS = [
     *("--length", "6", "--width", "4", "--height", "3"),
     *("--source-x", "1.5", "--source-y", "1.5", "--listener-x", "4", "--listener-y", "2"),
@@ -422,8 +320,8 @@ def test_room_morph_cli_keeps_a_mono_input_mono(tmp_path) -> None:
     assert json.loads(result.stdout)["stereo"] is False
 
 
-def test_lufs_cli_reports_the_channel_summed_value_master_reports(tmp_path) -> None:
-    """`lufs` on a stereo file is the BS.1770 channel sum, the figure `master` calls its input."""
+def test_lufs_cli_reports_the_channel_summed_value_mastering_reports(tmp_path) -> None:
+    """`lufs` on a stereo file is the BS.1770 channel sum, the input level `mastering` reports."""
     source = tmp_path / "mix.wav"
     output = tmp_path / "master.wav"
     length = 48000 * 2
@@ -432,7 +330,7 @@ def test_lufs_cli_reports_the_channel_summed_value_master_reports(tmp_path) -> N
     _write_stereo_wav(str(source), left, right, 48000)
 
     measured = _run_cli(["lufs", str(source), "--json"])
-    mastered = _run_cli(["master", str(source), "-o", str(output), "--preset", "pop", "--json"])
+    mastered = _run_cli(["mastering", str(source), "-o", str(output), "--preset", "pop", "--json"])
 
     assert measured.returncode == 0, measured.stderr
     assert mastered.returncode == 0, mastered.stderr

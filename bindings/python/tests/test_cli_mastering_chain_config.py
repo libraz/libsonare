@@ -16,6 +16,7 @@ import subprocess
 import sys
 import wave
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -62,35 +63,32 @@ def _write_source(path: Path, channels: int = 1) -> list[list[float]]:
 
 
 @pytest.mark.parametrize("channels", [1, 2])
-def test_master_assistant_starts_from_a_named_preset(tmp_path, monkeypatch, capsys, channels):
-    """Alongside ``--assistant``, ``--preset`` is the suggestion's base, as on ``mastering``."""
+def test_mastering_assistant_starts_from_a_named_preset(
+    tmp_path, monkeypatch, capsys, channels
+) -> None:
+    """Alongside ``--assistant``, ``--preset`` is the suggestion's base."""
     import libsonare
 
     source = tmp_path / "input.wav"
     _write_source(source, channels)
-    seen: list[object] = []
-    for name in ("mastering_assistant_suggest_chain", "mastering_assistant_suggest_chain_stereo"):
+    seen: list[dict[str, object]] = []
+    for name in ("mastering_assistant_suggest", "mastering_assistant_suggest_stereo"):
         original = getattr(libsonare, name)
 
         def capture(*args, _original=original, **kwargs):
-            seen.append(kwargs.get("params"))
+            seen.append(dict(kwargs.get("params") or {}))
             return _original(*args, **kwargs)
 
         monkeypatch.setattr(libsonare, name, capture)
 
-    assert _run(["master", str(source), "--assistant", "--preset", "classical", "--json"]) == 0
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["mode"] == "assistant"
-    # --preset selects the assistant's starting config (asserted above via the
-    # captured suggest_chain params), but the payload's own preset key is
-    # reserved for the preset ROUTE (mode == "preset") on both CLIs -- native
-    # only assigns preset_name off that route, so its JSON never carries the
-    # key for --assistant --preset either.
-    assert "preset" not in payload
-    assert _run(["master", str(source), "--assistant", "--json"]) == 0
+    assert _run(["mastering", str(source), "--assistant", "--preset", "classical", "--json"]) == 0
     capsys.readouterr()
-    # The default --preset value is not a choice the caller made.
-    assert seen == [{"preset": "classical"}, {}]
+    assert _run(["mastering", str(source), "--assistant", "--json"]) == 0
+    capsys.readouterr()
+    assert len(seen) == 2
+    assert seen[0].get("preset") == "classical"
+    # An omitted --preset is not a choice the caller made.
+    assert "preset" not in seen[1]
 
 
 def test_mastering_assistant_json_omits_the_preset_key_even_with_preset_supplied(
@@ -119,7 +117,6 @@ def test_mastering_assistant_json_omits_the_preset_key_even_with_preset_supplied
 # The dispatch table lives inside the entry point, so the handler is named here
 # rather than reached through it -- the same way the other CLI tests invoke one.
 _HANDLERS = {
-    "master": "cmd_master",
     "mastering": "cmd_mastering",
     "mastering-suggest": "cmd_mastering_suggest",
 }
@@ -162,27 +159,19 @@ def test_config_out_writes_the_chain_config_the_core_reports(tmp_path, capsys) -
     assert written["version"] == 2
 
 
-def test_a_written_chain_config_is_read_back_by_both_commands(tmp_path, capsys) -> None:
-    """``master --chain-config`` and ``mastering --chain-config`` render one
-    chain-config file identically."""
+def test_a_written_chain_config_is_read_back(tmp_path, capsys) -> None:
+    """``mastering --chain-config`` renders the file it is given, not its own defaults."""
     source = tmp_path / "input.wav"
     _write_source(source)
     config = tmp_path / "chain.json"
     _suggest_config(source, config, capsys)
 
-    rendered: dict[str, bytes] = {}
-    for label, argv in (
-        ("master.chain-config", ["master", str(source), "--chain-config", str(config)]),
-        ("mastering.chain-config", ["mastering", str(source), "--chain-config", str(config)]),
-    ):
-        output = tmp_path / f"{label}.wav"
-        assert _run([*argv, "--output", str(output), "--json"]) == 0
-        capsys.readouterr()
-        rendered[label] = output.read_bytes()
-
-    assert len(set(rendered.values())) == 1, {
-        label: len(payload) for label, payload in rendered.items()
-    }
+    first = tmp_path / "chain-config.wav"
+    assert (
+        _run(["mastering", str(source), "--chain-config", str(config), "-o", str(first), "--json"])
+        == 0
+    )
+    capsys.readouterr()
 
     # The file is read rather than stood in for: one changed field moves the
     # render, so a reader that quietly mastered with its own defaults instead
@@ -195,7 +184,7 @@ def test_a_written_chain_config_is_read_back_by_both_commands(tmp_path, capsys) 
     assert (
         _run(
             [
-                "master",
+                "mastering",
                 str(source),
                 "--chain-config",
                 str(retargeted),
@@ -207,7 +196,7 @@ def test_a_written_chain_config_is_read_back_by_both_commands(tmp_path, capsys) 
         == 0
     )
     capsys.readouterr()
-    assert output.read_bytes() != rendered["master.chain-config"]
+    assert output.read_bytes() != first.read_bytes()
 
 
 def test_applying_a_chain_config_needs_no_base_preset(tmp_path, capsys) -> None:
@@ -222,16 +211,28 @@ def test_applying_a_chain_config_needs_no_base_preset(tmp_path, capsys) -> None:
     config = tmp_path / "chain.json"
     written = _suggest_config(source, config, capsys)
 
-    flat = tmp_path / "flat.json"
-    flat.write_text(json.dumps(written["params"]), encoding="utf-8")
+    def leaves(path: str, value: object) -> list[str]:
+        # Each leaf as path=value: arrays by index, booleans as 1 / 0.
+        if isinstance(value, dict):
+            return [item for key, sub in value.items() for item in leaves(f"{path}.{key}", sub)]
+        if isinstance(value, list):
+            return [
+                item for index, sub in enumerate(value) for item in leaves(f"{path}.{index}", sub)
+            ]
+        if isinstance(value, bool):
+            return [f"{path}={int(value)}"]
+        return [f"{path}={value}"]
+
+    params = cast("dict[str, object]", written["params"])
+    flat = ",".join(item for key, value in params.items() for item in leaves(key, value))
 
     rendered: dict[str, bytes] = {}
     for label, argv in (
-        ("chain-config", ["master", str(source), "--chain-config", str(config)]),
-        ("overrides-on-default", ["master", str(source), "--config-file", str(flat)]),
+        ("chain-config", ["mastering", str(source), "--chain-config", str(config)]),
+        ("overrides-on-pop", ["mastering", str(source), "--preset", "pop", "--params", flat]),
         (
             "overrides-on-speech",
-            ["master", str(source), "--preset", "speech", "--config-file", str(flat)],
+            ["mastering", str(source), "--preset", "speech", "--params", flat],
         ),
     ):
         output = tmp_path / f"{label}.wav"
@@ -245,8 +246,8 @@ def test_applying_a_chain_config_needs_no_base_preset(tmp_path, capsys) -> None:
 
 
 @pytest.mark.parametrize("channels", [1, 2])
-def test_master_assistant_renders_the_chain_it_suggests(tmp_path, capsys, channels) -> None:
-    """``master --assistant`` equals applying the suggestion it wrote out.
+def test_mastering_assistant_renders_the_chain_it_suggests(tmp_path, capsys, channels) -> None:
+    """``mastering --assistant`` equals applying the suggestion it wrote out.
 
     Run over both channel counts because the two take different library entry
     points, and a stereo source must come back as a pair rather than a fold.
@@ -257,14 +258,14 @@ def test_master_assistant_renders_the_chain_it_suggests(tmp_path, capsys, channe
     _suggest_config(source, config, capsys)
 
     direct = tmp_path / "assistant.wav"
-    assert _run(["master", str(source), "--assistant", "--output", str(direct), "--json"]) == 0
+    assert _run(["mastering", str(source), "--assistant", "--output", str(direct), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["mode"] == "assistant"
 
     applied = tmp_path / "applied.wav"
     assert (
         _run(
             [
-                "master",
+                "mastering",
                 str(source),
                 "--chain-config",
                 str(config),
@@ -285,8 +286,6 @@ def test_master_assistant_renders_the_chain_it_suggests(tmp_path, capsys, channe
 @pytest.mark.parametrize(
     ("command", "extra"),
     [
-        ("master", ["--preset", "speech", "--chain-config", "chain.json"]),
-        ("master", ["--assistant", "--chain-config", "chain.json"]),
         ("mastering", ["--preset", "speech", "--chain-config", "chain.json"]),
         ("mastering", ["--assistant", "--chain-config", "chain.json"]),
     ],
@@ -326,7 +325,7 @@ def test_the_reported_mode_is_the_token_the_native_cli_reports(tmp_path, capsys)
     assert (
         _run(
             [
-                "master",
+                "mastering",
                 str(source),
                 "--chain-config",
                 str(config),

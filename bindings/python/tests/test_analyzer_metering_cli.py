@@ -402,114 +402,6 @@ def test_project_bounce_wav_writer_preserves_more_than_two_channels(tmp_path) ->
     assert written_rate == 48000
 
 
-def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_path, capsys) -> None:
-    """mastering-chain is exposed as a CLI wrapper over the Python mastering API."""
-    import libsonare
-    from libsonare import cli
-
-    calls: dict[str, object] = {}
-
-    def fake_load_audio(path: str) -> tuple[list[float], int]:
-        assert path == "input.wav"
-        return [0.25, -0.25, 0.0], 22050
-
-    def fake_master_audio(
-        samples: list[float],
-        *,
-        sample_rate: int,
-        preset: str | None,
-        overrides: dict[str, object],
-    ) -> SimpleNamespace:
-        calls["samples"] = samples
-        calls["sample_rate"] = sample_rate
-        calls["preset"] = preset
-        calls["config"] = overrides
-        return SimpleNamespace(
-            samples=[0.0, 0.1, -0.1],
-            sample_rate=sample_rate,
-            input_lufs=-20.0,
-            output_lufs=-14.0,
-            applied_gain_db=6.0,
-            stages=["eq.tilt", "loudness"],
-        )
-
-    patch_mono_decode(monkeypatch, fake_load_audio)
-    monkeypatch.setattr(libsonare, "master_audio", fake_master_audio)
-
-    output = tmp_path / "chain.wav"
-    args = argparse.Namespace(
-        file="input.wav",
-        output=str(output),
-        json=True,
-        config='{"eq.tilt.tiltDb": 1.5}',
-        config_file="",
-        params="loudness.enabled=1",
-    )
-
-    assert cli.cmd_mastering_chain(args) == 0
-    assert calls["samples"] == [0.25, -0.25, 0.0]
-    assert calls["sample_rate"] == 22050
-    assert calls["preset"] is None
-    assert calls["config"] == {"eq": {"tilt": {"tiltDb": 1.5}}, "loudness": {"enabled": 1.0}}
-    assert output.exists()
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["stages"] == ["eq.tilt", "loudness"]
-    assert payload["output"] == str(output)
-
-
-def test_master_cli_applies_preset_and_override_params(monkeypatch, tmp_path, capsys) -> None:
-    """master is a preset-oriented wrapper over master_audio."""
-    import libsonare
-    from libsonare import cli
-
-    calls: dict[str, object] = {}
-
-    patch_mono_decode(monkeypatch, lambda path: ([0.1, -0.1], 44100))
-
-    def fake_master_audio(
-        samples: list[float],
-        *,
-        sample_rate: int,
-        preset: str,
-        overrides: dict[str, object],
-    ) -> SimpleNamespace:
-        calls["samples"] = samples
-        calls["sample_rate"] = sample_rate
-        calls["preset"] = preset
-        calls["overrides"] = overrides
-        return SimpleNamespace(
-            samples=[0.0, 0.2],
-            sample_rate=sample_rate,
-            input_lufs=-18.0,
-            output_lufs=-12.0,
-            applied_gain_db=6.0,
-            stages=["preset", "loudness"],
-        )
-
-    monkeypatch.setattr(libsonare, "master_audio", fake_master_audio)
-
-    output = tmp_path / "master.wav"
-    args = argparse.Namespace(
-        file="input.wav",
-        output=str(output),
-        json=True,
-        preset="streaming",
-        config='{"eq.tilt.tiltDb": -0.5}',
-        config_file="",
-        params="loudness.enabled=1",
-    )
-
-    assert cli.cmd_master(args) == 0
-    assert calls["samples"] == [0.1, -0.1]
-    assert calls["sample_rate"] == 44100
-    assert calls["preset"] == "streaming"
-    assert calls["overrides"] == {"eq": {"tilt": {"tiltDb": -0.5}}, "loudness": {"enabled": 1.0}}
-    assert output.exists()
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["preset"] == "streaming"
-    assert payload["stages"] == ["preset", "loudness"]
-
-
 def test_mastering_processor_feeds_a_mono_source_to_both_channels(monkeypatch, capsys) -> None:
     """A mono source reaches a stereo-only processor as both channels, unannounced.
 
@@ -625,68 +517,13 @@ def test_mastering_streaming_cli_passes_platform_targets(monkeypatch, capsys) ->
     ]
 
 
-def test_declip_cli_writes_repaired_audio(monkeypatch, tmp_path, capsys) -> None:
-    """declip exposes the offline mastering repair API."""
-    import libsonare
-    from libsonare import cli
-
-    calls: dict[str, object] = {}
-
-    patch_mono_decode(monkeypatch, lambda path: ([1.0, -1.0, 0.25], 22050))
-
-    def fake_declip(
-        samples: list[float],
-        sample_rate: int,
-        *,
-        clip_threshold_db: float,
-        lpc_order: int,
-        iterations: int,
-        lpc_blend: float,
-    ) -> SimpleNamespace:
-        calls["samples"] = samples
-        calls["sample_rate"] = sample_rate
-        calls["clip_threshold_db"] = clip_threshold_db
-        calls["lpc_order"] = lpc_order
-        calls["iterations"] = iterations
-        calls["lpc_blend"] = lpc_blend
-        return SimpleNamespace(samples=[0.8, -0.8, 0.25])
-
-    monkeypatch.setattr(libsonare, "mastering_repair_declip", fake_declip)
-
-    output = tmp_path / "declip.wav"
-    args = argparse.Namespace(
-        file="input.wav",
-        output=str(output),
-        json=True,
-        clip_threshold_db=20.0 * math.log10(0.9),
-        lpc_order=24,
-        iterations=3,
-        lpc_blend=0.5,
-    )
-
-    assert cli.cmd_declip(args) == 0
-    assert calls == {
-        "samples": [1.0, -1.0, 0.25],
-        "sample_rate": 22050,
-        "clip_threshold_db": pytest.approx(20.0 * math.log10(0.9)),
-        "lpc_order": 24,
-        "iterations": 3,
-        "lpc_blend": 0.5,
-    }
-    assert output.exists()
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["samples"] == 3
-    assert payload["output"] == str(output)
-
-
-def test_mastering_cli_help_lists_preset_streaming_and_declip_commands() -> None:
+def test_mastering_cli_help_lists_the_mastering_and_repair_commands() -> None:
     """The practical mastering CLI surface is advertised in --help."""
     result = _run_cli(["--help"])
 
     assert result.returncode == 0
-    assert "master " in result.stdout
-    assert "mastering-streaming" in result.stdout
-    assert "declip" in result.stdout
+    for command in ("mastering ", "mastering-normalize-loudness", "mastering-streaming", "repair"):
+        assert command in result.stdout
 
 
 def test_mixing_preset_cli_commands_smoke() -> None:
