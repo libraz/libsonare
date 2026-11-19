@@ -219,30 +219,6 @@ def test_trim_threshold_and_top_db_conflict_is_semantic_error(
         effects.cmd_trim_silence(_args(threshold_db=-40.0, top_db=24.0))
 
 
-def test_resample_accepts_target_sr_alias_as_canonical_target_rate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(effects, "_load_audio", lambda _path: ([0.1, 0.2], 44100))
-    calls: list[tuple[list[float], int, int]] = []
-    writes: list[tuple[str, int]] = []
-    monkeypatch.setattr(
-        effects,
-        "_resample",
-        lambda samples, source_rate, target_rate: (
-            calls.append((samples, source_rate, target_rate)) or [0.1]
-        ),
-    )
-    monkeypatch.setattr(
-        effects,
-        "_write_wav",
-        lambda path, _samples, sample_rate: writes.append((path, sample_rate)),
-    )
-
-    assert effects.cmd_resample(_args(target_sr=16000, target_rate=None)) == 0
-    assert calls == [([0.1, 0.2], 44100, 16000)]
-    assert writes == [("output.wav", 16000)]
-
-
 def test_acoustic_text_prints_a_dash_for_what_a_blind_estimate_does_not_measure(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

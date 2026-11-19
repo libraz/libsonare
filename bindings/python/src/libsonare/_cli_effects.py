@@ -447,11 +447,7 @@ def cmd_resample(args: argparse.Namespace) -> int:
         print("Error: resample requires an output file (-o/--output)", file=sys.stderr)
         return EXIT_INVALID_PARAMETER
 
-    target_rate = getattr(args, "target_rate", None)
-    if target_rate is None:
-        target_rate = getattr(args, "target_sr", None)
-    if target_rate is None:
-        raise ValueError("--target-rate required")
+    target_rate = args.target_sample_rate
     samples, sr = _load_audio(args.file)
     result = _resample(samples, sr, target_rate)
 
@@ -461,8 +457,8 @@ def cmd_resample(args: argparse.Namespace) -> int:
     if args.json:
         payload: dict[str, object] = {
             "length": len(result),
-            "source_rate": sr,
-            "sample_rate": target_rate,
+            "source_sample_rate": sr,
+            "target_sample_rate": target_rate,
         }
         if args.output:
             payload["output"] = args.output
@@ -827,8 +823,8 @@ def register_effects_parsers(
         "resample", parents=[common], help="Resample audio to a target sample rate"
     )
     resample_p.add_argument(
-        "--target-rate",
-        dest="target_rate",
+        "--target-sample-rate",
+        dest="target_sample_rate",
         type=_c_int,
         required=True,
         help="Target sample rate in Hz",

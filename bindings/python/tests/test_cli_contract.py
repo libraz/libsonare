@@ -1485,7 +1485,7 @@ def test_root_version_flag_prints_the_package_version_and_exits_zero(monkeypatch
     [
         ("mel", "--n-fft", "99999999999"),
         ("mel", "--n-mels", "3000000000"),
-        ("resample", "--target-rate", "3000000000", "-o", "out.wav"),
+        ("resample", "--target-sample-rate", "3000000000", "-o", "out.wav"),
         ("pitch-shift", "--pitch-semitones", "1e40", "-o", "out.wav"),
     ],
 )

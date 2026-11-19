@@ -18,7 +18,7 @@ from ._helpers import patch_mono_decode
         ("normalize", ["--target-db", "-3"]),
         ("time-stretch", ["--rate", "1.1"]),
         ("trim-silence", []),
-        ("resample", ["--target-rate", "16000"]),
+        ("resample", ["--target-sample-rate", "16000"]),
     ],
 )
 def test_effect_cli_commands_write_output(command: str, extra: list[str]) -> None:
@@ -582,7 +582,7 @@ def test_resample_uses_native_antialiased_resampler(monkeypatch) -> None:
     # native CLI); the write itself is stubbed above.
     args = argparse.Namespace(
         file="tone.wav",
-        target_rate=48000,
+        target_sample_rate=48000,
         output="resampled.wav",
         json=True,
     )

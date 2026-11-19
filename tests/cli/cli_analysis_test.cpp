@@ -98,7 +98,7 @@ TEST_CASE("CLI applies the offline-input policy to the file it loads", "[cli]") 
     // same handle, and the Python CLI refuses this file for resample too.
     const std::string out_path = unique_temp_path("_policy_rate_out.wav");
     auto [code, output] = exec_command(CLI + " resample " + path +
-                                       " --target-rate 44100 --output " + out_path + " -q");
+                                       " --target-sample-rate 44100 --output " + out_path + " -q");
     std::remove(path.c_str());
     std::remove(out_path.c_str());
     CAPTURE(output);

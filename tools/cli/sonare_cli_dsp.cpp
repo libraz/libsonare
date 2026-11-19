@@ -173,16 +173,16 @@ int cmd_filter(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_resample(const CliArgs& args, const Audio& audio) {
-  if (!args.has("target-rate")) {
-    std::cerr << color::red << "Error: --target-rate required" << color::reset << "\n";
+  if (!args.has("target-sample-rate")) {
+    std::cerr << color::red << "Error: --target-sample-rate required" << color::reset << "\n";
     return 1;
   }
   const int source_sr = audio.sample_rate();
   // The core resample() only checks for a positive rate, so an unbounded value
   // reaches allocation and can write a multi-gigabyte file instead of failing.
   // Bound it to the same supported range the library documents for Audio.
-  const int target_sr =
-      args.get_int_in_range("target-rate", kMinAudioSampleRate, kMaxAudioSampleRate, source_sr);
+  const int target_sr = args.get_int_in_range("target-sample-rate", kMinAudioSampleRate,
+                                              kMaxAudioSampleRate, source_sr);
   Audio result = resample(audio, target_sr);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
@@ -190,8 +190,8 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
     JsonBuilder json;
     json.begin_object()
         .kv("length", result.size())
-        .kv("source_rate", source_sr)
-        .kv("sample_rate", target_sr);
+        .kv("source_sample_rate", source_sr)
+        .kv("target_sample_rate", target_sr);
     if (!args.output_file.empty()) json.kv("output", args.output_file);
     json.end_object().print();
   } else if (!args.quiet) {

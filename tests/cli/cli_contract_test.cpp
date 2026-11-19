@@ -275,7 +275,7 @@ TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]"
     } else if (path == "resample") {
       found_resample = true;
       REQUIRE(command["options"].size() == 3);
-      REQUIRE(command["options"][1]["name"].as_string() == "target-rate");
+      REQUIRE(command["options"][1]["name"].as_string() == "target-sample-rate");
       REQUIRE(command["options"][1]["aliases"].as_array().empty());
       REQUIRE(command["options"][1]["required"].as_bool());
       REQUIRE(command["options"][1]["default"].is_null());
@@ -488,11 +488,12 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE_FALSE(semitones->required);
   REQUIRE(semitones->default_value.kind == CliOptionDefaultKind::Null);
 
-  const auto* target_rate = cli_option_spec_for_command("resample", "target-rate");
+  const auto* target_rate = cli_option_spec_for_command("resample", "target-sample-rate");
   REQUIRE(target_rate != nullptr);
   REQUIRE(target_rate->required);
   REQUIRE(target_rate->aliases.empty());
   REQUIRE(target_rate->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(cli_option_spec_for_command("resample", "target-rate") == nullptr);
   REQUIRE(cli_option_spec_for_command("resample", "target-sr") == nullptr);
 
   const auto* key_hpss = cli_option_spec_for_command("key", "hpss");
@@ -1091,6 +1092,7 @@ TEST_CASE("CLI enforces registry requirements and canonical option aliases",
     const std::string output_path = unique_temp_path("_retired_spelling.wav");
     for (const std::string& invocation :
          {" resample --target-sr 16000 " + TEST_WAV + " -o " + output_path,
+          " resample --target-rate 16000 " + TEST_WAV + " -o " + output_path,
           " eq " + TEST_WAV + " --lookahead-ms 1 -o " + output_path,
           " mastering " + TEST_WAV + " --config " + output_path + ".json -o " + output_path,
           " estimate-room " + TEST_WAV + " --n-bands 6",
@@ -1247,10 +1249,10 @@ TEST_CASE("CLI option values do not depend on the option's side of the command w
     // Reading through an alias always worked, but the key the alias was stored
     // under depended on whether the command was known yet, which is the same
     // position dependence seen from the other end.
-    const CliArgs leading =
-        parse({"sonare-cli", "-o", "out.wav", "resample", "in.wav", "--target-rate", "8000"});
-    const CliArgs trailing =
-        parse({"sonare-cli", "resample", "in.wav", "--target-rate", "8000", "-o", "out.wav"});
+    const CliArgs leading = parse(
+        {"sonare-cli", "-o", "out.wav", "resample", "in.wav", "--target-sample-rate", "8000"});
+    const CliArgs trailing = parse(
+        {"sonare-cli", "resample", "in.wav", "--target-sample-rate", "8000", "-o", "out.wav"});
     REQUIRE(leading.output_file == "out.wav");
     REQUIRE(leading.output_file == trailing.output_file);
     REQUIRE(leading.options == trailing.options);

@@ -626,6 +626,21 @@ rule = "pitch-semitones"
 test = 'bindings/python/tests/test_cli_effects.py::payload["pitch_semitones"]'
 
 [[entry]]
+kind = "flag"
+old = "resample --target-rate"
+new = "resample --target-sample-rate"
+domain = "effects"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "command"
+old = "resample"
+changed = "the JSON names the two rates source_sample_rate and target_sample_rate; source_rate and sample_rate are gone"
+domain = "effects"
+rule = "sample-rate-name"
+test = "tests/cli/cli_effects_test.cpp::CLI resample names both of its rates as sample rates"
+
+[[entry]]
 kind = "command"
 old = "onset-envelope"
 new = "onset-strength"
@@ -719,7 +734,7 @@ test = "tests/cli/cli_mastering_test.cpp::CLI mastering command"
 [[entry]]
 kind = "flag"
 old = "resample --target-sr"
-removed = "use --target-rate"
+removed = "use --target-sample-rate"
 domain = "effects"
 rule = "aliases-removed"
 

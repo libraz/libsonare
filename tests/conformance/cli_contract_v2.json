@@ -3802,7 +3802,7 @@
           "domain": null
         },
         {
-          "name": "target-rate",
+          "name": "target-sample-rate",
           "type": "integer",
           "default": null,
           "stated_default": null,
@@ -12675,7 +12675,7 @@
           "domain": null
         },
         {
-          "name": "target-rate",
+          "name": "target-sample-rate",
           "type": "integer",
           "default": null,
           "stated_default": null,
@@ -12696,8 +12696,8 @@
         "success": {
           "keys": {
             "length": "integer",
-            "source_rate": "integer",
-            "sample_rate": "integer",
+            "source_sample_rate": "integer",
+            "target_sample_rate": "integer",
             "output": "string"
           }
         }
@@ -12708,7 +12708,7 @@
           "argv": [
             "resample",
             "{audio}",
-            "--target-rate",
+            "--target-sample-rate",
             "44100",
             "-o",
             "{resample_output}",

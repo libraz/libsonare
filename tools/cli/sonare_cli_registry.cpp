@@ -922,7 +922,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                      choices_of({"2", "4"}, CliOptionDomainStage::Parameter)),
          number_value("cutoff-hz", 0.0), number_value("center", 0.0),
          number_value("bandwidth", 0.0), required_output(), flag("zero-phase")});
-    add_command(commands, "resample", true, {required_int("target-rate"), required_output()});
+    add_command(commands, "resample", true,
+                {required_int("target-sample-rate"), required_output()});
     // The generators accept any positive rate, so a rate the library's own decoder
     // refuses produces a file none of these commands can read back. `resample`
     // already bounds its target rate here for the same reason; these three are the

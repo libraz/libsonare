@@ -19,10 +19,25 @@ TEST_CASE("CLI effect commands require an output destination", "[cli]") {
   }
 
   SECTION("resample") {
-    auto [code, output] = exec_command(CLI + " resample --target-rate 16000 " + TEST_WAV + " -q");
+    auto [code, output] =
+        exec_command(CLI + " resample --target-sample-rate 16000 " + TEST_WAV + " -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--output'"));
   }
+}
+
+TEST_CASE("CLI resample names both of its rates as sample rates", "[cli]") {
+  create_test_wav(TEST_WAV, 0.25f);
+  const std::string out = unique_temp_path("_resample_rates.wav");
+  auto [code, output] = exec_command(CLI + " resample " + TEST_WAV +
+                                     " --target-sample-rate 16000 -o " + out + " --json -q");
+  std::remove(out.c_str());
+  REQUIRE(code == 0);
+  const auto json = sonare::util::json::parse_strict(output);
+  CHECK(json["source_sample_rate"].as_int() == 22050);
+  CHECK(json["target_sample_rate"].as_int() == 16000);
+  CHECK_FALSE(json.contains("source_rate"));
+  CHECK_FALSE(json.contains("sample_rate"));
 }
 
 TEST_CASE("CLI normalize keeps stereo source order and validates mode first", "[cli]") {
