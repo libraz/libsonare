@@ -86,7 +86,7 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     auto [code, output] = exec_command(CLI + " voice-change --formant-factor 100 " + TEST_WAV +
                                        " -o " + TEST_OUT + " --json -q");
     REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("formant factor must be in [0.55, 1.65]"));
+    REQUIRE_THAT(output, ContainsSubstring("formant_factor must be finite and in [0.55, 1.65]"));
   }
 
   SECTION("voice presets are named by their library ids in any letter case") {
