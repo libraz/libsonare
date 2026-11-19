@@ -873,6 +873,46 @@
       "exclusive_maximum": false
     },
     {
+      "command": "transcribe",
+      "option": "max-polyphony",
+      "reject_exit": "invalid_parameter",
+      "choices": [],
+      "minimum": 1.0,
+      "exclusive_minimum": false,
+      "maximum": 64.0,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "transcribe",
+      "option": "min-note-division",
+      "reject_exit": "invalid_parameter",
+      "choices": [],
+      "minimum": 1.0,
+      "exclusive_minimum": false,
+      "maximum": 128.0,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "transcribe",
+      "option": "min-frame-peak-ratio",
+      "reject_exit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": false,
+      "maximum": 1.0,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "transcribe",
+      "option": "min-ridge-peak-ratio",
+      "reject_exit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": false,
+      "maximum": 1.0,
+      "exclusive_maximum": false
+    },
+    {
       "command": "tune-to-midi",
       "option": "track",
       "reject_exit": "invalid_parameter",
@@ -1258,6 +1298,26 @@
       "exclusive_maximum": false
     },
     {
+      "command": "mix-strip",
+      "option": "pan",
+      "reject_exit": "invalid_parameter",
+      "choices": [],
+      "minimum": -1.0,
+      "exclusive_minimum": false,
+      "maximum": 1.0,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "mix-strip",
+      "option": "width",
+      "reject_exit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": false,
+      "maximum": 2.0,
+      "exclusive_maximum": false
+    },
+    {
       "command": "playback",
       "option": "room",
       "reject_exit": "usage",
@@ -1401,6 +1461,47 @@
       "exclusive_minimum": true,
       "maximum": 1.0,
       "exclusive_maximum": false
+    },
+    {
+      "command": "normalize",
+      "option": "mode",
+      "reject_exit": "invalid_parameter",
+      "choices": [
+        "peak",
+        "rms"
+      ],
+      "minimum": null,
+      "exclusive_minimum": false,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "filter",
+      "option": "type",
+      "reject_exit": "invalid_parameter",
+      "choices": [
+        "hp",
+        "lp",
+        "bp",
+        "notch"
+      ],
+      "minimum": null,
+      "exclusive_minimum": false,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "filter",
+      "option": "order",
+      "reject_exit": "invalid_parameter",
+      "choices": [
+        "2",
+        "4"
+      ],
+      "minimum": null,
+      "exclusive_minimum": false,
+      "maximum": null,
+      "exclusive_maximum": false
     }
   ],
   "requiredInvalidParameter": [
@@ -1427,6 +1528,10 @@
     {
       "command": "filter",
       "option": "output"
+    },
+    {
+      "command": "filter",
+      "option": "type"
     },
     {
       "command": "gain",

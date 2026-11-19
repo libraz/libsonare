@@ -266,17 +266,6 @@ def _reject_unknown_processor_params(processor: str, params: dict[str, float]) -
         raise ValueError(f"unknown --params key for {processor}: {joined}")
 
 
-def _check_eq_enum_options(args: argparse.Namespace) -> None:
-    """Reject an ``eq`` enumerator index outside its enumeration."""
-    for dest, highest in _EQ_ENUM_BOUNDS.items():
-        value = getattr(args, dest, 0)
-        if not isinstance(value, int) or 0 <= value <= highest:
-            continue
-        option = "--" + dest.replace("_", "-")
-        accepted = ", ".join(str(index) for index in range(highest + 1))
-        raise ValueError(f"invalid value for {option}: {value} (expected one of {accepted})")
-
-
 def cmd_mastering(args: argparse.Namespace) -> int:
     planes, sr = _load_channels_or_downmix(args.file)
     samples = planes[0]
@@ -556,10 +545,6 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
 def cmd_eq(args: argparse.Namespace) -> int:
     from . import mastering_apply_processor, mastering_apply_processor_stereo
 
-    # Ahead of the audio load and the --params conflict check, matching the
-    # native CLI, which enforces every declared option domain from its registry
-    # before dispatching the handler.
-    _check_eq_enum_options(args)
     planes, sr = _load_channels_or_downmix(args.file)
     params_raw = getattr(args, "params", "") or ""
     bits = _wav_bits(args)

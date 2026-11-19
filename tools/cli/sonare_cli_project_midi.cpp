@@ -141,18 +141,9 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
 
   // A written 0 means a real zero (ratios), which the C ABI spells as a negative
   // value (its own 0 would mean the default); reattack's own 0 is "no split".
-  if (args.has("max-polyphony")) {
-    const int max_polyphony = args.get_int("max-polyphony", 0);
-    if (max_polyphony < 1 || max_polyphony > 64) {
-      throw std::invalid_argument("--max-polyphony must be an integer in 1..64");
-    }
-    config.max_polyphony = max_polyphony;
-  }
+  if (args.has("max-polyphony")) config.max_polyphony = args.get_int("max-polyphony", 0);
   const auto read_ratio = [&args](const char* name) {
     const float value = args.get_float(name, 0.0f);
-    if (!(value >= 0.0f) || !std::isfinite(value)) {
-      throw std::invalid_argument(std::string("--") + name + " must be a finite number >= 0");
-    }
     return value == 0.0f ? -1.0f : value;
   };
   if (args.has("min-frame-peak-ratio")) {
@@ -175,11 +166,7 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   // Both paths read the division; giving it with --min-note-ms is refused by the
   // core, which names the field.
   if (args.has("min-note-division")) {
-    const int division = args.get_int("min-note-division", 0);
-    if (division < 1 || division > 128) {
-      throw std::invalid_argument("--min-note-division must be an integer in 1..128");
-    }
-    config.min_note_division = division;
+    config.min_note_division = args.get_int("min-note-division", 0);
   }
 
   // Absent leaves the C ABI's 0 (segments); the core refuses singing together

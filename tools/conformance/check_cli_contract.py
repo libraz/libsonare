@@ -50,6 +50,7 @@ from cli_contract_payload import (
     parse_single_json,
     validate_payload,  # noqa: F401
 )
+from cli_contract_refusals import run_domain_refusals
 from cli_contract_schema import (
     _FEATURE_NAMES,
     NOT_SUPPORTED_EXIT,
@@ -959,6 +960,20 @@ def main(argv: list[str] | None = None) -> int:
             report,
             python_disabled,
         )
+        if native_inventory is not None and python_inventory is not None:
+            compared, not_compared = run_domain_refusals(
+                _run,
+                native_executable,
+                python_executable,
+                native_inventory,
+                python_inventory,
+                Path(temporary),
+                args.timeout,
+                report,
+            )
+            print(f"option-domain refusals: {compared} compared, {len(not_compared)} not compared")
+            for reason in not_compared:
+                print(f"  not compared: {reason}")
 
     return _emit(report)
 

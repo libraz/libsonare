@@ -214,24 +214,9 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
         render_notes,
     )
 
-    # Refused before the pitch track and the extraction, which are what the
-    # command costs: every check below is answerable from argv alone.
     if not args.output:
         print("Error: tune-to-midi requires an output file (-o/--output)", file=sys.stderr)
         return EXIT_INVALID_PARAMETER
-    if args.track < 0:
-        raise ValueError(f"--track must be a non-negative track index: {args.track}")
-    if args.unmatched_policy is not None and args.unmatched_policy not in _UNMATCHED_POLICIES:
-        raise ValueError(
-            f"--unmatched-policy must be one of {', '.join(_UNMATCHED_POLICY_NAMES)}: "
-            f"{args.unmatched_policy}"
-        )
-    if args.min_overlap_ratio is not None and not 0.0 <= args.min_overlap_ratio <= 1.0:
-        raise ValueError(f"--min-overlap-ratio must be between 0 and 1: {args.min_overlap_ratio:g}")
-    if args.max_correction_semitones is not None and args.max_correction_semitones < 0.0:
-        raise ValueError(
-            f"--max-correction-semitones must be non-negative: {args.max_correction_semitones:g}"
-        )
 
     # Only what the caller spelled is forwarded: 0 is legal for both, so neither
     # can double as the sentinel that asks for the library default.

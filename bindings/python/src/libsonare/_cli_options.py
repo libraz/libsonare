@@ -20,14 +20,21 @@ from collections.abc import Callable, Iterable, Sequence
 from typing import Any, NoReturn, cast
 
 from ._cli_common import EXIT_USAGE
-from ._cli_inventory import _cli_domain, _cli_scalar_type, _inventory_subparsers, _token_of
+from ._cli_inventory import (
+    _action_domain,
+    _canonical_option_string,
+    _cli_domain,
+    _cli_scalar_type,
+    _inventory_subparsers,
+    _token_of,
+)
 from ._errors import SonareValueError
 from ._narrowing import _FLOAT32_MAX
 from ._runtime import _C_INT_MAX, _C_INT_MIN, _narrow_int
 from ._types_enums import KeyMode
 
 
-class _OutOfRange(Exception):
+class _OutOfRangeError(Exception):
     """A value the option's type parsed but cannot hold, refused in the CLI's range wording.
 
     Not an ``ArgumentTypeError``: argparse would word that itself before the parser could name
@@ -74,14 +81,30 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         return super().add_argument(*args, **kwargs)
 
     def _get_value(self, action: argparse.Action, arg_string: str) -> Any:
+        """Convert one value and hold it to the option's published domain.
+
+        The domain record is the one the inventory publishes, so the value set the
+        cross-surface checker compares is also the one enforced here, and every
+        refusal is worded as the native option formatter words it. A usage-class
+        domain refuses through the parser; an invalid-parameter one is raised as a
+        ``ValueError``, which the entry point reports with that exit code.
+        """
+        option = _canonical_option_string(action) if action.option_strings else action.dest
         try:
-            return super()._get_value(action, arg_string)
-        except _OutOfRange as exc:
-            # Worded as the native option formatter words it, naming the option the caller spelled.
-            option = max(action.option_strings, key=len, default=action.dest)
+            value = super()._get_value(action, arg_string)
+        except _OutOfRangeError as exc:
             raise argparse.ArgumentError(
                 None, f"value out of range for {option}: {arg_string} (expected {exc.expected})"
             ) from exc
+        domain = _action_domain(action)
+        refusal = None if domain is None else _domain_refusal(domain, value)
+        if refusal is None:
+            return value
+        assert domain is not None
+        message = f"{refusal} for {option}: {arg_string} (expected {_describe_domain(domain)})"
+        if domain["reject_exit"] == "invalid_parameter":
+            raise ValueError(message)
+        raise argparse.ArgumentError(None, message)
 
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
@@ -186,6 +209,60 @@ _FALSE_FLAG_LITERALS = frozenset({"false", "0", "no", "off"})
 _TRUE_FLAG_LITERALS = frozenset({"true", "1", "yes", "on"})
 
 
+def _domain_bound(value: float) -> str:
+    """A bound as the native formatter writes it: whole numbers in full, others as ``%g``."""
+    if float(value).is_integer() and abs(value) < 1e18:
+        return str(int(value))
+    return f"{value:g}"
+
+
+def _describe_domain(domain: dict[str, Any]) -> str:
+    """The accepted set in the words of ``describe_domain`` in sonare_cli_option_validation.cpp."""
+    if domain["choices"]:
+        return "one of " + ", ".join(domain["choices"])
+    parts = []
+    if domain["minimum"] is not None:
+        word = "greater than " if domain["exclusive_minimum"] else "at least "
+        parts.append(word + _domain_bound(domain["minimum"]))
+    if domain["maximum"] is not None:
+        word = "less than " if domain["exclusive_maximum"] else "at most "
+        parts.append(word + _domain_bound(domain["maximum"]))
+    return " and ".join(parts)
+
+
+def _domain_refusal(domain: dict[str, Any], value: object) -> str | None:
+    """The native formatter's refusal kind for a converted value outside ``domain``, else None.
+
+    A numeric value matches a choice by number, as the native check does; a bound
+    reads a value that is not a number (``--tempo-bpm auto``) as no verdict.
+    """
+    numeric = isinstance(value, (int, float)) and not isinstance(value, bool)
+    if domain["choices"]:
+        if numeric:
+            accepted = any(_number_or_none(choice) == value for choice in domain["choices"])
+        else:
+            accepted = str(value) in domain["choices"]
+        return None if accepted else "invalid value"
+    number = value if numeric else _number_or_none(value)
+    if number is None:
+        return None
+    minimum, maximum = domain["minimum"], domain["maximum"]
+    below = minimum is not None and (
+        number <= minimum if domain["exclusive_minimum"] else number < minimum
+    )
+    above = maximum is not None and (
+        number >= maximum if domain["exclusive_maximum"] else number > maximum
+    )
+    return "value out of range" if below or above else None
+
+
+def _number_or_none(value: object) -> float | None:
+    try:
+        return float(str(value))
+    except ValueError:
+        return None
+
+
 def _finite_float(value: str) -> float:
     try:
         parsed = float(value)
@@ -196,30 +273,25 @@ def _finite_float(value: str) -> float:
     return parsed
 
 
+# The domain-carrying converters below parse only: the accepted set is the record
+# `_cli_domain` attaches to each, which the parser enforces for every option alike.
+
+
 def _nonnegative_finite_float(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed < 0.0:
-        raise argparse.ArgumentTypeError("must be greater than or equal to 0")
-    return parsed
+    return _finite_float(value)
 
 
 def _positive_pitch_frequency(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed <= 0.0:
-        raise argparse.ArgumentTypeError("must be greater than 0")
-    return parsed
+    return _finite_float(value)
 
 
 def _positive_finite_float(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed <= 0.0:
-        raise argparse.ArgumentTypeError("must be greater than 0")
-    return parsed
+    return _finite_float(value)
 
 
 def _tempo_bpm(value: str) -> float:
     """A tempo flag's value on every command that takes one: finite and greater than 0."""
-    return _positive_finite_float(value)
+    return _finite_float(value)
 
 
 def _given(args: argparse.Namespace, *same: str, **renamed: str) -> dict[str, Any]:
@@ -258,17 +330,11 @@ def _library_catalog(name: str) -> Callable[[], Sequence[str]]:
 
 
 def _closed_unit_float(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed < 0.0 or parsed > 1.0:
-        raise argparse.ArgumentTypeError("must be between 0 and 1")
-    return parsed
+    return _finite_float(value)
 
 
 def _pitch_threshold(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed <= 0.0 or parsed > 1.0:
-        raise argparse.ArgumentTypeError("must be greater than 0 and at most 1")
-    return parsed
+    return _finite_float(value)
 
 
 def _c_int_option(value: str, requirement: str) -> int:
@@ -284,7 +350,7 @@ def _c_int_option(value: str, requirement: str) -> int:
     try:
         return _narrow_int(parsed, "value", _C_INT_MIN, _C_INT_MAX)
     except SonareValueError as exc:
-        raise _OutOfRange("a signed 32-bit integer") from exc
+        raise _OutOfRangeError("a signed 32-bit integer") from exc
 
 
 def _c_int(value: str) -> int:
@@ -293,11 +359,7 @@ def _c_int(value: str) -> int:
 
 
 def _positive_int(value: str) -> int:
-    # Type half shared, semantic half local: "positive" is this option's own rule.
-    parsed = _c_int_option(value, "must be a positive integer")
-    if parsed <= 0:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-    return parsed
+    return _c_int_option(value, "must be an integer")
 
 
 def _candidate_count(value: str) -> int:

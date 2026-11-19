@@ -632,8 +632,13 @@ def register_mixing_parsers(
         "--input-trim-db", type=float, default=0.0, help="Input trim in dB (default: 0)"
     )
     mix_strip_p.add_argument("--fader-db", type=float, default=0.0, help="Fader in dB (default: 0)")
-    mix_strip_p.add_argument(
-        "--pan", type=float, default=0.0, help="Pan position, -1 to 1 (default: 0)"
+    _cli_domain(
+        mix_strip_p.add_argument(
+            "--pan", type=float, default=0.0, help="Pan position, -1 to 1 (default: 0)"
+        ),
+        minimum=-1.0,
+        maximum=1.0,
+        reject_exit="invalid_parameter",
     )
     _cli_domain(
         mix_strip_p.add_argument(
@@ -644,4 +649,11 @@ def register_mixing_parsers(
         choices=tuple(_cli_token(mode) for mode in _MIX_STRIP_PAN_MODES),
         reject_exit="invalid_parameter",
     )
-    mix_strip_p.add_argument("--width", type=float, default=1.0, help="Stereo width (default: 1.0)")
+    _cli_domain(
+        mix_strip_p.add_argument(
+            "--width", type=float, default=1.0, help="Stereo width, 0 to 2 (default: 1.0)"
+        ),
+        minimum=0.0,
+        maximum=2.0,
+        reject_exit="invalid_parameter",
+    )

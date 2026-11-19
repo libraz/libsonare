@@ -554,8 +554,6 @@ def cmd_pitch(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     algo = getattr(args, "algorithm", "pyin")
-    if algo not in {"yin", "pyin"}:
-        raise ValueError("--algorithm must be 'yin' or 'pyin'")
     # Keep direct callers that construct the historical three-field Namespace
     # on the old call shape; parser-built pitch invocations always carry the
     # analysis fields and forward the ones the caller spelled.
@@ -747,17 +745,25 @@ def register_analysis_parsers(
     sections_p = sub.add_parser(
         "sections", parents=[fft_stdout_options], help="Detect song structure"
     )
-    sections_p.add_argument(
-        "--min-duration-sec",
-        type=_finite_float,
-        default=None,
-        help="Minimum section duration in seconds (default: 4.0)",
+    _cli_domain(
+        sections_p.add_argument(
+            "--min-duration-sec",
+            type=_finite_float,
+            default=None,
+            help="Minimum section duration in seconds (default: 4.0)",
+        ),
+        minimum=0.0,
+        reject_exit="invalid_parameter",
     )
-    sections_p.add_argument(
-        "--threshold",
-        type=_finite_float,
-        default=None,
-        help="Relative boundary threshold (default: the library's section default)",
+    _cli_domain(
+        sections_p.add_argument(
+            "--threshold",
+            type=_finite_float,
+            default=None,
+            help="Relative boundary threshold (default: the library's section default)",
+        ),
+        minimum=0.0,
+        reject_exit="invalid_parameter",
     )
     analyze_p = sub.add_parser("analyze", parents=[stdout_options], help="Full music analysis")
     analyze_p.add_argument(

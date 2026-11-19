@@ -175,8 +175,10 @@ def test_a_pan_mode_that_is_not_kebab_case_is_a_parameter_error(
         ["mix-strip", str(stereo_wav), "--pan-mode", value, "-o", str(tmp_path / "out.wav")]
     )
     assert result.returncode == EXIT_INVALID_PARAMETER
-    assert f"--pan-mode: unknown value '{value}'" in result.stderr
-    assert "balance, stereo-pan, dual-pan" in result.stderr
+    assert (
+        f"invalid value for --pan-mode: {value} (expected one of balance, stereo-pan, dual-pan)"
+        in result.stderr
+    )
     assert not (tmp_path / "out.wav").exists()
 
 

@@ -428,16 +428,22 @@ def test_tune_to_midi_cli_forwards_a_correction_bound_of_zero() -> None:
 @pytest.mark.parametrize(
     ("extra", "message"),
     [
-        (["--track", "-1"], "--track must be a non-negative track index: -1"),
-        (["--min-overlap-ratio", "1.5"], "--min-overlap-ratio must be between 0 and 1: 1.5"),
-        (["--min-overlap-ratio", "-0.1"], "--min-overlap-ratio must be between 0 and 1: -0.1"),
+        (["--track", "-1"], "value out of range for --track: -1 (expected at least 0)"),
+        (
+            ["--min-overlap-ratio", "1.5"],
+            "value out of range for --min-overlap-ratio: 1.5 (expected at least 0 and at most 1)",
+        ),
+        (
+            ["--min-overlap-ratio", "-0.1"],
+            "value out of range for --min-overlap-ratio: -0.1 (expected at least 0 and at most 1)",
+        ),
         (
             ["--max-correction-semitones", "-1"],
-            "--max-correction-semitones must be non-negative: -1",
+            "value out of range for --max-correction-semitones: -1 (expected at least 0)",
         ),
         (
             ["--unmatched-policy", "hum"],
-            "--unmatched-policy must be one of leave, mute, nearest: hum",
+            "invalid value for --unmatched-policy: hum (expected one of leave, mute, nearest)",
         ),
     ],
 )
@@ -750,8 +756,16 @@ def test_note_bounds_in_seconds_round_to_the_nearest_sample(monkeypatch, capsys,
             ["--offset-sample", "100", "--offset-sec", "0.01"],
             "give --offset-sample or --offset-sec, not both",
         ),
-        ("note-stretch", ["--onset-sec", "-0.01"], "--onset-sec must be non-negative"),
-        ("note-move", ["--offset-sample", "-1"], "--offset-sample must be non-negative"),
+        (
+            "note-stretch",
+            ["--onset-sec", "-0.01"],
+            "value out of range for --onset-sec: -0.01 (expected at least 0)",
+        ),
+        (
+            "note-move",
+            ["--offset-sample", "-1"],
+            "value out of range for --offset-sample: -1 (expected at least 0)",
+        ),
     ],
 )
 def test_note_bounds_refuse_both_spellings_and_negatives(tmp_path, command, options, message):

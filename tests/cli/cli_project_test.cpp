@@ -1011,7 +1011,8 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
   SECTION("each rejected value is an invalid parameter") {
     for (const char* bad :
          {"--reattack-ratio 0.5", "--reattack-ratio -1", "--max-polyphony 0", "--max-polyphony 65",
-          "--min-frame-peak-ratio -0.1", "--min-ridge-peak-ratio -0.1"}) {
+          "--min-frame-peak-ratio -0.1", "--min-ridge-peak-ratio -0.1",
+          "--min-frame-peak-ratio 1.5", "--min-ridge-peak-ratio 1.5"}) {
       auto [code, output] = exec_command(base + " " + bad);
       INFO(bad << ": " << output);
       REQUIRE(code == 3);

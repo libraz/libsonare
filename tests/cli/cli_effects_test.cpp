@@ -50,7 +50,8 @@ TEST_CASE("CLI normalize keeps stereo source order and validates mode first", "[
   const auto [invalid_code, invalid_message] =
       exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
   REQUIRE(invalid_code == 3);
-  REQUIRE_THAT(invalid_message, ContainsSubstring("--mode must be 'peak' or 'rms'"));
+  REQUIRE_THAT(invalid_message,
+               ContainsSubstring("invalid value for --mode: invalid (expected one of peak, rms)"));
   REQUIRE_FALSE(std::ifstream(invalid_output).good());
 
   std::remove(input.c_str());
@@ -102,11 +103,12 @@ TEST_CASE("CLI normalize preserves retained-layout error ordering", "[cli][ffmpe
       ContainsSubstring(
           "FFmpeg: interleaved decode does not support a channel layout change midstream"));
 
-  // Handler validation still wins over that deferred decode failure.
+  // Option validation still wins over that deferred decode failure.
   const auto [invalid_code, invalid_message] =
       exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
   REQUIRE(invalid_code == 3);
-  REQUIRE_THAT(invalid_message, ContainsSubstring("--mode must be 'peak' or 'rms'"));
+  REQUIRE_THAT(invalid_message,
+               ContainsSubstring("invalid value for --mode: invalid (expected one of peak, rms)"));
   REQUIRE_FALSE(std::ifstream(invalid_output).good());
   cleanup();
 }
@@ -584,6 +586,29 @@ TEST_CASE("CLI filter applies zero phase to fourth-order filters only when reque
   std::remove(input.c_str());
   std::remove(causal_output.c_str());
   std::remove(zero_phase_output.c_str());
+}
+
+TEST_CASE("CLI filter takes hp, lp, bp or notch and refuses any other spelling", "[cli]") {
+  create_test_wav(TEST_WAV);
+  const std::string out = unique_temp_path("_filter_refused.wav");
+  for (const std::string& type : {"highpass", "lowpass", "bandpass"}) {
+    CAPTURE(type);
+    auto [code, output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --type " +
+                                       type + " --cutoff-hz 1000 -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("invalid value for --type: " + type +
+                                           " (expected one of hp, lp, bp, notch)"));
+  }
+  auto [order_code, order_output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out +
+                                                 " --type lp --cutoff-hz 1000 --order 3 -q");
+  REQUIRE(order_code == 3);
+  REQUIRE_THAT(order_output,
+               ContainsSubstring("invalid value for --order: 3 (expected one of 2, 4)"));
+  auto [missing_code, missing_output] =
+      exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --cutoff-hz 1000 -q");
+  REQUIRE(missing_code == 3);
+  REQUIRE_THAT(missing_output, ContainsSubstring("Missing required option '--type'"));
+  REQUIRE_FALSE(std::ifstream(out).good());
 }
 
 TEST_CASE("CLI presence flags do not swallow the audio file argument", "[cli]") {

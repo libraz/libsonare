@@ -868,7 +868,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  library_default(global_int("hop-length"), sonare::kDefaultSilenceHopLength)},
                 {}, nullptr, kUnboundedPositionals);
     add_command(commands, "normalize", true,
-                {string_value("mode", "peak"),
+                {with_domain(string_value("mode", "peak"),
+                             choices_of({"peak", "rms"}, CliOptionDomainStage::Parameter)),
                  with_stated_default(number_value("target-db"),
                                      stated_number(sonare::kDefaultPeakTargetDb) + " (peak) or " +
                                          stated_number(sonare::kDefaultRmsTargetDb) + " (rms)"),
@@ -877,10 +878,14 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "gain", true, {number_value("gain-db"), required_output()});
     add_command(commands, "fade", true,
                 {number_value("fade-in-sec"), number_value("fade-out-sec"), required_output()});
-    add_command(commands, "filter", true,
-                {string_value("type"), int_value("order", 2), number_value("cutoff-hz", 0.0),
-                 number_value("center", 0.0), number_value("bandwidth", 0.0), required_output(),
-                 flag("zero-phase")});
+    add_command(
+        commands, "filter", true,
+        {with_domain(required_with_stage(string_value("type"), CliOptionDomainStage::Parameter),
+                     choices_of({"hp", "lp", "bp", "notch"}, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("order", 2),
+                     choices_of({"2", "4"}, CliOptionDomainStage::Parameter)),
+         number_value("cutoff-hz", 0.0), number_value("center", 0.0),
+         number_value("bandwidth", 0.0), required_output(), flag("zero-phase")});
     add_command(commands, "resample", true, {required_int("target-rate"), required_output()});
     // The generators accept any positive rate, so a rate the library's own decoder
     // refuses produces a file none of these commands can read back. `resample`
@@ -1000,14 +1005,17 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // `mix-strip` is the only spelling for the strip. `mix` names the Python
     // CLI's scene mixer, which this front-end has no equivalent of, so it is
     // refused here as an unknown command rather than carried as an alias.
-    add_command(commands, "mix-strip", true,
-                {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
-                 number_value("pan", 0.0),
-                 with_domain(string_value("pan-mode", "balance"),
-                             choices_of({"balance", "stereo-pan", "dual-pan"},
-                                        CliOptionDomainStage::Parameter)),
-                 number_value("width", 1.0), output_value()},
-                {}, nullptr, 0, /*preserves_stereo_input=*/true);
+    add_command(
+        commands, "mix-strip", true,
+        {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
+         with_domain(number_value("pan", 0.0), between(-1.0, 1.0, CliOptionDomainStage::Parameter)),
+         with_domain(
+             string_value("pan-mode", "balance"),
+             choices_of({"balance", "stereo-pan", "dual-pan"}, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("width", 1.0),
+                     between(0.0, 2.0, CliOptionDomainStage::Parameter)),
+         output_value()},
+        {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mixing-presets", false, {});
     // The advertised default has to be one the command can actually run: an
     // empty string reaches the preset lookup and fails, and the handler's own
@@ -1328,15 +1336,21 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  library_default(int_value("instrument-latency-samples"), "0"),
                  nullable_string_value("synth")},
                 {}, &validate_project_bounce_channels, 1, false, false, kProjectJsonPositional);
-    // Every numeric here means "keep the library default" when absent, and the
-    // C ABI spells that 0 and refuses an out-of-domain value by name, so the
-    // domains stay on that one entry -- except the tempo, which every tempo flag refuses.
+    // Every numeric here means "keep the library default" when absent. The ranges a
+    // single value can be refused by are declared; the reattack ratio's "0 or above 1"
+    // stays in the handler, and the rules joining two options stay with the core.
     add_command(commands, "transcribe", true,
                 {required_output(), tempo(number_value("tempo-bpm")), flag("polyphonic"),
                  number_value("reference-hz"), number_value("f0-min-hz"), number_value("f0-max-hz"),
                  number_value("min-note-ms"), number_value("segmentation-threshold-cents"),
-                 int_value("max-polyphony"), int_value("min-note-division"),
-                 number_value("min-frame-peak-ratio"), number_value("min-ridge-peak-ratio"),
+                 with_domain(int_value("max-polyphony"),
+                             between(1.0, 64.0, CliOptionDomainStage::Parameter)),
+                 with_domain(int_value("min-note-division"),
+                             between(1.0, 128.0, CliOptionDomainStage::Parameter)),
+                 with_domain(number_value("min-frame-peak-ratio"),
+                             between(0.0, 1.0, CliOptionDomainStage::Parameter)),
+                 with_domain(number_value("min-ridge-peak-ratio"),
+                             between(0.0, 1.0, CliOptionDomainStage::Parameter)),
                  number_value("reattack-ratio"), number_value("velocity-floor-db"),
                  int_value("fixed-velocity"), library_default(int_value("group"), "0"),
                  library_default(int_value("channel"), "0"),

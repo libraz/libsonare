@@ -343,14 +343,6 @@ def _project_align_takes(args: argparse.Namespace) -> int:
     if not args.output:
         raise ValueError("project align-takes requires --output")
     reference_source = int(args.reference_source)
-    if not 1 <= reference_source <= 0xFFFFFFFF:
-        raise ValueError(
-            f"--reference-source must be between 1 and 4294967295, got {reference_source}"
-        )
-    if args.hop_length is not None and args.hop_length <= 0:
-        raise ValueError(f"--hop-length must be > 0, got {args.hop_length}")
-    if args.bins_per_octave is not None and args.bins_per_octave <= 0:
-        raise ValueError(f"--bins-per-octave must be > 0, got {args.bins_per_octave}")
 
     document = _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES)
     project = cast(Any, _project_from_document(document)).project
@@ -1017,33 +1009,54 @@ def register_project_parsers(
         help="Shortest span kept as a note, in ms "
         "(default: 30 monophonic segments, 45 singing, 60 polyphonic)",
     )
-    transcribe_p.add_argument(
-        "--min-note-division",
-        type=_c_int,
-        default=None,
-        metavar="N",
-        help="Shortest note kept, as a note value: N is a 1/N note at the tempo "
-        "(32 = thirty-second note), 1-128; not with --min-note-ms",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--min-note-division",
+            type=_c_int,
+            default=None,
+            metavar="N",
+            help="Shortest note kept, as a note value: N is a 1/N note at the tempo "
+            "(32 = thirty-second note), 1-128; not with --min-note-ms",
+        ),
+        minimum=1.0,
+        maximum=128.0,
+        reject_exit="invalid_parameter",
     )
-    transcribe_p.add_argument(
-        "--max-polyphony",
-        type=_c_int,
-        default=None,
-        metavar="N",
-        help="Polyphonic only: voices one frame may hold, 1-64 (default: 10)",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--max-polyphony",
+            type=_c_int,
+            default=None,
+            metavar="N",
+            help="Polyphonic only: voices one frame may hold, 1-64 (default: 10)",
+        ),
+        minimum=1.0,
+        maximum=64.0,
+        reject_exit="invalid_parameter",
     )
-    transcribe_p.add_argument(
-        "--min-frame-peak-ratio",
-        type=_finite_float,
-        default=None,
-        help="Polyphonic only: a frame's search stops below this share of its first "
-        "peak, 0-1 (default: 0.20)",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--min-frame-peak-ratio",
+            type=_finite_float,
+            default=None,
+            help="Polyphonic only: a frame's search stops below this share of its first "
+            "peak, 0-1 (default: 0.20)",
+        ),
+        minimum=0.0,
+        maximum=1.0,
+        reject_exit="invalid_parameter",
     )
-    transcribe_p.add_argument(
-        "--min-ridge-peak-ratio",
-        type=_finite_float,
-        default=None,
-        help="Polyphonic only: a ridge ends below this share of its own peak, 0-1 (default: 0.10)",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--min-ridge-peak-ratio",
+            type=_finite_float,
+            default=None,
+            help="Polyphonic only: a ridge ends below this share of its own peak, 0-1 "
+            "(default: 0.10)",
+        ),
+        minimum=0.0,
+        maximum=1.0,
+        reject_exit="invalid_parameter",
     )
     transcribe_p.add_argument(
         "--reattack-ratio",

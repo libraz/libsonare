@@ -29,7 +29,7 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
-from ._cli_inventory import _cli_domain, _token_of
+from ._cli_inventory import _cli_domain
 from ._cli_note_edit import (
     _DEFAULT_UNMATCHED_POLICY as _DEFAULT_UNMATCHED_POLICY,
 )
@@ -189,10 +189,6 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
     if not args.output:
         print("Error: decompose-stems requires an output file (-o/--output)", file=sys.stderr)
         return EXIT_INVALID_PARAMETER
-    # The C side reads any other name as its own default rather than refusing it,
-    # so an unrecognised initialiser is caught here or not at all.
-    if args.init is not None and args.init not in {"random", "nndsvd"}:
-        raise ValueError("--init must be 'random' or 'nndsvd'")
 
     samples, sr = _load_audio(args.file)
     result = decompose_stems(
@@ -285,8 +281,6 @@ def cmd_normalize(args: argparse.Namespace) -> int:
 
     planes, sr = _load_channels_or_downmix(args.file)
     mode = getattr(args, "mode", "peak")
-    if mode not in ("peak", "rms"):
-        raise ValueError("--mode must be 'peak' or 'rms'")
     checked_mode = cast(Literal["peak", "rms"], mode)
     given = getattr(args, "target_db", None)
     # The payload reports the level the library normalizes to, the mode's own when none is given.
@@ -520,9 +514,6 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
     pitch_semitones = getattr(args, "pitch_semitones", None)
     formant_factor = getattr(args, "formant_factor", None)
     raw_formant_mode = getattr(args, "formant_mode", None) or "relative"
-    # The parser accepts any text, so the handler is where an unknown mode is refused.
-    if raw_formant_mode not in {"relative", "absolute"}:
-        raise ValueError("--formant-mode must be 'relative' or 'absolute'")
     formant_mode: Literal["relative", "absolute"] = (
         "absolute" if raw_formant_mode == "absolute" else "relative"
     )
@@ -761,11 +752,12 @@ def register_effects_parsers(
     normalize_p = sub.add_parser(
         "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
     )
-    normalize_p.add_argument(
-        "--mode",
-        type=_token_of(("peak", "rms")),
-        default="peak",
-        help="Normalization mode (default: peak)",
+    _cli_domain(
+        normalize_p.add_argument(
+            "--mode", default="peak", help="Normalization mode: peak or rms (default: peak)"
+        ),
+        choices=("peak", "rms"),
+        reject_exit="invalid_parameter",
     )
     normalize_p.add_argument(
         "--target-db",

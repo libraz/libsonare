@@ -29,40 +29,6 @@ from ._runtime import SonareValueError
 _ROOM_PRESETS = ("none", "livingRoom", "homeTheater", "screeningRoom")
 
 
-def _unit_interval(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed < 0.0 or parsed > 1.0:
-        raise argparse.ArgumentTypeError("must be between 0 and 1")
-    return parsed
-
-
-def _playback_dialogue_db(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed < -12.0 or parsed > 12.0:
-        raise argparse.ArgumentTypeError("must be between -12 and 12")
-    return parsed
-
-
-def _playback_program_lufs(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed < -70.0 or parsed > 0.0:
-        raise argparse.ArgumentTypeError("must be between -70 and 0")
-    return parsed
-
-
-def _playback_target_lufs(value: str) -> float:
-    parsed = _finite_float(value)
-    if parsed < -40.0 or parsed > -5.0:
-        raise argparse.ArgumentTypeError("must be between -40 and -5")
-    return parsed
-
-
-_cli_scalar_type(_unit_interval, "number")
-_cli_scalar_type(_playback_dialogue_db, "number")
-_cli_scalar_type(_playback_program_lufs, "number")
-_cli_scalar_type(_playback_target_lufs, "number")
-
-
 def _hrtf_path(value: str) -> str:
     """Identity `type=`, tagged as a path: `--hrtf` is not in `_PATH_OPTION_NAMES`."""
     return value
@@ -96,7 +62,7 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
     p.add_argument("--no-upmix", action="store_true", help="Disable the stereo-to-surround upmix")
     _cli_domain(
         p.add_argument(
-            "--night", type=_unit_interval, default=None, help="Night-mode DRC amount (default: 0)"
+            "--night", type=_finite_float, default=None, help="Night-mode DRC amount (default: 0)"
         ),
         minimum=0.0,
         maximum=1.0,
@@ -104,7 +70,7 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
     _cli_domain(
         p.add_argument(
             "--dialogue-db",
-            type=_playback_dialogue_db,
+            type=_finite_float,
             default=None,
             help="Dialogue level gain in dB (default: 0)",
         ),
@@ -114,7 +80,7 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
     _cli_domain(
         p.add_argument(
             "--program-lufs",
-            type=_playback_program_lufs,
+            type=_finite_float,
             default=None,
             help="Program loudness in LUFS (default: measured from the whole input)",
         ),
@@ -124,7 +90,7 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
     _cli_domain(
         p.add_argument(
             "--target-lufs",
-            type=_playback_target_lufs,
+            type=_finite_float,
             default=None,
             help="Target loudness in LUFS (default: -24)",
         ),

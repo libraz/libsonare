@@ -3,11 +3,7 @@
 #include "sonare_cli.h"
 
 int cmd_normalize(const CliArgs& args, const Audio& audio) {
-  const std::string mode = catalog_token(args.get_string("mode", "peak"), {"peak", "rms"});
-  if (mode != "peak" && mode != "rms") {
-    std::cerr << color::red << "Error: --mode must be 'peak' or 'rms'" << color::reset << "\n";
-    return 1;
-  }
+  const std::string mode = args.get_string("mode", "peak");
   const bool rms = mode == "rms";
   const float target_db =
       args.get_float("target-db", rms ? sonare::kDefaultRmsTargetDb : sonare::kDefaultPeakTargetDb);
@@ -109,16 +105,10 @@ int cmd_fade(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_filter(const CliArgs& args, const Audio& audio) {
-  const std::string type = catalog_token(
-      args.get_string("type", ""), {"hp", "highpass", "lp", "lowpass", "bp", "bandpass", "notch"});
-  const bool is_hp = (type == "hp" || type == "highpass");
-  const bool is_lp = (type == "lp" || type == "lowpass");
-  const bool is_bp = (type == "bp" || type == "bandpass");
-  const bool is_notch = (type == "notch");
-  if (!is_hp && !is_lp && !is_bp && !is_notch) {
-    std::cerr << color::red << "Error: --type must be hp|lp|bp|notch" << color::reset << "\n";
-    return 1;
-  }
+  const std::string type = args.get_string("type", "");
+  const bool is_hp = type == "hp";
+  const bool is_lp = type == "lp";
+  const bool is_bp = type == "bp";
 
   const int sr = audio.sample_rate();
   const int order = args.get_int("order", 2);
@@ -135,10 +125,6 @@ int cmd_filter(const CliArgs& args, const Audio& audio) {
       return 1;
     }
     cutoff = args.get_float("cutoff-hz", 0.0f);
-    if (order != 2 && order != 4) {
-      std::cerr << color::red << "Error: --order must be 2 or 4" << color::reset << "\n";
-      return 1;
-    }
     if (order == 4) {
       CascadedBiquad cascade =
           is_hp ? highpass_coeffs_4th(cutoff, sr) : lowpass_coeffs_4th(cutoff, sr);

@@ -235,14 +235,6 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
 
     if not args.output:
         raise ValueError("room-morph requires --output")
-    # Ahead of the audio load, matching the native CLI, which enforces every
-    # declared option domain before dispatching the handler.
-    spacing = args.receiver_spacing
-    if spacing is not None and not 0.0 < spacing <= _MAX_RECEIVER_SPACING_M:
-        raise ValueError(
-            f"invalid value for --receiver-spacing: {spacing} "
-            f"(expected above 0 and at most {_MAX_RECEIVER_SPACING_M:g})"
-        )
     planes, sr = _load_channels_or_downmix(args.file)
     use_stereo = len(planes) == 2
     options: dict[str, Any] = {

@@ -978,3 +978,12 @@ changed = "omitted, the library's chroma resolution applies; an explicit 0 is re
 domain = "project"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::bins_per_octave_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "filter --type"
+frontend = "native"
+changed = "takes hp, lp, bp or notch in any letter case and is required; highpass, lowpass and bandpass are refused as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "token-case"
+test = "tests/cli/cli_effects_test.cpp::CLI filter takes hp, lp, bp or notch and refuses any other spelling"

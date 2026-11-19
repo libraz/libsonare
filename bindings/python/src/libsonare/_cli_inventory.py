@@ -137,6 +137,12 @@ def _action_domain(action: argparse.Action) -> dict[str, Any] | None:
     return dict(type_domain) if type_domain is not None else None
 
 
+def _canonical_option_string(action: argparse.Action) -> str:
+    """The spelling an option is published and refused under: its first long form."""
+    long_options = [option for option in action.option_strings if option.startswith("--")]
+    return long_options[0] if long_options else action.option_strings[0]
+
+
 def _inventory_subparsers(parser: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
     """Return named subparser choices from one argparse parser."""
     for action in parser._actions:
@@ -196,8 +202,7 @@ def _inventory_option(action: argparse.Action) -> dict[str, Any] | None:
     ):
         return None
 
-    long_options = [option for option in action.option_strings if option.startswith("--")]
-    canonical_option = long_options[0] if long_options else action.option_strings[0]
+    canonical_option = _canonical_option_string(action)
     canonical = canonical_option.lstrip("-")
     aliases = [option.lstrip("-") for option in action.option_strings if option != canonical_option]
     required = bool(action.required)

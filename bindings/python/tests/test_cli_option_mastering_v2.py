@@ -717,7 +717,7 @@ def test_no_streaming_safe_reaches_the_suggester(capsys, monkeypatch) -> None:
     ],
 )
 def test_eq_refuses_an_enumerator_index_outside_its_enumeration(
-    monkeypatch, option, first_rejected, last_accepted
+    option, first_rejected, last_accepted
 ) -> None:
     """An index past the enumeration maps to the first enumerator without this.
 
@@ -725,20 +725,17 @@ def test_eq_refuses_an_enumerator_index_outside_its_enumeration(
     first enumerator, so a mistyped `--type 999` applied a peak filter and exited
     0 with a normal JSON payload.
     """
-    from libsonare import _cli_mastering, cli
+    from libsonare import cli
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0] * 2048, 48_000))
+    parser = cli._build_parser()
     for value in (first_rejected, -1):
-        args = cli._build_parser().parse_args(["eq", "input.wav", f"--{option}={value}", "--json"])
-        with pytest.raises(ValueError, match=f"invalid value for --{option}"):
-            _cli_mastering.cmd_eq(args)
+        with pytest.raises(ValueError, match=f"invalid value for --{option}: {value} "):
+            parser.parse_args(["eq", "input.wav", f"--{option}={value}", "--json"])
 
     # The last enumerator is inside the domain, so it must get past validation
     # rather than be refused by an off-by-one bound.
-    args = cli._build_parser().parse_args(
-        ["eq", "input.wav", f"--{option}", str(last_accepted), "--json"]
-    )
-    _cli_mastering._check_eq_enum_options(args)
+    args = parser.parse_args(["eq", "input.wav", f"--{option}", str(last_accepted), "--json"])
+    assert getattr(args, option.replace("-", "_")) == last_accepted
 
 
 def test_eq_names_and_refuses_a_params_key_the_processor_does_not_read(monkeypatch) -> None:
