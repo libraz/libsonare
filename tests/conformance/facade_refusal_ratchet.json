@@ -15,7 +15,7 @@
   },
   "native": {
     "value-echo": 49,
-    "unknown-key": 2,
+    "unknown-key": 0,
     "array-scan": 1
   },
   "core": {
