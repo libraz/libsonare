@@ -61,12 +61,18 @@ class TestMasteringRepairDecrackle:
 
     def test_unknown_mode_raises(self) -> None:
         samples = self._sample()
-        with pytest.raises(ValueError, match="invalid decrackle mode"):
+        with pytest.raises(
+            ValueError,
+            match="^mastering_repair_decrackle: mode must be one of median, waveletShrinkage$",
+        ):
             libsonare.mastering_repair_decrackle(samples, SR, mode="not-a-mode")  # type: ignore[arg-type]
 
     def test_an_ordinal_mode_is_a_type_error(self) -> None:
         samples = self._sample()
-        with pytest.raises(TypeError, match="decrackle mode"):
+        with pytest.raises(
+            TypeError,
+            match="^mastering_repair_decrackle: mode must be one of median, waveletShrinkage$",
+        ):
             libsonare.mastering_repair_decrackle(samples, SR, mode=1)  # type: ignore[arg-type]
 
 
@@ -263,12 +269,16 @@ class TestMasteringRepairTrimSilence:
 
     def test_unknown_mode_raises(self) -> None:
         samples = self._sample()
-        with pytest.raises(ValueError, match="invalid trim_silence mode"):
+        with pytest.raises(
+            ValueError, match="^mastering_repair_trim_silence: mode must be one of peak, lufsGated$"
+        ):
             libsonare.mastering_repair_trim_silence(samples, SR, mode="not-a-mode")  # type: ignore[arg-type]
 
     def test_an_ordinal_mode_is_a_type_error(self) -> None:
         samples = self._sample()
-        with pytest.raises(TypeError, match="trim_silence mode"):
+        with pytest.raises(
+            TypeError, match="^mastering_repair_trim_silence: mode must be one of peak, lufsGated$"
+        ):
             libsonare.mastering_repair_trim_silence(samples, SR, mode=1)  # type: ignore[arg-type]
 
     def test_negative_padding_raises(self) -> None:

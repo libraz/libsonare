@@ -134,7 +134,9 @@ def test_an_ordinal_is_a_type_error(
     name: str, call: Callable[..., Any], keyword: str, tokens: tuple[str, ...], retired: str
 ) -> None:
     for number in (0, 1, True):
-        with pytest.raises(TypeError, match="expected a string token"):
+        with pytest.raises(
+            TypeError, match=f"^{name}: {keyword} must be one of {', '.join(tokens)}$"
+        ):
             call(**{keyword: number})
 
 
@@ -144,4 +146,4 @@ def test_a_retired_spelling_names_the_tokens(
 ) -> None:
     with pytest.raises(SonareValueError) as caught:
         call(**{keyword: retired})
-    assert str(list(tokens)) in str(caught.value)
+    assert str(caught.value) == f"{name}: {keyword} must be one of {', '.join(tokens)}"

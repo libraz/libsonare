@@ -177,7 +177,7 @@ map) or a flat config. JSON text is parsed by the caller (``json.loads``) first.
 def _voice_config_to_json(config: object) -> bytes:
     """A preset id is checked against the built-in ids; a mapping is a document."""
     if isinstance(config, str):
-        _token_ordinal(config, _VOICE_PRESET_IDS, "config preset id")
+        _token_ordinal(config, _VOICE_PRESET_IDS, "config")
         return _utf8_arg(config, "config")
     if isinstance(config, Mapping):
         return _utf8_arg(json.dumps(dict(config), separators=(",", ":")), "config")
@@ -542,9 +542,9 @@ class RealtimeVoiceChanger:
         carrier: Sequence[float] | list[float] | np.ndarray | None,
     ) -> list[np.ndarray]:
         if isinstance(channels, np.ndarray) and channels.ndim != 2:
-            raise _not_planar_channels(channels, "channels")
+            raise _not_planar_channels("channels")
         if not isinstance(channels, (Sequence, np.ndarray)):
-            raise _not_planar_channels(channels, "channels")
+            raise _not_planar_channels("channels")
         # Private copies the C call may write into; the caller's buffers stay untouched.
         # Zero frames is a no-op here, as on the mono and interleaved paths.
         planes = [
@@ -1110,10 +1110,10 @@ class RealtimeVoiceChangerConfig:
         return out
 
 
-def _resolve_preset_ordinal(preset: VoicePresetId) -> int:
+def _resolve_preset_ordinal(preset: VoicePresetId, key: str) -> int:
     if isinstance(preset, str):
         _utf8_arg(preset, "preset")
-    return _token_ordinal(preset, _VOICE_PRESET_IDS, "voice character preset")
+    return _token_ordinal(preset, _VOICE_PRESET_IDS, key)
 
 
 @_entry("realtime_voice_changer_preset_config")
@@ -1130,7 +1130,7 @@ def realtime_voice_changer_preset_config(preset: VoicePresetId) -> RealtimeVoice
     lib = _get_lib()
     pod = SonareRealtimeVoiceChangerConfig()
     rc = lib.sonare_realtime_voice_changer_preset_config(
-        _to_c_int(_resolve_preset_ordinal(preset), "preset"), ctypes.byref(pod)
+        _to_c_int(_resolve_preset_ordinal(preset, "preset"), "preset"), ctypes.byref(pod)
     )
     _check(rc)
     return RealtimeVoiceChangerConfig._from_pod(pod)

@@ -295,7 +295,7 @@ class Mixer:
             ),
         )
         if not handle:
-            raise _last_error(int(ErrorCode.INVALID_PARAMETER), f"failed to add strip {id!r}")
+            raise _last_error(int(ErrorCode.INVALID_PARAMETER), "failed to add strip")
         return self.strip_by_id(id)
 
     @_entry("Mixer.add_bus")
@@ -459,7 +459,7 @@ class Mixer:
         if isinstance(strip, str):
             handle = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip, "strip"))
             if not handle:
-                raise _refuse(f"mixer strip id not found: {strip!r}")
+                raise _refuse("strip must be the id of a strip in this mixer")
         else:
             handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(strip, "strip"))
             if not handle:
@@ -477,12 +477,12 @@ class Mixer:
         lib = _get_lib()
         target = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(id, "id"))
         if not target:
-            raise _refuse(f"mixer strip id not found: {id!r}")
+            raise _refuse("id must be the id of a strip in this mixer")
         for index in range(self.strip_count):
             handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(index, "index"))
             if handle and int(handle) == int(target):
                 return index
-        raise _refuse(f"mixer strip id not found: {id!r}")
+        raise _refuse("id must be the id of a strip in this mixer")
 
     @_entry("Mixer.set_soloed")
     def set_soloed(self, strip: StripRef, soloed: bool) -> None:
@@ -517,7 +517,11 @@ class Mixer:
         A mono source is unity at centre under every law (see :data:`PanLaw`).
         """
         handle = self._strip_handle(strip)
-        _check(_get_lib().sonare_strip_set_pan_law(handle, ctypes.c_int(_pan_law_value(pan_law))))
+        _check(
+            _get_lib().sonare_strip_set_pan_law(
+                handle, ctypes.c_int(_pan_law_value(pan_law, "pan_law"))
+            )
+        )
 
     @_entry("Mixer.set_channel_delay_samples")
     def set_channel_delay_samples(self, strip: StripRef, delay_samples: int) -> None:
@@ -613,7 +617,7 @@ class Mixer:
             SonareValueError: If ``pan`` is outside [-1, 1] or non-finite.
         """
         handle = self._strip_handle(strip)
-        mode = -1 if pan_mode is None else _pan_mode_value(pan_mode)
+        mode = -1 if pan_mode is None else _pan_mode_value(pan_mode, "pan_mode")
         _check(
             _get_lib().sonare_strip_set_pan(
                 handle, _to_c_float(pan, "pan"), _to_c_int(mode, "mode")
@@ -688,7 +692,7 @@ class Mixer:
                 _utf8_arg(send_id, "send_id"),
                 _utf8_arg(destination_bus_id, "destination_bus_id"),
                 _to_c_float(send_db, "send_db"),
-                ctypes.c_int(_send_timing_value(timing)),
+                ctypes.c_int(_send_timing_value(timing, "timing")),
                 ctypes.byref(index_out),
             )
         )
@@ -735,7 +739,7 @@ class Mixer:
         _require_export(lib, "sonare_strip_meter_tap", _WITHOUT_MIXING)
         _check(
             lib.sonare_strip_meter_tap(
-                handle, ctypes.c_int(_meter_tap_value(tap)), ctypes.byref(snapshot)
+                handle, ctypes.c_int(_meter_tap_value(tap, "tap")), ctypes.byref(snapshot)
             )
         )
         return _mix_meter_from_c(snapshot)
@@ -907,7 +911,7 @@ class Mixer:
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),
                 _to_c_float(fader_db, "fader_db"),
-                ctypes.c_int(_curve_value(curve)),
+                ctypes.c_int(_curve_value(curve, "curve")),
             )
         )
 
@@ -926,7 +930,7 @@ class Mixer:
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),
                 _to_c_float(pan, "pan"),
-                ctypes.c_int(_curve_value(curve)),
+                ctypes.c_int(_curve_value(curve, "curve")),
             )
         )
 
@@ -945,7 +949,7 @@ class Mixer:
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),
                 _to_c_float(width, "width"),
-                ctypes.c_int(_curve_value(curve)),
+                ctypes.c_int(_curve_value(curve, "curve")),
             )
         )
 
@@ -966,7 +970,7 @@ class Mixer:
                 _to_c_size_t(send_index, "send_index"),
                 _to_c_int64(sample_pos, "sample_pos"),
                 _to_c_float(db, "db"),
-                ctypes.c_int(_curve_value(curve)),
+                ctypes.c_int(_curve_value(curve, "curve")),
             )
         )
 
@@ -1001,7 +1005,7 @@ class Mixer:
                 _to_c_uint(param_id, "param_id"),
                 _to_c_int64(sample_pos, "sample_pos"),
                 _to_c_float(value, "value"),
-                ctypes.c_int(_curve_value(curve)),
+                ctypes.c_int(_curve_value(curve, "curve")),
             )
         )
 
@@ -1316,7 +1320,11 @@ def mix_stereo(
                     _to_c_float(
                         pan[index] if pan is not None and index < len(pan) else 0.0, f"pan[{index}]"
                     ),
-                    ctypes.c_int(_pan_mode_value(mode)),
+                    ctypes.c_int(
+                        _pan_mode_value(
+                            mode, "pan_mode" if mode_list is None else f"pan_mode[{index}]"
+                        )
+                    ),
                 )
             )
             if width is not None and index < len(width):

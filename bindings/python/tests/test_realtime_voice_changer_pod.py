@@ -73,9 +73,11 @@ def test_preset_config_distinguishes_presets() -> None:
 
 
 def test_preset_config_rejects_an_unknown_name_listing_the_ids() -> None:
-    with pytest.raises(SonareValueError, match="invalid voice character preset") as caught:
+    with pytest.raises(
+        SonareValueError, match="^realtime_voice_changer_preset_config: preset must be one of "
+    ) as caught:
         libsonare.realtime_voice_changer_preset_config("does-not-exist")  # type: ignore[arg-type]
-    assert "'radioVoice'" in str(caught.value)
+    assert str(caught.value).endswith(", radioVoice")
 
 
 @pytest.mark.parametrize("value", [0, 1, 2**32, True, False, 1.0])
@@ -89,7 +91,9 @@ def test_preset_config_refuses_a_number_rather_than_reading_it_as_an_ordinal(val
     ids = ("neutralMonitor", "brightIdol", "softWhisper")
     folded = [dataclasses.astuple(libsonare.realtime_voice_changer_preset_config(i)) for i in ids]
     assert len(set(folded)) == 3
-    with pytest.raises(TypeError, match="voice character preset"):
+    with pytest.raises(
+        TypeError, match="^realtime_voice_changer_preset_config: preset must be one of "
+    ):
         libsonare.realtime_voice_changer_preset_config(value)
 
 

@@ -342,7 +342,7 @@ def _transcribe_monophonic_model(value: str | None) -> int:
     if not isinstance(value, str):
         raise _refuse_type("monophonic_model must be a string or None")
     if value not in _MONOPHONIC_MODELS:
-        raise _refuse("monophonic_model must be 'segments' or 'singing'")
+        raise _refuse(f"monophonic_model must be one of {', '.join(_MONOPHONIC_MODELS)}")
     return _MONOPHONIC_MODELS[value]
 
 

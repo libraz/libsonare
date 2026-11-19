@@ -314,7 +314,7 @@ def downmix(
         raise _refuse_type("normalize must be a bool")
     if not isinstance(include_lfe, bool):
         raise _refuse_type("include_lfe must be a bool")
-    layout = _channel_layout_value(target_layout)
+    layout = _channel_layout_value(target_layout, "target_layout")
     planes = _linked_channel_planes(channels)
     frame_count = int(planes[0].shape[0])
     if any(int(plane.shape[0]) != frame_count for plane in planes):

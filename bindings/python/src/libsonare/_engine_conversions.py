@@ -70,23 +70,23 @@ from ._types_enums import (
 )
 
 
-def _track_monitor_mode_value(mode: EngineTrackMonitorMode) -> int:
+def _track_monitor_mode_value(mode: EngineTrackMonitorMode, key: str) -> int:
     """Resolve a track monitor mode token to its C enum ordinal."""
-    return _token_ordinal(mode, _TRACK_MONITOR_MODES, "track monitor mode")
+    return _token_ordinal(mode, _TRACK_MONITOR_MODES, key)
 
 
-def _capture_source_value(source: EngineCaptureSource) -> int:
+def _capture_source_value(source: EngineCaptureSource, key: str) -> int:
     """Resolve a capture source token to its C enum ordinal."""
-    return _token_ordinal(source, _CAPTURE_SOURCES, "capture source")
+    return _token_ordinal(source, _CAPTURE_SOURCES, key)
 
 
 def _capture_source_name(source: int) -> EngineCaptureSource:
     return cast(EngineCaptureSource, _CAPTURE_SOURCES[int(source)])
 
 
-def _marker_kind_value(kind: MarkerKind) -> int:
+def _marker_kind_value(kind: MarkerKind, key: str) -> int:
     """Resolve a marker kind token to its C enum ordinal."""
-    return _token_ordinal(kind, _MARKER_KINDS, "marker kind")
+    return _token_ordinal(kind, _MARKER_KINDS, key)
 
 
 def _marker_kind_name(kind: int) -> MarkerKind:
@@ -144,7 +144,7 @@ def _automation_points_to_c(
         _require_instance(point, AutomationPoint, f"points[{i}]")
         raw[i].ppq = _narrow_double(point.ppq, f"points[{i}].ppq")
         raw[i].value = _narrow_double(point.value, f"points[{i}].value")
-        raw[i].curve_to_next = _curve_value(point.curve_to_next)
+        raw[i].curve_to_next = _curve_value(point.curve_to_next, f"points[{i}].curve_to_next")
     return raw
 
 
@@ -196,7 +196,7 @@ def _marker_to_c(value: object) -> SonareEngineMarker:
     raw.id = marker_id
     # Assigned unconverted so the struct's own narrowing sees each caller value;
     # int() would truncate a fraction past it.
-    raw.kind = _marker_kind_value(marker.kind)
+    raw.kind = _marker_kind_value(marker.kind, "marker.kind")
     raw.key_fifths = marker.key_fifths
     raw.key_minor = 1 if marker.key_minor else 0
     raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
@@ -277,7 +277,7 @@ def _clips_to_c(
             raw.gain = _narrow_double(clip.gain, "clip.gain")
             raw.fade_in_samples = clip.fade_in_samples
             raw.fade_out_samples = clip.fade_out_samples
-            raw.warp_mode = _warp_mode_value(clip.warp_mode)
+            raw.warp_mode = _warp_mode_value(clip.warp_mode, "clip.warp_mode")
             raw.page_provider = page_provider._require_handle()
             if clip.warp_anchors:
                 anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
@@ -306,7 +306,7 @@ def _clips_to_c(
         raw.gain = _narrow_double(clip.gain, "clip.gain")
         raw.fade_in_samples = clip.fade_in_samples
         raw.fade_out_samples = clip.fade_out_samples
-        raw.warp_mode = _warp_mode_value(clip.warp_mode)
+        raw.warp_mode = _warp_mode_value(clip.warp_mode, "clip.warp_mode")
         if clip.warp_anchors:
             anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
             for i, (warp_sample, source_sample) in enumerate(clip.warp_anchors):
@@ -330,7 +330,7 @@ def _clips_to_c(
 def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
     raw = SonareEngineGraphNode()
     raw.id = _fixed_bytes(node.id, 64, "id")
-    raw.type = _token_ordinal(node.type, _GRAPH_NODE_TYPES, "graph node type")
+    raw.type = _token_ordinal(node.type, _GRAPH_NODE_TYPES, "node.type")
     raw.gain_db = _narrow_double(node.gain_db, "node.gain_db")
     raw.num_ports = _optional_positive_int(node.num_ports, "num_ports", _C_INT_MAX)
     return raw
@@ -344,7 +344,7 @@ def _graph_connection_to_c(connection: EngineGraphConnection) -> SonareEngineGra
     raw.source_port = connection.source_port
     raw.dest_node = _fixed_bytes(connection.dest_node, 64, "dest_node")
     raw.dest_port = connection.dest_port
-    raw.mix = _token_ordinal(connection.mix, _GRAPH_MIXES, "graph connection mix")
+    raw.mix = _token_ordinal(connection.mix, _GRAPH_MIXES, "connection.mix")
     return raw
 
 

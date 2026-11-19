@@ -8,6 +8,7 @@ refusing the right thing.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 
 import pytest
@@ -26,7 +27,7 @@ def _refuses(
     call: Callable[[dict[str, object]], object], good: Mapping[str, object], key: str
 ) -> None:
     call(dict(good))
-    with pytest.raises(SonareValueError, match=f"unknown key '{key}'"):
+    with pytest.raises(SonareValueError, match=rf"unknown key [^ ]*\b{re.escape(key)}\b"):
         call({**good, key: 1})
 
 
@@ -118,12 +119,14 @@ def test_an_external_stem_takes_one_spelling_and_a_layout_token() -> None:
     try:
         stem = {"name": "vox", "layout": "mono", "planar_samples": [[0.0] * 64], "role": "vocals"}
         before = project.to_json()
-        with pytest.raises(SonareValueError, match="unknown key 'channels'"):
+        with pytest.raises(SonareValueError, match=r"unknown key stems\[0\]\.channels \(expected "):
             project.import_external_stems(48000, [{**stem, "channels": stem["planar_samples"]}])
         # A channel count is not the layout token, and a near spelling lists the tokens.
-        with pytest.raises(TypeError, match="stem layout"):
+        with pytest.raises(TypeError, match=r"stems\[0\]\.layout must be one of mono, stereo"):
             project.import_external_stems(48000, [{**stem, "layout": 1}])
-        with pytest.raises(SonareValueError, match="'mono'"):
+        with pytest.raises(
+            SonareValueError, match=r"stems\[0\]\.layout must be one of mono, stereo"
+        ):
             project.import_external_stems(48000, [{**stem, "layout": "Mono"}])
         assert project.to_json() == before
         imported = project.import_external_stems(48000, [stem])

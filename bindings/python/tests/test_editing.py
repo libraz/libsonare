@@ -267,7 +267,7 @@ def test_pitch_correct_timevarying_scale_and_knobs() -> None:
         libsonare.pitch_correct_timevarying(
             samples, f0_hz=f0, sample_rate=sr, hop_length=hop, target_midi=200.0
         )
-    with pytest.raises(ValueError, match="expected one of"):
+    with pytest.raises(ValueError, match=" must be one of "):
         libsonare.pitch_correct_timevarying(
             samples, f0_hz=f0, sample_rate=sr, hop_length=hop, target_mode="Scale"
         )
@@ -502,7 +502,7 @@ def test_realtime_voice_changer_invalid_max_block_size() -> None:
 def test_realtime_voice_changer_invalid_preset_id() -> None:
     """An unrecognised preset id is an argument refusal at construction."""
 
-    with pytest.raises(libsonare.SonareValueError, match="config preset id"):
+    with pytest.raises(libsonare.SonareValueError, match="config must be one of "):
         libsonare.RealtimeVoiceChanger(48000, num_channels=1, config="nonexistent-preset-id-xyz")
 
 
@@ -512,11 +512,11 @@ def test_a_voice_changer_config_string_is_a_preset_id_and_a_mapping_is_a_documen
     with libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=document) as changer:
         changer.set_config("brightIdol")
         changer.set_config(document)
-        with pytest.raises(libsonare.SonareValueError, match="config preset id"):
+        with pytest.raises(libsonare.SonareValueError, match="config must be one of "):
             changer.set_config(json.dumps(document))
         with pytest.raises(TypeError, match="json.loads"):
             changer.set_config(3)  # type: ignore[arg-type]
-    with pytest.raises(libsonare.SonareValueError, match="config preset id"):
+    with pytest.raises(libsonare.SonareValueError, match="config must be one of "):
         libsonare.voice_change_realtime([0.0] * 64, sample_rate=48000, config=json.dumps(document))
 
 

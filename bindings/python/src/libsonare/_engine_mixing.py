@@ -78,7 +78,7 @@ def _sidechain_source_pair(source: SidechainSource | None, *, removable: bool) -
         return _TRACK_SOURCE_KIND, 0
     if not isinstance(source, SidechainSource):
         raise _refuse_type("source must be a SidechainSource or None")
-    kind = _sidechain_source_kind_value(source.kind)
+    kind = _sidechain_source_kind_value(source.kind, "source.kind")
     source_id = _narrow_int(source.id, "source.id", 0, _UINT32_MAX)
     if source_id == 0:
         raise _refuse("source.id must not be 0 (pass None to remove the binding)")
@@ -124,7 +124,9 @@ def _marshal_sends(
         # Absent timing is post-fader, the C default.
         timing = send.get("send_timing")
         send_array[send_index].send_timing = (
-            _send_timing_value(cast(SendTiming, timing)) if timing is not None else 0
+            _send_timing_value(cast(SendTiming, timing), f"{where}[{send_index}].send_timing")
+            if timing is not None
+            else 0
         )
     return send_array
 
@@ -169,7 +171,8 @@ class _EngineMixingMixin:
             )
             if "source_channel_layout" in lane:
                 raw[i].source_channel_layout = _channel_layout_value(
-                    cast(ChannelLayout, lane["source_channel_layout"])
+                    cast(ChannelLayout, lane["source_channel_layout"]),
+                    f"{where}.source_channel_layout",
                 )
         _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
         self._lane_order = [int(raw[i].track_id) for i in range(len(lanes))]
@@ -331,7 +334,7 @@ class _EngineMixingMixin:
             # unless the caller specifies it.
             if "channel_layout" in bus:
                 raw[i].channel_layout = _channel_layout_value(
-                    cast(ChannelLayout, bus["channel_layout"])
+                    cast(ChannelLayout, bus["channel_layout"]), f"{where}.channel_layout"
                 )
             else:
                 raw[i].channel_layout = 1
@@ -653,7 +656,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_track_strip_pan_law(
                 self._require_handle(),
                 _to_c_uint32(_track_only("set_strip_pan_law", ref), "strip"),
-                _pan_law_value(pan_law),
+                _pan_law_value(pan_law, "pan_law"),
             )
         )
 
@@ -664,7 +667,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_track_strip_pan_mode(
                 self._require_handle(),
                 _to_c_uint32(_track_only("set_strip_pan_mode", ref), "strip"),
-                _pan_mode_value(pan_mode),
+                _pan_mode_value(pan_mode, "pan_mode"),
             )
         )
 
@@ -742,7 +745,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_bus_strip_pan_law(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
-                _pan_law_value(pan_law),
+                _pan_law_value(pan_law, "pan_law"),
             )
         )
 
@@ -753,7 +756,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_bus_strip_pan_mode(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
-                _pan_mode_value(pan_mode),
+                _pan_mode_value(pan_mode, "pan_mode"),
             )
         )
 

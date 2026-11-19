@@ -155,7 +155,11 @@ def test_source_class_names_resolve_to_their_index():
 def test_an_unknown_source_class_name_is_refused():
     from libsonare import SonareValueError, mixing_assistant_source_class_from_name
 
-    with pytest.raises(SonareValueError, match="not-a-source-class"):
+    with pytest.raises(
+        SonareValueError,
+        match="^mixing_assistant_source_class_from_name: name must be the name of a source "
+        "class listed by mixing_assistant_source_class_names$",
+    ):
         mixing_assistant_source_class_from_name("not-a-source-class")
 
 
@@ -384,7 +388,10 @@ def test_duplicate_track_ids_are_rejected():
     from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
 
     tracks = [MixAssistantTrack("bass", [_tone(110.0)]), MixAssistantTrack("bass", [_tone(220.0)])]
-    with pytest.raises(SonareValueError, match="duplicate"):
+    with pytest.raises(
+        SonareValueError,
+        match=r"^mixing_assistant_suggest: tracks\[1\]\.id must be unique among tracks$",
+    ):
         mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
 
 

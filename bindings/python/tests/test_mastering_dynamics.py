@@ -54,14 +54,23 @@ class TestCompressor:
 
     def test_detector_is_a_token(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        with pytest.raises(TypeError, match="compressor detector"):
+        with pytest.raises(
+            TypeError,
+            match="^mastering_dynamics_compressor: detector must be one of peak, rms, logRms$",
+        ):
             mastering_dynamics_compressor(x, SR, detector=0)  # type: ignore[arg-type]
-        with pytest.raises(ValueError, match="'logRms'"):
+        with pytest.raises(
+            ValueError,
+            match="^mastering_dynamics_compressor: detector must be one of peak, rms, logRms$",
+        ):
             mastering_dynamics_compressor(x, SR, detector="log_rms")  # type: ignore[arg-type]
 
     def test_rejects_unknown_detector_string(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        with pytest.raises(ValueError, match="invalid compressor detector"):
+        with pytest.raises(
+            ValueError,
+            match="^mastering_dynamics_compressor: detector must be one of peak, rms, logRms$",
+        ):
             mastering_dynamics_compressor(x, SR, detector="not-a-mode")  # type: ignore[arg-type]
 
     def test_sidechain_high_pass_eases_compression_of_a_low_tone(self) -> None:

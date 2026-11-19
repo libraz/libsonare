@@ -256,8 +256,8 @@ ProjectChordQuality: TypeAlias = Literal[
 _PROJECT_CHORD_QUALITIES: tuple[str, ...] = get_args(ProjectChordQuality)
 
 
-def _automation_target_kind_value(value: object) -> int:
-    return _token_ordinal(value, _AUTOMATION_TARGET_KINDS, "automation target kind")
+def _automation_target_kind_value(value: object, key: str) -> int:
+    return _token_ordinal(value, _AUTOMATION_TARGET_KINDS, key)
 
 
 def _automation_target_param_id_value(value: object) -> int:
@@ -272,12 +272,12 @@ def _automation_target_param_id_value(value: object) -> int:
     return int(target)
 
 
-def _fade_curve_value(curve: ProjectFadeCurve) -> int:
-    return _token_ordinal(curve, _FADE_CURVES, "fade curve")
+def _fade_curve_value(curve: ProjectFadeCurve, key: str) -> int:
+    return _token_ordinal(curve, _FADE_CURVES, key)
 
 
-def _loop_mode_value(mode: ProjectLoopMode) -> int:
-    return _token_ordinal(mode, _LOOP_MODES, "loop mode")
+def _loop_mode_value(mode: ProjectLoopMode, key: str) -> int:
+    return _token_ordinal(mode, _LOOP_MODES, key)
 
 
 def _automation_lane_desc(
@@ -475,7 +475,7 @@ def _cc_binding_to_c(binding: MidiCcBinding) -> SonareMidiCcBinding:
     return SonareMidiCcBinding(
         cc_number=_narrow_int(binding.cc_number, "cc_number", 0, _MIDI_DATA_MAX),
         channel=_absent_or_in_range(binding.channel, "channel", 15, 0xFF),
-        kind=_token_ordinal(binding.kind, _MIDI_CC_BINDING_KINDS, "MIDI CC binding kind"),
+        kind=_token_ordinal(binding.kind, _MIDI_CC_BINDING_KINDS, "binding.kind"),
         cc_lsb_number=_narrow_int(binding.cc_lsb_number, "cc_lsb_number", 0, _MIDI_DATA_MAX),
         selector_msb=_narrow_int(binding.selector_msb, "selector_msb", 0, _MIDI_DATA_MAX),
         selector_lsb=_narrow_int(binding.selector_lsb, "selector_lsb", 0, _MIDI_DATA_MAX),
@@ -602,8 +602,8 @@ def _check_project_abi(lib: Any) -> None:
         )
 
 
-def _track_kind_value(kind: ProjectTrackKind) -> int:
-    return _token_ordinal(kind, _TRACK_KINDS, "track kind")
+def _track_kind_value(kind: ProjectTrackKind, key: str) -> int:
+    return _token_ordinal(kind, _TRACK_KINDS, key)
 
 
 def _midi_event_packed(name: str, *args: float | ctypes._SimpleCData[int]) -> ProjectMidiEvent:
@@ -627,7 +627,7 @@ def _midi_event_from_c(event: SonareMidiEventPod) -> ProjectMidiEvent:
 def _midi_event_to_c(event: object, label: str) -> SonareMidiEventPod:
     """Validate one :class:`ProjectMidiEvent` and pack it for the C ABI."""
     if not isinstance(event, ProjectMidiEvent):
-        raise _refuse_type(f"{label} must be a ProjectMidiEvent, not {type(event).__name__}")
+        raise _refuse_type(f"{label} must be a ProjectMidiEvent")
     return SonareMidiEventPod(
         ppq=_validate_midi_event_ppq(event.ppq, f"{label}.ppq"),
         word0=_validate_midi_event_word(event.word0, f"{label}.word0"),

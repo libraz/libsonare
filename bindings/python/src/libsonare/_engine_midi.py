@@ -545,9 +545,9 @@ class _EngineMidiMixin:
         """
         lib = _get_lib()
         binding = SonareControllerBinding(
-            input=_controller_input_value(input),
+            input=_controller_input_value(input, "input"),
             index=index,
-            axis=_controller_axis_value(axis),
+            axis=_controller_axis_value(axis, "axis"),
             reserved=0,
             lo=lo,
             hi=hi,
@@ -653,8 +653,8 @@ class _EngineMidiMixin:
             lib.sonare_engine_set_controller_note_tracking(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
-                _to_c_int(_mpe_dimension_value(dimension), "dimension"),
-                _to_c_int(_note_tracking_value(tracking), "tracking"),
+                _to_c_int(_mpe_dimension_value(dimension, "dimension"), "dimension"),
+                _to_c_int(_note_tracking_value(tracking, "tracking"), "tracking"),
             )
         )
 
@@ -673,7 +673,7 @@ class _EngineMidiMixin:
             lib.sonare_engine_controller_note_tracking(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
-                _to_c_int(_mpe_dimension_value(dimension), "dimension"),
+                _to_c_int(_mpe_dimension_value(dimension, "dimension"), "dimension"),
                 ctypes.byref(out),
             )
         )
@@ -718,7 +718,7 @@ class _EngineMidiMixin:
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
                 _to_c_uint8(channel, "channel"),
-                _to_c_int(_articulation_value(articulation), "articulation"),
+                _to_c_int(_articulation_value(articulation, "articulation"), "articulation"),
             )
         )
 
@@ -744,7 +744,7 @@ class _EngineMidiMixin:
         Control-thread only: do not call concurrently with :meth:`process`.
         """
         lib = _get_lib()
-        mode_value = _part_rig_mode_value(mode)
+        mode_value = _part_rig_mode_value(mode, "mode")
         _check(
             lib.sonare_engine_set_part_rig(
                 self._require_handle(),

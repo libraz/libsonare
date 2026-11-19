@@ -1003,9 +1003,15 @@ def test_engine_param_info_shape() -> None:
     assert force.min is not None and force.max is not None
     assert force.min <= force.default <= force.max
     assert force.unit
-    with pytest.raises(TypeError, match="engine mode"):
+    with pytest.raises(
+        TypeError,
+        match="^synth_engine_param_info: engine_mode must be one of default, subtractive, ",
+    ):
         synth_engine_param_info(SYNTH_ENUM_TABLES["engine_modes"].index("bowedString"))  # type: ignore[arg-type]
-    with pytest.raises(SonareValueError, match="engine mode"):
+    with pytest.raises(
+        SonareValueError,
+        match="^synth_engine_param_info: engine_mode must be one of default, subtractive, ",
+    ):
         synth_engine_param_info("BowedString")  # type: ignore[arg-type]
     patch_rows = synth_patch_param_info()
     names = {row.name for row in patch_rows}

@@ -357,7 +357,10 @@ def test_an_unknown_policy_is_refused_by_name() -> None:
     notes = [_note(0, HALF_SECOND)]
     targets = [NoteTarget(0.0, 0.5, 60.0)]
 
-    with pytest.raises(SonareValueError, match=r"'leave', 'mute', 'nearest'"):
+    with pytest.raises(
+        SonareValueError,
+        match="^assign_note_targets: unmatched_policy must be one of leave, mute, nearest$",
+    ):
         libsonare.assign_note_targets(notes, SR, targets, unmatched_policy="Nearest")
 
 

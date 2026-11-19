@@ -158,7 +158,7 @@ class _EngineIoMixin:
         # Narrowed, not int()-coerced: int(1024.5) is a buffer one frame short.
         channel_count = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
         frame_capacity = _narrow_int(capacity_frames, "capacity_frames", 1, _INT64_MAX)
-        source_value = _capture_source_value(source)
+        source_value = _capture_source_value(source, "source")
         offset = _narrow_int(record_offset_samples, "record_offset_samples", _INT64_MIN, _INT64_MAX)
         monitor = (
             CaptureInputMonitor(enabled=True)
@@ -431,7 +431,7 @@ class _EngineIoMixin:
         raw_options.dither = (
             0
             if options.dither is None
-            else _token_ordinal(options.dither, _ENGINE_DITHERS, "dither") + 1
+            else _token_ordinal(options.dither, _ENGINE_DITHERS, "options.dither") + 1
         )
         # Same narrowing as the fields above, worded against this entry point:
         # int(0.5) is the 0 this field reads as "keep the default 16", so a

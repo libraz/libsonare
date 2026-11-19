@@ -149,7 +149,7 @@ REFUSALS: dict[str, tuple[Callable[[Any], object], tuple[object, ...], tuple[obj
 def test_an_unknown_name_is_refused_naming_the_tokens(name: str) -> None:
     call, unknown, _ = REFUSALS[name]
     for value in unknown:
-        with pytest.raises(SonareValueError, match="expected one of"):
+        with pytest.raises(SonareValueError, match=" must be one of "):
             call(value)
 
 

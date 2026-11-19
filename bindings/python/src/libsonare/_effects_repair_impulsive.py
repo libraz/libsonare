@@ -63,8 +63,8 @@ from .types import (
 _DEFAULT_CLIP_THRESHOLD_DB = 20.0 * math.log10(0.98)
 
 
-def _coerce_decrackle_mode(value: DecrackleMode) -> int:
-    return _token_ordinal(value, _DECRACKLE_MODES, "decrackle mode")
+def _coerce_decrackle_mode(value: DecrackleMode, key: str) -> int:
+    return _token_ordinal(value, _DECRACKLE_MODES, key)
 
 
 @_entry("mastering_repair_declick")
@@ -518,7 +518,7 @@ def mastering_repair_decrackle(
     """Offline crackle suppressor (median or wavelet-shrinkage)."""
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
-        mode=_coerce_decrackle_mode(mode),
+        mode=_coerce_decrackle_mode(mode, "mode"),
         # Narrowed rather than coerced: int() takes 4.7 as 4, a depth nobody asked for.
         levels=_narrow_int(levels, "levels", _C_INT_MIN, _C_INT_MAX),
     )
@@ -586,7 +586,7 @@ def mastering_repair_detect_crackle(
     """
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
-        mode=_coerce_decrackle_mode(mode),
+        mode=_coerce_decrackle_mode(mode, "mode"),
         levels=_narrow_int(levels, "levels", _C_INT_MIN, _C_INT_MAX),
     )
     return _extract_crackle_detection(
@@ -651,7 +651,7 @@ def mastering_repair_decrackle_stereo(
         raise _refuse("left and right channel lengths must match")
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
-        mode=_coerce_decrackle_mode(mode),
+        mode=_coerce_decrackle_mode(mode, "mode"),
         levels=_narrow_int(levels, "levels", _C_INT_MIN, _C_INT_MAX),
     )
     out = SonareDecrackleStereoResult()  # noqa: F405

@@ -482,7 +482,7 @@ class _ProjectInspectionMixin:
             raw.id = _to_c_uint32(marker_id, "marker_id")
         raw.ppq = _narrow_double(ppq, "ppq")
         if kind is not None:
-            raw.kind = _marker_kind_value(kind)
+            raw.kind = _marker_kind_value(kind, "kind")
         if key_fifths is not None:
             # Assigned unconverted so the struct's own narrowing sees the value.
             raw.key_fifths = key_fifths

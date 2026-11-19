@@ -283,7 +283,9 @@ def _auto_tune_key(key: object) -> SonareKey | None:
             raise _refuse("key must be 'detect' or a key with a root and a mode")
         return None
     root, mode = _key_pair(key)
-    return SonareKey(int(PitchClass(cast(int, root))), _mode_value(cast(KeyMode, mode)), 1.0)
+    return SonareKey(
+        int(PitchClass(cast(int, root))), _mode_value(cast(KeyMode, mode), "key.mode"), 1.0
+    )
 
 
 @_entry("auto_tune")

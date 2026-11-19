@@ -369,19 +369,34 @@ def test_mastering_pair_and_stereo_analysis() -> None:
 @pytest.mark.parametrize(
     ("platform", "message"),
     [
-        ({"name": "S", "targetLufs": -14.0, "ceiling_dbtp": -1.0}, "use 'target_lufs'"),
-        ({"name": "S", "target_lufs": -14.0, "ceilingDb": -1.0}, "use 'ceiling_dbtp'"),
-        ({"name": "S", "target_lufs": -14.0, "ceiling_db": -1.0}, "use 'ceiling_dbtp'"),
-        ({"name": "S", "target_lufs": -14.0}, "missing ceiling_dbtp"),
-        ({"name": "S", "target_lufs": -14.0, "ceiling_dbtp": -1.0, "gain": 0.0}, "'gain'"),
+        (
+            {"name": "S", "targetLufs": -14.0, "ceiling_dbtp": -1.0},
+            "unknown key platforms[0].targetLufs (renamed to platforms[0].target_lufs)",
+        ),
+        (
+            {"name": "S", "target_lufs": -14.0, "ceilingDb": -1.0},
+            "unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)",
+        ),
+        (
+            {"name": "S", "target_lufs": -14.0, "ceiling_db": -1.0},
+            "unknown key platforms[0].ceiling_db (renamed to platforms[0].ceiling_dbtp)",
+        ),
+        ({"name": "S", "target_lufs": -14.0}, "platform is missing ceiling_dbtp"),
+        (
+            {"name": "S", "target_lufs": -14.0, "ceiling_dbtp": -1.0, "gain": 0.0},
+            "unknown key platforms[0].gain (expected name, target_lufs, ceiling_dbtp)",
+        ),
     ],
 )
 def test_a_streaming_platform_takes_exactly_its_snake_case_keys(
     platform: dict[str, object], message: str
 ) -> None:
+    import re
+
     import libsonare
 
-    with pytest.raises(libsonare.SonareValueError, match=message):
+    pinned = f"^mastering_streaming_preview: {re.escape(message)}$"
+    with pytest.raises(libsonare.SonareValueError, match=pinned):
         libsonare.mastering_streaming_preview([0.1] * 4800, 48000, platforms=[platform])  # type: ignore[list-item]
 
 
@@ -766,7 +781,9 @@ def test_mastering_assistant_starts_from_the_named_preset() -> None:
     )
     assert "base preset: jazz" in stereo.explanation
 
-    with pytest.raises(ValueError, match="notAPreset"):
+    with pytest.raises(
+        ValueError, match="^mastering_assistant_suggest: params.preset must be one of "
+    ):
         explanation({"preset": "notAPreset"})
     # A restoration preset leaves level alone, which the suggestion never does.
     with pytest.raises(libsonare.SonareError, match="vinyl"):

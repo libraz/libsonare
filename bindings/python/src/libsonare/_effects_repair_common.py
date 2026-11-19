@@ -98,13 +98,13 @@ def _linked_channel_planes(
     """
     if isinstance(channels, np.ndarray):
         if channels.ndim != 2:
-            raise _not_planar_channels(channels, "channels")
+            raise _not_planar_channels("channels")
         planes: list[Any] = list(channels)
     else:
         try:
             planes = list(channels)
         except TypeError as exc:
-            raise _not_planar_channels(channels, "channels") from exc
+            raise _not_planar_channels("channels") from exc
     if not planes:
         raise _refuse("channels must not be empty")
     return [

@@ -31,19 +31,19 @@ _PAN_LAW_CORPUS = json.loads(
 
 
 def test_track_monitor_mode_tokens_map_to_their_ordinals() -> None:
-    assert [_track_monitor_mode_value(mode) for mode in ("off", "pfl", "afl")] == [0, 1, 2]
+    assert [_track_monitor_mode_value(mode, "mode") for mode in ("off", "pfl", "afl")] == [0, 1, 2]
 
 
 @pytest.mark.parametrize("value", ["OFF", "Pfl", "cue", "pfl\N{SNOWMAN}"])
 def test_another_track_monitor_mode_spelling_is_refused(value: str) -> None:
     with pytest.raises(SonareValueError, match="afl"):
-        _track_monitor_mode_value(value)  # type: ignore[arg-type]
+        _track_monitor_mode_value(value, "mode")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("value", [True, 0, 1, 1.0, math.nan])
 def test_a_track_monitor_mode_number_is_a_type_error(value: object) -> None:
     with pytest.raises(TypeError):
-        _track_monitor_mode_value(value)  # type: ignore[arg-type]
+        _track_monitor_mode_value(value, "mode")  # type: ignore[arg-type]
 
 
 def test_engine_track_monitor_mode_pfl_and_afl() -> None:
@@ -825,11 +825,15 @@ def test_track_solo_mute_and_monitor_mode_address_a_declared_track_id() -> None:
             out = engine.process([[0.0] * 256])
         assert abs(out[0][-1]) < 0.01
         engine.set_track_monitor_mode(10, "pfl")
-        for call in (
-            lambda: engine.set_track_solo_mute(1, solo=True, mute=False),
-            lambda: engine.set_track_monitor_mode(1, "pfl"),
+        for entry, call in (
+            ("set_track_solo_mute", lambda: engine.set_track_solo_mute(1, solo=True, mute=False)),
+            ("set_track_monitor_mode", lambda: engine.set_track_monitor_mode(1, "pfl")),
         ):
-            with pytest.raises(SonareValueError, match="unknown track id 1"):
+            with pytest.raises(
+                SonareValueError,
+                match=f"^RealtimeEngine.{entry}: track_id must be "
+                "the id of a track in this engine$",
+            ):
                 call()
         with pytest.raises(TypeError):
             engine.set_track_solo_mute(None, solo=True, mute=False)  # type: ignore[arg-type]

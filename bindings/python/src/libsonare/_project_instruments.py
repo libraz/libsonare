@@ -178,7 +178,7 @@ class BuiltinSynthConfig:
 
     def _to_c(self) -> SonareBuiltinSynthConfig:
         return SonareBuiltinSynthConfig(
-            waveform=_synth_waveform_value(self.waveform),
+            waveform=_synth_waveform_value(self.waveform, "waveform"),
             gain=_optional_nonzero_float(self.gain, "gain"),
             attack_ms=_optional_nonzero_float(self.attack_ms, "attack_ms"),
             decay_ms=_optional_nonzero_float(self.decay_ms, "decay_ms"),
@@ -271,9 +271,9 @@ class Sf2ProgramStatus:
     """Resolved SF2 preset name; empty for the synth fallback."""
 
 
-def _synth_waveform_value(waveform: SynthWaveform) -> int:
+def _synth_waveform_value(waveform: SynthWaveform, key: str) -> int:
     """Resolve a built-in synth waveform token to its C ordinal."""
-    return _synth_enum_value(waveform, _BUILTIN_SYNTH_WAVEFORMS, "synth waveform")
+    return _synth_enum_value(waveform, _BUILTIN_SYNTH_WAVEFORMS, key)
 
 
 @dataclass(frozen=True)
@@ -601,15 +601,15 @@ class SynthPatch:
             c.present_fields2 |= bit
 
         c.preset = preset
-        c.engine_mode = _synth_enum_value(self.engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
-        c.waveform = _synth_enum_value(self.waveform, _SYNTH_OSC_WAVEFORMS, "oscillator waveform")
+        c.engine_mode = _synth_enum_value(self.engine_mode, _SYNTH_ENGINE_MODES, "engine_mode")
+        c.waveform = _synth_enum_value(self.waveform, _SYNTH_OSC_WAVEFORMS, "waveform")
         _set_int("unison", SONARE_SYNTH_FIELD_UNISON, self.unison)
         _set_float("detune_cents", SONARE_SYNTH_FIELD_DETUNE_CENTS, self.detune_cents)
         _set_float("drift_cents", SONARE_SYNTH_FIELD_DRIFT_CENTS, self.drift_cents)
         _set_float("drive", SONARE_SYNTH_FIELD_DRIVE, self.drive)
-        c.filter_model = _synth_enum_value(self.filter_model, _SYNTH_FILTER_MODELS, "filter model")
+        c.filter_model = _synth_enum_value(self.filter_model, _SYNTH_FILTER_MODELS, "filter_model")
         c.filter_output = _synth_enum_value(
-            self.filter_output, _SYNTH_FILTER_OUTPUTS, "filter output"
+            self.filter_output, _SYNTH_FILTER_OUTPUTS, "filter_output"
         )
         _set_float("cutoff_hz", SONARE_SYNTH_FIELD_CUTOFF_HZ, self.cutoff_hz)
         _set_float("hp_cutoff_hz", SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, self.hp_cutoff_hz)
@@ -646,11 +646,11 @@ class SynthPatch:
         )
         _set_float("lfo2_rate_hz", SONARE_SYNTH_FIELD_LFO2_RATE_HZ, self.lfo2_rate_hz)
         _set_float("glide_ms", SONARE_SYNTH_FIELD_GLIDE_MS, self.glide_ms)
-        c.body = _synth_enum_value(self.body, _SYNTH_BODY_TYPES, "body type")
+        c.body = _synth_enum_value(self.body, _SYNTH_BODY_TYPES, "body")
         _set_float("body_mix", SONARE_SYNTH_FIELD_BODY_MIX, self.body_mix)
         _set_float("stereo_spread", SONARE_SYNTH_FIELD_STEREO_SPREAD, self.stereo_spread)
-        c.retrigger = _synth_enum_value(self.retrigger, _SYNTH_RETRIGGERS, "retrigger mode")
-        c.lfo_shape = _synth_enum_value(self.lfo_shape, _SYNTH_LFO_SHAPES, "LFO shape")
+        c.retrigger = _synth_enum_value(self.retrigger, _SYNTH_RETRIGGERS, "retrigger")
+        c.lfo_shape = _synth_enum_value(self.lfo_shape, _SYNTH_LFO_SHAPES, "lfo_shape")
         routings = list(self.mod_routings or ())
         if self.mod_routings is not None:
             c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
@@ -661,9 +661,11 @@ class SynthPatch:
         c.num_mod_routings = len(routings)
         for i, routing in enumerate(routings):
             c.mod_routings[i] = SonareSynthModRouting(
-                source=_synth_enum_value(routing.source, _SYNTH_MOD_SOURCES, "mod source"),
+                source=_synth_enum_value(
+                    routing.source, _SYNTH_MOD_SOURCES, f"mod_routings[{i}].source"
+                ),
                 destination=_synth_enum_value(
-                    routing.destination, _SYNTH_MOD_DESTINATIONS, "mod destination"
+                    routing.destination, _SYNTH_MOD_DESTINATIONS, f"mod_routings[{i}].destination"
                 ),
                 depth=_narrow_double(routing.depth, "routing.depth"),
             )
@@ -684,11 +686,11 @@ class SynthPatch:
         # block at all. That is what keeps set 0 addressable without one.
         c.sample_set = 0 if self.sample_set is None else self.sample_set
         c.sample_level = 0.0 if self.sample_level is None else float(self.sample_level)
-        c.sample_loop = _sample_loop_value(self.sample_loop)
+        c.sample_loop = _sample_loop_value(self.sample_loop, "sample_loop")
         c.sample_start_offset = (
             0.0 if self.sample_start_offset is None else float(self.sample_start_offset)
         )
-        c.sample_key_track = _sample_key_track_value(self.sample_key_track)
+        c.sample_key_track = _sample_key_track_value(self.sample_key_track, "sample_key_track")
         if self.engine_params:
             # The struct borrows the key bytes and the array, and copying the
             # struct into a binding array copies bytes only, so the caller keeps
@@ -703,7 +705,7 @@ class SynthPatch:
                 zip(keys, self.engine_params.items(), strict=True)
             ):
                 params[i].key = raw_key
-                params[i].value = _narrow_double(value, f"engine_params[{param_name!r}]")
+                params[i].value = _narrow_double(value, f"engine_params.{param_name}")
             c.engine_params = ctypes.cast(params, ctypes.POINTER(SonareSynthEngineParam))
             c.engine_param_count = len(keys)
             c._keepalive = (keys, params)
@@ -822,7 +824,7 @@ def synth_engine_param_info(engine_mode: SynthEngineMode) -> list[SynthParamInfo
     unknown mode raises.
     """
     lib = _get_lib()
-    mode = _synth_enum_value(engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
+    mode = _synth_enum_value(engine_mode, _SYNTH_ENGINE_MODES, "engine_mode")
     return _synth_param_info(
         _call_string(lib.sonare_synth_engine_param_info, _to_c_int(mode, "engine_mode"))
     )

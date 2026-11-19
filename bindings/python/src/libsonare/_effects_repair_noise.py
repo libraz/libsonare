@@ -68,12 +68,12 @@ from .types import (
 )
 
 
-def _coerce_denoise_mode(value: DenoiseClassicalMode) -> int:
-    return _token_ordinal(value, _DENOISE_CLASSICAL_MODES, "denoise mode")
+def _coerce_denoise_mode(value: DenoiseClassicalMode, key: str) -> int:
+    return _token_ordinal(value, _DENOISE_CLASSICAL_MODES, key)
 
 
-def _coerce_denoise_estimator(value: DenoiseClassicalNoiseEstimator) -> int:
-    return _token_ordinal(value, _DENOISE_CLASSICAL_NOISE_ESTIMATORS, "denoise noise estimator")
+def _coerce_denoise_estimator(value: DenoiseClassicalNoiseEstimator, key: str) -> int:
+    return _token_ordinal(value, _DENOISE_CLASSICAL_NOISE_ESTIMATORS, key)
 
 
 @_entry("mastering_repair_denoise_classical")
@@ -131,8 +131,8 @@ def mastering_repair_denoise_classical(
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
     config = SonareDenoiseClassicalConfig(  # noqa: F405
-        mode=_coerce_denoise_mode(mode),
-        noise_estimator=_coerce_denoise_estimator(noise_estimator),
+        mode=_coerce_denoise_mode(mode, "mode"),
+        noise_estimator=_coerce_denoise_estimator(noise_estimator, "noise_estimator"),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
         dd_alpha=_narrow_double(dd_alpha, "dd_alpha"),
@@ -231,8 +231,8 @@ def mastering_repair_detect_noise_floor(
     n_fft_value = _require_power_of_two(n_fft, "n_fft")
     hop_length_value = _narrow_int(hop_length, "hop_length", 1, _C_INT_MAX)
     config = SonareDenoiseClassicalConfig(  # noqa: F405
-        mode=_coerce_denoise_mode(mode),
-        noise_estimator=_coerce_denoise_estimator(noise_estimator),
+        mode=_coerce_denoise_mode(mode, "mode"),
+        noise_estimator=_coerce_denoise_estimator(noise_estimator, "noise_estimator"),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
         dd_alpha=_narrow_double(dd_alpha, "dd_alpha"),
@@ -411,8 +411,8 @@ def mastering_repair_denoise_classical_stereo(
     if left_length != right_length:
         raise _refuse("left and right channel lengths must match")
     config = SonareDenoiseClassicalConfig(  # noqa: F405
-        mode=_coerce_denoise_mode(mode),
-        noise_estimator=_coerce_denoise_estimator(noise_estimator),
+        mode=_coerce_denoise_mode(mode, "mode"),
+        noise_estimator=_coerce_denoise_estimator(noise_estimator, "noise_estimator"),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
         dd_alpha=_narrow_double(dd_alpha, "dd_alpha"),
@@ -544,8 +544,8 @@ def mastering_repair_denoise_classical_linked(
     planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     config = SonareDenoiseClassicalConfig(  # noqa: F405
-        mode=_coerce_denoise_mode(mode),
-        noise_estimator=_coerce_denoise_estimator(noise_estimator),
+        mode=_coerce_denoise_mode(mode, "mode"),
+        noise_estimator=_coerce_denoise_estimator(noise_estimator, "noise_estimator"),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
         dd_alpha=_narrow_double(dd_alpha, "dd_alpha"),
@@ -577,8 +577,8 @@ def mastering_repair_denoise_classical_linked(
     )
 
 
-def _coerce_dehum_mode(value: DehumMode) -> int:
-    return _token_ordinal(value, _DEHUM_MODES, "dehum mode")
+def _coerce_dehum_mode(value: DehumMode, key: str) -> int:
+    return _token_ordinal(value, _DEHUM_MODES, key)
 
 
 @_entry("mastering_repair_dehum")
@@ -612,7 +612,7 @@ def mastering_repair_dehum(
         adaptation=_narrow_double(adaptation, "adaptation"),
         frame_size=_narrow_int(frame_size, "frame_size", _C_INT_MIN, _C_INT_MAX),
         pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
-        mode=_coerce_dehum_mode(mode),
+        mode=_coerce_dehum_mode(mode, "mode"),
     )
     lib = _get_lib()
     audio, report = _run_repair(
@@ -703,7 +703,7 @@ def mastering_repair_detect_hum(
         adaptation=_narrow_double(adaptation, "adaptation"),
         frame_size=_narrow_int(frame_size, "frame_size", _C_INT_MIN, _C_INT_MAX),
         pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
-        mode=_coerce_dehum_mode(mode),
+        mode=_coerce_dehum_mode(mode, "mode"),
     )
     return _extract_hum_detection(
         _run_detection(
@@ -787,7 +787,7 @@ def mastering_repair_dehum_stereo(
         adaptation=_narrow_double(adaptation, "adaptation"),
         frame_size=_narrow_int(frame_size, "frame_size", _C_INT_MIN, _C_INT_MAX),
         pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
-        mode=_coerce_dehum_mode(mode),
+        mode=_coerce_dehum_mode(mode, "mode"),
     )
     out = SonareDehumStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_dehum_stereo(

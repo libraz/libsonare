@@ -113,7 +113,10 @@ def test_the_fixed_midi_contour_corrector_is_the_default_target_mode() -> None:
 @pytest.mark.parametrize("value", ["Scale", "fixed", ""])
 def test_an_unknown_target_mode_names_the_tokens(value: str) -> None:
     samples = _tone()
-    with pytest.raises(SonareValueError, match="expected one of"):
+    with pytest.raises(
+        SonareValueError,
+        match="^pitch_correct_timevarying: target_mode must be one of midi, scale$",
+    ):
         libsonare.pitch_correct_timevarying(samples, SR, _contour(samples), HOP, target_mode=value)  # type: ignore[arg-type]
 
 

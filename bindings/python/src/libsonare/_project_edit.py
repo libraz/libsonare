@@ -249,7 +249,7 @@ class _ProjectEditMixin:
         if name == "":
             raise _refuse("name must not be empty; omit it for no name")
         desc = SonareProjectTrackDesc(
-            kind=_track_kind_value(kind),
+            kind=_track_kind_value(kind, "kind"),
             name=_utf8_arg(name, "name") if name is not None else None,
         )
         out_id = ctypes.c_uint32()
@@ -357,7 +357,9 @@ class _ProjectEditMixin:
             planes = stem.get("planar_samples")
             if not isinstance(name, str) or not isinstance(planes, Sequence):
                 raise _refuse_type("each stem needs string name and planar_samples")
-            layout_value = _token_ordinal(stem.get("layout"), _STEM_LAYOUTS, "stem layout") + 1
+            layout_value = (
+                _token_ordinal(stem.get("layout"), _STEM_LAYOUTS, f"stems[{i}].layout") + 1
+            )
             if len(planes) != layout_value:
                 raise _refuse("planar_samples must match mono or stereo layout")
             arrays = [_as_float32_buffer(plane, arg_name="planar_samples") for plane in planes]
@@ -446,7 +448,7 @@ class _ProjectEditMixin:
         elif partial_tail == "drop":
             flags = _LOOP_RECORDING_DROP_PARTIAL_TAIL
         else:
-            raise _refuse("partial_tail must be 'keep' or 'drop'")
+            raise _refuse("partial_tail must be one of keep, drop")
         planar = _planar_channels(audio)
         if planar is not None:
             if not planar:
@@ -570,7 +572,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_set_track_kind(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
-                _to_c_uint32(_track_kind_value(kind), "kind"),
+                _to_c_uint32(_track_kind_value(kind, "kind"), "kind"),
             )
         )
 
@@ -592,7 +594,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_set_clip_warp_mode(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                _to_c_uint32(_warp_mode_value(mode), "mode"),
+                _to_c_uint32(_warp_mode_value(mode, "mode"), "mode"),
             )
         )
 
@@ -779,7 +781,7 @@ class _ProjectEditMixin:
         :class:`SonareError` with ``NOT_SUPPORTED`` for a chain in a build
         without mastering.
         """
-        mode_value = _part_rig_mode_value(mode)
+        mode_value = _part_rig_mode_value(mode, "mode")
         json_arg = _part_rig_inserts_arg(mode_value, inserts)
         lib = _get_lib()
         _check(
@@ -959,8 +961,12 @@ class _ProjectEditMixin:
             raise _refuse("fade_in_length_ppq must be at least 0")
         if fout < 0.0:
             raise _refuse("fade_out_length_ppq must be at least 0")
-        c_in = SonareProjectClipFade(length_ppq=fin, curve=_fade_curve_value(fade_in_curve))
-        c_out = SonareProjectClipFade(length_ppq=fout, curve=_fade_curve_value(fade_out_curve))
+        c_in = SonareProjectClipFade(
+            length_ppq=fin, curve=_fade_curve_value(fade_in_curve, "fade_in_curve")
+        )
+        c_out = SonareProjectClipFade(
+            length_ppq=fout, curve=_fade_curve_value(fade_out_curve, "fade_out_curve")
+        )
         _check(
             _get_lib().sonare_project_set_clip_fade(
                 self._require_handle(),
@@ -987,7 +993,7 @@ class _ProjectEditMixin:
         0 = hard loop); the engine clamps it to the clip's pre-roll and half the
         loop.
         """
-        mode = _loop_mode_value(loop_mode)
+        mode = _loop_mode_value(loop_mode, "loop_mode")
         length = 0.0
         if loop_length_ppq is not None:
             length = _narrow_double(loop_length_ppq, "loop_length_ppq")
@@ -1091,7 +1097,11 @@ class _ProjectEditMixin:
         or ``"trackPan"`` state the kind explicitly.
         """
         desc, _backing = _automation_lane_desc(target_param_id, points)
-        kind = None if target_kind is None else _automation_target_kind_value(target_kind)
+        kind = (
+            None
+            if target_kind is None
+            else _automation_target_kind_value(target_kind, "target_kind")
+        )
         lib = _get_lib()
         out_target_param_id = ctypes.c_uint32()
         if kind is None:
@@ -1139,7 +1149,11 @@ class _ProjectEditMixin:
         """
         desc, _backing = _automation_lane_desc(target_param_id, points)
         target_id = _automation_target_param_id_value(target_param_id)
-        kind = None if target_kind is None else _automation_target_kind_value(target_kind)
+        kind = (
+            None
+            if target_kind is None
+            else _automation_target_kind_value(target_kind, "target_kind")
+        )
         lib = _get_lib()
         if kind is None:
             _check(

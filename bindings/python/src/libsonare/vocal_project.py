@@ -373,7 +373,9 @@ def _original_sources_to_c(
     for index, original in enumerate(originals):
         source_id = _id(original.source_id, f"original_sources[{index}].source_id")
         if source_id in seen:
-            raise _refuse(f"original_sources contains duplicate source_id {source_id}")
+            raise _refuse(
+                f"original_sources[{index}].source_id must be unique among original_sources"
+            )
         seen.add(source_id)
         sample_rate = _narrow_int(
             original.sample_rate,

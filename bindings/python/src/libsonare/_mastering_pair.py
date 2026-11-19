@@ -454,15 +454,17 @@ _PLATFORM_RENAMED = {
 }
 
 
-def _platform_fields(platform: Mapping[str, Any]) -> tuple[str, float, float]:
+def _platform_fields(platform: Mapping[str, Any], where: str) -> tuple[str, float, float]:
     """Read one :class:`StreamingPlatform` record, refusing any other key by name."""
     if not isinstance(platform, Mapping):
-        raise _refuse_type("each platform must be a mapping")
+        raise _refuse_type(f"{where} must be a mapping")
     for key in platform:
         if key in _PLATFORM_RENAMED:
-            raise _refuse(f"platform has unknown key {key!r}; use {_PLATFORM_RENAMED[key]!r}")
+            raise _refuse(
+                f"unknown key {where}.{key} (renamed to {where}.{_PLATFORM_RENAMED[key]})"
+            )
         if key not in _PLATFORM_KEYS:
-            raise _refuse(f"platform has unknown key {key!r}")
+            raise _refuse(f"unknown key {where}.{key} (expected {', '.join(_PLATFORM_KEYS)})")
     missing = [key for key in _PLATFORM_KEYS if key not in platform]
     if missing:
         raise _refuse(f"platform is missing {', '.join(missing)}")
@@ -485,7 +487,7 @@ def _streaming_platforms(
     """
     if platforms is None:
         return None, 0, []
-    fields = [_platform_fields(platform) for platform in platforms]
+    fields = [_platform_fields(platform, f"platforms[{i}]") for i, platform in enumerate(platforms)]
     if not fields:
         raise _refuse("platforms must not be empty; omit it for the built-in set")
     array_type = SonareStreamingPlatform * len(fields)

@@ -1059,7 +1059,7 @@ def scale_mask_for_mode(root: int, mode: KeyMode) -> int:
     lib = _get_lib()
     out = ctypes.c_uint16(0)
     rc = lib.sonare_scale_mask_for_mode(
-        _to_c_int(root, "root"), _to_c_int32(_mode_value(mode), "mode"), ctypes.byref(out)
+        _to_c_int(root, "root"), _to_c_int32(_mode_value(mode, "mode"), "mode"), ctypes.byref(out)
     )
     _check(rc)
     return int(out.value)

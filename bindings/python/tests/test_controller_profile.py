@@ -109,15 +109,23 @@ def test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding() -> None:
     """Another spelling is SonareValueError and a number is TypeError, before the C ABI."""
     with _reed_engine() as engine:
         engine.clear_controller_bindings(DESTINATION)
-        with pytest.raises(SonareValueError, match="controller axis"):
+        with pytest.raises(
+            SonareValueError, match="^RealtimeEngine.bind_controller: axis must be one of "
+        ):
             engine.bind_controller(DESTINATION, input="controlChange", axis="no-such-axis")
-        with pytest.raises(SonareValueError, match="controller input"):
+        with pytest.raises(
+            SonareValueError, match="^RealtimeEngine.bind_controller: input must be one of "
+        ):
             engine.bind_controller(DESTINATION, input="no-such-input", axis="excitation")
         # A number never selects an input or an axis, in range or not.
         for number in (0, 1, -1, True):
-            with pytest.raises(TypeError, match="controller axis"):
+            with pytest.raises(
+                TypeError, match="^RealtimeEngine.bind_controller: axis must be one of "
+            ):
                 engine.bind_controller(DESTINATION, input="controlChange", axis=number)  # type: ignore[arg-type]
-            with pytest.raises(TypeError, match="controller input"):
+            with pytest.raises(
+                TypeError, match="^RealtimeEngine.bind_controller: input must be one of "
+            ):
                 engine.bind_controller(DESTINATION, input=number, axis="excitation")  # type: ignore[arg-type]
         # A non-finite range or curve would reach the audio thread and stay
         # there, so the struct's own narrowing refuses it before the C ABI.

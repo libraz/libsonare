@@ -713,9 +713,9 @@ def _wrong_type_sites():
         ("finite_float", lambda v: _finite_float(v, "gain"), "x", float("nan")),
         ("unsigned", lambda v: _unsigned(v, "key", 127), "x", 1.5),
         ("note_set_index", lambda v: _note_set_index("index", v), "x", 1.5),
-        ("target_kind", _automation_target_kind_value, 1, "track-pan"),
+        ("target_kind", lambda v: _automation_target_kind_value(v, "target_kind"), 1, "track-pan"),
         ("midi_word", lambda v: _validate_midi_event_word(v, "word"), "x", -1),
-        ("enum", _meter_tap_value, [], "post"),
+        ("enum", lambda v: _meter_tap_value(v, "tap"), [], "post"),
     ]
 
 

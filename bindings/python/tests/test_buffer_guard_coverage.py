@@ -626,18 +626,18 @@ _PLANAR_ENTRY_POINTS = [
 
 @pytest.mark.parametrize(("drive", "subject"), _PLANAR_ENTRY_POINTS)
 @pytest.mark.parametrize(
-    ("channels", "detail"),
+    "channels",
     [
-        pytest.param(np.zeros(4, dtype=np.float32), "ndim=1 shape=(4,)", id="rank-1"),
-        pytest.param(np.full(1, 0.5, dtype=np.float32), "ndim=1 shape=(1,)", id="rank-1-single"),
-        pytest.param(np.array(0.5, dtype=np.float32), "ndim=0 shape=()", id="rank-0"),
-        pytest.param(np.float32(0.5), "a float32", id="numpy-scalar"),
-        pytest.param(np.zeros((2, 2, 2), dtype=np.float32), "ndim=3 shape=(2, 2, 2)", id="rank-3"),
-        pytest.param(0.5, "a float", id="python-scalar"),
-        pytest.param(None, "a NoneType", id="none"),
+        pytest.param(np.zeros(4, dtype=np.float32), id="rank-1"),
+        pytest.param(np.full(1, 0.5, dtype=np.float32), id="rank-1-single"),
+        pytest.param(np.array(0.5, dtype=np.float32), id="rank-0"),
+        pytest.param(np.float32(0.5), id="numpy-scalar"),
+        pytest.param(np.zeros((2, 2, 2), dtype=np.float32), id="rank-3"),
+        pytest.param(0.5, id="python-scalar"),
+        pytest.param(None, id="none"),
     ],
 )
-def test_non_planar_channels_name_the_caller_subject(drive, subject, channels, detail) -> None:
+def test_non_planar_channels_name_the_caller_subject(drive, subject, channels) -> None:
     """Anything that is not a planar buffer is refused by this library, naming the argument.
 
     These escaped as NumPy's ambiguous-truth ``ValueError``, a bare ``TypeError``
@@ -646,9 +646,9 @@ def test_non_planar_channels_name_the_caller_subject(drive, subject, channels, d
     """
     with pytest.raises(SonareValueError) as excinfo:
         drive(channels)
-    message = str(excinfo.value)
-    assert message.startswith(f"{subject} must be a sequence of 1-D channel buffers"), message
-    assert message.endswith(f"not {detail}"), message
+    assert str(excinfo.value) == (
+        f"{subject} must be a sequence of 1-D channel buffers or a 2-D (channels, frames) array"
+    )
 
 
 @pytest.mark.parametrize(("drive", "subject"), _PLANAR_ENTRY_POINTS)

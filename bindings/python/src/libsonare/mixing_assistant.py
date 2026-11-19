@@ -145,7 +145,7 @@ def _build_track_arrays(tracks: Sequence[MixAssistantTrack], sample_rate: int) -
         if not isinstance(track_id, str) or not track_id:
             raise _refuse(f"tracks[{index}].id must be a non-empty string")
         if track_id in seen:
-            raise _refuse(f"duplicate track id {track_id!r}")
+            raise _refuse(f"tracks[{index}].id must be unique among tracks")
         seen.add(track_id)
 
         if track.sample_rate is None:
@@ -490,5 +490,7 @@ def mixing_assistant_source_class_from_name(name: str) -> int:
     lib = _get_lib()
     value = int(lib.sonare_mixing_assistant_source_class_from_name(_utf8_arg(name, "name")))
     if value < 0:
-        raise _refuse(f"unknown source class {name!r}")
+        raise _refuse(
+            "name must be the name of a source class listed by mixing_assistant_source_class_names"
+        )
     return value

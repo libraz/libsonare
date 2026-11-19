@@ -280,7 +280,7 @@ def key_mode_from_analysis(mode: KeyMode) -> ProjectKeyMode:
         TypeError: If ``mode`` is not a string.
         SonareValueError: If ``mode`` is not a :data:`KeyMode` token.
     """
-    ordinal = _mode_value(mode)
+    ordinal = _mode_value(mode, "mode")
     lib = _get_lib()
     out_mode = ctypes.c_uint32()
     _check(lib.sonare_key_mode_from_analysis(_to_c_int32(ordinal, "mode"), ctypes.byref(out_mode)))

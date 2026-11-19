@@ -47,8 +47,8 @@ CURVES = ("linear", "exponential", "hold", "sCurve")
 def test_the_closed_sets_are_literal_types_in_ordinal_order() -> None:
     assert get_args(libsonare.PanLaw) == PAN_LAWS
     assert get_args(libsonare.AutomationCurve) == CURVES
-    assert [_pan_law_value(token) for token in PAN_LAWS] == [0, 1, 2, 3]
-    assert [_curve_value(token) for token in CURVES] == [0, 1, 2, 3]
+    assert [_pan_law_value(token, "probe") for token in PAN_LAWS] == [0, 1, 2, 3]
+    assert [_curve_value(token, "probe") for token in CURVES] == [0, 1, 2, 3]
 
 
 # Each Literal in ordinal order, except SendTiming, whose C ordinals put postFader first.
@@ -64,12 +64,12 @@ MIXER_SETS = [
 @pytest.mark.parametrize(("name", "resolve", "tokens"), MIXER_SETS)
 def test_the_mixer_closed_sets_are_literal_types(name: str, resolve, tokens: tuple) -> None:
     assert set(get_args(getattr(libsonare, name))) == set(tokens)
-    assert [resolve(token) for token in tokens] == list(range(len(tokens)))
+    assert [resolve(token, "probe") for token in tokens] == list(range(len(tokens)))
     with pytest.raises(SonareValueError, match=tokens[-1]):
-        resolve(tokens[-1] + " ")
+        resolve(tokens[-1] + " ", "probe")
     for number in (0, True):
         with pytest.raises(TypeError):
-            resolve(number)
+            resolve(number, "probe")
 
 
 @pytest.mark.parametrize(
@@ -85,14 +85,14 @@ def test_the_mixer_closed_sets_are_literal_types(name: str, resolve, tokens: tup
 )
 def test_another_spelling_is_refused_and_names_the_tokens(resolve, old: str, accepted: str) -> None:
     with pytest.raises(SonareValueError, match=accepted):
-        resolve(old)
+        resolve(old, "probe")
 
 
 @pytest.mark.parametrize("resolve", [_pan_law_value, _curve_value])
 @pytest.mark.parametrize("value", [0, 3, True, 1.0])
 def test_a_number_is_a_type_error(resolve, value: object) -> None:
     with pytest.raises(TypeError):
-        resolve(value)
+        resolve(value, "probe")
 
 
 @pytest.fixture
@@ -178,9 +178,9 @@ def test_the_synth_closed_sets_take_exact_tokens(name: str, resolve, values: dic
     if values is None:
         values = {token: ordinal for ordinal, token in enumerate(tokens)}
     assert tokens == tuple(values)
-    assert {token: resolve(token) for token in tokens} == values
+    assert {token: resolve(token, "probe") for token in tokens} == values
     with pytest.raises(SonareValueError, match=tokens[-1]):
-        resolve(tokens[-1].upper())
+        resolve(tokens[-1].upper(), "probe")
     for number in (0, 1, True):
         with pytest.raises(TypeError):
-            resolve(number)
+            resolve(number, "probe")

@@ -103,17 +103,29 @@ class TestMasteringRepairDenoiseClassical:
 
     def test_rejects_unknown_mode_string(self) -> None:
         noisy = _with_noise(sine(440.0, 0.1, amp=0.5), 0.4)
-        with pytest.raises(ValueError, match="invalid denoise mode"):
+        with pytest.raises(
+            ValueError,
+            match="^mastering_repair_denoise_classical: mode must be one of "
+            "logMmse, mmseStsa, spectralSubtraction$",
+        ):
             libsonare.mastering_repair_denoise_classical(noisy, SR, mode="not-a-mode")  # type: ignore[arg-type]
 
     def test_an_ordinal_mode_is_a_type_error(self) -> None:
         noisy = _with_noise(sine(440.0, 0.1, amp=0.5), 0.4)
-        with pytest.raises(TypeError, match="denoise mode"):
+        with pytest.raises(
+            TypeError,
+            match="^mastering_repair_denoise_classical: mode must be one of "
+            "logMmse, mmseStsa, spectralSubtraction$",
+        ):
             libsonare.mastering_repair_denoise_classical(noisy, SR, mode=1)  # type: ignore[arg-type]
 
     def test_rejects_unknown_noise_estimator_string(self) -> None:
         noisy = _with_noise(sine(440.0, 0.1, amp=0.5), 0.4)
-        with pytest.raises(ValueError, match="invalid denoise noise estimator"):
+        with pytest.raises(
+            ValueError,
+            match="^mastering_repair_denoise_classical: noise_estimator must be one of "
+            "quantile, mcra, imcra, spp$",
+        ):
             libsonare.mastering_repair_denoise_classical(
                 noisy,
                 SR,
@@ -122,5 +134,9 @@ class TestMasteringRepairDenoiseClassical:
 
     def test_an_ordinal_noise_estimator_is_a_type_error(self) -> None:
         noisy = _with_noise(sine(440.0, 0.1, amp=0.5), 0.4)
-        with pytest.raises(TypeError, match="denoise noise estimator"):
+        with pytest.raises(
+            TypeError,
+            match="^mastering_repair_denoise_classical: noise_estimator must be one of "
+            "quantile, mcra, imcra, spp$",
+        ):
             libsonare.mastering_repair_denoise_classical(noisy, SR, noise_estimator=1)  # type: ignore[arg-type]

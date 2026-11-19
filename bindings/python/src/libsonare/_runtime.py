@@ -387,19 +387,17 @@ def _element_is_none(samples: object, index: int) -> bool:
 
 def _not_a_buffer(samples: object, arg_name: str) -> SonareValueError:
     """Build the rejection for an input that is not a numeric buffer at all."""
-    return _refuse(
-        f"{arg_name} must be a sequence of numbers or a numpy array, not {type(samples).__name__}"
-    )
+    return _refuse(f"{arg_name} must be a sequence of numbers or a numpy array")
 
 
-def _integer_samples(dtype: np.dtype[Any], arg_name: str) -> TypeError:
+def _integer_samples(arg_name: str) -> TypeError:
     """Build the rejection for a typed buffer whose elements are integers or booleans.
 
     Integer audio is PCM with an implied full scale, so a plain cast would read
     16-bit codes as amplitudes up to 32767; the caller has to scale it.
     """
     return _refuse_type(
-        f"{arg_name} must have a floating dtype (float32 or float64), not {dtype}; "
+        f"{arg_name} must have a floating dtype (float32 or float64); "
         "scale integer PCM to [-1, 1] first"
     )
 
@@ -477,10 +475,10 @@ def _as_float32_buffer(samples: object, *, arg_name: str = "samples") -> np.ndar
     if isinstance(samples, (array.array, memoryview)):
         typed = np.asarray(samples)
         if typed.dtype.kind in "biu":
-            raise _integer_samples(typed.dtype, arg_name)
+            raise _integer_samples(arg_name)
     if isinstance(samples, np.ndarray):
         if samples.dtype.kind in "biu":
-            raise _integer_samples(samples.dtype, arg_name)
+            raise _integer_samples(arg_name)
         if (
             samples.dtype == np.float32
             and samples.flags["C_CONTIGUOUS"]
@@ -539,16 +537,10 @@ def _require_instance(value: object, expected: type[_T], name: str) -> _T:
     return value
 
 
-def _not_planar_channels(channels: object, subject: str) -> SonareValueError:
+def _not_planar_channels(subject: str) -> SonareValueError:
     """Build the rejection for a channels argument that is not a planar buffer."""
-    detail = (
-        f"ndim={channels.ndim} shape={tuple(channels.shape)}"
-        if isinstance(channels, np.ndarray)
-        else f"a {type(channels).__name__}"
-    )
     return _refuse(
-        f"{subject} must be a sequence of 1-D channel buffers or a 2-D "
-        f"(channels, frames) array, not {detail}"
+        f"{subject} must be a sequence of 1-D channel buffers or a 2-D (channels, frames) array"
     )
 
 
@@ -583,13 +575,13 @@ def _planar_channel_arrays(
     """
     if isinstance(channels, np.ndarray):
         if channels.ndim != 2:
-            raise _not_planar_channels(channels, subject)
+            raise _not_planar_channels(subject)
         channel_count = int(channels.shape[0])
     else:
         try:
             channel_count = len(channels)
         except TypeError as exc:
-            raise _not_planar_channels(channels, subject) from exc
+            raise _not_planar_channels(subject) from exc
     if channel_count == 0:
         raise _refuse(f"{subject} must not be empty")
     arrays: list[ctypes.Array[ctypes.c_float]] = []
@@ -940,68 +932,6 @@ def _tuning_arg(tuning_cents: float | str) -> tuple[float, int]:
     return tuning_cents, 0
 
 
-def _enum_error(
-    value: object,
-    names: Mapping[str, int],
-    what: str,
-    verb: str,
-    expected: bool,
-) -> str:
-    if expected:
-        return f"{verb} {what}: {value!r} (expected one of {sorted(names)})"
-    return f"{verb} {what}: {value}"
-
-
-def _resolve_enum(
-    value: object,
-    names: Mapping[str, int],
-    what: str,
-    *,
-    enum_cls: type | None = None,
-    dash: bool = False,
-    underscore: bool = False,
-    strip: bool = False,
-    validate_int: bool = True,
-    reject_bool: bool = True,
-    verb: str = "unknown",
-    expected: bool = True,
-) -> int:
-    """Resolve a string / int / enum ``value`` to its C enum ordinal.
-
-    ``names`` maps accepted lowercase spellings (with underscores folded to
-    dashes when ``dash`` is set) to ordinals. An integer must name one of those
-    ordinals, and a ``bool`` is not an ordinal; an ``enum_cls`` instance is
-    coerced with ``int()``. A value that is neither a string nor a number raises
-    ``TypeError``; any other unknown input raises :class:`SonareValueError` built
-    from ``verb`` / ``what``, listing the accepted names: a refusal that names
-    none of them leaves the caller with nothing to try next.
-
-    A table that does not spell every ordinal its field accepts is bounded at
-    the call site instead; ``validate_int=False`` is not that tool, because it
-    removes the bound rather than widening it.
-    """
-    if enum_cls is not None and isinstance(value, enum_cls):
-        return cast(int, value)
-    if isinstance(value, int):
-        if reject_bool and isinstance(value, bool):
-            raise _refuse_type(_enum_error(value, names, what, verb, expected))
-        if validate_int and value not in names.values():
-            raise _refuse(_enum_error(value, names, what, verb, expected))
-        return value
-    if not isinstance(value, str):
-        message = _enum_error(value, names, what, verb, expected)
-        raise _refuse(message) if _is_number(value) else _refuse_type(message)
-    key = value.strip() if strip else value
-    if dash:
-        key = key.replace("_", "-")
-    elif underscore:
-        key = key.replace("-", "_")
-    key = key.lower()
-    if key not in names:
-        raise _refuse(_enum_error(value, names, what, verb, expected))
-    return names[key]
-
-
 _C_INT_MAX = 2**31 - 1
 _C_INT_MIN = -(2**31)
 
@@ -1159,48 +1089,48 @@ def _validate_effect_hop(hop_length: object) -> int:
     return hop
 
 
-def _synth_enum_value(value: object, names: Mapping[str, int], what: str) -> int:
+def _synth_enum_value(value: object, names: Mapping[str, int], key: str) -> int:
     """Resolve a NativeSynth enum token to the C ordinal; a number is a TypeError."""
-    return names[_token_arg(value, tuple(names), what)]
+    return names[_token_arg(value, tuple(names), key)]
 
 
-def _pan_mode_value(value: PanMode) -> int:
+def _pan_mode_value(value: PanMode, key: str) -> int:
     """Resolve a pan mode token to its C enum value."""
-    return _token_ordinal(value, _PAN_MODES, "pan mode")
+    return _token_ordinal(value, _PAN_MODES, key)
 
 
-def _curve_value(value: AutomationCurve) -> int:
+def _curve_value(value: AutomationCurve, key: str) -> int:
     """Resolve an automation curve token to its C enum value."""
-    return _token_ordinal(value, _AUTOMATION_CURVES, "automation curve")
+    return _token_ordinal(value, _AUTOMATION_CURVES, key)
 
 
-def _pan_law_value(value: PanLaw) -> int:
+def _pan_law_value(value: PanLaw, key: str) -> int:
     """Resolve a pan law token to its C enum value."""
-    return _token_ordinal(value, _PAN_LAWS, "pan law")
+    return _token_ordinal(value, _PAN_LAWS, key)
 
 
-def _meter_tap_value(value: MeterTap) -> int:
+def _meter_tap_value(value: MeterTap, key: str) -> int:
     """Resolve a meter tap token to its C enum value."""
-    return _token_ordinal(value, _METER_TAPS, "meter tap")
+    return _token_ordinal(value, _METER_TAPS, key)
 
 
-def _send_timing_value(value: SendTiming) -> int:
+def _send_timing_value(value: SendTiming, key: str) -> int:
     """Resolve a send timing token to its C enum value."""
-    return _token_ordinal(value, _SEND_TIMINGS, "send timing")
+    return _token_ordinal(value, _SEND_TIMINGS, key)
 
 
-def _sidechain_source_kind_value(value: SidechainSourceKind) -> int:
+def _sidechain_source_kind_value(value: SidechainSourceKind, key: str) -> int:
     """Resolve a sidechain source kind token to its C enum value."""
-    return _token_ordinal(value, _SIDECHAIN_SOURCE_KINDS, "sidechain source kind")
+    return _token_ordinal(value, _SIDECHAIN_SOURCE_KINDS, key)
 
 
-def _channel_layout_value(value: ChannelLayout) -> int:
+def _channel_layout_value(value: ChannelLayout, key: str) -> int:
     """Resolve a channel layout token to its C enum value."""
-    return _token_ordinal(value, _CHANNEL_LAYOUTS, "channel layout")
+    return _token_ordinal(value, _CHANNEL_LAYOUTS, key)
 
 
-def _warp_mode_value(mode: ProjectWarpMode) -> int:
-    return _token_ordinal(mode, _WARP_MODES, "warp mode")
+def _warp_mode_value(mode: ProjectWarpMode, key: str) -> int:
+    return _token_ordinal(mode, _WARP_MODES, key)
 
 
 def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
@@ -1231,19 +1161,20 @@ def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
     )
 
 
-def _token_ordinal(value: object, tokens: tuple[str, ...], what: str) -> int:
+def _token_ordinal(value: object, tokens: tuple[str, ...], key: str) -> int:
     """Resolve a string token to its ordinal (its index in ``tokens``).
 
     Only the exact canonical spelling is accepted. A non-string, including an
     ``int`` or ``bool``, raises ``TypeError``; an unknown string raises
-    :class:`SonareValueError` listing the accepted tokens.
+    :class:`SonareValueError`. Both read ``<key> must be one of a, b, c``.
     """
+    message = f"{key} must be one of {', '.join(tokens)}"
     if not isinstance(value, str):
-        raise _refuse_type(f"invalid {what}: expected a string token, got {type(value).__name__}")
+        raise _refuse_type(message)
     try:
         return tokens.index(value)
     except ValueError:
-        raise _refuse(f"invalid {what}: {value!r} (expected one of {list(tokens)})") from None
+        raise _refuse(message) from None
 
 
 def _midi_fx_config_json(config: Mapping[str, Any]) -> bytes:
@@ -1253,12 +1184,12 @@ def _midi_fx_config_json(config: Mapping[str, Any]) -> bytes:
     return _utf8_arg(json.dumps(dict(config)), "config")
 
 
-def _token_arg(value: object, tokens: tuple[str, ...], what: str) -> str:
+def _token_arg(value: object, tokens: tuple[str, ...], key: str) -> str:
     """Return ``value`` once it is one of ``tokens``, refusing it as :func:`_token_ordinal` does.
 
     For a closed set the core receives by name and does not itself refuse.
     """
-    return tokens[_token_ordinal(value, tokens, what)]
+    return tokens[_token_ordinal(value, tokens, key)]
 
 
 def _max_block_size(getter: Callable[..., int], handle: object) -> int:
@@ -1271,14 +1202,16 @@ def _max_block_size(getter: Callable[..., int], handle: object) -> int:
 def _mapping_keys(mapping: object, keys: tuple[str, ...], where: str) -> Mapping[str, object]:
     """Return a caller-built mapping once every key in it is one of ``keys``.
 
-    A non-mapping raises ``TypeError``; any other key, including another
-    spelling of an accepted one, raises :class:`SonareValueError` naming it.
+    ``where`` is the mapping's path from the root the caller spelled. A
+    non-mapping raises ``TypeError``; any other key, including another spelling
+    of an accepted one, raises :class:`SonareValueError` naming its path.
     """
     if not isinstance(mapping, Mapping):
-        raise _refuse_type(f"{where} must be a mapping, got {type(mapping).__name__}")
+        raise _refuse_type(f"{where} must be a mapping")
     for key in mapping:
         if key not in keys:
-            raise _refuse(f"unknown key {key!r} (expected one of {list(keys)})")
+            path = f"{where}.{key}" if where else str(key)
+            raise _refuse(f"unknown key {path} (expected {', '.join(keys)})")
     return cast("Mapping[str, object]", mapping)
 
 
@@ -1301,27 +1234,27 @@ def _mode_values(modes: Sequence[KeyMode] | str | None) -> list[int]:
         return []
     if isinstance(modes, str):
         if modes in _MODE_GROUPS:
-            return [_mode_value(mode) for mode in _MODE_GROUPS[modes]]
-        return [_mode_value(cast(KeyMode, modes))]
-    values = [_mode_value(mode) for mode in modes]
+            return [_mode_value(mode, "modes") for mode in _MODE_GROUPS[modes]]
+        return [_mode_value(cast(KeyMode, modes), "modes")]
+    values = [_mode_value(mode, f"modes[{i}]") for i, mode in enumerate(modes)]
     if not values:
         raise _refuse("modes must not be empty; omit it for the default mode set")
     return values
 
 
-def _mode_value(mode: KeyMode) -> int:
+def _mode_value(mode: KeyMode, key: str) -> int:
     """Resolve one mode token to its C ordinal."""
-    return _token_ordinal(mode, _KEY_MODES, "mode")
+    return _token_ordinal(mode, _KEY_MODES, key)
 
 
 # SONARE_KEY_PROFILE_AUTO: no profile pinned, so the genre hint or the chroma chooses one.
 _KEY_PROFILE_AUTO = -1
 
 
-def _profile_value(profile: KeyProfile | None) -> int:
+def _profile_value(profile: KeyProfile | None, key: str) -> int:
     if profile is None:
         return _KEY_PROFILE_AUTO
-    return _token_ordinal(profile, _KEY_PROFILES, "key profile")
+    return _token_ordinal(profile, _KEY_PROFILES, key)
 
 
 def _ordinal_token(ordinal: int, tokens: tuple[str, ...], what: str) -> str:

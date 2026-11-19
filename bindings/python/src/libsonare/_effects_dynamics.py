@@ -29,8 +29,8 @@ from ._types_enums import _COMPRESSOR_DETECTORS, CompressorDetector
 from ._types_mastering import DynamicsProcessorResult
 
 
-def _coerce_compressor_detector(value: CompressorDetector) -> int:
-    return _token_ordinal(value, _COMPRESSOR_DETECTORS, "compressor detector")
+def _coerce_compressor_detector(value: CompressorDetector, key: str) -> int:
+    return _token_ordinal(value, _COMPRESSOR_DETECTORS, key)
 
 
 # The C config still pairs an enable flag with a corner it validates as positive
@@ -126,7 +126,7 @@ def mastering_dynamics_compressor(
         knee_db=_narrow_double(knee_db, "knee_db"),
         makeup_gain_db=_narrow_double(makeup_gain_db, "makeup_gain_db"),
         auto_makeup=1 if auto_makeup else 0,
-        detector=_coerce_compressor_detector(detector),
+        detector=_coerce_compressor_detector(detector, "detector"),
         sidechain_hpf_enabled=0 if sidechain_high_pass_hz is None else 1,
         sidechain_hpf_hz=_SIDECHAIN_HIGH_PASS_UNUSED_HZ
         if sidechain_high_pass_hz is None

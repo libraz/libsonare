@@ -98,5 +98,12 @@ def test_wrong_argument_type_is_type_error(
 def test_set_marker_kind_wrong_type_is_type_error() -> None:
     from libsonare import Project
 
-    with Project() as project, pytest.raises(TypeError, match="marker kind"):
+    with (
+        Project() as project,
+        pytest.raises(
+            TypeError,
+            match="^Project.set_marker: kind must be one of "
+            "marker, text, lyric, cuePoint, keySignature$",
+        ),
+    ):
         project.set_marker(1.0, kind=object())  # type: ignore[arg-type]

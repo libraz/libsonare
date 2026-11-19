@@ -569,7 +569,7 @@ class StreamingEqualizer:
     def set_phase_mode(self, mode: EqPhaseMode) -> None:
         """Set the global phase mode: ``"zero"``, ``"natural"`` or ``"linear"``."""
         self._ensure_open()
-        value = _token_ordinal(mode, _EQ_PHASE_MODES, "EQ phase mode") + 1
+        value = _token_ordinal(mode, _EQ_PHASE_MODES, "mode") + 1
         _check(self._lib.sonare_eq_set_phase_mode(self._handle, _to_c_int(value, "mode")))
 
     @_entry("StreamingEqualizer.set_auto_gain")
@@ -797,7 +797,7 @@ class StreamingEqualizer:
         """
         self._ensure_open()
         _require_export(self._lib, "sonare_eq_magnitude_response", _WITHOUT_MASTERING)
-        ordinal = _token_ordinal(placement, _EQ_STEREO_PLACEMENTS, "EQ band placement")
+        ordinal = _token_ordinal(placement, _EQ_STEREO_PLACEMENTS, "placement")
         # Non-finite only: an empty curve is a result, a NaN frequency is not.
         frequencies = _validate_samples(frequencies_hz, arg_name="frequencies_hz", allow_empty=True)
         c_frequencies, count = _to_c_float_array(frequencies)

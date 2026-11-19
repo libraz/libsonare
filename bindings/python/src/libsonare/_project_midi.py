@@ -851,7 +851,7 @@ class _ProjectMidiMixin:
         """
         return _found_index(
             _get_lib().sonare_midi_gm_program_for_name(_utf8_arg(name, "name")),
-            f"unknown instrument name {name!r}",
+            "name must be a GM instrument name",
         )
 
     @staticmethod
@@ -900,7 +900,7 @@ class _ProjectMidiMixin:
         """
         return _found_index(
             _get_lib().sonare_midi_gm_drum_note_for_name(_utf8_arg(name, "name")),
-            f"unknown drum name {name!r}",
+            "name must be a GM drum name",
         )
 
     @staticmethod
@@ -936,7 +936,7 @@ class _ProjectMidiMixin:
         """
         return _found_index(
             _get_lib().sonare_midi_cc_index_for_name(_utf8_arg(name, "name")),
-            f"unknown controller name {name!r}",
+            "name must be a standard MIDI CC name",
         )
 
     @staticmethod

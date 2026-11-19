@@ -623,8 +623,8 @@ class TestBufferRankGuards:
             changer.process_mono(_stereo_2d(256))
 
 
-class TestNoneIsReportedAsATypeNotAsANanSample:
-    """``None`` names its own type instead of pointing at the audio data.
+class TestNoneIsRefusedAsNotABufferNotAsANanSample:
+    """``None`` is refused as not a buffer instead of pointing at the audio data.
 
     NumPy turns ``None`` into ``array(nan)``, so a rank check that did not run
     ahead of the non-finite scan let it come back as "samples contains NaN or
@@ -632,26 +632,27 @@ class TestNoneIsReportedAsATypeNotAsANanSample:
     was never produced, instead of at whatever returned ``None``.
     """
 
-    def test_none_names_the_nonetype(self):
+    def test_none_is_refused_as_not_a_buffer(self):
         with pytest.raises(SonareValueError) as exc_info:
             lufs(None, SR)
         message = str(exc_info.value)
-        assert message == (
-            "lufs: samples must be a sequence of numbers or a numpy array, not NoneType"
-        )
+        assert message == ("lufs: samples must be a sequence of numbers or a numpy array")
         assert "NaN" not in message
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
-    def test_every_guarded_wrapper_names_the_nonetype(self, name):
+    def test_every_guarded_wrapper_refuses_none_as_not_a_buffer(self, name):
         arg = _buffer_arg(name)
         with pytest.raises(SonareValueError) as exc_info:
             _SAMPLE_WRAPPERS[name](None)
         assert str(exc_info.value) == (
-            f"{name}: {arg} must be a sequence of numbers or a numpy array, not NoneType"
+            f"{name}: {arg} must be a sequence of numbers or a numpy array"
         )
 
-    def test_a_bare_scalar_is_reported_by_type_too(self):
-        with pytest.raises(SonareValueError, match=r"not float$"):
+    def test_a_bare_scalar_is_refused_as_not_a_buffer_too(self):
+        with pytest.raises(
+            SonareValueError,
+            match=r"^metering_rms_db: samples must be a sequence of numbers or a numpy array$",
+        ):
             metering_rms_db(0.5, sample_rate=22050)
 
 

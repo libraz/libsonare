@@ -44,28 +44,28 @@ def test_token_tuples_are_the_literal_arguments_in_ordinal_order() -> None:
 
 def test_every_token_resolves_to_its_ordinal() -> None:
     for ordinal, token in enumerate(get_args(KeyMode)):
-        assert _mode_value(token) == ordinal  # type: ignore[arg-type]
+        assert _mode_value(token, "mode") == ordinal  # type: ignore[arg-type]
     for ordinal, token in enumerate(get_args(KeyProfile)):
-        assert _profile_value(token) == ordinal  # type: ignore[arg-type]
-    assert _profile_value(None) == -1
+        assert _profile_value(token, "profile") == ordinal  # type: ignore[arg-type]
+    assert _profile_value(None, "profile") == -1
 
 
 @pytest.mark.parametrize("value", [0, 1, True, 1.5, None, b"major", ("major",)])
 def test_a_non_string_mode_is_a_type_error(value: object) -> None:
     with pytest.raises(TypeError):
-        _mode_value(value)  # type: ignore[arg-type]
+        _mode_value(value, "mode")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("value", [0, 6, True, 1.5, b"temperley"])
 def test_a_non_string_profile_is_a_type_error(value: object) -> None:
     with pytest.raises(TypeError):
-        _profile_value(value)  # type: ignore[arg-type]
+        _profile_value(value, "profile")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("value", ["Major", "MAJOR", "maj", "m", "min", "minor ", ""])
 def test_an_unknown_or_legacy_mode_names_the_accepted_tokens(value: str) -> None:
     with pytest.raises(SonareValueError) as info:
-        _mode_value(value)  # type: ignore[arg-type]
+        _mode_value(value, "mode")  # type: ignore[arg-type]
     for token in get_args(KeyMode):
         assert token in str(info.value)
 
@@ -76,7 +76,7 @@ def test_an_unknown_or_legacy_mode_names_the_accepted_tokens(value: str) -> None
 )
 def test_an_unknown_or_legacy_profile_names_the_accepted_tokens(value: str) -> None:
     with pytest.raises(SonareValueError) as info:
-        _profile_value(value)  # type: ignore[arg-type]
+        _profile_value(value, "profile")  # type: ignore[arg-type]
     for token in get_args(KeyProfile):
         assert token in str(info.value)
 

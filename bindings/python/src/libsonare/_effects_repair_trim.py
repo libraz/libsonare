@@ -59,8 +59,8 @@ def _resolve_padding(
     return resolved
 
 
-def _coerce_trim_silence_mode(value: TrimSilenceMode) -> int:
-    return _token_ordinal(value, _TRIM_SILENCE_MODES, "trim_silence mode")
+def _coerce_trim_silence_mode(value: TrimSilenceMode, key: str) -> int:
+    return _token_ordinal(value, _TRIM_SILENCE_MODES, key)
 
 
 @_entry("mastering_repair_trim_silence")
@@ -85,7 +85,7 @@ def mastering_repair_trim_silence(
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
         # Narrowed rather than coerced: int() takes 0.5 as 0, which is "no padding at all".
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
-        mode=_coerce_trim_silence_mode(mode),
+        mode=_coerce_trim_silence_mode(mode, "mode"),
         gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
         window_ms=_narrow_double(window_ms, "window_ms"),
     )
@@ -171,7 +171,7 @@ def mastering_repair_detect_trim_range(
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
-        mode=_coerce_trim_silence_mode(mode),
+        mode=_coerce_trim_silence_mode(mode, "mode"),
         gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
         window_ms=_narrow_double(window_ms, "window_ms"),
     )
@@ -252,7 +252,7 @@ def mastering_repair_detect_trim_range_stereo(
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
-        mode=_coerce_trim_silence_mode(mode),
+        mode=_coerce_trim_silence_mode(mode, "mode"),
         gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
         window_ms=_narrow_double(window_ms, "window_ms"),
     )
@@ -347,7 +347,7 @@ def mastering_repair_trim_silence_stereo(
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
-        mode=_coerce_trim_silence_mode(mode),
+        mode=_coerce_trim_silence_mode(mode, "mode"),
         gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
         window_ms=_narrow_double(window_ms, "window_ms"),
     )

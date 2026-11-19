@@ -370,10 +370,10 @@ def test_an_optional_bus_is_none_and_bus_id_zero_is_refused() -> None:
 
 
 def test_sidechain_source_kind_value_takes_exact_tokens() -> None:
-    assert [_sidechain_source_kind_value(kind) for kind in ("track", "bus")] == [0, 1]
+    assert [_sidechain_source_kind_value(kind, "kind") for kind in ("track", "bus")] == [0, 1]
     for other in ("Track", "TRACK", "Bus", "lane"):
         with pytest.raises(SonareValueError, match="track"):
-            _sidechain_source_kind_value(other)
+            _sidechain_source_kind_value(other, "kind")
 
 
 def _midi1_word(status: int, channel: int, word0: int, word1: int) -> int:

@@ -57,7 +57,7 @@ _PARAMS = ("resolve", "what", "tokens", "retired")
 def test_each_token_resolves_to_its_ordinal(
     resolve: Resolver, what: str, tokens: Sequence[str], retired: Sequence[str]
 ) -> None:
-    assert [resolve(token) for token in tokens] == list(range(len(tokens))), what
+    assert [resolve(token, "probe") for token in tokens] == list(range(len(tokens))), what
 
 
 @pytest.mark.parametrize(_PARAMS, _FAMILIES, ids=_FAMILY_IDS)
@@ -65,8 +65,8 @@ def test_an_ordinal_or_a_bool_is_a_type_error(
     resolve: Resolver, what: str, tokens: Sequence[str], retired: Sequence[str]
 ) -> None:
     for value in (0, 1, 99, -1, 1.0, True, False, None):
-        with pytest.raises(TypeError, match=what):
-            resolve(value)
+        with pytest.raises(TypeError, match=f"^probe must be one of {', '.join(tokens)}$"):
+            resolve(value, "probe")
 
 
 @pytest.mark.parametrize(_PARAMS, _FAMILIES, ids=_FAMILY_IDS)
@@ -74,26 +74,23 @@ def test_a_retired_spelling_lists_the_tokens(
     resolve: Resolver, what: str, tokens: Sequence[str], retired: Sequence[str]
 ) -> None:
     for spelling in retired:
-        with pytest.raises(SonareValueError, match=what) as excinfo:
-            resolve(spelling)
-        message = str(excinfo.value)
-        assert repr(spelling) in message
-        for token in tokens:
-            assert repr(token) in message
+        with pytest.raises(SonareValueError) as excinfo:
+            resolve(spelling, "probe")
+        assert str(excinfo.value) == f"probe must be one of {', '.join(tokens)}"
 
 
 def test_a_key_ordinal_is_never_accepted_in_place_of_its_token() -> None:
     """The key-detection resolvers take the token spelling only, never an ordinal."""
     # Positive control: both routes carry a legal token through.
-    assert _mode_values(["minor"]) == [1] and _profile_value("krumhanslSchmuckler") == 0
+    assert _mode_values(["minor"]) == [1] and _profile_value("krumhanslSchmuckler", "profile") == 0
     # Omitted is SONARE_KEY_PROFILE_AUTO; the same -1 given as an ordinal is refused.
-    assert _profile_value(None) == -1
-    with pytest.raises(TypeError, match="mode"):
+    assert _profile_value(None, "profile") == -1
+    with pytest.raises(TypeError, match=r"^modes\[0\] must be one of "):
         _mode_values([1])  # type: ignore[list-item]
-    with pytest.raises(TypeError, match="key profile"):
-        _profile_value(0)  # type: ignore[arg-type]
-    with pytest.raises(TypeError, match="key profile"):
-        _profile_value(-1)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="^profile must be one of "):
+        _profile_value(0, "profile")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="^profile must be one of "):
+        _profile_value(-1, "profile")  # type: ignore[arg-type]
 
 
 @pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
@@ -116,7 +113,11 @@ def test_a_refused_warp_mode_never_reaches_the_arrangement() -> None:
 
         for refused in (2, 4, True, "tempo-sync"):
             expected = SonareValueError if isinstance(refused, str) else TypeError
-            with pytest.raises(expected, match="warp mode"):
+            with pytest.raises(
+                expected,
+                match="^Project.set_clip_warp_mode: mode must be one of "
+                "off, repitch, tempoSync, timeStretch$",
+            ):
                 project.set_clip_warp_mode(clip, refused)  # type: ignore[arg-type]
         assert project.to_json() == by_name
     finally:
@@ -133,9 +134,13 @@ def test_a_track_kind_is_a_token_on_add_and_on_change() -> None:
         project.set_track_kind(track, "aux")
         assert '"kind":2' in project.to_json()
         before = project.to_json()
-        with pytest.raises(TypeError, match="track kind"):
+        with pytest.raises(
+            TypeError, match="^Project.add_track: kind must be one of audio, midi, aux$"
+        ):
             project.add_track(1, "x")  # type: ignore[arg-type]
-        with pytest.raises(TypeError, match="track kind"):
+        with pytest.raises(
+            TypeError, match="^Project.set_track_kind: kind must be one of audio, midi, aux$"
+        ):
             project.set_track_kind(track, 0)  # type: ignore[arg-type]
         assert project.to_json() == before
     finally:

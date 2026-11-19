@@ -543,7 +543,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         raw.max_value = float(info.max_value)
         raw.default_value = float(info.default_value)
         raw.rt_safe = 1 if info.rt_safe else 0
-        raw.default_curve = _curve_value(info.default_curve)
+        raw.default_curve = _curve_value(info.default_curve, "info.default_curve")
         _check(_get_lib().sonare_engine_add_parameter(self._require_handle(), ctypes.byref(raw)))
 
     @_entry("RealtimeEngine.clear_parameters")
@@ -850,7 +850,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         try:
             return self._lane_order.index(track)
         except ValueError:
-            raise _refuse(f"unknown track id {track}") from None
+            raise _refuse("track_id must be the id of a track in this engine") from None
 
     @_entry("RealtimeEngine.set_track_solo_mute")
     def set_track_solo_mute(
@@ -894,7 +894,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         bounces and freezes never include the cue.
         """
         lane_index = self._lane_index_of(track_id)
-        mode_value = _track_monitor_mode_value(mode)
+        mode_value = _track_monitor_mode_value(mode, "mode")
         lib = _get_lib()
         _check(
             lib.sonare_engine_set_track_monitor_mode(

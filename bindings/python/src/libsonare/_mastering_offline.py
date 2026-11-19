@@ -147,29 +147,29 @@ def _insert_params(
         kind = kinds.get(key)
         if kind == "string":
             if not isinstance(value, str):
-                raise _refuse_type(f"params[{key!r}] must be a str")
+                raise _refuse_type(f"params.{key} must be a str")
             out[key] = value
         elif kind == "array":
             if isinstance(value, str | bytes | Mapping) or not isinstance(value, Iterable):
-                raise _refuse_type(f"params[{key!r}] must be a sequence of numbers")
+                raise _refuse_type(f"params.{key} must be a sequence of numbers")
             items = list(value)
             if any(isinstance(item, bool) or not isinstance(item, int | float) for item in items):
-                raise _refuse_type(f"params[{key!r}] must be a sequence of numbers")
+                raise _refuse_type(f"params.{key} must be a sequence of numbers")
             if not all(math.isfinite(item) for item in items):
-                raise _refuse(f"params[{key!r}] must contain only finite numbers")
+                raise _refuse(f"params.{key} must contain only finite numbers")
             out[key] = [float(item) for item in items]
         elif isinstance(value, str):
             if kind != "enum":
-                raise _refuse_type(f"params[{key!r}] must be a number or bool")
+                raise _refuse_type(f"params.{key} must be a number or bool")
             out[key] = _enum_value(processor, key, value)
         elif isinstance(value, bool):
             out[key] = value
         elif isinstance(value, int | float):
             if not math.isfinite(value):
-                raise _refuse(f"params[{key!r}] must be a finite number")
+                raise _refuse(f"params.{key} must be a finite number")
             out[key] = float(value)
         else:
-            raise _refuse_type(f"params[{key!r}] must be a number, bool or enum name")
+            raise _refuse_type(f"params.{key} must be a number, bool or enum name")
     return out
 
 
@@ -202,27 +202,25 @@ def _assistant_params(
         if key == "targetPlatform":
             _require_export(_get_lib(), "sonare_mastering_platform_from_name", _WITHOUT_MASTERING)
             resolved[key] = _resolve_name(
-                key,
+                f"params.{key}",
                 value,
                 "sonare_mastering_platform_from_name",
-                "delivery-target",
-                "mastering target platform",
                 mastering_platform_names,
             )
             continue
         if key == "preset":
             _require_export(_get_lib(), "sonare_mastering_preset_from_name", _WITHOUT_MASTERING)
             resolved[key] = _resolve_name(
-                key,
+                f"params.{key}",
                 value,
                 "sonare_mastering_preset_from_name",
-                "mastering preset",
-                "mastering preset",
                 mastering_preset_names,
             )
             continue
         if isinstance(value, str):
-            raise _refuse(f"{key} must be a number; only targetPlatform and preset take a name")
+            raise _refuse(
+                f"params.{key} must be a number; only targetPlatform and preset take a name"
+            )
         resolved[key] = value
     return _mastering_params(resolved)
 
@@ -231,17 +229,16 @@ def _resolve_name(
     key: str,
     value: object,
     symbol: str,
-    kind: str,
-    noun: str,
     names: Callable[[], list[str]],
 ) -> int:
     """Resolve one named assistant param to the index its C-ABI lookup returns."""
+    message = f"{key} must be one of {', '.join(names())}"
     if not isinstance(value, str):
-        raise _refuse(f"{key} must be a {kind} name; expected one of: {', '.join(names())}")
+        raise _refuse(message)
     lib = _get_lib()
     index = getattr(lib, symbol)(_utf8_arg(value, "value"))
     if index < 0:
-        raise _refuse(f"unknown {noun} {value!r}; expected one of: {', '.join(names())}")
+        raise _refuse(message)
     return int(index)
 
 
@@ -563,7 +560,7 @@ def _enum_value(processor: str | None, key: str, name: str) -> float:
         # An unknown name is an out-of-domain argument: the core's text, as a SonareValueError.
         detail = lib.sonare_last_error_message()
         if not detail:
-            raise _refuse(f"unknown name {key!r}")
+            raise _refuse(f"{key} must name a declared value")
         raise _coded_error(rc, detail.decode("utf-8"))
     _check(rc)
     return value.value if is_enum.value else float(name)
@@ -628,13 +625,13 @@ def _nest_chain_config(flat: Mapping[str, Any]) -> dict[str, Any]:
         for part in parts[:-1]:
             child = node.setdefault(part, {})
             if not isinstance(child, dict):
-                raise _refuse(f"mastering config path {path!r} nests under a value")
+                raise _refuse(f"{path} must not nest under a value")
             node = child
         leaf = parts[-1]
         if isinstance(value, Mapping):
             child = node.setdefault(leaf, {})
             if not isinstance(child, dict):
-                raise _refuse(f"mastering config path {path!r} nests under a value")
+                raise _refuse(f"{path} must not nest under a value")
             for key, member in _nest_chain_config(value).items():
                 child[key] = member
         elif isinstance(value, list):

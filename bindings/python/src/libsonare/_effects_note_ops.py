@@ -731,7 +731,7 @@ def _unmatched_policy_value(policy: str) -> int:
     behaviours was wanted.
     """
     if not isinstance(policy, str) or policy not in _UNMATCHED_POLICIES:
-        raise _refuse(f"unmatched_policy must be one of {sorted(_UNMATCHED_POLICIES)}")
+        raise _refuse(f"unmatched_policy must be one of {', '.join(_UNMATCHED_POLICIES)}")
     return _UNMATCHED_POLICIES[policy]
 
 

@@ -90,7 +90,7 @@ def test_engine_mode_table_carries_the_sample_engine() -> None:
     assert synth_enum_tables()["engine_modes"] == SYNTH_ENUM_TABLES["engine_modes"]
     assert SynthPatch(engine_mode="sample")._to_c().engine_mode == 17
     assert SynthPatch._from_c(SynthPatch(engine_mode="sample")._to_c()).engine_mode == "sample"
-    with pytest.raises(TypeError, match="engine mode"):
+    with pytest.raises(TypeError, match="^engine_mode must be one of default, subtractive, "):
         SynthPatch(engine_mode=17)._to_c()  # type: ignore[arg-type]
 
 
@@ -133,7 +133,10 @@ def test_add_sample_rejects_bad_buffers_and_out_of_range_fields() -> None:
             bank.add_sample(_tone(), root_key=60.5)  # type: ignore[arg-type]
         with pytest.raises(ValueError, match="source_rate must be a finite number"):
             bank.add_sample(_tone(), source_rate=float("inf"))
-        with pytest.raises(ValueError, match="invalid sample loop mode"):
+        with pytest.raises(
+            ValueError,
+            match="^SampleBank.add_sample: loop_mode must be one of none, continuous, keyDown$",
+        ):
             bank.add_sample(_tone(), loop_mode="looping-forever")
         assert bank.sample_count == 0
 
@@ -163,7 +166,7 @@ def test_patch_sample_enums_reject_unknown_spellings() -> None:
     for old in ("loop-forever", "key-down", "KeyDown"):
         with pytest.raises(ValueError, match="keyDown"):
             SynthPatch(sample_loop=old)._to_c()
-    with pytest.raises(ValueError, match="invalid sample key track"):
+    with pytest.raises(ValueError, match="^sample_key_track must be one of default, on, off$"):
         SynthPatch(sample_key_track="sometimes")._to_c()
 
 

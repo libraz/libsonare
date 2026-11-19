@@ -326,7 +326,11 @@ def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
         for mode in ("typo", "Repitch", "time-stretch", 1, 1.9, True):
             expected = ValueError if isinstance(mode, str) else TypeError
-            with pytest.raises(expected, match="invalid warp mode"):
+            with pytest.raises(
+                expected,
+                match="^RealtimeEngine.set_clips: clip.warp_mode must be one of "
+                "off, repitch, tempoSync, timeStretch$",
+            ):
                 engine.set_clips(
                     [
                         EngineClip(

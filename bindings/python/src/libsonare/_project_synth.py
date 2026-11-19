@@ -106,9 +106,9 @@ PART_RIG_ALL_PARTS = 0xFF
 """Part selector that addresses every part of a destination."""
 
 
-def _part_rig_mode_value(mode: PartRigMode) -> int:
+def _part_rig_mode_value(mode: PartRigMode, key: str) -> int:
     """Resolve a part-rig mode token to the C value."""
-    return _PART_RIG_MODES[_token_arg(mode, PART_RIG_MODES, "part rig mode")]
+    return _PART_RIG_MODES[_token_arg(mode, PART_RIG_MODES, key)]
 
 
 def _part_rig_mode_name(value: int) -> PartRigMode:
@@ -438,29 +438,29 @@ def _strip_va_prefix(name: str) -> str:
     return name[3:] if name.startswith("va:") else name
 
 
-def _sample_loop_value(mode: SampleLoopMode) -> int:
+def _sample_loop_value(mode: SampleLoopMode, key: str) -> int:
     """Resolve a :class:`SynthPatch` sample loop override to its C ordinal."""
-    return _synth_enum_value(mode, _SAMPLE_LOOP_MODES, "sample loop mode")
+    return _synth_enum_value(mode, _SAMPLE_LOOP_MODES, key)
 
 
-def _sample_key_track_value(value: SampleKeyTrack) -> int:
+def _sample_key_track_value(value: SampleKeyTrack, key: str) -> int:
     """Resolve a :class:`SynthPatch` sample key-track override to its C ordinal."""
-    return _synth_enum_value(value, _SAMPLE_KEY_TRACKS, "sample key track")
+    return _synth_enum_value(value, _SAMPLE_KEY_TRACKS, key)
 
 
-def _controller_input_value(value: ControllerInput) -> int:
+def _controller_input_value(value: ControllerInput, key: str) -> int:
     """Resolve a controller-profile input spelling to its C ordinal."""
-    return _synth_enum_value(value, _CONTROLLER_INPUTS, "controller input")
+    return _synth_enum_value(value, _CONTROLLER_INPUTS, key)
 
 
-def _controller_axis_value(value: ControllerAxis) -> int:
+def _controller_axis_value(value: ControllerAxis, key: str) -> int:
     """Resolve a controller-profile axis spelling to its C ordinal."""
-    return _synth_enum_value(value, _CONTROLLER_AXES, "controller axis")
+    return _synth_enum_value(value, _CONTROLLER_AXES, key)
 
 
-def _articulation_value(value: Articulation) -> int:
+def _articulation_value(value: Articulation, key: str) -> int:
     """Resolve an articulation spelling to its C ordinal."""
-    return _synth_enum_value(value, _ARTICULATIONS, "articulation")
+    return _synth_enum_value(value, _ARTICULATIONS, key)
 
 
 def _articulation_name(value: int) -> Articulation:
@@ -468,14 +468,14 @@ def _articulation_name(value: int) -> Articulation:
     return cast(Articulation, _synth_enum_name(value, _ARTICULATIONS))
 
 
-def _mpe_dimension_value(value: MpeDimension) -> int:
+def _mpe_dimension_value(value: MpeDimension, key: str) -> int:
     """Resolve an MPE dimension spelling to its C ordinal."""
-    return _synth_enum_value(value, _MPE_DIMENSIONS, "MPE dimension")
+    return _synth_enum_value(value, _MPE_DIMENSIONS, key)
 
 
-def _note_tracking_value(value: NoteTracking) -> int:
+def _note_tracking_value(value: NoteTracking, key: str) -> int:
     """Resolve a note-tracking spelling to its C ordinal."""
-    return _synth_enum_value(value, _NOTE_TRACKINGS, "note tracking")
+    return _synth_enum_value(value, _NOTE_TRACKINGS, key)
 
 
 def _note_tracking_name(value: int) -> NoteTracking:
@@ -483,9 +483,9 @@ def _note_tracking_name(value: int) -> NoteTracking:
     return cast(NoteTracking, _synth_enum_name(value, _NOTE_TRACKINGS))
 
 
-def _sample_desc_loop_value(mode: SampleDescLoopMode) -> int:
+def _sample_desc_loop_value(mode: SampleDescLoopMode, key: str) -> int:
     """Resolve a sample's own loop mode token to its SF2 ``sampleModes`` value."""
-    return _synth_enum_value(mode, _SAMPLE_DESC_LOOP_MODES, "sample loop mode")
+    return _synth_enum_value(mode, _SAMPLE_DESC_LOOP_MODES, key)
 
 
 def _unsigned(value: int, name: str, limit: int) -> int:
@@ -630,7 +630,7 @@ class SampleBank:
             ),
             loop_start=_unsigned(loop_start, "loop_start", _UINT32_MAX),
             loop_end=_unsigned(loop_end, "loop_end", _UINT32_MAX),
-            loop_mode=_sample_desc_loop_value(loop_mode),
+            loop_mode=_sample_desc_loop_value(loop_mode, "loop_mode"),
         )
         c_array, length = _to_c_float_array(buf)
         out_index = ctypes.c_uint32()

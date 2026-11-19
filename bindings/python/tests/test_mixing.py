@@ -101,10 +101,14 @@ def test_strip_by_id_returns_index_and_raises_on_unknown(mixer) -> None:
     index = mixer.strip_by_id("vocal")
     assert isinstance(index, int)
     assert 0 <= index < mixer.strip_count
-    with pytest.raises(SonareValueError, match="does-not-exist"):
+    with pytest.raises(
+        SonareValueError, match="^Mixer.strip_by_id: id must be the id of a strip in this mixer$"
+    ):
         mixer.strip_by_id("does-not-exist")
     # A strip reference taken by any other method is refused the same way.
-    with pytest.raises(SonareValueError, match="does-not-exist"):
+    with pytest.raises(
+        SonareValueError, match="^Mixer.set_soloed: strip must be the id of a strip in this mixer$"
+    ):
         mixer.set_soloed("does-not-exist", True)
     with pytest.raises(
         SonareValueError, match=rf"strip must be an integer in \[0, {mixer.strip_count - 1}\]$"
@@ -355,7 +359,7 @@ def test_set_pan_law_matches_shared_name_corpus(mixer) -> None:
     """Each exact token maps to the shared ordinal; other spellings and numbers are refused."""
     for case in _PAN_LAW_CORPUS["accepted"]:
         mixer.set_pan_law(0, case["value"])
-        assert _pan_law_value(case["value"]) == case["ordinal"], case["value"]
+        assert _pan_law_value(case["value"], "pan_law") == case["ordinal"], case["value"]
     for value in _PAN_LAW_CORPUS["rejected"]:
         with pytest.raises(SonareValueError):
             mixer.set_pan_law(0, value)
@@ -738,7 +742,7 @@ def test_automation_curves_match_shared_name_corpus(mixer) -> None:
     """Each curve token maps to the shared ordinal; other spellings and numbers are refused."""
     for case in _AUTOMATION_CURVE_CORPUS["accepted"]:
         mixer.schedule_fader_automation("vocal", 0, -6.0, case["value"])
-        assert _curve_value(case["value"]) == case["ordinal"], case["value"]
+        assert _curve_value(case["value"], "curve") == case["ordinal"], case["value"]
     for value in _AUTOMATION_CURVE_CORPUS["rejected"]:
         with pytest.raises(SonareValueError):
             mixer.schedule_fader_automation("vocal", 0, -6.0, value)

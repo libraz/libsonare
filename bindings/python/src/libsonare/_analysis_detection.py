@@ -182,7 +182,7 @@ def detect_key(
         _to_c_float(chroma_high_pass_hz, "chroma_high_pass_hz"),
         mode_array,
         _to_c_size_t(mode_count, "mode_count"),
-        ctypes.c_int32(_profile_value(profile)),
+        ctypes.c_int32(_profile_value(profile, "profile")),
         None
         if genre_hint is None
         else _utf8_arg(_token_arg(genre_hint, _GENRE_HINTS, "genre_hint"), "genre_hint"),
@@ -238,7 +238,7 @@ def detect_key_candidates(
         _to_c_float(chroma_high_pass_hz, "chroma_high_pass_hz"),
         mode_array,
         _to_c_size_t(mode_count, "mode_count"),
-        ctypes.c_int32(_profile_value(profile)),
+        ctypes.c_int32(_profile_value(profile, "profile")),
         None
         if genre_hint is None
         else _utf8_arg(_token_arg(genre_hint, _GENRE_HINTS, "genre_hint"), "genre_hint"),
