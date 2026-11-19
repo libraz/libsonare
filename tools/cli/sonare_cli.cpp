@@ -78,7 +78,10 @@ const std::vector<CommandInfo>& get_commands() {
       {"chirp", "Generate a frequency sweep", cmd_chirp, false},
       {"clicks", "Generate a click track", cmd_clicks, false},
 #ifdef SONARE_WITH_MASTERING
-      {"mastering", "Apply mastering loudness/true-peak processing", cmd_mastering, true},
+      {"mastering", "Master through a preset, a chain config or the assistant", cmd_mastering,
+       true},
+      {"mastering-normalize-loudness", "Normalise loudness under a true-peak ceiling",
+       cmd_mastering_normalize_loudness, true},
       {"eq", "Apply the unified mastering equalizer", cmd_eq, true},
       {"mastering-processor", "Apply a named mastering processor", cmd_mastering_processor, true},
       {"mastering-pair-processor", "Apply a two-input mastering processor",

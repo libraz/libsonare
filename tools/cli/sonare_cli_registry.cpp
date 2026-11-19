@@ -964,21 +964,24 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 #ifdef SONARE_WITH_MASTERING
     // "--chain-config" names a complete chain config in the core's own
     // `{params, version}` form.
-    add_command(
-        commands, "mastering", true,
-        {string_value("preset"), path_value("chain-config"), number_value("target-lufs", -14.0),
-         number_value("ceiling-dbtp", -1.0), string_value("params"), bits_value(),
-         true_peak_oversample_value(), path_value("report"), output_value(), flag("assistant"),
-         flag("enable-repair"), flag("explain"),
-         // The remaining AssistantConfig fields. `prefer_streaming_safe`
-         // defaults to true, so the reachable control is the one that
-         // turns it off -- a `--prefer-streaming-safe` flag would only
-         // ever restate the default. `--speech-mono-amount` carries no
-         // domain because the suggester clamps it to [0, 1] rather than
-         // refusing an outside value.
-         target_platform_value(), flag("no-streaming-safe"),
-         number_value("speech-mono-amount", 1.0)},
-        {}, nullptr, 0, /*preserves_stereo_input=*/true);
+    add_command(commands, "mastering", true,
+                {string_value("preset"), path_value("chain-config"),
+                 number_value("target-lufs", -14.0), number_value("ceiling-dbtp", -1.0),
+                 string_value("params"), bits_value(), path_value("report"), output_value(),
+                 flag("assistant"), flag("enable-repair"), flag("explain"),
+                 // The remaining AssistantConfig fields. `prefer_streaming_safe`
+                 // defaults to true, so the reachable control is the one that
+                 // turns it off -- a `--prefer-streaming-safe` flag would only
+                 // ever restate the default. `--speech-mono-amount` carries no
+                 // domain because the suggester clamps it to [0, 1] rather than
+                 // refusing an outside value.
+                 target_platform_value(), flag("no-streaming-safe"),
+                 number_value("speech-mono-amount", 1.0)},
+                {}, nullptr, 0, /*preserves_stereo_input=*/true);
+    add_command(commands, "mastering-normalize-loudness", true,
+                {number_value("target-lufs", -14.0), number_value("ceiling-dbtp", -1.0),
+                 bits_value(), true_peak_oversample_value(), path_value("report"), output_value()},
+                {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(
         commands, "mastering-processor", true,
         {required_string("processor"), string_value("params"), bits_value(), output_value()}, {},

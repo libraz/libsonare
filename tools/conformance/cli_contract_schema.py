@@ -989,7 +989,7 @@ def _validate_canonical_payload_schema(
         _require_schema_keys(
             payloads.get("success"), _SYNTHESIZE_RIR_KEYS, f"{label}.success", errors
         )
-    elif path == "mastering":
+    elif path == "mastering-normalize-loudness":
         _require_schema_keys(
             payloads.get("success"), _MASTERING_REPORT_KEYS, f"{label}.success", errors
         )

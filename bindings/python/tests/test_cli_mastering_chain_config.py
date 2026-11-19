@@ -341,8 +341,8 @@ def test_the_reported_mode_is_the_token_the_native_cli_reports(tmp_path, capsys)
     assert 'mode = "chainConfig";' in _NATIVE_HANDLER.read_text(encoding="utf-8")
 
 
-def test_a_loudness_flag_beside_a_chain_config_is_refused(tmp_path) -> None:
-    """The refusal names ``--chain-config``."""
+def test_a_loudness_target_beside_a_chain_config_is_refused(tmp_path) -> None:
+    """The loudness targets reach only the assistant, so a chain config refuses them."""
     source = tmp_path / "input.wav"
     _write_source(source)
     config = tmp_path / "chain.json"
@@ -350,7 +350,7 @@ def test_a_loudness_flag_beside_a_chain_config_is_refused(tmp_path) -> None:
 
     with pytest.raises(ValueError) as caught:
         _run(["mastering", str(source), "--chain-config", str(config), "--target-lufs", "-12"])
-    assert str(caught.value) == "--target-lufs cannot be combined with --chain-config"
+    assert str(caught.value) == "--target-lufs requires --assistant"
 
 
 def test_mastering_chain_config_has_no_second_spelling() -> None:
@@ -384,11 +384,9 @@ def test_native_front_end_declares_the_same_spelling() -> None:
     # one form `--chain-config` parses on either front-end.
     assert "mastering::api::chain_config_to_json(suggestion.config)" in handler
     assert '"--chain-config is mutually exclusive with --preset and --assistant"' in handler
-    # The chain-config selector is read and named under its canonical spelling,
-    # matching the Python handler's refusals above.
+    # The chain-config selector is read under its canonical spelling.
     assert 'args.has("chain-config")' in handler
     assert 'args.get_string("chain-config")' in handler
-    assert 'mode == "chainConfig" ? "chain-config" : mode' in handler
 
 
 def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -> None:

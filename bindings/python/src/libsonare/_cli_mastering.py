@@ -293,13 +293,18 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     # rather than a second chain, so only --chain-config excludes the other two.
     if config_raw and (preset or assistant):
         raise ValueError("--chain-config is mutually exclusive with --preset and --assistant")
-    if params_raw and not selectors:
-        raise ValueError("--params requires --preset, --chain-config, or --assistant")
+    if not selectors:
+        raise ValueError(
+            "mastering needs --preset or --chain-config, or --assistant (which may take "
+            "--preset); loudness-only normalisation is mastering-normalize-loudness"
+        )
     # Every option that only reaches an AssistantConfig field, refused rather
     # than accepted and dropped -- the same list, in the same order, the native
     # handler refuses.
     if not assistant:
         for name in (
+            "target-lufs",
+            "ceiling-dbtp",
             "enable-repair",
             "explain",
             "target-platform",
@@ -308,18 +313,6 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         ):
             if _option_supplied(args, name):
                 raise ValueError(f"--{name} requires --assistant")
-
-    # The preset/config chain is driven entirely by its config, so a standalone
-    # loudness flag would be silently discarded.
-    if selectors and not assistant:
-        ignored_loudness = [
-            name
-            for name in ("target-lufs", "ceiling-dbtp", "true-peak-oversample")
-            if _option_supplied(args, name)
-        ]
-        if ignored_loudness:
-            joined = ", ".join(f"--{name}" for name in ignored_loudness)
-            raise ValueError(f"{joined} cannot be combined with --{selectors[0]}")
 
     params = _parse_kv_params(params_raw, names=True) if params_raw else {}
 
@@ -340,7 +333,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         )
 
     result: Any
-    mode = "loudness"
+    mode = "chainConfig"
     explanation: list[str] = []
     if preset and not assistant:
         from . import master_audio, master_audio_stereo
@@ -383,15 +376,75 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         )
         config = _chain_config_paths(suggestion.chain_config)
         config.update(params)
-        # Match the native assistant route: an explicitly supplied shortcut
-        # wins over a flat --params override; an omitted shortcut leaves the
-        # assistant's suggested/default chain value intact.
-        if _option_supplied(args, "true-peak-oversample"):
-            config["loudness.truePeakOversample"] = float(getattr(args, "true_peak_oversample", 4))
         result = _run_chain(config)
         explanation = list(suggestion.explanation)
         mode = "assistant"
-    elif report_path or stereo:
+    rendered = [result.left, result.right] if stereo else [result.samples]
+    output = getattr(args, "output", "") or ""
+    if output:
+        _write_channel_output(output, rendered, result.sample_rate, bits)
+    if report_path:
+        _write_mastering_report(report_path, result.report)
+
+    if getattr(args, "json", False):
+        payload = _mastering_chain_payload(
+            result,
+            mode=mode,
+            output=output,
+            # preset selects the assistant's starting config too (see
+            # assistant_config_from_cli), but the payload's preset key is
+            # reserved for the preset ROUTE, matching the native CLI:
+            # tools/cli/sonare_cli_mastering.cpp only assigns
+            # preset_name on the plain --preset route, so its JSON never
+            # carries the key for --assistant --preset.
+            preset=preset if mode == "preset" else "",
+            explanation=explanation if explain else None,
+            include_report_latency=bool(report_path),
+        )
+        print(_strict_json_dumps(payload))
+    else:
+        print(f"  Mastering {mode}:")
+        # See the JSON payload's own preset= comment above: preset also seeds
+        # the assistant's starting config, but the printed line is reserved
+        # for the preset ROUTE, matching the native CLI (preset_name stays
+        # empty off that route there too).
+        if preset and mode == "preset":
+            print(f"    Preset:       {preset}")
+        stages = list(getattr(result, "stages", []))
+        print(f"    Stages:       {', '.join(stages) if stages else '(none)'}")
+        print(f"    Input LUFS:  {result.input_lufs:.2f}")
+        print(f"    Output LUFS: {result.output_lufs:.2f}")
+        print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
+        if output:
+            print(f"    Wrote: {output}")
+    return 0
+
+
+def cmd_mastering_normalize_loudness(args: argparse.Namespace) -> int:
+    from . import master_audio, master_audio_stereo
+
+    planes, sr = _load_channels_or_downmix(args.file)
+    samples = planes[0]
+    stereo = len(planes) == 2
+    report_path = getattr(args, "report", "") or ""
+    bits = _wav_bits(args)
+
+    def _run_chain(config: dict[str, Any]) -> Any:
+        """Run one chain config over however many channels the source has."""
+        if stereo:
+            return master_audio_stereo(
+                planes[0],
+                planes[1],
+                sample_rate=sr,
+                preset=None,
+                overrides=_nest_chain_config(config),
+            )
+        return master_audio(
+            samples, sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
+        )
+
+    result: Any
+    if report_path or stereo:
         # The standalone loudness facade has no stereo form, so a stereo source
         # takes the loudness-only chain the report path already uses. That is
         # the same operation rather than a substitute: over one mono input the
@@ -424,46 +477,21 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         _write_mastering_report(report_path, result.report)
 
     if getattr(args, "json", False):
-        if mode != "loudness":
-            payload = _mastering_chain_payload(
-                result,
-                mode=mode,
-                output=output,
-                # preset selects the assistant's starting config too (see
-                # assistant_config_from_cli), but the payload's preset key is
-                # reserved for the preset ROUTE, matching the native CLI:
-                # tools/cli/sonare_cli_mastering.cpp only assigns
-                # preset_name on the plain --preset route, so its JSON never
-                # carries the key for --assistant --preset.
-                preset=preset if mode == "preset" else "",
-                explanation=explanation if explain else None,
-                include_report_latency=bool(report_path),
-            )
-        else:
-            payload = {
-                "input_lufs": result.input_lufs,
-                "output_lufs": result.output_lufs,
-                "applied_gain_db": result.applied_gain_db,
-                "target_lufs": getattr(args, "target_lufs", -14.0),
-                "ceiling_dbtp": getattr(args, "ceiling_dbtp", -1.0),
-                "true_peak_oversample": getattr(args, "true_peak_oversample", 4),
-                "latency_samples": getattr(result, "latency_samples", 0),
-                "loudness_target_limited": bool(result.loudness_target_limited),
-                "sample_rate": result.sample_rate,
-                "output": output,
-            }
+        payload = {
+            "input_lufs": result.input_lufs,
+            "output_lufs": result.output_lufs,
+            "applied_gain_db": result.applied_gain_db,
+            "target_lufs": getattr(args, "target_lufs", -14.0),
+            "ceiling_dbtp": getattr(args, "ceiling_dbtp", -1.0),
+            "true_peak_oversample": getattr(args, "true_peak_oversample", 4),
+            "latency_samples": getattr(result, "latency_samples", 0),
+            "loudness_target_limited": bool(result.loudness_target_limited),
+            "sample_rate": result.sample_rate,
+            "output": output,
+        }
         print(_strict_json_dumps(payload))
     else:
-        print("  Mastering:" if mode == "loudness" else f"  Mastering {mode}:")
-        # See the JSON payload's own preset= comment above: preset also seeds
-        # the assistant's starting config, but the printed line is reserved
-        # for the preset ROUTE, matching the native CLI (preset_name stays
-        # empty off that route there too).
-        if preset and mode == "preset":
-            print(f"    Preset:       {preset}")
-        if mode != "loudness":
-            stages = list(getattr(result, "stages", []))
-            print(f"    Stages:       {', '.join(stages) if stages else '(none)'}")
+        print("  Mastering:")
         print(f"    Input LUFS:  {result.input_lufs:.2f}")
         print(f"    Output LUFS: {result.output_lufs:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
@@ -1024,7 +1052,9 @@ def register_mastering_parsers(
 
     # Mastering commands
     mastering_p = sub.add_parser(
-        "mastering", parents=[common], help="Loudness-normalize with a true-peak ceiling"
+        "mastering",
+        parents=[common],
+        help="Master through a preset, a chain config or the assistant",
     )
     mastering_p.add_argument(
         "--preset", type=_token_of(_library_catalog("mastering_preset_names")), default=""
@@ -1036,14 +1066,23 @@ def register_mastering_parsers(
     mastering_p.add_argument("--ceiling-dbtp", type=_finite_float, default=-1.0)
     mastering_p.add_argument("--params", default="")
     _add_wav_bits_argument(mastering_p)
-    mastering_p.add_argument(
-        "--true-peak-oversample", type=_c_int, choices=(1, 2, 4, 8, 16), default=4
-    )
     mastering_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
     mastering_p.add_argument("--assistant", action="store_true")
     mastering_p.add_argument("--enable-repair", action="store_true")
     mastering_p.add_argument("--explain", action="store_true")
     _add_assistant_control_arguments(mastering_p)
+    loudness_p = sub.add_parser(
+        "mastering-normalize-loudness",
+        parents=[common],
+        help="Normalise loudness under a true-peak ceiling",
+    )
+    loudness_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
+    loudness_p.add_argument("--ceiling-dbtp", type=_finite_float, default=-1.0)
+    _add_wav_bits_argument(loudness_p)
+    loudness_p.add_argument(
+        "--true-peak-oversample", type=_c_int, choices=(1, 2, 4, 8, 16), default=4
+    )
+    loudness_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
     mproc_p = sub.add_parser(
         "mastering-processor", parents=[common], help="Apply a named mastering processor"
     )

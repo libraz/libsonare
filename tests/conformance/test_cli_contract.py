@@ -913,7 +913,7 @@ class CliContractSelfTest(unittest.TestCase):
         self.assertEqual(
             declared,
             {
-                "mastering": 15,
+                "mastering": 16,
                 "mixing": 3,
                 "mixingAssistant": 1,
                 "acousticSim": 3,
@@ -954,7 +954,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared"
         }
-        self.assertEqual(len(shared), 79)
+        self.assertEqual(len(shared), 80)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
             self.assertEqual(self.manifest["commands"][path]["option_status"], "active", path)

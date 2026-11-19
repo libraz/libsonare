@@ -726,10 +726,10 @@ test = "tests/cli/cli_effects_test.cpp::leaves an omitted band count to the libr
 [[entry]]
 kind = "command"
 old = "mastering"
-changed = "the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; preset and assistant are unchanged; the before and after summaries of --report name the loudness range loudness_range_lu rather than loudness_range"
+changed = "a chain is required: --preset or --chain-config, or --assistant (which may take --preset as its base); with none the command is refused (exit 3) instead of normalising loudness, which is now mastering-normalize-loudness with the same options and output; --target-lufs and --ceiling-dbtp are assistant targets and require --assistant; the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; the before and after summaries of --report name the loudness range loudness_range_lu rather than loudness_range"
 domain = "mastering"
-rule = "token-case"
-test = "tests/cli/cli_mastering_test.cpp::CLI mastering command"
+rule = "mastering-names"
+test = "tests/cli/cli_mastering_test.cpp::CLI mastering needs a chain and leaves loudness-only work to its own command"
 
 [[entry]]
 kind = "flag"
@@ -758,6 +758,13 @@ old = "mastering --config"
 removed = "use --chain-config"
 domain = "mastering"
 rule = "aliases-removed"
+
+[[entry]]
+kind = "flag"
+old = "mastering --true-peak-oversample"
+removed = "use mastering-normalize-loudness --true-peak-oversample, or --params loudness.truePeakOversample=N on a mastering chain"
+domain = "mastering"
+rule = "mastering-names"
 
 [[entry]]
 kind = "flag"

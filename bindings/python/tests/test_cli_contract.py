@@ -105,6 +105,7 @@ TOP_LEVEL_ROUTES = (
     "tempogram",
     "plp",
     "mastering",
+    "mastering-normalize-loudness",
     "mastering-processor",
     "eq",
     "mastering-processors",
@@ -1042,11 +1043,13 @@ def test_missing_project_positional_is_a_usage_error_naming_it() -> None:
 
 
 def test_mastering_cli_uses_requested_true_peak_oversample(tmp_path) -> None:
-    """Mastering forwards the CLI oversampling factor and reports the applied value."""
+    """Loudness normalisation forwards the oversampling factor and reports the applied value."""
     source = tmp_path / "tone.wav"
     _write_tone_wav(source)
 
-    result = _run_console("mastering", "--json", "--true-peak-oversample", "8", str(source))
+    result = _run_console(
+        "mastering-normalize-loudness", "--json", "--true-peak-oversample", "8", str(source)
+    )
 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["true_peak_oversample"] == 8
@@ -1444,14 +1447,26 @@ def test_mastering_cli_reports_ceiling_limited_loudness(tmp_path) -> None:
     _write_tone_wav(source)
 
     limited = _run_console(
-        "mastering", "--json", "--target-lufs", "-6", "--ceiling-dbtp", "-12", str(source)
+        "mastering-normalize-loudness",
+        "--json",
+        "--target-lufs",
+        "-6",
+        "--ceiling-dbtp",
+        "-12",
+        str(source),
     )
     assert limited.returncode == 0, limited.stderr
     limited_payload = json.loads(limited.stdout)
     assert limited_payload["loudness_target_limited"] is True
 
     reachable = _run_console(
-        "mastering", "--json", "--target-lufs", "-20", "--ceiling-dbtp", "-1", str(source)
+        "mastering-normalize-loudness",
+        "--json",
+        "--target-lufs",
+        "-20",
+        "--ceiling-dbtp",
+        "-1",
+        str(source),
     )
     assert reachable.returncode == 0, reachable.stderr
     assert json.loads(reachable.stdout)["loudness_target_limited"] is False
@@ -1502,13 +1517,17 @@ def test_mastering_ceiling_is_spelled_and_echoed_in_dbtp(tmp_path: Path) -> None
     """The ceiling is held on the true peak, so the flag and the echo carry dBTP."""
     source = tmp_path / "tone.wav"
     _write_tone_wav(source)
-    result = _run_console("mastering", "--json", "--ceiling-dbtp", "-2", str(source))
+    result = _run_console(
+        "mastering-normalize-loudness", "--json", "--ceiling-dbtp", "-2", str(source)
+    )
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["ceiling_dbtp"] == -2
     assert "ceiling_db" not in payload
 
-    refused = _run_console("mastering", "--json", "--ceiling-db", "-2", str(source))
+    refused = _run_console(
+        "mastering-normalize-loudness", "--json", "--ceiling-db", "-2", str(source)
+    )
     assert refused.returncode == 2
     assert "--ceiling-db" in refused.stderr
 

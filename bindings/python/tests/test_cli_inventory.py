@@ -70,10 +70,12 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
         "exclusive_maximum": False,
         "reject_exit": "invalid_parameter",
     }
-    mastering_record = next(
-        command for command in payload["commands"] if command["path"] == "mastering"
+    loudness_record = next(
+        command
+        for command in payload["commands"]
+        if command["path"] == "mastering-normalize-loudness"
     )
-    assert _option(mastering_record, "true-peak-oversample")["domain"]["choices"] == [
+    assert _option(loudness_record, "true-peak-oversample")["domain"]["choices"] == [
         "1",
         "2",
         "4",

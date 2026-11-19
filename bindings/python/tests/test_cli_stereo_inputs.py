@@ -57,18 +57,18 @@ def test_master_cli_keeps_a_stereo_input_stereo(tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
-    "selector",
+    ("command", "selector"),
     [
-        pytest.param([], id="loudness"),
-        pytest.param(["--preset", "pop"], id="preset"),
-        pytest.param(["--assistant"], id="assistant"),
-        pytest.param(["--report"], id="report"),
+        pytest.param("mastering-normalize-loudness", [], id="loudness"),
+        pytest.param("mastering", ["--preset", "pop"], id="preset"),
+        pytest.param("mastering", ["--assistant"], id="assistant"),
+        pytest.param("mastering-normalize-loudness", ["--report"], id="report"),
     ],
 )
-def test_mastering_cli_keeps_a_stereo_input_stereo(tmp_path, selector) -> None:
-    """Every route through `mastering` carries a stereo source as a pair.
+def test_mastering_cli_keeps_a_stereo_input_stereo(tmp_path, command, selector) -> None:
+    """Every mastering route carries a stereo source as a pair.
 
-    Parametrized over the selectors rather than tested once, because the four
+    Parametrized over the routes rather than tested once, because the four
     reach the chain by different calls -- a preset, a suggested config, an
     explicit config and the standalone loudness path -- and the last one has no
     stereo entry of its own to inherit, so it is the one most likely to fall
@@ -81,7 +81,7 @@ def test_mastering_cli_keeps_a_stereo_input_stereo(tmp_path, selector) -> None:
     right = [0.2 * math.sin(2.0 * math.pi * 330.0 * i / 48000) for i in range(length)]
     _write_stereo_wav(str(source), left, right, 48000)
 
-    argv = ["mastering", str(source), "-o", str(output), "--json", *selector]
+    argv = [command, str(source), "-o", str(output), "--json", *selector]
     if selector == ["--report"]:
         argv += [str(tmp_path / "report.json")]
     result = _run_cli(argv)

@@ -141,8 +141,8 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
             "--assistant",
             "--enable-repair",
             "--explain",
-            "--true-peak-oversample",
-            "8",
+            "--params",
+            "loudness.truePeakOversample=8",
             "--json",
         ]
     )
@@ -438,7 +438,7 @@ def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) ->
 
     args = cli._build_parser().parse_args(
         [
-            "mastering",
+            "mastering-normalize-loudness",
             "input.wav",
             "--target-lufs",
             "-6",
@@ -447,7 +447,7 @@ def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) ->
             "--json",
         ]
     )
-    assert _cli_mastering.cmd_mastering(args) == 0
+    assert _cli_mastering.cmd_mastering_normalize_loudness(args) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["loudness_target_limited"] is True
 
@@ -528,11 +528,15 @@ def test_assistant_controls_are_refused_without_assistant(monkeypatch) -> None:
 
     patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     for option in (
+        ["--target-lufs", "-12"],
+        ["--ceiling-dbtp", "-2"],
         ["--target-platform", "broadcast"],
         ["--no-streaming-safe"],
         ["--speech-mono-amount", "0.5"],
     ):
-        args = cli._build_parser().parse_args(["mastering", "input.wav", *option])
+        args = cli._build_parser().parse_args(
+            ["mastering", "input.wav", "--preset", "pop", *option]
+        )
         with pytest.raises(ValueError, match="requires --assistant"):
             _cli_mastering.cmd_mastering(args)
 
@@ -586,21 +590,36 @@ def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
     [
         ("--target-lufs", "-14.0"),
         ("--ceiling-dbtp", "-1.0"),
-        ("--true-peak-oversample", "4"),
     ],
 )
-def test_a_loudness_option_carrying_its_default_is_refused_by_the_preset_chain(
+def test_a_loudness_target_carrying_its_default_is_refused_without_assistant(
     monkeypatch, option, value
 ) -> None:
-    """A preset chain ignores the loudness flags, so supplying one is refused."""
+    """The loudness targets reach only the assistant, so a preset chain refuses them."""
     from libsonare import _cli_mastering, cli
 
     patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     args = cli._build_parser().parse_args(
         ["mastering", "input.wav", "--preset", "pop", f"{option}={value}"]
     )
-    with pytest.raises(ValueError, match=f"{option} cannot be combined with --preset"):
+    with pytest.raises(ValueError, match=f"{option} requires --assistant"):
         _cli_mastering.cmd_mastering(args)
+
+
+def test_mastering_needs_a_chain_and_names_the_loudness_command(monkeypatch) -> None:
+    """With no chain selector the command is refused rather than normalising loudness."""
+    from libsonare import _cli_mastering, cli
+
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
+    for extra in ([], ["--params", "loudness.targetLufs=-18"]):
+        args = cli._build_parser().parse_args(["mastering", "input.wav", *extra])
+        with pytest.raises(ValueError, match="mastering-normalize-loudness"):
+            _cli_mastering.cmd_mastering(args)
+    # The oversampling factor is a chain parameter on mastering, not a flag.
+    with pytest.raises(SystemExit):
+        cli._build_parser().parse_args(
+            ["mastering", "input.wav", "--assistant", "--true-peak-oversample", "8"]
+        )
 
 
 @pytest.mark.parametrize(
@@ -614,7 +633,7 @@ def test_an_assistant_option_carrying_its_default_is_refused_without_assistant(
     from libsonare import _cli_mastering, cli
 
     patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
-    args = cli._build_parser().parse_args(["mastering", "input.wav", option])
+    args = cli._build_parser().parse_args(["mastering", "input.wav", "--preset", "pop", option])
     with pytest.raises(ValueError, match="requires --assistant"):
         _cli_mastering.cmd_mastering(args)
 
@@ -637,7 +656,6 @@ def test_presence_gated_mastering_options_match_the_native_handler() -> None:
         "speech-mono-amount",
         "target-lufs",
         "ceiling-dbtp",
-        "true-peak-oversample",
     ):
         assert f'args.has("{name}")' in text or f'"{name}",' in text
 

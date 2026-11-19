@@ -50,9 +50,15 @@ def _artifact_writers(source: Path, destination: Path) -> dict[str, Any]:
         "project": lambda: cli.cmd_project(
             cli._build_parser().parse_args(["project", "new", "-o", str(destination)])
         ),
-        "mastering-report": lambda: cli.cmd_mastering(
+        "mastering-report": lambda: cli.cmd_mastering_normalize_loudness(
             cli._build_parser().parse_args(
-                ["mastering", str(source), "--report", str(destination), "--json"]
+                [
+                    "mastering-normalize-loudness",
+                    str(source),
+                    "--report",
+                    str(destination),
+                    "--json",
+                ]
             )
         ),
     }

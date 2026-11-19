@@ -1440,6 +1440,80 @@
             "exclusive_maximum": false,
             "reject_exit": "usage"
           }
+        }
+      ],
+      "mastering-normalize-loudness": [
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "stated_default": "16",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "ceiling-dbtp",
+          "type": "number",
+          "default": -1,
+          "stated_default": "-1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "report",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "target-lufs",
+          "type": "number",
+          "default": -14,
+          "stated_default": "-14.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
         },
         {
           "name": "true-peak-oversample",
@@ -5702,6 +5776,14 @@
         "mastering"
       ]
     },
+    "mastering-normalize-loudness": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active",
+      "requires": [
+        "mastering"
+      ]
+    },
     "eq": {
       "classification": "shared",
       "status": "active",
@@ -7995,29 +8077,6 @@
             "exclusive_maximum": false,
             "reject_exit": "usage"
           }
-        },
-        {
-          "name": "true-peak-oversample",
-          "type": "integer",
-          "default": 4,
-          "stated_default": "4",
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": {
-            "choices": [
-              "1",
-              "2",
-              "4",
-              "8",
-              "16"
-            ],
-            "minimum": null,
-            "exclusive_minimum": false,
-            "maximum": null,
-            "exclusive_maximum": false,
-            "reject_exit": "usage"
-          }
         }
       ],
       "positionals": [
@@ -8029,20 +8088,6 @@
       ],
       "payloads": {
         "success": {
-          "keys": {
-            "input_lufs": "number",
-            "output_lufs": "number",
-            "applied_gain_db": "number",
-            "target_lufs": "number",
-            "ceiling_dbtp": "number",
-            "true_peak_oversample": "integer",
-            "latency_samples": "integer",
-            "loudness_target_limited": "boolean",
-            "sample_rate": "integer",
-            "output": "path"
-          }
-        },
-        "preset": {
           "keys": {
             "mode": "string",
             "input_lufs": "number",
@@ -8056,52 +8101,20 @@
       },
       "cases": [
         {
-          "id": "report",
+          "id": "no_selector_refused",
           "argv": [
             "mastering",
             "{audio}",
-            "--report",
-            "{mastering_report}",
             "--json"
           ],
-          "exit": 0,
-          "payload": "success",
+          "exit": 3,
+          "payload": "none",
           "artifact": "none",
-          "stdout": "json"
-        },
-        {
-          "id": "target_within_ceiling",
-          "argv": [
-            "mastering",
-            "{audio}",
-            "--report",
-            "{mastering_report}",
-            "--target-lufs",
-            "-20",
-            "--ceiling-dbtp",
-            "-1",
-            "--json"
-          ],
-          "exit": 0,
-          "payload": "success",
-          "artifact": "none",
-          "stdout": "json"
-        },
-        {
-          "id": "ceiling_limits_target",
-          "argv": [
-            "mastering",
-            "{audio}",
-            "--target-lufs",
-            "-6",
-            "--ceiling-dbtp",
-            "-3",
-            "--json"
-          ],
-          "exit": 0,
-          "payload": "success",
-          "artifact": "none",
-          "stdout": "json"
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "mastering needs --preset or --chain-config, or --assistant (which may take --preset)"
+          ]
         },
         {
           "id": "params_choice_by_name",
@@ -8115,7 +8128,7 @@
             "--json"
           ],
           "exit": 0,
-          "payload": "preset",
+          "payload": "success",
           "artifact": "none",
           "stdout": "json"
         },
@@ -8203,6 +8216,180 @@
           "sha256": "758c11bbf5a65f7466e2cfc111319854c5a7a7f9ca0d4cee56a52727cc83e01c"
         }
       }
+    },
+    {
+      "path": "mastering-normalize-loudness",
+      "options": [
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "stated_default": "16",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "ceiling-dbtp",
+          "type": "number",
+          "default": -1,
+          "stated_default": "-1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "report",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "target-lufs",
+          "type": "number",
+          "default": -14,
+          "stated_default": "-14.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "true-peak-oversample",
+          "type": "integer",
+          "default": 4,
+          "stated_default": "4",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "1",
+              "2",
+              "4",
+              "8",
+              "16"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "input_lufs": "number",
+            "output_lufs": "number",
+            "applied_gain_db": "number",
+            "target_lufs": "number",
+            "ceiling_dbtp": "number",
+            "true_peak_oversample": "integer",
+            "latency_samples": "integer",
+            "loudness_target_limited": "boolean",
+            "sample_rate": "integer",
+            "output": "path"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "report",
+          "argv": [
+            "mastering-normalize-loudness",
+            "{audio}",
+            "--report",
+            "{mastering_report}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "target_within_ceiling",
+          "argv": [
+            "mastering-normalize-loudness",
+            "{audio}",
+            "--report",
+            "{mastering_report}",
+            "--target-lufs",
+            "-20",
+            "--ceiling-dbtp",
+            "-1",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "ceiling_limits_target",
+          "argv": [
+            "mastering-normalize-loudness",
+            "{audio}",
+            "--target-lufs",
+            "-6",
+            "--ceiling-dbtp",
+            "-3",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
     },
     {
       "path": "synthesize-rir",
@@ -19350,9 +19537,9 @@
       "payload": "none"
     },
     {
-      "id": "mastering_reject_bit_depth",
+      "id": "mastering_normalize_loudness_reject_bit_depth",
       "argv": [
-        "mastering",
+        "mastering-normalize-loudness",
         "{audio}",
         "--bits",
         "8",
@@ -19376,9 +19563,9 @@
       "payload": "none"
     },
     {
-      "id": "mastering_reject_true_peak_oversample",
+      "id": "mastering_normalize_loudness_reject_true_peak_oversample",
       "argv": [
-        "mastering",
+        "mastering-normalize-loudness",
         "{audio}",
         "--true-peak-oversample",
         "3",

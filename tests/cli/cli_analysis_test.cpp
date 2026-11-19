@@ -160,7 +160,7 @@ TEST_CASE("CLI lufs reports the BS.1770 channel sum mastering reports for its in
 
   auto [lufs_code, lufs_output] = exec_command(CLI + " lufs " + path + " --json -q");
   auto [master_code, master_output] =
-      exec_command(CLI + " mastering " + path + " -o " + out + " --json -q");
+      exec_command(CLI + " mastering-normalize-loudness " + path + " -o " + out + " --json -q");
   std::remove(path.c_str());
   std::remove(out.c_str());
   CAPTURE(lufs_output, master_output);

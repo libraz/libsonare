@@ -283,7 +283,7 @@ def _validate_active_paths(
                     "spectral",
                     "voice-change",
                     "project.compile",
-                    "mastering",
+                    "mastering-normalize-loudness",
                     "synthesize-rir",
                     "rhythm",
                     "pitch",

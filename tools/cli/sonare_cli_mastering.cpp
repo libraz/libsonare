@@ -466,16 +466,17 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     throw std::invalid_argument(
         "--chain-config is mutually exclusive with --preset and --assistant");
   }
-  const std::string params_text = args.get_string("params");
-  const bool has_params = args.has("params");
-  if (!selector_count && has_params) {
-    throw std::invalid_argument("--params requires --preset, --chain-config, or --assistant");
+  if (!selector_count) {
+    throw std::invalid_argument(
+        "mastering needs --preset or --chain-config, or --assistant (which may take --preset); "
+        "loudness-only normalisation is mastering-normalize-loudness");
   }
-  // Every option that only reaches an AssistantConfig field. Refusing them
-  // without --assistant rather than accepting and dropping them is the same rule
-  // the preset/config chain applies to the standalone loudness flags below.
+  const std::string params_text = args.get_string("params");
+  // Every option that only reaches an AssistantConfig field is refused without
+  // --assistant rather than accepted and dropped.
   for (const char* assistant_option :
-       {"enable-repair", "explain", "target-platform", "no-streaming-safe", "speech-mono-amount"}) {
+       {"target-lufs", "ceiling-dbtp", "enable-repair", "explain", "target-platform",
+        "no-streaming-safe", "speech-mono-amount"}) {
     if (args.has(assistant_option) && !has_assistant) {
       throw std::invalid_argument(std::string("--") + assistant_option + " requires --assistant");
     }
@@ -487,121 +488,102 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   // main() has already warned is downmixed.
   const bool stereo_input = args.source_channels == 2;
 
-  const bool use_chain = selector_count != 0;
-  if (use_chain) {
-    mastering::api::MasteringChainConfig chain_config;
-    std::string mode = "chainConfig";
-    std::string preset_name;
-    std::vector<std::string> explanation;
-    // The document's params as written; with --params appended they are one list.
-    std::vector<mastering::api::Param> document_params;
+  mastering::api::MasteringChainConfig chain_config;
+  std::string mode = "chainConfig";
+  std::string preset_name;
+  std::vector<std::string> explanation;
+  // The document's params as written; with --params appended they are one list.
+  std::vector<mastering::api::Param> document_params;
 
-    if (has_assistant) {
-      // --params here overrides the suggested chain, so none of it reaches the
-      // assistant's own config.
-      const auto assistant_config = assistant_config_from_cli(args, "");
-      auto suggestion = mastering::assistant::suggest_chain(audio, assistant_config);
-      chain_config = std::move(suggestion.config);
-      explanation = std::move(suggestion.explanation);
-      mode = "assistant";
-    } else if (has_config) {
-      const std::string document = read_text_file(args.get_string("chain-config"));
-      // Parsed only to apply the document's own refusals; the chain is built from the list.
-      mastering::api::chain_config_from_json(document);
-      const auto root = sonare::util::json::parse(document);
-      if (!root.find("params")->as_object().empty()) {
-        for (auto& flat : mastering::api::chain_config_flat_params(document)) {
-          document_params.push_back({std::move(flat.key), flat.value});
-        }
-      }
-      mode = "chainConfig";
-    } else {
-      preset_name = catalog_token(args.get_string("preset"), mastering::api::preset_names());
-      chain_config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
-      mode = "preset";
-    }
-
-    // The preset/config chain is driven entirely by its config (or --params
-    // overrides); reject standalone loudness flags instead of silently
-    // ignoring them. Use --params to override chain parameters.
-    if (mode == "preset" || mode == "chainConfig") {
-      // Named by the option rather than by `mode`, which stays the reported
-      // payload value: the option's canonical spelling is --chain-config.
-      const std::string selector = mode == "chainConfig" ? "chain-config" : mode;
-      for (const char* loudness_flag : {"target-lufs", "ceiling-dbtp", "true-peak-oversample"}) {
-        if (args.has(loudness_flag)) {
-          throw std::invalid_argument(std::string("--") + loudness_flag +
-                                      " cannot be combined with --" + selector);
-        }
+  if (has_assistant) {
+    // --params here overrides the suggested chain, so none of it reaches the
+    // assistant's own config.
+    const auto assistant_config = assistant_config_from_cli(args, "");
+    auto suggestion = mastering::assistant::suggest_chain(audio, assistant_config);
+    chain_config = std::move(suggestion.config);
+    explanation = std::move(suggestion.explanation);
+    mode = "assistant";
+  } else if (has_config) {
+    const std::string document = read_text_file(args.get_string("chain-config"));
+    // Parsed only to apply the document's own refusals; the chain is built from the list.
+    mastering::api::chain_config_from_json(document);
+    const auto root = sonare::util::json::parse(document);
+    if (!root.find("params")->as_object().empty()) {
+      for (auto& flat : mastering::api::chain_config_flat_params(document)) {
+        document_params.push_back({std::move(flat.key), flat.value});
       }
     }
-
-    auto overrides = parse_chain_params(params_text);
-    if (has_assistant && args.has("true-peak-oversample")) {
-      overrides.push_back({"loudness.truePeakOversample",
-                           static_cast<double>(args.get_int("true-peak-oversample", 4))});
-    }
-    if (has_config) {
-      document_params.insert(document_params.end(), overrides.begin(), overrides.end());
-      chain_config =
-          mastering::api::parse_chain_config_params(document_params.data(), document_params.size());
-    } else if (!overrides.empty()) {
-      mastering::api::apply_chain_config_overrides(chain_config, overrides.data(),
-                                                   overrides.size());
-    }
-
-    mastering::api::MasteringChain chain(std::move(chain_config));
-    // One reporter for both channel counts, so the payload cannot drift between
-    // them: the two results differ only in which buffers were just written.
-    const auto report_chain_result = [&](const auto& result) {
-      if (args.has("report")) {
-        write_mastering_report(args.get_string("report"), result.report);
-      }
-      if (args.json_output) {
-        print_chain_result_json(result, mode, args.output_file, preset_name,
-                                args.has("explain") ? explanation : std::vector<std::string>{},
-                                args.has("report"));
-      } else {
-        std::cout << "\n"
-                  << color::cyan << color::bold << "Mastering Chain" << color::reset << "\n"
-                  << "  Mode:            " << mode << "\n";
-        if (!preset_name.empty()) std::cout << "  Preset:          " << preset_name << "\n";
-        std::cout << "  Input LUFS:      " << std::fixed << std::setprecision(2)
-                  << result.input_lufs << "\n"
-                  << "  Output LUFS:     " << result.output_lufs << "\n"
-                  << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
-                  << "  Stages:          " << result.stages.size() << "\n";
-        if (args.has("explain") && !explanation.empty()) {
-          std::cout << "  Explanation:\n";
-          for (const auto& item : explanation) std::cout << "    - " << item << "\n";
-        }
-        if (!args.output_file.empty()) {
-          std::cout << "  Output:          " << args.output_file << "\n";
-        }
-        std::cout << "\n";
-      }
-    };
-
-    if (stereo_input) {
-      const auto planes = load_stereo_planes(args, audio);
-      const auto result = chain.process_stereo(planes.left.data(), planes.right.data(),
-                                               planes.left.size(), audio.sample_rate());
-      if (!args.output_file.empty()) {
-        save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
-                        args.get_int("bits", 16));
-      }
-      report_chain_result(result);
-    } else {
-      const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
-      if (!args.output_file.empty()) {
-        save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-                 args.get_int("bits", 16));
-      }
-      report_chain_result(result);
-    }
-    return 0;
+    mode = "chainConfig";
+  } else {
+    preset_name = catalog_token(args.get_string("preset"), mastering::api::preset_names());
+    chain_config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
+    mode = "preset";
   }
 
+  const auto overrides = parse_chain_params(params_text);
+  if (has_config) {
+    document_params.insert(document_params.end(), overrides.begin(), overrides.end());
+    chain_config =
+        mastering::api::parse_chain_config_params(document_params.data(), document_params.size());
+  } else if (!overrides.empty()) {
+    mastering::api::apply_chain_config_overrides(chain_config, overrides.data(), overrides.size());
+  }
+
+  mastering::api::MasteringChain chain(std::move(chain_config));
+  // One reporter for both channel counts, so the payload cannot drift between
+  // them: the two results differ only in which buffers were just written.
+  const auto report_chain_result = [&](const auto& result) {
+    if (args.has("report")) {
+      write_mastering_report(args.get_string("report"), result.report);
+    }
+    if (args.json_output) {
+      print_chain_result_json(result, mode, args.output_file, preset_name,
+                              args.has("explain") ? explanation : std::vector<std::string>{},
+                              args.has("report"));
+    } else {
+      std::cout << "\n"
+                << color::cyan << color::bold << "Mastering Chain" << color::reset << "\n"
+                << "  Mode:            " << mode << "\n";
+      if (!preset_name.empty()) std::cout << "  Preset:          " << preset_name << "\n";
+      std::cout << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
+                << "\n"
+                << "  Output LUFS:     " << result.output_lufs << "\n"
+                << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
+                << "  Stages:          " << result.stages.size() << "\n";
+      if (args.has("explain") && !explanation.empty()) {
+        std::cout << "  Explanation:\n";
+        for (const auto& item : explanation) std::cout << "    - " << item << "\n";
+      }
+      if (!args.output_file.empty()) {
+        std::cout << "  Output:          " << args.output_file << "\n";
+      }
+      std::cout << "\n";
+    }
+  };
+
+  if (stereo_input) {
+    const auto planes = load_stereo_planes(args, audio);
+    const auto result = chain.process_stereo(planes.left.data(), planes.right.data(),
+                                             planes.left.size(), audio.sample_rate());
+    if (!args.output_file.empty()) {
+      save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
+                      args.get_int("bits", 16));
+    }
+    report_chain_result(result);
+  } else {
+    const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
+    if (!args.output_file.empty()) {
+      save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+               args.get_int("bits", 16));
+    }
+    report_chain_result(result);
+  }
+  return 0;
+}
+
+int cmd_mastering_normalize_loudness(const CliArgs& args, const Audio& audio) {
+  // main() probed the channel count; a two-channel input keeps its pair.
+  const bool stereo_input = args.source_channels == 2;
   mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs = args.get_float("target-lufs", -14.0f);
   config.ceiling_dbtp = args.get_float("ceiling-dbtp", -1.0f);

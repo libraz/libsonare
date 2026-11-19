@@ -555,6 +555,7 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "synthesize-rir",
         "room-morph",
         "mastering",
+        "mastering-normalize-loudness",
         "eq",
         "mastering-processor",
         "mastering-pair-processor",

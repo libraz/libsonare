@@ -205,6 +205,7 @@ CLI_COMMANDS: dict[str, str] = {
     "lufs": "mastering",
     "master": "mastering",
     "mastering": "mastering",
+    "mastering-normalize-loudness": "mastering",
     "mastering-chain": "mastering",
     "mastering-pair-analyses": "mastering",
     "mastering-pair-analyze": "mastering",

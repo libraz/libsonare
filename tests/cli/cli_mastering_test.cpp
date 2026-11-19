@@ -37,8 +37,8 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   std::remove(out.c_str());
 
   SECTION("writes mastered wav and reports metadata") {
-    auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " -o " + out +
-                                       " --target-lufs -18 --ceiling-dbtp -1 --json -q");
+    auto [code, output] = exec_command(CLI + " mastering-normalize-loudness " + TEST_WAV + " -o " +
+                                       out + " --target-lufs -18 --ceiling-dbtp -1 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"input_lufs\""));
     REQUIRE_THAT(output, ContainsSubstring("\"output_lufs\""));
@@ -52,16 +52,17 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   }
 
   SECTION("the dB-spelled ceiling flag is gone") {
-    const SplitResult result = exec_command_split(CLI + " mastering " + TEST_WAV + " -o " + out +
-                                                  " --ceiling-db -1 --json -q");
+    const SplitResult result =
+        exec_command_split(CLI + " mastering-normalize-loudness " + TEST_WAV + " -o " + out +
+                           " --ceiling-db -1 --json -q");
     CHECK(result.exit_code == 2);
     CHECK_THAT(result.err, ContainsSubstring("--ceiling-db"));
   }
 
   SECTION("the report's loudness summaries name the range in LU") {
     const std::string report = unique_temp_path("_mastering_lra_report.json");
-    auto [code, output] =
-        exec_command(CLI + " mastering " + TEST_WAV + " -o " + out + " --report " + report + " -q");
+    auto [code, output] = exec_command(CLI + " mastering-normalize-loudness " + TEST_WAV + " -o " +
+                                       out + " --report " + report + " -q");
     REQUIRE(code == 0);
     std::ifstream file(report);
     const std::string text{std::istreambuf_iterator<char>(file), {}};
@@ -74,8 +75,8 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
 
   SECTION("report JSON always publishes zero latency") {
     const std::string report = unique_temp_path("_mastering_report.json");
-    auto [code, output] =
-        exec_command(CLI + " mastering " + TEST_WAV + " --report " + report + " --json -q");
+    auto [code, output] = exec_command(CLI + " mastering-normalize-loudness " + TEST_WAV +
+                                       " --report " + report + " --json -q");
     REQUIRE(code == 0);
     const auto payload = sonare::util::json::parse_strict(output);
     REQUIRE(payload.contains("latency_samples"));
@@ -95,6 +96,51 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   }
 }
 
+TEST_CASE("CLI mastering needs a chain and leaves loudness-only work to its own command",
+          "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
+
+  SECTION("no selector is refused and names the loudness command") {
+    for (const std::string extra :
+         {"", " --target-lufs -18", " --params loudness.targetLufs=-18"}) {
+      CAPTURE(extra);
+      auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + extra + " --json -q");
+      CHECK(code == 3);
+      CHECK_THAT(output, ContainsSubstring("mastering needs --preset or --chain-config, or "
+                                           "--assistant (which may take --preset)"));
+      CHECK_THAT(output, ContainsSubstring("mastering-normalize-loudness"));
+    }
+  }
+
+  SECTION("--assistant takes --preset as its base but not a chain config") {
+    const std::string config = unique_temp_path("_assistant_chain.json");
+    {
+      std::ofstream file(config);
+      file << R"({"version":2,"params":{"loudness.enabled":1}})";
+    }
+    auto [based_code, based_output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --assistant --preset pop --json -q");
+    CHECK(based_code == 0);
+    auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV +
+                                       " --assistant --chain-config " + config + " --json -q");
+    CHECK(code == 3);
+    CHECK_THAT(output, ContainsSubstring(
+                           "--chain-config is mutually exclusive with --preset and --assistant"));
+    std::remove(config.c_str());
+  }
+
+  SECTION("the oversampling factor is a chain parameter on mastering") {
+    auto [gone_code, gone_output] = exec_command(CLI + " mastering " + TEST_WAV +
+                                                 " --assistant --true-peak-oversample 8 --json -q");
+    CHECK(gone_code == 2);
+    CHECK_THAT(gone_output, ContainsSubstring("--true-peak-oversample"));
+    auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV +
+                     " --assistant --params loudness.truePeakOversample=8 --json -q");
+    CHECK(code == 0);
+  }
+}
+
 TEST_CASE("CLI mastering chains report how they reached the level", "[cli][mastering]") {
   create_test_wav(TEST_WAV);
 
@@ -106,7 +152,7 @@ TEST_CASE("CLI mastering chains report how they reached the level", "[cli][maste
     // -3 dBTP ceiling cannot be reached, while -20 LUFS is reached outright.
     const std::string limited_out = unique_temp_path("_ceiling_limited.wav");
     auto [limited_code, limited_output] =
-        exec_command(CLI + " mastering " + TEST_WAV + " -o " + limited_out +
+        exec_command(CLI + " mastering-normalize-loudness " + TEST_WAV + " -o " + limited_out +
                      " --target-lufs -6 --ceiling-dbtp -3 --json -q");
     REQUIRE(limited_code == 0);
     const auto limited_payload = sonare::util::json::parse_strict(limited_output);
@@ -118,7 +164,7 @@ TEST_CASE("CLI mastering chains report how they reached the level", "[cli][maste
 
     const std::string reached_out = unique_temp_path("_ceiling_clear.wav");
     auto [reached_code, reached_output] =
-        exec_command(CLI + " mastering " + TEST_WAV + " -o " + reached_out +
+        exec_command(CLI + " mastering-normalize-loudness " + TEST_WAV + " -o " + reached_out +
                      " --target-lufs -20 --ceiling-dbtp -1 --json -q");
     REQUIRE(reached_code == 0);
     const auto reached_payload = sonare::util::json::parse_strict(reached_output);
@@ -414,9 +460,11 @@ TEST_CASE("CLI mastering assistant delivery targets", "[cli][mastering]") {
     // These reach an AssistantConfig field and nothing else, so supplying one
     // without --assistant is refused instead of accepted and dropped.
     for (const std::string option :
-         {"--target-platform broadcast", "--no-streaming-safe", "--speech-mono-amount 0.5"}) {
+         {"--target-lufs -12", "--ceiling-dbtp -2", "--target-platform broadcast",
+          "--no-streaming-safe", "--speech-mono-amount 0.5"}) {
       CAPTURE(option);
-      auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " " + option + " -q");
+      auto [code, output] =
+          exec_command(CLI + " mastering " + TEST_WAV + " --preset pop " + option + " -q");
       REQUIRE(code == 3);
       REQUIRE_THAT(output, ContainsSubstring("requires --assistant"));
     }
@@ -500,8 +548,8 @@ TEST_CASE("CLI auxiliary outputs are atomic", "[cli][atomic-output]") {
     const std::string report = unique_temp_path("_limited_report.json");
     write_sentinel(report);
     const auto [code, output] =
-        exec_command("trap '' XFSZ; ulimit -f 0; exec " + CLI + " mastering " + TEST_WAV +
-                     " --report " + report + " --json -q");
+        exec_command("trap '' XFSZ; ulimit -f 0; exec " + CLI + " mastering-normalize-loudness " +
+                     TEST_WAV + " --report " + report + " --json -q");
     CHECK(code == 12);
     CHECK_THAT(output, ContainsSubstring("cannot write mastering report: " + report));
     CHECK(read_cli_output_bytes(report) == "sentinel-before-output\n");
@@ -514,8 +562,8 @@ TEST_CASE("CLI auxiliary outputs are atomic", "[cli][atomic-output]") {
     REQUIRE(mkdir(destination.c_str(), 0700) == 0);
     const std::string sentinel = destination + "/sentinel";
     write_sentinel(sentinel);
-    const auto [code, output] =
-        exec_command(CLI + " mastering " + TEST_WAV + " --report " + destination + " --json -q");
+    const auto [code, output] = exec_command(CLI + " mastering-normalize-loudness " + TEST_WAV +
+                                             " --report " + destination + " --json -q");
     CHECK(code == 12);
     CHECK_THAT(output, ContainsSubstring("cannot write mastering report: " + destination));
     CHECK(read_cli_output_bytes(sentinel) == "sentinel-before-output\n");
@@ -527,8 +575,8 @@ TEST_CASE("CLI auxiliary outputs are atomic", "[cli][atomic-output]") {
   SECTION("report output replaces a file with one strict JSON line") {
     const std::string report = unique_temp_path("_report_replace.json");
     write_sentinel(report);
-    const auto [code, output] =
-        exec_command(CLI + " mastering " + TEST_WAV + " --report " + report + " --json -q");
+    const auto [code, output] = exec_command(CLI + " mastering-normalize-loudness " + TEST_WAV +
+                                             " --report " + report + " --json -q");
     REQUIRE(code == 0);
     verify_json_line(report);
     CHECK(count_cli_temp_files(report) == 0);
@@ -978,21 +1026,20 @@ TEST_CASE("CLI mastering carries a stereo input through as a stereo pair", "[cli
     return content;
   };
 
-  // Every selector, because each drives a different path through the handler:
+  // Every route, because each drives a different path through the handlers:
   // the loudness-only chain, the preset/config chain, the assistant chain, and
   // the loudness chain the --report request composes.
   const std::string report_path = unique_temp_path("_stereo_master_report.json");
   const std::vector<std::pair<std::string, std::string>> runs = {
-      {"loudness", " --target-lufs -18"},
-      {"preset", " --preset pop"},
-      {"assistant", " --assistant"},
-      {"report", " --report " + report_path},
+      {"loudness", " mastering-normalize-loudness " + input + " --target-lufs -18"},
+      {"preset", " mastering " + input + " --preset pop"},
+      {"assistant", " mastering " + input + " --assistant"},
+      {"report", " mastering-normalize-loudness " + input + " --report " + report_path},
   };
-  for (const auto& [label, selector] : runs) {
+  for (const auto& [label, route] : runs) {
     CAPTURE(label);
     const std::string out = unique_temp_path("_stereo_mastered.wav");
-    auto [code, output] =
-        exec_command(CLI + " mastering " + input + " -o " + out + selector + " --json -q");
+    auto [code, output] = exec_command(CLI + route + " -o " + out + " --json -q");
     REQUIRE(code == 0);
     // The downmix warning is main()'s answer to the same question, so a stereo
     // run that still announced a downmix would contradict its own output.
@@ -1011,8 +1058,8 @@ TEST_CASE("CLI mastering carries a stereo input through as a stereo pair", "[cli
   const std::string mono_input = unique_temp_path("_mono_master.wav");
   create_test_wav(mono_input, 1.0f, 440.0f, kRate);
   const std::string mono_out = unique_temp_path("_mono_mastered.wav");
-  auto [mono_code, mono_output] = exec_command(CLI + " mastering " + mono_input + " -o " +
-                                               mono_out + " --target-lufs -18 --json -q");
+  auto [mono_code, mono_output] = exec_command(CLI + " mastering-normalize-loudness " + mono_input +
+                                               " -o " + mono_out + " --target-lufs -18 --json -q");
   REQUIRE(mono_code == 0);
   auto [mono_samples, mono_rate, mono_channels] = load_audio_interleaved(mono_out);
   CHECK(mono_channels == 1);

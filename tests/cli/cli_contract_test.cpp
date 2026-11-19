@@ -894,10 +894,12 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
 
     // An argparse `choices=` tuple on the Python side: usage.
     const CliValidationError oversample =
-        reject({"sonare-cli", "mastering", "--true-peak-oversample", "3"}, true);
+        reject({"sonare-cli", "mastering-normalize-loudness", "--true-peak-oversample", "3"}, true);
     REQUIRE_FALSE(oversample.empty());
     REQUIRE_FALSE(oversample.invalid_parameter);
-    REQUIRE(reject({"sonare-cli", "mastering", "--true-peak-oversample", "8"}, true).empty());
+    REQUIRE(
+        reject({"sonare-cli", "mastering-normalize-loudness", "--true-peak-oversample", "8"}, true)
+            .empty());
   }
 #endif
 
@@ -993,11 +995,11 @@ TEST_CASE("CLI rejects option typos and terminal required options before dispatc
   commands.insert(commands.end(), {"estimate-room", "synthesize-rir", "room-morph"});
 #endif
 #ifdef SONARE_WITH_MASTERING
-  commands.insert(
-      commands.end(),
-      {"mastering", "eq", "mastering-processor", "mastering-pair-processor",
-       "mastering-pair-analyze", "mastering-stereo-analyze", "mastering-processors",
-       "mastering-pair-processors", "mastering-pair-analyses", "mastering-stereo-analyses"});
+  commands.insert(commands.end(),
+                  {"mastering", "mastering-normalize-loudness", "eq", "mastering-processor",
+                   "mastering-pair-processor", "mastering-pair-analyze", "mastering-stereo-analyze",
+                   "mastering-processors", "mastering-pair-processors", "mastering-pair-analyses",
+                   "mastering-stereo-analyses"});
 #endif
 #ifdef SONARE_WITH_MIXING
   commands.insert(commands.end(), {"mix-strip", "mixing-presets", "mixing-preset"});
@@ -1095,6 +1097,7 @@ TEST_CASE("CLI enforces registry requirements and canonical option aliases",
           " resample --target-rate 16000 " + TEST_WAV + " -o " + output_path,
           " eq " + TEST_WAV + " --lookahead-ms 1 -o " + output_path,
           " mastering " + TEST_WAV + " --config " + output_path + ".json -o " + output_path,
+          " mastering " + TEST_WAV + " --preset pop --true-peak-oversample 8 -o " + output_path,
           " estimate-room " + TEST_WAV + " --n-bands 6",
           " acoustic " + TEST_WAV + " --n-bands 6"}) {
       auto [code, output] = exec_command(CLI + invocation + " -q");

@@ -251,6 +251,7 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio);
 
 #ifdef SONARE_WITH_MASTERING
 int cmd_mastering(const CliArgs& args, const Audio& audio);
+int cmd_mastering_normalize_loudness(const CliArgs& args, const Audio& audio);
 int cmd_mastering_processor(const CliArgs& args, const Audio& audio);
 int cmd_eq(const CliArgs& args, const Audio& audio);
 int cmd_mastering_processors(const CliArgs& args, const Audio& audio);

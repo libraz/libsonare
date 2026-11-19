@@ -435,7 +435,7 @@ def _validate_case_payload(
                     ),
                 )
             )
-    if path == "mastering" and case_id == "target_within_ceiling":
+    if path == "mastering-normalize-loudness" and case_id == "target_within_ceiling":
         # The flag says the true-peak ceiling, not the target, decided the level.
         # Reading it as a value rather than as a type is what separates a surface
         # that computes it from one that publishes a constant. A target this far
@@ -448,7 +448,7 @@ def _validate_case_payload(
                     f"{label}.loudness_target_limited: expected False, got {limited!r}",
                 )
             )
-    if path == "mastering" and case_id == "ceiling_limits_target":
+    if path == "mastering-normalize-loudness" and case_id == "ceiling_limits_target":
         # The opposite direction of target_within_ceiling: the fixture is a -6
         # dBFS tone, so a -6 LUFS target under a -3 dBTP ceiling cannot be
         # reached and both surfaces must say so. The cross-surface comparison

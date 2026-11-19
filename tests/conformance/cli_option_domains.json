@@ -406,6 +406,19 @@
       "exclusive_maximum": false
     },
     {
+      "command": "mastering-normalize-loudness",
+      "option": "bits",
+      "reject_exit": "invalid_parameter",
+      "choices": [
+        "16",
+        "24"
+      ],
+      "minimum": null,
+      "exclusive_minimum": false,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
       "command": "mastering",
       "option": "target-platform",
       "reject_exit": "usage",
@@ -425,7 +438,7 @@
       "exclusive_maximum": false
     },
     {
-      "command": "mastering",
+      "command": "mastering-normalize-loudness",
       "option": "true-peak-oversample",
       "reject_exit": "usage",
       "choices": [
