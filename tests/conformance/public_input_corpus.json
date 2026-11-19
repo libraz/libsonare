@@ -321,7 +321,13 @@
       { "id": "ppq_boolean", "key": "ppq", "value": false, "refused": "type", "predicate": "must be a number" },
       { "id": "ppq_negative", "key": "ppq", "value": -1, "refused": "range", "predicate": "must be finite and at least 0" },
       { "id": "ppq_nan", "key": "ppq", "value": {"$number": "nan"}, "refused": "range", "predicate": "must be finite and at least 0" },
-      { "id": "ppq_infinite", "key": "ppq", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and at least 0" }
+      { "id": "ppq_infinite", "key": "ppq", "value": {"$number": "inf"}, "refused": "range", "predicate": "must be finite and at least 0" },
+      { "id": "group_wrong_type", "key": "group", "value": "0", "refused": "type", "predicate": "must be an integer" },
+      { "id": "group_above_domain", "key": "group", "value": 16, "refused": "range", "predicate": "must be an integer in [0, 15]" },
+      { "id": "channel_fraction", "key": "channel", "value": 0.5, "refused": "range", "predicate": "must be an integer in [0, 15]" },
+      { "id": "channel_above_domain", "key": "channel", "value": 16, "refused": "range", "predicate": "must be an integer in [0, 15]" },
+      { "id": "velocity_wrong_type", "key": "velocity", "value": null, "refused": "type", "predicate": "must be an integer" },
+      { "id": "velocity_above_domain", "key": "velocity", "value": 128, "refused": "range", "predicate": "must be an integer in [0, 127]" }
     ]
   }
 }
