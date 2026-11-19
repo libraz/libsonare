@@ -283,9 +283,19 @@ describe('NativeSynth preset catalog', () => {
     }
   });
 
-  it('rejects non-string preset properties consistently', () => {
-    expect(synthPatchRoundTripForTest({ preset: undefined }).preset).toBe('');
-    expect(synthPatchRoundTripForTest({ preset: null } as unknown as SynthPatch).preset).toBe('');
+  it('reads an absent preset back as absent and refuses an empty, over-long or non-string one', () => {
+    for (const preset of [undefined, null]) {
+      const patch = synthPatchRoundTripForTest({ preset } as unknown as SynthPatch);
+      expect('preset' in patch, String(preset)).toBe(false);
+    }
+    for (const preset of ['', 'va:']) {
+      expect(() => synthPatchRoundTripForTest({ preset }), preset).toThrow(
+        /synth patch preset must not be empty; omit it for the init patch/,
+      );
+    }
+    expect(() => synthPatchRoundTripForTest({ preset: 'x'.repeat(32) })).toThrow(
+      /synth patch preset must be at most 31 bytes/,
+    );
     expect(() => synthPatchRoundTripForTest({ preset: 123 } as unknown as SynthPatch)).toThrow(
       /synth patch preset must be a string/,
     );

@@ -293,9 +293,19 @@ describe('Sonare WASM NativeSynth', () => {
     }
   });
 
-  it('treats explicit empty preset values as absent', () => {
-    expect(synthPatchRoundTripForTest({ preset: undefined }).preset).toBe('');
-    expect(synthPatchRoundTripForTest({ preset: null } as unknown as SynthPatch).preset).toBe('');
+  it('reads an absent preset back as absent and refuses an empty or over-long one', () => {
+    for (const preset of [undefined, null]) {
+      const patch = synthPatchRoundTripForTest({ preset } as unknown as SynthPatch);
+      expect('preset' in patch, String(preset)).toBe(false);
+    }
+    for (const preset of ['', 'va:']) {
+      expect(() => synthPatchRoundTripForTest({ preset }), preset).toThrow(
+        /synth patch preset must not be empty; omit it for the init patch/,
+      );
+    }
+    expect(() => synthPatchRoundTripForTest({ preset: 'x'.repeat(32) })).toThrow(
+      /synth patch preset must be at most 31 bytes/,
+    );
   });
 
   it('rejects non-object synth patch descriptors instead of applying defaults', () => {
