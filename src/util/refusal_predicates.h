@@ -158,6 +158,14 @@ inline constexpr const char* kDeclaredValuePredicate = "must name a declared val
 /// @brief "must not be NULL", for a pointer the call reads or writes.
 inline constexpr const char* kNonNullPredicate = "must not be NULL";
 
+/// @brief "must not be empty", for a string or list the call needs at least one element of.
+inline constexpr const char* kNonEmptyPredicate = "must not be empty";
+
+/// @brief "must be the id of <thing> in this <owner>"; @p thing carries its article.
+inline std::string known_id_predicate(const std::string& thing, const std::string& owner) {
+  return "must be the id of " + thing + " in this " + owner;
+}
+
 /// @brief "{0} must not be NULL when {1} is not 0", for a pointer read only while a count is set.
 inline constexpr const char* kNonNullWhenCountRelation = "{0} must not be NULL when {1} is not 0";
 

@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -180,6 +181,23 @@ inline void non_null_when_count(const void* pointer, std::size_t count, const ch
     throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter, {subject, count_subject},
                                            refusal::kNonNullWhenCountRelation);
   }
+}
+
+/// @brief Refuses @p subject with a predicate no domain helper states: "<subject> <predicate>".
+[[noreturn]] inline void refuse(const char* subject, const std::string& predicate) {
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject, predicate);
+}
+
+/// @brief Refuses an empty @p value: "<subject> must not be empty".
+inline void non_empty(std::string_view value, const char* subject) {
+  if (value.empty()) refuse(subject, refusal::kNonEmptyPredicate);
+}
+
+/// @brief Refuses an id nothing in @p owner carries:
+///        "<subject> must be the id of <thing> in this <owner>"; @p thing carries its article.
+[[noreturn]] inline void refuse_unknown_id(const char* subject, const char* thing,
+                                           const char* owner) {
+  refuse(subject, refusal::known_id_predicate(thing, owner));
 }
 
 /// @brief Refuses a relation between members; @p text writes subject @c i as "{i}".

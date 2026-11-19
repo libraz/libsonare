@@ -191,3 +191,15 @@ TEST_CASE("a NULL pointer is refused by name, alone or while its count is set", 
         "samples must not be NULL when length is not 0");
   CHECK_FALSE(counted.shape_error());
 }
+
+TEST_CASE("an empty string, an unknown id and a stated predicate are refused by name",
+          "[util][refusal]") {
+  CHECK_NOTHROW(check::non_empty("warm", "preset_name"));
+  CHECK(refusal_text([] { check::non_empty("", "preset_name"); }) ==
+        "preset_name must not be empty");
+  CHECK(refusal_text([] { check::refuse_unknown_id("strip_id", "a strip", "engine"); }) ==
+        "strip_id must be the id of a strip in this engine");
+  const auto stated = caught_refusal([] { check::refuse("layout", "must name a declared value"); });
+  CHECK(std::string(stated.what()) == "layout must name a declared value");
+  CHECK_FALSE(stated.shape_error());
+}
