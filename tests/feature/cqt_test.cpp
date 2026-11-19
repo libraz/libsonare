@@ -59,16 +59,14 @@ int find_bin_for_freq(const std::vector<float>& freqs, float target) {
 }
 
 void evict_cqt_kernel_cache(const Audio& audio, int family) {
-  CqtConfig first;
-  first.fmin = 300.0f + 20.0f * static_cast<float>(family);
-  first.n_bins = 4 + family;
-  first.hop_length = 128 + family;
-  CqtConfig second = first;
-  second.fmin += 40.0f;
-  second.n_bins += 1;
-  second.hop_length += 17;
-  static_cast<void>(cqt(audio, first));
-  static_cast<void>(cqt(audio, second));
+  // More distinct kernels than the cache holds.
+  for (int i = 0; i < 16; ++i) {
+    CqtConfig config;
+    config.fmin = 300.0f + 20.0f * static_cast<float>(family) + 3.0f * static_cast<float>(i);
+    config.n_bins = 4 + family;
+    config.hop_length = 128 + family + i;
+    static_cast<void>(cqt(audio, config));
+  }
 }
 
 void check_cqt_matches_cold(const CqtResult& actual, const CqtResult& cold) {
@@ -1404,5 +1402,48 @@ TEST_CASE("a CQT kernel built from a donor equals one built alone", "[cqt][spars
     CHECK(kernel->kernel().row_offsets == alone->kernel().row_offsets);
     CHECK(kernel->kernel().column_indices == alone->kernel().column_indices);
     CHECK(kernel->kernel().values == alone->kernel().values);
+  }
+}
+
+TEST_CASE("a CQT kernel does not depend on how many workers built it", "[cqt][sparse_kernel]") {
+  struct Grid {
+    int sr;
+    float fmin;
+    int n_bins;
+    int bins_per_octave;
+    int hop_length;
+    float filter_scale;
+    WindowType window;
+  };
+  const auto config_of = [](const Grid& g, int n_bins) {
+    CqtConfig config;
+    config.fmin = g.fmin;
+    config.n_bins = n_bins;
+    config.bins_per_octave = g.bins_per_octave;
+    config.hop_length = g.hop_length;
+    config.filter_scale = g.filter_scale;
+    config.window = g.window;
+    return config;
+  };
+  for (const Grid& g : {Grid{22050, 110.0f, 48, 12, 256, 1.0f, WindowType::Hann},
+                        Grid{16000, 65.406f, 61, 36, 512, 1.0f, WindowType::Hamming},
+                        Grid{22050, 82.407f, 40, 24, 256, 0.5f, WindowType::Blackman},
+                        Grid{22050, 220.0f, 37, 12, 1024, 2.0f, WindowType::Hann},
+                        Grid{22050, 440.0f, 2, 12, 256, 1.0f, WindowType::Hann}}) {
+    // The donor holds a prefix of the grid, so some parts copy rows and some build them.
+    const auto donor = CqtKernel::create(g.sr, config_of(g, std::max(2, g.n_bins / 3)), nullptr, 1);
+    for (const CqtKernel* from : std::initializer_list<const CqtKernel*>{nullptr, donor.get()}) {
+      const auto serial = CqtKernel::create(g.sr, config_of(g, g.n_bins), from, 1);
+      for (int workers : {0, 2, 3, 5, 8, 64}) {
+        const auto kernel = CqtKernel::create(g.sr, config_of(g, g.n_bins), from, workers);
+        INFO("sr " << g.sr << " fmin " << g.fmin << " bins " << g.n_bins << " filter_scale "
+                   << g.filter_scale << " donor " << (from != nullptr) << " workers " << workers);
+        CHECK(kernel->kernel().rows == serial->kernel().rows);
+        CHECK(kernel->kernel().cols == serial->kernel().cols);
+        CHECK(kernel->kernel().row_offsets == serial->kernel().row_offsets);
+        CHECK(kernel->kernel().column_indices == serial->kernel().column_indices);
+        CHECK(kernel->kernel().values == serial->kernel().values);
+      }
+    }
   }
 }

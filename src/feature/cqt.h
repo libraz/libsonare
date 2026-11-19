@@ -125,6 +125,13 @@ class CqtKernel {
   /// @param donor Kernel to take matching rows from, or nullptr
   static std::unique_ptr<CqtKernel> create(int sr, const CqtConfig& config, const CqtKernel* donor);
 
+  /// @brief Creates the same kernel as create(sr, config, donor) on a host offering
+  ///        @p host_concurrency workers.
+  /// @details Rows are built by up to that many threads and joined in row order, so the kernel
+  ///          does not depend on the count. The other overloads pass the host's own.
+  static std::unique_ptr<CqtKernel> create(int sr, const CqtConfig& config, const CqtKernel* donor,
+                                           int host_concurrency);
+
   /// @brief Returns FFT length used by kernel.
   int fft_length() const { return fft_length_; }
 

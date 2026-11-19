@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -17,6 +18,7 @@
 #include "util/lru_cache.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parallel_for.h"
 
 namespace sonare {
 
@@ -69,15 +71,36 @@ struct CachedCqtKernel {
 };
 
 /// @brief Maximum number of cached CQT kernels.
-/// @details Chord detection alone runs three constant-Q configurations per call (full range,
-/// bass blend, bass cue); fewer slots rebuild every kernel on every call.
-constexpr size_t kMaxCqtCacheSize = 4;
+/// @details A chord analysis holds three kernels (full range, bass blend, bass cue) per sample
+/// rate and tuning, about 1 MB a set; twelve slots keep four sets.
+constexpr size_t kMaxCqtCacheSize = 12;
 // The public NNLS-chroma default uses 36 bins/octave over seven octaves. At
 // 44.1 kHz its longest kernel requires 252 * 131072 elements, so the resource
 // ceiling must admit that shipped configuration while still rejecting hostile
 // low-fmin / oversized requests.
 constexpr size_t kMaxCqtKernelElements = 32 * 1024 * 1024;
 constexpr int kMaxCqtFftLength = 131072;
+
+/// @brief Scratch the builders of one kernel may hold between them.
+constexpr uint64_t kMaxCqtBuildScratchBytes = 64u * 1024u * 1024u;
+// The 252-bin, 36 bins/octave kernel builds in about 170 ms on eight builders at 22.05 kHz and
+// 85 ms on the sixteen the scratch budget would admit; at 44.1 kHz the budget admits eight.
+constexpr int kMaxCqtBuilders = 8;
+
+/// @brief Builders for @p rows kernel rows of @p n_fft columns on a host offering
+///        @p host_concurrency workers, held within @ref kMaxCqtBuildScratchBytes.
+int kernel_builder_count(int rows, int n_fft, int host_concurrency) {
+  if (rows <= 1 || host_concurrency <= 1) return 1;
+  const int offered = std::min({rows, host_concurrency, kMaxCqtBuilders});
+  // Per builder: the padded row, its transform and the FFT's three buffers, then the
+  // sparsifier's magnitude, order and kept-column arrays.
+  const uint64_t bytes_per_column =
+      5 * sizeof(std::complex<float>) + sizeof(float) + sizeof(std::pair<float, int>) + sizeof(int);
+  const uint64_t per_builder_bytes = bytes_per_column * static_cast<uint64_t>(std::max(n_fft, 1));
+  const uint64_t affordable = kMaxCqtBuildScratchBytes / per_builder_bytes;
+  if (affordable >= static_cast<uint64_t>(offered)) return offered;
+  return affordable == 0 ? 1 : static_cast<int>(affordable);
+}
 
 /// @brief Kernels a later build may copy rows from; weak, so the cache alone decides lifetime.
 struct RowDonors {
@@ -205,6 +228,15 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
 
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
                                              const CqtKernel* donor) {
+#ifndef __EMSCRIPTEN__
+  return create(sr, config, donor, available_workers());
+#else
+  return create(sr, config, donor, 1);
+#endif
+}
+
+std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
+                                             const CqtKernel* donor, int host_concurrency) {
   validate_cqt_fmin(config.fmin);
   SONARE_CHECK(sr > 0 && config.hop_length > 0 && config.hop_length <= kMaxCqtFftLength / 2 &&
                    config.n_bins > 0 && config.bins_per_octave > 0 && std::isfinite(config.fmin) &&
@@ -277,85 +309,123 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
            donor->raw_lengths_[static_cast<size_t>(k)] == raw_lengths[static_cast<size_t>(k)];
   };
 
-  // Scale each row by raw_length / n_fft (librosa.__vqt_filter_fft step), then FFT it.
-  FFT fft(n_fft);
-  kernel->kernel_.rows = config.n_bins;
-  kernel->kernel_.cols = n_fft;
-  kernel->kernel_.row_offsets.reserve(static_cast<size_t>(config.n_bins) + 1);
-  kernel->kernel_.row_offsets.push_back(0);
-  std::vector<std::complex<float>> row;
-  std::vector<std::complex<float>> freq_kernel;
-  // Time-domain wavelets (selected periodic window * complex sinusoid, L1-normalised) of
-  // the current run of built rows, packed back to back. Each is centred in its own n_fft
-  // row only while that row is transformed: a dense n_bins x n_fft basis is hundreds of
-  // MB at 44.1 kHz.
-  std::vector<std::complex<float>> packed;
-  size_t cursor = 0;
-  int run_end = 0;
-  int written_begin = 0;
-  int written_end = 0;
-  for (int k = 0; k < config.n_bins; ++k) {
-    if (reusable(k)) {
-      const SparseComplexKernel& from = donor->kernel_;
-      const int begin = from.row_offsets[static_cast<size_t>(k)];
-      const int end = from.row_offsets[static_cast<size_t>(k) + 1];
-      kernel->kernel_.column_indices.insert(kernel->kernel_.column_indices.end(),
-                                            from.column_indices.begin() + begin,
-                                            from.column_indices.begin() + end);
-      kernel->kernel_.values.insert(kernel->kernel_.values.end(), from.values.begin() + begin,
-                                    from.values.begin() + end);
-      kernel->kernel_.row_offsets.push_back(static_cast<int>(kernel->kernel_.values.size()));
-      continue;
-    }
-    if (k >= run_end) {
-      run_end = k + 1;
-      while (run_end < config.n_bins && !reusable(run_end)) ++run_end;
-      // A length is set by a bin's neighbours, so the run takes one bin on each side that
-      // has one and leaves the grid's own edge bins as the edges of the sublist.
-      const int first = k > 0 ? k - 1 : 0;
-      const int last = run_end < config.n_bins ? run_end : run_end - 1;
-      const std::vector<float> run_freqs(freqs.begin() + first, freqs.begin() + last + 1);
-      const std::vector<float> run_lengths = wavelet_lengths(run_freqs, sr, config.filter_scale);
-      packed = detail::wavelet_with_window(run_freqs, sr, config.filter_scale, /*is_cqt=*/true,
-                                           /*pad_fft=*/false, /*Q=*/0.0f, config.window);
-      size_t packed_total = 0;
-      for (int g = first; g <= last; ++g) {
-        const float length = run_lengths[static_cast<size_t>(g - first)];
-        SONARE_CHECK(g < k || g >= run_end || length == raw_lengths[static_cast<size_t>(g)],
-                     ErrorCode::InvalidState);
-        packed_total += static_cast<size_t>(effective_length(length));
+  // Builds rows [begin, end) into @p out exactly as one pass over the whole grid would: a row
+  // reads nothing another row wrote, so any split of the grid yields the same rows.
+  const auto build_rows = [&](int begin, int end, SparseComplexKernel& out) {
+    out.row_offsets.reserve(static_cast<size_t>(end - begin) + 1);
+    out.row_offsets.push_back(0);
+    // An FFT instance and its buffers are per builder; neither is built for copied rows.
+    std::unique_ptr<FFT> fft;
+    std::vector<std::complex<float>> row;
+    std::vector<std::complex<float>> freq_kernel;
+    // Time-domain wavelets (selected periodic window * complex sinusoid, L1-normalised) of
+    // the current run of built rows, packed back to back. Each is centred in its own n_fft
+    // row only while that row is transformed: a dense n_bins x n_fft basis is hundreds of
+    // MB at 44.1 kHz.
+    std::vector<std::complex<float>> packed;
+    size_t cursor = 0;
+    int run_end = begin;
+    int written_begin = 0;
+    int written_end = 0;
+    for (int k = begin; k < end; ++k) {
+      if (reusable(k)) {
+        const SparseComplexKernel& from = donor->kernel_;
+        const int row_first = from.row_offsets[static_cast<size_t>(k)];
+        const int row_last = from.row_offsets[static_cast<size_t>(k) + 1];
+        out.column_indices.insert(out.column_indices.end(), from.column_indices.begin() + row_first,
+                                  from.column_indices.begin() + row_last);
+        out.values.insert(out.values.end(), from.values.begin() + row_first,
+                          from.values.begin() + row_last);
+        out.row_offsets.push_back(static_cast<int>(out.values.size()));
+        continue;
       }
-      SONARE_CHECK(packed_total == packed.size(), ErrorCode::InvalidState);
-      cursor = first < k ? static_cast<size_t>(effective_length(run_lengths.front())) : 0;
-      if (row.empty()) {
-        row.resize(static_cast<size_t>(n_fft));
-        freq_kernel.resize(static_cast<size_t>(n_fft));
+      if (k >= run_end) {
+        run_end = k + 1;
+        while (run_end < end && !reusable(run_end)) ++run_end;
+        // A length is set by a bin's neighbours, so the run takes one bin on each side that
+        // has one and leaves the grid's own edge bins as the edges of the sublist.
+        const int first = k > 0 ? k - 1 : 0;
+        const int last = run_end < config.n_bins ? run_end : run_end - 1;
+        const std::vector<float> run_freqs(freqs.begin() + first, freqs.begin() + last + 1);
+        const std::vector<float> run_lengths = wavelet_lengths(run_freqs, sr, config.filter_scale);
+        packed = detail::wavelet_with_window(run_freqs, sr, config.filter_scale, /*is_cqt=*/true,
+                                             /*pad_fft=*/false, /*Q=*/0.0f, config.window);
+        size_t packed_total = 0;
+        for (int g = first; g <= last; ++g) {
+          const float length = run_lengths[static_cast<size_t>(g - first)];
+          SONARE_CHECK(g < k || g >= run_end || length == raw_lengths[static_cast<size_t>(g)],
+                       ErrorCode::InvalidState);
+          packed_total += static_cast<size_t>(effective_length(length));
+        }
+        SONARE_CHECK(packed_total == packed.size(), ErrorCode::InvalidState);
+        cursor = first < k ? static_cast<size_t>(effective_length(run_lengths.front())) : 0;
+        if (!fft) {
+          fft = std::make_unique<FFT>(n_fft);
+          row.resize(static_cast<size_t>(n_fft));
+          freq_kernel.resize(static_cast<size_t>(n_fft));
+        }
+      }
+      const int length = kernel->lengths_[k];
+      const int offset = (n_fft_basis - length) / 2 + widen_pad;
+      // Scale each row by raw_length / n_fft (librosa.__vqt_filter_fft step), then FFT it.
+      const float scale = raw_lengths[k] / static_cast<float>(n_fft);
+      // Only the span the previous row wrote is non-zero.
+      std::fill(row.begin() + written_begin, row.begin() + written_end,
+                std::complex<float>(0.0f, 0.0f));
+      for (int i = 0; i < length; ++i) {
+        row[static_cast<size_t>(offset + i)] = packed[cursor + static_cast<size_t>(i)] * scale;
+      }
+      written_begin = offset;
+      written_end = offset + length;
+      cursor += static_cast<size_t>(length);
+      fft->forward_complex(row.data(), freq_kernel.data());
+      const size_t row_begin = out.values.size();
+      detail::append_sparsified_kernel_row(out, freq_kernel.data(), n_fft);
+      // We use the conjugate so that `result = stored_basis * FFT(signal)` evaluates
+      // to a true cross-correlation at zero lag (i.e., the standard CQT inner
+      // product `<kernel, signal>`). librosa's pipeline uses the convention
+      // `fft_basis.dot(D)`, which is equivalent only because the wavelet is
+      // single-sided in frequency (energy concentrated at +ω). Storing the
+      // conjugate keeps our existing matmul path unchanged. A column's rank reads
+      // its magnitude, which the conjugate shares, so only the kept ones take it.
+      for (size_t i = row_begin; i < out.values.size(); ++i) {
+        out.values[i] = std::conj(out.values[i]);
       }
     }
-    const int length = kernel->lengths_[k];
-    const int offset = (n_fft_basis - length) / 2 + widen_pad;
-    const float scale = raw_lengths[k] / static_cast<float>(n_fft);
-    // Only the span the previous row wrote is non-zero.
-    std::fill(row.begin() + written_begin, row.begin() + written_end,
-              std::complex<float>(0.0f, 0.0f));
-    for (int i = 0; i < length; ++i) {
-      row[static_cast<size_t>(offset + i)] = packed[cursor + static_cast<size_t>(i)] * scale;
+  };
+
+  // Every row costs a transform and a ranking of n_fft columns, so the grid is split across
+  // builders; their parts are joined in row order.
+  int built_rows = 0;
+  for (int k = 0; k < config.n_bins; ++k) built_rows += reusable(k) ? 0 : 1;
+  const int builders = kernel_builder_count(built_rows, n_fft, host_concurrency);
+  const int rows_per_part = (config.n_bins + builders - 1) / builders;
+  std::vector<SparseComplexKernel> parts(static_cast<size_t>(builders));
+  const auto build_parts = [&](int part_begin, int part_end) {
+    for (int part = part_begin; part < part_end; ++part) {
+      const int begin = std::min(part * rows_per_part, config.n_bins);
+      const int end = std::min(begin + rows_per_part, config.n_bins);
+      build_rows(begin, end, parts[static_cast<size_t>(part)]);
     }
-    written_begin = offset;
-    written_end = offset + length;
-    cursor += static_cast<size_t>(length);
-    fft.forward_complex(row.data(), freq_kernel.data());
-    const size_t row_begin = kernel->kernel_.values.size();
-    detail::append_sparsified_kernel_row(kernel->kernel_, freq_kernel.data(), n_fft);
-    // We use the conjugate so that `result = stored_basis * FFT(signal)` evaluates
-    // to a true cross-correlation at zero lag (i.e., the standard CQT inner
-    // product `<kernel, signal>`). librosa's pipeline uses the convention
-    // `fft_basis.dot(D)`, which is equivalent only because the wavelet is
-    // single-sided in frequency (energy concentrated at +ω). Storing the
-    // conjugate keeps our existing matmul path unchanged. A column's rank reads
-    // its magnitude, which the conjugate shares, so only the kept ones take it.
-    for (size_t i = row_begin; i < kernel->kernel_.values.size(); ++i) {
-      kernel->kernel_.values[i] = std::conj(kernel->kernel_.values[i]);
+  };
+#ifndef __EMSCRIPTEN__
+  parallel_for(builders, builders, build_parts);
+#else
+  build_parts(0, builders);
+#endif
+
+  SparseComplexKernel& joined = kernel->kernel_;
+  joined.rows = config.n_bins;
+  joined.cols = n_fft;
+  joined.row_offsets.reserve(static_cast<size_t>(config.n_bins) + 1);
+  joined.row_offsets.push_back(0);
+  for (const SparseComplexKernel& part : parts) {
+    const int base = static_cast<int>(joined.values.size());
+    joined.column_indices.insert(joined.column_indices.end(), part.column_indices.begin(),
+                                 part.column_indices.end());
+    joined.values.insert(joined.values.end(), part.values.begin(), part.values.end());
+    for (size_t r = 1; r < part.row_offsets.size(); ++r) {
+      joined.row_offsets.push_back(base + part.row_offsets[r]);
     }
   }
   kernel->raw_lengths_ = std::move(raw_lengths);

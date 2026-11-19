@@ -10,16 +10,13 @@
 #include <string>
 #include <utility>
 #include <vector>
-#ifndef __EMSCRIPTEN__
-#include <future>
-#include <thread>
-#endif
 
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/non_finite_sample.h"
 #include "util/numeric_validation.h"
+#include "util/parallel_for.h"
 
 namespace sonare {
 
@@ -149,31 +146,6 @@ void median_filter_line(const float* in, float* out, int n, int kernel_size, Sli
     out[i] = compute_median(window, n - start);
   }
 }
-
-#ifndef __EMSCRIPTEN__
-/// @brief Executes fn(start, end) across n_workers threads over [0, total).
-template <typename F>
-void parallel_for(int total, int n_workers, F&& fn) {
-  if (n_workers <= 1 || total <= 1) {
-    fn(0, total);
-    return;
-  }
-  n_workers = std::min(n_workers, total);
-  std::vector<std::future<void>> futures;
-  futures.reserve(n_workers);
-  int chunk = (total + n_workers - 1) / n_workers;
-  for (int i = 0; i < n_workers; ++i) {
-    int start = i * chunk;
-    int end = std::min(start + chunk, total);
-    if (start >= end) break;
-    futures.emplace_back(std::async(std::launch::async, std::forward<F>(fn), start, end));
-  }
-  for (auto& f : futures) f.get();
-}
-
-/// @brief Workers the host offers, as the worker-count policy takes it.
-int available_workers() { return static_cast<int>(std::thread::hardware_concurrency()); }
-#endif
 
 }  // namespace
 
