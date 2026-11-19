@@ -1433,7 +1433,7 @@ rule = "one-positional-form"
 [[entry]]
 kind = "option"
 old = "framesToSamples(nFft)"
-changed = "absent = no centring offset; explicit 0 refused (RangeError)"
+changed = "absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring)"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/analysis-features.test.ts::refuses an explicit 0 centring window"
@@ -2505,7 +2505,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "samplesToFrames(nFft)"
-changed = "absent = no centring offset; explicit 0 refused (RangeError)"
+changed = "absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring)"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/analysis-features.test.ts::refuses an explicit 0 centring window"

@@ -610,15 +610,16 @@ export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 51
   });
 }
 
-// Absent nFft is the native "no centring" 0; an explicit 0 is out of domain.
+// Absent nFft is the native "no centring" 0; an explicit 0 or negative is out of domain.
 function resolveOptionalFft(nFft: number | undefined | null): number {
   if (nFft === undefined || nFft === null) {
     return 0;
   }
-  assertNumber(nFft, 'nFft');
+  assertIntegerValue(nFft, 'nFft');
   if (nFft === 0) {
-    throw refuse(`nFft must not be 0 (omit it for no centring)`);
+    throw refuse('nFft must not be 0; omit it for no centring');
   }
+  assertPositiveInteger(nFft, 'nFft');
   return nFft;
 }
 

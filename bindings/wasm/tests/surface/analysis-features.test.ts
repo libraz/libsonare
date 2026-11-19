@@ -367,10 +367,14 @@ describe('analysis features: scalar conversions are positional only', () => {
     expect(samplesToFrames(2048, 512)).toBe(4);
   });
 
-  it('treats an absent nFft as no centring and refuses an explicit zero', () => {
+  it('treats an absent nFft as no centring and refuses an explicit zero or negative', () => {
     expect(framesToSamples(4, 512, 2048)).toBe(4 * 512 + 1024);
     expect(caught(() => framesToSamples(4, 512, 0))).toBeInstanceOf(RangeError);
-    expect(caught(() => samplesToFrames(2048, 512, 0))).toBeInstanceOf(RangeError);
+    expect(() => samplesToFrames(2048, 512, 0)).toThrow(
+      'samplesToFrames: nFft must not be 0; omit it for no centring',
+    );
+    expect(caught(() => framesToSamples(4, 512, -5))).toBeInstanceOf(RangeError);
+    expect(caught(() => samplesToFrames(2048, 512, -5))).toBeInstanceOf(RangeError);
   });
 });
 

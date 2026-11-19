@@ -221,7 +221,7 @@ describe('analyzePolyphonic', () => {
       ['maxRefineHz', 'a derived ceiling'],
     ] as const) {
       expect(() => withAnalysis((analysis) => analysis.noteCount, { [field]: 0 })).toThrow(
-        `analyzePolyphonic: ${field} must not be 0 (omit it for ${meaning})`,
+        `analyzePolyphonic: ${field} must not be 0; omit it for ${meaning}`,
       );
     }
   });

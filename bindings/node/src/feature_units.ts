@@ -1,4 +1,4 @@
-import { withEntry } from './internal/entry.js';
+import { refuse, withEntry } from './internal/entry.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
 import { assertFloat32Array, assertPositiveInteger, requestOnly } from './validation.js';
@@ -143,6 +143,9 @@ function resolveCentringNFft(nFft: number | null | undefined): number {
     return 0;
   }
   const resolved = resolveIntegerOption('nFft', nFft, 0);
+  if (resolved === 0) {
+    throw refuse('nFft must not be 0; omit it for no centring');
+  }
   assertPositiveInteger(resolved, 'nFft');
   return resolved;
 }

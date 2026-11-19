@@ -2825,7 +2825,7 @@ entry = "./analysis"
 [[entry]]
 kind = "option"
 old = "framesToSamples(nFft)"
-changed = "absent = no centring offset; explicit 0 refused (RangeError)"
+changed = "absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring)"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::treats an absent nFft as no centring"
@@ -2833,7 +2833,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::treats an absent 
 [[entry]]
 kind = "option"
 old = "framesToSamples(nFft)"
-changed = "absent = no centring offset; explicit 0 refused (RangeError)"
+changed = "absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring)"
 domain = "analysis"
 rule = "absent-not-sentinel"
 entry = "./analysis"
@@ -4898,7 +4898,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "samplesToFrames(nFft)"
-changed = "absent = no centring offset; explicit 0 refused (RangeError)"
+changed = "absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring)"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::treats an absent nFft as no centring"
@@ -4906,7 +4906,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::treats an absent 
 [[entry]]
 kind = "option"
 old = "samplesToFrames(nFft)"
-changed = "absent = no centring offset; explicit 0 refused (RangeError)"
+changed = "absent = no centring offset; an explicit 0 or negative is refused with RangeError (at or below 0 used to select no centring)"
 domain = "analysis"
 rule = "absent-not-sentinel"
 entry = "./analysis"

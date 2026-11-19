@@ -279,6 +279,10 @@ describe('sample-taking functions', () => {
     expect(sonare.framesToSamples(10, 512, 2048)).not.toBe(5120);
     expectThrows(() => sonare.framesToSamples(10, 512, 0), RangeError);
     expectThrows(() => sonare.samplesToFrames(5120, 512, 0), RangeError);
+    expect(() => sonare.framesToSamples(10, 512, 0)).toThrow(
+      'framesToSamples: nFft must not be 0; omit it for no centring',
+    );
+    expectThrows(() => sonare.framesToSamples(10, 512, -5), RangeError);
   });
 
   it('takes the scalar unit conversions positionally only', () => {

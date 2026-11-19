@@ -469,7 +469,7 @@ describe('PolyphonicAnalysis config', () => {
     ] as const) {
       const error = expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, [field]: 0 }));
       expect(error.message).toBe(
-        `analyzePolyphonic: ${field} must not be 0 (omit it for ${meaning})`,
+        `analyzePolyphonic: ${field} must not be 0; omit it for ${meaning}`,
       );
     }
   });

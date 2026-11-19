@@ -41,7 +41,7 @@ function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<strin
   const config = rest;
   for (const [key, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (config[key] === 0) {
-      throw refuse(`${key} must not be 0 (omit it for ${meaning})`);
+      throw refuse(`${key} must not be 0; omit it for ${meaning}`);
     }
   }
   const reattack = config.reattackRatio;

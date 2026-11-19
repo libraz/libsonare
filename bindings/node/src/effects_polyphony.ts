@@ -39,7 +39,7 @@ function nativePolyphonicOptions(options: PolyphonicAnalysisOptions): Record<str
   const out: Record<string, unknown> = { ...options };
   for (const [field, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (options[field as keyof typeof NAMED_ZERO_FIELDS] === 0) {
-      throw refuse(`${field} must not be 0 (omit it for ${meaning})`);
+      throw refuse(`${field} must not be 0; omit it for ${meaning}`);
     }
   }
   const { reattackRatio } = options;
