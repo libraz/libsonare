@@ -30,6 +30,7 @@ from ._runtime import (
     _check_realtime,
     _from_c_float_array,
     _get_lib,
+    _joined_names,
     _max_block_size,
     _narrow_int,
     _not_planar_channels,
@@ -667,12 +668,10 @@ def voice_change_realtime(
 @_entry("realtime_voice_changer_preset_names")
 def realtime_voice_changer_preset_names() -> list[str]:
     """Return the names of the built-in realtime voice-changer presets."""
-    raw = _get_lib().sonare_realtime_voice_changer_preset_names()
-    if not raw:
-        return []
-    # The C API returns a newline-separated list (matching every other
-    # *_names API in libsonare); split on '\n' and drop empty entries.
-    return [s for s in raw.decode("utf-8").split("\n") if s.strip()]
+    return _joined_names(
+        _get_lib().sonare_realtime_voice_changer_preset_names(),
+        "realtime voice changer preset names",
+    )
 
 
 @_entry("realtime_voice_changer_preset_json")
