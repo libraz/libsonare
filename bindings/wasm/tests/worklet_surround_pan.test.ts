@@ -77,6 +77,7 @@ describe('SonareEngine surround pan at numChannels 6', () => {
       type: 'syncTrackStripSurroundPan',
       trackId: TRACK,
       pan: { azimuth: -110, divergence: 0, lfe: 0 },
+      entry: 'SonareEngine.setStripSurroundPan',
     });
 
     const processor = new SonareRealtimeEngineWorkletProcessor({
