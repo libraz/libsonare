@@ -260,9 +260,6 @@ def _inverse_audio(
 ) -> np.ndarray:
     """Call a Griffin-Lim inverse wrapper with shared HTK/output handling."""
     function_name = extended_name if htk else base_name
-    if not hasattr(lib, function_name):
-        feature = "HTK inverse-reconstruction" if htk else "inverse-reconstruction"
-        raise _not_supported(f"libsonare was built without {feature} support")
     htk_arg = (ctypes.c_int(1),) if htk else ()
     with _out_float_array(lib) as (out, out_length):
         _check(
