@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
+import json
 import math
 
 import numpy as np
@@ -310,6 +311,23 @@ def test_set_config_refuses_a_retune_grain_outside_its_domain(grain: float) -> N
         )
     finally:
         changer.close()
+
+
+@pytest.mark.parametrize("grain", [1, 3, 2230, -4, 8196])
+def test_a_document_refuses_a_retune_grain_outside_its_domain_by_path(grain: int) -> None:
+    """The preset and flat documents read the grain against the stage's own domain."""
+    preset = json.loads(libsonare.realtime_voice_changer_preset_json("deepNarrator"))
+    preset["dsp"]["retune"]["grainSizeSamples"] = grain
+    flat = _flat(libsonare.realtime_voice_changer_preset_config("neutralMonitor"))
+    flat["retuneGrainSizeSamples"] = grain
+    for document, path in (
+        (preset, "dsp.retune.grainSizeSamples"),
+        (flat, "retuneGrainSizeSamples"),
+    ):
+        with pytest.raises(SonareError) as refused:
+            libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=document)
+        assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
+        assert str(refused.value).endswith(f"{path} must be a multiple of 4 in [4, 8192]")
 
 
 @pytest.mark.parametrize("grain", [4, 8192])
