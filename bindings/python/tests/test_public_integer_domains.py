@@ -103,7 +103,6 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     "_validate_c_int_field": (("probe", 1.5, "probe"), ("probe", 7, "probe")),
     "_validate_hpss_kernel": (("probe", 31.5, "probe"), ("probe", 31, "probe")),
     "_validate_stft_n_fft": (("probe", 2048.5), ("probe", 2048)),
-    "_validate_effect_fft_options": (("probe", 2048.5, 512), ("probe", 2048, 512)),
     "_validate_effect_hop": (("probe", 512.5), ("probe", 512)),
     "_validate_scalar": (("probe", math.nan, "probe"), ("probe", 1.5, "probe")),
     "_validate_samples": (("probe", [math.nan]), ("probe", [0.1, 0.2])),

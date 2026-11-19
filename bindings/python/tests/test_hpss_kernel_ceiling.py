@@ -276,7 +276,7 @@ def test_percussive_events_refuse_a_wrapping_kernel_by_name(
     with pytest.raises(SonareValueError) as raised:
         extract_percussive_events(hits, SR, **{arg_name: passed})
     _assert_parameter_refusal(raised.value)
-    assert f"{arg_name} must be an integer within the signed 32-bit range" in str(raised.value)
+    assert f"{arg_name} must be an integer in [1, 2147483647]" in str(raised.value)
     assert "exceeds the maximum" not in str(raised.value)
 
 
@@ -288,14 +288,14 @@ def test_percussive_events_never_separate_on_the_truncated_kernel(
     """The worst path on this facade is a success, not a wrong refusal.
 
     0 is this config's spelling of "use the default", so a kernel that truncated
-    to it returned the default run's events unchanged -- byte for byte the right
-    answer to a question the caller never asked.
+    to it would return the default run's events unchanged -- byte for byte the
+    right answer to a question the caller never asked.
     """
     arg_name = f"hpss_kernel_{direction}"
     outcome = _event_outcome(hits, **{arg_name: passed})
     assert outcome == REFUSED
     assert outcome != _event_outcome(hits)
-    if truncates_to >= 0 and (truncates_to == 0 or truncates_to % 2 == 1):
+    if truncates_to > 0 and truncates_to % 2 == 1:
         assert outcome != _event_outcome(hits, **{arg_name: truncates_to})
 
 
@@ -313,21 +313,12 @@ def test_percussive_events_even_kernel_trips_the_core_parity_guard(direction, hi
 
 
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
-def test_percussive_events_treat_zero_as_the_default_rather_than_refusing(direction, hits) -> None:
-    """Zero selects the default on this facade, where ``hpss`` would refuse it.
-
-    Every field of the versioned separation config takes its default at 0, so an
-    explicit 0 is indistinguishable from an omitted keyword -- it is not the
-    odd-and-positive refusal the same value draws from ``hpss``. Asserted
-    against the default run rather than just "it did not raise", so a 0 that
-    quietly selected something else would still fail.
-    """
-    default = extract_percussive_events(hits, SR)
-    zeroed = extract_percussive_events(hits, SR, **{f"hpss_kernel_{direction}": 0})
-    assert len(default) > 0
-    assert [(event.onset_sample, event.offset_sample) for event in zeroed] == [
-        (event.onset_sample, event.offset_sample) for event in default
-    ]
+def test_percussive_events_refuse_an_explicit_zero_kernel(direction, hits) -> None:
+    """0 is the config's default spelling, so an explicit 0 is refused; omit it instead."""
+    arg_name = f"hpss_kernel_{direction}"
+    with pytest.raises(SonareValueError, match=rf"{arg_name} must be an integer in \[1, "):
+        extract_percussive_events(hits, SR, **{arg_name: 0})
+    assert len(extract_percussive_events(hits, SR)) > 0
 
 
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])

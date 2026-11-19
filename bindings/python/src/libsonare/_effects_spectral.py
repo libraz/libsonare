@@ -107,7 +107,7 @@ def spectral_edit(
         n_fft: STFT size; a power of two in ``[4, 262144]``. Default: the
             library's (2048).
         hop_length: STFT hop; must satisfy ``0 < hop_length <= n_fft / 2``.
-            Default: the library default.
+            Default: ``n_fft / 4``, derived by the library.
         window: Analysis window, one of ``"hann"``, ``"hamming"``,
             ``"blackman"``, ``"rectangular"`` (default ``"hann"``).
         heal_radius_frames: Neighbour frames each side used by ``"heal"`` mode;

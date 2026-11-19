@@ -12333,3 +12333,67 @@ changed = "a bool or a value that is not a number raises TypeError instead of So
 domain = "engine"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_mixing.py::test_read_goniometer_latest_bounds_the_buffer_independently_of_max_points"
+
+[[entry]]
+kind = "option"
+old = "extract_percussive_events(n_fft)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
+
+[[entry]]
+kind = "option"
+old = "extract_percussive_events(hop_length)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default; an omitted hop is n_fft / 4 (at least 1), so it moves with a given n_fft"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
+
+[[entry]]
+kind = "option"
+old = "extract_percussive_events(hpss_kernel_harmonic)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
+
+[[entry]]
+kind = "option"
+old = "extract_percussive_events(hpss_kernel_percussive)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
+
+[[entry]]
+kind = "option"
+old = "render_percussive_events(n_fft)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
+
+[[entry]]
+kind = "option"
+old = "render_percussive_events(hop_length)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default; an omitted hop is n_fft / 4 (at least 1), so it moves with a given n_fft"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
+
+[[entry]]
+kind = "option"
+old = "render_percussive_events(hpss_kernel_harmonic)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"
+
+[[entry]]
+kind = "option"
+old = "render_percussive_events(hpss_kernel_percussive)"
+changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_separation_refuses_zero_where_none_is_the_default"

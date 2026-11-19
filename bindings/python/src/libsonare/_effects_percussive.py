@@ -17,11 +17,13 @@ from ._ffi import (
 )
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
+    _C_INT_MAX,
     SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _optional_positive_int,
     _out_float_array,
     _resolve_sample_bound,
     _resolve_time_offset,
@@ -142,13 +144,13 @@ def _percussive_separation(
     hpss_kernel_harmonic: int | None,
     hpss_kernel_percussive: int | None,
 ) -> dict[str, int]:
-    """The separation fields both percussive configs carry; 0 keeps each default.
+    """The separation fields both percussive configs carry; ``None`` is the C 0 default.
 
     Extraction measures events against this separation and rendering has to
     repeat it, so it is one set of fields both sides take rather than a framing
-    each of them restates -- and one place the signed-32-bit narrowing is
-    checked, since 0 is the default here and a value that wraps to it would
-    separate on the default while reporting success.
+    each of them restates -- and one place the narrowing is checked, since 0 is
+    the default here: an explicit 0, or a value that wraps to it, would separate
+    on the default while reporting success, so both are refused.
     """
     fields = {
         "n_fft": n_fft,
@@ -157,7 +159,7 @@ def _percussive_separation(
         "hpss_kernel_percussive": hpss_kernel_percussive,
     }
     return {
-        name: 0 if value is None else _validate_c_int_field(fn_name, value, name)
+        name: _optional_positive_int(value, f"{fn_name}: {name}", _C_INT_MAX)
         for name, value in fields.items()
     }
 
@@ -260,16 +262,16 @@ def extract_percussive_events(
         samples: Source audio (any sequence convertible to float32).
         sample_rate: Sample rate in Hz.
         n_fft: FFT size the separation and the onset detector share; ``None``
-            keeps the library default (2048). The pair must overlap-add --
+            keeps the library default. The pair must overlap-add --
             ``n_fft`` even and at least 2, ``hop_length`` no more than half of it
             -- because the separation inverts an STFT.
-        hop_length: Hop the same two share; ``None`` keeps the default (512).
+        hop_length: Hop the same two share; ``None`` derives ``n_fft / 4``.
             They cannot be set apart: an event measured on one framing and lifted
             out on another is not the same signal.
         hpss_kernel_harmonic: Median filter length the separation runs along
-            time; ``None`` keeps the default (31). A longer harmonic kernel calls
+            time; ``None`` keeps the library default. A longer harmonic kernel calls
             more of a sustained sound harmonic.
-        hpss_kernel_percussive: The same, along frequency; ``None`` keeps 31.
+        hpss_kernel_percussive: The same, along frequency.
         onset_wait: Minimum frames between consecutive onsets; ``None`` keeps the
             default (1). Must be a whole number: 0 is the default's own spelling,
             so a fractional wait is refused rather than resolved onto it.
@@ -406,10 +408,10 @@ def render_percussive_events(
         n_fft: The separation the events were measured against. Pass back what
             :func:`extract_percussive_events` was called with, or a different
             separation lifts a different signal out of the span than the one the
-            events describe. ``None`` keeps the library default (2048).
-        hop_length: The same; ``None`` keeps the default (512).
-        hpss_kernel_harmonic: The same; ``None`` keeps the default (31).
-        hpss_kernel_percussive: The same; ``None`` keeps the default (31).
+            events describe. ``None`` keeps the library default.
+        hop_length: The same; ``None`` derives ``n_fft / 4``.
+        hpss_kernel_harmonic: The same; ``None`` keeps the library default.
+        hpss_kernel_percussive: The same.
         fade_ms: Fade-out at the tail of each lifted span; ``None`` keeps the
             library default (5 ms). There is deliberately no matching fade-in: a
             span opens in front of its transient, where the percussive component

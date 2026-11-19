@@ -1091,12 +1091,12 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
     native CLI accept, which makes the facade diverge rather than merely be
     stricter.
 
-    This is the single definition of the even-and-at-least-four domain, reached
-    through :func:`_validate_effect_fft_options`, so the entry points that hold
-    it cannot drift apart. It is not the binding's only STFT size domain: other
-    STFT-framed entry points deliberately require a power of two, and they are
-    not stricter versions of this one -- adopt this domain for a new entry point
-    only after checking which of the two the C ABI behind it accepts.
+    This is the single definition of the even-and-at-least-four domain, so the
+    entry points that hold it cannot drift apart. It is not the binding's only
+    STFT size domain: other STFT-framed entry points deliberately require a power
+    of two, and they are not stricter versions of this one -- adopt this domain
+    for a new entry point only after checking which of the two the C ABI behind
+    it accepts.
 
     Args:
         fn_name: Caller name, used to prefix the error message.
@@ -1120,40 +1120,16 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
     return size
 
 
-# The framing every spectral effect entry point defaults to, beside the
-# validator they all route those two arguments through.
+# The STFT size every spectral effect entry point defaults to.
 _DEFAULT_EFFECT_N_FFT = 2048
-_DEFAULT_EFFECT_HOP_LENGTH = 512
-
-
-def _validate_effect_fft_options(
-    fn_name: str, n_fft: int, hop_length: int | None
-) -> tuple[int, int]:
-    """Validate and normalize the FFT options shared by spectral effects.
-
-    Entry points that additionally constrain the hop (the constant-overlap-add
-    rule, for instance) apply that on top of what this returns.
-
-    Args:
-        fn_name: Caller name, used to prefix the error messages.
-        n_fft: Requested STFT size; see :func:`_validate_stft_n_fft`.
-        hop_length: Requested hop size in samples; ``None`` is ``max(1, n_fft // 4)``.
-
-    Returns:
-        The validated ``(n_fft, hop_length)`` pair as plain ``int`` values.
-
-    Raises:
-        TypeError: If either value is not a number.
-        SonareValueError: If either value falls outside the accepted domain.
-    """
-    n_fft = _validate_stft_n_fft(fn_name, n_fft)
-    if hop_length is None:
-        return n_fft, max(1, n_fft // 4)
-    return n_fft, _validate_effect_hop(fn_name, hop_length)
 
 
 def _validate_effect_hop(fn_name: str, hop_length: object) -> int:
-    """Narrow a given STFT hop onto a positive C ``int``; 0 is refused, not a default."""
+    """Narrow a given STFT hop onto a positive C ``int``; 0 is refused, not a default.
+
+    An omitted hop is not passed here: the caller sends the C ``0``, for which the
+    core derives ``n_fft / 4``.
+    """
     domain = f"must be an integer in [1, {_C_INT_MAX}]"
     try:
         hop = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)

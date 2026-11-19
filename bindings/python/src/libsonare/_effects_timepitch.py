@@ -21,7 +21,6 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    _DEFAULT_EFFECT_HOP_LENGTH,
     _DEFAULT_EFFECT_N_FFT,
     _PITCH_TARGET_MODES,
     _UINT32_MAX,
@@ -42,8 +41,9 @@ from ._runtime import (
     _to_c_size_t,
     _token_arg,
     _unsupported_effect_symbol,
-    _validate_effect_fft_options,
+    _validate_effect_hop,
     _validate_samples,
+    _validate_stft_n_fft,
 )
 from ._types_analysis import AutoTuneResult, Key
 from ._types_enums import KeyMode, PitchClass, PitchTargetMode
@@ -67,17 +67,18 @@ def time_stretch(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft // 4``
-            (at least 1), 512 at the default ``n_fft``.
+            so frames overlap by at least half a window. Default: ``n_fft / 4``
+            (at least 1), derived by the library.
 
     Returns:
         ``float32`` array of time-stretched samples.
     """
     _validate_samples("time_stretch", samples)
-    n_fft, hop_length = _validate_effect_fft_options("time_stretch", n_fft, hop_length)
+    n_fft = _validate_stft_n_fft("time_stretch", n_fft)
+    hop_length = 0 if hop_length is None else _validate_effect_hop("time_stretch", hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_time_stretch_ex"):
-        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != _DEFAULT_EFFECT_HOP_LENGTH:
+        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0:
             raise _unsupported_effect_symbol("sonare_time_stretch_ex")
         if not hasattr(lib, "sonare_time_stretch"):
             raise _unsupported_effect_symbol("sonare_time_stretch")
@@ -113,17 +114,18 @@ def pitch_shift(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft // 4``
-            (at least 1), 512 at the default ``n_fft``.
+            so frames overlap by at least half a window. Default: ``n_fft / 4``
+            (at least 1), derived by the library.
 
     Returns:
         ``float32`` array of pitch-shifted samples.
     """
     _validate_samples("pitch_shift", samples)
-    n_fft, hop_length = _validate_effect_fft_options("pitch_shift", n_fft, hop_length)
+    n_fft = _validate_stft_n_fft("pitch_shift", n_fft)
+    hop_length = 0 if hop_length is None else _validate_effect_hop("pitch_shift", hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_pitch_shift_ex"):
-        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != _DEFAULT_EFFECT_HOP_LENGTH:
+        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0:
             raise _unsupported_effect_symbol("sonare_pitch_shift_ex")
         if not hasattr(lib, "sonare_pitch_shift"):
             raise _unsupported_effect_symbol("sonare_pitch_shift")

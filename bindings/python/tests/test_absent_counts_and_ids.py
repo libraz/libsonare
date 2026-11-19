@@ -205,3 +205,30 @@ def test_bounce_dither_is_a_token_and_none_renders_undithered() -> None:
             engine.bounce_offline(
                 EngineBounceOptions(total_frames=128, num_channels=2, dither="none")  # type: ignore[arg-type]
             )
+
+
+def test_an_omitted_effect_hop_is_a_quarter_of_the_given_n_fft() -> None:
+    tone = _tone()
+    omitted = libsonare.hpss(tone, SR, n_fft=1024)
+    quarter = libsonare.hpss(tone, SR, n_fft=1024, hop_length=256)
+    np.testing.assert_array_equal(omitted.harmonic, quarter.harmonic)
+    np.testing.assert_array_equal(omitted.percussive, quarter.percussive)
+    with pytest.raises(SonareValueError, match=r"^hpss: hop_length must be an integer in \[1, "):
+        libsonare.hpss(tone, SR, n_fft=1024, hop_length=0)
+
+
+@pytest.mark.parametrize(
+    "field", ["n_fft", "hop_length", "hpss_kernel_harmonic", "hpss_kernel_percussive"]
+)
+def test_percussive_separation_refuses_zero_where_none_is_the_default(field: str) -> None:
+    tone = _tone()
+    with pytest.raises(
+        SonareValueError,
+        match=rf"^extract_percussive_events: {field} must be an integer in \[1, ",
+    ):
+        libsonare.extract_percussive_events(tone, SR, **{field: 0})
+    with pytest.raises(
+        SonareValueError,
+        match=rf"^render_percussive_events: {field} must be an integer in \[1, ",
+    ):
+        libsonare.render_percussive_events(tone, SR, [], **{field: 0})

@@ -107,6 +107,21 @@ def test_native_spectral_stretch_accepts(case: dict) -> None:
     assert libsonare.pitch_shift(*args, _STRETCH["input"]["pitch_semitones"], **geometry).size > 0
 
 
+@pytest.mark.parametrize("case", _STRETCH["absent_hop"], ids=lambda case: case["id"])
+def test_native_spectral_stretch_derives_an_absent_hop(case: dict) -> None:
+    # The facade spells an absent hop by omission; the C 0 the corpus names is refused.
+    args = (_stretch_samples(), _STRETCH["input"]["sample_rate"])
+    derived = {"n_fft": case["n_fft"], "hop_length": case["derived_hop_length"]}
+    omitted = {"n_fft": case["n_fft"]}
+    for fn, amount in (
+        (libsonare.time_stretch, _STRETCH["input"]["speed_ratio"]),
+        (libsonare.pitch_shift, _STRETCH["input"]["pitch_semitones"]),
+    ):
+        np.testing.assert_array_equal(fn(*args, amount, **omitted), fn(*args, amount, **derived))
+        with pytest.raises(SonareValueError, match=r"hop_length must be an integer in \[1, "):
+            fn(*args, amount, n_fft=case["n_fft"], hop_length=case["hop_length"])
+
+
 @pytest.mark.parametrize("case", _STRETCH["refused"], ids=lambda case: case["id"])
 def test_native_spectral_stretch_refuses(case: dict) -> None:
     # The facade validates the geometry pair itself, so only the error class is pinned here.

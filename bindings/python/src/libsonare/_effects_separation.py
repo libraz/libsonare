@@ -20,7 +20,6 @@ from ._narrowing import (
     _resolve_zero_default,
 )
 from ._runtime import (
-    _DEFAULT_EFFECT_HOP_LENGTH,
     _DEFAULT_EFFECT_N_FFT,
     SonareValueError,
     _call_float_array_transform,
@@ -41,7 +40,6 @@ from ._runtime import (
     _unsupported_effect_symbol,
     _utf8_arg,
     _validate_c_int_field,
-    _validate_effect_fft_options,
     _validate_effect_hop,
     _validate_hpss_kernel,
     _validate_samples,
@@ -236,7 +234,7 @@ def decompose_stems(
         sample_rate: Sample rate in Hz.
         n_components: Number of NMF components. Default: the library's (4).
         n_fft: STFT size. Default: the library's (2048).
-        hop_length: STFT hop. Default: the library default.
+        hop_length: STFT hop. Default: ``n_fft / 4``, derived by the library.
         n_iter: NMF multiplicative-update iterations. Default: the library's (100).
         beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler). Default:
             the library's (2.0).
@@ -335,7 +333,7 @@ def decompose_stems_linked(
         sample_rate: Sample rate in Hz, shared by every channel.
         n_components: Number of NMF components. Default: the library's (4).
         n_fft: STFT size. Default: the library's (2048).
-        hop_length: STFT hop. Default: the library default.
+        hop_length: STFT hop. Default: ``n_fft / 4``, derived by the library.
         n_iter: NMF multiplicative-update iterations. Default: the library's (100).
         beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler). Default:
             the library's (2.0).
@@ -588,15 +586,16 @@ def hpss(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft // 4``
-            (at least 1), 512 at the default ``n_fft``.
+            so frames overlap by at least half a window. Default: ``n_fft / 4``
+            (at least 1), derived by the library.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
 
     Returns:
         HpssResult with harmonic and percussive components.
     """
     _validate_samples("hpss", samples)
-    n_fft, hop_length = _validate_effect_fft_options("hpss", n_fft, hop_length)
+    n_fft = _validate_stft_n_fft("hpss", n_fft)
+    hop_length = 0 if hop_length is None else _validate_effect_hop("hpss", hop_length)
     kernel_harmonic = _validate_hpss_kernel("hpss", kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel("hpss", kernel_percussive, "kernel_percussive")
     if not isinstance(hard_mask, bool):
@@ -605,7 +604,7 @@ def hpss(
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1
     if not hasattr(lib, "sonare_hpss_ex"):
-        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != _DEFAULT_EFFECT_HOP_LENGTH or hard_mask:
+        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0 or hard_mask:
             raise _unsupported_effect_symbol("sonare_hpss_ex")
         if not hasattr(lib, "sonare_hpss"):
             raise _unsupported_effect_symbol("sonare_hpss")
@@ -744,8 +743,8 @@ def hpss_with_residual(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window. Default: ``n_fft // 4``
-            (at least 1), 512 at the default ``n_fft``.
+            so frames overlap by at least half a window. Default: ``n_fft / 4``
+            (at least 1), derived by the library.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
 
     Returns:
@@ -753,7 +752,8 @@ def hpss_with_residual(
         (all the same length) plus ``sampleRate``.
     """
     _validate_samples("hpss_with_residual", samples)
-    n_fft, hop_length = _validate_effect_fft_options("hpss_with_residual", n_fft, hop_length)
+    n_fft = _validate_stft_n_fft("hpss_with_residual", n_fft)
+    hop_length = 0 if hop_length is None else _validate_effect_hop("hpss_with_residual", hop_length)
     kernel_harmonic = _validate_hpss_kernel(
         "hpss_with_residual", kernel_harmonic, "kernel_harmonic"
     )
@@ -766,7 +766,7 @@ def hpss_with_residual(
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1
     if not hasattr(lib, "sonare_hpss_ex"):
-        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != _DEFAULT_EFFECT_HOP_LENGTH or hard_mask:
+        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != 0 or hard_mask:
             raise _unsupported_effect_symbol("sonare_hpss_ex")
         if not hasattr(lib, "sonare_hpss_with_residual"):
             raise _unsupported_effect_symbol("sonare_hpss_with_residual")
