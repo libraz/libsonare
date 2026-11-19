@@ -295,7 +295,8 @@ def mel_to_audio(
         mel: Mel power spectrogram, a 2-D array of shape ``(n_mels, n_frames)``.
         sr: Sample rate of the original audio in Hz (default 22050).
         n_fft: FFT size used for reconstruction (default 2048).
-        hop_length: Hop length used for reconstruction (default None = ``n_fft // 4``).
+        hop_length: Hop length used for reconstruction. Default: ``n_fft / 4`` (at
+            least 1), derived by the library.
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
         fmax: Maximum Mel frequency in Hz (default None = sr/2).
         n_iter: Griffin-Lim iterations (default 32).
@@ -319,9 +320,7 @@ def mel_to_audio(
             _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
             _to_c_int(
-                n_fft // 4
-                if hop_length is None
-                else _validate_effect_hop("mel_to_audio", hop_length),
+                0 if hop_length is None else _validate_effect_hop("mel_to_audio", hop_length),
                 "hop_length",
             ),
             _to_c_float(fmin, "fmin"),
@@ -344,7 +343,8 @@ def griffin_lim(
 
     ``n_fft`` is implied by the bin count, ``(n_bins - 1) * 2``; omitted, it is
     inferred, and an explicit value that disagrees raises ``SonareValueError``.
-    An omitted ``hop_length`` is ``n_fft // 4``. Returns a float32 array.
+    An omitted ``hop_length`` is ``n_fft / 4`` (at least 1), derived by the
+    library. Returns a float32 array.
     """
     lib = _get_lib()
     data, n_bins, n_frames = _to_c_float_matrix("griffin_lim", magnitude, arg_name="magnitude")
@@ -355,9 +355,7 @@ def griffin_lim(
         raise SonareValueError(
             f"griffin_lim: n_fft must equal (n_bins - 1) * 2 (got {n_fft} for {n_bins} bins)"
         )
-    hop_length = (
-        n_fft // 4 if hop_length is None else _validate_effect_hop("griffin_lim", hop_length)
-    )
+    hop_length = 0 if hop_length is None else _validate_effect_hop("griffin_lim", hop_length)
     length = n_bins * n_frames
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -445,7 +443,8 @@ def mfcc_to_audio(
         n_mels: Number of Mel bins (must match the MFCC source config).
         sr: Sample rate of the original audio in Hz (default 22050).
         n_fft: FFT size used for reconstruction (default 2048).
-        hop_length: Hop length used for reconstruction (default None = ``n_fft // 4``).
+        hop_length: Hop length used for reconstruction. Default: ``n_fft / 4`` (at
+            least 1), derived by the library.
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
         fmax: Maximum Mel frequency in Hz (default None = sr/2).
         n_iter: Griffin-Lim iterations (default 32).
@@ -460,9 +459,7 @@ def mfcc_to_audio(
     c_array, n_mfcc, n_frames = _to_c_float_matrix(
         "mfcc_to_audio", coefficients, arg_name="coefficients"
     )
-    hop_length = (
-        n_fft // 4 if hop_length is None else _validate_effect_hop("mfcc_to_audio", hop_length)
-    )
+    hop_length = 0 if hop_length is None else _validate_effect_hop("mfcc_to_audio", hop_length)
     if lifter == 0.0:
         return _inverse_audio(
             lib,

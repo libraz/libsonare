@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +32,7 @@ _ERROR_CLASS = {"argument": SonareValueError, "missing_argument": SonareValueErr
 _MFCC = _CORPUS["mfcc_to_mel"]
 _MEL = _CORPUS["mel_to_audio"]
 _MFCC_AUDIO = _CORPUS["mfcc_to_audio"]
+_GRIFFIN_LIM = _CORPUS["griffin_lim"]
 _STRETCH = _CORPUS["native_spectral_stretch"]
 _CHAIN = _CORPUS["streaming_mastering_chain_prepare"]
 _EQ = _CORPUS["equalizer_prepare"]
@@ -92,6 +94,53 @@ def test_mfcc_to_audio_refuses(case: dict) -> None:
     n_mels = _MFCC_AUDIO["input"]["n_mels"]
     with pytest.raises(_ERROR_CLASS[case["cause"]], match=case["message"]):
         libsonare.mfcc_to_audio(_mfcc_audio(), n_mels=n_mels, n_iter=case["n_iter"])
+
+
+def _griffin_lim_magnitude(n_fft: int) -> np.ndarray:
+    shape = (n_fft // 2 + 1, _GRIFFIN_LIM["input"]["n_frames"])
+    return np.full(shape, _GRIFFIN_LIM["input"]["fill"], dtype=np.float32)
+
+
+def _inverse_routes(n_fft: int) -> dict[str, Callable[[int | None], np.ndarray]]:
+    n_mels = _MFCC_AUDIO["input"]["n_mels"]
+    sample_rate = _GRIFFIN_LIM["input"]["sample_rate"]
+    return {
+        "mel_to_audio": lambda hop: libsonare.mel_to_audio(
+            _mel(), n_fft=n_fft, hop_length=hop, n_iter=1
+        ),
+        "mfcc_to_audio": lambda hop: libsonare.mfcc_to_audio(
+            _mfcc_audio(), n_mels=n_mels, n_fft=n_fft, hop_length=hop, n_iter=1
+        ),
+        "griffin_lim": lambda hop: libsonare.griffin_lim(
+            _griffin_lim_magnitude(n_fft), sample_rate, hop_length=hop, n_iter=1
+        ),
+    }
+
+
+def _inverse_cases(key: str) -> list[tuple[str, dict]]:
+    return [(route, case) for route in _inverse_routes(4) for case in _CORPUS[route][key]]
+
+
+@pytest.mark.parametrize(
+    ("route", "case"), _inverse_cases("absent_hop"), ids=lambda value: str(value)[:24]
+)
+def test_inverse_transform_derives_an_absent_hop(route: str, case: dict) -> None:
+    # The facade spells an absent hop by omission; the C 0 the corpus names is refused.
+    call = _inverse_routes(case["n_fft"])[route]
+    np.testing.assert_array_equal(call(None), call(case["derived_hop_length"]))
+    with pytest.raises(
+        SonareValueError, match=rf"^{route}: hop_length must be an integer in \[1, "
+    ):
+        call(case["hop_length"])
+
+
+@pytest.mark.parametrize(
+    ("route", "case"), _inverse_cases("negative_hop"), ids=lambda value: str(value)[:24]
+)
+def test_inverse_transform_refuses_a_negative_hop(route: str, case: dict) -> None:
+    # The facade refuses before the core does, so only the error class is pinned here.
+    with pytest.raises(_ERROR_CLASS[case["cause"]]):
+        _inverse_routes(case["n_fft"])[route](case["hop_length"])
 
 
 def _stretch_samples() -> np.ndarray:
