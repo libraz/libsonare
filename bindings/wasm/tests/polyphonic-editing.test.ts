@@ -424,7 +424,7 @@ describe('PolyphonicAnalysis config', () => {
     const error = expectRefusalOf(() =>
       analyzePolyphonic({ samples, sampleRate, maxPolyphony: 65 }),
     );
-    expect(error.message).toBe('Invalid parameter');
+    expect(error.message).toBe('analyzePolyphonic: Invalid parameter');
   });
 
   it('reads 0 on a floor field as the value 0 and refuses a negative', () => {

@@ -1,4 +1,5 @@
 import { toVoicedInt32 } from './internal/effects_common.js';
+import { withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveFftOptions } from './internal/fft_options.js';
@@ -608,7 +609,7 @@ export function pitchYin(
   options?: OptionsOf<PitchYinRequest>,
 ): PitchResult;
 export function pitchYin(...args: unknown[]): PitchResult {
-  return pitchTrack('pitchYin', args);
+  return withEntry('pitchYin', () => pitchTrack('pitchYin', args));
 }
 
 /** pYIN fundamental-frequency track. */
@@ -619,7 +620,7 @@ export function pitchPyin(
   options?: OptionsOf<PitchPyinRequest>,
 ): PitchResult;
 export function pitchPyin(...args: unknown[]): PitchResult {
-  return pitchTrack('pitchPyin', args);
+  return withEntry('pitchPyin', () => pitchTrack('pitchPyin', args));
 }
 
 /** Segment a host-supplied monophonic F0 track into stable note regions. */

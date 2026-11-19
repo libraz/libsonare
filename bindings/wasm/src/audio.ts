@@ -60,6 +60,7 @@ import {
   zeroCrossingRate,
 } from './features.js';
 import { CHANNEL_LAYOUT_VALUES, CHANNEL_LAYOUTS } from './internal/channel_layout.js';
+import { entryClass, withEntry } from './internal/entry.js';
 import type { MasterAudioRequest, NormalizeRequest } from './mastering_chain.js';
 import { masterAudio } from './mastering_chain.js';
 import type {
@@ -313,11 +314,13 @@ export async function decodeChannelsWithBrowserFallback(
   bytes: Uint8Array,
   options: BrowserAudioDecodeOptions = {},
 ): Promise<DecodedChannels> {
-  try {
-    return decodeChannels(bytes);
-  } catch (nativeError) {
-    return decodeWithBrowserCodec(bytes, options, nativeError, 'decodeChannels');
-  }
+  return withEntry('decodeChannelsWithBrowserFallback', async () => {
+    try {
+      return decodeChannels(bytes);
+    } catch (nativeError) {
+      return decodeWithBrowserCodec(bytes, options, nativeError, 'decodeChannels');
+    }
+  });
 }
 
 async function decodeWithBrowserCodec(
@@ -412,6 +415,7 @@ const AUDIO_FACTORY_KEY = Symbol('Audio factory');
  * const mel = audio.melSpectrogram();
  * ```
  */
+@entryClass('Audio')
 export class Audio {
   private _samples: Float32Array | null;
   private readonly _sampleRate: number;

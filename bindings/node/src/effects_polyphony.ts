@@ -1,3 +1,4 @@
+import { entryClass, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   NoteEditInput,
@@ -110,6 +111,7 @@ function assertPolyphonicOptions(fnName: string, options: PolyphonicAnalysisOpti
  * const edited = analysis.render();
  * ```
  */
+@entryClass('PolyphonicAnalysis')
 export class PolyphonicAnalysis {
   private native: InstanceType<typeof addon.PolyphonicAnalysis>;
   private readonly sampleRate: number;
@@ -376,5 +378,9 @@ export function analyzePolyphonic(
   options?: OptionsOf<AnalyzePolyphonicRequest>,
 ): PolyphonicAnalysis;
 export function analyzePolyphonic(...args: unknown[]): PolyphonicAnalysis {
-  return new PolyphonicAnalysis(sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', args));
+  return withEntry(
+    'analyzePolyphonic',
+    () =>
+      new PolyphonicAnalysis(sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', args)),
+  );
 }

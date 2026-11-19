@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
@@ -260,7 +261,7 @@ export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
     r.processor,
     r.samples,
     r.sampleRate,
-    resolveProcessorParams(r.processor, r.params ?? {}),
+    withEntry('masteringApplyProcessor', () => resolveProcessorParams(r.processor, r.params ?? {})),
   );
   return { ...result, latencySamples: result.latencySamples ?? 0 } as MasteringResult;
 }
@@ -289,7 +290,9 @@ export function masteringApplyProcessorStereo<P extends SoloProcessor>(
     r.left,
     r.right,
     r.sampleRate,
-    resolveProcessorParams(r.processor, r.params ?? {}),
+    withEntry('masteringApplyProcessorStereo', () =>
+      resolveProcessorParams(r.processor, r.params ?? {}),
+    ),
   );
 }
 

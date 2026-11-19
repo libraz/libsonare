@@ -1,4 +1,5 @@
 import { chainConfigJson } from './internal/chain_config.js';
+import { entryClass } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -150,6 +151,7 @@ function optionalIntegerBlockSize(fnName: string, value: unknown): number | unde
  * }
  * ```
  */
+@entryClass('StreamingMasteringChain', ['processMono', 'processStereo'])
 export class StreamingMasteringChain {
   private chainHandle: import('./sonare.js').WasmStreamingMasteringChain;
   private released = false;
@@ -367,6 +369,12 @@ export class StreamingMasteringChain {
  * }
  * ```
  */
+@entryClass('StreamingEqualizer', [
+  'processMono',
+  'processStereo',
+  'setSidechainMono',
+  'setSidechainStereo',
+])
 export class StreamingEqualizer {
   private eqHandle: import('./sonare.js').WasmStreamingEqualizer;
   private released = false;
@@ -632,6 +640,7 @@ function assertRetuneConfig(
  * before processing, and call {@link destroy} (or use `try/finally`) to release
  * the underlying WASM object.
  */
+@entryClass('StreamingRetune', ['processMono'])
 export class StreamingRetune {
   private retuneHandle: import('./sonare.js').WasmStreamingRetune;
   private released = false;

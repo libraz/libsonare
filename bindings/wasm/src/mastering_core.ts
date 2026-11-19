@@ -1,4 +1,5 @@
 import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_config.js';
+import { withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
@@ -442,7 +443,7 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
   insert: N,
 ): (keyof MasteringProcessorParams<N> & string)[] {
   assertString('masteringInsertParamNames', insert, 'insert');
-  if (!masteringInsertNames().includes(insert)) {
+  if (!withEntry('masteringInsertParamNames', () => masteringInsertNames()).includes(insert)) {
     throw new RangeError(`masteringInsertParamNames: unknown insert '${insert}'`);
   }
   return Array.from(
@@ -532,7 +533,9 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
   assertString('masteringInsertTiming', r.insert, 'insert');
   assertSampleRate('masteringInsertTiming', r.sampleRate);
   const json = JSON.stringify(
-    resolveInsertParams('masteringInsertTiming', r.insert, r.params ?? {}),
+    withEntry('masteringInsertTiming', () =>
+      resolveInsertParams('masteringInsertTiming', r.insert, r.params ?? {}),
+    ),
   );
   return requireModule().masteringInsertTiming(r.insert, json, r.sampleRate);
 }
@@ -588,7 +591,7 @@ export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
     r.processor,
     r.samples,
     r.sampleRate,
-    resolveProcessorParams(r.processor, r.params ?? {}),
+    withEntry('masteringApplyProcessor', () => resolveProcessorParams(r.processor, r.params ?? {})),
   );
   return result as MasteringResult;
 }
@@ -617,7 +620,9 @@ export function masteringApplyProcessorStereo<P extends SoloProcessor>(
     r.left,
     r.right,
     r.sampleRate,
-    resolveProcessorParams(r.processor, r.params ?? {}),
+    withEntry('masteringApplyProcessorStereo', () =>
+      resolveProcessorParams(r.processor, r.params ?? {}),
+    ),
   );
 }
 
@@ -943,7 +948,7 @@ export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistan
     requireModule().masteringAssistantSuggest(
       r.samples,
       r.sampleRate,
-      assistantParams('masteringAssistantSuggest', r),
+      withEntry('masteringAssistantSuggest', () => assistantParams('masteringAssistantSuggest', r)),
     ),
   );
 }
@@ -971,7 +976,9 @@ export function masteringAssistantSuggestChain(...args: unknown[]): MasteringCha
     requireModule().masteringAssistantSuggestChain(
       r.samples,
       r.sampleRate,
-      assistantParams('masteringAssistantSuggestChain', r),
+      withEntry('masteringAssistantSuggestChain', () =>
+        assistantParams('masteringAssistantSuggestChain', r),
+      ),
     ),
   );
 }
@@ -1052,7 +1059,9 @@ export function masteringAssistantSuggestStereo(
       r.left,
       r.right,
       r.sampleRate,
-      assistantParams('masteringAssistantSuggestStereo', r),
+      withEntry('masteringAssistantSuggestStereo', () =>
+        assistantParams('masteringAssistantSuggestStereo', r),
+      ),
     ),
   );
 }
@@ -1076,7 +1085,9 @@ export function masteringAssistantSuggestChainStereo(
       r.left,
       r.right,
       r.sampleRate,
-      assistantParams('masteringAssistantSuggestChainStereo', r),
+      withEntry('masteringAssistantSuggestChainStereo', () =>
+        assistantParams('masteringAssistantSuggestChainStereo', r),
+      ),
     ),
   );
 }

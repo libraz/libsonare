@@ -1,4 +1,5 @@
 import { chainConfigJson } from './internal/chain_config.js';
+import { entryClass } from './internal/entry.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
@@ -128,6 +129,7 @@ function optionalIntegerBlockSize(fnName: string, value: unknown): number | unde
  * chain.reset();
  * ```
  */
+@entryClass('StreamingMasteringChain', ['processMono', 'processStereo'])
 export class StreamingMasteringChain {
   private native: InstanceType<typeof addon.StreamingMasteringChain>;
   private disposed = false;
@@ -637,6 +639,7 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
  * is not invoked by multiple threads within either role. A full pending ring
  * drops the newly produced output frame while analysis totals keep advancing.
  */
+@entryClass('StreamAnalyzer', ['process', 'processWithOffset'])
 export class StreamAnalyzer {
   private native: InstanceType<typeof addon.StreamAnalyzer>;
   private disposed = false;
@@ -884,6 +887,12 @@ const EQ_PHASE_MODES = Object.keys(EQ_PHASE_MODE_ORDINALS) as EqPhaseMode[];
  * const { left, right } = eq.processStereo(blockLeft, blockRight);
  * ```
  */
+@entryClass('StreamingEqualizer', [
+  'processMono',
+  'processStereo',
+  'setSidechainMono',
+  'setSidechainStereo',
+])
 export class StreamingEqualizer {
   private native: InstanceType<typeof addon.StreamingEqualizer>;
   private disposed = false;

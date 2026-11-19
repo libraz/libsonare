@@ -1,4 +1,5 @@
 import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_config.js';
+import { withEntry } from './internal/entry.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { masteringPlatformNames, masteringPresetNames } from './mastering_catalog.js';
@@ -248,7 +249,7 @@ export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistan
     addon.masteringAssistantSuggest(
       r.samples,
       r.sampleRate,
-      assistantParams('masteringAssistantSuggest', r),
+      withEntry('masteringAssistantSuggest', () => assistantParams('masteringAssistantSuggest', r)),
     ),
   );
 }
@@ -276,7 +277,9 @@ export function masteringAssistantSuggestChain(...args: unknown[]): MasteringCha
     addon.masteringAssistantSuggestChain(
       r.samples,
       r.sampleRate,
-      assistantParams('masteringAssistantSuggestChain', r),
+      withEntry('masteringAssistantSuggestChain', () =>
+        assistantParams('masteringAssistantSuggestChain', r),
+      ),
     ),
   );
 }
@@ -353,7 +356,9 @@ export function masteringAssistantSuggestStereo(
       r.left,
       r.right,
       r.sampleRate,
-      assistantParams('masteringAssistantSuggestStereo', r),
+      withEntry('masteringAssistantSuggestStereo', () =>
+        assistantParams('masteringAssistantSuggestStereo', r),
+      ),
     ),
   );
 }
@@ -377,7 +382,9 @@ export function masteringAssistantSuggestChainStereo(
       r.left,
       r.right,
       r.sampleRate,
-      assistantParams('masteringAssistantSuggestChainStereo', r),
+      withEntry('masteringAssistantSuggestChainStereo', () =>
+        assistantParams('masteringAssistantSuggestChainStereo', r),
+      ),
     ),
   );
 }

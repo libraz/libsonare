@@ -1,3 +1,4 @@
+import { entryClass, withEntry } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -74,6 +75,7 @@ function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<strin
  * Using the analysis after it has been released throws `InvalidState` rather than
  * reaching a freed native object.
  */
+@entryClass('PolyphonicAnalysis')
 export class PolyphonicAnalysis {
   private native: WasmPolyphonicAnalysis | null;
   private readonly sampleRate: number;
@@ -331,5 +333,9 @@ export function analyzePolyphonic(
   options?: OptionsOf<AnalyzePolyphonicRequest>,
 ): PolyphonicAnalysis;
 export function analyzePolyphonic(...args: unknown[]): PolyphonicAnalysis {
-  return new PolyphonicAnalysis(sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', args));
+  return withEntry(
+    'analyzePolyphonic',
+    () =>
+      new PolyphonicAnalysis(sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', args)),
+  );
 }

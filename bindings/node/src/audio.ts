@@ -92,6 +92,7 @@ import {
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
 } from './features.js';
+import { entryClass } from './internal/entry.js';
 import type { MasterAudioRequest } from './mastering_chain.js';
 import { masterAudio as masterAudioFn } from './mastering_chain.js';
 import type {
@@ -185,6 +186,7 @@ const AUDIO_FACTORY_KEY = Symbol('Audio factory');
  * source is downmixed as it is loaded; {@link Audio.fromFileChannel} loads one channel instead.
  * Release it with `destroy()` or a `using` declaration.
  */
+@entryClass('Audio')
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
   private disposed = false;

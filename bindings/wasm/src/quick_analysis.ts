@@ -12,6 +12,7 @@ import {
   pitchClassOrdinal,
 } from './analysis_helpers.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AcousticOptions,
@@ -969,7 +970,7 @@ export function synthesizeRir(...args: unknown[]): RirResult {
       'libsonare was built without acoustic-simulation support',
     );
   }
-  const native = nativeRoomOptions('synthesizeRir', r);
+  const native = withEntry('synthesizeRir', () => nativeRoomOptions('synthesizeRir', r));
   const synthesize = module.synthesizeRir;
   return refusingInvalidGeometry('synthesizeRir', () => synthesize.call(module, native));
 }
@@ -998,7 +999,11 @@ export function estimateRoom(...args: unknown[]): RoomEstimateResult {
   }
   const r = sampleOneShot<EstimateRoomRequest>('estimateRoom', args);
   assertAudioInput('estimateRoom', r.samples, r.sampleRate, r);
-  return module.estimateRoom(r.samples, r.sampleRate, nativeRoomOptions('estimateRoom', r));
+  return module.estimateRoom(
+    r.samples,
+    r.sampleRate,
+    withEntry('estimateRoom', () => nativeRoomOptions('estimateRoom', r)),
+  );
 }
 
 /**
@@ -1072,7 +1077,7 @@ export function roomMorph(...args: unknown[]): RoomMorphResult {
   }
   const r = sampleOneShot<RoomMorphRequest>('roomMorph', args);
   assertAudioInput('roomMorph', r.samples, r.sampleRate, r);
-  const native = nativeRoomOptions('roomMorph', r);
+  const native = withEntry('roomMorph', () => nativeRoomOptions('roomMorph', r));
   const morph = module.roomMorph;
   return refusingInvalidGeometry('roomMorph', () =>
     morph.call(module, r.samples, r.sampleRate, native),
@@ -1112,7 +1117,7 @@ export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
       `receiverSpacingM must be a finite number in (0, 4] metres; omitted = 0.5 (got ${spacing})`,
     );
   }
-  const native = nativeRoomOptions('roomMorphStereo', request);
+  const native = withEntry('roomMorphStereo', () => nativeRoomOptions('roomMorphStereo', request));
   const morphStereo = module.roomMorphStereo;
   return refusingInvalidGeometry('roomMorphStereo', () =>
     morphStereo.call(module, request.left, request.right, request.sampleRate, native),

@@ -1,4 +1,5 @@
 import { chordQualityToken } from './analysis_helpers.js';
+import { entryClass } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { WINDOW_TYPES, windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
@@ -269,6 +270,7 @@ export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
  * browser builds remain single-threaded unless the host explicitly provisions
  * shared-memory worker support.
  */
+@entryClass('StreamAnalyzer', ['process', 'processWithOffset'])
 export class StreamAnalyzer {
   private analyzerHandle: WasmStreamAnalyzer;
   private released = false;

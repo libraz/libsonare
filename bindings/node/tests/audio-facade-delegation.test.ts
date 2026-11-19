@@ -518,9 +518,26 @@ describe('both forms answer a wrong integer with one class and one message', () 
             const viaFacade = outcomeOf(() =>
               (entry.facade as NonNullable<Delegation['facade']>)(tone, sampleRate, args),
             );
-            // Compared as one object so a disagreement names the class AND the
-            // message at once, rather than failing on whichever ran first.
-            expect(viaMethod).toEqual(viaFacade);
+            // Each form names the entry the caller invoked, so the text after the
+            // prefix is compared: as one object, so a disagreement names the class
+            // AND the text at once, rather than failing on whichever ran first.
+            const split = (o: Outcome) => {
+              if (!o.refused) {
+                return { refused: false };
+              }
+              const m = /^([\w.]+): ([\s\S]*)$/.exec(o.message);
+              return { refused: true, errorClass: o.errorClass, prefix: m?.[1], text: m?.[2] };
+            };
+            const method = split(viaMethod);
+            const facade = split(viaFacade);
+            expect({ ...method, prefix: undefined }).toEqual({ ...facade, prefix: undefined });
+            expect('prefix' in facade ? facade.prefix : undefined).toBe(entry.name);
+            // A refusal the native layer raised carries the Audio member; one a facade
+            // check raised still carries the function until those checks are routed.
+            const methodPrefix = 'prefix' in method ? method.prefix : undefined;
+            expect(methodPrefix === entry.name || /^Audio\.\w+$/.test(methodPrefix ?? '')).toBe(
+              true,
+            );
             // Without this a pair that silently stopped refusing would compare
             // two successes and read as covered.
             expect(viaMethod.refused, 'neither form refused the value').toBe(true);

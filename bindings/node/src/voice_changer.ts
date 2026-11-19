@@ -641,6 +641,7 @@ function assertRetuneConfig(fnName: string, config: StreamingRetuneConfig): Stre
  * non-finite sample is rejected rather than zeroed: either would otherwise
  * enter the grain history and persist into every later block.
  */
+@entryClass('StreamingRetune', ['processMono'])
 export class StreamingRetune {
   private native: InstanceType<typeof addon.StreamingRetune>;
   private disposed = false;

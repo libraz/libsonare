@@ -1,4 +1,5 @@
 import { chainConfigFromJson } from './internal/chain_config.js';
+import { withEntry } from './internal/entry.js';
 import { resolveInsertParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
@@ -120,7 +121,12 @@ export function masteringInsertNames(): MasteringInsertName[] {
 export function masteringInsertParamNames<N extends MasteringInsertName>(
   insert: N,
 ): (keyof MasteringProcessorParams<N> & string)[] {
-  assertClosedToken('masteringInsertParamNames', insert, masteringInsertNames(), 'insert');
+  assertClosedToken(
+    'masteringInsertParamNames',
+    insert,
+    withEntry('masteringInsertParamNames', () => masteringInsertNames()),
+    'insert',
+  );
   return addon.masteringInsertParamNames(insert);
 }
 
@@ -197,7 +203,9 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
 ): MasteringInsertTiming {
   const r = requestOnly<MasteringInsertTimingRequest<N>>('masteringInsertTiming', [request]);
   assertSampleRate('masteringInsertTiming', r.sampleRate);
-  const resolved = resolveInsertParams('masteringInsertTiming', r.insert, r.params ?? {});
+  const resolved = withEntry('masteringInsertTiming', () =>
+    resolveInsertParams('masteringInsertTiming', r.insert, r.params ?? {}),
+  );
   return addon.masteringInsertTiming(
     r.insert,
     JSON.stringify(resolved),
