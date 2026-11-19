@@ -16201,7 +16201,7 @@ old = "GriffinLimRequest.nFft"
 changed = "omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (was a 2048 default); a size that disagrees with the bin count is a RangeError"
 domain = "analysis"
 rule = "individual"
-test = "bindings/node/tests/surface/analysis-features.test.ts::griffinLim: nFft must equal (nBins - 1) * 2"
+test = "bindings/node/tests/surface/analysis-features.test.ts::griffinLim: nFft must equal (magnitude.rows - 1) * 2"
 
 [[entry]]
 kind = "field"
