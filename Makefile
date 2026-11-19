@@ -923,6 +923,7 @@ conformance-checks:
 	$(CHECK) python3 tests/conformance/check_facade_refusal_ratchet.py
 	$(CHECK) python3 -m unittest tests/conformance/test_facade_refusal_ratchet.py
 	$(CHECK) node tests/conformance/native_entries.cjs --check
+	$(CHECK) node tests/conformance/shared_type_shapes.cjs --check
 	$(CHECK) python3 tests/conformance/check_goniometer_capacity_mirrors.py
 	$(CHECK) python3 -m unittest tests/conformance/test_goniometer_capacity_mirrors.py
 	$(CHECK) python3 tests/conformance/check_chord_quality_tables.py

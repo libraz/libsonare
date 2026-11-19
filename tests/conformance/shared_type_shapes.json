@@ -78,5 +78,28 @@
       "parent"
     ]
   },
+  "optional": {
+    "CapabilityCatalogChainList": ["processor"],
+    "CapabilityCatalogChainStage": ["processor"],
+    "MasteringPresetCatalogEntry": [
+      "maxLimiterGainReductionDb",
+      "targetLufs",
+      "truePeakCeilingDbtp"
+    ],
+    "MasteringInsertParamInfo": [
+      "choices",
+      "default",
+      "id",
+      "max",
+      "maxRelativeTo",
+      "min",
+      "slot",
+      "uiMax",
+      "uiMin",
+      "unit"
+    ],
+    "MasteringProcessorCatalogEntry": ["realtimeCost"],
+    "MasteringInsertSlot": ["parent"]
+  },
   "aliases": {}
 }
