@@ -409,5 +409,17 @@
       { "id": "band0_frequency_null", "param": "band0.frequencyHz", "value": null, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.frequencyHz must be a number or a boolean", "pending": {"node": "the addon prefixes 'failed to build mixer from scene JSON: ' ahead of the core text"} },
       { "id": "band0_q_zero", "param": "band0.q", "value": 0, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.q must be finite and greater than 0", "pending": {"node": "the addon prefixes 'failed to build mixer from scene JSON: ' ahead of the core text"} }
     ]
+  },
+  "insert_unknown_key": {
+    "entries": ["mastering_insert_timing", "mastering_apply_processor", "mastering_apply_processor_stereo"],
+    "sample_rate": 48000,
+    "samples": 4800,
+    "error": {"node": "TypeError", "wasm": "TypeError", "python": "SonareValueError"},
+    "cases": [
+      { "id": "single_unknown", "processor": "saturation.softClipper", "params": {"notAKey": 1.0}, "message": "unknown key notAKey (expected aliasing, ceiling, driveDb, mix)", "pending": {"node": "the core param-bag refusal reaches JS as RangeError; the refusal kind is not yet carried to the translation point", "wasm": "the core param-bag refusal reaches JS as RangeError; the refusal kind is not yet carried to the translation point"} },
+      { "id": "first_unknown_in_byte_order", "processor": "saturation.softClipper", "params": {"zeta": 1.0, "alpha": 2.0}, "message": "unknown key alpha (expected aliasing, ceiling, driveDb, mix)", "pending": {"node": "the core param-bag refusal reaches JS as RangeError; the refusal kind is not yet carried to the translation point", "wasm": "the core param-bag refusal reaches JS as RangeError; the refusal kind is not yet carried to the translation point"} },
+      { "id": "unknown_beside_a_known_key", "processor": "saturation.softClipper", "params": {"driveDb": 1.0, "notAKey": 1.0}, "message": "unknown key notAKey (expected aliasing, ceiling, driveDb, mix)", "pending": {"node": "the core param-bag refusal reaches JS as RangeError; the refusal kind is not yet carried to the translation point", "wasm": "the core param-bag refusal reaches JS as RangeError; the refusal kind is not yet carried to the translation point"} },
+      { "id": "unknown_band_field_lists_the_templates", "processor": "eq.parametric", "params": {"band0.nope": 1.0}, "message": "unknown key band0.nope (expected band{i}.attackMs, band{i}.autoThreshold, band{i}.bypassed, band{i}.coeffMode, band{i}.detectorDelayMs, band{i}.dynamic, band{i}.enabled, band{i}.frequencyHz, band{i}.gainDb, band{i}.phase, band{i}.placement, band{i}.proportionalQ, band{i}.proportionalQStrength, band{i}.q, band{i}.rangeDb, band{i}.ratio, band{i}.releaseMs, band{i}.sidechainFreqHz, band{i}.sidechainQ, band{i}.slopeDbOct, band{i}.soloed, band{i}.thresholdDb, band{i}.type)", "pending": {"node": "the core param-bag refusal reaches JS as RangeError; the refusal kind is not yet carried to the translation point", "wasm": "the core param-bag refusal reaches JS as RangeError; the refusal kind is not yet carried to the translation point"} }
+    ]
   }
 }

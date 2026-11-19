@@ -11,6 +11,9 @@ import {
   gmInstrumentName,
   init,
   Mixer,
+  masteringApplyProcessor,
+  masteringApplyProcessorStereo,
+  masteringInsertTiming,
   masteringRepairDetectTrimRange,
   masteringRepairDetectTrimRangeStereo,
   masteringRepairTrimSilence,
@@ -535,5 +538,57 @@ describe('a scene insert refusal reaches the caller with its document path untou
       expect((caught as SonareError).codeName).toBe(testCase.code_name);
       expect((caught as Error).message).toBe(`${fn}: ${testCase.message}`);
     });
+  }
+});
+
+type InsertUnknownKeyCase = {
+  id: string;
+  processor: string;
+  params: Record<string, number>;
+  message: string;
+  pending?: Record<string, string>;
+};
+type InsertUnknownKeySection = {
+  entries: string[];
+  sample_rate: number;
+  samples: number;
+  error: Record<string, string>;
+  cases: InsertUnknownKeyCase[];
+};
+
+describe('an unknown insert key is refused with one class and text on every param-bag entry', () => {
+  const section = (corpus as unknown as { insert_unknown_key: InsertUnknownKeySection })
+    .insert_unknown_key;
+  const sampleRate = section.sample_rate;
+  const samples = new Float32Array(section.samples);
+  const calls: Record<string, (processor: string, params: Record<string, number>) => unknown> = {
+    mastering_insert_timing: (insert, params) =>
+      masteringInsertTiming({ insert, params, sampleRate } as never),
+    mastering_apply_processor: (processor, params) =>
+      masteringApplyProcessor({ processor, samples, sampleRate, params } as never),
+    mastering_apply_processor_stereo: (processor, params) =>
+      masteringApplyProcessorStereo({
+        processor,
+        left: samples,
+        right: samples,
+        sampleRate,
+        params,
+      } as never),
+  };
+  for (const entry of section.entries) {
+    for (const testCase of section.cases) {
+      const pending = testCase.pending?.[SURFACE];
+      const test = pending ? it.fails : it;
+      test(`${entry} ${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
+        let caught: unknown;
+        try {
+          calls[entry](testCase.processor, testCase.params);
+        } catch (error) {
+          caught = error;
+        }
+        expect((caught as Error | undefined)?.constructor.name).toBe(section.error[SURFACE]);
+        expect((caught as Error).message).toBe(`${camelKey(entry)}: ${testCase.message}`);
+      });
+    }
   }
 });
