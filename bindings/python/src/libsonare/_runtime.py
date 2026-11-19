@@ -1033,7 +1033,9 @@ def _validate_c_int_field(fn_name: str, value: object, arg_name: str) -> int:
     try:
         return _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
-        raise _int_refusal(fn_name, value, arg_name, "must fit in a signed 32-bit integer") from exc
+        raise _int_refusal(
+            fn_name, value, arg_name, "must be an integer within the signed 32-bit range"
+        ) from exc
 
 
 def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
@@ -1152,7 +1154,7 @@ def _validate_effect_fft_options(
 
 def _validate_effect_hop(fn_name: str, hop_length: object) -> int:
     """Narrow a given STFT hop onto a positive C ``int``; 0 is refused, not a default."""
-    domain = "must fit in a positive signed 32-bit integer"
+    domain = f"must be an integer in [1, {_C_INT_MAX}]"
     try:
         hop = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:

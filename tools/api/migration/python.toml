@@ -12293,3 +12293,43 @@ changed = "a SourceBackend token ('synth' or 'sf2') instead of an ordinal"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_soundfont.py::test_sound_font_manifest_reports_backends"
+
+[[entry]]
+kind = "option"
+old = "Project.set_max_history_bytes(bytes)"
+changed = "a bool or a value that is not a number raises TypeError instead of SonareValueError; a non-integer number or one outside [0, SIZE_MAX] stays SonareValueError"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_project_edit_ops.py::test_set_max_history_bytes_rejects_invalid_values_without_mutating_history"
+
+[[entry]]
+kind = "option"
+old = "pad_center(target_size)"
+changed = "a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError"
+domain = "analysis"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_surface_analysis.py::test_target_size_is_refused_by_cause"
+
+[[entry]]
+kind = "option"
+old = "fix_length(target_size)"
+changed = "a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError"
+domain = "analysis"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_surface_analysis.py::test_target_size_is_refused_by_cause"
+
+[[entry]]
+kind = "option"
+old = "analyze_impulse_response(n_octave_bands)"
+changed = "a bool or a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError"
+domain = "analysis"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_python_feature_options.py::test_analyze_impulse_response_validates_ex_parameters"
+
+[[entry]]
+kind = "option"
+old = "Mixer.read_goniometer_latest(max_points)"
+changed = "a bool or a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_mixing.py::test_read_goniometer_latest_bounds_the_buffer_independently_of_max_points"

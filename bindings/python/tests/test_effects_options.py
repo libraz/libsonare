@@ -209,7 +209,7 @@ def test_invalid_options_are_rejected_before_library_lookup(
         level.trim(_samples(), frame_length=0, sample_rate=22050)
     with pytest.raises(ValueError, match="hop_length"):
         level.trim(_samples(), hop_length=2**32, sample_rate=22050)
-    with pytest.raises(ValueError, match="float32"):
+    with pytest.raises(ValueError, match="within the 32-bit float range"):
         level.normalize(_samples(), sample_rate=22050, mode="rms", target_db=-1e100)
 
 

@@ -6,7 +6,6 @@ from __future__ import annotations
 import ctypes
 import json
 import math
-import operator
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
@@ -1215,16 +1214,7 @@ class _ProjectEditMixin:
         checked against the platform's ``size_t`` range before calling the
         optional additive C ABI symbol.
         """
-        if isinstance(bytes, bool):
-            raise SonareValueError("bytes must be a non-negative integer within size_t range")
-        try:
-            value = operator.index(bytes)
-        except TypeError:
-            raise SonareValueError(
-                "bytes must be a non-negative integer within size_t range"
-            ) from None
-        if value < 0 or value > _SIZE_T_MAX:
-            raise SonareValueError("bytes must be a non-negative integer within size_t range")
+        value = _narrow_int(bytes, "bytes", 0, _SIZE_T_MAX)
 
         lib = _get_lib()
         _require_export(

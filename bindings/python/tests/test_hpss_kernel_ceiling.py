@@ -276,7 +276,7 @@ def test_percussive_events_refuse_a_wrapping_kernel_by_name(
     with pytest.raises(SonareValueError) as raised:
         extract_percussive_events(hits, SR, **{arg_name: passed})
     _assert_parameter_refusal(raised.value)
-    assert f"{arg_name} must fit in a signed 32-bit integer" in str(raised.value)
+    assert f"{arg_name} must be an integer within the signed 32-bit range" in str(raised.value)
     assert "exceeds the maximum" not in str(raised.value)
 
 

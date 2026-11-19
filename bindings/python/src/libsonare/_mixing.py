@@ -18,6 +18,7 @@ from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    _SIZE_T_MAX,
     AutomationCurve,
     ErrorCode,
     MeterTap,
@@ -854,13 +855,10 @@ class Mixer:
 
         ``max_points`` is a request rather than an allocation size: a value
         beyond the strip's goniometer ring simply returns every point the ring
-        holds. A non-integer or negative value raises
-        :class:`SonareValueError`.
+        holds. A negative or non-integer number raises :class:`SonareValueError`
+        and a value that is not a number raises ``TypeError``.
         """
-        if isinstance(max_points, bool) or not isinstance(max_points, int):
-            raise SonareValueError("max_points must be a non-negative integer")
-        if max_points < 0:
-            raise SonareValueError("max_points must be a non-negative integer")
+        max_points = _narrow_int(max_points, "max_points", 0, _SIZE_T_MAX)
         # Bound the working buffer by the ring, not by the caller's number: a
         # ctypes array sized straight from an arbitrary count is how a request
         # for 10**12 points becomes a multi-gigabyte allocation. Same shape as

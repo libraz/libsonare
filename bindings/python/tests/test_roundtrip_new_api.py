@@ -357,7 +357,7 @@ def test_stream_analyzer_rejects_invalid_size_arguments_without_wrapping():
         for value in invalid_values:
             for operation in operations:
                 expected = TypeError if isinstance(value, bool) else ValueError
-                with pytest.raises(expected, match="non-negative integer"):
+                with pytest.raises(expected, match=r"must be an integer in \[0, "):
                     operation(value)
 
         analyzer.reset(size_t_max)

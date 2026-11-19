@@ -112,7 +112,7 @@ def test_mix_stereo_sample_rate_range_is_enforced() -> None:
     strips = [([0.1] * 64, [0.1] * 64)]
     for bad in (7999, 384001, 0, -48000):
         with pytest.raises(
-            SonareValueError, match=r"sample_rate must be an integer within \[8000, 384000\]"
+            SonareValueError, match=r"sample_rate must be an integer in \[8000, 384000\]"
         ):
             mix_stereo(strips, sample_rate=bad)
     with pytest.raises(SonareValueError):
@@ -126,7 +126,7 @@ def test_scene_sample_rate_range_is_enforced() -> None:
     scene = json.dumps(mixing_scene_preset(__import__("libsonare").mixing_scene_preset_names()[0]))
     for bad in (7999, 384001):
         with pytest.raises(
-            SonareValueError, match=r"sample_rate must be an integer within \[8000, 384000\]"
+            SonareValueError, match=r"sample_rate must be an integer in \[8000, 384000\]"
         ):
             Mixer.from_json(scene, sample_rate=bad)
 

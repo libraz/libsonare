@@ -99,7 +99,7 @@ def _dynamic_range_args(
     """The dynamic-range arguments; percentiles are ranks in [0, 1] with low <= high."""
     for name, value in (("low_percentile", low_percentile), ("high_percentile", high_percentile)):
         if value is not None and not 0.0 <= _narrow_double(value, name) <= 1.0:
-            raise SonareValueError(f"{name} must be within [0, 1]")
+            raise SonareValueError(f"{name} must be in [0, 1]")
     if (
         low_percentile is not None
         and high_percentile is not None

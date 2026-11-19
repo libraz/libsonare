@@ -5,7 +5,6 @@ from __future__ import annotations
 import ctypes
 import json
 import math
-import operator
 from collections.abc import Sequence
 from typing import Any
 
@@ -602,20 +601,9 @@ def analyze_impulse_response(
     ``min_decay_db`` selects the minimum decay range used by the native
     regression and defaults to the legacy 30 dB range.
     """
-    if isinstance(n_octave_bands, bool):
-        raise SonareValueError(
-            "analyze_impulse_response: n_octave_bands must be a non-negative integer"
-        )
-    try:
-        n_octave_bands_value = operator.index(n_octave_bands)
-    except TypeError as exc:
-        raise SonareValueError(
-            "analyze_impulse_response: n_octave_bands must be a non-negative integer"
-        ) from exc
-    if n_octave_bands_value < 0 or n_octave_bands_value > _C_INT_MAX:
-        raise SonareValueError(
-            "analyze_impulse_response: n_octave_bands must be a non-negative integer"
-        )
+    n_octave_bands_value = _narrow_int(
+        n_octave_bands, "analyze_impulse_response: n_octave_bands", 0, _C_INT_MAX
+    )
     try:
         decay_db = _narrow_double(min_decay_db, "min_decay_db")
         decay_db_c = ctypes.c_float(decay_db).value

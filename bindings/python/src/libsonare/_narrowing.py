@@ -65,10 +65,10 @@ def _is_number(value: object) -> bool:
 
 
 def _narrowing_error(name: str, low: int, high: int) -> str:
-    """Word one refusal for both halves of the family, unsigned reading as such."""
-    if low == 0:
-        return f"{name} must be a non-negative integer within [0, {high}]"
-    return f"{name} must be an integer within [{low}, {high}]"
+    """Word one refusal for both halves of the family, as the Node and WASM readers do."""
+    if (low, high) == (-(2**31), 2**31 - 1):
+        return f"{name} must be an integer within the signed 32-bit range"
+    return f"{name} must be an integer in [{low}, {high}]"
 
 
 # Largest finite value a 32-bit float represents. A double above it does not
@@ -121,7 +121,7 @@ def _narrow_float(value: object, name: str) -> float:
 
 def _float_narrowing_error(name: str) -> str:
     """Word one refusal for the float half, as :func:`_narrowing_error` does for ints."""
-    return f"{name} must be a finite number within [-{_FLOAT32_MAX:g}, {_FLOAT32_MAX:g}]"
+    return f"{name} must be a finite number within the 32-bit float range"
 
 
 def _narrow_double(value: object, name: str) -> float:

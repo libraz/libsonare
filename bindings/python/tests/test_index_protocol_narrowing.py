@@ -134,7 +134,7 @@ def _refusal(entry, error=SonareValueError, **kwargs) -> str:
     [
         ("kernel_harmonic", "hpss: kernel_harmonic must be a positive odd signed 32-bit integer"),
         ("n_fft", "hpss: n_fft must be an even signed 32-bit integer >= 4"),
-        ("hop_length", "hpss: hop_length must fit in a positive signed 32-bit integer"),
+        ("hop_length", "hpss: hop_length must be an integer in [1, 2147483647]"),
     ],
 )
 def test_an_index_only_hpss_argument_past_the_range_is_refused_for_its_range(
@@ -142,29 +142,26 @@ def test_an_index_only_hpss_argument_past_the_range_is_refused_for_its_range(
 ) -> None:
     """Reaching the range check is what separates this from the old refusal.
 
-    The value is index-able, so the type half passes and the range half answers.
-    Asserted against the type wording as well, because that is the message the
-    same input drew before the validators shared a predicate -- a regression
-    would land back on it rather than on a different string.
+    The value is index-able, so the type half passes and the range half answers;
+    the type refusal is the bare ``must be an integer``, which equality rules out.
     """
     message = _refusal(ls.hpss, samples=tone, sample_rate=SR, **{keyword: Index(2**32)})
     assert message == domain
-    assert "must be an integer" not in message
 
 
 def test_an_index_only_decompose_count_past_the_range_is_refused_for_its_range(tone) -> None:
-    """The C-int config field words its range half differently from the domains above."""
+    """The C-int config field names the signed 32-bit range, as the Node and WASM readers do."""
     message = _refusal(ls.decompose_stems, samples=tone, sample_rate=SR, n_components=Index(2**32))
-    assert message == "decompose_stems: n_components must fit in a signed 32-bit integer"
-    assert "must be an integer" not in message
+    assert (
+        message == "decompose_stems: n_components must be an integer within the signed 32-bit range"
+    )
 
 
 @pytest.mark.parametrize("keyword", ["frame_length", "hop_length"])
 def test_an_index_only_trim_window_past_the_range_is_refused_for_its_range(keyword, padded) -> None:
     """The ``trim`` copy reaches its range check the same way."""
     message = _refusal(ls.trim, samples=padded, sample_rate=SR, **{keyword: Index(2**32)})
-    assert message == f"trim: {keyword} must fit in a positive signed 32-bit integer"
-    assert "must be an integer" not in message
+    assert message == f"trim: {keyword} must be an integer in [1, 2147483647]"
 
 
 # -- what did NOT widen --------------------------------------------------------

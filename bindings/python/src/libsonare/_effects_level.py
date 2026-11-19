@@ -64,7 +64,7 @@ def _trim_length(value: int, arg_name: str) -> int:
     The type and range halves are :func:`_narrow_int`, the check every ``_to_c_*``
     reader runs; positive is this argument's own.
     """
-    domain = "must fit in a positive signed 32-bit integer"
+    domain = f"must be an integer in [1, {_C_INT_MAX}]"
     try:
         length = _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
     except (TypeError, SonareValueError) as exc:
@@ -87,7 +87,9 @@ def _normalize_target(fn_name: str, target_db: float) -> float:
     target_db = _validate_scalar(fn_name, target_db, "target_db")
     target_db_c = ctypes.c_float(target_db).value
     if not np.isfinite(target_db_c):
-        raise SonareValueError(f"{fn_name}: target_db must fit in a finite float32 value")
+        raise SonareValueError(
+            f"{fn_name}: target_db must be a finite number within the 32-bit float range"
+        )
     if target_db_c > 0.0:
         raise SonareValueError(f"{fn_name}: target_db must be at or below 0 dBFS")
     return target_db_c

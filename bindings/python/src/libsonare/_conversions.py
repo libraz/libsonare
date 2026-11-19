@@ -524,8 +524,6 @@ def pad_center(
     pad_value: float = 0.0,
 ) -> np.ndarray:
     """Pad an array by centering it within target size; returns a float32 array."""
-    if not isinstance(target_size, int) or target_size < 0:
-        raise SonareValueError("target_size must be a non-negative integer")
     return _call_float_array_transform(
         "sonare_pad_center",
         values,
@@ -541,8 +539,6 @@ def fix_length(
     pad_value: float = 0.0,
 ) -> np.ndarray:
     """Crop or pad an array to exact length; returns a float32 array."""
-    if not isinstance(target_size, int) or target_size < 0:
-        raise SonareValueError("target_size must be a non-negative integer")
     return _call_float_array_transform(
         "sonare_fix_length",
         values,
