@@ -180,7 +180,7 @@ def _narrow_double(value: object, name: str) -> float:
             if math.isfinite(number):
                 return number
             raise _refuse(f"{name} must be a finite number")
-    raise _refuse_type(f"{name} must be a finite number")
+    raise _refuse_type(f"{name} must be a number")
 
 
 _INT64_MIN = -(2**63)

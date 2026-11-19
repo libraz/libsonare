@@ -371,3 +371,18 @@ def test_a_number_outside_the_float_domain_is_a_value_error(value) -> None:
     else:
         with pytest.raises(SonareValueError):
             _narrow_double(value, "gain")
+
+
+@pytest.mark.parametrize("given", ["60", True, None, [60.0]])
+def test_a_non_number_for_a_double_is_refused_by_type_alone(given: object) -> None:
+    assert ls.scale_quantize_midi(0, 0b101010110101, 60.4) == 60.0  # positive control
+    with pytest.raises(TypeError, match=r"^scale_quantize_midi: midi must be a number$"):
+        ls.scale_quantize_midi(0, 0b101010110101, given)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("given", [float("nan"), float("inf"), 10**400])
+def test_a_non_finite_double_is_refused_by_its_value_predicate(given: float) -> None:
+    with pytest.raises(
+        ls.SonareValueError, match=r"^scale_quantize_midi: midi must be a finite number$"
+    ):
+        ls.scale_quantize_midi(0, 0b101010110101, given)

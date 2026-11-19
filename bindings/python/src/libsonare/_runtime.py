@@ -360,21 +360,14 @@ def _guard_buffer(
 
 
 def _validate_scalar(value: float, arg_name: str) -> float:
-    """Reject NaN / Inf scalar inputs with :class:`SonareValueError`.
+    """Reject a non-number, NaN or Inf scalar input, naming the argument.
 
     The float32 range is not checked here -- :func:`_narrow_float` does that
-    where the value is converted. What this owes the caller either way is a
-    refusal naming the argument, so an integer too large for a double is
-    refused rather than escaping as a bare ``OverflowError``.
+    where the value is converted. This is :func:`_narrow_double`: a non-number
+    (a ``bool`` or a numeric string included) is a ``TypeError``, a NaN, an
+    infinity or an integer too large for a double a :class:`SonareValueError`.
     """
-    refusal = f"{arg_name} must be a finite number"
-    try:
-        v = float(value)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise _refuse(refusal) from exc
-    if not np.isfinite(v):
-        raise _refuse(refusal)
-    return v
+    return _narrow_double(value, arg_name)
 
 
 def _element_is_none(samples: object, index: int) -> bool:
