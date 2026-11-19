@@ -197,6 +197,19 @@ function optionalName(argName: string, value: unknown, hint: string): string | u
   return value;
 }
 
+/** The fields of a clip take and of a comp segment. */
+const TAKE_KEYS = ['id', 'sourceId', 'sourceOffsetPpq', 'name'];
+const COMP_SEGMENT_KEYS = ['startPpq', 'endPpq', 'takeId', 'crossfadePpq'];
+
+/** Refuse the first key of `record` outside `keys`, by its path. */
+function refuseUnknownFields(record: object, where: string, keys: readonly string[]): void {
+  for (const key of Object.keys(record)) {
+    if (!keys.includes(key)) {
+      throw refuseUnknownKey(`${where}.${key}`, keys);
+    }
+  }
+}
+
 /** The take list as the native layer reads it, each take checked by name; absent fields are missing keys. */
 function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(takes)) {
@@ -207,6 +220,7 @@ function takesToNative(takes: unknown): Array<Record<string, unknown>> {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
       throw refuseType(`${where} must be an object`);
     }
+    refuseUnknownFields(entry, where, TAKE_KEYS);
     const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
     const takeId = requireNumber(id, `${where}.id`);
     assertU32(takeId, `${where}.id`);
@@ -233,6 +247,7 @@ function compSegmentsToNative(segments: unknown): Array<Record<string, unknown>>
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
       throw refuseType(`segments[${index}] must be an object`);
     }
+    refuseUnknownFields(entry, `segments[${index}]`, COMP_SEGMENT_KEYS);
     const { takeId, ...rest } = entry as Record<string, unknown>;
     const take = optionalId(`segments[${index}].takeId`, takeId, 'for the active take');
     return { ...rest, ...(take === undefined ? {} : { takeId: take }) };
@@ -302,9 +317,9 @@ function bindInstruments<T extends object>(
 const INSTRUMENT_BINDING_KEYS = ['destinationId', 'instrument'];
 
 /**
- * One `{ destinationId?, instrument }` pair, refused by its path: an undeclared key
- * (a bare config's own key points under `instrument`), a missing or non-object
- * instrument, and a `destinationId` given inside the instrument instead of beside it.
+ * One `{ destinationId?, instrument }` pair, refused by its path: an undeclared key, a
+ * missing or non-object instrument, and a `destinationId` given inside the instrument
+ * instead of beside it.
  */
 function instrumentBinding(pair: unknown, label: string): Record<string, unknown> {
   if (typeof pair !== 'object' || pair === null || Array.isArray(pair)) {
@@ -313,8 +328,7 @@ function instrumentBinding(pair: unknown, label: string): Record<string, unknown
   const record = pair as Record<string, unknown>;
   for (const key of Object.keys(record)) {
     if (!INSTRUMENT_BINDING_KEYS.includes(key)) {
-      const also = 'instrument' in record ? undefined : `${label}.instrument.${key}`;
-      throw refuseUnknownKey(`${label}.${key}`, INSTRUMENT_BINDING_KEYS, also);
+      throw refuseUnknownKey(`${label}.${key}`, INSTRUMENT_BINDING_KEYS);
     }
   }
   if (isAbsent(record.instrument)) {

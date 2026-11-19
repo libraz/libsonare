@@ -286,8 +286,7 @@ export function normalizeInstrumentBindings<E, R extends object>(
     const record = pair as Record<string, unknown>;
     for (const key of Object.keys(record)) {
       if (!INSTRUMENT_BINDING_KEYS.includes(key)) {
-        const also = 'instrument' in record ? undefined : `${label}.instrument.${key}`;
-        throw refuseUnknownKey(`${label}.${key}`, INSTRUMENT_BINDING_KEYS, also);
+        throw refuseUnknownKey(`${label}.${key}`, INSTRUMENT_BINDING_KEYS);
       }
     }
     if (record.instrument === undefined || record.instrument === null) {
@@ -840,6 +839,19 @@ export function optionalName(argName: string, value: unknown, hint: string): str
   return value;
 }
 
+/** The fields of a clip take and of a comp segment. */
+const TAKE_KEYS = ['id', 'sourceId', 'sourceOffsetPpq', 'name'];
+const COMP_SEGMENT_KEYS = ['startPpq', 'endPpq', 'takeId', 'crossfadePpq'];
+
+/** Refuse the first key of `record` outside `keys`, by its path. */
+function refuseUnknownFields(record: object, where: string, keys: readonly string[]): void {
+  for (const key of Object.keys(record)) {
+    if (!keys.includes(key)) {
+      throw refuseUnknownKey(`${where}.${key}`, keys);
+    }
+  }
+}
+
 /** The take list as the native layer reads it, each take checked by name; absent fields are missing keys. */
 export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(takes)) {
@@ -850,6 +862,7 @@ export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
       throw refuseType(`${where} must be an object`);
     }
+    refuseUnknownFields(entry, where, TAKE_KEYS);
     const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
     if (typeof id !== 'number') {
       throw refuseType(`${where}.id must be a number`);
@@ -878,6 +891,7 @@ export function compSegmentsToNative(segments: unknown): Array<Record<string, un
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
       throw refuseType(`segments[${index}] must be an object`);
     }
+    refuseUnknownFields(entry, `segments[${index}]`, COMP_SEGMENT_KEYS);
     const { takeId, ...rest } = entry as Record<string, unknown>;
     const take = optionalId(`segments[${index}].takeId`, takeId, false, 'for the active take');
     return { ...rest, ...(take === undefined ? {} : { takeId: take }) };
