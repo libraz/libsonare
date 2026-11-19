@@ -1216,6 +1216,7 @@ const VOCAL_CREATE_REQUEST_KEYS = keySet(
 
 const SET_PART_RIG_REQUEST_KEYS = keySet('destinationId', 'part', 'mode', 'inserts');
 const RENDER_OFFLINE_REQUEST_KEYS = keySet('channels', 'blockSize', 'finalize');
+const STREAMING_RETUNE_CONFIG_KEYS = keySet('pitchSemitones', 'mix', 'grainSizeSamples');
 const ENGINE_CONFIG_REQUEST_KEYS = keySet(
   'sampleRate',
   'maxBlockSize',
@@ -1427,6 +1428,7 @@ export const REQUEST_KEYS = {
   autoTempo: AUTO_TEMPO_REQUEST_KEYS,
   renderOffline: RENDER_OFFLINE_REQUEST_KEYS,
   RealtimeEngine: ENGINE_CONFIG_REQUEST_KEYS,
+  StreamingRetune: STREAMING_RETUNE_CONFIG_KEYS,
   prepare: ENGINE_CONFIG_REQUEST_KEYS,
   setTrackLanes: ENGINE_TRACK_LANE_REQUEST_KEYS,
   setTrackBuses: ENGINE_BUS_REQUEST_KEYS,

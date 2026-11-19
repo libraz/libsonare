@@ -158,6 +158,22 @@ describe('StreamingRetune grain', () => {
     });
   });
 
+  it('refuses an unknown config key by name on the constructor and setConfig', () => {
+    expect(() => new StreamingRetune({ pitch: 3 } as never)).toThrow(
+      new TypeError("StreamingRetune: unknown request key 'pitch'"),
+    );
+    const retune = new StreamingRetune({ pitchSemitones: 3 });
+    try {
+      expect(() => retune.setConfig({ pitchSemitones: 5, bogus: 1 } as never)).toThrow(
+        new TypeError("StreamingRetune.setConfig: unknown request key 'bogus'"),
+      );
+      // A refused config leaves the current one in place.
+      expect(retune.config().pitchSemitones).toBeCloseTo(3, 5);
+    } finally {
+      retune.destroy();
+    }
+  });
+
   it('refuses a grain that is not a multiple of 4 in [4, 8192]', () => {
     for (const grain of [1, 3, 6, 1.5, -4, 8196]) {
       expect(() => new StreamingRetune({ grainSizeSamples: grain }), String(grain)).toThrow(

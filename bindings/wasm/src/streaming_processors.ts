@@ -15,6 +15,7 @@ import type {
 import {
   assertInt32,
   assertIntegerValue,
+  assertKnownRequestKeys,
   assertRetuneGrain,
   requireBoolean,
   requireToken,
@@ -618,11 +619,12 @@ export class StreamingEqualizer {
 // ============================================================================
 
 // The grain is checked here because native rounds a fraction and reads a negative as automatic;
-// native refuses unknown keys and wrong-typed controls.
+// native refuses wrong-typed controls.
 function assertRetuneConfig(config: StreamingRetuneConfig): Record<string, unknown> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw refuseType(`config must be an object`);
   }
+  assertKnownRequestKeys('StreamingRetune', config);
   const { grainSizeSamples, ...rest } = config as Record<string, unknown>;
   if (grainSizeSamples === undefined || grainSizeSamples === null) {
     return rest;

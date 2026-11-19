@@ -38,6 +38,7 @@ const methodShapes = [
   'PlaybackRenderer',
   'ProjectInstrumentBinding',
   'RealtimeEngine',
+  'StreamingRetune',
   'addClip',
   'addSend',
   'analyzeTempo',

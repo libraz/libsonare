@@ -276,6 +276,7 @@ import type {
   PlaybackRendererOptions,
   RenderPlaybackRequest,
 } from './public_types_playback.js';
+import type { StreamingRetuneConfig } from './public_types_realtime.js';
 import type { AutoTuneKey } from './public_types_spectral.js';
 import type {
   VocalAnalysisInput,
@@ -2208,6 +2209,11 @@ const RenderOfflineRequestKeys = keysOf<RenderOfflineRequest>()([
   'blockSize',
   'finalize',
 ]);
+const StreamingRetuneConfigKeys = keysOf<StreamingRetuneConfig>()([
+  'pitchSemitones',
+  'mix',
+  'grainSizeSamples',
+]);
 const EngineConfigRequestKeys = keysOf<RealtimeEngineConfig>()([
   'sampleRate',
   'maxBlockSize',
@@ -2671,6 +2677,7 @@ export const REQUEST_SHAPES = {
   setPartRig: { keys: SetPartRigRequestKeys },
   renderOffline: { keys: RenderOfflineRequestKeys },
   RealtimeEngine: { keys: EngineConfigRequestKeys },
+  StreamingRetune: { keys: StreamingRetuneConfigKeys },
   ClipPageStreamer: { keys: ClipPageStreamerOptionsKeys },
   prepare: { keys: EngineConfigRequestKeys },
   setBusSidechain: { keys: SidechainSourceRequestKeys },

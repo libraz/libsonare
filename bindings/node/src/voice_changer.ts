@@ -9,6 +9,7 @@ import type {
 import {
   assertAudioChannels,
   assertAudioInput,
+  assertKnownRequestKeys,
   assertPositiveInteger,
   assertRetuneGrain,
   assertSampleRate,
@@ -630,11 +631,12 @@ export type StreamingRetuneAppliedConfig = Required<
   Pick<StreamingRetuneConfig, 'grainSizeSamples'>;
 
 // The grain is checked here because nothing below refuses a fraction or an out-of-range value;
-// native refuses unknown keys and wrong-typed controls.
+// native refuses wrong-typed controls.
 function assertRetuneConfig(config: StreamingRetuneConfig): StreamingRetuneConfig {
   if (!isRecord(config)) {
     throw refuseType(`config must be an object`);
   }
+  assertKnownRequestKeys('StreamingRetune', config as Record<string, unknown>);
   const { grainSizeSamples, ...rest } = config as Record<string, unknown>;
   if (grainSizeSamples === undefined || grainSizeSamples === null) {
     return rest;
