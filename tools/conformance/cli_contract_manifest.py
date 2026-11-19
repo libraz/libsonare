@@ -583,11 +583,11 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
         presets = fixtures["presets"]
         if _exact(
             presets,
-            {"valid", "invalid", "custom", "earlier"},
+            {"valid", "invalid", "custom", "earlier", "grain_automatic", "grain_zero"},
             "manifest.fixtures.presets",
             errors,
         ):
-            for key in ("valid", "invalid", "custom", "earlier"):
+            for key in ("valid", "invalid", "custom", "earlier", "grain_automatic", "grain_zero"):
                 if not isinstance(presets[key], dict):
                     errors.append(f"manifest.fixtures.presets.{key}: expected an object")
         # Chain-config documents the --chain-config cases read; each is a {version, params}

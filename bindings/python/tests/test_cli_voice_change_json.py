@@ -407,4 +407,4 @@ def test_voice_change_renders_the_new_presets_and_voice_preset_writes_schema_v3(
 
     generated = _run_cli("voice-preset", "--preset", preset)
     assert generated.returncode == 0, generated.stderr
-    assert json.loads(generated.stdout)["schemaVersion"] == 3
+    assert json.loads(generated.stdout)["schemaVersion"] == 4

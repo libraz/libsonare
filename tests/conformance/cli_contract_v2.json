@@ -6675,6 +6675,21 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "earlier_version_refused",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_earlier}",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "failure",
+          "artifact": "none",
+          "stdout": "json",
+          "stdout_contains": [
+            "preset schemaVersion 3 is older than the version this release reads (4)"
+          ]
         }
       ],
       "artifacts": {}
@@ -6978,7 +6993,10 @@
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
-          "stderr": "nonempty"
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "preset schemaVersion 3 is older than the version this release reads (4)"
+          ]
         },
         {
           "id": "preset_empty_refused",
@@ -7013,6 +7031,42 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "grain_automatic",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_grain_automatic}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "custom",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "grain_zero_refused",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_grain_zero}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "dsp.retune.grainSizeSamples"
+          ]
         }
       ],
       "artifacts": {
@@ -18357,7 +18411,7 @@
     },
     "presets": {
       "valid": {
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "id": "contract-fixture",
         "name": "Contract Fixture",
         "category": "custom",
@@ -18372,14 +18426,14 @@
         }
       },
       "invalid": {
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "id": "contract-invalid",
         "name": "Invalid",
         "category": "custom",
         "dsp": {}
       },
       "earlier": {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "id": "contract-earlier",
         "name": "Contract Earlier",
         "category": "custom",
@@ -18499,7 +18553,222 @@
         "id": "contract-custom",
         "name": "Contract Custom",
         "category": "custom",
-        "schemaVersion": 3
+        "schemaVersion": 4
+      },
+      "grain_automatic": {
+        "dsp": {
+          "compressor": {
+            "attackMs": 8,
+            "makeupGainDb": 0.5,
+            "ratio": 1.8,
+            "releaseMs": 120,
+            "thresholdDb": -24
+          },
+          "deesser": {
+            "frequencyHz": 7200,
+            "rangeDb": 8,
+            "ratio": 4,
+            "thresholdDb": -28
+          },
+          "eq": {
+            "airDb": 0.5,
+            "bodyDb": 0,
+            "highPassHz": 75,
+            "presenceDb": 1.2
+          },
+          "formant": {
+            "amount": 0,
+            "body": 0,
+            "brightness": 0.1,
+            "factor": 1,
+            "nasal": 0
+          },
+          "gate": {
+            "attackMs": 2,
+            "rangeDb": 18,
+            "releaseMs": 100,
+            "thresholdDb": -55
+          },
+          "inputGainDb": 0,
+          "limiter": {
+            "ceilingDb": -1,
+            "releaseMs": 50
+          },
+          "outputGainDb": 0,
+          "retune": {
+            "mix": 0,
+            "pitchSemitones": 0
+          },
+          "pitchCorrection": {
+            "mode": "off",
+            "amount": 1,
+            "speedMs": 20,
+            "keyRoot": 0,
+            "scale": "major",
+            "robotOctave": 0
+          },
+          "harmony": {
+            "voices": 0,
+            "steps": [
+              2,
+              4,
+              -3
+            ],
+            "level": 0.7,
+            "leadLevel": 1,
+            "detuneCents": 6,
+            "delayMs": 12
+          },
+          "vocoder": {
+            "enabled": false,
+            "bands": 20,
+            "attackMs": 2,
+            "releaseMs": 20,
+            "sibilance": 0.3,
+            "carrierSource": "internal",
+            "carrierWave": "saw",
+            "ensembleDetuneCents": 12,
+            "level": 1
+          },
+          "character": {
+            "type": "none",
+            "amount": 0.5,
+            "tone": 0
+          },
+          "reverbVariation": {
+            "variation": "reverb",
+            "delayMs": 250,
+            "feedback": 0.35,
+            "tempoBpm": 120,
+            "division": "eighth"
+          },
+          "midi": {
+            "release": "hold"
+          },
+          "voiceEngine": {
+            "engine": "grain",
+            "f0MinHz": 70
+          },
+          "reverb": {
+            "damping": 0.55,
+            "mix": 0,
+            "seed": 1,
+            "timeMs": 320
+          },
+          "wetMix": 1
+        },
+        "id": "contract-grain-automatic",
+        "name": "Contract Custom",
+        "category": "custom",
+        "schemaVersion": 4
+      },
+      "grain_zero": {
+        "dsp": {
+          "compressor": {
+            "attackMs": 8,
+            "makeupGainDb": 0.5,
+            "ratio": 1.8,
+            "releaseMs": 120,
+            "thresholdDb": -24
+          },
+          "deesser": {
+            "frequencyHz": 7200,
+            "rangeDb": 8,
+            "ratio": 4,
+            "thresholdDb": -28
+          },
+          "eq": {
+            "airDb": 0.5,
+            "bodyDb": 0,
+            "highPassHz": 75,
+            "presenceDb": 1.2
+          },
+          "formant": {
+            "amount": 0,
+            "body": 0,
+            "brightness": 0.1,
+            "factor": 1,
+            "nasal": 0
+          },
+          "gate": {
+            "attackMs": 2,
+            "rangeDb": 18,
+            "releaseMs": 100,
+            "thresholdDb": -55
+          },
+          "inputGainDb": 0,
+          "limiter": {
+            "ceilingDb": -1,
+            "releaseMs": 50
+          },
+          "outputGainDb": 0,
+          "retune": {
+            "grainSizeSamples": 0,
+            "mix": 0,
+            "pitchSemitones": 0
+          },
+          "pitchCorrection": {
+            "mode": "off",
+            "amount": 1,
+            "speedMs": 20,
+            "keyRoot": 0,
+            "scale": "major",
+            "robotOctave": 0
+          },
+          "harmony": {
+            "voices": 0,
+            "steps": [
+              2,
+              4,
+              -3
+            ],
+            "level": 0.7,
+            "leadLevel": 1,
+            "detuneCents": 6,
+            "delayMs": 12
+          },
+          "vocoder": {
+            "enabled": false,
+            "bands": 20,
+            "attackMs": 2,
+            "releaseMs": 20,
+            "sibilance": 0.3,
+            "carrierSource": "internal",
+            "carrierWave": "saw",
+            "ensembleDetuneCents": 12,
+            "level": 1
+          },
+          "character": {
+            "type": "none",
+            "amount": 0.5,
+            "tone": 0
+          },
+          "reverbVariation": {
+            "variation": "reverb",
+            "delayMs": 250,
+            "feedback": 0.35,
+            "tempoBpm": 120,
+            "division": "eighth"
+          },
+          "midi": {
+            "release": "hold"
+          },
+          "voiceEngine": {
+            "engine": "grain",
+            "f0MinHz": 70
+          },
+          "reverb": {
+            "damping": 0.55,
+            "mix": 0,
+            "seed": 1,
+            "timeMs": 320
+          },
+          "wetMix": 1
+        },
+        "id": "contract-grain-zero",
+        "name": "Contract Custom",
+        "category": "custom",
+        "schemaVersion": 4
       }
     },
     "chain_configs": {

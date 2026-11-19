@@ -151,7 +151,7 @@ def test_voice_preset_validate_set_delivers_a_json_value_containing_commas() -> 
     available to the caller.
     """
     preset = {
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "id": "set-fixture",
         "name": "Set Fixture",
         "category": "custom",
@@ -869,8 +869,8 @@ def test_voice_preset_validate_refuses_an_earlier_schema_version() -> None:
     preset = _run_cli(["voice-preset", "--preset", "hardTune", "--json"])
     assert preset.returncode == 0, preset.stderr
     document = json.loads(preset.stdout)
-    assert document["schemaVersion"] == 3
-    earlier = {**document, "schemaVersion": 2}
+    assert document["schemaVersion"] == 4
+    earlier = {**document, "schemaVersion": 3}
     with tempfile.TemporaryDirectory() as tmpdir:
         outcomes = {}
         for name, content in (("current.json", document), ("earlier.json", earlier)):
@@ -883,7 +883,7 @@ def test_voice_preset_validate_refuses_an_earlier_schema_version() -> None:
     assert refused.returncode == 3
     report = json.loads(refused.stdout)
     assert report["ok"] is False
-    assert "schemaVersion 2 is older than the version this release reads (3)" in report["error"]
+    assert "schemaVersion 3 is older than the version this release reads (4)" in report["error"]
 
 
 def test_voice_preset_validate_accepts_native_preset_json_alias() -> None:
