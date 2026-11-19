@@ -100,14 +100,14 @@ def _parse_audio_binding(assignment: str) -> tuple[int, str]:
     The split is on the first ``=``, so a path containing one stays intact.
     """
     source_id_text, separator, path = assignment.partition("=")
-    if not separator or not path:
-        raise ValueError(f"--audio expects <source_id>=FILE, got {assignment!r}")
+    if not separator or not path or not source_id_text:
+        raise ValueError("argument --audio: must be <source_id>=FILE")
     try:
         source_id = _read_integer_text(source_id_text, _INT64_MIN, _INT64_MAX)
     except _NumericTextError as exc:
         raise ValueError(f"argument --audio: <source_id> {exc}") from None
-    if source_id <= 0:
-        raise ValueError(f"--audio source id must be positive, got {source_id}")
+    if not 1 <= source_id <= 0xFFFFFFFF:
+        raise ValueError("argument --audio: <source_id> must be an integer in [1, 4294967295]")
     return source_id, path
 
 

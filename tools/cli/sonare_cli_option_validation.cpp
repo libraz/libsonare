@@ -1,13 +1,12 @@
 #include <algorithm>
-#include <cmath>
 #include <limits>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "sonare_cli_registry.h"
+#include "util/refusal_predicates.h"
 
 const CliOptionSpec* option_for_spec(const CliCommandSpec* command, const std::string& option) {
   if (command == nullptr) return nullptr;
@@ -41,38 +40,37 @@ const CliOptionSpec* cli_option_spec_for_command(const std::string& command,
   return option_for_spec(cli_command_spec_for_path(command), option);
 }
 
-std::string describe_domain(const CliOptionDomain& domain) {
+// The domain in the library's predicate vocabulary (util/refusal_predicates.h), so an
+// option and the library argument it feeds refuse in the same words after the subject.
+// An integer domain's exclusive end is the next integer in, as the library states it.
+std::string domain_predicate(const CliOptionSpec& spec) {
+  namespace refusal = sonare::util::refusal;
+  const CliOptionDomain& domain = spec.domain;
   if (!domain.choices.empty()) {
-    std::string text = "one of ";
+    std::string text = "must be one of ";
     for (size_t index = 0; index < domain.choices.size(); ++index) {
       if (index > 0) text += ", ";
       text += domain.choices[index];
     }
     return text;
   }
-  // A whole-number bound is written out rather than left to the stream's default
-  // precision, which turned a uint32 ceiling into "4.29497e+09" -- a number the
-  // caller cannot type back.
-  const auto bound = [](double value) {
-    std::ostringstream text;
-    if (value == std::floor(value) && std::abs(value) < 1e18) {
-      text << static_cast<long long>(value);
-    } else {
-      text << value;
-    }
-    return text.str();
-  };
-  std::ostringstream text;
-  if (domain.has_minimum && domain.has_maximum) {
-    text << (domain.exclusive_minimum ? "greater than " : "at least ") << bound(domain.minimum)
-         << " and " << (domain.exclusive_maximum ? "less than " : "at most ")
-         << bound(domain.maximum);
-  } else if (domain.has_minimum) {
-    text << (domain.exclusive_minimum ? "greater than " : "at least ") << bound(domain.minimum);
-  } else {
-    text << (domain.exclusive_maximum ? "less than " : "at most ") << bound(domain.maximum);
+  if (spec.scalar_type == CliOptionScalarType::Integer && domain.has_minimum) {
+    const double low = domain.exclusive_minimum ? domain.minimum + 1.0 : domain.minimum;
+    if (!domain.has_maximum)
+      return refusal::integer_at_least_predicate(static_cast<long long>(low));
+    const double high = domain.exclusive_maximum ? domain.maximum - 1.0 : domain.maximum;
+    return refusal::integer_range_predicate(low, high);
   }
-  return text.str();
+  if (domain.has_minimum && domain.has_maximum) {
+    return refusal::interval_predicate(domain.minimum, !domain.exclusive_minimum, domain.maximum,
+                                       !domain.exclusive_maximum);
+  }
+  if (domain.has_minimum) {
+    return domain.exclusive_minimum ? refusal::greater_than_predicate(domain.minimum)
+                                    : refusal::at_least_predicate(domain.minimum);
+  }
+  return domain.exclusive_maximum ? refusal::less_than_predicate(domain.maximum)
+                                  : refusal::at_most_predicate(domain.maximum);
 }
 
 bool value_matches_choice(const CliOptionSpec& spec, const std::string& value,
@@ -96,8 +94,7 @@ std::string domain_error_for(const CliOptionSpec& spec, const std::string& value
     for (const auto& choice : spec.domain.choices) {
       if (value_matches_choice(spec, value, choice)) return {};
     }
-    return "invalid value for --" + spec.name + ": " + value + " (expected " +
-           describe_domain(spec.domain) + ")";
+    return option_subject(spec.name) + " " + domain_predicate(spec);
   }
   double parsed = 0.0;
   try {
@@ -113,8 +110,7 @@ std::string domain_error_for(const CliOptionSpec& spec, const std::string& value
       spec.domain.has_maximum && (spec.domain.exclusive_maximum ? parsed >= spec.domain.maximum
                                                                 : parsed > spec.domain.maximum);
   if (!below && !above) return {};
-  return "value out of range for --" + spec.name + ": " + value + " (expected " +
-         describe_domain(spec.domain) + ")";
+  return option_subject(spec.name) + " " + domain_predicate(spec);
 }
 
 std::string validate_numeric_option_values(const CliArgs& args) {

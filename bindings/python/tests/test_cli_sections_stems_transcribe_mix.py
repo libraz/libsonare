@@ -485,10 +485,7 @@ def test_transcribe_refuses_an_out_of_domain_min_note_division(
         output = os.path.join(tmpdir, "take.mid")
         result = _run_cli(["transcribe", melody_wav, "-o", output, "--min-note-division", division])
         assert result.returncode == 3
-        assert (
-            f"value out of range for --min-note-division: {division} "
-            "(expected at least 1 and at most 128)"
-        ) in result.stderr
+        assert "argument --min-note-division: must be an integer in [1, 128]" in result.stderr
         assert not os.path.exists(output)
 
 

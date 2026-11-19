@@ -454,7 +454,7 @@ TEST_CASE("CLI mastering assistant delivery targets", "[cli][mastering]") {
     auto [unknown_code, unknown_output] = exec_command(
         CLI + " mastering " + TEST_WAV + " --assistant --target-platform bogus --json -q");
     REQUIRE(unknown_code == 2);
-    REQUIRE_THAT(unknown_output, ContainsSubstring("invalid value for --target-platform"));
+    REQUIRE_THAT(unknown_output, ContainsSubstring("argument --target-platform: must be one of "));
     REQUIRE_THAT(unknown_output, ContainsSubstring("broadcast"));
 
     // These reach an AssistantConfig field and nothing else, so supplying one

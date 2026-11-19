@@ -177,7 +177,7 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
     } else if (model == "singing") {
       config.monophonic_model = 1;
     } else {
-      throw std::invalid_argument("invalid value for --monophonic-model: " + model);
+      throw std::invalid_argument("argument --monophonic-model: must be one of segments, singing");
     }
   }
 

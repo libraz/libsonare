@@ -16,6 +16,7 @@ import importlib
 import inspect
 import math
 import re
+import struct
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, NoReturn, cast
@@ -27,6 +28,7 @@ from ._cli_inventory import (
     _cli_domain,
     _cli_scalar_type,
     _inventory_subparsers,
+    _option_type,
     _rendered_default,
     _stated_default,
     _token_of,
@@ -133,11 +135,10 @@ class _ContractArgumentParser(argparse.ArgumentParser):
             subject = option if action.option_strings else (action.metavar or action.dest)
             raise argparse.ArgumentError(None, f"argument {subject}: {exc.message}") from exc
         domain = _action_domain(action)
-        refusal = None if domain is None else _domain_refusal(domain, value)
-        if refusal is None:
+        if domain is None or not _outside_domain(domain, value):
             return value
-        assert domain is not None
-        message = f"{refusal} for {option}: {arg_string} (expected {_describe_domain(domain)})"
+        predicate = _domain_predicate(domain, _option_type(action, option.lstrip("-")))
+        message = f"argument {option}: {predicate}"
         if domain["reject_exit"] == "invalid_parameter":
             raise ValueError(message)
         raise argparse.ArgumentError(None, message)
@@ -245,43 +246,79 @@ _FALSE_FLAG_LITERALS = frozenset({"false", "0", "no", "off"})
 _TRUE_FLAG_LITERALS = frozenset({"true", "1", "yes", "on"})
 
 
-def _domain_bound(value: float) -> str:
-    """A bound as the native formatter writes it: whole numbers in full, others as ``%g``."""
-    if float(value).is_integer() and abs(value) < 1e18:
-        return str(int(value))
-    return f"{value:g}"
+def _as_float32(value: float) -> float:
+    return cast(float, struct.unpack("f", struct.pack("f", value))[0])
 
 
-def _describe_domain(domain: dict[str, Any]) -> str:
-    """The accepted set in the words of ``describe_domain`` in sonare_cli_option_validation.cpp."""
+def _bare_exponent(text: str) -> str:
+    """``bare_exponent`` in util/refusal_predicates.h: "3.4028235e+38" -> "3.4028235e38"."""
+    mantissa, e, exponent = text.partition("e")
+    if not e:
+        return text
+    sign = "-" if exponent.startswith("-") else ""
+    return f"{mantissa}e{sign}{exponent.lstrip('+-').lstrip('0') or '0'}"
+
+
+def _bound_text(value: float) -> str:
+    """``bound_text`` in util/refusal_predicates.h: the shortest decimal reading back as ``value``.
+
+    A bound a 32-bit float holds exactly is written as that float's shortest decimal.
+    """
+    narrowed = _as_float32(value)
+    if math.isfinite(value) and narrowed == value:
+        for digits in range(6, 10):
+            text = f"{value:.{digits}g}"
+            if _as_float32(float(text)) == narrowed:
+                return _bare_exponent(text)
+    for digits in range(6, 17):
+        text = f"{value:.{digits}g}"
+        if float(text) == value:
+            return _bare_exponent(text)
+    return _bare_exponent(f"{value:.17g}")
+
+
+def _domain_predicate(domain: dict[str, Any], scalar_type: str) -> str:
+    """``domain_predicate`` in sonare_cli_option_validation.cpp: the library's predicate words.
+
+    An integer domain's exclusive end is the next integer in, as the library states it.
+    """
     if domain["choices"]:
-        return "one of " + ", ".join(domain["choices"])
-    parts = []
-    if domain["minimum"] is not None:
-        word = "greater than " if domain["exclusive_minimum"] else "at least "
-        parts.append(word + _domain_bound(domain["minimum"]))
-    if domain["maximum"] is not None:
-        word = "less than " if domain["exclusive_maximum"] else "at most "
-        parts.append(word + _domain_bound(domain["maximum"]))
-    return " and ".join(parts)
+        return "must be one of " + ", ".join(domain["choices"])
+    minimum, maximum = domain["minimum"], domain["maximum"]
+    if scalar_type == "integer" and minimum is not None:
+        low = minimum + 1 if domain["exclusive_minimum"] else minimum
+        if maximum is None:
+            return f"must be an integer of at least {int(low)}"
+        high = maximum - 1 if domain["exclusive_maximum"] else maximum
+        return f"must be an integer in [{_bound_text(low)}, {_bound_text(high)}]"
+    if minimum is not None and maximum is not None:
+        opening = "(" if domain["exclusive_minimum"] else "["
+        closing = ")" if domain["exclusive_maximum"] else "]"
+        return (
+            f"must be finite and in {opening}{_bound_text(minimum)}, "
+            f"{_bound_text(maximum)}{closing}"
+        )
+    if minimum is not None:
+        word = "greater than" if domain["exclusive_minimum"] else "at least"
+        return f"must be finite and {word} {_bound_text(minimum)}"
+    word = "less than" if domain["exclusive_maximum"] else "at most"
+    return f"must be finite and {word} {_bound_text(maximum)}"
 
 
-def _domain_refusal(domain: dict[str, Any], value: object) -> str | None:
-    """The native formatter's refusal kind for a converted value outside ``domain``, else None.
+def _outside_domain(domain: dict[str, Any], value: object) -> bool:
+    """Whether a converted value falls outside ``domain``, as the native check decides.
 
-    A numeric value matches a choice by number, as the native check does; a bound
-    reads a value that is not a number (``--tempo-bpm auto``) as no verdict.
+    A numeric value matches a choice by number; a bound reads a value that is not a
+    number (``--tempo-bpm auto``) as no verdict.
     """
     numeric = isinstance(value, (int, float)) and not isinstance(value, bool)
     if domain["choices"]:
         if numeric:
-            accepted = any(_number_or_none(choice) == value for choice in domain["choices"])
-        else:
-            accepted = str(value) in domain["choices"]
-        return None if accepted else "invalid value"
+            return not any(_number_or_none(choice) == value for choice in domain["choices"])
+        return str(value) not in domain["choices"]
     number = value if numeric else _number_or_none(value)
     if number is None:
-        return None
+        return False
     minimum, maximum = domain["minimum"], domain["maximum"]
     below = minimum is not None and (
         number <= minimum if domain["exclusive_minimum"] else number < minimum
@@ -289,7 +326,7 @@ def _domain_refusal(domain: dict[str, Any], value: object) -> str | None:
     above = maximum is not None and (
         number >= maximum if domain["exclusive_maximum"] else number > maximum
     )
-    return "value out of range" if below or above else None
+    return below or above
 
 
 def _number_or_none(value: object) -> float | None:

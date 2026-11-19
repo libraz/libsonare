@@ -740,7 +740,7 @@ TEST_CASE("CLI pitch command", "[cli]") {
   SECTION("rejects unknown algorithm") {
     auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --algorithm typo -q");
     REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("invalid value for --algorithm"));
+    REQUIRE_THAT(output, ContainsSubstring("argument --algorithm: must be one of "));
   }
 
   SECTION("an fmin whose period does not fit the frame is refused, as librosa refuses it") {

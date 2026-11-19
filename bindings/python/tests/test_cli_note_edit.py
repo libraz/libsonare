@@ -155,8 +155,13 @@ def test_polyphonic_render_cli_applies_one_edit_per_occurrence() -> None:
 @pytest.mark.parametrize(
     ("assignment", "message"),
     [
-        ("0.no_such_field=1", "unknown --edit field: no_such_field"),
-        ("9.gain_db=-3", "--edit note index out of range: 9"),
+        ("0.no_such_field=1", "argument --edit: FIELD must be one of pitch_shift_semitones, "),
+        ("9.gain_db=-3", "argument --edit: NOTE must be an integer in [0, "),
+        ("0.gain_db", "argument --edit: must be NOTE.FIELD=VALUE"),
+        (
+            "0.muted=maybe",
+            "argument --edit: muted must be one of true, 1, yes, on, false, 0, no, off",
+        ),
         ("0.gain_db=nan", "argument --edit: gain_db must be finite"),
         # The native parsers read a value whole and an offset is a C int, so
         # neither an underscore separator nor a wider offset is a number here.
@@ -429,22 +434,22 @@ def test_tune_to_midi_cli_forwards_a_correction_bound_of_zero() -> None:
 @pytest.mark.parametrize(
     ("extra", "message"),
     [
-        (["--track", "-1"], "value out of range for --track: -1 (expected at least 0)"),
+        (["--track", "-1"], "argument --track: must be an integer of at least 0"),
         (
             ["--min-overlap-ratio", "1.5"],
-            "value out of range for --min-overlap-ratio: 1.5 (expected at least 0 and at most 1)",
+            "argument --min-overlap-ratio: must be finite and in [0, 1]",
         ),
         (
             ["--min-overlap-ratio", "-0.1"],
-            "value out of range for --min-overlap-ratio: -0.1 (expected at least 0 and at most 1)",
+            "argument --min-overlap-ratio: must be finite and in [0, 1]",
         ),
         (
             ["--max-correction-semitones", "-1"],
-            "value out of range for --max-correction-semitones: -1 (expected at least 0)",
+            "argument --max-correction-semitones: must be finite and at least 0",
         ),
         (
             ["--unmatched-policy", "hum"],
-            "invalid value for --unmatched-policy: hum (expected one of leave, mute, nearest)",
+            "argument --unmatched-policy: must be one of leave, mute, nearest",
         ),
     ],
 )
@@ -763,12 +768,12 @@ def test_note_bounds_in_seconds_round_to_the_nearest_sample(monkeypatch, capsys,
         (
             "note-stretch",
             ["--onset-sec", "-0.01"],
-            "value out of range for --onset-sec: -0.01 (expected at least 0)",
+            "argument --onset-sec: must be finite and at least 0",
         ),
         (
             "note-move",
             ["--offset-sample", "-1"],
-            "value out of range for --offset-sample: -1 (expected at least 0)",
+            "argument --offset-sample: must be an integer of at least 0",
         ),
     ],
 )

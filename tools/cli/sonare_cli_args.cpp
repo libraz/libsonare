@@ -6,12 +6,12 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
-#include <sstream>
 #include <stdexcept>
 
 #include "analysis/key_profiles.h"
 #include "sonare_cli_registry.h"
 #include "util/exception.h"
+#include "util/refusal_predicates.h"
 
 int cli_exit_code_for_error(sonare::ErrorCode error) noexcept {
   switch (error) {
@@ -468,26 +468,24 @@ unsigned CliArgs::get_uint32(const std::string& k, unsigned def) const {
   // The option's domain is what refuses a value outside the field; this is the
   // width backstop for a handler reaching here without one.
   if (parsed < 0 || parsed > static_cast<long long>(std::numeric_limits<unsigned>::max())) {
-    std::ostringstream message;
-    message << "value out of range for --" << name << ": " << it->second << " (expected 0 to "
-            << std::numeric_limits<unsigned>::max() << ")";
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message.str());
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        option_subject(name) + " " +
+            sonare::util::refusal::integer_range_predicate(
+                0.0, static_cast<double>(std::numeric_limits<unsigned>::max())));
   }
   return static_cast<unsigned>(parsed);
 }
 
 namespace {
 
-[[noreturn]] void reject_option_range(const std::string& option, const std::string& value,
-                                      int minimum, int maximum) {
-  std::ostringstream message;
-  message << "value out of range for --" << option << ": " << value << " (expected ";
-  if (maximum == std::numeric_limits<int>::max()) {
-    message << minimum << " or greater)";
-  } else {
-    message << minimum << " to " << maximum << ")";
-  }
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message.str());
+[[noreturn]] void reject_option_range(const std::string& option, int minimum, int maximum) {
+  namespace refusal = sonare::util::refusal;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                option_subject(option) + " " +
+                                    (maximum == std::numeric_limits<int>::max()
+                                         ? refusal::integer_at_least_predicate(minimum)
+                                         : refusal::integer_range_predicate(minimum, maximum)));
 }
 
 }  // namespace
@@ -498,13 +496,13 @@ int CliArgs::get_int_in_range(const std::string& k, int minimum, int maximum, in
     // A registry default outside the caller's range is a registry bug, not user
     // input; clamping would hide it, so report it the same way.
     if (fallback < minimum || fallback > maximum) {
-      reject_option_range(k, std::to_string(fallback), minimum, maximum);
+      reject_option_range(k, minimum, maximum);
     }
     return fallback;
   }
   const int value = get_int(k, def);
   if (value < minimum || value > maximum) {
-    reject_option_range(k, std::to_string(value), minimum, maximum);
+    reject_option_range(k, minimum, maximum);
   }
   return value;
 }

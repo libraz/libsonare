@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "sonare_cli_project.h"
+#include "util/refusal_predicates.h"
 
 #ifdef SONARE_WITH_ARRANGEMENT
 
@@ -159,13 +160,14 @@ void parse_audio_binding(const std::string& assignment, uint32_t* out_source_id,
                          std::string* out_path) {
   const size_t separator = assignment.find('=');
   if (separator == 0 || separator == std::string::npos || separator + 1 >= assignment.size()) {
-    throw std::invalid_argument("--audio expects <source_id>=FILE, got '" + assignment + "'");
+    throw std::invalid_argument("argument --audio: must be <source_id>=FILE");
   }
   const long long source_id =
       parse_int64_text("argument --audio: <source_id>", assignment.substr(0, separator));
   if (source_id <= 0 || source_id > static_cast<long long>(UINT32_MAX)) {
-    throw std::invalid_argument("--audio source id out of range: " +
-                                assignment.substr(0, separator));
+    throw std::invalid_argument(
+        "argument --audio: <source_id> " +
+        sonare::util::refusal::integer_range_predicate(1.0, static_cast<double>(UINT32_MAX)));
   }
   *out_source_id = static_cast<uint32_t>(source_id);
   *out_path = assignment.substr(separator + 1);

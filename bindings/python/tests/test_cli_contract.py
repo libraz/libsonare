@@ -376,7 +376,7 @@ def test_cli_invalid_parameter_exit_code_matches_native_pitch_command(tmp_path) 
 
     result = _run_console("pitch", str(source), "--algorithm", "typo")
     assert result.returncode == 3
-    assert "invalid value for --algorithm: typo (expected one of yin, pyin)" in result.stderr
+    assert "argument --algorithm: must be one of yin, pyin" in result.stderr
 
 
 def test_cli_unknown_project_subcommand_is_a_usage_error(tmp_path) -> None:

@@ -480,9 +480,8 @@ CliValidationError validate_project_bounce_channels(const CliArgs& args) {
   if (channels == mono || channels == stereo || sonare::is_surround_channel_count(channels)) {
     return {};
   }
-  return {"invalid value for --channels: " + std::to_string(channels) + " (expected one of " +
-              std::to_string(mono) + ", " + std::to_string(stereo) +
-              ", 6 or 8; leave it out for the scene master's width)",
+  return {"argument --channels: must be one of " + std::to_string(mono) + ", " +
+              std::to_string(stereo) + ", 6, 8; leave it out for the scene master's width",
           true};
 }
 #endif

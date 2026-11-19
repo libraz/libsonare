@@ -65,8 +65,7 @@ TEST_CASE("CLI normalize keeps stereo source order and validates mode first", "[
   const auto [invalid_code, invalid_message] =
       exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
   REQUIRE(invalid_code == 3);
-  REQUIRE_THAT(invalid_message,
-               ContainsSubstring("invalid value for --mode: invalid (expected one of peak, rms)"));
+  REQUIRE_THAT(invalid_message, ContainsSubstring("argument --mode: must be one of peak, rms"));
   REQUIRE_FALSE(std::ifstream(invalid_output).good());
 
   std::remove(input.c_str());
@@ -122,8 +121,7 @@ TEST_CASE("CLI normalize preserves retained-layout error ordering", "[cli][ffmpe
   const auto [invalid_code, invalid_message] =
       exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
   REQUIRE(invalid_code == 3);
-  REQUIRE_THAT(invalid_message,
-               ContainsSubstring("invalid value for --mode: invalid (expected one of peak, rms)"));
+  REQUIRE_THAT(invalid_message, ContainsSubstring("argument --mode: must be one of peak, rms"));
   REQUIRE_FALSE(std::ifstream(invalid_output).good());
   cleanup();
 }
@@ -612,14 +610,12 @@ TEST_CASE("CLI filter takes hp, lp, bp or notch and refuses any other spelling",
     auto [code, output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --type " +
                                        type + " --cutoff-hz 1000 -q");
     REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("invalid value for --type: " + type +
-                                           " (expected one of hp, lp, bp, notch)"));
+    REQUIRE_THAT(output, ContainsSubstring("argument --type: must be one of hp, lp, bp, notch"));
   }
   auto [order_code, order_output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out +
                                                  " --type lp --cutoff-hz 1000 --order 3 -q");
   REQUIRE(order_code == 3);
-  REQUIRE_THAT(order_output,
-               ContainsSubstring("invalid value for --order: 3 (expected one of 2, 4)"));
+  REQUIRE_THAT(order_output, ContainsSubstring("argument --order: must be one of 2, 4"));
   auto [missing_code, missing_output] =
       exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --cutoff-hz 1000 -q");
   REQUIRE(missing_code == 3);

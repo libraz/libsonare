@@ -56,8 +56,7 @@ TEST_CASE("CLI numeric option validation", "[cli]") {
       auto [code, output] = exec_command(CLI + " " + command + " --values 1,2,3 --size -1");
       INFO(command);
       REQUIRE(code == 3);
-      REQUIRE_THAT(output, ContainsSubstring("--size"));
-      REQUIRE_THAT(output, ContainsSubstring("-1"));
+      REQUIRE_THAT(output, ContainsSubstring("argument --size: must be an integer of at least 1"));
     }
   }
 
@@ -1428,7 +1427,7 @@ TEST_CASE("CLI refuses an enumerator index outside its enumeration", "[cli][argu
   for (const EnumOption& option : options) {
     CAPTURE(option.command, option.option);
     const std::string flag = std::string(" --") + option.option + " ";
-    const std::string expected = std::string("invalid value for --") + option.option;
+    const std::string expected = std::string("argument --") + option.option + ": must be one of ";
 
     auto [rejected_code, rejected_output] =
         exec_command(CLI + " " + option.command + flag + option.first_rejected + " " + option.rest);

@@ -747,7 +747,7 @@ def test_eq_refuses_an_enumerator_index_outside_its_enumeration(
 
     parser = cli._build_parser()
     for value in (first_rejected, -1):
-        with pytest.raises(ValueError, match=f"invalid value for --{option}: {value} "):
+        with pytest.raises(ValueError, match=f"argument --{option}: must be one of "):
             parser.parse_args(["eq", "input.wav", f"--{option}={value}", "--json"])
 
     # The last enumerator is inside the domain, so it must get past validation

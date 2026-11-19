@@ -10,6 +10,7 @@
 #include "analysis/analysis_rate.h"
 #include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
+#include "util/refusal_predicates.h"
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_renderer.h"
@@ -357,7 +358,8 @@ bool parse_edit_bool(const std::string& field, const std::string& value) {
   const std::string lowered = lowercase_cli_value(value);
   if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on") return true;
   if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off") return false;
-  throw std::invalid_argument("invalid boolean value for --edit " + field + ": " + value);
+  throw std::invalid_argument("argument --edit: " + field +
+                              " must be one of true, 1, yes, on, false, 0, no, off");
 }
 
 // One --edit occurrence is one NOTE.FIELD=VALUE assignment: the dot path and the
@@ -368,19 +370,21 @@ void apply_polyphonic_note_edit(std::vector<editing::note_model::NoteObject>& no
                                 const std::string& assignment) {
   const auto equals = assignment.find('=');
   if (equals == std::string::npos || equals == 0) {
-    throw std::invalid_argument("invalid --edit assignment: " + assignment);
+    throw std::invalid_argument("argument --edit: must be NOTE.FIELD=VALUE");
   }
   const std::string path = assignment.substr(0, equals);
   const std::string value = assignment.substr(equals + 1);
   const auto dot = path.rfind('.');
   if (dot == std::string::npos || dot == 0 || dot + 1 == path.size()) {
-    throw std::invalid_argument("--edit path must be NOTE.FIELD: " + assignment);
+    throw std::invalid_argument("argument --edit: must be NOTE.FIELD=VALUE");
   }
   const std::string index_text = path.substr(0, dot);
   const int index = parse_int_text("argument --edit: NOTE", index_text);
+  if (notes.empty()) throw std::invalid_argument("argument --edit: the analysis found no notes");
   if (index < 0 || static_cast<size_t>(index) >= notes.size()) {
-    throw std::invalid_argument("--edit note index out of range: " + index_text +
-                                " (the analysis found " + std::to_string(notes.size()) + " notes)");
+    throw std::invalid_argument(
+        "argument --edit: NOTE " +
+        sonare::util::refusal::integer_range_predicate(0.0, static_cast<double>(notes.size() - 1)));
   }
   const std::string field = path.substr(dot + 1);
   auto& edit = notes[static_cast<size_t>(index)].edit;
@@ -409,9 +413,9 @@ void apply_polyphonic_note_edit(std::vector<editing::note_model::NoteObject>& no
     // can read it. The amplitude envelope is the one edit field missing from it:
     // it is a curve, and nothing on a command line states one.
     throw std::invalid_argument(
-        "unknown --edit field: " + field +
-        " (expected one of pitch_shift_semitones, gain_db, time_offset_samples, "
-        "time_stretch_ratio, formant_shift_semitones, vibrato_depth_change, drift_change, muted)");
+        "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db, "
+        "time_offset_samples, "
+        "time_stretch_ratio, formant_shift_semitones, vibrato_depth_change, drift_change, muted");
   }
 }
 
@@ -690,7 +694,7 @@ editing::note_model::UnmatchedTargetPolicy parse_unmatched_policy(const std::str
   if (name == "leave") return UnmatchedTargetPolicy::Leave;
   if (name == "mute") return UnmatchedTargetPolicy::Mute;
   if (name == "nearest") return UnmatchedTargetPolicy::Nearest;
-  throw std::invalid_argument("invalid value for --unmatched-policy: " + name);
+  throw std::invalid_argument("argument --unmatched-policy: must be one of leave, mute, nearest");
 }
 
 }  // namespace

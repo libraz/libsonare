@@ -323,7 +323,7 @@ def _parse_polyphonic_edit_bool(field: str, value: str) -> bool:
         return True
     if lowered in _FALSE_FLAG_LITERALS:
         return False
-    raise ValueError(f"invalid boolean value for --edit {field}: {value}")
+    raise ValueError(f"argument --edit: {field} must be one of true, 1, yes, on, false, 0, no, off")
 
 
 def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
@@ -335,15 +335,15 @@ def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
     """
     path, separator, value = assignment.partition("=")
     if not separator or not path:
-        raise ValueError(f"invalid --edit assignment: {assignment}")
+        raise ValueError("argument --edit: must be NOTE.FIELD=VALUE")
     index_text, dot, field = path.rpartition(".")
     if not dot or not index_text or not field:
-        raise ValueError(f"--edit path must be NOTE.FIELD: {assignment}")
+        raise ValueError("argument --edit: must be NOTE.FIELD=VALUE")
     index = _parse_polyphonic_edit_int("NOTE", index_text)
+    if not edits:
+        raise ValueError("argument --edit: the analysis found no notes")
     if index < 0 or index >= len(edits):
-        raise ValueError(
-            f"--edit note index out of range: {index_text} (the analysis found {len(edits)} notes)"
-        )
+        raise ValueError(f"argument --edit: NOTE must be an integer in [0, {len(edits) - 1}]")
     edit = edits[index]
     if field == "time_offset_samples":
         edit.time_offset_samples = _parse_polyphonic_edit_int(field, value)
@@ -359,7 +359,7 @@ def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
         # The accepted set is named at the refusal because the help carries no
         # per-field text, so this is the only place a caller can read it.
         raise ValueError(
-            f"unknown --edit field: {field} (expected one of {', '.join(_POLYPHONIC_EDIT_FIELDS)})"
+            f"argument --edit: FIELD must be one of {', '.join(_POLYPHONIC_EDIT_FIELDS)}"
         )
     return index
 

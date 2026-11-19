@@ -432,8 +432,8 @@ TEST_CASE("CLI project command group", "[cli]") {
       auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                    " --frames 256 --channels " + count + " -q");
       REQUIRE(bc == 3);
-      REQUIRE_THAT(bo, ContainsSubstring("--channels"));
-      REQUIRE_THAT(bo, ContainsSubstring(count));
+      REQUIRE_THAT(bo, ContainsSubstring("argument --channels: must be one of 1, 2, 6, 8; leave it "
+                                         "out for the scene master's width"));
       std::ifstream out_file(wav);
       REQUIRE_FALSE(out_file.good());
     }

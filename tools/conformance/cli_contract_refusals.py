@@ -2,10 +2,11 @@
 
 Each row of tests/conformance/cli_option_domains.json names an option whose accepted
 set is narrower than its type. Both front-ends are given one value outside that set and
-must refuse it with the exit class the row declares and with the same text, the native
-option formatter's ``value out of range for --X: V (expected ...)`` or
-``invalid value for --X: V (expected one of ...)``. The rows a run could not compare --
-a command one build does not carry -- are counted and named, never folded into a pass.
+must refuse it with the exit class the row declares and with the line
+``argument --X: <predicate>``, the predicate generated here from the row in the
+library's vocabulary (src/util/refusal_predicates.h) rather than read from either
+front-end. The rows a run could not compare -- a command one build does not carry --
+are counted and named, never folded into a pass.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import struct
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -24,9 +26,58 @@ DOMAINS_PATH = REPO_ROOT / "tests" / "conformance" / "cli_option_domains.json"
 EXIT_FOR_CLASS = {"usage": 2, "invalid_parameter": 3}
 
 # One line of either front-end's stderr; the prefixes around it differ by design.
-_REFUSAL_TEXT = re.compile(
-    r"(?:value out of range|invalid value) for --[\w-]+: .* \(expected [^\n]*\)$", re.MULTILINE
-)
+_REFUSAL_TEXT = re.compile(r"argument --[\w-]+: must [^\n]*$", re.MULTILINE)
+
+
+def _bound_text(value: float) -> str:
+    """The library's ``bound_text``: the shortest decimal reading back as ``value``.
+
+    A bound a 32-bit float holds exactly is written as that float's shortest decimal.
+    """
+
+    def as_float32(number: float) -> float:
+        return float(struct.unpack("f", struct.pack("f", number))[0])
+
+    def bare(text: str) -> str:
+        mantissa, e, exponent = text.partition("e")
+        if not e:
+            return text
+        sign = "-" if exponent.startswith("-") else ""
+        return f"{mantissa}e{sign}{exponent.lstrip('+-').lstrip('0') or '0'}"
+
+    if math.isfinite(value) and as_float32(value) == value:
+        for digits in range(6, 10):
+            text = f"{value:.{digits}g}"
+            if as_float32(float(text)) == as_float32(value):
+                return bare(text)
+    for digits in range(6, 17):
+        text = f"{value:.{digits}g}"
+        if float(text) == value:
+            return bare(text)
+    return bare(f"{value:.17g}")
+
+
+def expected_predicate(domain: dict[str, Any], scalar_type: str) -> str:
+    """The predicate both front-ends must state for ``domain``, in the library's words."""
+    if domain["choices"]:
+        return "must be one of " + ", ".join(str(choice) for choice in domain["choices"])
+    low, high = domain["minimum"], domain["maximum"]
+    if scalar_type == "integer" and low is not None:
+        low = low + 1 if domain["exclusive_minimum"] else low
+        if high is None:
+            return f"must be an integer of at least {int(low)}"
+        high = high - 1 if domain["exclusive_maximum"] else high
+        return f"must be an integer in [{_bound_text(low)}, {_bound_text(high)}]"
+    if low is not None and high is not None:
+        opening = "(" if domain["exclusive_minimum"] else "["
+        closing = ")" if domain["exclusive_maximum"] else "]"
+        return f"must be finite and in {opening}{_bound_text(low)}, {_bound_text(high)}{closing}"
+    if low is not None:
+        word = "greater than" if domain["exclusive_minimum"] else "at least"
+        return f"must be finite and {word} {_bound_text(low)}"
+    word = "less than" if domain["exclusive_maximum"] else "at most"
+    return f"must be finite and {word} {_bound_text(high)}"
+
 
 Runner = Callable[[str, str, list[str], float], dict[str, Any]]
 
@@ -122,6 +173,7 @@ def run_domain_refusals(
             for token in (f"--{record['name']}", inside_value(record, directory))
         ]
         argv = _argv(path, name, outside_value(row, option["type"]), required)
+        expected_text = f"argument --{name}: {expected_predicate(row, option['type'])}"
         expected_exit = EXIT_FOR_CLASS[row["reject_exit"]]
         texts = {}
         for surface, executable in (("native", native_executable), ("python", python_executable)):
@@ -150,6 +202,8 @@ def run_domain_refusals(
                     )
                 )
             texts[surface] = match.group(0) if match else None
+            if match is not None and match.group(0) != expected_text:
+                report.append(("fail", f"{label}: {match.group(0)!r} is not {expected_text!r}"))
         compared += 1
         if None not in texts.values() and texts["native"] != texts["python"]:
             report.append(
