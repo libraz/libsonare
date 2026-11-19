@@ -152,11 +152,11 @@ class CliContractSelfTest(unittest.TestCase):
                 "with-seventh",
             ],
         )
-        self.assertEqual(
+        # Left to the library: the CLI holds no default of its own for the high-pass corner.
+        self.assertIsNone(
             next(
                 option for option in contract["options"] if option["name"] == "chroma-high-pass-hz"
-            )["default"],
-            80,
+            )["default"]
         )
         payload_keys = set(contract["payloads"]["success"]["keys"])
         self.assertEqual(
