@@ -498,17 +498,7 @@ class _ProjectInspectionMixin:
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
-        full_name = ctypes.c_char_p()
-        lib = _get_lib()
-        _check(
-            lib.sonare_project_marker_name_by_index(
-                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(full_name)
-            )
-        )
-        try:
-            name = full_name.value.decode("utf-8") if full_name.value else None
-        finally:
-            lib.sonare_free_string(full_name)
+        name = self._string_by_index("sonare_project_marker_name_by_index", index) or None
         return ProjectMarker(
             id=int(raw.id),
             ppq=float(raw.ppq),
@@ -517,6 +507,20 @@ class _ProjectInspectionMixin:
             key_fifths=int(raw.key_fifths),
             key_minor=bool(raw.key_minor),
         )
+
+    def _string_by_index(self, entry: str, index: int) -> str:
+        """Read one complete owned UTF-8 string through a ``*_by_index`` getter."""
+        out = ctypes.c_char_p()
+        lib = _get_lib()
+        _check(
+            getattr(lib, entry)(
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(out)
+            )
+        )
+        try:
+            return out.value.decode("utf-8") if out.value else ""
+        finally:
+            lib.sonare_free_string(out)
 
     def _track_by_index(self, index: int) -> ProjectTrack:
         """Read a stored project track by 0-based index."""
@@ -534,7 +538,7 @@ class _ProjectInspectionMixin:
             pan=float(raw.pan),
             mute=bool(raw.mute),
             solo=bool(raw.solo),
-            name=raw.name.split(b"\0", 1)[0].decode(),
+            name=self._string_by_index("sonare_project_track_name_by_index", index) or None,
         )
 
     def _clip_by_index(self, index: int) -> ProjectClip:
@@ -566,10 +570,17 @@ class _ProjectInspectionMixin:
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
-        return self._source_from_raw(raw)
+        name_or_uri = self._string_by_index("sonare_project_source_name_or_uri_by_index", index)
+        return self._source_from_raw(raw, name_or_uri)
 
-    def _source_from_raw(self, raw: SonareProjectSource) -> ProjectSource:
-        """Build a ProjectSource; audio sources carry the full, untruncated URI."""
+    def _source_from_raw(
+        self, raw: SonareProjectSource, name_or_uri: str | None = None
+    ) -> ProjectSource:
+        """Build a ProjectSource carrying the full, untruncated name or URI.
+
+        ``name_or_uri`` is the complete string when the caller read it by index;
+        otherwise an audio source's URI is read by id.
+        """
         content_hash: str | None = None
         external_stem_role: str | None = None
         if int(raw.kind) == 0:  # SONARE_SOURCE_AUDIO; MIDI has no such metadata.
@@ -596,7 +607,22 @@ class _ProjectInspectionMixin:
                     # The native getter owns both strings even when it reports
                     # a failure after partially filling the descriptor.
                     lib.sonare_free_project_audio_source_metadata(ctypes.byref(metadata))
-        name_or_uri = raw.name_or_uri.split(b"\0", 1)[0].decode()
+        if name_or_uri is None:
+            name_or_uri = self._audio_source_uri(raw)
+        return ProjectSource(
+            id=int(raw.id),
+            kind=cast(ProjectSourceKind, _SOURCE_KINDS[int(raw.kind)]),
+            num_channels=int(raw.num_channels),
+            storage_handle_id=int(raw.storage_handle_id),
+            sample_rate_hint=float(raw.sample_rate_hint),
+            name_or_uri=name_or_uri,
+            content_hash=content_hash,
+            external_stem_role=external_stem_role,
+        )
+
+    def _audio_source_uri(self, raw: SonareProjectSource) -> str:
+        """Read a source's name or URI by id, the full URI for an audio source."""
+        name_or_uri: str = raw.name_or_uri.split(b"\0", 1)[0].decode()
         lib = _get_lib()
         if int(raw.kind) == 0 and hasattr(lib, "sonare_project_get_audio_source_uri"):
             uri = ctypes.c_char_p()
@@ -613,16 +639,7 @@ class _ProjectInspectionMixin:
             finally:
                 if uri.value:
                     lib.sonare_free_string(uri)
-        return ProjectSource(
-            id=int(raw.id),
-            kind=cast(ProjectSourceKind, _SOURCE_KINDS[int(raw.kind)]),
-            num_channels=int(raw.num_channels),
-            storage_handle_id=int(raw.storage_handle_id),
-            sample_rate_hint=float(raw.sample_rate_hint),
-            name_or_uri=name_or_uri,
-            content_hash=content_hash,
-            external_stem_role=external_stem_role,
-        )
+        return name_or_uri
 
     def set_mixer_scene_json(self, scene_json: str) -> None:
         """Replace the project's mixer scene from scene JSON.

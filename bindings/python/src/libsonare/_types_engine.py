@@ -363,8 +363,8 @@ class ProjectTrack:
     """Whether the track is muted."""
     solo: bool
     """Whether the track is soloed."""
-    name: str
-    """Track name."""
+    name: str | None
+    """Track name; None for an unnamed track."""
 
 
 @dataclass(frozen=True, slots=True)

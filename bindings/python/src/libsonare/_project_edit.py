@@ -123,7 +123,9 @@ class _ProjectEditMixin:
     if TYPE_CHECKING:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
-        def _source_from_raw(self, raw: SonareProjectSource) -> ProjectSource: ...
+        def _source_from_raw(
+            self, raw: SonareProjectSource, name_or_uri: str | None = None
+        ) -> ProjectSource: ...
 
     def set_sample_rate(self, sample_rate: float) -> None:
         """Set the project sample rate in Hz.

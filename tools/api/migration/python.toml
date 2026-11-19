@@ -12179,3 +12179,19 @@ changed = "int | None, default None: None is the engine's prepared rate and an e
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_counts_and_ids.py::test_bounce_rates_are_none_when_omitted_and_zero_is_refused"
+
+[[entry]]
+kind = "field"
+old = "ProjectTrack.name"
+changed = "str | None: None for an unnamed track (1.x read \"\"), and a name longer than 63 bytes reads back whole instead of cut"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_project_track_name_is_none_when_unnamed"
+
+[[entry]]
+kind = "field"
+old = "ProjectSource.name_or_uri"
+changed = "a MIDI source name or audio URI longer than 127 bytes reads back whole instead of cut"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_project_source_uri_has_no_byte_limit"

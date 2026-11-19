@@ -71,6 +71,27 @@ def test_project_marker_name_has_no_byte_limit() -> None:
         assert {m.id: m.name for m in project.markers()}[marker] == long_name
 
 
+@pytest.mark.parametrize("name", ["t" * 64, "t" * 40 + "é" * 30])
+def test_project_track_name_has_no_byte_limit(name: str) -> None:
+    with Project() as project:
+        track = project.add_track("audio", name)
+        assert {t.id: t.name for t in project.tracks()}[track] == name
+
+
+def test_project_track_name_is_none_when_unnamed() -> None:
+    with Project() as project:
+        track = project.add_track("audio", None)
+        assert {t.id: t.name for t in project.tracks()}[track] is None
+
+
+@pytest.mark.parametrize("uri", ["asset://" + "s" * 120, "asset://" + "s" * 60 + "é" * 40])
+def test_project_source_uri_has_no_byte_limit(uri: str) -> None:
+    with Project() as project:
+        track = project.add_track("audio", "a")
+        project.add_clip(track, 0.0, 4.0, source_uri=uri)
+        assert [source.name_or_uri for source in project.sources()] == [uri]
+
+
 def test_engine_marker_name_is_none_when_unnamed_and_is_never_cut() -> None:
     assert EngineMarker(1, 0.0).name is None
     longest = "m" * 63
