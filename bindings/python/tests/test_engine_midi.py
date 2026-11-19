@@ -595,5 +595,6 @@ def test_live_input_push_refuses_a_disabled_source_as_invalid_state(
         with pytest.raises(SonareError) as refused:
             getattr(engine, method)(*args)
         assert refused.value.code == int(ErrorCode.INVALID_STATE)
-        c_function = f"sonare_engine_{method}"
-        assert f"{c_function}: the MIDI input source is not enabled" in str(refused.value)
+        assert str(refused.value) == (
+            f"[7] RealtimeEngine.{method}: the MIDI input source is not enabled"
+        )
