@@ -639,7 +639,11 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
 
   const SplitResult missing = run(R"([{"name":"custom","target_lufs":-14}])");
   CHECK(missing.exit_code == 3);
-  CHECK_THAT(missing.err, ContainsSubstring("platform is missing ceiling_dbtp"));
+  CHECK_THAT(missing.err, ContainsSubstring("platforms[0].ceiling_dbtp must be given"));
+
+  const SplitResult mistyped = run(R"([{"name":"custom","target_lufs":"loud","ceiling_dbtp":-1}])");
+  CHECK(mistyped.exit_code == 3);
+  CHECK_THAT(mistyped.err, ContainsSubstring("platforms[0].target_lufs must be a number"));
 
   const SplitResult unknown =
       run(R"([{"name":"custom","target_lufs":-14,"ceiling_dbtp":-1,"x":1}])");

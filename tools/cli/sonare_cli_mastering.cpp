@@ -171,10 +171,11 @@ constexpr std::pair<const char*, const char*> kStreamingPlatformRenamed[] = {
     {"ceiling_db", "ceiling_dbtp"},
 };
 
-float streaming_platform_number(const sonare::util::json::Value& entry, const char* key) {
+float streaming_platform_number(const sonare::util::json::Value& entry, const std::string& where,
+                                const char* key) {
   const sonare::util::json::Value& value = *entry.find(key);
   if (!value.is_number()) {
-    throw std::invalid_argument(std::string("--platforms: ") + key + " must be a number");
+    throw std::invalid_argument("--platforms: " + where + "." + key + " must be a number");
   }
   return value.as_float();
 }
@@ -201,12 +202,11 @@ void check_streaming_platform_keys(const sonare::util::json::Value& entry,
                                   expected_list + ")");
     }
   }
-  std::string missing;
   for (const char* expected : kStreamingPlatformKeys) {
-    if (entry.find(expected) == nullptr)
-      missing += (missing.empty() ? "" : ", ") + std::string(expected);
+    if (entry.find(expected) == nullptr) {
+      throw std::invalid_argument("--platforms: " + where + "." + expected + " must be given");
+    }
   }
-  if (!missing.empty()) throw std::invalid_argument("--platforms: platform is missing " + missing);
 }
 
 }  // namespace
@@ -225,15 +225,16 @@ std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& 
     if (!entry.is_object()) {
       throw std::invalid_argument("--platforms entries must be JSON objects");
     }
-    check_streaming_platform_keys(entry, "platforms[" + std::to_string(platforms.size()) + "]");
+    const std::string where = "platforms[" + std::to_string(platforms.size()) + "]";
+    check_streaming_platform_keys(entry, where);
     StreamingPlatformSpec spec;
     const sonare::util::json::Value& name = *entry.find("name");
     if (!name.is_string() || name.as_string().empty()) {
-      throw std::invalid_argument("--platforms: name must be a non-empty string");
+      throw std::invalid_argument("--platforms: " + where + ".name must be a non-empty string");
     }
     spec.name = name.as_string();
-    spec.target_lufs = streaming_platform_number(entry, "target_lufs");
-    spec.ceiling_dbtp = streaming_platform_number(entry, "ceiling_dbtp");
+    spec.target_lufs = streaming_platform_number(entry, where, "target_lufs");
+    spec.ceiling_dbtp = streaming_platform_number(entry, where, "ceiling_dbtp");
     platforms.push_back(std::move(spec));
   }
   return platforms;

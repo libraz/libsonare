@@ -1551,7 +1551,7 @@ def test_mastering_ceiling_is_spelled_and_echoed_in_dbtp(tmp_path: Path) -> None
             '{"name":"x","target_lufs":-14,"ceiling_db":-1}',
             "unknown key platforms[0].ceiling_db (renamed to platforms[0].ceiling_dbtp)",
         ),
-        ('{"name":"x","target_lufs":-14}', "platform is missing ceiling_dbtp"),
+        ('{"name":"x","target_lufs":-14}', "platforms[0].ceiling_dbtp must be given"),
         (
             '{"name":"x","target_lufs":-14,"ceiling_dbtp":-1,"x":1}',
             "unknown key platforms[0].x (expected name, target_lufs, ceiling_dbtp)",
