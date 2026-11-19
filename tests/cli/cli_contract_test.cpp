@@ -3,6 +3,8 @@
 ///        registry, option domains and exit codes.
 
 #include <algorithm>
+#include <deque>
+#include <functional>
 
 #include "analysis/section_analyzer.h"
 #include "cli/cli_test_helpers.h"
@@ -1652,74 +1654,56 @@ TEST_CASE("CLI command help", "[cli]") {
 // An option the handler leaves to the library states the library's value in `--help`. Leaving
 // it out must render what passing that stated value renders, and a different value must render
 // something else, so the row's input reaches the option at all.
-TEST_CASE("CLI options left to the library reproduce their stated default", "[cli][defaults]") {
-  const std::string tone_wav = unique_temp_path("_stated_tone.wav");
-  const std::string clipped_wav = unique_temp_path("_stated_clipped.wav");
-  const std::string stepped_wav = unique_temp_path("_stated_stepped.wav");
-  const std::string noisy_wav = unique_temp_path("_stated_noisy.wav");
-  const std::string out = unique_temp_path("_stated_out.wav");
-  const std::string project_json = unique_temp_path("_stated_project.json");
-  const std::string reference_smf = unique_temp_path("_stated_reference.mid");
-  const std::string rir_wav = unique_temp_path("_stated_rir.wav");
-  const std::string click_wav = unique_temp_path("_stated_clicks.wav");
-  const std::string sine_chords_wav = unique_temp_path("_stated_sine_chords.wav");
-  const std::string sine_chords_fast_wav = unique_temp_path("_stated_sine_chords_fast.wav");
-  const std::string harmonic_chords_wav = unique_temp_path("_stated_harmonic_chords.wav");
-  const std::string sections_wav = unique_temp_path("_stated_sections.wav");
-  const std::string silent_wav = unique_temp_path("_stated_silent.wav");
-  const std::string glide_wav = unique_temp_path("_stated_glide.wav");
-  const std::string stereo_wav = unique_temp_path("_stated_stereo.wav");
-  const std::string gapped_wav = unique_temp_path("_stated_gapped.wav");
-  const std::string takes_project = unique_temp_path("_stated_takes.json");
-  const std::string takes_out = unique_temp_path("_stated_takes_out.json");
-  create_test_wav(tone_wav, 1.0f);
-  create_chord_progression_wav(sine_chords_wav, 0.5f, false);
-  create_chord_progression_wav(sine_chords_fast_wav, 0.25f, false);
-  create_chord_progression_wav(harmonic_chords_wav, 0.25f, true);
-  create_section_triads_wav(sections_wav);
-  create_silent_wav(silent_wav);
-  create_glide_wav(glide_wav);
-  create_stereo_delayed_wav(stereo_wav);
-  // Two tones around a near-silent gap, with silence at both ends to trim.
-  create_blocked_level_wav(
-      gapped_wav, {{0.0f, 0.3f}, {0.5f, 0.4f}, {0.003f, 0.3f}, {0.5f, 0.4f}, {0.0f, 0.3f}});
-  create_clipped_wav(clipped_wav);
-  create_stepped_level_wav(stepped_wav);
-  create_noisy_wav(noisy_wav);
-  // A click every 0.4 s, so a narrowed tempo search moves the reported tempo.
-  std::string click_times = "0";
-  for (int i = 1; i < 20; ++i) click_times += "," + std::to_string(0.4 * i);
-  REQUIRE(exec_command(CLI + " clicks --times " + click_times + " --click-duration-sec 0.03 -o " +
-                       click_wav + " -q")
-              .first == 0);
-#ifdef SONARE_WITH_ACOUSTIC_SIM
-  // A tone has no decay to measure, so the room analyses read a synthesized impulse response.
-  REQUIRE(exec_command(CLI + " synthesize-rir -o " + rir_wav + " --max-sec 1.0 -q").first == 0);
-#endif
-#ifdef SONARE_WITH_ARRANGEMENT
-  REQUIRE(exec_command(CLI + " project new -o " + project_json + " -q").first == 0);
-  create_takes_project(takes_project);
-#ifdef SONARE_WITH_PITCH_EDITOR
-  create_reference_smf(reference_smf, {{0.0, 1.0, 60}}, 4.0);
-#endif
-#endif
+namespace {
 
-  struct Row {
-    // As typed on the command line; a project leaf is spelled `project bounce`.
-    std::string command;
-    std::string arguments;
-    std::string option;
-    // Empty only where the command prints nothing the option affects.
-    std::string other_value;
-  };
-  const std::string to_out = " -o " + out + " --json -q";
+// Every case below carries this name, so the migration ledger finds them by one substring.
+constexpr const char* kStatedDefaultCase =
+    "CLI options left to the library reproduce their stated default";
+
+// The files a row names. The tables are built once, at registration, with a placeholder token
+// in each member; a case swaps in its own per-process paths before it runs.
+struct StatedDefaultPaths {
+  std::string tone_wav, short_tone_wav, clipped_wav, stepped_wav, noisy_wav, out, project_json,
+      reference_smf, rir_wav, click_wav, sine_chords_wav, sine_chords_fast_wav, harmonic_chords_wav,
+      sections_wav, silent_wav, glide_wav, stereo_wav, gapped_wav, takes_project, takes_out;
+};
+
+struct StatedRow {
+  // As typed on the command line; a project leaf is spelled `project bounce`.
+  std::string command;
+  std::string arguments;
+  std::string option;
+  // Empty only where the command prints nothing the option affects.
+  std::string other_value;
+  // Each run pays the CQT chroma's fixed cost (~1.8 s whatever the input length), so the row
+  // runs in the slow tier.
+  bool slow = false;
+};
+
+// A default derived from another option: each case sets that option and names the value the
+// library then takes, and two cases keep the row from passing on one setting alone.
+struct DerivedRow {
+  std::string command;
+  std::string arguments;
+  std::string option;
+  std::vector<std::pair<std::string, std::string>> cases;
+};
+
+struct StatedDefaultTables {
+  std::vector<StatedRow> rows;
+  std::vector<DerivedRow> derived;
+};
+
+StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
+  const std::string to_out = " -o " + p.out + " --json -q";
   // Two recordings of one progression at different tempi, so the alignment has a path to find.
   const std::string takes_arguments =
-      takes_project + " --reference-source 1 --audio 1=" + sine_chords_fast_wav +
-      " --audio 2=" + sine_chords_wav + " -o " + takes_out + " --json -q";
-  const std::vector<Row> rows = {
-      {"preemphasis", tone_wav + to_out, "coef", "0.5"},
-      {"deemphasis", tone_wav + to_out, "coef", "0.5"},
+      p.takes_project + " --reference-source 1 --audio 1=" + p.sine_chords_fast_wav +
+      " --audio 2=" + p.sine_chords_wav + " -o " + p.takes_out + " --json -q";
+  StatedDefaultTables tables;
+  tables.rows = {
+      {"preemphasis", p.tone_wav + to_out, "coef", "0.5"},
+      {"deemphasis", p.tone_wav + to_out, "coef", "0.5"},
       {"power-to-db", "--values 0.5,0.25", "ref", "2"},
       {"power-to-db", "--values 1e-3,1e-12", "amin", "1e-9"},
       {"power-to-db", "--values 1,1e-9", "top-db", "100"},
@@ -1753,62 +1737,63 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       {"clicks", "--times 0.1" + to_out, "length", "44100"},
       {"clicks", "--times 0.1" + to_out, "frequency-hz", "500"},
       {"clicks", "--times 0.1" + to_out, "click-duration-sec", "0.05"},
-      {"melody", noisy_wav + " --json -q", "threshold", "0.9"},
-      {"melody", tone_wav + " --json -q", "hop-length", "512"},
-      {"melody", tone_wav + " --json -q", "f0-min-hz", "500"},
-      {"melody", tone_wav + " --json -q", "f0-max-hz", "300"},
-      {"cqt", tone_wav + " --json -q", "n-bins", "48"},
-      {"cqt", tone_wav + " --json -q", "bins-per-octave", "24"},
-      {"vqt", tone_wav + " --json -q", "n-bins", "48"},
-      {"vqt", tone_wav + " --json -q", "bins-per-octave", "24"},
-      {"vqt", tone_wav + " --json -q", "gamma", "0"},
+      {"melody", p.noisy_wav + " --json -q", "threshold", "0.9"},
+      {"melody", p.tone_wav + " --json -q", "hop-length", "512"},
+      {"melody", p.tone_wav + " --json -q", "f0-min-hz", "500"},
+      {"melody", p.tone_wav + " --json -q", "f0-max-hz", "300"},
+      {"cqt", p.tone_wav + " --json -q", "n-bins", "48"},
+      {"cqt", p.tone_wav + " --json -q", "bins-per-octave", "24"},
+      {"vqt", p.tone_wav + " --json -q", "n-bins", "48"},
+      {"vqt", p.tone_wav + " --json -q", "bins-per-octave", "24"},
+      {"vqt", p.tone_wav + " --json -q", "gamma", "0"},
       // The vqt JSON prints only shape, fmin, bins per octave and gamma, none of which depend on
       // it.
-      {"vqt", tone_wav + " --json -q", "filter-scale", ""},
-      {"meter", clipped_wav + " --json -q", "clip-threshold", "0.2"},
-      {"meter", clipped_wav + " --json -q", "oversample", "1"},
-      {"clipping", clipped_wav + " --json -q", "threshold", "0.2"},
-      {"clipping", clipped_wav + " --json -q", "min-region", "100000"},
-      {"dynamic-range", stepped_wav + " --json -q", "window-sec", "1"},
-      {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "hop-sec", "0.25"},
-      {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "low-percentile", "0.5"},
-      {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "high-percentile", "0.5"},
+      {"vqt", p.tone_wav + " --json -q", "filter-scale", ""},
+      {"meter", p.clipped_wav + " --json -q", "clip-threshold", "0.2"},
+      {"meter", p.clipped_wav + " --json -q", "oversample", "1"},
+      {"clipping", p.clipped_wav + " --json -q", "threshold", "0.2"},
+      {"clipping", p.clipped_wav + " --json -q", "min-region", "100000"},
+      {"dynamic-range", p.stepped_wav + " --json -q", "window-sec", "1"},
+      {"dynamic-range", p.stepped_wav + " --window-sec 0.5 --json -q", "hop-sec", "0.25"},
+      {"dynamic-range", p.stepped_wav + " --window-sec 0.5 --json -q", "low-percentile", "0.5"},
+      {"dynamic-range", p.stepped_wav + " --window-sec 0.5 --json -q", "high-percentile", "0.5"},
       // Options a steady tone cannot move read a chord, section or glide input built for them.
-      {"analyze", tone_wav + " --json -q", "chroma-high-pass-hz", "4000"},
-      {"analyze", tone_wav + " --json -q", "meter-denominator", "8"},
-      {"key", tone_wav + " --json -q", "high-pass-hz", "4000"},
-      {"chords", sine_chords_wav + " --json -q", "min-duration-sec", "1.5"},
-      {"chords", tone_wav + " --json -q", "smoothing-window", "0.5"},
-      {"chords", tone_wav + " --json -q", "threshold", "0.99"},
-      {"chords", tone_wav + " --json -q", "chroma-method", "stft"},
-      {"chords", harmonic_chords_wav + " --json -q", "hmm-beam-width", "1"},
-      {"chords", sine_chords_fast_wav + " --key-context --json -q", "key-root", "D"},
-      {"chords", sine_chords_fast_wav + " --key-context --json -q", "key-mode", "minor"},
-      {"sections", sections_wav + " --json -q", "min-duration-sec", "1"},
-      {"dynamics", tone_wav + " --json -q", "window-sec", "0.1"},
+      {"analyze", p.tone_wav + " --json -q", "chroma-high-pass-hz", "4000", true},
+      {"analyze", p.tone_wav + " --json -q", "meter-denominator", "8", true},
+      {"key", p.tone_wav + " --json -q", "high-pass-hz", "4000", true},
+      // Options read past the chroma stage take a cheaper chroma than the CQT one (~1.8 s a run).
+      {"chords", p.sine_chords_wav + " --chroma-method stft --json -q", "min-duration-sec", "1.5"},
+      {"chords", p.tone_wav + " --chroma-method stft --json -q", "smoothing-window", "0.5"},
+      {"chords", p.tone_wav + " --chroma-method stft --json -q", "threshold", "0.99"},
+      {"chords", p.tone_wav + " --json -q", "chroma-method", "stft", true},
+      {"chords", p.harmonic_chords_wav + " --chroma-method stft --json -q", "hmm-beam-width", "1"},
+      {"chords", p.sine_chords_fast_wav + " --key-context --json -q", "key-root", "D", true},
+      {"chords", p.sine_chords_fast_wav + " --key-context --json -q", "key-mode", "minor", true},
+      {"sections", p.sections_wav + " --json -q", "min-duration-sec", "1"},
+      {"dynamics", p.tone_wav + " --json -q", "window-sec", "0.1"},
       // start-bpm answers only when the estimator finds no tempo, which silence guarantees.
-      {"rhythm", silent_wav + " --json -q", "start-bpm", "80"},
-      {"rhythm", click_wav + " --json -q", "bpm-min", "160"},
-      {"rhythm", click_wav + " --json -q", "bpm-max", "100"},
-      {"pitch", noisy_wav + " --json -q", "threshold", "0.9"},
-      {"pitch", tone_wav + " --json -q", "f0-min-hz", "500"},
-      {"pitch", tone_wav + " --json -q", "f0-max-hz", "300"},
-      {"tempogram", tone_wav + " --json -q", "win-length", "128"},
-      {"plp", tone_wav + " --json -q", "win-length", "128"},
-      {"acoustic", tone_wav + " --json -q", "n-octave-bands", "3"},
-      {"hpss", tone_wav + " --harmonic-only" + to_out, "kernel-harmonic", "7"},
-      {"hpss", tone_wav + " --harmonic-only" + to_out, "kernel-percussive", "7"},
-      {"decompose-stems", tone_wav + to_out, "n-components", "2"},
-      {"decompose-stems", tone_wav + to_out, "n-iter", "5"},
-      {"decompose-stems", tone_wav + to_out, "beta", "1"},
-      {"decompose-stems", tone_wav + to_out, "init", "nndsvd"},
-      {"decompose-stems", tone_wav + to_out, "mask-power", "2"},
+      {"rhythm", p.silent_wav + " --json -q", "start-bpm", "80"},
+      {"rhythm", p.click_wav + " --json -q", "bpm-min", "160"},
+      {"rhythm", p.click_wav + " --json -q", "bpm-max", "100"},
+      {"pitch", p.noisy_wav + " --json -q", "threshold", "0.9"},
+      {"pitch", p.tone_wav + " --json -q", "f0-min-hz", "500"},
+      {"pitch", p.tone_wav + " --json -q", "f0-max-hz", "300"},
+      {"tempogram", p.tone_wav + " --json -q", "win-length", "128"},
+      {"plp", p.tone_wav + " --json -q", "win-length", "128"},
+      {"acoustic", p.tone_wav + " --json -q", "n-octave-bands", "3"},
+      {"hpss", p.tone_wav + " --harmonic-only" + to_out, "kernel-harmonic", "7"},
+      {"hpss", p.tone_wav + " --harmonic-only" + to_out, "kernel-percussive", "7"},
+      {"decompose-stems", p.short_tone_wav + to_out, "n-components", "2"},
+      {"decompose-stems", p.short_tone_wav + to_out, "n-iter", "5"},
+      {"decompose-stems", p.short_tone_wav + to_out, "beta", "1"},
+      {"decompose-stems", p.short_tone_wav + to_out, "init", "nndsvd"},
+      {"decompose-stems", p.short_tone_wav + to_out, "mask-power", "2"},
 #ifdef SONARE_WITH_ACOUSTIC_SIM
-      {"acoustic", rir_wav + " --json -q", "min-decay-db", "20"},
-      {"acoustic", rir_wav + " --json -q", "noise-floor-margin-db", "60"},
-      {"estimate-room", rir_wav + " --json -q", "aspect-lw", "2"},
-      {"estimate-room", rir_wav + " --json -q", "aspect-lh", "2"},
-      {"estimate-room", rir_wav + " --json -q", "reference-absorption", "0.5"},
+      {"acoustic", p.rir_wav + " --json -q", "min-decay-db", "20"},
+      {"acoustic", p.rir_wav + " --json -q", "noise-floor-margin-db", "60"},
+      {"estimate-room", p.rir_wav + " --json -q", "aspect-lw", "2"},
+      {"estimate-room", p.rir_wav + " --json -q", "aspect-lh", "2"},
+      {"estimate-room", p.rir_wav + " --json -q", "reference-absorption", "0.5"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "length", "10"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "width", "8"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "height", "4"},
@@ -1821,163 +1806,334 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       {"synthesize-rir", "--max-sec 0.3" + to_out, "listener-z", "1.2"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "ism-order", "1"},
       {"synthesize-rir", "--max-sec 0.3" + to_out, "seed", "7"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "absorption", "0.5"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "source-x", "2"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "source-y", "2"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "source-z", "1.5"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "listener-x", "4"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "listener-y", "3"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "listener-z", "1.2"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "suppression", "1"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "wet", "0"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "ism-order", "1"},
-      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "seed", "7"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "absorption", "0.5"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "source-x", "2"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "source-y", "2"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "source-z", "1.5"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "listener-x", "4"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "listener-y", "3"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "listener-z", "1.2"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "suppression", "1"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "wet", "0"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "ism-order", "1"},
+      {"room-morph", p.tone_wav + " --max-sec 0.3" + to_out, "seed", "7"},
       // Only a stereo input is heard through the receiver pair; it shows in the written WAV.
-      {"room-morph", stereo_wav + " --max-sec 0.3" + to_out, "receiver-spacing", "2.0"},
+      {"room-morph", p.stereo_wav + " --max-sec 0.3" + to_out, "receiver-spacing", "2.0"},
 #endif
       // The spectral geometry. key reads the FFT size only with --hpss, chords only with STFT
       // chroma, and sections moves only when the minimum lets more than one section survive.
-      {"timbre", tone_wav + " --json -q", "n-fft", "1024"},
-      {"timbre", tone_wav + " --json -q", "hop-length", "256"},
-      {"timbre", tone_wav + " --json -q", "n-mels", "64"},
-      {"mel", tone_wav + " --json -q", "n-fft", "1024"},
-      {"mel", tone_wav + " --json -q", "hop-length", "256"},
-      {"mel", tone_wav + " --json -q", "n-mels", "64"},
-      {"mel", tone_wav + " --json -q", "fmin-hz", "100"},
-      {"chroma", tone_wav + " --json -q", "n-fft", "1024"},
-      {"chroma", tone_wav + " --json -q", "hop-length", "256"},
-      {"tonnetz", tone_wav + " --json -q", "n-fft", "1024"},
-      {"tonnetz", tone_wav + " --json -q", "hop-length", "256"},
-      {"spectral", tone_wav + " --json -q", "n-fft", "1024"},
-      {"spectral", tone_wav + " --json -q", "hop-length", "256"},
-      {"onset-env", tone_wav + " --json -q", "n-fft", "1024"},
-      {"onset-env", tone_wav + " --json -q", "hop-length", "256"},
-      {"onset-env", tone_wav + " --json -q", "n-mels", "64"},
-      {"onset-envelope", tone_wav + " --json -q", "n-fft", "1024"},
-      {"onset-envelope", tone_wav + " --json -q", "hop-length", "256"},
-      {"onset-envelope", tone_wav + " --json -q", "n-mels", "64"},
-      {"fourier-tempogram", tone_wav + " --json -q", "hop-length", "256"},
-      {"tempogram-ratio", tone_wav + " --json -q", "hop-length", "256"},
-      {"tempogram", tone_wav + " --json -q", "n-fft", "1024"},
-      {"tempogram", tone_wav + " --json -q", "hop-length", "256"},
-      {"tempogram", tone_wav + " --json -q", "n-mels", "64"},
-      {"plp", tone_wav + " --json -q", "n-fft", "1024"},
-      {"plp", tone_wav + " --json -q", "hop-length", "256"},
-      {"plp", tone_wav + " --json -q", "n-mels", "64"},
-      {"nnls-chroma", tone_wav + " --json -q", "hop-length", "256"},
-      {"cqt", tone_wav + " --json -q", "hop-length", "256"},
-      {"vqt", tone_wav + " --json -q", "hop-length", "256"},
-      {"pitch", tone_wav + " --json -q", "hop-length", "256"},
-      {"key", tone_wav + " --hpss --json -q", "n-fft", "1024"},
-      {"key", tone_wav + " --json -q", "hop-length", "256"},
-      {"chords", sine_chords_wav + " --chroma-method stft --json -q", "n-fft", "1024"},
-      {"chords", sine_chords_wav + " --json -q", "hop-length", "256"},
-      {"sections", sections_wav + " --min-duration-sec 1 --json -q", "n-fft", "1024"},
-      {"sections", sections_wav + " --min-duration-sec 1 --json -q", "hop-length", "256"},
-      {"dynamics", tone_wav + " --json -q", "hop-length", "256"},
-      {"rhythm", click_wav + " --json -q", "n-fft", "1024"},
-      {"rhythm", click_wav + " --json -q", "hop-length", "256"},
-      {"boundaries", sections_wav + " --json -q", "n-fft", "1024"},
-      {"boundaries", sections_wav + " --json -q", "hop-length", "256"},
-      {"hpss", tone_wav + " --harmonic-only" + to_out, "n-fft", "1024"},
-      {"decompose-stems", tone_wav + to_out, "n-fft", "1024"},
-      {"trim-silence", gapped_wav + to_out, "threshold-db", "-20"},
-      {"trim-silence", gapped_wav + to_out, "n-fft", "1024"},
-      {"trim-silence", gapped_wav + to_out, "hop-length", "256"},
-      {"split-silence", gapped_wav + " --json -q", "top-db", "30"},
-      {"split-silence", gapped_wav + " --json -q", "n-fft", "1024"},
-      {"split-silence", gapped_wav + " --json -q", "hop-length", "256"},
-      {"pitch-shift", tone_wav + " --pitch-semitones 3" + to_out, "n-fft", "1024"},
-      {"time-stretch", tone_wav + " --rate 1.5" + to_out, "n-fft", "1024"},
-      {"mel-to-audio", tone_wav + to_out, "n-fft", "1024"},
-      {"mel-to-audio", tone_wav + to_out, "hop-length", "256"},
-      {"mel-to-audio", tone_wav + to_out, "n-mels", "64"},
-      {"mel-to-audio", tone_wav + to_out, "fmin-hz", "100"},
-      {"mel-to-audio", tone_wav + to_out, "n-iter", "8"},
-      {"mfcc-to-audio", tone_wav + to_out, "n-fft", "1024"},
-      {"mfcc-to-audio", tone_wav + to_out, "hop-length", "256"},
-      {"mfcc-to-audio", tone_wav + to_out, "n-mels", "64"},
-      {"mfcc-to-audio", tone_wav + to_out, "fmin-hz", "100"},
-      {"mfcc-to-audio", tone_wav + to_out, "n-iter", "8"},
+      {"timbre", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"timbre", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"timbre", p.tone_wav + " --json -q", "n-mels", "64"},
+      {"mel", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"mel", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"mel", p.tone_wav + " --json -q", "n-mels", "64"},
+      {"mel", p.tone_wav + " --json -q", "fmin-hz", "100"},
+      {"chroma", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"chroma", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"tonnetz", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"tonnetz", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"spectral", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"spectral", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"onset-env", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"onset-env", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"onset-env", p.tone_wav + " --json -q", "n-mels", "64"},
+      {"onset-envelope", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"onset-envelope", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"onset-envelope", p.tone_wav + " --json -q", "n-mels", "64"},
+      {"fourier-tempogram", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"tempogram-ratio", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"tempogram", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"tempogram", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"tempogram", p.tone_wav + " --json -q", "n-mels", "64"},
+      {"plp", p.tone_wav + " --json -q", "n-fft", "1024"},
+      {"plp", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"plp", p.tone_wav + " --json -q", "n-mels", "64"},
+      {"nnls-chroma", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"cqt", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"vqt", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"pitch", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"key", p.tone_wav + " --hpss --json -q", "n-fft", "1024", true},
+      {"key", p.tone_wav + " --json -q", "hop-length", "256", true},
+      {"chords", p.sine_chords_wav + " --chroma-method stft --json -q", "n-fft", "1024"},
+      {"chords", p.sine_chords_wav + " --chroma-method stft --json -q", "hop-length", "256"},
+      {"sections", p.sections_wav + " --min-duration-sec 1 --json -q", "n-fft", "1024"},
+      {"sections", p.sections_wav + " --min-duration-sec 1 --json -q", "hop-length", "256"},
+      {"dynamics", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"rhythm", p.click_wav + " --json -q", "n-fft", "1024"},
+      {"rhythm", p.click_wav + " --json -q", "hop-length", "256"},
+      {"boundaries", p.sections_wav + " --json -q", "n-fft", "1024"},
+      {"boundaries", p.sections_wav + " --json -q", "hop-length", "256"},
+      {"hpss", p.tone_wav + " --harmonic-only" + to_out, "n-fft", "1024"},
+      {"decompose-stems", p.short_tone_wav + to_out, "n-fft", "1024"},
+      {"trim-silence", p.gapped_wav + to_out, "threshold-db", "-20"},
+      {"trim-silence", p.gapped_wav + to_out, "n-fft", "1024"},
+      {"trim-silence", p.gapped_wav + to_out, "hop-length", "256"},
+      {"split-silence", p.gapped_wav + " --json -q", "top-db", "30"},
+      {"split-silence", p.gapped_wav + " --json -q", "n-fft", "1024"},
+      {"split-silence", p.gapped_wav + " --json -q", "hop-length", "256"},
+      {"pitch-shift", p.tone_wav + " --pitch-semitones 3" + to_out, "n-fft", "1024"},
+      {"time-stretch", p.tone_wav + " --rate 1.5" + to_out, "n-fft", "1024"},
+      {"mel-to-audio", p.short_tone_wav + to_out, "n-fft", "1024"},
+      {"mel-to-audio", p.short_tone_wav + to_out, "hop-length", "256"},
+      {"mel-to-audio", p.short_tone_wav + to_out, "n-mels", "64"},
+      {"mel-to-audio", p.short_tone_wav + to_out, "fmin-hz", "100"},
+      {"mel-to-audio", p.short_tone_wav + to_out, "n-iter", "8"},
+      {"mfcc-to-audio", p.short_tone_wav + to_out, "n-fft", "1024"},
+      {"mfcc-to-audio", p.short_tone_wav + to_out, "hop-length", "256"},
+      {"mfcc-to-audio", p.short_tone_wav + to_out, "n-mels", "64"},
+      {"mfcc-to-audio", p.short_tone_wav + to_out, "fmin-hz", "100"},
+      {"mfcc-to-audio", p.short_tone_wav + to_out, "n-iter", "8"},
 #ifdef SONARE_WITH_PITCH_EDITOR
       // A target three semitones up makes every correction setting audible; the scale
       // options act only in scale mode, where a root or mask off the tone puts it off-grid.
-      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out, "hop-length", "256"},
-      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out, "retune-amount",
+      {"pitch-correct-timevarying", p.tone_wav + " --target-midi 72" + to_out, "hop-length", "256"},
+      {"pitch-correct-timevarying", p.tone_wav + " --target-midi 72" + to_out, "retune-amount",
        "0.5"},
-      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out,
+      {"pitch-correct-timevarying", p.tone_wav + " --target-midi 72" + to_out,
        "max-correction-semitones", "1"},
-      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out, "retune-speed-ms",
+      {"pitch-correct-timevarying", p.tone_wav + " --target-midi 72" + to_out, "retune-speed-ms",
        "500"},
-      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out,
+      {"pitch-correct-timevarying", p.tone_wav + " --target-midi 72" + to_out,
        "vibrato-threshold-cents", ""},
-      {"pitch-correct-timevarying", tone_wav + " --mode scale" + to_out, "scale-root", "1"},
-      {"pitch-correct-timevarying", tone_wav + " --mode scale" + to_out, "scale-mode-mask", "1"},
-      {"pitch-correct-timevarying", tone_wav + " --mode scale" + to_out, "reference-midi", "69.5"},
+      {"pitch-correct-timevarying", p.tone_wav + " --mode scale" + to_out, "scale-root", "1"},
+      {"pitch-correct-timevarying", p.tone_wav + " --mode scale" + to_out, "scale-mode-mask", "1"},
+      {"pitch-correct-timevarying", p.tone_wav + " --mode scale" + to_out, "reference-midi",
+       "69.5"},
 #ifdef SONARE_WITH_ARRANGEMENT
-      {"tune-to-midi", tone_wav + " --reference-smf " + reference_smf + to_out, "unmatched-policy",
-       ""},
+      {"tune-to-midi", p.tone_wav + " --reference-smf " + p.reference_smf + to_out,
+       "unmatched-policy", ""},
 #endif
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
       // Bounce does not read the option today, so nothing it prints or writes can differ.
-      {"project bounce", project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
-      {"midi-render", project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
+      {"project bounce", p.project_json + " --frames 128" + to_out, "instrument-latency-samples",
+       ""},
+      {"midi-render", p.project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
       // A MIDI 1.0 file carries no group.
-      {"transcribe", tone_wav + to_out, "group", ""},
+      {"transcribe", p.tone_wav + to_out, "group", ""},
       // The channel shows only in the written .mid status bytes.
-      {"transcribe", tone_wav + to_out, "channel", "5"},
-      {"transcribe", glide_wav + to_out, "monophonic-model", "singing"},
+      {"transcribe", p.tone_wav + to_out, "channel", "5"},
+      {"transcribe", p.glide_wav + to_out, "monophonic-model", "singing"},
       {"project align-takes", takes_arguments, "hop-length", "256"},
       {"project align-takes", takes_arguments, "bins-per-octave", "24"},
 #endif
   };
-
-  // The registry spells a project leaf `project.bounce`.
-  const auto registry_path = [](std::string command) {
-    std::replace(command.begin(), command.end(), ' ', '.');
-    return command;
+  tables.derived = {
+      {"decompose-stems",
+       p.short_tone_wav + to_out,
+       "hop-length",
+       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
+      {"hpss",
+       p.tone_wav + " --harmonic-only" + to_out,
+       "hop-length",
+       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
+      {"pitch-shift",
+       p.tone_wav + " --pitch-semitones 3" + to_out,
+       "hop-length",
+       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
+      {"time-stretch",
+       p.tone_wav + " --rate 1.5" + to_out,
+       "hop-length",
+       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
+      {"normalize",
+       p.gapped_wav + to_out,
+       "target-db",
+       {{"--mode peak", "0.0"}, {"--mode rms", "-20.0"}}},
   };
+  return tables;
+}
+
+const StatedDefaultTables& stated_default_tables() {
+  static const StatedDefaultTables tables = build_stated_default_tables(
+      {"@tone@",        "@short_tone@",       "@clipped@",         "@stepped@",  "@noisy@",
+       "@out@",         "@project@",          "@reference_smf@",   "@rir@",      "@clicks@",
+       "@sine_chords@", "@sine_chords_fast@", "@harmonic_chords@", "@sections@", "@silent@",
+       "@glide@",       "@stereo@",           "@gapped@",          "@takes@",    "@takes_out@"});
+  return tables;
+}
+
+// The registry spells a project leaf `project.bounce`.
+std::string stated_registry_path(std::string command) {
+  std::replace(command.begin(), command.end(), ' ', '.');
+  return command;
+}
+
+// The per-process files behind the placeholder tokens: each fixture is written the first time an
+// invocation names it, and every path is removed when the case ends.
+class StatedDefaultFixtures {
+ public:
+  StatedDefaultFixtures() {
+    add("@tone@", "_stated_tone.wav", [](const std::string& path) { create_test_wav(path, 1.0f); });
+    add("@short_tone@", "_stated_short_tone.wav",
+        [](const std::string& path) { create_test_wav(path, 0.1f); });
+    add("@clipped@", "_stated_clipped.wav",
+        [](const std::string& path) { create_clipped_wav(path); });
+    add("@stepped@", "_stated_stepped.wav",
+        [](const std::string& path) { create_stepped_level_wav(path); });
+    add("@noisy@", "_stated_noisy.wav", [](const std::string& path) { create_noisy_wav(path); });
+    add("@out@", "_stated_out.wav", nullptr);
+    add("@project@", "_stated_project.json", [](const std::string& path) {
+      REQUIRE(exec_command(CLI + " project new -o " + path + " -q").first == 0);
+    });
+    add("@reference_smf@", "_stated_reference.mid",
+        [](const std::string& path) { create_reference_smf(path, {{0.0, 1.0, 60}}, 4.0); });
+    // A tone has no decay to measure, so the room analyses read a synthesized impulse response.
+    add("@rir@", "_stated_rir.wav", [](const std::string& path) {
+      REQUIRE(exec_command(CLI + " synthesize-rir -o " + path + " --max-sec 0.5 -q").first == 0);
+    });
+    // A click every 0.4 s, so a narrowed tempo search moves the reported tempo.
+    add("@clicks@", "_stated_clicks.wav", [](const std::string& path) {
+      std::string click_times = "0";
+      for (int i = 1; i < 20; ++i) click_times += "," + std::to_string(0.4 * i);
+      REQUIRE(exec_command(CLI + " clicks --times " + click_times +
+                           " --click-duration-sec 0.03 -o " + path + " -q")
+                  .first == 0);
+    });
+    add("@sine_chords@", "_stated_sine_chords.wav",
+        [](const std::string& path) { create_chord_progression_wav(path, 0.5f, false); });
+    add("@sine_chords_fast@", "_stated_sine_chords_fast.wav",
+        [](const std::string& path) { create_chord_progression_wav(path, 0.25f, false); });
+    add("@harmonic_chords@", "_stated_harmonic_chords.wav",
+        [](const std::string& path) { create_chord_progression_wav(path, 0.25f, true); });
+    add("@sections@", "_stated_sections.wav",
+        [](const std::string& path) { create_section_triads_wav(path); });
+    add("@silent@", "_stated_silent.wav", [](const std::string& path) { create_silent_wav(path); });
+    add("@glide@", "_stated_glide.wav", [](const std::string& path) { create_glide_wav(path); });
+    add("@stereo@", "_stated_stereo.wav",
+        [](const std::string& path) { create_stereo_delayed_wav(path); });
+    // Two tones around a near-silent gap, with silence at both ends to trim.
+    add("@gapped@", "_stated_gapped.wav", [](const std::string& path) {
+      create_blocked_level_wav(
+          path, {{0.0f, 0.3f}, {0.5f, 0.4f}, {0.003f, 0.3f}, {0.5f, 0.4f}, {0.0f, 0.3f}});
+    });
+    add("@takes@", "_stated_takes.json",
+        [](const std::string& path) { create_takes_project(path); });
+    add("@takes_out@", "_stated_takes_out.json", nullptr);
+  }
+
+  ~StatedDefaultFixtures() {
+    for (const Fixture& fixture : fixtures_) std::remove(fixture.path.c_str());
+  }
+
+  StatedDefaultFixtures(const StatedDefaultFixtures&) = delete;
+  StatedDefaultFixtures& operator=(const StatedDefaultFixtures&) = delete;
+
+  // The invocation with every token replaced by its path, each named fixture written first.
+  std::string resolve(std::string invocation) {
+    for (Fixture& fixture : fixtures_) {
+      bool named = false;
+      for (size_t at = invocation.find(fixture.token); at != std::string::npos;
+           at = invocation.find(fixture.token, at + fixture.path.size())) {
+        invocation.replace(at, fixture.token.size(), fixture.path);
+        named = true;
+      }
+      if (named && fixture.create && !fixture.written) {
+        fixture.create(fixture.path);
+        fixture.written = true;
+      }
+    }
+    return invocation;
+  }
 
   // stdout plus the written file, if any, so a generator is compared by what it rendered.
-  const auto rendered = [&](const std::string& invocation) {
+  std::string rendered(const std::string& invocation) {
+    const std::string& out = path_of("@out@");
     std::remove(out.c_str());
     auto [code, output] = exec_command(CLI + " " + invocation);
     REQUIRE(code == 0);
     std::ifstream file(out, std::ios::binary);
     return output + std::string(std::istreambuf_iterator<char>(file), {});
+  }
+
+ private:
+  struct Fixture {
+    std::string token;
+    std::string path;
+    std::function<void(const std::string&)> create;
+    bool written = false;
   };
 
-  // A default derived from another option: each case sets that option and names the value the
-  // library then takes, and two cases keep the row from passing on one setting alone.
-  struct DerivedRow {
-    std::string command;
-    std::string arguments;
-    std::string option;
-    std::vector<std::pair<std::string, std::string>> cases;
+  void add(const char* token, const char* suffix, std::function<void(const std::string&)> create) {
+    fixtures_.push_back({token, unique_temp_path(suffix), std::move(create)});
+  }
+
+  const std::string& path_of(const std::string& token) const {
+    for (const Fixture& fixture : fixtures_)
+      if (fixture.token == token) return fixture.path;
+    FAIL("no fixture for " << token);
+    return fixtures_.front().path;
+  }
+
+  std::vector<Fixture> fixtures_;
+};
+
+void run_stated_row(std::size_t index) {
+  const StatedRow& row = stated_default_tables().rows[index];
+  CAPTURE(row.command, row.option);
+  const auto* spec = cli_option_spec_for_command(stated_registry_path(row.command), row.option);
+  REQUIRE(spec != nullptr);
+
+  StatedDefaultFixtures fixtures;
+  const std::string base = fixtures.resolve(row.command + " " + row.arguments);
+  const std::string omitted = fixtures.rendered(base);
+  CHECK(omitted == fixtures.rendered(base + " --" + row.option + " " + spec->stated_default));
+  if (!row.other_value.empty()) {
+    CHECK(omitted != fixtures.rendered(base + " --" + row.option + " " + row.other_value));
+  }
+}
+
+void run_derived_row(std::size_t index) {
+  const DerivedRow& row = stated_default_tables().derived[index];
+  CAPTURE(row.command, row.option);
+  StatedDefaultFixtures fixtures;
+  for (const auto& [setting, value] : row.cases) {
+    CAPTURE(setting, value);
+    const std::string base = fixtures.resolve(row.command + " " + row.arguments + " " + setting);
+    CHECK(fixtures.rendered(base) == fixtures.rendered(base + " --" + row.option + " " + value));
+  }
+}
+
+class StatedDefaultInvoker final : public Catch::ITestInvoker {
+ public:
+  StatedDefaultInvoker(void (*run)(std::size_t), std::size_t index) : run_(run), index_(index) {}
+  void invoke() const override { run_(index_); }
+
+ private:
+  void (*run_)(std::size_t);
+  std::size_t index_;
+};
+
+// One ctest case per row, so each case spawns the CLI only two or three times and stays short
+// under a parallel run; a duplicated command and option pair fails registration by name.
+[[maybe_unused]] const bool kStatedDefaultCasesRegistered = [] {
+  static std::deque<std::string> names;
+  const auto register_case = [](std::string name, const char* tags, void (*run)(std::size_t),
+                                std::size_t index) {
+    names.push_back(std::move(name));
+    Catch::AutoReg(Catch::Detail::make_unique<StatedDefaultInvoker>(run, index),
+                   CATCH_INTERNAL_LINEINFO, Catch::StringRef(),
+                   Catch::NameAndTags{names.back(), tags});
   };
-  const std::vector<DerivedRow> derived_rows = {
-      {"decompose-stems",
-       tone_wav + to_out,
-       "hop-length",
-       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
-      {"hpss",
-       tone_wav + " --harmonic-only" + to_out,
-       "hop-length",
-       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
-      {"pitch-shift",
-       tone_wav + " --pitch-semitones 3" + to_out,
-       "hop-length",
-       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
-      {"time-stretch",
-       tone_wav + " --rate 1.5" + to_out,
-       "hop-length",
-       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
-      {"normalize",
-       gapped_wav + to_out,
-       "target-db",
-       {{"--mode peak", "0.0"}, {"--mode rms", "-20.0"}}},
-  };
+  const StatedDefaultTables& tables = stated_default_tables();
+  for (std::size_t i = 0; i < tables.rows.size(); ++i) {
+    const StatedRow& row = tables.rows[i];
+    register_case(std::string(kStatedDefaultCase) + ": " + row.command + " --" + row.option,
+                  row.slow ? "[cli][defaults][.][slow]" : "[cli][defaults]", &run_stated_row, i);
+  }
+  for (std::size_t i = 0; i < tables.derived.size(); ++i) {
+    const DerivedRow& row = tables.derived[i];
+    register_case(
+        std::string(kStatedDefaultCase) + ": " + row.command + " --" + row.option + " derived",
+        "[cli][defaults]", &run_derived_row, i);
+  }
+  return true;
+}();
+
+}  // namespace
+
+TEST_CASE("CLI options left to the library each have a stated-default row", "[cli][defaults]") {
+  const StatedDefaultTables& tables = stated_default_tables();
 
   // Every option that states a library default is in one of the two tables.
   for (const CliCommandSpec& command : cli_command_registry()) {
@@ -1985,48 +2141,27 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       if (option.stated_default.empty()) continue;
       CAPTURE(command.path, option.name);
       const auto names = [&](const auto& row) {
-        return registry_path(row.command) == command.path && row.option == option.name;
+        return stated_registry_path(row.command) == command.path && row.option == option.name;
       };
-      CHECK((std::any_of(rows.begin(), rows.end(), names) ||
-             std::any_of(derived_rows.begin(), derived_rows.end(), names)));
+      CHECK((std::any_of(tables.rows.begin(), tables.rows.end(), names) ||
+             std::any_of(tables.derived.begin(), tables.derived.end(), names)));
     }
   }
 
-  for (const DerivedRow& row : derived_rows) {
-    CAPTURE(row.command, row.option);
-    const auto* spec = cli_option_spec_for_command(registry_path(row.command), row.option);
+  // And every row names an option the library leaves unset and states a default for.
+  const auto check_spec = [](const std::string& command, const std::string& option) {
+    CAPTURE(command, option);
+    const auto* spec = cli_option_spec_for_command(stated_registry_path(command), option);
     REQUIRE(spec != nullptr);
-    REQUIRE(spec->default_value.kind == CliOptionDefaultKind::Null);
-    REQUIRE_FALSE(spec->stated_default.empty());
+    CHECK(spec->default_value.kind == CliOptionDefaultKind::Null);
+    CHECK_FALSE(spec->stated_default.empty());
+  };
+  for (const StatedRow& row : tables.rows) check_spec(row.command, row.option);
+  for (const DerivedRow& row : tables.derived) {
+    check_spec(row.command, row.option);
     REQUIRE(row.cases.size() >= 2);
-    REQUIRE(row.cases[0].second != row.cases[1].second);
-    for (const auto& [setting, value] : row.cases) {
-      CAPTURE(setting, value);
-      const std::string base = row.command + " " + row.arguments + " " + setting;
-      CHECK(rendered(base) == rendered(base + " --" + row.option + " " + value));
-    }
+    CHECK(row.cases[0].second != row.cases[1].second);
   }
-
-  for (const Row& row : rows) {
-    CAPTURE(row.command, row.option);
-    const auto* spec = cli_option_spec_for_command(registry_path(row.command), row.option);
-    REQUIRE(spec != nullptr);
-    REQUIRE(spec->default_value.kind == CliOptionDefaultKind::Null);
-    REQUIRE_FALSE(spec->stated_default.empty());
-
-    const std::string base = row.command + " " + row.arguments;
-    const std::string omitted = rendered(base);
-    CHECK(omitted == rendered(base + " --" + row.option + " " + spec->stated_default));
-    if (!row.other_value.empty()) {
-      CHECK(omitted != rendered(base + " --" + row.option + " " + row.other_value));
-    }
-  }
-
-  for (const std::string& path :
-       {tone_wav, clipped_wav, stepped_wav, noisy_wav, out, project_json, reference_smf, rir_wav,
-        click_wav, sine_chords_wav, sine_chords_fast_wav, harmonic_chords_wav, sections_wav,
-        silent_wav, glide_wav, stereo_wav, takes_project, takes_out, gapped_wav})
-    std::remove(path.c_str());
 }
 
 TEST_CASE("CLI loudness range keys carry the LU unit", "[cli][json]") {
