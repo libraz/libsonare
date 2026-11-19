@@ -1,0 +1,109 @@
+"""Stdlib self-tests for the facade refusal ratchet.
+
+Each case drives the checker's own functions -- the ones its entry point calls --
+so a rule is asserted through the code that ships rather than a restatement.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import tempfile
+import unittest
+from pathlib import Path
+
+_SPEC = importlib.util.spec_from_file_location(
+    "check_facade_refusal_ratchet",
+    Path(__file__).resolve().parent / "check_facade_refusal_ratchet.py",
+)
+assert _SPEC and _SPEC.loader
+ratchet = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(ratchet)
+
+
+def counts(text: str) -> dict[str, int]:
+    return dict(ratchet.count_text(text))
+
+
+class CountTextTest(unittest.TestCase):
+    def test_counts_each_raw_error_class(self) -> None:
+        text = "throw new RangeError('a');\nthrow new TypeError(`b`);\nthrow new SonareError(1, 'c');\n"
+        self.assertEqual(counts(text)["raw-error"], 3)
+
+    def test_ignores_errors_in_comments_and_strings(self) -> None:
+        text = (
+            "// throw new RangeError('x');\n"
+            "/** @example throw new TypeError('y') */\n"
+            "const s = 'new RangeError(';\n"
+            "const u = 'http://example';\n"
+            "throw refuse('z');\n"
+        )
+        self.assertEqual(counts(text)["raw-error"], 0)
+
+    def test_a_url_in_a_string_does_not_start_a_comment(self) -> None:
+        text = "const u = 'https://x'; throw new RangeError('after');\n"
+        self.assertEqual(counts(text)["raw-error"], 1)
+
+    def test_counts_name_carrying_parameters_only(self) -> None:
+        text = (
+            "function a(fnName: string, v: number) {}\n"
+            "function b(v: number, fn: RequestFn) {}\n"
+            "function c(entryName?: string) {}\n"
+            "function d(argName: string, field: string) {}\n"
+            "const e = { fnName: 'x' };\n"
+        )
+        self.assertEqual(counts(text)["fn-name-param"], 3)
+
+
+class EvaluateTest(unittest.TestCase):
+    def found(self, raw: int, scanned: int = 1) -> dict:
+        totals = {"raw-error": raw, "fn-name-param": 0}
+        files = {"a.ts": dict(totals)} if raw else {}
+        return {"node": {"scanned": scanned, "totals": totals, "files": files}}
+
+    def test_equal_counts_pass(self) -> None:
+        line = {"node": {"raw-error": 2, "fn-name-param": 0}}
+        self.assertEqual(ratchet.evaluate(self.found(2), line), [])
+
+    def test_a_rise_fails_naming_the_file(self) -> None:
+        line = {"node": {"raw-error": 1, "fn-name-param": 0}}
+        errors = ratchet.evaluate(self.found(2), line)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("exceeds the recorded 1", errors[0])
+        self.assertIn("a.ts 2", errors[0])
+
+    def test_a_drop_fails_until_the_line_is_lowered(self) -> None:
+        line = {"node": {"raw-error": 3, "fn-name-param": 0}}
+        errors = ratchet.evaluate(self.found(2), line)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("below the recorded 3", errors[0])
+
+    def test_a_scan_that_read_nothing_fails(self) -> None:
+        line = {"node": {"raw-error": 0, "fn-name-param": 0}}
+        errors = ratchet.evaluate(self.found(0, scanned=0), line)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("scanned no facade source", errors[0])
+
+    def test_an_unrecorded_kind_fails(self) -> None:
+        errors = ratchet.evaluate(self.found(0), {"node": {"raw-error": 0}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("fn-name-param: no recorded line", errors[0])
+
+
+class ScanTest(unittest.TestCase):
+    def test_skips_declarations_and_the_helpers_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in ratchet.SURFACES.values():
+                src = root / rel
+                (src / "internal").mkdir(parents=True)
+                (src / "a.ts").write_text("throw new RangeError('a');\n")
+                (src / "b.d.ts").write_text("throw new RangeError('b');\n")
+                (src / "internal" / "entry.ts").write_text("throw new RangeError('c');\n")
+            found = ratchet.scan(root)
+            for data in found.values():
+                self.assertEqual(data["scanned"], 1)
+                self.assertEqual(data["totals"]["raw-error"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -331,7 +331,7 @@ async function decodeWithBrowserCodec(
   bytes: Uint8Array,
   options: BrowserAudioDecodeOptions,
   nativeError: unknown,
-  caller: string,
+  nativeDecoder: string,
 ): Promise<DecodedChannels> {
   const contextFactory = options.createAudioContext ?? getBrowserAudioContextFactory();
   const context =
@@ -343,7 +343,7 @@ async function decodeWithBrowserCodec(
   if (!context) {
     throw codedError(
       ErrorCode.NotSupported,
-      `${caller} failed and browser decodeAudioData is unavailable: ${
+      `${nativeDecoder} failed and browser decodeAudioData is unavailable: ${
         nativeError instanceof Error ? nativeError.message : String(nativeError)
       }`,
       { cause: nativeError },
@@ -360,7 +360,7 @@ async function decodeWithBrowserCodec(
   } catch (fallbackError) {
     throw codedError(
       ErrorCode.DecodeFailed,
-      `${caller} failed and browser decodeAudioData fallback failed: ${
+      `${nativeDecoder} failed and browser decodeAudioData fallback failed: ${
         fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
       }`,
       { cause: fallbackError },

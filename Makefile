@@ -920,6 +920,8 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_public_integer_domains.py
 	$(CHECK) python3 tests/conformance/check_zero_sentinel_filter.py
 	$(CHECK) python3 -m unittest tests/conformance/test_zero_sentinel_filter.py
+	$(CHECK) python3 tests/conformance/check_facade_refusal_ratchet.py
+	$(CHECK) python3 -m unittest tests/conformance/test_facade_refusal_ratchet.py
 	$(CHECK) python3 tests/conformance/check_goniometer_capacity_mirrors.py
 	$(CHECK) python3 -m unittest tests/conformance/test_goniometer_capacity_mirrors.py
 	$(CHECK) python3 tests/conformance/check_chord_quality_tables.py

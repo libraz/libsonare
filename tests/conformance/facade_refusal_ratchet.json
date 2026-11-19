@@ -1,0 +1,10 @@
+{
+  "node": {
+    "raw-error": 0,
+    "fn-name-param": 0
+  },
+  "wasm": {
+    "raw-error": 0,
+    "fn-name-param": 0
+  }
+}
