@@ -47,6 +47,12 @@ def test_the_sample_rate_is_required() -> None:
         StreamAnalyzer({"sample_rate": SR})  # type: ignore[arg-type]
 
 
+def test_the_magnitude_downsample_factor_is_not_a_setting() -> None:
+    # The C field it fed is unused while magnitude readout is unsupported.
+    with pytest.raises(TypeError, match="magnitude_downsample"):
+        StreamAnalyzer(sample_rate=SR, magnitude_downsample=2)  # type: ignore[call-arg]
+
+
 def test_an_absent_upper_edge_is_nyquist() -> None:
     np.testing.assert_allclose(_mel(), _mel(fmax_hz=SR / 2), rtol=1e-6)
     assert not np.allclose(_mel(), _mel(fmax_hz=2000.0))

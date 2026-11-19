@@ -92,7 +92,6 @@ class StreamAnalyzer:
         compute_onset: bool | None = None,
         compute_spectral: bool | None = None,
         emit_every_n_frames: int | None = None,
-        magnitude_downsample: int | None = None,
         max_pending_frames: int | None = None,
         max_progression_entries: int | None = None,
         key_update_interval_sec: float | None = None,
@@ -114,8 +113,7 @@ class StreamAnalyzer:
         tuning reference, within 220..880 as :meth:`set_reference_hz` accepts.
         ``compute_mel`` / ``compute_chroma`` / ``compute_onset`` / ``compute_spectral``
         choose the features computed; the chord arrays follow ``compute_chroma``.
-        ``emit_every_n_frames`` throttles emission (at least 1) and
-        ``magnitude_downsample`` downsamples the magnitude output.
+        ``emit_every_n_frames`` throttles emission (at least 1).
         ``max_pending_frames`` caps the unread frames retained (overflow drops the
         newly produced frame) and ``max_progression_entries`` caps each chord and bar
         progression (overflow drops the oldest entry). ``key_update_interval_sec`` and
@@ -154,8 +152,6 @@ class StreamAnalyzer:
             raw.compute_spectral = int(compute_spectral)
         if emit_every_n_frames is not None:
             raw.emit_every_n_frames = emit_every_n_frames
-        if magnitude_downsample is not None:
-            raw.magnitude_downsample = magnitude_downsample
         if max_pending_frames is not None:
             raw.max_pending_frames = max_pending_frames
         if max_progression_entries is not None:

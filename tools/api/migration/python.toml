@@ -4665,7 +4665,7 @@ test = "bindings/python/tests/test_tempo_range_defaults.py::test_the_default_ran
 [[entry]]
 kind = "type"
 old = "StreamConfig"
-removed = "pass each setting as its own keyword to StreamAnalyzer: sample_rate= (required), fmin_hz= and fmax_hz= (were fmin/fmax), reference_hz= (was tuning_ref_hz), window= as a WindowType token; compute_magnitude and output_format had no effect and are gone"
+removed = "pass each setting as its own keyword to StreamAnalyzer: sample_rate= (required), fmin_hz= and fmax_hz= (were fmin/fmax), reference_hz= (was tuning_ref_hz), window= as a WindowType token; compute_magnitude, magnitude_downsample and output_format had no effect and are gone"
 domain = "analysis"
 rule = "construction"
 
