@@ -318,7 +318,7 @@ def downmix(
     planes = _linked_channel_planes(channels)
     frame_count = int(planes[0].shape[0])
     if any(int(plane.shape[0]) != frame_count for plane in planes):
-        raise _refuse("channels must all be the same length")
+        raise _refuse("all channels must have the same length")
     packed = np.ascontiguousarray(np.stack(planes), dtype=np.float32)
     fold = _ffi_core.SonareDownmixOptions()
     lib.sonare_downmix_options_init(ctypes.byref(fold))

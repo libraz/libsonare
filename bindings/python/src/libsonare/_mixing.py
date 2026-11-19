@@ -1256,14 +1256,12 @@ def mix_stereo(
         # A NaN loses every comparison the peak meter makes, so an unguarded
         # non-finite strip reads as the -120 dB silence floor rather than as a
         # fault; an infinity propagates into the master sum and the meter.
-        left_buf = _validate_samples(left, arg_name=f"strips[{index}] left", allow_empty=True)
-        right_buf = _validate_samples(right, arg_name=f"strips[{index}] right", allow_empty=True)
+        left_buf = _validate_samples(left, arg_name=f"strips[{index}][0]", allow_empty=True)
+        right_buf = _validate_samples(right, arg_name=f"strips[{index}][1]", allow_empty=True)
         left_array, left_length = _to_c_float_array(left_buf)
         right_array, right_length = _to_c_float_array(right_buf)
         if left_length != right_length:
-            raise _refuse(
-                f"strips[{index}] left and strips[{index}] right must have the same length"
-            )
+            raise _refuse(f"strips[{index}][0] and strips[{index}][1] must have the same length")
         if length is None:
             length = left_length
         elif left_length != length:

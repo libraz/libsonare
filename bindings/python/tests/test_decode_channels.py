@@ -129,5 +129,7 @@ def test_downmix_refuses_an_upmix_an_unknown_layout_and_malformed_channels() -> 
         downmix(pair, 0)  # type: ignore[arg-type]
     with pytest.raises(SonareValueError):
         downmix([], "mono")
-    with pytest.raises(SonareValueError):
+    with pytest.raises(
+        SonareValueError, match=r"^downmix: all channels must have the same length$"
+    ):
         downmix([np.zeros(8, dtype=np.float32), np.zeros(3, dtype=np.float32)], "mono")

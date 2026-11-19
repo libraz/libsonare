@@ -277,7 +277,7 @@ _B = [0.1] * 4799
         (
             "mix_stereo",
             lambda: libsonare.mix_stereo([(_A, _A), (_A, _B)], 48000),
-            "strips[1] left and strips[1] right",
+            "strips[1][0] and strips[1][1]",
         ),
     ],
 )
