@@ -603,7 +603,14 @@ describe('an unknown insert key is refused with one class and text on every para
   }
 });
 
-type CqtFamilyCase = PendingCase & { only?: string[] };
+type CqtFamilyCase = PendingCase & {
+  only?: string[];
+  options?: Record<string, unknown>;
+  message?: string;
+  no_internal_text?: boolean;
+};
+/** A corpus text as this surface spells it: every snake_case identifier in camel case. */
+const camelText = (text: string): string => text.replace(/\b[a-z]+(?:_[a-z0-9]+)+\b/g, camelKey);
 type CqtFamilySection = {
   entries: string[];
   sample_rate: number;
@@ -630,13 +637,31 @@ describe('the constant-Q family answers the shared corpus with one text on every
       const pending = testCase.pending?.[SURFACE];
       const test = pending ? it.fails : it;
       test(`${entry} ${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
-        const key = camelKey(testCase.key);
-        const call = () => calls[entry]({ [key]: corpusValue(testCase.value) });
+        const options = testCase.options
+          ? Object.fromEntries(
+              Object.entries(testCase.options).map(([k, v]) => [camelKey(k), corpusValue(v)]),
+            )
+          : { [camelKey(testCase.key)]: corpusValue(testCase.value) };
+        const call = () => calls[entry](options);
         if (testCase.accepted) {
           expect(call).not.toThrow();
           return;
         }
-        const refusal = `${camelKey(entry)}: ${key} ${testCase.predicate}`;
+        if (testCase.no_internal_text) {
+          let caught: unknown;
+          try {
+            call();
+          } catch (error) {
+            caught = error;
+          }
+          if (caught === undefined) return;
+          expect((caught as Error).message).not.toMatch(/std::|bad_alloc/);
+          if (caught instanceof SonareError) expect(caught.codeName).toBe('OutOfMemory');
+          return;
+        }
+        const refusal = testCase.message
+          ? `${camelKey(entry)}: ${camelText(testCase.message)}`
+          : `${camelKey(entry)}: ${camelKey(testCase.key)} ${testCase.predicate}`;
         expect(call).toThrow(
           testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
         );

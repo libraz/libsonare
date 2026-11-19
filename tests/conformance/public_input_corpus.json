@@ -442,7 +442,10 @@
       { "id": "gamma_negative", "key": "gamma", "value": -1, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0; omit it for the default" },
       { "id": "gamma_nan", "key": "gamma", "value": {"$number": "nan"}, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0; omit it for the default" },
       { "id": "gamma_inf", "key": "gamma", "value": {"$number": "inf"}, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0; omit it for the default" },
-      { "id": "gamma_wrong_type", "key": "gamma", "value": "1", "only": ["vqt"], "refused": "type", "predicate": "must be a number" }
+      { "id": "gamma_wrong_type", "key": "gamma", "value": "1", "only": ["vqt"], "refused": "type", "predicate": "must be a number" },
+      { "id": "fmin_hz_over_nyquist", "options": {"fmin_hz": 20000}, "refused": "range", "message": "fmin_hz * 2^((n_bins - 1) / bins_per_octave) must be less than sample_rate / 2", "pending": {"node": "the core refuses the Nyquist relation untexted", "wasm": "the core refuses the Nyquist relation untexted"} },
+      { "id": "top_bin_over_nyquist", "options": {"fmin_hz": 1000, "n_bins": 84}, "refused": "range", "message": "fmin_hz * 2^((n_bins - 1) / bins_per_octave) must be less than sample_rate / 2", "pending": {"node": "the core refuses the Nyquist relation untexted", "wasm": "the core refuses the Nyquist relation untexted"} },
+      { "id": "hop_length_one_names_no_internal_failure", "options": {"hop_length": 1}, "only": ["pseudo_cqt"], "no_internal_text": true, "pending": {"wasm": "an allocation failure reaches JS as SonareError \"std::bad_alloc\" rather than OutOfMemory or a budget refusal"} }
     ]
   }
 }
