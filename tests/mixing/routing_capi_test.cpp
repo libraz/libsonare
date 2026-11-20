@@ -1333,20 +1333,21 @@ TEST_CASE("C-API set output bus refuses every invalid edit without touching the 
   REQUIRE(sonare_mixer_set_output_bus(mixer, "fx", "sub") == SONARE_OK);
 
   const std::string before = mixer_scene_json(mixer);
-  const auto refused = [&](const char* source, const char* bus, const char* needle) {
+  const auto refused = [&](const char* source, const char* bus, const char* text) {
     REQUIRE(sonare_mixer_set_output_bus(mixer, source, bus) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(std::string(sonare_last_error_message()).find(needle) != std::string::npos);
+    REQUIRE(std::string(sonare_last_error_message()) == text);
     REQUIRE(mixer_scene_json(mixer) == before);
   };
-  refused("nope", "sub", "nope");
-  refused("a", "nope", "nope");
-  refused("a", "b", "'b'");
-  refused("master", "sub", "master");
-  refused("a", "a", "'a'");
-  refused("sub", "sub", "'sub'");
+  constexpr const char* kCycle = "bus_id must not name a bus whose routing leads back to source_id";
+  refused("nope", "sub", "source_id must be the id of a strip or a bus in this mixer");
+  refused("a", "nope", "bus_id must be the id of a bus in this mixer");
+  refused("a", "b", "bus_id must be the id of a bus, not of a strip");
+  refused("master", "sub", "source_id must not be the id of the master bus");
+  refused("a", "a", "bus_id must be the id of a bus, not of a strip");
+  refused("sub", "sub", "bus_id must not be the same id as source_id");
   // sub -> sub2 exists, so sub2 -> sub closes a loop; likewise through fx -> sub.
-  refused("sub2", "sub", "sub2 -> sub -> sub2");
-  refused("sub2", "fx", "sub2 -> fx -> sub -> sub2");
+  refused("sub2", "sub", kCycle);
+  refused("sub2", "fx", kCycle);
   REQUIRE(sonare_mixer_set_output_bus(nullptr, "a", "sub") == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_mixer_set_output_bus(mixer, nullptr, "sub") == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_mixer_set_output_bus(mixer, "a", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1371,8 +1372,8 @@ TEST_CASE("C-API set output bus refuses a cycle that closes through a send",
   // sub -> a (connection), a -> sub2 (send): sub2 -> sub would close the loop.
   const std::string before = mixer_scene_json(mixer);
   REQUIRE(sonare_mixer_set_output_bus(mixer, "sub2", "sub") == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(std::string(sonare_last_error_message()).find("sub2 -> sub -> a -> sub2") !=
-          std::string::npos);
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          "bus_id must not name a bus whose routing leads back to source_id");
   REQUIRE(mixer_scene_json(mixer) == before);
   sonare_mixer_destroy(mixer);
 }
@@ -1393,6 +1394,70 @@ TEST_CASE("C-API set output bus does not compile the graph", "[mixing][capi][rou
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "sub", &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
   sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API scene topology refusals name the document path", "[mixing][capi][refusal]") {
+  using sonare::mixing::api::Scene;
+  const auto base = [] {
+    Scene scene;
+    sonare::mixing::api::Strip a;
+    a.id = "a";
+    sonare::mixing::api::Strip b;
+    b.id = "b";
+    scene.strips.push_back(a);
+    scene.strips.push_back(b);
+    scene.buses.push_back({"master", "master"});
+    scene.buses.push_back({"sub", "submix"});
+    return scene;
+  };
+  const auto refused = [](const Scene& scene, const char* text) {
+    const std::string json = sonare::mixing::api::scene_to_json(scene);
+    REQUIRE(sonare_mixer_from_scene_json(json.c_str(), 48000, 64) == nullptr);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+    CHECK(std::string(sonare_last_error_message()) == text);
+  };
+
+  Scene scene = base();
+  scene.strips[1].id = "a";
+  refused(scene, "strips[1].id must be unique among strips");
+
+  scene = base();
+  scene.strips[1].id = "sub";
+  refused(scene, "strips[1].id must not be the id of a bus");
+
+  scene = base();
+  scene.buses.push_back({"sub", "aux"});
+  refused(scene, "buses[2].id must be unique among buses");
+
+  scene = base();
+  scene.connections.push_back({"ghost", "sub"});
+  refused(scene, "connections[0].source must be the id of a strip or a bus in this scene");
+
+  scene = base();
+  scene.connections.push_back({"a", "ghost"});
+  refused(scene, "connections[0].destination must be the id of a strip or a bus in this scene");
+
+  scene = base();
+  scene.connections.push_back({"a", "sub"});
+  scene.connections.push_back({"a", "sub"});
+  refused(scene, "connections[1] must be unique among connections");
+
+  scene = base();
+  scene.strips[0].sends.push_back({"s", "b", -6.0f});
+  refused(scene, "strips[0].sends[0].destinationBusId must be the id of a bus, not of a strip");
+
+  scene = base();
+  sonare::mixing::api::Insert keyed;
+  keyed.slot = sonare::mixing::api::InsertSlot::PreFader;
+  keyed.processor_name = "dynamics.compressor";
+  keyed.params_json = "{}";
+  keyed.sidechain_key = "ghost";
+  sonare::mixing::api::Insert plain = keyed;
+  plain.sidechain_key.clear();
+  scene.strips[1].inserts.push_back(plain);
+  scene.strips[1].inserts.push_back(keyed);
+  refused(scene,
+          "strips[1].inserts[1].sidechainKey must be the id of a strip or a bus in this scene");
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

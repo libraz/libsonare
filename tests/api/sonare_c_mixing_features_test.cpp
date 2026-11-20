@@ -92,6 +92,8 @@ TEST_CASE("sonare_mixer_process_stereo leaves the caller's output untouched when
   const std::vector<float> right_before = right;
   REQUIRE(sonare_mixer_process_stereo(mixer, in, in, 1, left.data(), right.data(), kBlock) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "num_channels must not exceed the channel count of the master bus");
   REQUIRE(std::memcmp(left.data(), left_before.data(), kBlock * sizeof(float)) == 0);
   REQUIRE(std::memcmp(right.data(), right_before.data(), kBlock * sizeof(float)) == 0);
   REQUIRE(sonare_mixer_drain_tail_stereo(mixer, left.data(), right.data(), kBlock) ==

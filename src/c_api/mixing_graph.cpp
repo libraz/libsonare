@@ -6,6 +6,7 @@
 #include "mixing/solo_mute.h"
 #include "mixing/stereo_width.h"
 #include "mixing/tail_planner.h"
+#include "util/json_schema.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_c_mixing_detail {
@@ -300,6 +301,7 @@ class BusNode final : public sonare::rt::ProcessorBase {
 SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
                                    SonareMixMeterSnapshot* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(bus_id);
   SONARE_C_TRY
@@ -399,6 +401,34 @@ std::vector<std::string> undeclared_send_notes(const SonareMixer* mixer) {
   return notes;
 }
 
+namespace {
+
+namespace schema = sonare::util::json::schema;
+
+// A topology the scene cannot be built from is the document's refusal, named by its path.
+[[noreturn]] void refuse_scene(const std::string& path, std::string_view predicate) {
+  throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, schema::refusal(path, predicate));
+}
+
+std::string scene_path(const char* list, size_t index) {
+  return schema::index_path(schema::child_path(std::string(), list), index);
+}
+
+std::string scene_path(const char* list, size_t index, const char* key) {
+  return schema::child_path(scene_path(list, index), key);
+}
+
+// Document index of the @p nth insert that carries a sidechain key.
+size_t keyed_insert_index(const std::vector<sonare::mixing::api::Insert>& inserts, size_t nth) {
+  for (size_t index = 0; index < inserts.size(); ++index) {
+    if (inserts[index].sidechain_key.empty()) continue;
+    if (nth-- == 0) return index;
+  }
+  return inserts.size();
+}
+
+}  // namespace
+
 // Rebuilds the routing graph from the mixer's stored strips/buses/connections,
 // wiring main edges, send taps, and default master routing, then compiles and
 // prepares it. Throws sonare::SonareException on invalid topology.
@@ -408,10 +438,22 @@ void build_and_compile(SonareMixer* mixer) {
 
   sonare::graph::Graph graph;
   apply_solo_mutes(mixer);
+  // Every node exists and every port is in range by construction; a repeated scene
+  // connection is refused where the connections are read.
   auto checked_connect = [&](sonare::graph::Connection connection) {
     if (!graph.connect(std::move(connection))) {
-      throw SonareException(ErrorCode::InvalidParameter, "invalid or duplicate mixer connection");
+      throw SonareException(ErrorCode::InvalidState, "the mixer could not wire its routing graph");
     }
+  };
+  // The scene path of a strip or declared bus id, for a refusal about that id.
+  const auto id_path = [&](const std::string& id) {
+    for (size_t index = 0; index < mixer->strips.size(); ++index) {
+      if (mixer->strips[index]->id == id) return scene_path("strips", index, "id");
+    }
+    for (size_t index = 0; index < mixer->buses.size(); ++index) {
+      if (mixer->buses[index].id == id) return scene_path("buses", index, "id");
+    }
+    return std::string("id");
   };
 
   // Work on a local bus list so manually-built mixers (no scene) still get a
@@ -434,8 +476,25 @@ void build_and_compile(SonareMixer* mixer) {
   for (const auto& bus : buses) {
     is_bus[bus.id] = true;
   }
+  std::unordered_map<std::string, bool> is_strip;
   for (const auto& strip : mixer->strips) {
-    for (const auto& send : strip->scene_strip.sends) {
+    is_strip[strip->id] = true;
+  }
+  for (size_t strip_index = 0; strip_index < mixer->strips.size(); ++strip_index) {
+    const auto& sends = mixer->strips[strip_index]->scene_strip.sends;
+    for (size_t send_index = 0; send_index < sends.size(); ++send_index) {
+      const auto& send = sends[send_index];
+      const auto destination_path = [&] {
+        return schema::child_path(
+            schema::index_path(scene_path("strips", strip_index, "sends"), send_index),
+            "destinationBusId");
+      };
+      if (send.destination_bus_id.empty()) {
+        refuse_scene(destination_path(), "must not be empty");
+      }
+      if (!is_bus.count(send.destination_bus_id) && is_strip.count(send.destination_bus_id)) {
+        refuse_scene(destination_path(), "must be the id of a bus, not of a strip");
+      }
       if (!is_bus.count(send.destination_bus_id)) {
         buses.push_back({send.destination_bus_id, "aux"});
         is_bus[send.destination_bus_id] = true;
@@ -445,11 +504,13 @@ void build_and_compile(SonareMixer* mixer) {
   }
 
   // The master's layout is the widest output it may be built at.
-  for (const auto& bus : buses) {
+  for (size_t index = 0; index < buses.size(); ++index) {
+    const auto& bus = buses[index];
     if (bus.id == master_id &&
         mixer->output_channels > std::max(2, sonare::channel_count(bus.layout))) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "mixer output width exceeds the master layout: " + master_id);
+      // Only a bounce widens the output past 2, so the refused value is its channel count.
+      sonare::util::check::refuse("num_channels",
+                                  "must not exceed the channel count of the master bus");
     }
   }
 
@@ -487,10 +548,6 @@ void build_and_compile(SonareMixer* mixer) {
   // A stereo strip scatters when its widest main destination has more than two
   // planes; a strip already running at a surround width does not, and a wide
   // strip destination takes the stereo signal on its front pair instead.
-  std::unordered_map<std::string, bool> is_strip;
-  for (const auto& strip : mixer->strips) {
-    is_strip[strip->id] = true;
-  }
   std::unordered_map<std::string, int> scatter_planes_by_id;
   for (const auto& strip : mixer->strips) {
     if (input_planes[strip->id] > 2) {
@@ -514,7 +571,8 @@ void build_and_compile(SonareMixer* mixer) {
   // Bus nodes: post-sum insert chains live inside FxBus/BusProcessor.
   std::unordered_map<std::string, std::vector<BusNode::SidechainInput>> bus_sidechain_inputs_by_id;
   std::unordered_map<std::string, std::vector<std::string>> bus_sidechain_keys_by_id;
-  for (const auto& bus : buses) {
+  for (size_t bus_index = 0; bus_index < buses.size(); ++bus_index) {
+    const auto& bus = buses[bus_index];
     // The DSP is looked up, never rebuilt: its inserts were constructed once at
     // scene-apply time (sonare_mixer_from_scene_json), and an implicit bus -- the
     // synthesized master, or an aux a send destination created -- gets an empty
@@ -543,7 +601,13 @@ void build_and_compile(SonareMixer* mixer) {
         &fx_bus, &dsp.panner, &dsp.eq, &dsp.eq_enabled, bus.input_trim_db, bus.width,
         bus.polarity_invert_left, bus.polarity_invert_right, planes, std::move(sidechain_inputs));
     if (!graph.add_node(bus.id, std::move(node), next_sidechain_port)) {
-      throw SonareException(ErrorCode::InvalidParameter, "duplicate or invalid bus id: " + bus.id);
+      // Implicit buses take ids no declared bus has, never empty (sends refuse that above).
+      if (bus.id.empty()) refuse_scene(scene_path("buses", bus_index, "id"), "must not be empty");
+      if (graph.node(bus.id) != nullptr) {
+        refuse_scene(scene_path("buses", bus_index, "id"), "must be unique among buses");
+      }
+      refuse_scene(scene_path("buses", bus_index, "inserts"),
+                   "must not carry more sidechain keys than a mixer node has ports for");
     }
   }
 
@@ -551,7 +615,8 @@ void build_and_compile(SonareMixer* mixer) {
   // tap, keys.
   std::unordered_map<std::string, std::vector<StripNode::SidechainInput>> sidechain_inputs_by_id;
   std::unordered_map<std::string, std::vector<std::string>> sidechain_keys_by_id;
-  for (const auto& strip : mixer->strips) {
+  for (size_t strip_index = 0; strip_index < mixer->strips.size(); ++strip_index) {
+    const auto& strip = mixer->strips[strip_index];
     const int num_sends = static_cast<int>(strip->strip.num_sends());
     const int main_planes = input_planes[strip->id];
     const int scatter_planes = scatter_planes_by_id[strip->id];
@@ -589,8 +654,15 @@ void build_and_compile(SonareMixer* mixer) {
         std::make_unique<StripNode>(strip.get(), main_planes, scatter_planes, num_sends,
                                     mixer->timeline_sample_pos, std::move(sidechain_inputs));
     if (!graph.add_node(strip->id, std::move(node), num_ports)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "duplicate or invalid strip id: " + strip->id);
+      // Strip ids are unique among strips: adding a strip refuses a repeated one.
+      if (strip->id.empty()) {
+        refuse_scene(scene_path("strips", strip_index, "id"), "must not be empty");
+      }
+      if (graph.node(strip->id) != nullptr) {
+        refuse_scene(scene_path("strips", strip_index, "id"), "must not be the id of a bus");
+      }
+      refuse_scene(scene_path("strips", strip_index, "inserts"),
+                   "must not carry more sidechain keys than a mixer node has ports for");
     }
   }
 
@@ -627,7 +699,7 @@ void build_and_compile(SonareMixer* mixer) {
     auto node = std::make_unique<DownmixNode>(sonare::layout_from_channel_count(source.planes),
                                               sonare::layout_from_channel_count(planes));
     if (!graph.add_node(id, std::move(node), source.planes)) {
-      throw SonareException(ErrorCode::InvalidParameter, "duplicate downmix node: " + id);
+      refuse_scene(id_path(id), "must not be the id of a node the mixer adds itself");
     }
     for (int p = 0; p < source.planes; ++p) {
       checked_connect(
@@ -660,11 +732,21 @@ void build_and_compile(SonareMixer* mixer) {
   // Main connections. Track which strips have an explicit outgoing main edge so
   // the rest can default-route to master.
   std::unordered_map<std::string, bool> has_main_out;
-  for (const auto& conn : mixer->connections) {
-    if (graph.node(conn.source) == nullptr || graph.node(conn.destination) == nullptr) {
-      throw SonareException(
-          ErrorCode::InvalidParameter,
-          "connection references unknown node: " + conn.source + " -> " + conn.destination);
+  for (size_t conn_index = 0; conn_index < mixer->connections.size(); ++conn_index) {
+    const auto& conn = mixer->connections[conn_index];
+    if (graph.node(conn.source) == nullptr) {
+      refuse_scene(scene_path("connections", conn_index, "source"),
+                   "must be the id of a strip or a bus in this scene");
+    }
+    if (graph.node(conn.destination) == nullptr) {
+      refuse_scene(scene_path("connections", conn_index, "destination"),
+                   "must be the id of a strip or a bus in this scene");
+    }
+    for (size_t earlier = 0; earlier < conn_index; ++earlier) {
+      if (mixer->connections[earlier].source == conn.source &&
+          mixer->connections[earlier].destination == conn.destination) {
+        refuse_scene(scene_path("connections", conn_index), "must be unique among connections");
+      }
     }
     const bool wide_strip_destination =
         is_strip.count(conn.destination) != 0 && input_planes[conn.destination] > 2;
@@ -706,7 +788,7 @@ void build_and_compile(SonareMixer* mixer) {
     }
     const std::string id = "__sonare_input__/" + strip->id;
     if (!graph.add_node(id, std::make_unique<InputNode>(), 2)) {
-      throw SonareException(ErrorCode::InvalidParameter, "duplicate input node: " + id);
+      refuse_scene(id_path(id), "must not be the id of a node the mixer adds itself");
     }
     for (int p = 0; p < 2; ++p) {
       checked_connect({id, p, strip->id, p, sonare::graph::Connection::Mix::Add});
@@ -720,22 +802,20 @@ void build_and_compile(SonareMixer* mixer) {
   // only on error.
 
   // Send taps: strip send output ports -> destination bus input ports.
-  for (const auto& strip : mixer->strips) {
+  for (size_t strip_index = 0; strip_index < mixer->strips.size(); ++strip_index) {
+    const auto& strip = mixer->strips[strip_index];
     const auto& sends = strip->scene_strip.sends;
     const int send_planes = input_planes[strip->id];
     const int send_base = send_planes + scatter_planes_by_id[strip->id];
     for (size_t s = 0; s < sends.size(); ++s) {
       const std::string& dest = sends[s].destination_bus_id;
-      if (!is_bus.count(dest)) {
-        throw SonareException(ErrorCode::InvalidParameter, "send destination is not a bus: " +
-                                                               dest + " (strip " + strip->id + ")");
-      }
       connect_audio({strip->id, send_base + send_planes * static_cast<int>(s), send_planes}, dest);
     }
   }
 
   // Insert sidechain keys: source main output -> destination strip key input ports.
-  for (const auto& strip : mixer->strips) {
+  for (size_t strip_index = 0; strip_index < mixer->strips.size(); ++strip_index) {
+    const auto& strip = mixer->strips[strip_index];
     const auto inputs_it = sidechain_inputs_by_id.find(strip->id);
     const auto keys_it = sidechain_keys_by_id.find(strip->id);
     if (inputs_it == sidechain_inputs_by_id.end() || keys_it == sidechain_keys_by_id.end()) {
@@ -746,15 +826,19 @@ void build_and_compile(SonareMixer* mixer) {
     for (size_t index = 0; index < inputs.size(); ++index) {
       const std::string& key_source = keys[index];
       if (graph.node(key_source) == nullptr) {
-        throw SonareException(
-            ErrorCode::InvalidParameter,
-            "sidechain key references unknown node: " + key_source + " (strip " + strip->id + ")");
+        const size_t insert_index = keyed_insert_index(strip->scene_strip.inserts, index);
+        refuse_scene(
+            schema::child_path(
+                schema::index_path(scene_path("strips", strip_index, "inserts"), insert_index),
+                "sidechainKey"),
+            "must be the id of a strip or a bus in this scene");
       }
       connect_key(key_source, strip->id, inputs[index].left_port, inputs[index].right_port);
     }
   }
 
-  for (const auto& bus : buses) {
+  for (size_t bus_index = 0; bus_index < buses.size(); ++bus_index) {
+    const auto& bus = buses[bus_index];
     const auto inputs_it = bus_sidechain_inputs_by_id.find(bus.id);
     const auto keys_it = bus_sidechain_keys_by_id.find(bus.id);
     if (inputs_it == bus_sidechain_inputs_by_id.end() ||
@@ -766,9 +850,12 @@ void build_and_compile(SonareMixer* mixer) {
     for (size_t index = 0; index < inputs.size(); ++index) {
       const std::string& key_source = keys[index];
       if (graph.node(key_source) == nullptr) {
-        throw SonareException(
-            ErrorCode::InvalidParameter,
-            "bus sidechain key references unknown node: " + key_source + " (bus " + bus.id + ")");
+        const size_t insert_index = keyed_insert_index(bus.inserts, index);
+        refuse_scene(
+            schema::child_path(
+                schema::index_path(scene_path("buses", bus_index, "inserts"), insert_index),
+                "sidechainKey"),
+            "must be the id of a strip or a bus in this scene");
       }
       connect_key(key_source, bus.id, inputs[index].left_port, inputs[index].right_port);
     }

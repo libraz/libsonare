@@ -204,7 +204,7 @@ size_t sonare_mixer_strip_count(const SonareMixer* mixer) {
 
 SonareError sonare_mixer_get_strip_count(const SonareMixer* mixer, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = mixer->strips.size();
@@ -235,10 +235,6 @@ SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_i
   SONARE_C_TRY
   const std::string source = source_id;
   const std::string destination = bus_id;
-  const auto refuse = [](const std::string& message) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
-  };
-
   const std::string master = resolve_master_bus_id(mixer->buses);
   const auto is_declared_bus = [&](const std::string& id) {
     return std::any_of(mixer->buses.begin(), mixer->buses.end(),
@@ -248,21 +244,20 @@ SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_i
       std::any_of(mixer->strips.begin(), mixer->strips.end(),
                   [&](const std::unique_ptr<SonareStrip>& strip) { return strip->id == source; });
   if (source == master) {
-    refuse("set_output_bus: the master '" + source + "' cannot be a source");
+    check::refuse("source_id", "must not be the id of the master bus");
   }
   if (!source_is_strip && !is_declared_bus(source)) {
-    refuse("set_output_bus: unknown source '" + source + "'");
+    check::refuse("source_id", "must be the id of a strip or a bus in this mixer");
   }
   if (destination != master && !is_declared_bus(destination)) {
     const bool destination_is_strip = std::any_of(
         mixer->strips.begin(), mixer->strips.end(),
         [&](const std::unique_ptr<SonareStrip>& strip) { return strip->id == destination; });
-    refuse(destination_is_strip
-               ? "set_output_bus: destination '" + destination + "' is a strip, not a bus"
-               : "set_output_bus: unknown destination '" + destination + "'");
+    if (destination_is_strip) check::refuse("bus_id", "must be the id of a bus, not of a strip");
+    check::refuse_unknown_id("bus_id", "a bus", "mixer");
   }
   if (source == destination) {
-    refuse("set_output_bus: '" + source + "' cannot route to itself");
+    check::refuse_relation({"bus_id", "source_id"}, "{0} must not be the same id as {1}");
   }
 
   // Edge set after the edit: every other main connection, the new one, and every
@@ -281,7 +276,6 @@ SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_i
   }
   // Any new cycle runs through the new edge, so search for a path back to the
   // source from the destination.
-  std::vector<std::string> path{source, destination};
   std::unordered_map<std::string, bool> visited;
   const std::function<bool(const std::string&)> reaches_source = [&](const std::string& node) {
     if (node == source) return true;
@@ -290,19 +284,13 @@ SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_i
     const auto it = edges.find(node);
     if (it == edges.end()) return false;
     for (const auto& next : it->second) {
-      path.push_back(next);
       if (reaches_source(next)) return true;
-      path.pop_back();
     }
     return false;
   };
   if (reaches_source(destination)) {
-    std::string text;
-    for (const auto& node : path) {
-      text += (text.empty() ? "" : " -> ") + node;
-    }
-    refuse("set_output_bus: routing '" + source + "' to '" + destination +
-           "' closes a cycle: " + text);
+    check::refuse_relation({"bus_id", "source_id"},
+                           "{0} must not name a bus whose routing leads back to {1}");
   }
 
   mixer->connections.erase(std::remove_if(mixer->connections.begin(), mixer->connections.end(),
@@ -373,7 +361,7 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
 
 SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = mixer->buses.size();
@@ -521,7 +509,7 @@ SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
 
 SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = mixer->vca_groups.size();
@@ -589,6 +577,15 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   std::unique_ptr<SonareMixer> mixer(created);
   for (size_t strip_index = 0; strip_index < scene.strips.size(); ++strip_index) {
     const auto& scene_strip = scene.strips[strip_index];
+    for (size_t earlier = 0; earlier < strip_index; ++earlier) {
+      if (scene.strips[earlier].id == scene_strip.id) {
+        namespace schema = sonare::util::json::schema;
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidFormat,
+            schema::refusal(schema::child_path(schema::index_path("strips", strip_index), "id"),
+                            "must be unique among strips"));
+      }
+    }
     // Build with the scene's metering: the meters are sized when the strip is
     // constructed, so this is the one point where a scene can opt out of the
     // full LUFS + true-peak configuration.
@@ -741,7 +738,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (json_out != nullptr) *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(json_out);
   SONARE_C_TRY
@@ -821,7 +818,7 @@ SonareError sonare_mixer_compile(SonareMixer* mixer) {
 
 SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_samples) {
   SONARE_C_API_ENTRY;
-  if (out_latency_samples != nullptr) *out_latency_samples = 0;
+  SONARE_C_ZERO_OUTS(out_latency_samples);
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(out_latency_samples);
   SONARE_C_TRY
@@ -835,7 +832,7 @@ SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_sa
 
 SonareError sonare_mixer_max_block_size(const SonareMixer* mixer, int* out_max_block_size) {
   SONARE_C_API_ENTRY;
-  if (out_max_block_size) *out_max_block_size = 0;
+  SONARE_C_ZERO_OUTS(out_max_block_size);
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(out_max_block_size);
   *out_max_block_size = mixer->max_block_size;
@@ -844,7 +841,7 @@ SonareError sonare_mixer_max_block_size(const SonareMixer* mixer, int* out_max_b
 
 SonareError sonare_mixer_tail_samples(SonareMixer* mixer, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
-  if (out_tail_samples != nullptr) *out_tail_samples = 0;
+  SONARE_C_ZERO_OUTS(out_tail_samples);
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(out_tail_samples);
   SONARE_C_TRY
@@ -966,7 +963,7 @@ const char* sonare_mixing_scene_preset_names(void) {
 
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (json_out != nullptr) *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(preset_name);
   SONARE_C_REQUIRE_NONNULL(json_out);
   SONARE_C_TRY

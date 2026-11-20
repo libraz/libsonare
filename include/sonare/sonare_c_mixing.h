@@ -318,8 +318,8 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id);
 ///   @p source_id is a strip or a non-master bus; @p bus_id is a declared bus or
 ///   the master (the id resolved the way the compile resolves it). Everything is
 ///   validated before anything changes, so a refused call leaves the topology
-///   untouched. Returns @c SONARE_ERROR_INVALID_PARAMETER, with the ids (and, for
-///   a cycle, the path) in @ref sonare_last_error_message, if an argument is NULL,
+///   untouched. Returns @c SONARE_ERROR_INVALID_PARAMETER, naming the refused
+///   argument in @ref sonare_last_error_message, if an argument is NULL,
 ///   the source or destination is unknown, the source is the master, the
 ///   destination is not a bus, the route is a self-route, or the edit would
 ///   close a cycle through connections or sends.
