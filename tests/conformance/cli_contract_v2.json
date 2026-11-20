@@ -8538,7 +8538,10 @@
     "mastering-stereo-analyses": {
       "classification": "shared",
       "status": "active",
-      "option_status": "active"
+      "option_status": "active",
+      "requires": [
+        "mastering"
+      ]
     },
     "fourier-tempogram": {
       "classification": "shared",

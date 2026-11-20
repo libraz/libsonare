@@ -2129,6 +2129,7 @@ test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the co
 [[entry]]
 kind = "flag"
 old = "clipping --threshold"
+frontend = "native"
 changed = "the detection level is given in dBFS as --threshold-db, in [-120, 0]; a linear threshold t becomes 20*log10(t), and a level outside the range is refused as a usage error (exit 2)"
 to = "clipping --threshold-db"
 domain = "analysis"
@@ -2138,6 +2139,7 @@ test = "bindings/python/tests/test_cli_feature_commands.py::test_clipping_thresh
 [[entry]]
 kind = "flag"
 old = "meter --clip-threshold"
+frontend = "native"
 changed = "the clipping level is given in dBFS as --clip-threshold-db, in [-120, 0]; a linear threshold t becomes 20*log10(t), and a level outside the range is refused as a usage error (exit 2)"
 to = "meter --clip-threshold-db"
 domain = "analysis"
@@ -2400,6 +2402,7 @@ test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed in
 [[entry]]
 kind = "flag"
 old = "mix --input"
+frontend = "python"
 changed = "an entry with an empty strip id or an empty path is refused as a usage error (exit 2) before any input is read"
 domain = "engine"
 rule = "cli-front-end-parity"
@@ -2408,6 +2411,7 @@ test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed in
 [[entry]]
 kind = "flag"
 old = "mix --sample-rate"
+frontend = "python"
 changed = "a rate outside 8000-384000 is refused as a usage error (exit 2) before any input is read"
 domain = "engine"
 rule = "cli-front-end-parity"
