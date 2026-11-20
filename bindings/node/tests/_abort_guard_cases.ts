@@ -100,7 +100,7 @@ const readerTone = new Float32Array(4096).map((_, i) => Math.sin((2 * Math.PI * 
 const readerMatrix = new Float32Array(4).fill(0.5);
 const readerAudio = () => addon.Audio.fromBuffer(readerTone, 22050);
 const READER_MIXER_SCENE = JSON.stringify({
-  version: 1,
+  version: 2,
   buses: [
     { id: 'master', role: 'master', inserts: [] },
     { id: 'fx', role: 'aux', inserts: [] },
@@ -147,6 +147,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.analyzeSections', 'sampleRate', () => addon.analyzeSections(readerTone, 'x')],
   ['addon.analyzeTimbre', 'sampleRate', () => addon.analyzeTimbre(readerTone, 'x')],
   ['addon.bassChroma', 'sampleRate', () => addon.bassChroma(readerTone, 'x')],
+  ['addon.biquadFilter', 'type', () => addon.biquadFilter(readerTone, 22050, 'x')],
   ['addon.chirp', 'fmin', () => addon.chirp('x')],
   [
     'addon.chordFunctionalAnalysis',
@@ -179,6 +180,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
     () => addon.ebur128LoudnessRangeLu(readerTone, 'x'),
   ],
   ['addon.estimateTuning', 'sampleRate', () => addon.estimateTuning(readerTone, 'x')],
+  ['addon.fade', 'fadeInSec', () => addon.fade(readerTone, 22050, 'x')],
   ['addon.fixFrames', 'xMin', () => addon.fixFrames(new Int32Array([0, 1]), 'x')],
   ['addon.fourierTempogram', 'sampleRate', () => addon.fourierTempogram(readerTone, 'x')],
   ['addon.framesToSamples', 'hopLength', () => addon.framesToSamples(2, 'x')],
