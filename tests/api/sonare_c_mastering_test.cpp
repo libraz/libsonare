@@ -459,7 +459,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(sonare_streaming_mastering_chain_process_stereo(stereo_chain, left.data(), right.data(),
                                                             left.size() + 1) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(std::string(sonare_last_error_message()).empty());
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "num_samples must be an integer in [0, 128]");
     sonare_streaming_mastering_chain_destroy(stereo_chain);
   }
 
