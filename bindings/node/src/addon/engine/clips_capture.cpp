@@ -301,9 +301,9 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
         return env.Undefined();
       }
       if (source_channel_layout_raw != SONARE_CHANNEL_LAYOUT_STEREO) {
-        Napi::RangeError::New(env,
-                              "track lane sourceChannelLayout must be stereo; multichannel lanes "
-                              "are not implemented")
+        sonare_node::MakeSonareError(env, SONARE_ERROR_NOT_SUPPORTED,
+                                     "lanes[" + std::to_string(i) +
+                                         "].sourceChannelLayout other than stereo is not supported")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }

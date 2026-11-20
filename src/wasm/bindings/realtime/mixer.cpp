@@ -10,6 +10,7 @@
 #include "mixing/pan_law.h"
 #include "realtime_engine_wasm.h"
 #include "util/json.h"
+#include "util/parameter_checks.h"
 
 namespace {
 
@@ -137,9 +138,9 @@ sonare::engine::SidechainSourceKind sidechainSourceKindForQuery(int source_kind)
 void RealtimeEngineWasm::setTrackLanes(val lanes) {
 #if defined(SONARE_WITH_MIXING)
   const int count = static_cast<int>(wasmArrayLikeLength(lanes, "lanes"));
-  if (static_cast<size_t>(count) > sonare::engine::TrackMixerRuntime::kMaxTrackLanes) {
-    throw WasmRangeError(sonare::engine::kTrackLaneCountRefusal);
-  }
+  sonare::util::check::integer_in_range(
+      count, 0, static_cast<long long>(sonare::engine::TrackMixerRuntime::kMaxTrackLanes),
+      "lane_count");
   std::vector<sonare::engine::TrackLaneConfig> configs;
   configs.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {
@@ -164,7 +165,11 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
         throw WasmRangeError("invalid source channel layout");
       }
       if (raw_layout != static_cast<int>(sonare::ChannelLayout::Stereo)) {
-        throw WasmRangeError(sonare::engine::kTrackLaneLayoutRefusal);
+        throw sonare::SonareException(
+            sonare::ErrorCode::NotSupported,
+            sonare::util::check::indexed_subject("lanes", static_cast<std::size_t>(i),
+                                                 "sourceChannelLayout") +
+                " other than stereo is not supported");
       }
       config.source_layout = sonare::ChannelLayout::Stereo;
     }
