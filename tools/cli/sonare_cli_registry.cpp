@@ -400,6 +400,38 @@ CliValidationError validate_boundary_feature_streams(const CliArgs& args) {
       "needs at least one feature stream"};
 }
 
+// Both lengths default to 0, which is no fade, so a fade with neither side given does nothing.
+CliValidationError validate_fade_sides(const CliArgs& args) {
+  if (args.has("fade-in-sec") || args.has("fade-out-sec")) return {};
+  return {"give --fade-in-sec or --fade-out-sec"};
+}
+
+// --type decides which frequencies the filter reads; one it reads is required, and one it does
+// not read is refused rather than ignored, as the library refuses it.
+CliValidationError validate_filter_frequencies(const CliArgs& args) {
+  const std::string type = args.get_string("type", "");
+  const bool corner = type == "high-pass" || type == "low-pass";
+  const char* types = corner ? "high-pass or low-pass" : "band-pass or notch";
+  const std::vector<const char*> read = corner
+                                            ? std::vector<const char*>{"cutoff-hz"}
+                                            : std::vector<const char*>{"center-hz", "bandwidth-hz"};
+  const std::vector<const char*> unread =
+      corner ? std::vector<const char*>{"center-hz", "bandwidth-hz"}
+             : std::vector<const char*>{"cutoff-hz"};
+  for (const char* name : read) {
+    if (!args.has(name)) return {std::string("--") + name + " is required when --type is " + types};
+  }
+  for (const char* name : unread) {
+    if (args.has(name)) {
+      return {std::string("--") + name + " does not apply when --type is " + types};
+    }
+  }
+  if (!corner && args.get_int("order", 2) != 2) {
+    return {std::string("--order must be 2 when --type is ") + types};
+  }
+  return {};
+}
+
 // A position is spelled in samples or in seconds; both at once is refused by
 // name, as the library refuses the two keyword spellings.
 CliValidationError refuse_both_bound_spellings(const CliArgs& args,
@@ -867,14 +899,18 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                                          stated_number(sonare::kDefaultRmsTargetDb) + " (rms)"),
                  required_output()},
                 {}, nullptr, 0, /*preserves_stereo_input=*/true);
-    add_command(commands, "gain", true, {number_value("gain-db"), required_output()});
     add_command(commands, "fade", true,
-                {number_value("fade-in-sec"), number_value("fade-out-sec"), required_output()});
+                {with_domain(number_value("fade-in-sec"), at_least(0.0)),
+                 with_domain(number_value("fade-out-sec"), at_least(0.0)), required_output()},
+                {}, validate_fade_sides);
     add_command(commands, "filter", true,
-                {with_domain(string_value("type", true), choices_of({"hp", "lp", "bp", "notch"})),
-                 with_domain(int_value("order", 2), choices_of({"2", "4"})),
-                 number_value("cutoff-hz", 0.0), number_value("center", 0.0),
-                 number_value("bandwidth", 0.0), required_output(), flag("zero-phase")});
+                {with_domain(string_value("type", true), choices_of(filter_type_tokens())),
+                 library_default(with_domain(int_value("order"), choices_of({"2", "4"})), "2"),
+                 with_domain(number_value("cutoff-hz"), greater_than(0.0)),
+                 with_domain(number_value("center-hz"), greater_than(0.0)),
+                 with_domain(number_value("bandwidth-hz"), greater_than(0.0)), required_output(),
+                 flag("zero-phase")},
+                {}, validate_filter_frequencies);
     add_command(commands, "resample", true,
                 {required_int("target-sample-rate"), required_output()});
     // The generators accept any positive rate, so a rate the library's own decoder
@@ -909,6 +945,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  library_default(number_value("click-duration-sec"), "0.1"), required_output()});
 
 #ifdef SONARE_WITH_MASTERING
+    // The library's utility.gain processor, so the command takes the processor's published value.
+    add_command(commands, "gain", true, {number_value("gain-db", true), required_output()});
     // "--chain-config" names a complete chain config in the core's own
     // `{params, version}` form.
     add_command(commands, "mastering", true,

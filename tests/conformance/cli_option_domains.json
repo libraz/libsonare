@@ -1379,12 +1379,30 @@
       "exclusive_maximum": false
     },
     {
+      "command": "fade",
+      "option": "fade-in-sec",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": false,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "fade",
+      "option": "fade-out-sec",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": false,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
       "command": "filter",
       "option": "type",
       "choices": [
-        "hp",
-        "lp",
-        "bp",
+        "high-pass",
+        "low-pass",
+        "band-pass",
         "notch"
       ],
       "minimum": null,
@@ -1401,6 +1419,33 @@
       ],
       "minimum": null,
       "exclusive_minimum": false,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "filter",
+      "option": "cutoff-hz",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": true,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "filter",
+      "option": "center-hz",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": true,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "filter",
+      "option": "bandwidth-hz",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": true,
       "maximum": null,
       "exclusive_maximum": false
     }

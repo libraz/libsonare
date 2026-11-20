@@ -909,7 +909,11 @@ TEST_CASE("CLI generator and edit flags carry their unit", "[cli]") {
         " tone -o " + out + " --frequency-hz 440 --duration 1 -q",
         " clicks -o " + out + " --times 0.1 --click-duration 0.05 -q",
         " fade " + TEST_WAV + " -o " + out + " --fade-in 0.1 -q",
-        " filter " + TEST_WAV + " -o " + out + " --type lp --cutoff 1000 -q",
+        " filter " + TEST_WAV + " -o " + out + " --type low-pass --cutoff 1000 -q",
+        " filter " + TEST_WAV + " -o " + out +
+            " --type band-pass --center 1000 --bandwidth-hz 100 -q",
+        " filter " + TEST_WAV + " -o " + out +
+            " --type band-pass --center-hz 1000 --bandwidth 100 -q",
         " chords " + TEST_WAV + " --min-duration 0.3 -q", " key " + TEST_WAV + " --use-hpss -q"}) {
     CAPTURE(retired);
     auto [code, output] = exec_command(CLI + retired);

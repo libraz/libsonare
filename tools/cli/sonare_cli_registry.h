@@ -173,6 +173,12 @@ CliOptionValue null_default();
 const CliOptionSpec* option_for_spec(const CliCommandSpec* command, const std::string& option);
 std::string command_path_for_args(const CliArgs& args);
 
+/// The `filter --type` tokens, indexed by the SonareBiquadFilterType each one selects.
+inline const std::vector<std::string>& filter_type_tokens() {
+  static const std::vector<std::string> tokens = {"high-pass", "low-pass", "band-pass", "notch"};
+  return tokens;
+}
+
 #ifdef SONARE_WITH_MASTERING
 /// The first refusal of `repair`'s mode switches, `--stages` and `--params`, decided from
 /// the command line alone, or empty; defined in sonare_cli_mastering_args.cpp.

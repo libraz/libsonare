@@ -334,7 +334,9 @@ int cmd_stereo(const CliArgs& args, const Audio& audio);
 int cmd_phase(const CliArgs& args, const Audio& audio);
 
 int cmd_normalize(const CliArgs& args, const Audio& audio);
+#ifdef SONARE_WITH_MASTERING
 int cmd_gain(const CliArgs& args, const Audio& audio);
+#endif
 int cmd_fade(const CliArgs& args, const Audio& audio);
 int cmd_filter(const CliArgs& args, const Audio& audio);
 int cmd_resample(const CliArgs& args, const Audio& audio);

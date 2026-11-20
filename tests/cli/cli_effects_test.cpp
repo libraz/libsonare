@@ -575,11 +575,11 @@ TEST_CASE("CLI filter applies zero phase to fourth-order filters only when reque
 
   auto [causal_code, causal_message] =
       exec_command(CLI + " filter " + input + " -o " + causal_output +
-                   " --type lp --cutoff-hz 1000 --order 4 -q");
+                   " --type low-pass --cutoff-hz 1000 --order 4 -q");
   REQUIRE(causal_code == 0);
   auto [zero_phase_code, zero_phase_message] =
       exec_command(CLI + " filter " + input + " -o " + zero_phase_output +
-                   " --type lp --cutoff-hz 1000 --order 4 --zero-phase -q");
+                   " --type low-pass --cutoff-hz 1000 --order 4 --zero-phase -q");
   REQUIRE(zero_phase_code == 0);
 
   auto [causal, causal_rate] = load_wav(causal_output);
@@ -601,25 +601,79 @@ TEST_CASE("CLI filter applies zero phase to fourth-order filters only when reque
   std::remove(zero_phase_output.c_str());
 }
 
-TEST_CASE("CLI filter takes hp, lp, bp or notch and refuses any other spelling", "[cli]") {
+TEST_CASE("CLI filter takes the library's four response types and refuses any other spelling",
+          "[cli]") {
   create_test_wav(TEST_WAV);
   const std::string out = unique_temp_path("_filter_refused.wav");
-  for (const char* spelling : {"highpass", "lowpass", "bandpass"}) {
+  for (const char* spelling : {"hp", "lp", "highpass", "lowPass"}) {
     const std::string type = spelling;
     CAPTURE(type);
     auto [code, output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --type " +
                                        type + " --cutoff-hz 1000 -q");
     REQUIRE(code == 2);
-    REQUIRE_THAT(output, ContainsSubstring("argument --type: must be one of hp, lp, bp, notch"));
+    REQUIRE_THAT(
+        output,
+        ContainsSubstring("argument --type: must be one of high-pass, low-pass, band-pass, notch"));
   }
   auto [order_code, order_output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out +
-                                                 " --type lp --cutoff-hz 1000 --order 3 -q");
+                                                 " --type low-pass --cutoff-hz 1000 --order 3 -q");
   REQUIRE(order_code == 2);
   REQUIRE_THAT(order_output, ContainsSubstring("argument --order: must be one of 2, 4"));
   auto [missing_code, missing_output] =
       exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " --cutoff-hz 1000 -q");
   REQUIRE(missing_code == 2);
   REQUIRE_THAT(missing_output, ContainsSubstring("Missing required option '--type'"));
+  REQUIRE_FALSE(std::ifstream(out).good());
+}
+
+TEST_CASE("CLI filter requires the frequencies its type reads and refuses the others", "[cli]") {
+  create_test_wav(TEST_WAV);
+  const std::string out = unique_temp_path("_filter_frequencies.wav");
+  const std::pair<const char*, const char*> refusals[] = {
+      {"--type high-pass", "--cutoff-hz is required when --type is high-pass or low-pass"},
+      {"--type low-pass --cutoff-hz 1000 --center-hz 500",
+       "--center-hz does not apply when --type is high-pass or low-pass"},
+      {"--type band-pass --center-hz 1000",
+       "--bandwidth-hz is required when --type is band-pass or notch"},
+      {"--type notch --center-hz 1000 --bandwidth-hz 100 --cutoff-hz 500",
+       "--cutoff-hz does not apply when --type is band-pass or notch"},
+      {"--type band-pass --center-hz 1000 --bandwidth-hz 100 --order 4",
+       "--order must be 2 when --type is band-pass or notch"},
+      {"--type low-pass --cutoff-hz 0", "argument --cutoff-hz: must be finite and greater than 0"},
+  };
+  for (const auto& [arguments, message] : refusals) {
+    CAPTURE(arguments);
+    auto [code, output] =
+        exec_command(CLI + " filter " + TEST_WAV + " -o " + out + " " + arguments + " -q");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(message));
+  }
+  // A corner at or past Nyquist needs the input's rate, so the library refuses it after the read.
+  auto [nyquist_code, nyquist_output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out +
+                                                     " --type low-pass --cutoff-hz 30000 -q");
+  REQUIRE(nyquist_code == 3);
+  REQUIRE_THAT(nyquist_output, ContainsSubstring("cutoff_hz must be finite and in (0, "));
+  REQUIRE_FALSE(std::ifstream(out).good());
+
+  auto [code, output] = exec_command(CLI + " filter " + TEST_WAV + " -o " + out +
+                                     " --type notch --center-hz 1000 --bandwidth-hz 100 --json -q");
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, ContainsSubstring("\"cutoff_hz\": null"));
+  REQUIRE_THAT(output, ContainsSubstring("\"center_hz\": 1000"));
+  std::remove(out.c_str());
+}
+
+TEST_CASE("CLI fade takes at least one side and refuses a negative length", "[cli]") {
+  create_test_wav(TEST_WAV);
+  const std::string out = unique_temp_path("_fade_refused.wav");
+  auto [none_code, none_output] = exec_command(CLI + " fade " + TEST_WAV + " -o " + out + " -q");
+  REQUIRE(none_code == 2);
+  REQUIRE_THAT(none_output, ContainsSubstring("give --fade-in-sec or --fade-out-sec"));
+  auto [negative_code, negative_output] =
+      exec_command(CLI + " fade " + TEST_WAV + " -o " + out + " --fade-out-sec -1 -q");
+  REQUIRE(negative_code == 2);
+  REQUIRE_THAT(negative_output,
+               ContainsSubstring("argument --fade-out-sec: must be finite and at least 0"));
   REQUIRE_FALSE(std::ifstream(out).good());
 }
 

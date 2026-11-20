@@ -903,9 +903,13 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
 #endif
 
   SECTION("a missing required option is refused before dispatch") {
+#ifdef SONARE_WITH_MASTERING
     REQUIRE(reject({"sonare-cli", "gain", "--gain-db", "3"}, true).message ==
             "Missing required option '--output'");
+    REQUIRE(reject({"sonare-cli", "gain", "-o", "out.wav"}, true).message ==
+            "Missing required option '--gain-db'");
     REQUIRE(reject({"sonare-cli", "gain", "--gain-db", "3", "-o", "out.wav"}, true).empty());
+#endif
     REQUIRE(reject({"sonare-cli", "resample", "-o", "out.wav"}, true).message ==
             "Missing required option '--target-sample-rate'");
     REQUIRE(reject({"sonare-cli", "pitch-shift", "-o", "out.wav"}, true).message ==
@@ -1972,6 +1976,7 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       // A 0.5 s window lets the weaker of the two boundaries clear --threshold 0.7 on its own.
       {"boundaries", p.sections_wav + " --threshold 0.7 --json -q", "reference-window", "0.5"},
       {"hpss", p.tone_wav + " --harmonic-only" + to_out, "n-fft", "1024"},
+      {"filter", p.tone_wav + " --type low-pass --cutoff-hz 1000" + to_out, "order", "4"},
       {"decompose-stems", p.short_tone_wav + to_out, "n-fft", "1024"},
       {"trim-silence", p.gapped_wav + to_out, "threshold-db", "-20"},
       {"trim-silence", p.gapped_wav + to_out, "n-fft", "1024"},

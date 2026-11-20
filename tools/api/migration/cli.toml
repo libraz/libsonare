@@ -1983,3 +1983,55 @@ changed = "a value outside [1, 65536] is refused as a usage error (exit 2) befor
 domain = "analysis"
 rule = "cli-front-end-parity"
 test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "filter --center"
+new = "filter --center-hz"
+frontend = "native"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "filter --bandwidth"
+new = "filter --bandwidth-hz"
+frontend = "native"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "filter --type"
+changed = "values are the library's response names in kebab-case (high-pass, low-pass, band-pass, notch); hp, lp and bp are refused as a usage error (exit 2)"
+frontend = "native"
+domain = "effects"
+rule = "token-case"
+test = "tests/cli/cli_effects_test.cpp::CLI filter takes the library's four response types and refuses any other spelling"
+
+[[entry]]
+kind = "command"
+old = "filter"
+changed = "the frequencies --type reads are required and one it does not read is refused, as usage errors (exit 2) before the input is read rather than exit 1; a corner or centre at or above the input's Nyquist frequency is refused (exit 3) rather than written as a non-finite signal; the JSON names cutoff_hz, center_hz and bandwidth_hz, null where the type does not read one, and adds order and zero_phase"
+frontend = "native"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI filter requires the frequencies its type reads and refuses the others"
+
+[[entry]]
+kind = "command"
+old = "fade"
+changed = "a fade with neither --fade-in-sec nor --fade-out-sec, or with a negative length, is refused as a usage error (exit 2) before the input is read rather than exit 1; the JSON names the lengths fade_in_sec and fade_out_sec, where it named them fade_in and fade_out"
+frontend = "native"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI fade takes at least one side and refuses a negative length"
+
+[[entry]]
+kind = "command"
+old = "gain"
+changed = "runs the library's utility.gain processor, which writes the same file (the WAV writer clamps to full scale where the command used to); leaving out --gain-db is refused as a usage error (exit 2) before the input is read rather than exit 1; the command needs a build with mastering"
+frontend = "native"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
