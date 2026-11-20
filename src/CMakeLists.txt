@@ -1706,13 +1706,20 @@ if(BUILD_WASM)
     set_source_files_properties(
       mastering/api/chain.cpp
       mastering/api/chain_json.cpp
+      mastering/api/chain_params.cpp
       mastering/api/insert_factory.cpp
       mastering/api/insert_param_catalog.cpp
+      mastering/api/named_processor.cpp
       mastering/api/named_processor_registry.cpp
       mastering/assistant/audio_profile.cpp
       mastering/assistant/repair_session.cpp
       mastering/eq/equalizer.cpp
       mastering/eq/graphic_eq.cpp
+      mastering/multiband/multiband_compressor.cpp
+      mastering/multiband/multiband_dynamic_eq.cpp
+      mastering/multiband/multiband_expander.cpp
+      mastering/multiband/multiband_limiter.cpp
+      mastering/saturation/multiband_exciter.cpp
       TARGET_DIRECTORY sonare_mastering
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
