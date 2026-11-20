@@ -265,7 +265,7 @@ def mastering_repair_detect_trim_range_stereo(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     return _extract_trim_range(out)
 
 
@@ -361,7 +361,7 @@ def mastering_repair_trim_silence_stereo(
         ctypes.byref(out),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         # An all-silent pair comes back as (NULL, NULL, 0) and SONARE_OK, so the
         # length is read before either pointer -- sizing from the input length
         # instead would index a NULL pointer and raise on a documented success.

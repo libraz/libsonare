@@ -162,7 +162,7 @@ def voice_change(
             ctypes.byref(out_length),
         )
         # A refused factor is an argument refusal in either formant mode.
-        _check(rc)
+        _check(rc, flattened="config")
         return _from_c_float_array(out, out_length.value)
 
 

@@ -333,7 +333,8 @@ def downmix(
                 _to_c_int(layout, "target_layout"),
                 ctypes.byref(fold),
                 ctypes.byref(out),
-            )
+            ),
+            flattened="options",
         )
         out_channels = _LAYOUT_CHANNEL_COUNTS[target_layout]
         planar = _from_c_float_array(out, out_channels * frame_count)

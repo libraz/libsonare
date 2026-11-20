@@ -276,7 +276,7 @@ def test_estimate_room_frees_a_partial_foreign_result_before_check(
     foreign = ForeignLibrary()
     monkeypatch.setattr(acoustic_module, "_get_lib", lambda: foreign)
 
-    def raise_from_check(_rc: int) -> None:
+    def raise_from_check(_rc: int, *, flattened: str | None = None) -> None:
         raise _ForeignEstimateError("foreign estimate failure")
 
     monkeypatch.setattr(acoustic_module, "_check", raise_from_check)

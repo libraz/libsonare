@@ -165,7 +165,8 @@ class _ProjectInspectionMixin:
                 candidates,
                 ctypes.c_size_t(len(candidates)),
                 ctypes.byref(count),
-            )
+            ),
+            flattened="options",
         )
         labels = ("primary", "half", "double")
         return [
@@ -227,7 +228,8 @@ class _ProjectInspectionMixin:
                 _to_c_size_t(candidate_index, "candidate_index"),
                 _to_c_uint8(1 if apply_time_signatures else 0, "apply_time_signatures"),
                 ctypes.byref(out_bpm),
-            )
+            ),
+            flattened="options",
         )
         return float(out_bpm.value)
 

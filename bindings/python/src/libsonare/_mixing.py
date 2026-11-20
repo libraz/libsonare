@@ -800,7 +800,10 @@ class Mixer:
         config.true_peak_oversample = _narrow_int(
             true_peak_oversample, "true_peak_oversample", _C_INT_MIN, _C_INT_MAX
         )
-        _check(lib.sonare_mixer_configure_master_meter(self._handle, ctypes.byref(config)))
+        _check(
+            lib.sonare_mixer_configure_master_meter(self._handle, ctypes.byref(config)),
+            flattened="config",
+        )
 
     @_entry("Mixer.meter_snapshot")
     def meter_snapshot(self) -> MixMeterSnapshot:

@@ -101,7 +101,7 @@ def mastering(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         processed = _from_c_float_array(out.samples, out.length)
         return MasteringResult(

@@ -435,7 +435,7 @@ def mastering_repair_denoise_classical_stereo(
         ctypes.byref(out),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         n = int(out.length)
         return DenoiseStereoResult(
             left=_from_c_float_array(out.left, n),
@@ -569,7 +569,8 @@ def mastering_repair_denoise_classical_linked(
             ctypes.byref(config),
             ctypes.cast(out_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
             ctypes.byref(report),
-        )
+        ),
+        flattened="config",
     )
     return DenoiseLinkedResult(
         channels=out_buffers,
@@ -799,7 +800,7 @@ def mastering_repair_dehum_stereo(
         ctypes.byref(out),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         n = int(out.length)
         return DehumStereoResult(
             left=_from_c_float_array(out.left, n),

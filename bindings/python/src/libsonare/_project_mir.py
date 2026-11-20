@@ -178,7 +178,7 @@ def align_take_to_reference(
         ctypes.byref(out_alignment),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         anchors = tuple(
             (out_anchors[i].warp_sample, out_anchors[i].source_sample)
             for i in range(out_count.value)

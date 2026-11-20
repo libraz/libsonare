@@ -203,6 +203,7 @@ def spectral_edit(
                 _to_c_size_t(n_ops, "n_ops"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
-            )
+            ),
+            flattened="config",
         )
         return _from_c_float_array(out, out_length.value)

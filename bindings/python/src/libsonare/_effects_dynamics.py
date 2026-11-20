@@ -52,6 +52,8 @@ def _run_dynamics(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     config: Any,
+    *,
+    flattened: str | None = None,
 ) -> DynamicsProcessorResult:
     """Invoke a dynamics ``(samples, sr, &config, &out, &out_length, &out_latency)``
     C call and return its :class:`DynamicsProcessorResult`.
@@ -71,7 +73,7 @@ def _run_dynamics(
             ctypes.byref(out_length),
             ctypes.byref(latency),
         )
-        _check(rc)
+        _check(rc, flattened=flattened)
         return DynamicsProcessorResult(
             samples=_from_c_float_array(out, out_length.value),
             latency_samples=int(latency.value),
@@ -246,4 +248,5 @@ def mastering_dynamics_transient_shaper(
         samples,
         sample_rate,
         config,
+        flattened="config",
     )

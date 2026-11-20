@@ -662,7 +662,7 @@ def _note_set_edit(
         *cut,
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         return _notes_from_c(out)
     finally:

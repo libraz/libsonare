@@ -274,7 +274,7 @@ def mastering_repair_declick_stereo(
         ctypes.byref(out),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         n = int(out.length)
         return DeclickStereoResult(
             left=_from_c_float_array(out.left, n),
@@ -492,7 +492,7 @@ def mastering_repair_declip_stereo(
         ctypes.byref(out),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         n = int(out.length)
         return DeclipStereoResult(
             left=_from_c_float_array(out.left, n),
@@ -664,7 +664,7 @@ def mastering_repair_decrackle_stereo(
         ctypes.byref(out),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         n = int(out.length)
         return DecrackleStereoResult(
             left=_from_c_float_array(out.left, n),

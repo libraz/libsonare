@@ -376,7 +376,7 @@ def estimate_room(
         ctypes.byref(out),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         count = out.band_count
         return RoomEstimate(
             volume=float(out.volume),

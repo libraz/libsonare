@@ -386,7 +386,7 @@ def detect_onsets(
             ctypes.byref(out_times),
             ctypes.byref(out_count),
         )
-        _check(rc)
+        _check(rc, flattened="config")
         count = out_count.value
         return _from_c_float_array(out_times, count)
 

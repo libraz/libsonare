@@ -281,7 +281,7 @@ def extract_notes(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         return _notes_from_c(out)
     finally:
@@ -411,7 +411,8 @@ def render_notes(
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
-            )
+            ),
+            flattened="config",
         )
         return _from_c_float_array(out, out_length.value)
 
@@ -948,7 +949,8 @@ def assign_note_targets(
             _to_c_size_t(target_count, "target_count"),
             ctypes.byref(config),
             ctypes.byref(assigned),
-        )
+        ),
+        flattened="config",
     )
     # The shared marshaller hands the array back as `object`, which is all its
     # other callers need; this is the one entry point that reads the rows again.
@@ -1142,7 +1144,8 @@ def transcribe(
                 _to_c_float(tempo, "tempo_bpm"),
                 ctypes.byref(config),
                 ctypes.byref(out),
-            )
+            ),
+            flattened="config",
         )
         return _transcribe_result_from_c(out)
     finally:

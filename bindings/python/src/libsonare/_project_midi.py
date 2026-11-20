@@ -307,7 +307,8 @@ class _ProjectMidiMixin:
                 _to_c_int(rate, "sample_rate"),
                 ctypes.byref(config),
                 ctypes.byref(note_count),
-            )
+            ),
+            flattened="config",
         )
         return int(note_count.value)
 

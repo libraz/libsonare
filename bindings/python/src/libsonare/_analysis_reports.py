@@ -294,7 +294,8 @@ def analyze(
             _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(options),
             ctypes.byref(out_json),
-        )
+        ),
+        flattened="options",
     )
     try:
         raw = out_json.value
@@ -347,7 +348,7 @@ def _analyze_with_callbacks(
         None,
     )
     raise_callback_error(state, rc, lambda: _free_json(lib, out_json))
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         raw = out_json.value
         data = json.loads(raw.decode("utf-8") if raw else "{}")
@@ -487,7 +488,7 @@ def estimate_meter(
         ctypes.byref(options),
         ctypes.byref(out_json),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         raw = out_json.value
         data = json.loads(raw.decode("utf-8") if raw else "{}")

@@ -343,7 +343,7 @@ def mastering_repair_dereverb_classical_stereo(
         ctypes.byref(out),
     )
     try:
-        _check(rc)
+        _check(rc, flattened="config")
         n = int(out.length)
         return DereverbStereoResult(
             left=_from_c_float_array(out.left, n),
@@ -483,7 +483,8 @@ def mastering_repair_dereverb_classical_linked(
             ctypes.byref(config),
             ctypes.cast(out_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
             ctypes.byref(report),
-        )
+        ),
+        flattened="config",
     )
     return DereverbLinkedResult(
         channels=out_buffers,

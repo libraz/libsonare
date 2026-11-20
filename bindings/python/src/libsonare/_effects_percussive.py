@@ -365,7 +365,7 @@ def extract_percussive_events(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         return [_percussive_event_from_c(out.events[i]) for i in range(out.count)]
     finally:
@@ -471,6 +471,7 @@ def render_percussive_events(
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
-            )
+            ),
+            flattened="config",
         )
         return _from_c_float_array(out, out_length.value)

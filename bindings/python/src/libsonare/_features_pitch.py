@@ -394,7 +394,7 @@ def note_segments(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         return [
             NoteSegment(

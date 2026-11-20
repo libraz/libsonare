@@ -279,7 +279,8 @@ def decompose_stems(
                 ctypes.byref(out_w_length),
                 ctypes.byref(out_h),
                 ctypes.byref(out_h_length),
-            )
+            ),
+            flattened="config",
         )
         count = component_count.value
         per = component_length.value
@@ -380,7 +381,8 @@ def decompose_stems_linked(
                 ctypes.byref(out_w_length),
                 ctypes.byref(out_h),
                 ctypes.byref(out_h_length),
-            )
+            ),
+            flattened="config",
         )
         count = component_count.value
         ch = out_channel_count.value

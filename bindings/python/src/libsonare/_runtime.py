@@ -114,15 +114,20 @@ def _strip_c_entry(message: str) -> str:
     return message[match.end() :]
 
 
-def _coded_error(code: int, message: str) -> SonareError:
+def _coded_error(code: int, message: str, *, flattened: str | None = None) -> SonareError:
     """Build the exception for a C-ABI failure, split by cause.
 
     InvalidParameter is always a refused caller argument, so it is a
     :class:`SonareValueError` with the plain message; every other code is a coded
     :class:`SonareError`. Either way the calling entry prefixes its name on the way out,
-    in place of a C entry name the text opened with.
+    in place of a C entry name the text opened with. ``flattened`` names the C struct
+    parameter whose fields the calling entry takes as its own arguments; its
+    ``"<flattened>."`` root is removed from every subject, so the text names the
+    argument the caller wrote.
     """
     message = _strip_c_entry(message)
+    if flattened is not None:
+        message = re.sub(rf"(?<![\w.]){re.escape(flattened)}\.(?=\w)", "", message)
     exc = (
         SonareValueError(message)
         if code == int(ErrorCode.INVALID_PARAMETER)
@@ -132,7 +137,7 @@ def _coded_error(code: int, message: str) -> SonareError:
     return exc
 
 
-def _check(rc: int) -> None:
+def _check(rc: int, *, flattened: str | None = None) -> None:
     """Check a SonareError return code and raise on failure.
 
     When the C layer recorded a detailed thread-local message
@@ -142,13 +147,14 @@ def _check(rc: int) -> None:
     This is the single definition of the return-code-to-exception mapping for
     the whole binding; every submodule imports it from here. Audio-thread entry
     points are the one exception and use :func:`_check_realtime` instead.
+    ``flattened`` is passed on to :func:`_coded_error`.
     """
     if rc != SONARE_OK:
         lib = _get_lib()
         detail = lib.sonare_last_error_message()
         detail_str = detail.decode("utf-8") if detail else ""
         if detail_str:
-            raise _coded_error(rc, detail_str)
+            raise _coded_error(rc, detail_str, flattened=flattened)
         raise _generic_error(rc)
 
 

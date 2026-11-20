@@ -168,7 +168,8 @@ class _ProjectRenderMixin:
                     ctypes.byref(out),
                     ctypes.byref(out_len),
                     ctypes.byref(width),
-                )
+                ),
+                flattened="options",
             )
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
@@ -236,7 +237,8 @@ class _ProjectRenderMixin:
                     ctypes.byref(out),
                     ctypes.byref(out_len),
                     ctypes.byref(width),
-                )
+                ),
+                flattened="options",
             )
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
@@ -333,7 +335,8 @@ class _ProjectRenderMixin:
                     ctypes.byref(out),
                     ctypes.byref(out_len),
                     ctypes.byref(width),
-                )
+                ),
+                flattened="options",
             )
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
@@ -473,7 +476,8 @@ class _ProjectRenderMixin:
                     ctypes.byref(out),
                     ctypes.byref(out_len),
                     ctypes.byref(width),
-                )
+                ),
+                flattened="options",
             )
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
@@ -558,7 +562,7 @@ class _ProjectRenderMixin:
             )
             # `keepalive` pins the ctypes trampolines until the bounce returns.
             keepalive.clear()
-            _check(rc)
+            _check(rc, flattened="options")
             if errors:
                 raise errors[0]
             interleaved = _from_c_float_array(out, int(out_len.value))

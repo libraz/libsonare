@@ -271,7 +271,8 @@ def pitch_correct_timevarying(
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
-            )
+            ),
+            flattened="config",
         )
         return _from_c_float_array(out, out_length.value)
 

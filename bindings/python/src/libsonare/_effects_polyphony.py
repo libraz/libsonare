@@ -321,7 +321,8 @@ class PolyphonicAnalysis:
                 _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(config),
                 ctypes.byref(handle),
-            )
+            ),
+            flattened="config",
         )
         self._handle = handle
 
@@ -669,7 +670,8 @@ class PolyphonicAnalysis:
             _check(
                 lib.sonare_polyphonic_render(
                     handle, ctypes.byref(config), ctypes.byref(out), ctypes.byref(out_length)
-                )
+                ),
+                flattened="config",
             )
             return _from_c_float_array(out, out_length.value)
 

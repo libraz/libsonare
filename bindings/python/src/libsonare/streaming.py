@@ -167,7 +167,10 @@ class StreamAnalyzer:
         if window is not None:
             raw.window = _token_ordinal(window, _WINDOW_TYPES, "window")
         handle = ctypes.c_void_p()
-        _check(lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)))
+        _check(
+            lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)),
+            flattened="config",
+        )
         self._handle = handle
 
     @_entry("StreamAnalyzer.close")

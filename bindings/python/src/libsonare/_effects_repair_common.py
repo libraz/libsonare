@@ -45,7 +45,7 @@ def _run_detection(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     return out
 
 
@@ -78,7 +78,7 @@ def _run_repair(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         return _optional_from_c_float_array(out.samples, out.length), extract_report(out.report)
     finally:
