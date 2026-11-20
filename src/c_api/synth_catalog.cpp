@@ -84,8 +84,8 @@ int sonare_synth_builtin_waveform_from_name(const char* name) {
 
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
   if (out != nullptr) *out = {};
+#if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(name);
   const sonare::midi::synth::SynthPreset* preset = nullptr;
   if (const SonareError err = run_validation([&] {
