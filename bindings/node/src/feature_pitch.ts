@@ -17,6 +17,7 @@ import type { VoicedFlags } from './types_notes.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertCqtHopLength,
   assertFloat32Array,
   assertFrequencyBounds,
   assertPositiveFloatValue,
@@ -273,10 +274,10 @@ function toCqtResult(r: NativeCqt): CqtResult {
 
 const DEFAULT_CQT_FMIN_HZ = 32.70319566257483;
 
-// Shared guard of the CQT family: audio, then the three counts every entry point refuses at zero.
+// Shared guard of the CQT family: audio, the hop bound, then the two counts refused at zero.
 function checkCqtRequest(request: CqtRequest): void {
   assertAudioInput(request.samples, request.sampleRate, request);
-  assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+  assertCqtHopLength(request.hopLength ?? 512);
   assertPositiveInteger(request.nBins ?? 84, 'nBins');
   assertPositiveInteger(request.binsPerOctave ?? 12, 'binsPerOctave');
   assertPositiveFloatValue(request.fminHz ?? DEFAULT_CQT_FMIN_HZ, 'fminHz');
@@ -321,7 +322,7 @@ export function chromaCens(...args: unknown[]): ChromaResult {
   return withEntry('chromaCens', () => {
     const request = sampleOneShot<ChromaCensRequest>('chromaCens', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+    assertCqtHopLength(request.hopLength ?? 512);
     assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
     assertPositiveInteger(request.binsPerOctave ?? 36, 'binsPerOctave');
     return toChromaResult(
@@ -347,7 +348,7 @@ export function chromaCqt(...args: unknown[]): ChromaResult {
   return withEntry('chromaCqt', () => {
     const request = sampleOneShot<ChromaCqtRequest>('chromaCqt', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+    assertCqtHopLength(request.hopLength ?? 512);
     assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
     assertPositiveInteger(request.binsPerOctave ?? 36, 'binsPerOctave');
     return toChromaResult(
@@ -373,7 +374,7 @@ export function bassChroma(...args: unknown[]): ChromaResult {
   return withEntry('bassChroma', () => {
     const request = sampleOneShot<BassChromaRequest>('bassChroma', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    assertPositiveInteger(request.hopLength ?? 512, 'hopLength');
+    assertCqtHopLength(request.hopLength ?? 512);
     assertPositiveInteger(request.nChroma ?? 12, 'nChroma');
     return toChromaResult(
       addon.bassChroma(

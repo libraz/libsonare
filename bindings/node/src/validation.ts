@@ -377,6 +377,14 @@ export function assertPositiveInteger(value: unknown, argName: string): asserts 
   assertBoundedInteger(value, argName, 1, C_INT_MAX);
 }
 
+/** The constant-Q family's largest hop, in samples; the core states the same bound. */
+export const CQT_MAX_HOP_LENGTH = 65536;
+
+/** A constant-Q hop: an integer in `[1, CQT_MAX_HOP_LENGTH]`. */
+export function assertCqtHopLength(value: unknown): asserts value is number {
+  assertBoundedInteger(value, 'hopLength', 1, CQT_MAX_HOP_LENGTH);
+}
+
 /** Even integer in `[min, max]`, for an FFT-style size where only parity matters. */
 export function assertEvenIntegerAtLeast(
   value: unknown,

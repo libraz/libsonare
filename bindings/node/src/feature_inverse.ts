@@ -7,6 +7,7 @@ import type { Matrix2D } from './types.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertCqtHopLength,
   assertFiniteScalar,
   assertFloat32Array,
   assertFloatFields,
@@ -178,9 +179,9 @@ export function cqtToAudio(...args: unknown[]): Float32Array {
     assertMatrix2D(r.magnitude, 'magnitude');
     const sampleRate = r.sampleRate;
     assertSampleRate(sampleRate);
-    // Positivity only: the core takes any positive hop and any positive iteration
-    // count, and names the Griffin-Lim ceiling itself when one exceeds it.
-    const hopLength = resolvePositiveIntegerOption('hopLength', r.hopLength, 512);
+    // nIter is positive here; the core names the Griffin-Lim ceiling itself.
+    const hopLength = r.hopLength ?? 512;
+    assertCqtHopLength(hopLength);
     const nIter = resolvePositiveIntegerOption('nIter', r.nIter, 32);
     const fminHz = r.fminHz ?? DEFAULT_CQT_FMIN_HZ;
     assertPositiveFloatValue(fminHz, 'fminHz');
@@ -205,7 +206,8 @@ export function vqtToAudio(...args: unknown[]): Float32Array {
     assertMatrix2D(r.magnitude, 'magnitude');
     const sampleRate = r.sampleRate;
     assertSampleRate(sampleRate);
-    const hopLength = resolvePositiveIntegerOption('hopLength', r.hopLength, 512);
+    const hopLength = r.hopLength ?? 512;
+    assertCqtHopLength(hopLength);
     const nIter = resolvePositiveIntegerOption('nIter', r.nIter, 32);
     const fminHz = r.fminHz ?? DEFAULT_CQT_FMIN_HZ;
     assertPositiveFloatValue(fminHz, 'fminHz');

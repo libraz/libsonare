@@ -17,6 +17,7 @@ import type { WasmCqtResult } from './sonare.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertCqtHopLength,
   assertFiniteScalar,
   assertFrequencyBounds,
   assertMatrix2D,
@@ -220,7 +221,8 @@ function cqtFamily<R extends CqtRequest>(
   const hopLength = request.hopLength ?? 512;
   const nBins = request.nBins ?? 84;
   const binsPerOctave = request.binsPerOctave ?? 12;
-  validatePositiveIntegers({ hopLength, nBins, binsPerOctave });
+  assertCqtHopLength(hopLength);
+  validatePositiveIntegers({ nBins, binsPerOctave });
   const fminHz = request.fminHz ?? 32.70319566257483;
   assertPositiveFloatValue(fminHz, 'fminHz');
   const native = call(request, hopLength, fminHz, nBins, binsPerOctave);
@@ -328,7 +330,8 @@ function cqtInverseInput(request: CqtToAudioRequest | VqtToAudioRequest) {
   const binsPerOctave = request.binsPerOctave ?? 12;
   const nIter = request.nIter ?? 32;
   assertSampleRate(sampleRate);
-  validatePositiveIntegers({ hopLength, binsPerOctave, nIter });
+  assertCqtHopLength(hopLength);
+  validatePositiveIntegers({ binsPerOctave, nIter });
   if (nIter > 256) {
     throw refuse(`nIter must be at most 256`);
   }

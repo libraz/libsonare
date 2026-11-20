@@ -404,10 +404,10 @@
     "scene": {"version": 2, "strips": [{"id": "s", "inserts": [{"slot": "post", "processor": "eq.parametric", "params": {}}]}], "buses": [{"id": "master", "role": "master"}], "connections": []},
     "cases": [
       { "id": "band0_frequency_accepted", "param": "band0.frequencyHz", "value": 1000, "accepted": true },
-      { "id": "band0_frequency_zero", "param": "band0.frequencyHz", "value": 0, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.frequencyHz must be finite and in (0, 24000)", "pending": {"node": "the addon prefixes 'failed to build mixer from scene JSON: ' ahead of the core text"} },
-      { "id": "band0_frequency_at_nyquist", "param": "band0.frequencyHz", "value": 24000, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.frequencyHz must be finite and in (0, 24000)", "pending": {"node": "the addon prefixes 'failed to build mixer from scene JSON: ' ahead of the core text"} },
-      { "id": "band0_frequency_null", "param": "band0.frequencyHz", "value": null, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.frequencyHz must be a number or a boolean", "pending": {"node": "the addon prefixes 'failed to build mixer from scene JSON: ' ahead of the core text"} },
-      { "id": "band0_q_zero", "param": "band0.q", "value": 0, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.q must be finite and greater than 0", "pending": {"node": "the addon prefixes 'failed to build mixer from scene JSON: ' ahead of the core text"} }
+      { "id": "band0_frequency_zero", "param": "band0.frequencyHz", "value": 0, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.frequencyHz must be finite and in (0, 24000)" },
+      { "id": "band0_frequency_at_nyquist", "param": "band0.frequencyHz", "value": 24000, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.frequencyHz must be finite and in (0, 24000)" },
+      { "id": "band0_frequency_null", "param": "band0.frequencyHz", "value": null, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.frequencyHz must be a number or a boolean" },
+      { "id": "band0_q_zero", "param": "band0.q", "value": 0, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.q must be finite and greater than 0" }
     ]
   },
   "insert_unknown_key": {
@@ -429,9 +429,11 @@
     "fill": 0.1,
     "cases": [
       { "id": "hop_length_default", "key": "hop_length", "value": 512, "accepted": true },
-      { "id": "hop_length_zero", "key": "hop_length", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
-      { "id": "hop_length_fraction", "key": "hop_length", "value": 1.5, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
-      { "id": "hop_length_past_int32", "key": "hop_length", "value": 2147483648, "refused": "range", "predicate": "must be an integer in [1, 2147483647]" },
+      { "id": "hop_length_zero", "key": "hop_length", "value": 0, "refused": "range", "predicate": "must be an integer in [1, 65536]" },
+      { "id": "hop_length_fraction", "key": "hop_length", "value": 1.5, "refused": "range", "predicate": "must be an integer in [1, 65536]" },
+      { "id": "hop_length_past_int32", "key": "hop_length", "value": 2147483648, "refused": "range", "predicate": "must be an integer in [1, 65536]" },
+      { "id": "hop_length_at_bound", "key": "hop_length", "value": 65536, "accepted": true },
+      { "id": "hop_length_past_bound", "key": "hop_length", "value": 65537, "refused": "range", "predicate": "must be an integer in [1, 65536]" },
       { "id": "hop_length_wrong_type", "key": "hop_length", "value": "512", "refused": "type", "predicate": "must be an integer" },
       { "id": "fmin_hz_c1", "key": "fmin_hz", "value": 32.7, "accepted": true },
       { "id": "fmin_hz_zero", "key": "fmin_hz", "value": 0, "refused": "range", "predicate": "must be finite and greater than 0" },

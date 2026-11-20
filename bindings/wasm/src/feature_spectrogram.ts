@@ -20,6 +20,7 @@ import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertClosedToken,
+  assertCqtHopLength,
   assertFiniteScalar,
   assertFloat32Array,
   assertFloatFields,
@@ -403,7 +404,8 @@ export function chromaCens(...args: unknown[]): ChromaResult {
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
     const binsPerOctave = r.binsPerOctave ?? 36;
-    validatePositiveIntegers({ hopLength, nChroma, binsPerOctave });
+    assertCqtHopLength(hopLength);
+    validatePositiveIntegers({ nChroma, binsPerOctave });
     if (binsPerOctave % nChroma !== 0) {
       throw refuse('binsPerOctave must be a multiple of nChroma');
     }
@@ -431,7 +433,8 @@ export function chromaCqt(...args: unknown[]): ChromaResult {
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
     const binsPerOctave = r.binsPerOctave ?? 36;
-    validatePositiveIntegers({ hopLength, nChroma, binsPerOctave });
+    assertCqtHopLength(hopLength);
+    validatePositiveIntegers({ nChroma, binsPerOctave });
     if (binsPerOctave % nChroma !== 0) {
       throw refuse('binsPerOctave must be a multiple of nChroma');
     }
@@ -458,7 +461,8 @@ export function bassChroma(...args: unknown[]): ChromaResult {
     assertAudioInput(r.samples, r.sampleRate, r);
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
-    validatePositiveIntegers({ hopLength, nChroma });
+    assertCqtHopLength(hopLength);
+    validatePositiveIntegers({ nChroma });
     return chromaResult(requireModule().bassChroma(r.samples, r.sampleRate, hopLength, nChroma));
   });
 }
