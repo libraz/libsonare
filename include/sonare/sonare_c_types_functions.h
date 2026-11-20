@@ -545,6 +545,7 @@ const char* sonare_error_message(SonareError error);
 ///   - A refusal reported by a core diagnostic (an invalid room in
 ///     @ref sonare_synthesize_rir) records its first Error as
 ///     ``acoustic.code: explanation``.
+///   - Like every sonare_last_* accessor, it records no error.
 /// @return Pointer to a NUL-terminated thread-local message string.
 const char* sonare_last_error_message(void);
 
@@ -555,7 +556,8 @@ const char* sonare_last_error_message(void);
 ///   @ref sonare_last_error_message on entry clear this code, and every path
 ///   that records a message records the code beside it (for a SonareError
 ///   return, the code returned). Audio-thread entry points neither clear nor
-///   record it, exactly as for the message. Diagnostic accessors do not clear it.
+///   record it, exactly as for the message. Diagnostic accessors do not clear it. Like every
+///   sonare_last_* accessor, it records no error.
 /// @return The recorded SonareError, or SONARE_OK.
 SonareError sonare_last_error_code(void);
 
@@ -593,14 +595,15 @@ void sonare_diagnostic_init(SonareDiagnostic* diagnostic);
 ///     a later clean call is 0 rather than stale.
 ///   - Reading does not consume: the list stays valid until the next API call
 ///     that records or clears a diagnostic on the same thread.
+///   - Like every sonare_last_* accessor, it records no error.
 size_t sonare_last_diagnostic_count(void);
 
 /// @brief Copies diagnostic @p index of the most recent call into @p out.
 /// @return SONARE_ERROR_INVALID_PARAMETER when @p out is NULL, its @c struct_size
 ///   is below sizeof(SonareDiagnostic), or @p index is not below
-///   sonare_last_diagnostic_count(); @p out is left untouched then. Like the
-///   other sonare_last_* accessors it records no error message, so the message
-///   of the call being inspected survives the read.
+///   sonare_last_diagnostic_count(); @p out is left untouched then. Like every
+///   sonare_last_* accessor, it records no error, so the message of the call
+///   being inspected survives the read.
 SonareError sonare_last_diagnostic(size_t index, SonareDiagnostic* out);
 
 /// @brief Number of subjects in the parameter refusal the most recent failing call on the calling
@@ -610,14 +613,14 @@ SonareError sonare_last_diagnostic(size_t index, SonareDiagnostic* out);
 ///   order the message names them, followed by the successor key when an unknown-key refusal
 ///   names one. A binding that passes a struct or document under a name its caller never wrote
 ///   drops that leading path segment from each subject and renders the message again with
-///   @ref sonare_last_refusal_render, rather than editing the message text. Like the other
-///   sonare_last_* accessors it neither clears nor records an error.
+///   @ref sonare_last_refusal_render, rather than editing the message text. Like every
+///   sonare_last_* accessor, it records no error, and it clears none.
 size_t sonare_last_refusal_subject_count(void);
 
 /// @brief Subject @p index of the last parameter refusal, or NULL when @p index is not below
 ///        @ref sonare_last_refusal_subject_count.
 /// @details Borrowed: owned by the library and valid until the next API call that records or
-///   clears an error on the same thread.
+///   clears an error on the same thread. Like every sonare_last_* accessor, it records no error.
 const char* sonare_last_refusal_subject(size_t index);
 
 /// @brief Renders the last parameter refusal's message with @p subjects in place of its own.
@@ -636,8 +639,8 @@ const char* sonare_last_refusal_subject(size_t index);
 /// @return SONARE_ERROR_INVALID_STATE when no parameter refusal is recorded;
 ///   SONARE_ERROR_INVALID_PARAMETER when @p out_text is NULL, @p subject_count differs from the
 ///   recorded count, a subject is NULL or a factor is not finite and greater than 0;
-///   SONARE_ERROR_OUT_OF_MEMORY when the copy cannot be allocated. Records no error, so the refusal
-///   being rendered survives the call.
+///   SONARE_ERROR_OUT_OF_MEMORY when the copy cannot be allocated. Like every sonare_last_*
+///   accessor, it records no error, so the refusal being rendered survives the call.
 SonareError sonare_last_refusal_render(const char* const* subjects, const double* scales,
                                        size_t subject_count, char** out_text);
 
