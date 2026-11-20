@@ -986,11 +986,9 @@ TEST_CASE("project scene deserializer refuses earlier scene spellings", "[serial
       {R"({"id":"a","pan_mode":"balance"})",
        "scene.strips[0].pan_mode is an earlier spelling; write scene.strips[0].panMode"},
       {R"({"id":"a","panMode":2})",
-       "scene.strips[0].panMode takes a token, not a number (valid names: balance, stereoPan, "
-       "dualPan)"},
+       "scene.strips[0].panMode must be one of balance, stereoPan, dualPan"},
       {R"({"id":"a","panLaw":3})",
-       "scene.strips[0].panLaw takes a token, not a number (valid names: const3Db, const4.5Db, "
-       "const6Db, linear0Db)"},
+       "scene.strips[0].panLaw must be one of const3Db, const4.5Db, const6Db, linear0Db"},
       {R"({"id":"a","sends":[{"id":"s","timing":"pre"}]})",
        "scene.strips[0].sends[0].timing must be one of preFader, postFader"},
       {R"({"id":"a","sends":[{"id":"s","destination_bus_id":"bus"}]})",

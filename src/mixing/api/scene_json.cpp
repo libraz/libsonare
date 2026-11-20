@@ -101,10 +101,7 @@ template <typename Enum>
 Enum token_value(const JsonValue& value, const std::string& at, const char* tokens,
                  std::optional<Enum> (*from_string)(const std::string&)) {
   if (!value.is_string()) {
-    if (value.is_number()) {
-      refuse(schema::refusal(
-          at, std::string("takes a token, not a number (valid names: ") + tokens + ")"));
-    }
+    if (value.is_number()) refuse(schema::refusal(at, std::string("must be one of ") + tokens));
     refuse(schema::must_be(at, schema::Kind::String));
   }
   const auto parsed = from_string(value.as_string());

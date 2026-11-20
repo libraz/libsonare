@@ -1948,9 +1948,7 @@ TEST_CASE("an enum parameter's name resolves to the number the flat lists carry"
     CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
     message = error.what();
   }
-  CHECK(message.find("repair.denoise.noiseEstimator") != std::string::npos);
-  CHECK(message.find("'nope'") != std::string::npos);
-  CHECK(message.find("quantile, mcra, imcra, spp") != std::string::npos);
+  CHECK(message == "repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp");
 
   int is_enum = -1;
   double value = -1.0;

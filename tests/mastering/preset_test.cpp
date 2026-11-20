@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <functional>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -411,17 +412,18 @@ TEST_CASE("a chain document refuses what it cannot mean, naming the path",
   refused(R"({"version":1,"params":{}})", "version must be 2, or left out");
   refused(R"({"version":"2","params":{}})", "version must be 2, or left out");
   refused(R"({"params":{"eq.tilt.tiltDb":1,"eq":{"tilt":{"tiltDb":2}}}})",
-          "duplicate key params.eq.tilt.tiltDb");
+          "params.eq.tilt.tiltDb must not be given twice");
   refused(R"({"params":{"dynamics.multibandComp.cutoff0Hz":100,)"
           R"("dynamics.multibandComp.crossover.cutoffsHz":[200,300]}})",
-          "duplicate key params.dynamics.multibandComp.");
+          "must not be given twice");
   refused(R"({"params":{"eq.tilt.tiltDb":null}})",
           "params.eq.tilt.tiltDb must be a number, a boolean or a token");
   refused(R"({"params":{"dynamics.compressor.detector":1}})",
-          "params.dynamics.compressor.detector takes a token, not a number (valid names: ");
+          "params.dynamics.compressor.detector must be one of ");
   refused(R"({"params":{"dynamics.compressor.detector":"loud"}})",
-          "dynamics.compressor.detector: unknown name 'loud' (valid names: ");
-  refused(R"({"params":{"eq.tilt.tiltDb":"high"}})", "params.eq.tilt.tiltDb is a string");
+          "params.dynamics.compressor.detector must be one of ");
+  refused(R"({"params":{"eq.tilt.tiltDb":"high"}})",
+          "params.eq.tilt.tiltDb must be a number or a boolean");
   refused(R"({"params":{"repair.declip.clipThresholdDb":0.5}})",
           "params.repair.declip.clipThresholdDb must be finite and in [-890, 0]");
   refused(R"({"params":{"repair.declip.enabled":false,"repair.declip.clipThresholdDb":3}})",
@@ -469,6 +471,46 @@ TEST_CASE("every document entry reads the same document and refuses as a documen
                          "params.eq.tilt.tiltDb must be a number, a boolean or a token",
                          sonare::ErrorCode::InvalidFormat);
   }
+}
+
+TEST_CASE("a binding's parameter object is refused under the root its caller wrote",
+          "[mastering][preset][json]") {
+  const ChainParamsOrigin overrides = chain_params_argument("overrides");
+  const auto refusal_of = [&](const std::string& document) {
+    try {
+      (void)chain_config_overrides_from_json(preset_config(Preset::Pop), document, overrides);
+    } catch (const sonare::SonareParameterRefusal& refusal) {
+      return refusal;
+    }
+    FAIL("expected a parameter refusal");
+    throw std::logic_error("unreachable");
+  };
+
+  const sonare::SonareParameterRefusal unknown =
+      refusal_of(R"({"params":{"limiter":{"ceilingDb":-1}}})");
+  CHECK(unknown.code() == sonare::ErrorCode::InvalidParameter);
+  CHECK(unknown.shape_error());
+  CHECK(unknown.subject() == "overrides.limiter.ceilingDb");
+
+  const sonare::SonareParameterRefusal token =
+      refusal_of(R"({"params":{"repair.denoise.noiseEstimator":"bogus"}})");
+  CHECK(token.code() == sonare::ErrorCode::InvalidParameter);
+  CHECK_FALSE(token.shape_error());
+  CHECK(std::string(token.what()) ==
+        "overrides.repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp");
+
+  const sonare::SonareParameterRefusal ordinal =
+      refusal_of(R"({"params":{"repair.denoise.noiseEstimator":2}})");
+  CHECK(ordinal.shape_error());
+  CHECK(std::string(ordinal.what()) ==
+        "overrides.repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp");
+
+  require_refused_with(
+      [&] {
+        (void)chain_config_from_json(R"({"params":{"eq.tilt.tiltDb":null}})",
+                                     chain_params_argument("config"));
+      },
+      "config.eq.tilt.tiltDb must be a number, a boolean or a token");
 }
 
 TEST_CASE("a multiband chain stage carries between two and 64 bands", "[mastering][preset][json]") {
@@ -570,7 +612,7 @@ TEST_CASE("chain config flat params refuse what has no flat spelling",
   REQUIRE(chain_config_flat_params(R"({"params":{}})").empty());
 
   require_refused_with([] { chain_config_flat_params(R"({"params":{"eq.tilt.tiltDb":"steep"}})"); },
-                       "params.eq.tilt.tiltDb is a string, but takes no token",
+                       "params.eq.tilt.tiltDb must be a number or a boolean",
                        sonare::ErrorCode::InvalidFormat);
   require_refused_with([] { chain_config_flat_params(R"({"params":{"eq.tilt.tiltDb":null}})"); },
                        "params.eq.tilt.tiltDb must be a number, a boolean or a token",
@@ -580,7 +622,7 @@ TEST_CASE("chain config flat params refuse what has no flat spelling",
         chain_config_flat_params(
             R"({"params":{"dynamics.multibandComp":{"bands":[{"ratio":"x"}]}}})");
       },
-      "params.dynamics.multibandComp.bands.0.ratio is a string, but takes no token",
+      "params.dynamics.multibandComp.bands.0.ratio must be a number or a boolean",
       sonare::ErrorCode::InvalidFormat);
   require_refused_with(
       [] {

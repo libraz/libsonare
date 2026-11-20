@@ -249,11 +249,6 @@ constexpr sonare::resource::ProjectImportResourceLimits kChainJsonLimits{
 constexpr int kChainDocumentVersion = 2;
 constexpr const char* kParamsKey = "params";
 
-// The document path of flat parameter @p flat_path.
-std::string params_path(const std::string& flat_path) {
-  return schema::child_path(kParamsKey, flat_path);
-}
-
 // `dynamics.multibandComp.cutoff<i>Hz` and `...crossover.cutoffsHz.<i>` name one value.
 std::string duplicate_identity(const std::string& path) {
   std::string storage;
@@ -295,28 +290,36 @@ class ParamsWalker {
     if (value.is_array()) {
       const auto& elements = value.as_array();
       if (elements.empty()) {
-        throw_invalid_json(schema::refusal(params_path(path), "must not be an empty list"));
+        throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, path,
+                                                "must not be an empty list");
       }
       for (std::size_t index = 0; index < elements.size(); ++index) {
         append(schema::catalog_index_path(path, index), elements[index]);
       }
       return;
     }
-    if (!seen_.insert(duplicate_identity(path)).second)
-      throw_invalid_json(schema::duplicate_key(params_path(path)));
+    if (!seen_.insert(duplicate_identity(path)).second) {
+      throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, path,
+                                               "must not be given twice");
+    }
     const std::optional<std::string> names = mastering_enum_names("", path);
-    if (value.is_null())
-      throw_invalid_json(
-          schema::refusal(params_path(path), "must be a number, a boolean or a token"));
+    if (value.is_null()) {
+      throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, path,
+                                               "must be a number, a boolean or a token");
+    }
     if (value.is_string()) {
-      if (!names) throw_invalid_json(params_path(path) + " is a string, but takes no token");
+      if (!names) {
+        throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, path,
+                                                 "must be a number or a boolean");
+      }
       out_.push_back(
           ChainFlatParam{path, *mastering_enum_value("", path, value.as_string()), false});
       return;
     }
-    if (names)
-      throw_invalid_json(params_path(path) +
-                         " takes a token, not a number (valid names: " + *names + ")");
+    if (names) {
+      throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, path,
+                                               "must be one of " + *names);
+    }
     if (value.is_bool()) {
       out_.push_back(ChainFlatParam{path, value.as_bool() ? 1.0 : 0.0, true});
       return;
@@ -324,8 +327,8 @@ class ParamsWalker {
     // The declip threshold's dB domain, refused enabled or not (repair::clip_threshold_from_db).
     if (path == "repair.declip.clipThresholdDb" &&
         !(value.as_number() >= kMinPositiveGainDb && value.as_number() <= 0.0)) {
-      throw_invalid_json(
-          schema::refusal(params_path(path), schema::range_predicate(kMinPositiveGainDb, 0.0)));
+      throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, path,
+                                              schema::range_predicate(kMinPositiveGainDb, 0.0));
     }
     out_.push_back(ChainFlatParam{path, value.as_number(), false});
   }
@@ -334,8 +337,20 @@ class ParamsWalker {
   std::set<std::string> seen_;
 };
 
-// The flat leaves of a chain document. Every refusal is the document's, so InvalidFormat.
-std::vector<ChainFlatParam> read_chain_document(const std::string& text) {
+// A refusal from the params walker or the flat-param parser, rooted and coded for @p origin.
+[[noreturn]] void refuse_from(const ChainParamsOrigin& origin, const SonareParameterRefusal& e) {
+  if (e.code() != ErrorCode::InvalidParameter) throw e;
+  schema::rethrow_under(e, origin.root, origin.code);
+}
+
+[[noreturn]] void refuse_from(const ChainParamsOrigin& origin, const SonareException& e) {
+  if (e.code() != ErrorCode::InvalidParameter) throw e;
+  throw SonareException(origin.code, e.what());
+}
+
+// The flat leaves of a chain document's params block, refused as @p origin reads them.
+std::vector<ChainFlatParam> read_chain_document(const std::string& text,
+                                                const ChainParamsOrigin& origin) {
   try {
     const auto root = sonare::util::json::admit_strict(text, kChainJsonLimits);
     if (!root.is_object()) throw_invalid_json(schema::root_must_be_object());
@@ -359,18 +374,16 @@ std::vector<ChainFlatParam> read_chain_document(const std::string& text) {
   } catch (const sonare::util::json::JsonError& e) {
     throw SonareException(ErrorCode::InvalidFormat, e.what());
   } catch (const SonareParameterRefusal& e) {
-    if (e.code() != ErrorCode::InvalidParameter) throw;
-    schema::rethrow_under(e, kParamsKey, ErrorCode::InvalidFormat);
+    refuse_from(origin, e);
   } catch (const SonareException& e) {
-    if (e.code() != ErrorCode::InvalidParameter) throw;
-    throw SonareException(ErrorCode::InvalidFormat, e.what());
+    refuse_from(origin, e);
   }
 }
 
 }  // namespace
 
 std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json) {
-  return read_chain_document(chain_config_json);
+  return read_chain_document(chain_config_json, kChainDocument);
 }
 
 std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,
@@ -403,8 +416,8 @@ std::string chain_config_to_json(const MasteringChainConfig& config) {
 
 namespace {
 
-std::vector<Param> document_params(const std::string& document) {
-  const std::vector<ChainFlatParam> flat = read_chain_document(document);
+std::vector<Param> document_params(const std::string& document, const ChainParamsOrigin& origin) {
+  const std::vector<ChainFlatParam> flat = read_chain_document(document, origin);
   std::vector<Param> params;
   params.reserve(flat.size());
   for (const ChainFlatParam& leaf : flat) params.push_back(Param{leaf.key, leaf.value});
@@ -412,39 +425,41 @@ std::vector<Param> document_params(const std::string& document) {
 }
 
 // The flat-param parser and the config validator are shared with the key/value and struct entry
-// points, where a refusal is the caller's argument. Here the values come from the document.
+// points, where a refusal is the caller's argument. Here the values come from @p origin.
 template <typename Build>
-MasteringChainConfig from_document(Build&& build) {
+MasteringChainConfig from_document(const ChainParamsOrigin& origin, Build&& build) {
   try {
     MasteringChainConfig config = build();
     validate_mastering_chain_config(config);
     return config;
   } catch (const SonareParameterRefusal& e) {
-    if (e.code() != ErrorCode::InvalidParameter) throw;
-    schema::rethrow_under(e, kParamsKey, ErrorCode::InvalidFormat);
+    refuse_from(origin, e);
   } catch (const SonareException& e) {
-    if (e.code() != ErrorCode::InvalidParameter) throw;
-    throw SonareException(ErrorCode::InvalidFormat, e.what());
+    refuse_from(origin, e);
   }
 }
 
 }  // namespace
 
-MasteringChainConfig chain_config_from_json(const std::string& json) {
-  const std::vector<Param> params = document_params(json);
-  return from_document([&] { return parse_chain_config_params(params.data(), params.size()); });
+MasteringChainConfig chain_config_from_json(const std::string& json,
+                                            const ChainParamsOrigin& origin) {
+  const std::vector<Param> params = document_params(json, origin);
+  return from_document(origin,
+                       [&] { return parse_chain_config_params(params.data(), params.size()); });
 }
 
-MasteringChainConfig streaming_chain_config_from_json(const std::string& json) {
-  const std::vector<Param> params = document_params(json);
+MasteringChainConfig streaming_chain_config_from_json(const std::string& json,
+                                                      const ChainParamsOrigin& origin) {
+  const std::vector<Param> params = document_params(json, origin);
   return from_document(
-      [&] { return parse_streaming_chain_config_params(params.data(), params.size()); });
+      origin, [&] { return parse_streaming_chain_config_params(params.data(), params.size()); });
 }
 
 MasteringChainConfig chain_config_overrides_from_json(MasteringChainConfig base,
-                                                      const std::string& json) {
-  const std::vector<Param> params = document_params(json);
-  return from_document([&] {
+                                                      const std::string& json,
+                                                      const ChainParamsOrigin& origin) {
+  const std::vector<Param> params = document_params(json, origin);
+  return from_document(origin, [&] {
     apply_chain_config_overrides(base, params.data(), params.size());
     return std::move(base);
   });

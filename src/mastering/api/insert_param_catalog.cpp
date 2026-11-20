@@ -1114,10 +1114,10 @@ std::optional<double> mastering_enum_value(const std::string& processor, const s
   for (const detail::EnumChoice& entry : *choices) {
     if (entry.name == choice) return static_cast<double>(entry.value);
   }
-  throw SonareException(ErrorCode::InvalidParameter,
-                        key + ": unknown name '" + choice + "'" +
-                            retired_choice_note(leaf, choice) +
-                            " (valid names: " + joined_names(*choices) + ")");
+  std::string predicate = "must be one of " + joined_names(*choices);
+  const std::string note = retired_choice_note(leaf, choice);
+  if (!note.empty()) predicate += " (" + choice + " was " + note.substr(2);
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key, predicate);
 }
 
 std::optional<std::string> mastering_enum_names(const std::string& processor,

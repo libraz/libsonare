@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
@@ -30,6 +31,7 @@
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::api {
 
@@ -651,22 +653,43 @@ std::string chain_config_to_json(const MasteringChainConfig& config);
 std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,
                                                    const std::string& key);
 
+/// @brief Who wrote a chain document's `params` block, which decides how its refusals read.
+/// @details A loaded document is refused under `params` as InvalidFormat. A binding that wraps a
+///          caller's parameter object as the block passes the name the caller gave it, so a
+///          refusal names that root and stays the caller's argument (InvalidParameter).
+struct ChainParamsOrigin {
+  std::string_view root;
+  ErrorCode code;
+};
+
+/// @brief A chain document the caller handed over as a document.
+inline constexpr ChainParamsOrigin kChainDocument{"params", ErrorCode::InvalidFormat};
+
+/// @brief A binding's parameter object named @p root, wrapped as the document's `params`.
+constexpr ChainParamsOrigin chain_params_argument(std::string_view root) {
+  return ChainParamsOrigin{root, ErrorCode::InvalidParameter};
+}
+
 /// @brief Parse a chain configuration document.
 /// `version` may be left out and otherwise must be 2. Under `params`, a dotted key and the nested
 /// objects and lists spelling the same path are interchangeable.
-/// Throws SonareException(InvalidFormat) for malformed JSON, an unsupported version, an unknown or
+/// Throws SonareException(InvalidFormat) for malformed JSON, an unsupported version or a missing
+/// `params`. Throws a SonareParameterRefusal rooted and coded by @p origin for an unknown or
 /// earlier key spelling, a path given twice, a null leaf, an enum given as a number or by an
 /// unknown name, a positive declip threshold, or a value outside its domain.
-MasteringChainConfig chain_config_from_json(const std::string& json);
+MasteringChainConfig chain_config_from_json(const std::string& json,
+                                            const ChainParamsOrigin& origin = kChainDocument);
 
 /// @brief As chain_config_from_json, over the streaming chain's defaults
 ///        (parse_streaming_chain_config_params).
-MasteringChainConfig streaming_chain_config_from_json(const std::string& json);
+MasteringChainConfig streaming_chain_config_from_json(
+    const std::string& json, const ChainParamsOrigin& origin = kChainDocument);
 
 /// @brief @p base with a chain document's params applied as overrides
 ///        (apply_chain_config_overrides); refusals as chain_config_from_json.
-MasteringChainConfig chain_config_overrides_from_json(MasteringChainConfig base,
-                                                      const std::string& json);
+MasteringChainConfig chain_config_overrides_from_json(
+    MasteringChainConfig base, const std::string& json,
+    const ChainParamsOrigin& origin = kChainDocument);
 
 /// @brief One leaf of a chain config document's `params` block, in flat spelling.
 struct ChainFlatParam {
