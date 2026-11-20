@@ -296,7 +296,7 @@ def auto_tune(
     sample_rate: int,
     key: str | Key | Mapping[str, object] | tuple[PitchClass, KeyMode] = "detect",
     *,
-    strength: float | None = None,
+    retune_amount: float | None = None,
     retune_speed_ms: float | None = None,
     vibrato_threshold_cents: float | None = None,
     max_correction_semitones: float | None = None,
@@ -306,9 +306,8 @@ def auto_tune(
 
     Chains key detection (when ``key`` is ``"detect"``), :func:`scale_mask_for_mode`,
     pYIN pitch tracking (2048-sample frames, 512-sample hop) and the time-varying
-    scale corrector, so the knobs are :func:`pitch_correct_timevarying`'s with
-    ``strength`` as ``retune_amount``. The output has the input's length;
-    unvoiced stretches pass through unchanged.
+    scale corrector, so the knobs are :func:`pitch_correct_timevarying`'s. The output has
+    the input's length; unvoiced stretches pass through unchanged.
 
     Args:
         samples: Mono audio samples.
@@ -317,7 +316,7 @@ def auto_tune(
             it with a :class:`Key` (e.g. :func:`detect_key`'s result), a
             ``{"root": ..., "mode": ...}`` mapping or a ``(root, mode)`` pair, the
             mode a :data:`KeyMode` token.
-        strength: Correction strength in ``[0, 1]``; ``None`` keeps the default (1.0).
+        retune_amount: Correction strength in ``[0, 1]``; ``None`` keeps the default (1.0).
         retune_speed_ms: Retune IIR time constant (ms); ``None`` keeps the default.
         vibrato_threshold_cents: Vibrato-preserve threshold; ``None`` keeps the default.
         max_correction_semitones: Per-frame correction clamp; ``None`` keeps the default.
@@ -332,8 +331,8 @@ def auto_tune(
     named = _auto_tune_key(key)
     config = SonarePitchCorrectionConfig()
     _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
-    if strength is not None:
-        config.retune_amount = _narrow_double(strength, "strength")
+    if retune_amount is not None:
+        config.retune_amount = _narrow_double(retune_amount, "retune_amount")
     if scale_reference_midi is not None:
         config.scale_reference_midi = _narrow_double(scale_reference_midi, "scale_reference_midi")
     if max_correction_semitones is not None:
@@ -360,7 +359,8 @@ def auto_tune(
                 ctypes.byref(out),
                 ctypes.byref(out_length),
                 ctypes.byref(used),
-            )
+            ),
+            flattened="config",
         )
         return AutoTuneResult(
             samples=_from_c_float_array(out, out_length.value),

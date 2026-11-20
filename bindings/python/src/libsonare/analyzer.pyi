@@ -764,7 +764,7 @@ def auto_tune(
     sample_rate: int,
     key: str | Key | Mapping[str, object] | tuple[PitchClass, KeyMode] = "detect",
     *,
-    strength: float | None = None,
+    retune_amount: float | None = None,
     retune_speed_ms: float | None = None,
     vibrato_threshold_cents: float | None = None,
     max_correction_semitones: float | None = None,

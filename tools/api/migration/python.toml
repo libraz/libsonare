@@ -4635,6 +4635,13 @@ rule = "individual"
 
 [[entry]]
 kind = "option"
+old = "auto_tune(strength)"
+new = "auto_tune(retune_amount)"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "option"
 old = "scale_quantize_midi(reference_midi)"
 to = "scale_quantize_midi(scale_reference_midi)"
 changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused until the core reads it as MIDI note 0"

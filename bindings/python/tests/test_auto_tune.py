@@ -136,17 +136,20 @@ def test_auto_tune_takes_the_key_in_several_shapes() -> None:
     assert pair.key.mode == "dorian"
 
 
-def test_auto_tune_strength_zero_leaves_the_audio_unchanged() -> None:
+def test_auto_tune_retune_amount_zero_leaves_the_audio_unchanged() -> None:
     audio = _detuned_melody(DETUNE_CENTS)
-    result = libsonare.auto_tune(audio, SR, key=(0, "major"), strength=0.0)
+    result = libsonare.auto_tune(audio, SR, key=(0, "major"), retune_amount=0.0)
     assert np.max(np.abs(np.asarray(result.samples) - audio)) < 1e-3
 
 
-def test_auto_tune_refuses_a_bad_key_and_strength() -> None:
+def test_auto_tune_refuses_a_bad_key_and_retune_amount() -> None:
     audio = _detuned_melody(0.0)
     with pytest.raises(libsonare.SonareValueError):
         libsonare.auto_tune(audio, SR, key="C major")
     with pytest.raises(ValueError):
         libsonare.auto_tune(audio, SR, key=(12, "major"))
-    with pytest.raises(Exception):  # noqa: B017 - the core refuses strength outside [0, 1]
-        libsonare.auto_tune(audio, SR, key=(0, "major"), strength=2.0)
+    with pytest.raises(
+        libsonare.SonareValueError,
+        match=r"^auto_tune: retune_amount must be finite and in \[0, 1\]$",
+    ):
+        libsonare.auto_tune(audio, SR, key=(0, "major"), retune_amount=2.0)
