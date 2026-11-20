@@ -24,6 +24,9 @@ from ._cli_options import (
     _tempo_bpm,
 )
 
+# The library's constant-Q hop bound, which keeps the bin-0 filter a finite length.
+_MAX_CQT_HOP_LENGTH = 65536
+
 
 def cmd_rhythm(args: argparse.Namespace) -> int:
     from . import analyze_rhythm
@@ -355,7 +358,13 @@ def register_advanced_parsers(
         "onset-strength", parents=[mel_options], help="Compute the onset strength envelope"
     )
     nnls_p = sub.add_parser("nnls-chroma", parents=[stdout_options], help="Compute NNLS chroma")
-    nnls_p.add_argument("--hop-length", type=_c_int, default=None, help="Hop length (default: 512)")
+    _cli_domain(
+        nnls_p.add_argument(
+            "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
+        ),
+        minimum=1,
+        maximum=_MAX_CQT_HOP_LENGTH,
+    )
     tempogram_p = sub.add_parser(
         "tempogram", parents=[mel_options], help="Compute autocorrelation tempogram"
     )

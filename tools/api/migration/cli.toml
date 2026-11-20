@@ -1957,3 +1957,29 @@ changed = "leaving it out is refused as a usage error (exit 2) before the input 
 domain = "effects"
 rule = "cli-front-end-parity"
 test = "bindings/python/tests/test_cli_validate_order.py::test_cross_option_refusal_precedes_the_input_read"
+
+[[entry]]
+kind = "flag"
+old = "cqt --hop-length"
+frontend = "native"
+changed = "a value outside [1, 65536] is refused as a usage error (exit 2) before the input is read; the library bounds the constant-Q hop so its longest filter stays finite"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "vqt --hop-length"
+frontend = "native"
+changed = "a value outside [1, 65536] is refused as a usage error (exit 2) before the input is read; the library bounds the constant-Q hop so its longest filter stays finite"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "nnls-chroma --hop-length"
+changed = "a value outside [1, 65536] is refused as a usage error (exit 2) before the input is read; the library bounds the constant-Q hop so its longest filter stays finite"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI refuses every registry domain before the input is read"

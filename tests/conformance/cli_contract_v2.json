@@ -10101,7 +10101,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 65536,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",

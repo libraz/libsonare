@@ -16,6 +16,7 @@
 #include "core/channel_layout.h"
 #include "effects/normalize.h"
 #include "effects/silence.h"
+#include "feature/cqt.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/rhythm.h"
 #include "util/constants.h"
@@ -524,6 +525,9 @@ CliOptionSpec library_default(CliOptionSpec option, float library_value) {
   option.stated_default = stated_number(library_value);
   return option;
 }
+
+// The constant-Q hop the library accepts: it bounds the hop so the longest filter stays finite.
+CliOptionDomain cqt_hop_domain() { return between(1.0, sonare::kMaxCqtHopLength); }
 
 /// A list of numbers as the CLI reads one back: comma-separated, no spaces.
 std::string joined_numbers(const std::vector<int>& values) {
@@ -1063,20 +1067,21 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  library_default(global_int("hop-length"), "512"),
                  library_default(global_int("n-mels"), "128"), tempo(number_value("bpm-min")),
                  tempo(number_value("bpm-max")), library_default(int_value("win-length"), "384")});
-    add_command(commands, "nnls-chroma", true, {library_default(global_int("hop-length"), "512")});
+    add_command(commands, "nnls-chroma", true,
+                {with_domain(library_default(global_int("hop-length"), "512"), cqt_hop_domain())});
     // An omitted lower bound is the library's (C1); a constant-Q bin cannot sit at
     // or below 0 Hz, so a spelled one must be above it.
     add_command(commands, "cqt", true,
                 {library_default(int_value("n-bins"), "84"),
                  library_default(int_value("bins-per-octave"), "12"),
-                 library_default(global_int("hop-length"), "512"),
+                 with_domain(library_default(global_int("hop-length"), "512"), cqt_hop_domain()),
                  with_domain(number_value("fmin-hz", false, true), greater_than(0.0))});
     add_command(commands, "vqt", true,
                 {library_default(int_value("n-bins"), "84"),
                  library_default(int_value("bins-per-octave"), "12"),
                  library_default(number_value("gamma"), "-1.0"),
                  library_default(number_value("filter-scale"), "1.0"),
-                 library_default(global_int("hop-length"), "512"),
+                 with_domain(library_default(global_int("hop-length"), "512"), cqt_hop_domain()),
                  with_domain(number_value("fmin-hz", false, true), greater_than(0.0))});
     add_command(
         commands, "mel-to-audio", true,

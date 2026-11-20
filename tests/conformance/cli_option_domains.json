@@ -1059,12 +1059,39 @@
       "exclusive_maximum": false
     },
     {
+      "command": "nnls-chroma",
+      "option": "hop-length",
+      "choices": [],
+      "minimum": 1.0,
+      "exclusive_minimum": false,
+      "maximum": 65536.0,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "cqt",
+      "option": "hop-length",
+      "choices": [],
+      "minimum": 1.0,
+      "exclusive_minimum": false,
+      "maximum": 65536.0,
+      "exclusive_maximum": false
+    },
+    {
       "command": "cqt",
       "option": "fmin-hz",
       "choices": [],
       "minimum": 0.0,
       "exclusive_minimum": true,
       "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "vqt",
+      "option": "hop-length",
+      "choices": [],
+      "minimum": 1.0,
+      "exclusive_minimum": false,
+      "maximum": 65536.0,
       "exclusive_maximum": false
     },
     {
