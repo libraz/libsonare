@@ -13,6 +13,7 @@ from ._ffi import (
     SonareCqtResult,
     SonareInverseResult,
 )
+from ._field_spelling import surface_spelling
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -110,7 +111,7 @@ def _cqt_variant(
     rc = getattr(lib, fn_name)(
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sample_rate, surface_spelling(fn_name.removeprefix("sonare_"), "sample_rate")),
         _narrow_int(hop_length, "hop_length", 1, _CQT_HOP_LENGTH_MAX),
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),

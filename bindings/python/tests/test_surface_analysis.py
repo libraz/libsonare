@@ -1091,6 +1091,10 @@ _INT_MAX = "2147483647"
             f"mel_to_stft: n_fft must be an integer in [1, {_INT_MAX}]",
         ),
         (
+            lambda: libsonare.mel_to_stft(_MEL, 0),
+            f"mel_to_stft: sr must be an integer in [1, {_INT_MAX}]",
+        ),
+        (
             lambda: libsonare.mel_to_audio(_MEL, SR, n_fft=0, n_iter=1),
             f"mel_to_audio: n_fft must be an integer in [1, {_INT_MAX}]",
         ),

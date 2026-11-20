@@ -17,6 +17,7 @@ from ._ffi import (
     SonareReassignedSpectrogramResult,
     SonareStftResult,
 )
+from ._field_spelling import surface_spelling
 from ._runtime import (
     _call_float_array_transform,
     _check,
@@ -446,7 +447,7 @@ def _chroma_variant(
     args: list[object] = [
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sample_rate, surface_spelling(wrapper_name, "sample_rate")),
         _narrow_int(hop_length, "hop_length", 1, _CQT_HOP_LENGTH_MAX),
         _to_c_int(n_chroma, "n_chroma"),
     ]

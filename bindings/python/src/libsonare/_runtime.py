@@ -30,6 +30,7 @@ from ._errors import SonareError as SonareError
 from ._errors import SonareValueError as SonareValueError
 from ._errors import _not_supported as _not_supported
 from ._ffi import *  # noqa: F403
+from ._field_spelling import surface_spelling
 from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
 from ._narrowing import _INT64_MAX as _INT64_MAX
 from ._narrowing import _INT64_MIN as _INT64_MIN
@@ -140,19 +141,23 @@ def _render_as_given(
 ) -> str | None:
     """Render the last parameter refusal under the names and units the caller wrote.
 
-    ``root.`` is dropped from each subject under it, then a subject ``respelled`` names is
+    ``root.`` is dropped from each subject under it. A subject ``respelled`` names is then
     replaced by the spelling the caller gave, with its domain in the caller's unit when the
-    respelling carries a scale. None when no parameter refusal is recorded, so the caller
-    keeps the message it read.
+    respelling carries a scale; any other subject takes the refused entry's Python spelling
+    from the generated table. None when no parameter refusal is recorded or no subject
+    changed, so the caller keeps the message it read.
     """
     count = lib.sonare_last_refusal_subject_count()
     if count == 0:
         return None
+    entry = (lib.sonare_last_refusal_entry() or b"").decode("utf-8")
     subjects = []
     scales = []
+    changed = False
     for index in range(count):
         raw = lib.sonare_last_refusal_subject(_to_c_size_t(index, "index"))
-        subject = (raw or b"").decode("utf-8")
+        recorded = (raw or b"").decode("utf-8")
+        subject = recorded
         if root is not None:
             head, dot, rest = subject.partition(".")
             if dot and head == root:
@@ -162,8 +167,13 @@ def _render_as_given(
         if given is not None:
             subject = given.name
             scale = 1.0 if given.scale is None else given.scale
+        else:
+            subject = surface_spelling(entry, subject)
+        changed = changed or subject != recorded or scale != 1.0
         subjects.append(_utf8_arg(subject, "subject"))
         scales.append(scale)
+    if not changed:
+        return None
     c_scales = (ctypes.c_double * count)(*scales) if any(s != 1.0 for s in scales) else None
     out = ctypes.c_char_p()
     if (
@@ -206,8 +216,7 @@ def _check(
         lib = _get_lib()
         detail = lib.sonare_last_error_message()
         detail_str = detail.decode("utf-8") if detail else ""
-        if flattened is not None or respelled:
-            detail_str = _render_as_given(lib, flattened, respelled) or detail_str
+        detail_str = _render_as_given(lib, flattened, respelled) or detail_str
         if detail_str:
             raise _coded_error(rc, detail_str)
         raise _generic_error(rc)
