@@ -125,18 +125,21 @@ def test_a_core_reached_entry_counts_as_reached_and_is_marked() -> None:
 def test_a_command_only_the_native_cli_ships_shows_as_a_python_gap() -> None:
     """The asymmetry the merged column could not express, on the real tree.
 
-    `cqt` is a native `sonare-cli` command with no Python CLI counterpart. The
-    parity checker's `cli` surface is the union of the two front-ends, so it
-    sees no gap at all; the per-front-end columns are where it appears.
+    A command only the native `sonare-cli` ships has no Python CLI counterpart.
+    The parity checker's `cli` surface is the union of the two front-ends, so it
+    sees no gap at all; the per-front-end columns are where it appears. The
+    commands are derived, so the test follows the CLIs as they converge.
     """
     root = _HERE.parent.parent
     import check_parity
 
     merged = check_parity.run(root=root)
-    assert "cqt" not in surface_coverage.unreachable_keys(merged, ("cli",))["cli"]
     split = surface_coverage.unreachable_by_column(root, merged)
-    assert "cqt" in split["cli_python"], "python CLI gained a cqt command?"
-    assert "cqt" not in split["cli_native"]
+    declared = set(surface_coverage.c_declaration_headers(root))
+    native_only = (set(split["cli_python"]) - set(split["cli_native"])) & declared
+    assert native_only, "no native-only CLI command left to show the asymmetry on"
+    merged_gaps = surface_coverage.unreachable_keys(merged, ("cli",))["cli"]
+    assert not native_only & set(merged_gaps), sorted(native_only & set(merged_gaps))
 
 
 def test_the_tracked_table_matches_the_current_surfaces() -> None:

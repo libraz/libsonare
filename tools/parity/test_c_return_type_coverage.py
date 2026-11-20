@@ -93,7 +93,8 @@ def test_the_header_scan_reaches_declarations() -> None:
     # of the three passes the assertion above by not looking.
     for shape in ("SonareError", "const char*", "SonareMixer*"):
         assert shape in declared, f"header scan found no {shape} declaration"
-    assert len(declared) >= 16, f"header scan found only {len(declared)} return types"
+    # Measured 11 once the struct-returning *_default() functions became void *_init().
+    assert len(declared) >= 10, f"header scan found only {len(declared)} return types"
 
 
 def test_a_return_type_only_the_read_tree_spells_is_extracted() -> None:
