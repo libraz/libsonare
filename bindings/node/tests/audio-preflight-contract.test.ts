@@ -792,7 +792,13 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
       [fn, 2 ** 31, 'hopLength'],
       [fn, 1, 'hopLength'],
     ],
-    assertCqtHopLength: [[fn, 0], [fn, 65536], [fn, 65537], [fn, 1.5], [fn, '512']],
+    assertCqtHopLength: [
+      [fn, 0],
+      [fn, 65536],
+      [fn, 65537],
+      [fn, 1.5],
+      [fn, '512'],
+    ],
     assertIntegerValue: [
       [fn, '3', 'count'],
       [fn, 3.5, 'count'],
