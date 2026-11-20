@@ -983,6 +983,18 @@ fields = [
   # C beat_times + beat_count become beats: Beat[], each beat carrying its time
   # and the count being the array length.
   "analysis_result.beat_times",
+  # --- Tempo hypothesis spelled bpm (category 1) ---
+  # Every facade names a candidate's tempo `bpm`, as the result's own tempo is;
+  # the C struct calls the same float `value`.
+  "analysis_bpm_candidate.value",
+  "analysis_bpm_candidate.bpm",
+  # --- Fields with one permitted value (category 4) ---
+  # MFCC is_db is always 0; the stream config's magnitude pair and output format
+  # accept only their defaults. The facades pass those and do not expose them.
+  "mfcc_result.is_db",
+  "stream_config.compute_magnitude",
+  "stream_config.magnitude_downsample",
+  "stream_config.output_format",
   # --- Reserved surround pan fields (category 4) ---
   # The C struct still carries elevation and distance, documented as having no
   # effect; the facades do not expose them and pass their fixed 0 / 1.
