@@ -151,7 +151,8 @@ def _render_as_given(
     subjects = []
     scales = []
     for index in range(count):
-        subject = (lib.sonare_last_refusal_subject(index) or b"").decode("utf-8")
+        raw = lib.sonare_last_refusal_subject(_to_c_size_t(index, "index"))
+        subject = (raw or b"").decode("utf-8")
         if root is not None:
             head, dot, rest = subject.partition(".")
             if dot and head == root:
@@ -167,7 +168,10 @@ def _render_as_given(
     out = ctypes.c_char_p()
     if (
         lib.sonare_last_refusal_render(
-            (ctypes.c_char_p * count)(*subjects), c_scales, count, ctypes.byref(out)
+            (ctypes.c_char_p * count)(*subjects),
+            c_scales,
+            _to_c_size_t(count, "count"),
+            ctypes.byref(out),
         )
         != SONARE_OK
     ):
