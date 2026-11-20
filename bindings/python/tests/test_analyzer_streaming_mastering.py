@@ -650,7 +650,7 @@ _CHAIN_CONFIG_CALLS = {
 _CHAIN_CONTENT_REFUSALS = {
     "duplicate_path": (
         {"eq": {"tilt": {"tiltDb": 1.0}}, "eq.tilt.tiltDb": 1.0},
-        r"duplicate key params\.eq\.tilt\.tiltDb",
+        r"params\.eq\.tilt\.tiltDb must not be given twice$",
     ),
     "null_leaf": (
         {"loudness": {"targetLufs": None}},
@@ -658,7 +658,7 @@ _CHAIN_CONTENT_REFUSALS = {
     ),
     "number_for_a_token": (
         {"dynamics": {"compressor": {"detector": 1}}},
-        r"dynamics\.compressor\.detector takes a token, not a number",
+        r"params\.dynamics\.compressor\.detector must be one of peak, rms, logRms$",
     ),
     "clip_threshold_above_full_scale": (
         {"repair": {"declip": {"clipThresholdDb": 1.0}}},
