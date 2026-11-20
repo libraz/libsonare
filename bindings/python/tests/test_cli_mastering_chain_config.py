@@ -404,7 +404,10 @@ def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -
     base = ["--preset", "pop", "--params"]
     by_name = run([*base, "repair.denoise.enabled=1,repair.denoise.noiseEstimator=mcra"])
     assert by_name["mode"] == "preset"
-    with pytest.raises(Exception, match="takes a token, not a number"):
+    with pytest.raises(
+        Exception,
+        match=r"params\.repair\.denoise\.noiseEstimator must be one of quantile, mcra, imcra, spp",
+    ):
         _run(
             [
                 "mastering",
@@ -430,7 +433,10 @@ def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -
     from_file = run(["--chain-config", str(config)])
     assert from_file["mode"] == "chainConfig"
 
-    with pytest.raises(Exception, match="unknown name 'nope'"):
+    with pytest.raises(
+        Exception,
+        match=r"params\.repair\.denoise\.noiseEstimator must be one of quantile, mcra, imcra, spp",
+    ):
         _run(
             [
                 "mastering",

@@ -8024,7 +8024,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "repair.denoise.noiseEstimator takes a token, not a number"
+            "params.repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp"
           ]
         },
         {
