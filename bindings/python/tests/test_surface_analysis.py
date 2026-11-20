@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import inspect
+import re
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -1010,9 +1012,9 @@ def test_chord_names_and_roman_numerals_are_fields() -> None:
 
 
 def test_sections_are_a_named_list() -> None:
-    sections = libsonare.analyze_sections(_tone(8.0), SR, min_section_sec=2.0)
-    assert isinstance(sections, list)
-    for section in sections:
+    result = libsonare.analyze_sections(_tone(8.0), SR, min_section_sec=2.0)
+    assert isinstance(result.sections, list)
+    for section in result.sections:
         assert isinstance(section, libsonare.Section)
         assert section.name
     assert "canonical_name" not in {f.name for f in libsonare.Section.__dataclass_fields__.values()}
@@ -1073,3 +1075,84 @@ def test_constant_q_hop_is_refused_by_the_core_bound(name: str, hop: object) -> 
 
 def test_constant_q_hop_takes_the_bound_itself() -> None:
     libsonare.cqt(_tone(), SR, hop_length=65536)
+
+
+_MEL = np.ones((16, 4), dtype=np.float32)
+_MFCC = np.ones((13, 4), dtype=np.float32)
+_STFT_MAGNITUDE = np.ones((257, 4), dtype=np.float32)
+_INT_MAX = "2147483647"
+
+
+@pytest.mark.parametrize(
+    ("call", "text"),
+    [
+        (
+            lambda: libsonare.mel_to_stft(_MEL, SR, n_fft=0),
+            f"mel_to_stft: n_fft must be an integer in [1, {_INT_MAX}]",
+        ),
+        (
+            lambda: libsonare.mel_to_audio(_MEL, SR, n_fft=0, n_iter=1),
+            f"mel_to_audio: n_fft must be an integer in [1, {_INT_MAX}]",
+        ),
+        (
+            lambda: libsonare.mfcc_to_audio(_MFCC, n_mels=16, sr=SR, n_fft=0, n_iter=1),
+            f"mfcc_to_audio: n_fft must be an integer in [1, {_INT_MAX}]",
+        ),
+        (
+            lambda: libsonare.griffin_lim(_STFT_MAGNITUDE, 1000, n_iter=1),
+            "griffin_lim: sample_rate must be an integer in [8000, 384000]",
+        ),
+        (
+            lambda: libsonare.griffin_lim(_STFT_MAGNITUDE, SR, n_iter=0),
+            "griffin_lim: n_iter must be an integer in [1, 256]",
+        ),
+        (
+            lambda: libsonare.griffin_lim(_STFT_MAGNITUDE, SR, n_iter=1, momentum=1.0),
+            "griffin_lim: momentum must be finite and in [0, 1)",
+        ),
+        (
+            lambda: libsonare.spectral_bandwidth(_tone(), SR, p=0.0),
+            "spectral_bandwidth: p must be finite and greater than 0",
+        ),
+        (
+            lambda: libsonare.spectral_flux(_tone(), SR, lag=0),
+            f"spectral_flux: lag must be an integer in [1, {_INT_MAX}]",
+        ),
+        (
+            lambda: libsonare.zero_crossings(_tone(), threshold=-1.0),
+            "zero_crossings: threshold must be finite and at least 0",
+        ),
+        (
+            lambda: libsonare.onset_backtrack([2], np.array([1.0, np.nan, 1.0], np.float32)),
+            "onset_backtrack: energy contains a non-finite sample at index 1",
+        ),
+        (
+            lambda: libsonare.tuning_to_reference_hz(0.0, a4_hz=0.0),
+            "tuning_to_reference_hz: a4_hz must be finite and greater than 0",
+        ),
+        (
+            lambda: libsonare.tuning_to_reference_hz(1e9),
+            "tuning_to_reference_hz: "
+            "a4_hz * 2^(tuning_cents / 1200) must be finite and greater than 0",
+        ),
+        (
+            lambda: libsonare.reference_hz_to_tuning(0.0),
+            "reference_hz_to_tuning: reference_hz must be finite and greater than 0",
+        ),
+        (
+            lambda: libsonare.note_segments(
+                np.full(4, 220.0, np.float32), 100.0, voiced_prob=np.full(4, 2.0, np.float32)
+            ),
+            "note_segments: voiced_prob[0] must be finite and in [0, 1]",
+        ),
+        (
+            lambda: libsonare.note_segments(
+                np.full(4, 220.0, np.float32), 0.0, voiced_prob=np.full(4, 0.5, np.float32)
+            ),
+            "note_segments: frame_rate must be finite and greater than 0",
+        ),
+    ],
+)
+def test_a_library_refusal_states_its_cause(call: Callable[[], object], text: str) -> None:
+    with pytest.raises(SonareValueError, match=f"^{re.escape(text)}$"):
+        call()

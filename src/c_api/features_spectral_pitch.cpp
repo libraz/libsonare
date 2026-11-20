@@ -1,12 +1,15 @@
 #include <limits>
+#include <string>
 
 #include "c_api/features_internal.h"
 #include "core/synthesis.h"
 #include "feature/chroma.h"
 #include "util/constants.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 using sonare::constants::kCentsPerSemitone;
+namespace check = sonare::util::check;
 
 // Core - Synthetic audio generation
 // ============================================================================
@@ -27,7 +30,11 @@ SonareError sonare_chirp(float fmin_hz, float fmax_hz, int sample_rate, float du
                          int linear, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (linear != 0 && linear != 1) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err =
+          run_validation([&] { check::integer_in_range(linear, 0, 1, "linear"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
@@ -94,7 +101,10 @@ SonareError sonare_spectral_bandwidth_ex(const float* samples, size_t length, in
       err != SONARE_OK) {
     return err;
   }
-  if (!std::isfinite(p) || p <= 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] { check::greater_than(p, 0.0, "p"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_count);
   return run_prevalidated_offline(
@@ -162,7 +172,10 @@ SonareError sonare_spectral_flux(const float* samples, size_t length, int sample
       err != SONARE_OK) {
     return err;
   }
-  if (lag < 1) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] { check::integer_at_least(lag, 1, "lag"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_count);
   return run_prevalidated_offline(
@@ -281,7 +294,10 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_count);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(samples, length);
-  if (!numeric::finite_non_negative(threshold)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] { check::at_least(threshold, 0.0, "threshold"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_count);
 
@@ -320,8 +336,16 @@ SonareError sonare_onset_backtrack(const int* events, size_t event_count, const 
   // to Inf. Making finiteness a core precondition would turn those analyses
   // into thrown exceptions. Finiteness is therefore a contract on envelopes
   // that come from outside, not an invariant of the core function.
-  for (size_t index = 0; index < energy_count; ++index) {
-    if (!std::isfinite(energy[index])) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        for (size_t index = 0; index < energy_count; ++index) {
+          if (!std::isfinite(energy[index])) {
+            check::refuse("energy",
+                          "contains a non-finite sample at index " + std::to_string(index));
+          }
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_count);
@@ -390,12 +414,14 @@ SonareError sonare_tuning_to_reference_hz(float tuning_cents, float a4_hz, float
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_hz);
   SONARE_C_TRY
-  if (!std::isfinite(tuning_cents) || !numeric::finite_positive(a4_hz)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  check::finite(tuning_cents, "tuning_cents");
+  check::greater_than(a4_hz, 0.0, "a4_hz");
   SONARE_C_REQUIRE_NONNULL(out_hz);
   const float hz = tuning_to_reference_hz(tuning_cents / kCentsPerSemitone, a4_hz);
-  if (!numeric::finite_positive(hz)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!numeric::finite_positive(hz)) {
+    check::refuse_relation({"a4_hz", "tuning_cents"},
+                           "{0} * 2^({1} / 1200) must be finite and greater than 0");
+  }
   *out_hz = hz;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -406,9 +432,8 @@ SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz,
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_tuning_cents);
   SONARE_C_TRY
-  if (!numeric::finite_positive(reference_hz) || !numeric::finite_positive(a4_hz)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  check::greater_than(reference_hz, 0.0, "reference_hz");
+  check::greater_than(a4_hz, 0.0, "a4_hz");
   SONARE_C_REQUIRE_NONNULL(out_tuning_cents);
   *out_tuning_cents = reference_hz_to_tuning(reference_hz, a4_hz) * kCentsPerSemitone;
   return SONARE_OK;
@@ -463,9 +488,14 @@ SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, i
       err != SONARE_OK) {
     return err;
   }
-  if ((fill_nan != 0 && fill_nan != 1) || !std::isfinite(ref_power) || ref_power < 0.0f ||
-      n_fft <= 0 || hop_length <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check::integer_at_least(n_fft, 1, "n_fft");
+        check::integer_at_least(hop_length, 1, "hop_length");
+        check::at_least(ref_power, 0.0, "ref_power");
+        check::integer_in_range(fill_nan, 0, 1, "fill_nan");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
   return run_prevalidated_offline(
@@ -584,34 +614,43 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
         "exactly one of voiced_prob and voiced_flags must be given, not both and not neither");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (n_frames == 0 || n_frames > static_cast<size_t>(std::numeric_limits<int>::max()) ||
-      !numeric::finite_positive(frame_rate)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (config != nullptr && (config->struct_version < 0 || config->struct_version > 2)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        constexpr int kMaxFrames = std::numeric_limits<int>::max();
+        check::integer_in_range(n_frames > static_cast<size_t>(kMaxFrames)
+                                    ? static_cast<long long>(kMaxFrames) + 1
+                                    : static_cast<long long>(n_frames),
+                                1, kMaxFrames, "n_frames");
+        check::greater_than(frame_rate, 0.0, "frame_rate");
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
   sonare::editing::pitch_editor::NoteSegmenterConfig segmenter_config;
   float voiced_threshold = 0.5f;
   if (config != nullptr) {
-    if (!std::isfinite(config->segmentation_threshold_cents) ||
-        !std::isfinite(config->min_note_ms) || !std::isfinite(config->reference_hz) ||
-        config->segmentation_threshold_cents < 0.0f || config->min_note_ms < 0.0f ||
-        config->reference_hz < 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err = run_validation_under(
+            "config",
+            [&] {
+              check::integer_in_range(config->struct_version, 0, 2, "struct_version");
+              check::at_least(config->segmentation_threshold_cents, 0.0,
+                              "segmentation_threshold_cents");
+              check::at_least(config->min_note_ms, 0.0, "min_note_ms");
+              check::at_least(config->reference_hz, 0.0, "reference_hz");
+              if (config->struct_version == 2) {
+                check::in_range(config->voiced_threshold, 0.0, 1.0, "voiced_threshold");
+              }
+            });
+        err != SONARE_OK) {
+      return err;
     }
     if (config->segmentation_threshold_cents > 0.0f) {
       segmenter_config.segmentation_threshold_cents = config->segmentation_threshold_cents;
     }
     if (config->min_note_ms > 0.0f) segmenter_config.min_note_ms = config->min_note_ms;
     if (config->reference_hz > 0.0f) segmenter_config.reference_hz = config->reference_hz;
-    if (config->struct_version == 2) {
-      if (!std::isfinite(config->voiced_threshold) || config->voiced_threshold < 0.0f ||
-          config->voiced_threshold > 1.0f) {
-        return SONARE_ERROR_INVALID_PARAMETER;
-      }
-      if (config->voiced_threshold > 0.0f) voiced_threshold = config->voiced_threshold;
+    if (config->struct_version == 2 && config->voiced_threshold > 0.0f) {
+      voiced_threshold = config->voiced_threshold;
     }
   }
   SONARE_C_REQUIRE_NONNULL(out);
@@ -631,7 +670,8 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
     // The probability is, because it is compared against a threshold below and
     // a non-finite one would lose that comparison and read as unvoiced.
     if (!std::isfinite(probability) || probability < 0.0f || probability > 1.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      const std::string subject = "voiced_prob[" + std::to_string(i) + "]";
+      check::in_range(probability, 0.0, 1.0, subject.c_str());
     }
     track.f0_hz.push_back(f0);
     track.voiced_prob.push_back(probability);
