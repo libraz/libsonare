@@ -135,7 +135,7 @@ describe('mastering request-object compatibility', () => {
         preset: 'pop',
         overrides: { loudness: { nope: 1 } } as never,
       }),
-    ).toThrow(/^masterAudio: unknown key params\.loudness\.nope$/);
+    ).toThrow(/^masterAudio: unknown key overrides\.loudness\.nope$/);
   });
 
   it('masterAudioStereo takes a request object only', () => {

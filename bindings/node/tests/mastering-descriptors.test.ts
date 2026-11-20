@@ -9,7 +9,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   capabilityCatalog,
-  ErrorCode,
   masterAudio,
   masteringApplyProcessor,
   masteringAssistantSuggestChainStereo,
@@ -178,13 +177,7 @@ describe('enum tokens in mastering overrides', () => {
   const x = noise(SR);
   const denoise = (extra: object) => ({ repair: { denoise: { enabled: true, ...extra } } });
 
-  const invalidFormat = (message: string) =>
-    expect.objectContaining({
-      code: ErrorCode.InvalidFormat,
-      message: expect.stringContaining(message),
-    });
-
-  it('takes a name, and the core refuses a number naming the path', () => {
+  it('takes a name, and a number is refused as a TypeError naming the key', () => {
     const byName = masterAudio({
       samples: x,
       sampleRate: SR,
@@ -199,7 +192,11 @@ describe('enum tokens in mastering overrides', () => {
         preset: 'pop',
         overrides: denoise({ noiseEstimator: 1, mode: 1 }) as never,
       }),
-    ).toThrow(invalidFormat('takes a token, not a number'));
+    ).toThrow(
+      new TypeError(
+        'masterAudio: overrides.repair.denoise.mode must be one of logMmse, mmseStsa, spectralSubtraction',
+      ),
+    );
   });
 
   it('takes the dotted spelling as the same override as the nested one', () => {
@@ -221,8 +218,7 @@ describe('enum tokens in mastering overrides', () => {
     expect(Array.from(dotted.samples)).toEqual(Array.from(nested.samples));
   });
 
-  it('the core refuses an unknown name as InvalidFormat on both chains', () => {
-    const message = "repair.denoise.noiseEstimator: unknown name 'nope'";
+  it('an unknown name is a RangeError on both chains', () => {
     expect(() =>
       masterAudio({
         samples: x,
@@ -230,17 +226,21 @@ describe('enum tokens in mastering overrides', () => {
         preset: 'pop',
         overrides: denoise({ noiseEstimator: 'nope' }) as never,
       }),
-    ).toThrow(invalidFormat(message));
+    ).toThrow(
+      new RangeError(
+        'masterAudio: overrides.repair.denoise.noiseEstimator must be one of quantile, mcra, imcra, spp',
+      ),
+    );
     expect(() => {
       new StreamingMasteringChain({
         sampleRate: SR,
         numChannels: 1,
         ...denoise({ noiseEstimator: 'nope' }),
       } as never);
-    }).toThrow(invalidFormat(message));
+    }).toThrow(RangeError);
   });
 
-  it('the core refuses a string for a number-valued key as InvalidFormat', () => {
+  it('a string for a number-valued key is a TypeError', () => {
     expect(() =>
       masterAudio({
         samples: x,
@@ -248,7 +248,9 @@ describe('enum tokens in mastering overrides', () => {
         preset: 'pop',
         overrides: { loudness: { targetLufs: 'x' } } as never,
       }),
-    ).toThrow(invalidFormat('loudness.targetLufs is a string, but takes no token'));
+    ).toThrow(
+      new TypeError('masterAudio: overrides.loudness.targetLufs must be a number or a boolean'),
+    );
   });
 });
 

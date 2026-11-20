@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Audio, ErrorCode, init, masterAudio, masterAudioStereo } from '../src/index';
+import { Audio, init, masterAudio, masterAudioStereo } from '../src/index';
 
 const sampleRate = 22_050;
 const samples = Float32Array.from(
@@ -19,10 +19,7 @@ describe('WASM masterAudio nested overrides', () => {
         overrides: { loudness: { targetLufs: 'not-a-number' } } as never,
       }),
     ).toThrow(
-      expect.objectContaining({
-        code: ErrorCode.InvalidFormat,
-        message: expect.stringContaining('loudness.targetLufs is a string, but takes no token'),
-      }),
+      new TypeError('masterAudio: overrides.loudness.targetLufs must be a number or a boolean'),
     );
   });
 
