@@ -182,7 +182,9 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
   }
 
   auto config = sonare::mastering::api::streaming_chain_config_from_json(
-      has_config ? node_narrow_string(env, info[0], "configJson") : std::string("{\"params\":{}}"));
+      has_config ? node_narrow_string(env, info[0], "configJson") : std::string("{\"params\":{}}"),
+      // The constructor's request object is the chain config itself, so its keys have no root.
+      sonare::mastering::api::chain_params_argument(""));
   chain_ =
       std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config), options);
   SONARE_NODE_CATCH_VOID(env)

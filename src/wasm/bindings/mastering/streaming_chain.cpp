@@ -42,7 +42,8 @@ mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val optio
 class StreamingMasteringChainWrapper {
  public:
   StreamingMasteringChainWrapper(val config_json, val options)
-      : chain_(masteringChainConfigFromDocument(config_json, true),
+      // The constructor's request object is the chain config itself, so its keys have no root.
+      : chain_(masteringChainConfigFromDocument(config_json, true, ""),
                streamingOptionsFromVal(options)) {}
 
   // The two block dimensions arrive as val rather than as int: embind's integer

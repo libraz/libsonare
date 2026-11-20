@@ -233,14 +233,17 @@ mastering::api::MasteringChainConfig presetConfigWithOverrides(const val& preset
   const bool no_overrides = overrides.isUndefined() || overrides.isNull();
   if (no_preset) {
     if (no_overrides) return mastering::api::MasteringChainConfig{};
-    return mastering::api::chain_config_from_json(stringFromVal(overrides, "overridesJson"));
+    return mastering::api::chain_config_from_json(
+        stringFromVal(overrides, "overridesJson"),
+        mastering::api::chain_params_argument("overrides"));
   }
   const std::string preset_name = stringFromVal(preset, "preset");
   wasmRefuseEmbeddedNul(preset_name, "preset");
   auto config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
   if (no_overrides) return config;
   return mastering::api::chain_config_overrides_from_json(
-      std::move(config), stringFromVal(overrides, "overridesJson"));
+      std::move(config), stringFromVal(overrides, "overridesJson"),
+      mastering::api::chain_params_argument("overrides"));
 }
 
 val js_master_audio(val preset, val samples, const val& sample_rate_val, val overrides) {

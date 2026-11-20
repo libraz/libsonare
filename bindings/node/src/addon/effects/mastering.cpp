@@ -85,24 +85,30 @@ bool IsDocumentOrAbsent(const Napi::Value& value) {
   return value.IsString() || value.IsUndefined() || value.IsNull();
 }
 
-mastering_api::MasteringChainConfig OfflineChainConfig(const std::optional<std::string>& document) {
-  return document ? mastering_api::chain_config_from_json(*document)
+// A caller's chain config object, refused under the request key @p root it was given as.
+mastering_api::MasteringChainConfig OfflineChainConfig(const std::optional<std::string>& document,
+                                                       std::string_view root = "config") {
+  return document ? mastering_api::chain_config_from_json(
+                        *document, mastering_api::chain_params_argument(root))
                   : mastering_api::MasteringChainConfig{};
 }
 
 mastering_api::MasteringChainConfig StreamingChainConfig(
     const std::optional<std::string>& document) {
-  return mastering_api::streaming_chain_config_from_json(document ? *document
-                                                                  : std::string("{\"params\":{}}"));
+  return mastering_api::streaming_chain_config_from_json(
+      document ? *document : std::string("{\"params\":{}}"),
+      mastering_api::chain_params_argument("config"));
 }
 
 // A preset's config with the overrides document applied; no preset reads the document alone.
 mastering_api::MasteringChainConfig PresetChainConfig(const std::optional<std::string>& preset_name,
                                                       const std::optional<std::string>& overrides) {
-  if (!preset_name) return OfflineChainConfig(overrides);
+  if (!preset_name) return OfflineChainConfig(overrides, "overrides");
   auto config = mastering_api::preset_config(mastering_api::preset_from_string(*preset_name));
-  return overrides ? mastering_api::chain_config_overrides_from_json(std::move(config), *overrides)
-                   : config;
+  return overrides
+             ? mastering_api::chain_config_overrides_from_json(
+                   std::move(config), *overrides, mastering_api::chain_params_argument("overrides"))
+             : config;
 }
 
 struct ProgressContext {

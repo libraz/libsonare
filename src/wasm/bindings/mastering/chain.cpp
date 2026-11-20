@@ -49,13 +49,15 @@ val js_mastering(val samples, const val& sample_rate_val, const val& target_lufs
 // The chain configuration crosses as document text; the core reader is the only parser, which
 // keeps WASM in lockstep with the C ABI, Node and Python.
 mastering::api::MasteringChainConfig masteringChainConfigFromDocument(const val& document,
-                                                                      bool streaming) {
+                                                                      bool streaming,
+                                                                      std::string_view root) {
   const bool absent = document.isUndefined() || document.isNull();
   const std::string text =
       absent ? std::string("{\"params\":{}}") : stringFromVal(document, "configJson");
-  if (streaming) return mastering::api::streaming_chain_config_from_json(text);
+  const auto origin = mastering::api::chain_params_argument(root);
+  if (streaming) return mastering::api::streaming_chain_config_from_json(text, origin);
   return absent ? mastering::api::MasteringChainConfig{}
-                : mastering::api::chain_config_from_json(text);
+                : mastering::api::chain_config_from_json(text, origin);
 }
 
 val js_mastering_chain(val samples, const val& sample_rate_val, val config) {

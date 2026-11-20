@@ -6,7 +6,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init, masterAudio } from '../src/index';
+import { init, masterAudio } from '../src/index';
 
 const sampleRate = 22_050;
 const samples = Float32Array.from({ length: 4096 }, (_, i) =>
@@ -79,11 +79,13 @@ describe('WASM mastering chain saturation fields', () => {
   });
 
   it('refuses a mode given as a number or an unknown name, naming the path', () => {
-    const cases: [unknown, string][] = [
-      [3, 'saturation.exciter.aliasing takes a token, not a number'],
-      ['bogus', "saturation.exciter.aliasing: unknown name 'bogus'"],
+    const tokens =
+      'masterAudio: overrides.saturation.exciter.aliasing must be one of none, adaa1, adaa2, oversample4x';
+    const cases: [unknown, ErrorConstructor][] = [
+      [3, TypeError],
+      ['bogus', RangeError],
     ];
-    for (const [aliasing, message] of cases) {
+    for (const [aliasing, cls] of cases) {
       expect(() =>
         masterAudio({
           samples,
@@ -91,10 +93,7 @@ describe('WASM mastering chain saturation fields', () => {
           overrides: { saturation: { exciter: { enabled: true, amount: 0.5, aliasing } } } as never,
         }),
       ).toThrow(
-        expect.objectContaining({
-          code: ErrorCode.InvalidFormat,
-          message: expect.stringContaining(message),
-        }),
+        expect.objectContaining({ name: cls.name, message: expect.stringContaining(tokens) }),
       );
     }
   });

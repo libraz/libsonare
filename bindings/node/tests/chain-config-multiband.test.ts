@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   type MasteringChainConfig,
   masterAudio,
   masterAudioStereo,
@@ -62,9 +61,9 @@ const DOTTED: Record<string, number | boolean | string> = {
 };
 const DOTTED_JSON = JSON.stringify({ version: 2, params: DOTTED });
 
-const invalidFormat = (message: string) =>
+const refusedAs = (cls: ErrorConstructor, message: string) =>
   expect.objectContaining({
-    code: ErrorCode.InvalidFormat,
+    name: cls.name,
     message: expect.stringContaining(message),
   });
 
@@ -174,8 +173,9 @@ describe('typed multiband crossover + bands', () => {
   ] as const)('refuses the retired %s shorthand and names %s', (key, value, current) => {
     const overrides = { dynamics: { multibandComp: { [key]: value } } } as never;
     expect(() => masterAudio({ samples: tone(1), sampleRate: SAMPLE_RATE, overrides })).toThrow(
-      invalidFormat(
-        `masterAudio: unknown key params.${P}.${key} (renamed to params.${P}.${current})`,
+      refusedAs(
+        TypeError,
+        `masterAudio: unknown key overrides.${P}.${key} (renamed to overrides.${P}.${current})`,
       ),
     );
   });
@@ -185,20 +185,23 @@ describe('typed multiband crossover + bands', () => {
       dynamics: { multibandComp: { crossover: { cutoffsHz: [200, 2000], slope: 2 } } },
     } as never;
     expect(() => masterAudio({ samples: tone(1), sampleRate: SAMPLE_RATE, overrides })).toThrow(
-      invalidFormat(`${P}.crossover.slope takes a token, not a number`),
+      refusedAs(
+        TypeError,
+        `masterAudio: overrides.${P}.crossover.slope must be one of lr2, lr4, lr8`,
+      ),
     );
   });
 
   it('refuses an empty array by path on every entry point', () => {
     const empty = { dynamics: { multibandComp: { crossover: { cutoffsHz: [] } } } };
-    const message = invalidFormat(`params.${P}.crossover.cutoffsHz must not be an empty list`);
+    const tail = `${P}.crossover.cutoffsHz must not be an empty list`;
     expect(() =>
       masterAudio({
         samples: tone(1),
         sampleRate: SAMPLE_RATE,
         overrides: empty as MasteringChainConfig,
       }),
-    ).toThrow(message);
+    ).toThrow(refusedAs(RangeError, `masterAudio: overrides.${tail}`));
     expect(
       () =>
         new StreamingMasteringChain({
@@ -206,9 +209,9 @@ describe('typed multiband crossover + bands', () => {
           numChannels: 1,
           ...(empty as MasteringChainConfig),
         }),
-    ).toThrow(message);
+    ).toThrow(refusedAs(RangeError, `StreamingMasteringChain: ${tail}`));
     expect(() => new native.StreamingMasteringChain(JSON.stringify({ params: empty }))).toThrow(
-      message,
+      refusedAs(RangeError, `StreamingMasteringChain: ${tail}`),
     );
   });
 });

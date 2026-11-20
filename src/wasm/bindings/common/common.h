@@ -16,6 +16,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -224,6 +225,22 @@ inline void rethrowLastCRefusal() {
 [[noreturn]] inline void throwCodedCError(SonareError err) {
   rethrowLastCRefusal();
   throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err), cErrorMessage(err));
+}
+
+/// @brief throwCodedCError for a call whose config struct's refusal subjects carry a
+///        "<c_root>." prefix the request keys do not: the prefix is stripped before the
+///        JS translation point spells them.
+[[noreturn]] inline void throwCodedCErrorFlattening(SonareError err, const char* c_root) {
+  if (const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal()) {
+    const std::string root = std::string(c_root) + ".";
+    throw refusal->respelled(
+        refusal->code(),
+        [&root](const std::string& subject) {
+          return subject.rfind(root, 0) == 0 ? subject.substr(root.size()) : subject;
+        },
+        false);
+  }
+  throwCodedCError(err);
 }
 
 /// @brief The messages of the diagnostics the most recent C-ABI call published, in order.
@@ -660,9 +677,10 @@ std::vector<mastering::api::Param> masteringParamsFromObject(
 /// @brief Reads a chain configuration document (`{"version"?, "params"}` text) as an offline
 ///        chain config, or as a streaming one when @p streaming is set.
 /// @details Absent, `undefined` or `null` selects the defaults of that chain kind.
-/// @throws WasmTypeError for a non-string; the core's InvalidFormat for a refused document.
-mastering::api::MasteringChainConfig masteringChainConfigFromDocument(const val& document,
-                                                                      bool streaming = false);
+/// @throws WasmTypeError for a non-string; a refused key or value as a parameter refusal under
+///         the request key @p root ("" when the request object is the config itself).
+mastering::api::MasteringChainConfig masteringChainConfigFromDocument(
+    const val& document, bool streaming = false, std::string_view root = "config");
 
 void registerProjectBindings();
 void registerStreamAnalyzerBindings();
