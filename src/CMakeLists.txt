@@ -1669,6 +1669,7 @@ if(BUILD_WASM)
       c_api/sonare_c_vocal_edit.cpp
       core/audio_io.cpp
       core/convert.cpp
+      effects/silence.cpp
       feature/cqt.cpp
       feature/vqt.cpp
       filters/chroma.cpp
