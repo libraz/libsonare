@@ -264,9 +264,12 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
                               const SonareTranscribeConfig* config, SonareTranscribeResult* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = {};
-  out->struct_version = kTranscribeResultVersion;
+  // The result carries its own struct_version, so it is cleared by hand rather than by
+  // SONARE_C_ZERO_OUTS.
+  if (out != nullptr) {
+    *out = {};
+    out->struct_version = kTranscribeResultVersion;
+  }
   // The family's buffer policy, non-finite scan included. Transcription needs it
   // as much as any of them: a buffer of NaN tracks no pitch, so without the scan
   // it would answer SONARE_OK with zero notes -- an answer a caller cannot tell
@@ -281,6 +284,7 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
   const SonareError config_error = sonare_c_detail::run_validation(
       [&] { read_config(config, &core_config, &group, &channel, &reference_auto); });
   if (config_error != SONARE_OK) return config_error;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   const sonare::Audio audio = sonare::Audio::from_buffer(samples, length, sample_rate);
@@ -318,9 +322,9 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
                                               const SonareTranscribeConfig* config,
                                               size_t* out_note_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_note_count);
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
-  if (out_note_count) *out_note_count = 0;
-  if (project == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   const SonareError audio_error =
       validate_audio_params("project_transcribe_to_clip", "samples", samples, length, sample_rate);
   if (audio_error != SONARE_OK) return audio_error;
@@ -354,7 +358,6 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_note_count) *out_note_count = 0;
   SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, samples, length, sample_rate, config,
                               out_note_count);
 #endif

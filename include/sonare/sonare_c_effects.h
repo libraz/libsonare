@@ -985,6 +985,47 @@ SonareError sonare_trim(const float* samples, size_t length, int sample_rate, fl
 SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
                                  float target_db, float** out, size_t* out_length);
 
+/// @brief Applies a cosine fade-in and fade-out to mono audio.
+/// @details Each length is clamped to the input; 0 leaves that end untouched.
+///   The fade-in is applied first, then the fade-out.
+/// @param fade_in_sec  Fade-in length in seconds; finite and >= 0.
+/// @param fade_out_sec Fade-out length in seconds; finite and >= 0.
+/// @note Free @p out with @ref sonare_free_floats.
+SonareError sonare_fade(const float* samples, size_t length, int sample_rate, float fade_in_sec,
+                        float fade_out_sec, float** out, size_t* out_length);
+
+/// @brief Response selector for @ref sonare_biquad_filter.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_BIQUAD_FILTER_HIGH_PASS = 0,  ///< Butterworth high-pass at @c cutoff_hz.
+  SONARE_BIQUAD_FILTER_LOW_PASS = 1,   ///< Butterworth low-pass at @c cutoff_hz.
+  SONARE_BIQUAD_FILTER_BAND_PASS = 2,  ///< Band-pass at @c center_hz, @c bandwidth_hz wide.
+  SONARE_BIQUAD_FILTER_NOTCH = 3,      ///< Notch at @c center_hz, @c bandwidth_hz wide.
+} SonareBiquadFilterType;
+
+/// @brief Configuration for @ref sonare_biquad_filter.
+/// @details Fill with @ref sonare_biquad_filter_config_init, then set the
+///   frequency fields @c type reads. A frequency field @c type does not read
+///   must stay 0; any other value is refused.
+typedef struct {
+  uint32_t struct_size;  ///< sizeof(SonareBiquadFilterConfig); set by the init function.
+  int32_t type;          ///< A @ref SonareBiquadFilterType (default HIGH_PASS).
+  int32_t order;         ///< 2, or 4 for HIGH_PASS / LOW_PASS (a two-section cascade); default 2.
+  int32_t zero_phase;    ///< Non-zero runs the filter forward and backward; default 0.
+  float cutoff_hz;       ///< HIGH_PASS / LOW_PASS corner, in (0, sample_rate / 2).
+  float center_hz;       ///< BAND_PASS / NOTCH center, in (0, sample_rate / 2).
+  float bandwidth_hz;    ///< BAND_PASS / NOTCH bandwidth, > 0.
+} SonareBiquadFilterConfig;
+
+/// @brief Fills @p config with the defaults; every frequency field is 0, so
+///   the caller sets the one @c type reads. A NULL @p config is ignored.
+void sonare_biquad_filter_config_init(SonareBiquadFilterConfig* config);
+
+/// @brief Filters mono audio with a biquad (or a cascade of two for order 4).
+/// @note Free @p out with @ref sonare_free_floats.
+SonareError sonare_biquad_filter(const float* samples, size_t length, int sample_rate,
+                                 const SonareBiquadFilterConfig* config, float** out,
+                                 size_t* out_length);
+
 /// @brief A normalized channel pair and the gain that produced it.
 /// @details @c left and @c right are heap-allocated; release the pair with
 ///   @ref sonare_free_normalize_stereo_result. @c applied_gain_db is one figure rather than a

@@ -40,19 +40,6 @@ sonare::util::json::Array newline_name_array(const char* names) {
   return values;
 }
 
-void clear_stereo_result(SonareMasteringStereoResult* out, int sample_rate) {
-  out->left = nullptr;
-  out->right = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->latency_samples = 0;
-  out->loudness_target_limited = 0;
-  out->non_finite_substitution_count = 0;
-}
-
 void set_stereo_result(const sonare::mastering::api::StereoResult& result,
                        SonareMasteringStereoResult* out) {
   const std::size_t length = result.left.size();
@@ -84,34 +71,31 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
                                      const SonareMasteringConfig* config,
                                      SonareMasteringResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
+
+  if (const SonareError err =
+          validate_audio_params("mastering_process", "samples", samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
 
-  out->samples = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->latency_samples = 0;
-  out->loudness_target_limited = 0;
-  out->non_finite_substitution_count = 0;
+  return run_prevalidated_offline(
+      samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        auto result = sonare::mastering::maximizer::loudness_optimize(audio, to_cpp_config(config));
 
-  return run_offline("mastering_process", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       auto result = sonare::mastering::maximizer::loudness_optimize(
-                           audio, to_cpp_config(config));
+        out->length = result.audio.size();
+        out->sample_rate = result.audio.sample_rate();
+        out->input_lufs = result.input_lufs;
+        out->output_lufs = result.output_lufs;
+        out->applied_gain_db = result.applied_gain_db;
+        out->latency_samples = result.latency_samples;
+        out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
+        out->non_finite_substitution_count = result.non_finite_substitution_count;
 
-                       out->length = result.audio.size();
-                       out->sample_rate = result.audio.sample_rate();
-                       out->input_lufs = result.input_lufs;
-                       out->output_lufs = result.output_lufs;
-                       out->applied_gain_db = result.applied_gain_db;
-                       out->latency_samples = result.latency_samples;
-                       out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
-                       out->non_finite_substitution_count = result.non_finite_substitution_count;
-
-                       return copy_audio_result(result.audio, &out->samples, &out->length);
-                     });
+        return copy_audio_result(result.audio, &out->samples, &out->length);
+      });
 }
 
 SonareError sonare_mastering_apply_processor(const char* processor, const float* samples,
@@ -119,25 +103,18 @@ SonareError sonare_mastering_apply_processor(const char* processor, const float*
                                              const SonareMasteringParam* params, size_t param_count,
                                              SonareMasteringResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !processor || processor[0] == '\0') {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   // Define the result before any validation return, so a rejected call hands
   // back a defined struct rather than the caller's untouched stack slot.
-  out->samples = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->latency_samples = 0;
-  out->loudness_target_limited = 0;
-  out->non_finite_substitution_count = 0;
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
 
+  SONARE_C_REQUIRE_NONNULL(processor);
+  if (processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err =
       validate_audio_params("mastering_apply_processor", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   auto result = sonare::mastering::api::apply_named_processor(
@@ -151,26 +128,18 @@ SonareError sonare_mastering_apply_processor_stereo(
     const char* processor, const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !processor || processor[0] == '\0') {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   // Define the result before any validation return, so a rejected call hands
   // back a defined struct rather than the caller's untouched stack slot.
-  out->left = nullptr;
-  out->right = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->latency_samples = 0;
-  out->loudness_target_limited = 0;
-  out->non_finite_substitution_count = 0;
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
 
+  SONARE_C_REQUIRE_NONNULL(processor);
+  if (processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_stereo_audio_params("mastering_apply_processor_stereo", "left",
                                                  "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   auto result = sonare::mastering::api::apply_named_processor_stereo(
@@ -230,7 +199,8 @@ const char* sonare_mastering_insert_names(void) {
 
 SonareError sonare_mastering_processor_catalog(char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out_json);
+  SONARE_C_REQUIRE_NONNULL(out_json);
   SONARE_C_TRY
   *out_json = copy_string(sonare::mastering::api::processor_catalog_json());
   return SONARE_OK;
@@ -239,7 +209,8 @@ SonareError sonare_mastering_processor_catalog(char** out_json) {
 
 SonareError sonare_mastering_amp_preset_catalog(char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out_json);
+  SONARE_C_REQUIRE_NONNULL(out_json);
   SONARE_C_TRY
   *out_json = copy_string(sonare::mastering::api::amp_preset_catalog_json());
   return SONARE_OK;
@@ -316,7 +287,8 @@ std::string build_capability_catalog_json() {
 
 SonareError sonare_capability_catalog_json(char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out_json);
+  SONARE_C_REQUIRE_NONNULL(out_json);
   SONARE_C_TRY
   // A pure function of the build, so one serialization serves every call.
   static const std::string serialized = build_capability_catalog_json();
@@ -443,11 +415,9 @@ const char* sonare_mastering_insert_param_names(const char* insert) {
 
 SonareError sonare_mastering_insert_param_info(const char* insert, char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (insert == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "insert must not be NULL");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_ZERO_OUTS(out_json);
+  SONARE_C_REQUIRE_NONNULL(insert);
+  SONARE_C_REQUIRE_NONNULL(out_json);
   SONARE_C_TRY
   *out_json = copy_string(sonare::mastering::api::insert_param_info_json(insert));
   return SONARE_OK;
@@ -457,17 +427,15 @@ SonareError sonare_mastering_insert_param_info(const char* insert, char** out_js
 SonareError sonare_mastering_insert_param_info_at_rate(const char* insert, int sample_rate,
                                                        char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (insert == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "insert must not be NULL");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_ZERO_OUTS(out_json);
+  SONARE_C_REQUIRE_NONNULL(insert);
   SONARE_C_TRY
   if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_REQUIRE_NONNULL(out_json);
   *out_json =
       copy_string(sonare::mastering::api::insert_param_info_json_at_rate(insert, sample_rate));
   return SONARE_OK;
@@ -477,19 +445,15 @@ SonareError sonare_mastering_insert_param_info_at_rate(const char* insert, int s
 SonareError sonare_mastering_insert_timing(const char* insert, const char* params, int sample_rate,
                                            int* out_latency_samples, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_latency_samples, out_tail_samples);
   SONARE_C_TRY
-  if (out_latency_samples == nullptr || out_tail_samples == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "out_latency_samples and out_tail_samples are required");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out_latency_samples = 0;
-  *out_tail_samples = 0;
   if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_REQUIRE_NONNULL(out_latency_samples);
+  SONARE_C_REQUIRE_NONNULL(out_tail_samples);
 
   const auto timing = sonare::mastering::api::insert_timing(
       insert != nullptr ? insert : "", params != nullptr ? params : "{}", sample_rate);
@@ -502,13 +466,11 @@ SonareError sonare_mastering_insert_timing(const char* insert, const char* param
 SonareError sonare_mastering_enum_value(const char* processor, const char* key, const char* name,
                                         int* out_is_enum, double* out_value) {
   SONARE_C_API_ENTRY;
-  if (out_is_enum == nullptr || out_value == nullptr || key == nullptr || name == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "key, name, out_is_enum and out_value are required");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out_is_enum = 0;
-  *out_value = 0.0;
+  SONARE_C_ZERO_OUTS(out_is_enum, out_value);
+  SONARE_C_REQUIRE_NONNULL(key);
+  SONARE_C_REQUIRE_NONNULL(name);
+  SONARE_C_REQUIRE_NONNULL(out_is_enum);
+  SONARE_C_REQUIRE_NONNULL(out_value);
   SONARE_C_TRY
   const auto value = sonare::mastering::api::mastering_enum_value(
       processor != nullptr ? processor : "", key, name);
@@ -525,28 +487,21 @@ SonareError sonare_mastering_apply_pair_processor_ex(
     size_t reference_length, int reference_sample_rate, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !processor || processor[0] == '\0') {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   // Define the result before any validation return, so a rejected call hands
   // back a defined struct rather than the caller's untouched stack slot.
-  out->samples = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->latency_samples = 0;
-  out->loudness_target_limited = 0;
-  out->non_finite_substitution_count = 0;
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
 
+  SONARE_C_REQUIRE_NONNULL(processor);
+  if (processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params("mastering_apply_pair_processor_ex", "source", source,
                                           source_length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params("mastering_apply_pair_processor_ex", "reference", reference,
                               reference_length, reference_sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   auto result = sonare::mastering::api::apply_named_pair_processor(
@@ -574,9 +529,10 @@ SonareError sonare_mastering_apply_pair_processor_stereo_ex(
     size_t reference_length, int reference_sample_rate, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
-  clear_stereo_result(out, sample_rate);
-  if (!processor || processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
+  SONARE_C_REQUIRE_NONNULL(processor);
+  if (processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
 
   SonareError err = validate_stereo_audio_params("mastering_apply_pair_processor_stereo_ex",
                                                  "source_left", "source_right", source_left,
@@ -586,7 +542,8 @@ SonareError sonare_mastering_apply_pair_processor_stereo_ex(
                                      "reference_right", reference_left, reference_right,
                                      reference_length, reference_sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   const auto result = sonare::mastering::api::apply_named_pair_processor_stereo(
@@ -613,16 +570,16 @@ SonareError sonare_mastering_analyze_pair_ex(const char* analysis, const float* 
                                              int sample_rate, const SonareMasteringParam* params,
                                              size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
+  SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(analysis);
-  *json_out = nullptr;
   SonareError err = validate_audio_params("mastering_analyze_pair_ex", "source", source,
                                           source_length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params("mastering_analyze_pair_ex", "reference", reference, reference_length,
                               reference_sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
   SONARE_C_TRY
   auto json = sonare::mastering::api::analyze_named_pair(
       analysis, source, reference, source_length, reference_length, sample_rate,
@@ -646,13 +603,13 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* l
                                             const SonareMasteringParam* params, size_t param_count,
                                             char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
+  SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(analysis);
-  *json_out = nullptr;
   SonareError err = validate_stereo_audio_params("mastering_analyze_stereo", "left", "right", left,
                                                  right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
   SONARE_C_TRY
   auto json = sonare::mastering::api::analyze_named_stereo(
       analysis, left, right, length, sample_rate, to_params(params, param_count));
@@ -670,14 +627,15 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
   // Cleared before the argument checks, not after: a caller that ignores the
   // error code must not read the scalars left in the struct by whatever wrote
   // it last as though this call had measured them.
-  if (out_match) *out_match = SonareLoudnessMatch{};
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length, out_match);
   SonareError err = validate_audio_params("mastering_ab_match_loudness", "source", source,
                                           source_length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params("mastering_ab_match_loudness", "reference", reference,
                               reference_length, reference_sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   const Audio reference_audio =
@@ -698,9 +656,8 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
     int reference_sample_rate, int sample_rate, SonareMasteringStereoResult* out,
     SonareLoudnessMatch* out_match) {
   SONARE_C_API_ENTRY;
-  if (out_match) *out_match = SonareLoudnessMatch{};
-  SONARE_C_REQUIRE_NONNULL(out);
-  clear_stereo_result(out, sample_rate);
+  SONARE_C_ZERO_OUTS(out, out_match);
+  if (out != nullptr) out->sample_rate = sample_rate;
 
   SonareError err = validate_stereo_audio_params("mastering_ab_match_loudness_stereo",
                                                  "source_left", "source_right", source_left,
@@ -710,6 +667,7 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
                                      "reference_right", reference_left, reference_right,
                                      reference_length, reference_sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   const sonare::mastering::match::StereoAudioPair reference{

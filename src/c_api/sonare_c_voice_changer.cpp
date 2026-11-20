@@ -141,21 +141,28 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
 #if defined(SONARE_WITH_VOICE_CHANGER)
+  if (const SonareError err =
+          validate_audio_params("voice_change", "samples", samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
 
-  return run_offline("voice_change", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       editing::voice_changer::VoiceChangerConfig config;
-                       config.pitch_semitones = pitch_semitones;
-                       config.formant_factor = formant_factor;
-                       editing::voice_changer::VoiceChanger changer(config);
-                       Audio result = changer.process(audio);
-                       return copy_audio_result(result, out, out_length);
-                     });
+  return run_prevalidated_offline(samples, length, sample_rate,
+                                  [&](const Audio& audio) -> SonareError {
+                                    editing::voice_changer::VoiceChangerConfig config;
+                                    config.pitch_semitones = pitch_semitones;
+                                    config.formant_factor = formant_factor;
+                                    editing::voice_changer::VoiceChanger changer(config);
+                                    Audio result = changer.process(audio);
+                                    return copy_audio_result(result, out, out_length);
+                                  });
 #else
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, pitch_semitones, formant_factor, out,
                               out_length);
 #endif
@@ -165,28 +172,36 @@ SonareError sonare_voice_change_ex(const float* samples, size_t length, int samp
                                    const SonareVoiceChangeConfig* config, float** out,
                                    size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
 #if defined(SONARE_WITH_VOICE_CHANGER)
+  if (const SonareError err =
+          validate_audio_params("voice_change_ex", "samples", samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
   if (config == nullptr || config->struct_version < 0 || config->struct_version > 1 ||
       (config->formant_mode != SONARE_FORMANT_MODE_RELATIVE &&
        config->formant_mode != SONARE_FORMANT_MODE_ABSOLUTE)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
-  return run_offline("voice_change_ex", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       editing::voice_changer::VoiceChangerConfig core_config;
-                       core_config.pitch_semitones = config->pitch_semitones;
-                       core_config.formant_factor = config->formant_factor;
-                       core_config.formant_mode =
-                           config->formant_mode == SONARE_FORMANT_MODE_ABSOLUTE
-                               ? editing::voice_changer::FormantMode::Absolute
-                               : editing::voice_changer::FormantMode::Relative;
-                       editing::voice_changer::VoiceChanger changer(core_config);
-                       Audio result = changer.process(audio);
-                       return copy_audio_result(result, out, out_length);
-                     });
+  return run_prevalidated_offline(
+      samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        editing::voice_changer::VoiceChangerConfig core_config;
+        core_config.pitch_semitones = config->pitch_semitones;
+        core_config.formant_factor = config->formant_factor;
+        core_config.formant_mode = config->formant_mode == SONARE_FORMANT_MODE_ABSOLUTE
+                                       ? editing::voice_changer::FormantMode::Absolute
+                                       : editing::voice_changer::FormantMode::Relative;
+        editing::voice_changer::VoiceChanger changer(core_config);
+        Audio result = changer.process(audio);
+        return copy_audio_result(result, out, out_length);
+      });
 #else
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);
 #endif
 }
@@ -195,17 +210,15 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
                                          const char* preset, int channels, float** out,
                                          size_t* out_length) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_length);
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_REQUIRE_NONNULL(out_length);
-  *out = nullptr;
-  *out_length = 0;
-  if (channels < 1 || channels > 2) return SONARE_ERROR_INVALID_PARAMETER;
-  if (channels == 2 && length % 2 != 0) return SONARE_ERROR_INVALID_PARAMETER;
-
   SonareError err =
       validate_audio_params("voice_change_realtime", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
+  if (channels < 1 || channels > 2) return SONARE_ERROR_INVALID_PARAMETER;
+  if (channels == 2 && length % 2 != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   constexpr int kBlockSize = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
@@ -234,8 +247,6 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = {};
-  if (out_length) *out_length = {};
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, preset, channels, out, out_length);
 #endif
 }
@@ -439,11 +450,11 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
                                                         SonareRealtimeVoiceChangerConfig* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  SONARE_C_REQUIRE_NONNULL(out);
   // Reject an out-of-range preset ordinal instead of silently substituting
   // NeutralMonitor. This matches sonare_voice_character_preset_id, which returns
   // nullptr for the same input, and every other surface's strict handling.
   if (!vc_preset_is_valid(preset)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   const auto config =
       editing::voice_changer::realtime_voice_changer_preset(vc_preset_from_c(preset));
@@ -475,17 +486,8 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
                                                  int num_channels,
                                                  SonareRealtimeVoiceChanger** out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  SONARE_C_REQUIRE_NONNULL(out);
-  if (max_block_size == 0) {
-    max_block_size = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
-  }
-  if (const char* refused = editing::voice_changer::prepare_arguments_error(
-          static_cast<double>(sample_rate), max_block_size, num_channels)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, refused);
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   SONARE_C_TRY
   editing::voice_changer::RealtimeVoiceChangerConfig cfg;
   if (config) {
@@ -504,6 +506,15 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
     cfg = editing::voice_changer::realtime_voice_changer_preset(
         editing::voice_changer::VoiceCharacterPreset::NeutralMonitor);
   }
+  if (max_block_size == 0) {
+    max_block_size = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
+  }
+  if (const char* refused = editing::voice_changer::prepare_arguments_error(
+          static_cast<double>(sample_rate), max_block_size, num_channels)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, refused);
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
   auto handle = std::make_unique<SonareRealtimeVoiceChanger>();
   handle->changer.set_config(cfg);
   handle->changer.prepare(sample_rate, max_block_size, num_channels);
@@ -514,7 +525,6 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(config, sample_rate, max_block_size, num_channels, out);
 #endif
 }
@@ -563,17 +573,8 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
                                                       int num_channels,
                                                       SonareRealtimeVoiceChanger** out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  SONARE_C_REQUIRE_NONNULL(out);
-  if (max_block_size == 0) {
-    max_block_size = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
-  }
-  if (const char* refused = editing::voice_changer::prepare_arguments_error(
-          static_cast<double>(sample_rate), max_block_size, num_channels)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, refused);
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   SONARE_C_TRY
   const std::string config_text = preset_or_config_json && preset_or_config_json[0] != '\0'
                                       ? preset_or_config_json
@@ -585,6 +586,15 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
     set_last_error(SONARE_ERROR_INVALID_FORMAT, error.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
+  if (max_block_size == 0) {
+    max_block_size = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
+  }
+  if (const char* refused = editing::voice_changer::prepare_arguments_error(
+          static_cast<double>(sample_rate), max_block_size, num_channels)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, refused);
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
   auto handle = std::make_unique<SonareRealtimeVoiceChanger>();
   handle->changer.set_config(config);
   handle->changer.prepare(sample_rate, max_block_size, num_channels);
@@ -595,7 +605,6 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(preset_or_config_json, sample_rate, max_block_size, num_channels,
                               out);
 #endif
@@ -847,17 +856,16 @@ SonareError sonare_realtime_voice_changer_non_finite_discard_count(
 SonareError sonare_realtime_voice_changer_config_json(const SonareRealtimeVoiceChanger* handle,
                                                       char** out_json) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_VOICE_CHANGER)
   SONARE_C_REQUIRE_NONNULL(handle);
   SONARE_C_REQUIRE_NONNULL(out_json);
-  *out_json = nullptr;
   SONARE_C_TRY
   *out_json = copy_string(
       editing::voice_changer::realtime_voice_changer_config_to_json(handle->changer.config()));
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_json) *out_json = {};
   SONARE_C_STUB_NOT_SUPPORTED(handle, out_json);
 #endif
 }
@@ -906,17 +914,16 @@ const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset ordinal)
 
 SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** out_json) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_VOICE_CHANGER)
   SONARE_C_REQUIRE_NONNULL(name);
   SONARE_C_REQUIRE_NONNULL(out_json);
-  *out_json = nullptr;
   SONARE_C_TRY
   const auto preset = editing::voice_changer::realtime_voice_changer_preset_from_id(name);
   *out_json = copy_string(editing::voice_changer::realtime_voice_changer_preset_json(preset));
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_json) *out_json = {};
   SONARE_C_STUB_NOT_SUPPORTED(name, out_json);
 #endif
 }
@@ -925,12 +932,11 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
                                                                char** out_normalized_json,
                                                                char** out_error) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_normalized_json, out_error);
 #if defined(SONARE_WITH_VOICE_CHANGER)
   SONARE_C_REQUIRE_NONNULL(json);
   SONARE_C_REQUIRE_NONNULL(out_normalized_json);
   SONARE_C_REQUIRE_NONNULL(out_error);
-  *out_normalized_json = nullptr;
-  *out_error = nullptr;
   // Both copy_string calls stay inside the guarded body so an allocation
   // failure maps to SONARE_ERROR_OUT_OF_MEMORY like everywhere else; the
   // message a caught exception carries reaches the caller through
@@ -947,8 +953,6 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_error) *out_error = {};
-  if (out_normalized_json) *out_normalized_json = {};
   SONARE_C_STUB_NOT_SUPPORTED(json, out_normalized_json, out_error);
 #endif
 }

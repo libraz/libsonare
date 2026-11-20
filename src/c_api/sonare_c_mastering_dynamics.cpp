@@ -95,11 +95,12 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
                                                  const SonareCompressorConfig* config, float** out,
                                                  size_t* out_length, int* out_latency_samples) {
   SONARE_C_API_ENTRY;
-  if (out_latency_samples) *out_latency_samples = 0;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
   SonareError err = validate_audio_params("mastering_dynamics_compressor", "samples", samples,
                                           length, sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
@@ -113,11 +114,12 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
                                            const SonareGateConfig* config, float** out,
                                            size_t* out_length, int* out_latency_samples) {
   SONARE_C_API_ENTRY;
-  if (out_latency_samples) *out_latency_samples = 0;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
   SonareError err =
       validate_audio_params("mastering_dynamics_gate", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
@@ -133,11 +135,12 @@ SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, siz
                                                        float** out, size_t* out_length,
                                                        int* out_latency_samples) {
   SONARE_C_API_ENTRY;
-  if (out_latency_samples) *out_latency_samples = 0;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length, out_latency_samples);
   SonareError err = validate_audio_params("mastering_dynamics_transient_shaper", "samples", samples,
                                           length, sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);

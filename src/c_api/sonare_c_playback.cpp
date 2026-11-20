@@ -31,7 +31,7 @@ struct SonarePlaybackLoudnessMeter {
 #ifndef __EMSCRIPTEN__
 SonareError sonare_hrtf_set_create_default(SonareHrtfSet** out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
@@ -49,10 +49,10 @@ SonareError sonare_hrtf_set_create_default(SonareHrtfSet** out) {
 SonareError sonare_hrtf_set_create_from_memory(const uint8_t* data, size_t size,
                                                SonareHrtfSet** out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
-  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(data);
+  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   auto handle = std::make_unique<SonareHrtfSet>();
   handle->set = std::make_unique<playback::HrtfSet>(playback::HrtfSet::from_memory(data, size));
@@ -76,10 +76,10 @@ SonareError sonare_playback_renderer_create_json(const char* config_json, const 
                                                  int sample_rate, int max_block_size,
                                                  SonarePlaybackRenderer** out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
-  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(config_json);
+  SONARE_C_REQUIRE_NONNULL(out);
   if (max_block_size == 0) max_block_size = playback::kPlaybackRendererDefaultMaxBlock;
   SONARE_C_TRY
   const playback::RendererConfig config = playback::parse_renderer_config(config_json);
@@ -135,7 +135,7 @@ SonareError sonare_playback_renderer_set_config_json(SonarePlaybackRenderer* ren
 SonareError sonare_playback_renderer_config_json(const SonarePlaybackRenderer* renderer,
                                                  char** out_json) {
   SONARE_C_API_ENTRY;
-  if (out_json) *out_json = nullptr;
+  SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out_json);
@@ -165,7 +165,7 @@ SonareError sonare_playback_renderer_set_head_orientation(SonarePlaybackRenderer
 SonareError sonare_playback_renderer_num_input_channels(const SonarePlaybackRenderer* renderer,
                                                         int* out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = 0;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -179,7 +179,7 @@ SonareError sonare_playback_renderer_num_input_channels(const SonarePlaybackRend
 SonareError sonare_playback_renderer_max_input_channels(const SonarePlaybackRenderer* renderer,
                                                         int* out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = 0;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -192,7 +192,7 @@ SonareError sonare_playback_renderer_max_input_channels(const SonarePlaybackRend
 
 SonareError sonare_playback_config_num_output_channels(const char* config_json, int* out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = 0;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(config_json);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -209,7 +209,7 @@ SonareError sonare_playback_config_num_output_channels(const char* config_json, 
 SonareError sonare_playback_renderer_num_output_channels(const SonarePlaybackRenderer* renderer,
                                                          int* out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = 0;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -253,8 +253,8 @@ SonareError sonare_playback_renderer_process_interleaved(SonarePlaybackRenderer*
 SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRenderer* renderer,
                                                      int* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_TRY
-  if (out) *out = 0;
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -269,7 +269,7 @@ SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRendere
 SonareError sonare_playback_renderer_max_block_size(const SonarePlaybackRenderer* renderer,
                                                     int* out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = 0;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -283,7 +283,7 @@ SonareError sonare_playback_renderer_max_block_size(const SonarePlaybackRenderer
 SonareError sonare_playback_renderer_diagnostics_json(const SonarePlaybackRenderer* renderer,
                                                       char** out_json) {
   SONARE_C_API_ENTRY;
-  if (out_json) *out_json = nullptr;
+  SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out_json);
@@ -299,7 +299,7 @@ SonareError sonare_playback_renderer_diagnostics_json(const SonarePlaybackRender
 SonareError sonare_playback_renderer_non_finite_discard_count(
     const SonarePlaybackRenderer* renderer, uint32_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out_count);
@@ -315,14 +315,12 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
                                                const SonareHrtfSet* hrtf, float** out,
                                                size_t* out_frames, int* out_channels) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
-  if (out_frames) *out_frames = 0;
-  if (out_channels) *out_channels = 0;
+  SONARE_C_ZERO_OUTS(out, out_frames, out_channels);
 #if defined(SONARE_WITH_PLAYBACK)
+  SONARE_C_REQUIRE_NONNULL(config_json);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_frames);
   SONARE_C_REQUIRE_NONNULL(out_channels);
-  SONARE_C_REQUIRE_NONNULL(config_json);
   SONARE_C_TRY
   const playback::RendererConfig config = playback::parse_renderer_config(config_json);
   const playback::HrtfSet* hrtf_ptr = hrtf ? hrtf->set.get() : nullptr;
@@ -345,9 +343,7 @@ SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* rend
                                                     float** out, size_t* out_frames,
                                                     int* out_channels) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
-  if (out_frames) *out_frames = 0;
-  if (out_channels) *out_channels = 0;
+  SONARE_C_ZERO_OUTS(out, out_frames, out_channels);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
   SONARE_C_REQUIRE_NONNULL(out);
@@ -369,7 +365,7 @@ SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* rend
 SonareError sonare_playback_loudness_meter_create(int channels, int sample_rate,
                                                   SonarePlaybackLoudnessMeter** out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
@@ -401,7 +397,7 @@ SonareError sonare_playback_loudness_meter_push_interleaved(SonarePlaybackLoudne
 SonareError sonare_playback_loudness_meter_integrated_lufs(const SonarePlaybackLoudnessMeter* meter,
                                                            float* out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = 0.0f;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(meter);
   SONARE_C_REQUIRE_NONNULL(out);

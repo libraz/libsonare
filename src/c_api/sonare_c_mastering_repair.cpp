@@ -323,13 +323,13 @@ SonareTrimReport to_c_trim_report(const sonare::mastering::repair::TrimReport& c
 template <typename CDetection, typename Fn>
 SonareError run_detection(const char* fn, const char* name, const float* samples, size_t length,
                           int sample_rate, CDetection* out, Fn detect) {
-  SONARE_C_REQUIRE_NONNULL(out);
   // Cleared before any validation return, so a rejected call hands back a zero
   // detection rather than whatever the caller's stack slot held.
-  *out = CDetection{};
+  SONARE_C_ZERO_OUTS(out);
 
   const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   *out = detect();
@@ -341,14 +341,14 @@ SonareError run_detection(const char* fn, const char* name, const float* samples
 /// report type and the core call they wrap.
 template <typename CReport, typename Fn>
 SonareError run_linked(const char* fn, const char* name, const float* const* channels,
-                       size_t channel_count, size_t length, int sample_rate,
+                       size_t channel_count, size_t length, int sample_rate, bool params_ok,
                        float* const* out_channels, CReport* out_report, Fn process) {
-  SONARE_C_REQUIRE_NONNULL(out_report);
   // Cleared before any validation return, so a rejected call hands back a zero
   // report rather than whatever the caller's stack slot held. The output planes
   // are the caller's and stay untouched until the core has produced samples.
-  *out_report = CReport{};
-  if (!channels || !out_channels || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out_report);
+  SONARE_C_REQUIRE_NONNULL(channels);
+  if (channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   std::vector<Audio> inputs;
@@ -356,13 +356,20 @@ SonareError run_linked(const char* fn, const char* name, const float* const* cha
   // cannot represent before indexing caller pointers, preserving the C error
   // contract instead of exposing vector::length_error.
   if (channel_count > inputs.max_size()) return SONARE_ERROR_INVALID_PARAMETER;
-  inputs.reserve(channel_count);
   for (size_t c = 0; c < channel_count; ++c) {
-    if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
     const std::string channel_name = std::string(name) + "[" + std::to_string(c) + "]";
     const SonareError err =
         validate_audio_params(fn, channel_name.c_str(), channels[c], length, sample_rate);
     if (err != SONARE_OK) return err;
+  }
+  if (!params_ok) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_channels);
+  for (size_t c = 0; c < channel_count; ++c) {
+    if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_REQUIRE_NONNULL(out_report);
+  inputs.reserve(channel_count);
+  for (size_t c = 0; c < channel_count; ++c) {
     inputs.push_back(Audio::from_buffer(channels[c], length, sample_rate));
   }
   std::vector<const Audio*> pointers;
@@ -398,20 +405,20 @@ bool dereverb_config_valid(const SonareDereverbClassicalConfig* config) {
 /// Shared body of the stereo repair entry points, which differ only in their
 /// result type and the core call. @p process receives both channels and fills
 /// @p out; @p params_ok is the caller's config pre-check, applied after the
-/// result is cleared and before the audio is validated.
+/// audio is validated, where the config sits in the signature.
 template <typename CResult, typename Fn>
 SonareError run_stereo(const char* fn, const char* left_name, const char* right_name,
                        bool params_ok, const float* left, const float* right, size_t length,
                        int sample_rate, CResult* out, Fn process) {
-  SONARE_C_REQUIRE_NONNULL(out);
   // Defined before any validation return, so a rejected call hands back an empty
   // result rather than whatever the caller's stack slot held.
-  *out = CResult{};
-  if (!params_ok) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out);
 
   const SonareError err =
       validate_stereo_audio_params(fn, left_name, right_name, left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
+  if (!params_ok) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   process(Audio::from_buffer(left, length, sample_rate),
@@ -434,12 +441,12 @@ SonareError run_stereo(const char* fn, const char* left_name, const char* right_
 template <typename CResult, typename Fn>
 SonareError run_mono(const char* fn, const char* name, bool params_ok, const float* samples,
                      size_t length, int sample_rate, CResult* out, Fn process) {
-  SONARE_C_REQUIRE_NONNULL(out);
-  *out = CResult{};
-  if (!params_ok) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out);
 
   const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
   if (err != SONARE_OK) return err;
+  if (!params_ok) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   auto produced = process(Audio::from_buffer(samples, length, sample_rate));
@@ -552,12 +559,9 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
   SONARE_C_API_ENTRY;
   // Mirrors the mono and stereo entries' pre-check so the three agree on which
   // configs they reject before the core ever sees them.
-  if (out_report) *out_report = {};
-  if (!denoise_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
-
   return run_linked(
       "mastering_repair_denoise_classical_linked", "channels", channels, num_channels, length,
-      sample_rate, out_channels, out_report,
+      sample_rate, denoise_config_valid(config), out_channels, out_report,
       [&](const Audio* const* inputs, std::vector<Audio>* produced) {
         return to_c_denoise_report(sonare::mastering::repair::denoise_classical_linked(
             inputs, num_channels, produced, to_cpp_denoise_config(config)));
@@ -581,13 +585,15 @@ SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, 
   static_assert(SONARE_REPAIR_NOISE_BAND_EDGE_COUNT ==
                     static_cast<int>(sonare::mastering::common::kRepairNoiseBandCount) + 1,
                 "C band edge array must match the core's band count");
-  SONARE_C_REQUIRE_NONNULL(out_bins);
   // Zeroed before any validation return, so a caller that ignores the error code
   // reads empty bands rather than whatever its stack slot held.
-  std::memset(out_bins, 0, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT * sizeof(int));
+  if (out_bins != nullptr) {
+    std::memset(out_bins, 0, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT * sizeof(int));
+  }
   // The same power-of-two rule the denoise config validator applies, so a grid
   // this hands back is always one the detector can report on.
   if (!is_power_of_two(n_fft) || sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_bins);
 
   SONARE_C_TRY
   sonare::mastering::common::repair_noise_band_bins(n_fft, sample_rate, out_bins);
@@ -758,12 +764,9 @@ SonareError sonare_mastering_repair_dereverb_classical_linked(
   SONARE_C_API_ENTRY;
   // Mirrors the mono and stereo entries' pre-check so the three agree on which
   // configs they reject before the core ever sees them.
-  if (out_report) *out_report = {};
-  if (!dereverb_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
-
   return run_linked(
       "mastering_repair_dereverb_classical_linked", "channels", channels, num_channels, length,
-      sample_rate, out_channels, out_report,
+      sample_rate, dereverb_config_valid(config), out_channels, out_report,
       [&](const Audio* const* inputs, std::vector<Audio>* produced) {
         return to_c_dereverb_report(sonare::mastering::repair::dereverb_classical_linked(
             inputs, num_channels, produced, to_cpp_dereverb_config(config)));
@@ -834,14 +837,14 @@ SonareError sonare_mastering_repair_detect_trim_range_stereo(const float* left, 
                                                              const SonareTrimSilenceConfig* config,
                                                              SonareTrimRange* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
   // Cleared before any validation return, so a rejected call hands back a zero
   // range rather than whatever the caller's stack slot held.
-  *out = SonareTrimRange{};
+  SONARE_C_ZERO_OUTS(out);
 
   SonareError err = validate_stereo_audio_params("mastering_repair_detect_trim_range_stereo",
                                                  "left", "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   *out = to_c_trim_range(sonare::mastering::repair::detect_trim_range_stereo(
@@ -875,14 +878,15 @@ SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t
                                             size_t length, int sample_rate,
                                             const char* request_json, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
-  if (!channels || num_channels == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(json_out);
+  SONARE_C_REQUIRE_NONNULL(channels);
+  if (num_channels == 0) return SONARE_ERROR_INVALID_PARAMETER;
   for (size_t c = 0; c < num_channels; ++c) {
     const SonareError err = validate_audio_params("mastering_repair_analyze", "channels",
                                                   channels[c], length, sample_rate);
     if (err != SONARE_OK) return err;
   }
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   *json_out = copy_string(sonare::mastering::assistant::repair_analyze_json(
@@ -897,15 +901,19 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t n
                                           float* const* out_channels, char** reports_json_out,
                                           SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(reports_json_out);
-  *reports_json_out = nullptr;
-  if (!channels || !out_channels || num_channels == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(reports_json_out);
+  SONARE_C_REQUIRE_NONNULL(channels);
+  if (num_channels == 0) return SONARE_ERROR_INVALID_PARAMETER;
   for (size_t c = 0; c < num_channels; ++c) {
-    if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
     const SonareError err = validate_audio_params("mastering_repair_apply", "channels", channels[c],
                                                   length, sample_rate);
     if (err != SONARE_OK) return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_channels);
+  for (size_t c = 0; c < num_channels; ++c) {
+    if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_REQUIRE_NONNULL(reports_json_out);
 
   SONARE_C_TRY
   sonare::mastering::assistant::RepairProgressCallback progress;

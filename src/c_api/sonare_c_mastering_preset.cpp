@@ -29,8 +29,8 @@ const char* sonare_mastering_preset_names(void) {
 
 SonareError sonare_mastering_preset_params_json(const char* preset, char** json_out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
 
   SONARE_C_TRY
   const auto config = sonare::mastering::api::preset_config(
@@ -42,9 +42,9 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
 
 SonareError sonare_mastering_chain_config_params_json(const char* document, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(document);
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   const auto config = sonare::mastering::api::chain_config_from_json(document);
@@ -81,13 +81,14 @@ SonareError sonare_master_audio(const char* preset, const float* samples, size_t
                                 int sample_rate, const SonareMasteringParam* overrides,
                                 size_t override_count, SonareMasteringChainResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(preset);
-  clear_chain_result(out, sample_rate);
 
   SonareError err = validate_audio_params("master_audio", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(overrides, override_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   const auto chain_preset = sonare::mastering::api::preset_from_string(preset);
@@ -104,16 +105,17 @@ SonareError sonare_master_audio_stereo(const char* preset, const float* left, co
                                        const SonareMasteringParam* overrides, size_t override_count,
                                        SonareMasteringChainStereoResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(preset);
-  clear_chain_result(out, sample_rate);
 
   // Match the mono paths: reject non-finite samples and out-of-range
   // sample_rate/length, not just null pointers.
   SonareError verr = validate_stereo_audio_params("master_audio_stereo", "left", "right", left,
                                                   right, length, sample_rate);
   if (verr != SONARE_OK) return verr;
-  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(overrides, override_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   const auto chain_preset = sonare::mastering::api::preset_from_string(preset);
@@ -131,14 +133,15 @@ SonareError sonare_master_audio_with_progress_ex(
     SonareMasteringProgressCallback callback, void* user_data, SonareMasteringChainResult* out,
     SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(preset);
-  clear_chain_result(out, sample_rate);
 
   SonareError err = validate_audio_params("master_audio_with_progress_ex", "samples", samples,
                                           length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(overrides, override_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   const auto chain_preset = sonare::mastering::api::preset_from_string(preset);
@@ -160,16 +163,17 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
     SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_ZERO_OUTS(out);
+  if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(preset);
-  clear_chain_result(out, sample_rate);
 
   // Match the mono paths: reject non-finite samples and out-of-range
   // sample_rate/length, not just null pointers.
   SonareError verr = validate_stereo_audio_params("master_audio_stereo_with_progress_ex", "left",
                                                   "right", left, right, length, sample_rate);
   if (verr != SONARE_OK) return verr;
-  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(overrides, override_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   const auto chain_preset = sonare::mastering::api::preset_from_string(preset);

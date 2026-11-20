@@ -620,6 +620,17 @@ uint32_t sonare_engine_abi_version(void);
 /// @return SONARE_OK, or an error code with the reason in the last error.
 SonareError sonare_capabilities_json(char** out_json);
 
+/// @brief Builds a JSON document describing the host this library runs on.
+/// @details Holds @c cpu (@c logical_cores, @c physical_cores), @c memory
+///   (@c total_gb, @c available_gb, bytes / 1024^3) and @c parallel
+///   (@c enabled, @c workers, @c strategy). A fact the platform cannot report
+///   is absent from its object, never 0; @c parallel is always present and
+///   assumes one core when the logical count is unknown.
+/// @param[out] out_json Receives a NUL-terminated UTF-8 document the caller
+///   releases with @ref sonare_free_string; set to NULL on failure.
+/// @return SONARE_OK, or an error code with the reason in the last error.
+SonareError sonare_system_info_json(char** out_json);
+
 /// @brief Returns 1 when the named feature is compiled into this build, 0 otherwise.
 /// @details Reads the same table as the @c features object of
 ///   sonare_capabilities_json(), and takes its key names (@c "ffmpeg",

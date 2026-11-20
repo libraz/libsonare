@@ -25,8 +25,6 @@
 
 #include "sonare_c_internal.h"
 
-using sonare_c_detail::begin_vector_output;
-
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 using sonare::Audio;
 using sonare_c_detail::run_mono_offline;
@@ -222,15 +220,12 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,
                                   SonareRirSynthResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
+  // The result records the requested rate even when the call is refused.
+  if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(config);
-  SONARE_C_REQUIRE_NONNULL(out);
-  // Define the result before any validation return, so a rejected call hands
-  // back a defined struct rather than the caller's untouched stack slot.
-  out->rir = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
   if (!struct_size_accepted(config->struct_size, sizeof(SonareRirSynthConfig),
                             "SonareRirSynthConfig") ||
       sample_rate < sonare_c_detail::kMinSampleRate ||
@@ -266,6 +261,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   for (size_t i = 0; i < config->scattering_band_count; ++i) {
     if (!unit(config->scattering_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   using namespace sonare::acoustic;
   const ShoeboxRoom room =
@@ -299,7 +295,6 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(config, sample_rate, out);
 #endif
 }
@@ -313,15 +308,15 @@ void sonare_free_rir_synth_result(SonareRirSynthResult* result) {
 SonareError sonare_estimate_room(const float* samples, size_t length, int sample_rate,
                                  const SonareRoomEstimateConfig* config, SonareRoomEstimate* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-  SONARE_C_REQUIRE_NONNULL(out);
-  *out = {};
   SONARE_C_REQUIRE_NONNULL(config);
   sonare::AcousticConfig::Mode mode = sonare::AcousticConfig::Mode::Auto;
   if (!sonare_c_detail::ordinal_to_enum(config->mode, SONARE_ACOUSTIC_MODE_AUTO,
                                         SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE, &mode)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
       "estimate_room", "samples", samples, length, sample_rate,
@@ -374,7 +369,6 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
         return SONARE_OK;
       });
 #else
-  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);
 #endif
 }
@@ -453,10 +447,11 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
                               const SonareRoomMorphConfig* config, float** out,
                               size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
   if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   return run_mono_offline("room_morph", "samples", samples, length, sample_rate, out, out_length,
                           [&](const Audio& audio) -> Audio {
                             sonare::effects::acoustic::RoomMorphResult result =
@@ -469,6 +464,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
                             return std::move(result.audio);
                           });
 #else
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);
 #endif
 }
@@ -477,18 +473,17 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
                                      int sample_rate, const SonareRoomMorphConfig* config,
                                      SonareRoomMorphStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  // Defined before any validation return, so a rejected call hands back an empty result.
-  *out = SonareRoomMorphStereoResult{};
+  SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
-  if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = sonare_c_detail::validate_audio_params("room_morph_stereo", "left", left,
                                                            length, sample_rate);
   if (err != SONARE_OK) return err;
   err = sonare_c_detail::validate_audio_params("room_morph_stereo", "right", right, length,
                                                sample_rate);
   if (err != SONARE_OK) return err;
+  if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   const sonare::effects::acoustic::RoomMorphStereoResult result =
@@ -508,6 +503,7 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_STUB_NOT_SUPPORTED(left, right, length, sample_rate, config);
 #endif
 }

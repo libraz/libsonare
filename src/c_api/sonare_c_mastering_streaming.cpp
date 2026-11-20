@@ -24,13 +24,17 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
                                                const SonareStreamingPlatform* platforms,
                                                size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  if (const SonareError err = validate_audio_params("mastering_streaming_preview", "samples",
+                                                    samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(platforms, platform_count);
   SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
-  if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
-  return run_offline(
-      "mastering_streaming_preview", "samples", samples, length, sample_rate,
-      [&](const Audio& audio) -> SonareError {
+  return run_prevalidated_offline(
+      samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
         cpp_platforms.reserve(platform_count);
         for (size_t index = 0; index < platform_count; ++index) {
@@ -66,12 +70,12 @@ SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, 
                                            const SonareMasteringParam* params, size_t param_count,
                                            SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
-  *out = undefined_streaming_loudness_gain();
+  if (out != nullptr) *out = undefined_streaming_loudness_gain();
   SonareError err =
       validate_audio_params("streaming_loudness_gain", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
@@ -89,12 +93,12 @@ SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float
                                                   size_t param_count,
                                                   SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
-  *out = undefined_streaming_loudness_gain();
+  if (out != nullptr) *out = undefined_streaming_loudness_gain();
   SonareError err = validate_stereo_audio_params("streaming_loudness_gain_stereo", "left", "right",
                                                  left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
@@ -110,12 +114,12 @@ SonareError sonare_mastering_assistant_suggest(const float* samples, size_t leng
                                                const SonareMasteringParam* params,
                                                size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SonareError err =
       validate_audio_params("mastering_assistant_suggest", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   const auto config = to_assistant_config(params, param_count);
@@ -131,12 +135,12 @@ SonareError sonare_mastering_assistant_suggest_chain_json(const float* samples, 
                                                           const SonareMasteringParam* params,
                                                           size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SonareError err = validate_audio_params("mastering_assistant_suggest_chain_json", "samples",
                                           samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   const auto config = to_assistant_config(params, param_count);
@@ -151,12 +155,12 @@ SonareError sonare_mastering_audio_profile(const float* samples, size_t length, 
                                            const SonareMasteringParam* params, size_t param_count,
                                            char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SonareError err =
       validate_audio_params("mastering_audio_profile", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   const auto config = to_audio_profile_config(params, param_count);
@@ -196,12 +200,12 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
                                                       const SonareStreamingPlatform* platforms,
                                                       size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SonareError err = validate_stereo_params("mastering_streaming_preview_stereo", "left", "right",
                                            left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(platforms, platform_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
@@ -229,12 +233,12 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
                                                       const SonareMasteringParam* params,
                                                       size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SonareError err = validate_stereo_params("mastering_assistant_suggest_stereo", "left", "right",
                                            left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   const auto config = to_assistant_config(params, param_count);
@@ -250,12 +254,12 @@ SonareError sonare_mastering_assistant_suggest_chain_json_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SonareError err = validate_stereo_params("mastering_assistant_suggest_chain_json_stereo", "left",
                                            "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   const auto config = to_assistant_config(params, param_count);
@@ -272,12 +276,12 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
                                                   const SonareMasteringParam* params,
                                                   size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(json_out);
-  *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
   SonareError err = validate_stereo_params("mastering_audio_profile_stereo", "left", "right", left,
                                            right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   const auto config = to_audio_profile_config(params, param_count);
@@ -309,14 +313,9 @@ SonareError sonare_streaming_mastering_chain_create_ex(const SonareMasteringPara
                                                        float loudness_static_gain_peak_db,
                                                        SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(out);
-  *out = nullptr;
-  if (!params && param_count > 0) {
-    set_last_error(
-        SONARE_ERROR_INVALID_PARAMETER,
-        "streaming mastering chain: params must not be null when param_count is non-zero");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
   auto config = sonare::mastering::api::parse_streaming_chain_config_params(cpp_params.data(),
@@ -412,11 +411,14 @@ SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMastering
                                                         float* samples, size_t capacity,
                                                         size_t* samples_written) {
   SONARE_C_API_ENTRY;
-  if (!handle || !handle->chain || !samples_written || (!samples && capacity > 0) ||
-      capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
+  SONARE_C_ZERO_OUTS(samples_written);
+  SONARE_C_REQUIRE_NONNULL(handle);
+  if (!handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(samples, capacity);
+  if (capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *samples_written = 0;
+  SONARE_C_REQUIRE_NONNULL(samples_written);
   SONARE_C_TRY
   float* channels[] = {samples};
   const int written = handle->chain->flush(channels, 1, static_cast<int>(capacity));
@@ -430,11 +432,15 @@ SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteri
                                                           size_t capacity,
                                                           size_t* samples_written) {
   SONARE_C_API_ENTRY;
-  if (!handle || !handle->chain || !samples_written || (!left && capacity > 0) ||
-      (!right && capacity > 0) || capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
+  SONARE_C_ZERO_OUTS(samples_written);
+  SONARE_C_REQUIRE_NONNULL(handle);
+  if (!handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(left, capacity);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(right, capacity);
+  if (capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *samples_written = 0;
+  SONARE_C_REQUIRE_NONNULL(samples_written);
   SONARE_C_TRY
   float* channels[] = {left, right};
   const int written = handle->chain->flush(channels, 2, static_cast<int>(capacity));
@@ -478,8 +484,10 @@ int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMaster
 SonareError sonare_streaming_mastering_chain_max_block_size(
     const SonareStreamingMasteringChain* handle, int* out_max_block_size) {
   SONARE_C_API_ENTRY;
-  if (out_max_block_size) *out_max_block_size = 0;
-  if (!handle || !handle->chain || !out_max_block_size) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out_max_block_size);
+  SONARE_C_REQUIRE_NONNULL(handle);
+  if (!handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_max_block_size);
   *out_max_block_size = handle->max_block_size;
   return SONARE_OK;
 }
@@ -500,7 +508,10 @@ const char* sonare_streaming_mastering_chain_stage_names(
 SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
     const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!handle || !handle->chain || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out_count);
+  SONARE_C_REQUIRE_NONNULL(handle);
+  if (!handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = handle->chain->non_finite_substitution_count();
   return SONARE_OK;
 }

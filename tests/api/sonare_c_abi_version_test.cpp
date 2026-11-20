@@ -707,3 +707,15 @@ TEST_CASE("Thread-local name getters return their sentinel when allocation fails
   }
 }
 #endif
+
+TEST_CASE("SONARE_C_ZERO_OUTS clears every non-NULL out and skips a NULL one", "[c_api][abi]") {
+  float* buffer = reinterpret_cast<float*>(0x10);
+  size_t length = 7;
+  SonareStringArray names{reinterpret_cast<char**>(0x20), 3};
+  int* absent = nullptr;
+  SONARE_C_ZERO_OUTS(&buffer, &length, &names, absent);
+  CHECK(buffer == nullptr);
+  CHECK(length == 0);
+  CHECK(names.items == nullptr);
+  CHECK(names.count == 0);
+}

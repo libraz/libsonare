@@ -8,8 +8,11 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
                            int sample_rate, int hop_length, float fmin, int n_bins,
                            int bins_per_octave, SonareCqtResult* out, Transform&& transform) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
-  *out = {};
+  SONARE_C_ZERO_OUTS(out);
+  if (const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
   if (const SonareError err = run_validation([&] {
         CqtConfig config;
         config.hop_length = hop_length;
@@ -21,17 +24,18 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline(fn, name, samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       CqtConfig config;
-                       config.hop_length = hop_length;
-                       config.fmin = fmin;
-                       config.n_bins = n_bins;
-                       config.bins_per_octave = bins_per_octave;
-                       CqtResult result = transform(audio, config);
-                       return fill_cqt_result(result, out);
-                     });
+  return run_prevalidated_offline(samples, length, sample_rate,
+                                  [&](const Audio& audio) -> SonareError {
+                                    CqtConfig config;
+                                    config.hop_length = hop_length;
+                                    config.fmin = fmin;
+                                    config.n_bins = n_bins;
+                                    config.bins_per_octave = bins_per_octave;
+                                    CqtResult result = transform(audio, config);
+                                    return fill_cqt_result(result, out);
+                                  });
 }
 
 }  // namespace
@@ -68,8 +72,11 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
                        float fmin_hz, int n_bins, int bins_per_octave, float gamma,
                        SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
-  *out = {};
+  SONARE_C_ZERO_OUTS(out);
+  if (const SonareError err = validate_audio_params("vqt", "samples", samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
   if (const SonareError err = run_validation([&] {
         VqtConfig config;
         config.hop_length = hop_length;
@@ -82,16 +89,17 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
-  return run_offline("vqt", "samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       VqtConfig config;
-                       config.hop_length = hop_length;
-                       config.fmin = fmin_hz;
-                       config.n_bins = n_bins;
-                       config.bins_per_octave = bins_per_octave;
-                       config.gamma = gamma;
-                       VqtResult result = vqt(audio, config);
-                       return fill_cqt_result(result, out);
-                     });
+  return run_prevalidated_offline(samples, length, sample_rate,
+                                  [&](const Audio& audio) -> SonareError {
+                                    VqtConfig config;
+                                    config.hop_length = hop_length;
+                                    config.fmin = fmin_hz;
+                                    config.n_bins = n_bins;
+                                    config.bins_per_octave = bins_per_octave;
+                                    config.gamma = gamma;
+                                    VqtResult result = vqt(audio, config);
+                                    return fill_cqt_result(result, out);
+                                  });
 }

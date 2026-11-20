@@ -33,6 +33,7 @@ TEST_CASE("the interleaved LUFS entries name themselves and the refused argument
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(last_message(), Catch::Matchers::StartsWith("lufs_interleaved: samples"));
 
+  stereo[7] = 0.1f;
   float* momentary = nullptr;
   CHECK(sonare_lufs_series_interleaved(stereo.data(), 4800, 2, 48000, &momentary, nullptr, nullptr,
                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
@@ -89,11 +90,12 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(last_message(), Catch::Matchers::StartsWith("align_take_to_reference_ex: reference"));
 
+  reference[5] = 0.0f;
+  take[100] = 0.0f;
   CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
                                           take.size(), 22050, nullptr, nullptr, &count,
                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "align_take_to_reference_ex: out_anchors must not be NULL"));
+  CHECK(last_message() == "out_anchors must not be NULL");
 }
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
 

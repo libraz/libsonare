@@ -42,8 +42,8 @@ sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
 
 SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(out);
-  *out = nullptr;
   if (max_block_size == 0) {
     max_block_size = sonare::mastering::eq::EqualizerProcessor::kDefaultMaxBlock;
   }
@@ -61,9 +61,11 @@ void sonare_eq_destroy(SonareEq* eq) { delete eq; }
 
 SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
   SONARE_C_API_ENTRY;
-  if (!eq || !band_json || index < 0 || index >= static_cast<int>(SONARE_EQ_MAX_BANDS)) {
+  SONARE_C_REQUIRE_NONNULL(eq);
+  if (index < 0 || index >= static_cast<int>(SONARE_EQ_MAX_BANDS)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_REQUIRE_NONNULL(band_json);
   SONARE_C_TRY
   eq->processor.set_band(static_cast<size_t>(index), sonare::c_api::parse_eq_band_json(band_json));
   return SONARE_OK;
@@ -99,15 +101,16 @@ SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_
                                int sample_rate, const float* reference, size_t reference_length,
                                int reference_sample_rate, int max_bands) {
   SONARE_C_API_ENTRY;
-  if (!eq || max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(eq);
   SonareError err =
       validate_audio_params("eq_match_ex", "source", source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params("eq_match_ex", "reference", reference, reference_length,
                               reference_sample_rate);
   if (err != SONARE_OK) return err;
+  if (max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   SONARE_C_TRY
   sonare::mastering::match::MatchEqConfig config;
@@ -165,7 +168,7 @@ int sonare_eq_latency_samples(const SonareEq* eq) {
 
 SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size) {
   SONARE_C_API_ENTRY;
-  if (out_max_block_size) *out_max_block_size = 0;
+  SONARE_C_ZERO_OUTS(out_max_block_size);
   SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_REQUIRE_NONNULL(out_max_block_size);
   *out_max_block_size = eq->max_block_size;
@@ -213,17 +216,19 @@ SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_chan
 SonareError sonare_eq_magnitude_response(const SonareEq* eq, int placement,
                                          const float* frequencies_hz, size_t count, float* out_db) {
   SONARE_C_API_ENTRY;
-  if (!eq || (count > 0 && (!frequencies_hz || !out_db))) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
-  eq->processor.magnitude_response_db(parse_placement(placement), frequencies_hz, count, out_db);
+  const auto parsed_placement = parse_placement(placement);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(frequencies_hz, count);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out_db, count);
+  eq->processor.magnitude_response_db(parsed_placement, frequencies_hz, count, out_db);
   return SONARE_OK;
   SONARE_C_CATCH
 }
 
 SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY

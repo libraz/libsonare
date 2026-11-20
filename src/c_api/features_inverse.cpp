@@ -30,7 +30,7 @@ size_t inverse_input_length(int rows, int n_frames) noexcept {
 // a single home that WASM (which calls the core directly) inherits too.
 SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, int n_bins,
                                  int n_frames, int sample_rate, int hop_length, float fmin,
-                                 int bins_per_octave, int n_iter) {
+                                 int bins_per_octave, const float* gamma, int n_iter) {
   SONARE_C_REQUIRE_NONNULL(magnitude);
   if (const SonareError err = run_validation([&] {
         namespace check = sonare::util::check;
@@ -40,6 +40,7 @@ SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, in
         check::integer_at_least(hop_length, 1, "hop_length");
         check::greater_than(fmin, 0.0, "fmin");
         check::integer_at_least(bins_per_octave, 1, "bins_per_octave");
+        if (gamma != nullptr) validate_vqt_gamma(*gamma);
         check::integer_in_range(n_iter, 1, sonare::resource::kMaxGriffinLimIterations, "n_iter");
       });
       err != SONARE_OK) {
@@ -55,11 +56,13 @@ SonareError sonare_cqt_to_audio_checked(const float* magnitude, size_t input_len
                                         float fmin_hz, int bins_per_octave, int n_iter, float** out,
                                         size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
   const SonareError validation =
       validate_cqt_inverse(magnitude, input_length, n_bins, n_frames, sample_rate, hop_length,
-                           fmin_hz, bins_per_octave, n_iter);
+                           fmin_hz, bins_per_octave, nullptr, n_iter);
   if (validation != SONARE_OK) return validation;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   CqtConfig config;
@@ -86,15 +89,13 @@ SonareError sonare_vqt_to_audio_checked(const float* magnitude, size_t input_len
                                         float fmin_hz, int bins_per_octave, float gamma, int n_iter,
                                         float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (const SonareError err = run_validation([&] { validate_vqt_gamma(gamma); });
-      err != SONARE_OK) {
-    return err;
-  }
+  SONARE_C_ZERO_OUTS(out, out_length);
   const SonareError validation =
       validate_cqt_inverse(magnitude, input_length, n_bins, n_frames, sample_rate, hop_length,
-                           fmin_hz, bins_per_octave, n_iter);
+                           fmin_hz, bins_per_octave, &gamma, n_iter);
   if (validation != SONARE_OK) return validation;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
   VqtConfig config;
@@ -121,8 +122,7 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
                                   int n_fft, float fmin_hz, float fmax_hz, int htk,
                                   SonareInverseResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
-  *out = {};
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(mel);
   if (n_mels <= 0 || n_frames <= 0 || n_fft <= 0 || sample_rate <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -130,6 +130,7 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
 
   SONARE_C_TRY
   validate_mel_bounds(fmin_hz, fmax_hz);
+  SONARE_C_REQUIRE_NONNULL(out);
   MelConfig config;
   config.n_mels = n_mels;
   config.n_fft = n_fft;
@@ -151,7 +152,7 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
                                    int n_fft, int hop_length, float fmin_hz, float fmax_hz, int htk,
                                    int n_iter, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(mel);
   // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   if (n_mels <= 0 || n_frames <= 0 || n_fft <= 0 || sample_rate <= 0) {
@@ -160,6 +161,8 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
 
   SONARE_C_TRY
   validate_mel_bounds(fmin_hz, fmax_hz);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   MelConfig config;
   config.n_mels = n_mels;
   config.n_fft = n_fft;
@@ -184,14 +187,17 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
                                int n_frames, int n_fft, int hop_length, int sample_rate, int n_iter,
                                float momentum, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
+  SONARE_C_REQUIRE_NONNULL(magnitude);
   // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
-  if (!magnitude || n_bins <= 0 || n_frames <= 0 || n_fft <= 0 || sample_rate < kMinSampleRate ||
+  if (n_bins <= 0 || n_frames <= 0 || n_fft <= 0 || sample_rate < kMinSampleRate ||
       sample_rate > kMaxSampleRate || n_iter <= 0 || n_iter > resource::kMaxGriffinLimIterations ||
       !std::isfinite(momentum) || momentum < 0.0f || momentum >= 1.0f || n_bins != n_fft / 2 + 1 ||
       check_inverse_input_length(input_length, n_bins, n_frames) != SONARE_OK) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
   GriffinLimConfig config;
   config.n_iter = n_iter;
@@ -205,9 +211,9 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
 SonareError sonare_mfcc_to_mel_ex(const float* coefficients, int n_mfcc, int n_frames, int n_mels,
                                   float lifter, SonareInverseResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
-  *out = {};
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(coefficients);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   std::vector<float> mel = mfcc_to_mel(coefficients, n_mfcc, n_frames, n_mels, lifter);
@@ -226,7 +232,7 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
                                      float fmin_hz, float fmax_hz, int htk, float lifter,
                                      int n_iter, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
   // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   if (n_fft <= 0 || sample_rate <= 0) {
@@ -235,6 +241,8 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
 
   SONARE_C_TRY
   validate_mel_bounds(fmin_hz, fmax_hz);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   MelConfig config;
   config.n_mels = n_mels;
   config.n_fft = n_fft;
@@ -268,7 +276,7 @@ SonareError sonare_mel_to_stft_checked(const float* mel, size_t input_length, in
                                        int n_frames, int sample_rate, int n_fft, float fmin_hz,
                                        float fmax_hz, SonareInverseResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(mel);
   if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
@@ -281,7 +289,7 @@ SonareError sonare_mel_to_stft_checked_ex(const float* mel, size_t input_length,
                                           int n_frames, int sample_rate, int n_fft, float fmin_hz,
                                           float fmax_hz, int htk, SonareInverseResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(mel);
   if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
@@ -296,7 +304,7 @@ SonareError sonare_mel_to_audio_checked(const float* mel, size_t input_length, i
                                         float fmin_hz, float fmax_hz, int n_iter, float** out,
                                         size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(mel);
   if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
@@ -311,7 +319,7 @@ SonareError sonare_mel_to_audio_checked_ex(const float* mel, size_t input_length
                                            float fmin_hz, float fmax_hz, int htk, int n_iter,
                                            float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(mel);
   if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
@@ -324,7 +332,7 @@ SonareError sonare_mel_to_audio_checked_ex(const float* mel, size_t input_length
 SonareError sonare_mfcc_to_mel_checked(const float* coefficients, size_t input_length, int n_mfcc,
                                        int n_frames, int n_mels, SonareInverseResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(coefficients);
   if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {
@@ -337,7 +345,7 @@ SonareError sonare_mfcc_to_mel_checked_ex(const float* coefficients, size_t inpu
                                           int n_mfcc, int n_frames, int n_mels, float lifter,
                                           SonareInverseResult* out) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(coefficients);
   if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {
@@ -351,7 +359,7 @@ SonareError sonare_mfcc_to_audio_checked(const float* coefficients, size_t input
                                          int hop_length, float fmin_hz, float fmax_hz, int n_iter,
                                          float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
   if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {
@@ -366,7 +374,7 @@ SonareError sonare_mfcc_to_audio_checked_ex(const float* coefficients, size_t in
                                             int n_fft, int hop_length, float fmin_hz, float fmax_hz,
                                             int htk, int n_iter, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
   if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {
@@ -382,7 +390,7 @@ SonareError sonare_mfcc_to_audio_checked_ex2(const float* coefficients, size_t i
                                              float fmax_hz, int htk, float lifter, int n_iter,
                                              float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
   if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {

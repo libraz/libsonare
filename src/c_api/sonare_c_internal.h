@@ -6,6 +6,8 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "automation/automation_lane.h"
@@ -397,6 +399,36 @@ inline std::string join_names(const std::vector<std::string>& values) {
 // family: cleared on entry, and everything that can throw inside SONARE_C_TRY.
 #define SONARE_C_API_ENTRY sonare_c_detail::clear_last_error()
 
+namespace sonare_c_detail {
+
+// True for a struct the caller versions through struct_size or struct_version.
+template <typename T, typename = void>
+struct is_caller_versioned : std::false_type {};
+template <typename T>
+struct is_caller_versioned<T, std::void_t<decltype(std::declval<T&>().struct_size)>>
+    : std::true_type {};
+template <typename T, typename = void>
+struct is_caller_versioned_by_version : std::false_type {};
+template <typename T>
+struct is_caller_versioned_by_version<T, std::void_t<decltype(std::declval<T&>().struct_version)>>
+    : std::true_type {};
+
+/// @brief Value-initializes every non-NULL out parameter, so a refused call never leaves one
+///        unwritten. A caller-versioned struct is not an out to clear and is refused at compile
+///        time.
+template <typename... Outs>
+inline void zero_outs(Outs*... outs) noexcept {
+  static_assert(
+      ((!is_caller_versioned<Outs>::value && !is_caller_versioned_by_version<Outs>::value) && ...),
+      "a struct carrying struct_size or struct_version is filled by the caller");
+  ((outs != nullptr ? void(*outs = Outs{}) : void()), ...);
+}
+
+}  // namespace sonare_c_detail
+
+// Clear every out parameter first, before any refusal, in one statement per entry.
+#define SONARE_C_ZERO_OUTS(...) ::sonare_c_detail::zero_outs(__VA_ARGS__)
+
 // Refuse a NULL argument by its parameter name, spelled as the public header spells it.
 // The _WHEN_COUNT form refuses it only while the count that sizes it is not 0.
 #define SONARE_C_REQUIRE_NONNULL(param)                                    \
@@ -473,11 +505,11 @@ template <typename Fn>
 SonareError run_mono_offline(const char* fn, const char* name, const float* samples, size_t length,
                              int sample_rate, float** out, size_t* out_length, Fn process) {
   SONARE_C_TRY
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  SONARE_C_ZERO_OUTS(out, out_length);
   const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   Audio result = process(audio);
   // Empty-result policy lives in copy_audio_result: size()==0 -> (*out=nullptr,

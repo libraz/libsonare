@@ -1,6 +1,10 @@
 #include <sonare/sonare_c.h>
 
 #include <cstring>
+#include <iomanip>
+#include <limits>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -8,6 +12,7 @@
 #include "rt/command.h"
 #include "sonare.h"
 #include "sonare_c_internal.h"
+#include "util/system_info.h"
 
 using namespace sonare_c_detail;
 
@@ -310,6 +315,59 @@ SonareError sonare_capabilities_json(char** out_json) {
   capabilities += std::to_string(concurrency == 0 ? 1 : concurrency);
   capabilities += '}';
   *out_json = copy_string(capabilities);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+namespace {
+
+/// @brief Appends `"key":<gigabytes>` when @p bytes is known, as the native CLI wrote it.
+void append_gigabytes(std::string& json, bool& first, const char* key,
+                      const std::optional<std::size_t>& bytes) {
+  if (!bytes) return;
+  if (!first) json += ',';
+  first = false;
+  std::ostringstream number;
+  number << std::setprecision(std::numeric_limits<float>::max_digits10)
+         << static_cast<float>(*bytes) / (1024.0f * 1024.0f * 1024.0f);
+  json += '"';
+  json += key;
+  json += "\":";
+  json += number.str();
+}
+
+/// @brief Appends `"key":<count>` when @p count is known.
+void append_count(std::string& json, bool& first, const char* key,
+                  const std::optional<int>& count) {
+  if (!count) return;
+  if (!first) json += ',';
+  first = false;
+  json += '"';
+  json += key;
+  json += "\":";
+  json += std::to_string(*count);
+}
+
+}  // namespace
+
+SonareError sonare_system_info_json(char** out_json) {
+  SONARE_C_API_ENTRY;
+  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  namespace info = sonare::system_info;
+  std::string json = "{\"cpu\":{";
+  bool first = true;
+  append_count(json, first, "logical_cores", info::logical_cores());
+  append_count(json, first, "physical_cores", info::physical_cores());
+  json += "},\"memory\":{";
+  first = true;
+  append_gigabytes(json, first, "total_gb", info::total_memory_bytes());
+  append_gigabytes(json, first, "available_gb", info::available_memory_bytes());
+  json += "},\"parallel\":{\"enabled\":";
+  json += json_bool(info::parallel_enabled());
+  json += ",\"workers\":" + std::to_string(info::parallel_workers());
+  json += ",\"strategy\":\"" + info::parallel_strategy() + "\"}}";
+  *out_json = copy_string(json);
   return SONARE_OK;
   SONARE_C_CATCH
 }
