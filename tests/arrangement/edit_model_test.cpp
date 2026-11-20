@@ -44,7 +44,7 @@ TEST_CASE("Project constructs with deterministic defaults", "[arrangement]") {
   CHECK(p.assist_sidecars().empty());
   CHECK(p.warp_maps().empty());
   // The mixer scene is held as pure data even with mixing runtime disabled.
-  CHECK(p.scene().version == 1);
+  CHECK(p.scene().version == sonare::mixing::api::kSceneFormatVersion);
 }
 
 TEST_CASE("Project stores first-class warp maps by stable id", "[arrangement]") {
