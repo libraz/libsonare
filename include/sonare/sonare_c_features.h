@@ -77,6 +77,8 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
                                  float min_duration_sec, float smoothing_window_sec,
                                  float threshold, int use_triads_only, int n_fft, int hop_length,
                                  int use_beat_sync, SonareChordAnalysisResult* out);
+/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
+void sonare_chord_detection_options_init(SonareChordDetectionOptions* options);
 /// @brief Extended chord detection with the same UNKNOWN/N.C. threshold contract.
 /// @param out Receives heap-owned arrays; free with sonare_free_chord_analysis_result.
 SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
@@ -116,6 +118,8 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
 SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
                                    SonarePitchClass key_root, SonareMode key_mode,
                                    SonareStringArray* roman, SonareStringArray* functions);
+/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
+void sonare_section_options_init(SonareSectionOptions* options);
 /// @brief Detects song-structure sections (intro/verse/chorus/...).
 /// @param options Must be non-NULL; start from @ref sonare_section_options_init. A threshold
 ///   that is negative or not finite is refused with SONARE_ERROR_INVALID_PARAMETER.
@@ -123,6 +127,8 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate,
                                     const SonareSectionOptions* options, SonareSectionResult* out);
 
+/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
+void sonare_boundary_options_init(SonareBoundaryOptions* options);
 /// @brief Detects structural boundaries and returns the novelty curve they came
 ///   from.
 /// @details The unlabelled layer under @ref sonare_analyze_sections, not a view

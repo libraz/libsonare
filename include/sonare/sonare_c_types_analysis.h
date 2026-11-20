@@ -339,9 +339,6 @@ typedef struct {
   float threshold;
 } SonareSectionOptions;
 
-/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
-void sonare_section_options_init(SonareSectionOptions* options);
-
 /** Structural boundary detection. This is the layer sonare_analyze_sections is
  * built on and is not a coarser view of it: sections are labelled spans, these
  * are the unlabelled transitions plus the continuous novelty curve they were
@@ -399,9 +396,6 @@ typedef struct {
   float reference_window_sec;
 } SonareBoundaryOptions;
 
-/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
-void sonare_boundary_options_init(SonareBoundaryOptions* options);
-
 /// @brief One melody contour point.
 typedef struct {
   float time_sec;      ///< seconds
@@ -446,9 +440,6 @@ typedef struct {
      SonareChordAnalysisResult.tuning_cents. */
   int tuning_auto;
 } SonareChordDetectionOptions;
-
-/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
-void sonare_chord_detection_options_init(SonareChordDetectionOptions* options);
 
 /* ============================================================================
  * NativeSynth patch (versioned) — the patch-driven synthesizer surface
