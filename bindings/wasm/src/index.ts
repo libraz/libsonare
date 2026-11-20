@@ -1388,10 +1388,18 @@ export function systemInfo(): SystemInfo {
     const physicalCores = optionalFact(raw.cpu?.physical_cores);
     const totalGb = optionalFact(raw.memory?.total_gb);
     const availableGb = optionalFact(raw.memory?.available_gb);
-    if (logicalCores !== undefined) cpu.logicalCores = logicalCores;
-    if (physicalCores !== undefined) cpu.physicalCores = physicalCores;
-    if (totalGb !== undefined) memory.totalGb = totalGb;
-    if (availableGb !== undefined) memory.availableGb = availableGb;
+    if (logicalCores !== undefined) {
+      cpu.logicalCores = logicalCores;
+    }
+    if (physicalCores !== undefined) {
+      cpu.physicalCores = physicalCores;
+    }
+    if (totalGb !== undefined) {
+      memory.totalGb = totalGb;
+    }
+    if (availableGb !== undefined) {
+      memory.availableGb = availableGb;
+    }
     return {
       cpu,
       memory,

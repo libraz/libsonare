@@ -11,7 +11,9 @@ const sampleRate = 22050;
 
 function rms(samples: Float32Array): number {
   let sum = 0;
-  for (const v of samples) sum += v * v;
+  for (const v of samples) {
+    sum += v * v;
+  }
   return Math.sqrt(sum / samples.length);
 }
 
