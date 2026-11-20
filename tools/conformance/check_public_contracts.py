@@ -182,7 +182,12 @@ def main() -> int:
         token = {1: "INT16", 2: "UINT8"}.get(legacy)
         if token is None or f"SONARE_STREAM_OUTPUT_{token} = {legacy}" not in c_header:
             errors.append(f"C legacy output format {legacy} declaration drifted")
-    if "config->output_format != SONARE_STREAM_OUTPUT_FLOAT32" not in c_impl:
+    # The only accepted output format is Float32: a one_of over that single member.
+    only_float32 = re.search(
+        r"one_of\(\s*config->output_format,\s*std::array<int,\s*1>\{SONARE_STREAM_OUTPUT_FLOAT32\}",
+        c_impl,
+    )
+    if only_float32 is None:
         errors.append("C analyzer no longer rejects legacy generic output formats")
 
     if contract["disabled_feature_shape"] != "empty":
