@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -10,7 +11,7 @@
 
 namespace {
 
-// The transcription default for the re-attack split; the C ABI reads 0 as "no split".
+// The transcription default for the re-attack split; the C ABI reads NaN as "no split".
 constexpr float kDefaultReattackRatio = 2.0f;
 
 using ProjectMidiImportFn = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);
@@ -123,39 +124,31 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
     return project_exit_code(err);
   }
 
-  // 0 is the C ABI's "keep the library default" for every field here, which is
-  // what an unset option means, so an absent option is left at 0 rather than
-  // given a value this CLI would have to keep in step with the core's.
-  SonareTranscribeConfig config{};
-  config.struct_version = 4;
+  // An absent option keeps what sonare_transcribe_config_init wrote, so this CLI never restates
+  // a core default; a given value, 0 included, is passed through for the core to check.
+  SonareTranscribeConfig config;
+  sonare_transcribe_config_init(&config);
   config.polyphonic = args.has("polyphonic") ? 1 : 0;
-  config.reference_hz = args.get_float("reference-hz", 0.0f);
-  config.f0_min_hz = args.get_float("f0-min-hz", 0.0f);
-  config.f0_max_hz = args.get_float("f0-max-hz", 0.0f);
-  config.min_note_ms = args.get_float("min-note-ms", 0.0f);
-  config.segmentation_threshold_cents = args.get_float("segmentation-threshold-cents", 0.0f);
-  config.velocity_floor_db = args.get_float("velocity-floor-db", 0.0f);
-  config.fixed_velocity = args.get_int("fixed-velocity", 0);
-  config.channel = args.get_int("channel", config.channel);
-
-  // A written 0 means a real zero (ratios), which the C ABI spells as a negative
-  // value (its own 0 would mean the default); reattack's own 0 is "no split".
-  if (args.has("max-polyphony")) config.max_polyphony = args.get_int("max-polyphony", 0);
-  const auto read_ratio = [&args](const char* name) {
-    const float value = args.get_float(name, 0.0f);
-    return value == 0.0f ? -1.0f : value;
+  const auto read_float = [&args](const char* name, float& field) {
+    if (args.has(name)) field = args.get_float(name, field);
   };
-  if (args.has("min-frame-peak-ratio")) {
-    config.min_frame_peak_ratio = read_ratio("min-frame-peak-ratio");
-  }
-  if (args.has("min-ridge-peak-ratio")) {
-    config.min_ridge_peak_ratio = read_ratio("min-ridge-peak-ratio");
-  }
+  read_float("reference-hz", config.reference_hz);
+  read_float("f0-min-hz", config.f0_min_hz);
+  read_float("f0-max-hz", config.f0_max_hz);
+  read_float("min-note-ms", config.min_note_ms);
+  read_float("segmentation-threshold-cents", config.segmentation_threshold_cents);
+  read_float("velocity-floor-db", config.velocity_floor_db);
+  read_float("min-frame-peak-ratio", config.min_frame_peak_ratio);
+  read_float("min-ridge-peak-ratio", config.min_ridge_peak_ratio);
+  if (args.has("fixed-velocity")) config.fixed_velocity = args.get_int("fixed-velocity", 0);
+  config.channel = args.get_int("channel", config.channel);
+  if (args.has("max-polyphony")) config.max_polyphony = args.get_int("max-polyphony", 0);
   if (args.has("reattack-ratio")) {
-    // validate_transcribe has already refused a ratio that is neither 0 nor above 1.
-    config.reattack_ratio = args.get_float("reattack-ratio", 0.0f);
+    // The CLI spells "no split" as 0, which the C ABI spells as NaN.
+    const float ratio = args.get_float("reattack-ratio", 0.0f);
+    config.reattack_ratio = ratio == 0.0f ? std::numeric_limits<float>::quiet_NaN() : ratio;
   } else if (config.polyphonic != 0) {
-    // The C ABI reads 0 as "no split", so the polyphonic transcription default is spelled out.
+    // The C ABI does not split without a ratio, so the polyphonic transcription default is given.
     config.reattack_ratio = kDefaultReattackRatio;
   }
 

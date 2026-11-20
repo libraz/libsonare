@@ -275,7 +275,8 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_sections(const CliArgs& args, const Audio& audio) {
-  SonareSectionOptions options = sonare_section_options_default();
+  SonareSectionOptions options;
+  sonare_section_options_init(&options);
   options.min_section_sec = args.get_float("min-duration-sec", options.min_section_sec);
   options.threshold = args.get_float("threshold", options.threshold);
   options.n_fft = args.get_int("n-fft", options.n_fft);
