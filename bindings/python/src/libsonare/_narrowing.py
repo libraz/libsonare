@@ -11,7 +11,7 @@ import ctypes
 import math
 import numbers
 import operator
-from typing import SupportsFloat, SupportsIndex
+from typing import NamedTuple, SupportsFloat, SupportsIndex
 
 from ._errors import _refuse, _refuse_type
 
@@ -208,6 +208,26 @@ def _seconds_to_samples(seconds: object, sample_rate: float, name: str) -> int:
     return samples
 
 
+class _SampleBound(NamedTuple):
+    """A time bound resolved from its samples or seconds spelling.
+
+    ``respelled`` maps the samples spelling the library refuses to the seconds
+    spelling the caller wrote, and is empty when the caller wrote samples or
+    nothing; :func:`_check` takes it so a refusal names what the caller gave.
+    """
+
+    value: int | None
+    respelled: dict[str, str]
+
+
+def _respellings(*bounds: _SampleBound) -> dict[str, str]:
+    """The respellings of several bounds of one call, for :func:`_check`."""
+    merged: dict[str, str] = {}
+    for bound in bounds:
+        merged.update(bound.respelled)
+    return merged
+
+
 def _resolve_sample_bound(
     sample_value: object,
     sec_value: object,
@@ -216,14 +236,15 @@ def _resolve_sample_bound(
     sec_name: str,
     *,
     signed: bool = False,
-) -> int | None:
+) -> _SampleBound:
     """Resolve one time bound spelled either in samples or in seconds.
 
-    ``None`` on both spellings is absence and returns ``None`` so the caller
+    ``None`` on both spellings is absence: ``value`` is ``None`` so the caller
     applies its own default (an end bound's default is the end of the signal).
     Giving both is refused by name. A position is non-negative; a displacement
     (``signed=True``, such as a note's time offset) may be negative. A negative
-    value is refused, never read as "absent".
+    value is refused, never read as "absent". ``sample_name`` is the subject the
+    library refuses the converted value under, so it must be the C spelling.
 
     Raises:
         TypeError: If the given value is not a number.
@@ -233,16 +254,18 @@ def _resolve_sample_bound(
     if sample_value is not None and sec_value is not None:
         raise _refuse(f"give {sample_name} or {sec_name}, not both")
     if sample_value is None and sec_value is None:
-        return None
+        return _SampleBound(None, {})
     if sec_value is not None:
         value = _seconds_to_samples(sec_value, sample_rate, sec_name)
         name = sec_name
+        respelled = {sample_name: sec_name}
     else:
         value = _narrow_int(sample_value, sample_name, _INT64_MIN, _INT64_MAX)
         name = sample_name
+        respelled = {}
     if not signed and value < 0:
         raise _refuse(f"{name} must be at least 0")
-    return value
+    return _SampleBound(value, respelled)
 
 
 def _resolve_time_offset(
@@ -251,7 +274,7 @@ def _resolve_time_offset(
     sample_rate: float,
     sample_name: str,
     sec_name: str,
-) -> int:
+) -> _SampleBound:
     """Resolve a pending time offset from samples or seconds; unset is 0.
 
     ``time_offset_samples`` is 0 when unset, so only a non-zero sample value
@@ -266,10 +289,10 @@ def _resolve_time_offset(
         sec_name,
         signed=True,
     )
-    if resolved is not None:
+    if resolved.value is not None:
         return resolved
     # Zero is the identity; a zero-valued non-integer still fails here.
-    return _narrow_int(sample_value, sample_name, _INT64_MIN, _INT64_MAX)
+    return _SampleBound(_narrow_int(sample_value, sample_name, _INT64_MIN, _INT64_MAX), {})
 
 
 def _resolve_render_frame(render_frame: object) -> int:

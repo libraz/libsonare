@@ -117,7 +117,8 @@ class _EngineIoMixin:
         self._capture_arrays = arrays
         self._capture_ptrs = ptrs
 
-    def _punch_bound(self, punch: CapturePunch, edge: str) -> int:
+    def _punch_bound(self, punch: CapturePunch, edge: str) -> tuple[int, str]:
+        """One punch edge in samples, with the spelling the caller gave it."""
         ppq = getattr(punch, f"{edge}_ppq")
         sample = getattr(punch, f"{edge}_sample")
         sec = getattr(punch, f"{edge}_sec")
@@ -128,12 +129,13 @@ class _EngineIoMixin:
             beats = _narrow_double(ppq, f"punch.{edge}_ppq")
             if not beats >= 0.0:
                 raise _refuse(f"punch.{edge}_ppq must be at least 0")
-            return self.sample_at_ppq(beats)
+            return self.sample_at_ppq(beats), f"punch.{edge}_ppq"
         bound = _resolve_sample_bound(
             sample, sec, self._sample_rate, f"punch.{edge}_sample", f"punch.{edge}_sec"
         )
-        assert bound is not None
-        return bound
+        assert bound.value is not None
+        given = f"punch.{edge}_sample"
+        return bound.value, bound.respelled.get(given, given)
 
     @_entry("RealtimeEngine.configure_capture")
     def configure_capture(
@@ -189,14 +191,17 @@ class _EngineIoMixin:
                 _to_c_float(monitor.gain, "input_monitor.gain"),
             )
         )
-        start, end = bounds if bounds is not None else (0, 0)
+        (start, start_given), (end, end_given) = (
+            bounds if bounds is not None else ((0, "start_sample"), (0, "end_sample"))
+        )
         _check(
             lib.sonare_engine_set_capture_punch(
                 handle,
-                _to_c_int64(start, "punch.start"),
-                _to_c_int64(end, "punch.end"),
+                _to_c_int64(start, start_given),
+                _to_c_int64(end, end_given),
                 0 if bounds is None else 1,
-            )
+            ),
+            respelled={"start_sample": start_given, "end_sample": end_given},
         )
 
     @_entry("RealtimeEngine.arm_capture")

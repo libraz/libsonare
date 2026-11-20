@@ -45,6 +45,8 @@ from ._narrowing import _resolve_render_frame as _resolve_render_frame
 from ._narrowing import _resolve_sample_bound as _resolve_sample_bound
 from ._narrowing import _resolve_time_offset as _resolve_time_offset
 from ._narrowing import _resolve_zero_default as _resolve_zero_default
+from ._narrowing import _respellings as _respellings
+from ._narrowing import _SampleBound as _SampleBound
 from ._narrowing import _utf8_arg as _utf8_arg
 from ._types_enums import _AUTOMATION_CURVES as _AUTOMATION_CURVES
 from ._types_enums import _CHANNEL_LAYOUTS as _CHANNEL_LAYOUTS
@@ -132,19 +134,26 @@ def _coded_error(code: int, message: str) -> SonareError:
     return exc
 
 
-def _render_without_root(lib: Any, root: str) -> str | None:
-    """Render the last parameter refusal with ``root.`` dropped from each subject under it.
+def _render_as_given(lib: Any, root: str | None, respelled: Mapping[str, str] | None) -> str | None:
+    """Render the last parameter refusal under the names the caller wrote.
 
-    None when no parameter refusal is recorded, so the caller keeps the message it read.
+    ``root.`` is dropped from each subject under it, then a subject ``respelled`` names is
+    replaced by the spelling the caller gave. None when no parameter refusal is recorded,
+    so the caller keeps the message it read.
     """
     count = lib.sonare_last_refusal_subject_count()
     if count == 0:
         return None
     subjects = []
     for index in range(count):
-        subject = lib.sonare_last_refusal_subject(index) or b""
-        head, dot, rest = subject.partition(b".")
-        subjects.append(rest if dot and head.decode("utf-8") == root else subject)
+        subject = (lib.sonare_last_refusal_subject(index) or b"").decode("utf-8")
+        if root is not None:
+            head, dot, rest = subject.partition(".")
+            if dot and head == root:
+                subject = rest
+        if respelled:
+            subject = respelled.get(subject, subject)
+        subjects.append(_utf8_arg(subject, "subject"))
     out = ctypes.c_char_p()
     if (
         lib.sonare_last_refusal_render(
@@ -159,7 +168,12 @@ def _render_without_root(lib: Any, root: str) -> str | None:
         lib.sonare_free_string(out)
 
 
-def _check(rc: int, *, flattened: str | None = None) -> None:
+def _check(
+    rc: int,
+    *,
+    flattened: str | None = None,
+    respelled: Mapping[str, str] | None = None,
+) -> None:
     """Check a SonareError return code and raise on failure.
 
     When the C layer recorded a detailed thread-local message
@@ -170,15 +184,16 @@ def _check(rc: int, *, flattened: str | None = None) -> None:
     the whole binding; every submodule imports it from here. Audio-thread entry
     points are the one exception and use :func:`_check_realtime` instead.
     ``flattened`` names the C struct parameter whose members the calling entry takes as
-    its own keyword arguments; the refusal is rendered without that root, so it names the
-    argument the caller wrote.
+    its own keyword arguments; the refusal is rendered without that root. ``respelled``
+    maps a subject the entry converted (``start_sample``) to the spelling the caller gave
+    (``start_sec``). Both together make the refusal name the argument the caller wrote.
     """
     if rc != SONARE_OK:
         lib = _get_lib()
         detail = lib.sonare_last_error_message()
         detail_str = detail.decode("utf-8") if detail else ""
-        if flattened is not None:
-            detail_str = _render_without_root(lib, flattened) or detail_str
+        if flattened is not None or respelled:
+            detail_str = _render_as_given(lib, flattened, respelled) or detail_str
         if detail_str:
             raise _coded_error(rc, detail_str)
         raise _generic_error(rc)
@@ -1349,8 +1364,12 @@ def _call_float_array_transform(
     values: Sequence[float] | list[float] | np.ndarray,
     *args: object,
     arg_name: str = "samples",
+    respelled: Mapping[str, str] | None = None,
 ) -> np.ndarray:
-    """Run a buffer-in, buffer-out C transform and return a ``float32`` ndarray."""
+    """Run a buffer-in, buffer-out C transform and return a ``float32`` ndarray.
+
+    ``respelled`` is passed to :func:`_check` for the bounds the entry converted.
+    """
     lib = _get_lib()
     # `fn_name` is the C symbol, not the facade, so only the argument name goes on.
     c_array, length = _to_c_float_array(values, arg_name=arg_name)
@@ -1362,7 +1381,7 @@ def _call_float_array_transform(
             ctypes.byref(out),
             ctypes.byref(out_length),
         )
-        _check(rc)
+        _check(rc, respelled=respelled)
         return _from_c_float_array(out, out_length.value)
 
 

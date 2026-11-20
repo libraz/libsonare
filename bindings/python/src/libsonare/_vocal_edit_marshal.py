@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, SupportsFloat, cast
 
 import numpy as np
@@ -42,6 +42,8 @@ from ._runtime import (
     _narrow_int,
     _ordinal_token,
     _resolve_sample_bound,
+    _respellings,
+    _SampleBound,
     _token_ordinal,
     _utf8_arg,
 )
@@ -189,8 +191,13 @@ class VocalEditError(SonareError):
         super().__init__(code, message)
 
 
-def _vocal_check(rc: int, *, flattened: str | None = None) -> None:
-    """Raise VocalEditError for a failing vocal-edit call; flattened is as for _check."""
+def _vocal_check(
+    rc: int,
+    *,
+    flattened: str | None = None,
+    respelled: Mapping[str, str] | None = None,
+) -> None:
+    """Raise VocalEditError for a failing vocal-edit call; the keywords are as for _check."""
     if int(rc) == 0:
         return
     lib = _get_lib()
@@ -198,7 +205,7 @@ def _vocal_check(rc: int, *, flattened: str | None = None) -> None:
     lib.sonare_vocal_error_detail_init(ctypes.byref(detail))
     lib.sonare_vocal_last_error_detail(ctypes.byref(detail))
     try:
-        _check(int(rc), flattened=flattened)
+        _check(int(rc), flattened=flattened, respelled=respelled)
     except SonareError as exc:
         message = str(exc)
         prefix = f"[{exc.code}] "
@@ -208,7 +215,7 @@ def _vocal_check(rc: int, *, flattened: str | None = None) -> None:
             exc.code,
             message,
             reason=cast(VocalReason, _ordinal_token(int(detail.reason), _VOCAL_REASONS, "reason")),
-            field=_unrooted(_text(detail.field), flattened),
+            field=_as_given(_text(detail.field), flattened, respelled),
             expected=int(detail.expected),
             actual=int(detail.actual),
             expected_text=_text(detail.expected_text),
@@ -216,12 +223,13 @@ def _vocal_check(rc: int, *, flattened: str | None = None) -> None:
         ) from exc
 
 
-def _unrooted(field: str, root: str | None) -> str:
-    """``field`` without a leading ``root.`` segment, matching the rendered refusal."""
-    if root is None:
-        return field
-    head, dot, rest = field.partition(".")
-    return rest if dot and head == root else field
+def _as_given(field: str, root: str | None, respelled: Mapping[str, str] | None) -> str:
+    """``field`` under the name the caller wrote, matching the rendered refusal."""
+    if root is not None:
+        head, dot, rest = field.partition(".")
+        if dot and head == root:
+            field = rest
+    return respelled.get(field, field) if respelled else field
 
 
 def _new_result(lib: ctypes.CDLL, name: str, cls: type[Any]) -> Any:
@@ -250,13 +258,14 @@ def _range(
     sample_rate: int,
     start_sec: float | None = None,
     end_sec: float | None = None,
-) -> SonareVocalRange:
+) -> tuple[SonareVocalRange, dict[str, str]]:
     """Resolve a render range from a pair of samples or from seconds.
 
     The range is ``value`` (a :class:`VocalRange` or a ``(start_sample,
     end_sample)`` pair whose entries may be ``None``) or ``start_sec`` /
     ``end_sec``, not both. An omitted start is 0 and an omitted end is the end of
-    the output; negative bounds are refused.
+    the output; negative bounds are refused. The second element is the respelling of
+    the bounds given in seconds, for :func:`_vocal_check`.
     """
     if value is not None and (start_sec is not None or end_sec is not None):
         raise _refuse("give range or start_sec/end_sec, not both")
@@ -285,11 +294,11 @@ def _range(
             )
             for i, item in enumerate(value)
         )
-    start_i = 0 if start_i is None else start_i
-    end_i = output_length if end_i is None else end_i
-    if end_i < start_i:
+    start = 0 if start_i.value is None else start_i.value
+    end = output_length if end_i.value is None else end_i.value
+    if end < start:
         raise _refuse("render range must satisfy 0 <= start_sample <= end_sample")
-    return SonareVocalRange(start_i, end_i)
+    return SonareVocalRange(start, end), _respellings(start_i, end_i)
 
 
 def _analysis_to_c(
@@ -494,23 +503,25 @@ def _operation_position(
     sample_rate: int,
     sample_name: str,
     sec_name: str,
-) -> int:
+) -> _SampleBound:
     """Resolve one required operation position from samples or seconds.
 
     Absence is ``None``; a real 0 is the sample position 0.
     """
     resolved = _resolve_sample_bound(sample_value, sec_value, sample_rate, sample_name, sec_name)
-    if resolved is None:
+    if resolved.value is None:
         raise _refuse(f"{operation_name} needs {sample_name} or {sec_name}")
     return resolved
 
 
 def _operation_to_c(
     lib: ctypes.CDLL, operation: VocalOperation, sample_rate: int
-) -> tuple[SonareVocalOperation, list[Any]]:
+) -> tuple[SonareVocalOperation, list[Any], dict[str, str]]:
+    """Marshal one operation; the last element respells the positions given in seconds."""
     raw = SonareVocalOperation()
     lib.sonare_vocal_operation_init(ctypes.byref(raw))
     keepalive: list[Any] = []
+    respelled: dict[str, str] = {}
     if isinstance(operation, VocalSetNoteEdit):
         raw.kind = _operation_kind("setEdit")
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
@@ -519,7 +530,7 @@ def _operation_to_c(
     elif isinstance(operation, VocalSetNoteSourceSpan):
         raw.kind = _operation_kind("setSourceSpan")
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
-        raw.source_start_sample = _operation_position(
+        bound = _operation_position(
             "VocalSetNoteSourceSpan",
             operation.source_start_sample,
             operation.source_start_sec,
@@ -527,7 +538,9 @@ def _operation_to_c(
             "source_start_sample",
             "source_start_sec",
         )
-        raw.source_end_sample = _operation_position(
+        raw.source_start_sample = bound.value
+        respelled.update(bound.respelled)
+        bound = _operation_position(
             "VocalSetNoteSourceSpan",
             operation.source_end_sample,
             operation.source_end_sec,
@@ -535,7 +548,9 @@ def _operation_to_c(
             "source_end_sample",
             "source_end_sec",
         )
-        raw.destination_start_sample = _operation_position(
+        raw.source_end_sample = bound.value
+        respelled.update(bound.respelled)
+        bound = _operation_position(
             "VocalSetNoteSourceSpan",
             operation.destination_start_sample,
             operation.destination_start_sec,
@@ -543,7 +558,9 @@ def _operation_to_c(
             "destination_start_sample",
             "destination_start_sec",
         )
-        raw.destination_length_samples = _operation_position(
+        raw.destination_start_sample = bound.value
+        respelled.update(bound.respelled)
+        bound = _operation_position(
             "VocalSetNoteSourceSpan",
             operation.destination_length_samples,
             operation.destination_length_sec,
@@ -551,10 +568,12 @@ def _operation_to_c(
             "destination_length_samples",
             "destination_length_sec",
         )
+        raw.destination_length_samples = bound.value
+        respelled.update(bound.respelled)
     elif isinstance(operation, VocalSplitNote):
         raw.kind = _operation_kind("split")
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
-        raw.cut_source_sample = _operation_position(
+        bound = _operation_position(
             "VocalSplitNote",
             operation.cut_source_sample,
             operation.cut_source_sec,
@@ -562,6 +581,8 @@ def _operation_to_c(
             "cut_source_sample",
             "cut_source_sec",
         )
+        raw.cut_source_sample = bound.value
+        respelled.update(bound.respelled)
     elif isinstance(operation, VocalMergeNotes):
         raw.kind = _operation_kind("merge")
         raw.merge_policy = _token_ordinal(
@@ -594,7 +615,7 @@ def _operation_to_c(
         keepalive.append(ids)
     else:
         raise _refuse(f"unsupported vocal operation: {type(operation).__name__}")
-    return raw, keepalive
+    return raw, keepalive, respelled
 
 
 def _note_edit_from_c(raw: SonareVocalNoteEdit) -> VocalNoteEdit:
@@ -781,7 +802,9 @@ def _callback(cancel: Callable[[], bool] | None) -> tuple[Any, list[BaseExceptio
     return SonareVocalCancelCallback(probe), errors
 
 
-def _probe_check(errors: list[BaseException], error: int) -> None:
+def _probe_check(
+    errors: list[BaseException], error: int, *, respelled: Mapping[str, str] | None = None
+) -> None:
     if errors:
         raise errors[0]
-    _vocal_check(error)
+    _vocal_check(error, respelled=respelled)

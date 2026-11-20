@@ -114,7 +114,7 @@ def _note_bound_sample(args: argparse.Namespace, bound: str, sample_rate: int) -
         sample_rate,
         f"--{bound}-sample",
         f"--{bound}-sec",
-    )
+    ).value
 
 
 def cmd_note_move(args: argparse.Namespace) -> int:

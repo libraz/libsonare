@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypeVar
 
 import numpy as np
@@ -26,13 +26,16 @@ def _run_detection(
     sample_rate: int,
     config: Any,
     detection_type: Any,
+    *,
+    respelled: Mapping[str, str] | None = None,
 ) -> Any:
     """Call one measure-only repair entry and hand back the filled C struct.
 
     These allocate nothing -- the result is a small POD struct the caller
     supplies -- so unlike :func:`_run_repair` there is nothing to release and no
     pointer to read. A refused call zeroes the struct before it returns, which
-    the ``_check`` below turns into an exception anyway.
+    the ``_check`` below turns into an exception anyway. ``respelled`` is the
+    respelling of the config members the entry converted, for :func:`_check`.
     """
     in_buf = _as_float32_buffer(samples)
     length = int(in_buf.shape[0])
@@ -45,7 +48,7 @@ def _run_detection(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc, flattened="config")
+    _check(rc, flattened="config", respelled=respelled)
     return out
 
 
@@ -60,12 +63,14 @@ def _run_repair(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     config: Any,
+    *,
+    respelled: Mapping[str, str] | None = None,
 ) -> tuple[np.ndarray, _Report]:
     """Run one mono repair entry and return its audio with the report it filled.
 
     The audio is copied out and the report converted before ``free_fn`` releases
     the C result. A pass that kept nothing (a trim of silence) hands back a NULL
-    buffer, which reads as an empty array.
+    buffer, which reads as an empty array. ``respelled`` is as for :func:`_run_detection`.
     """
     in_buf = _as_float32_buffer(samples)
     length = int(in_buf.shape[0])
@@ -78,7 +83,7 @@ def _run_repair(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc, flattened="config")
+    _check(rc, flattened="config", respelled=respelled)
     try:
         return _optional_from_c_float_array(out.samples, out.length), extract_report(out.report)
     finally:

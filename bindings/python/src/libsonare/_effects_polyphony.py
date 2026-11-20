@@ -594,17 +594,18 @@ class PolyphonicAnalysis:
         envelope, envelope_count = _to_c_float_array(curve, arg_name="edit.amplitude_envelope")
         # envelope_offset / envelope_count are inert on this door: the points are
         # the argument below and the analysis keeps its own copy.
+        # Narrowed rather than coerced: int(0.5) is 0, which is this field's
+        # identity, so a sub-sample shift would render unmoved and report
+        # success. Int64-bounded: the ctypes field is c_int64.
+        time_offset = _resolve_time_offset(
+            edit.time_offset_samples,
+            edit.time_offset_sec,
+            self._sample_rate,
+            "edit.time_offset_samples",
+            "edit.time_offset_sec",
+        )
         c_edit = SonareNoteEdit(
-            # Narrowed rather than coerced: int(0.5) is 0, which is this field's
-            # identity, so a sub-sample shift would render unmoved and report
-            # success. Int64-bounded: the ctypes field is c_int64.
-            time_offset_samples=_resolve_time_offset(
-                edit.time_offset_samples,
-                edit.time_offset_sec,
-                self._sample_rate,
-                "edit.time_offset_samples",
-                "edit.time_offset_sec",
-            ),
+            time_offset_samples=time_offset.value,
             pitch_semitones=_narrow_double(edit.pitch_semitones, "edit.pitch_semitones"),
             gain_db=_narrow_double(edit.gain_db, "edit.gain_db"),
             time_stretch_ratio=_narrow_double(edit.time_stretch_ratio, "edit.time_stretch_ratio"),
@@ -622,7 +623,8 @@ class PolyphonicAnalysis:
                 ctypes.byref(c_edit),
                 envelope,
                 _to_c_size_t(envelope_count, "envelope_count"),
-            )
+            ),
+            respelled=time_offset.respelled,
         )
 
     @_entry("PolyphonicAnalysis.render")

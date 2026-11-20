@@ -27,6 +27,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _resolve_sample_bound,
+    _SampleBound,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -43,7 +44,7 @@ from .types import (
 
 def _resolve_padding(
     padding_samples: int | None, padding_sec: float | None, sample_rate: int
-) -> int:
+) -> _SampleBound:
     """Resolve the kept margin from samples or seconds; unset is no padding.
 
     Narrowed rather than coerced: ``int()`` takes 0.5 as 0, which is "no padding
@@ -52,10 +53,11 @@ def _resolve_padding(
     resolved = _resolve_sample_bound(
         padding_samples, padding_sec, sample_rate, "padding_samples", "padding_sec"
     )
-    if resolved is None:
-        return 0
-    if resolved > _SIZE_T_MAX:
-        raise _refuse("padding_samples must fit a size_t")
+    if resolved.value is None:
+        return _SampleBound(0, {})
+    if resolved.value > _SIZE_T_MAX:
+        name = resolved.respelled.get("padding_samples", "padding_samples")
+        raise _refuse(f"{name} must fit a size_t")
     return resolved
 
 
@@ -81,10 +83,10 @@ def mastering_repair_trim_silence(
     The margin kept around the signal is ``padding_samples`` or ``padding_sec``,
     not both.
     """
+    padding = _resolve_padding(padding_samples, padding_sec, sample_rate)
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_domain_float(threshold_db, "threshold_db"),
-        # Narrowed rather than coerced: int() takes 0.5 as 0, which is "no padding at all".
-        padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
+        padding_samples=padding.value,
         mode=_coerce_trim_silence_mode(mode, "mode"),
         gate_lufs=_domain_float(gate_lufs, "gate_lufs"),
         window_ms=_domain_float(window_ms, "window_ms"),
@@ -98,6 +100,7 @@ def mastering_repair_trim_silence(
         samples,
         sample_rate,
         config,
+        respelled=padding.respelled,
     )
     return TrimSilenceResult(samples=audio, report=report)
 
@@ -168,9 +171,10 @@ def mastering_repair_detect_trim_range(
             sample.
         SonareError: If the C call rejects the request.
     """
+    padding = _resolve_padding(padding_samples, padding_sec, sample_rate)
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_domain_float(threshold_db, "threshold_db"),
-        padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
+        padding_samples=padding.value,
         mode=_coerce_trim_silence_mode(mode, "mode"),
         gate_lufs=_domain_float(gate_lufs, "gate_lufs"),
         window_ms=_domain_float(window_ms, "window_ms"),
@@ -182,6 +186,7 @@ def mastering_repair_detect_trim_range(
             sample_rate,
             config,
             SonareTrimRange,  # noqa: F405
+            respelled=padding.respelled,
         )
     )
 
@@ -249,9 +254,10 @@ def mastering_repair_detect_trim_range_stereo(
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
         raise _refuse("left and right must have the same length")
+    padding = _resolve_padding(padding_samples, padding_sec, sample_rate)
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_domain_float(threshold_db, "threshold_db"),
-        padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
+        padding_samples=padding.value,
         mode=_coerce_trim_silence_mode(mode, "mode"),
         gate_lufs=_domain_float(gate_lufs, "gate_lufs"),
         window_ms=_domain_float(window_ms, "window_ms"),
@@ -265,7 +271,7 @@ def mastering_repair_detect_trim_range_stereo(
         ctypes.byref(config),
         ctypes.byref(out),
     )
-    _check(rc, flattened="config")
+    _check(rc, flattened="config", respelled=padding.respelled)
     return _extract_trim_range(out)
 
 
@@ -344,9 +350,10 @@ def mastering_repair_trim_silence_stereo(
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
         raise _refuse("left and right must have the same length")
+    padding = _resolve_padding(padding_samples, padding_sec, sample_rate)
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold_db=_domain_float(threshold_db, "threshold_db"),
-        padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
+        padding_samples=padding.value,
         mode=_coerce_trim_silence_mode(mode, "mode"),
         gate_lufs=_domain_float(gate_lufs, "gate_lufs"),
         window_ms=_domain_float(window_ms, "window_ms"),
@@ -361,7 +368,7 @@ def mastering_repair_trim_silence_stereo(
         ctypes.byref(out),
     )
     try:
-        _check(rc, flattened="config")
+        _check(rc, flattened="config", respelled=padding.respelled)
         # An all-silent pair comes back as (NULL, NULL, 0) and SONARE_OK, so the
         # length is read before either pointer -- sizing from the input length
         # instead would index a NULL pointer and raise on a documented success.

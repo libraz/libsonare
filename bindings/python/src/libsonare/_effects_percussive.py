@@ -27,6 +27,7 @@ from ._runtime import (
     _out_float_array,
     _resolve_sample_bound,
     _resolve_time_offset,
+    _respellings,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -179,11 +180,15 @@ def _percussive_event_from_c(row: SonarePercussiveEvent) -> PercussiveEvent:
 
 def _percussive_events_to_c(
     events: Sequence[PercussiveEvent], sample_rate: int
-) -> tuple[object, int]:
-    """Marshal an event list into the C event array; an empty set is NULL and 0."""
+) -> tuple[object, int, dict[str, str]]:
+    """Marshal an event list into the C event array; an empty set is NULL and 0.
+
+    The last element is the respelling of the bounds given in seconds, for :func:`_check`.
+    """
     count = len(events)
     if count == 0:
-        return None, 0
+        return None, 0, {}
+    respelled: dict[str, str] = {}
 
     c_events = (SonarePercussiveEvent * count)()
     for i, event in enumerate(events):
@@ -203,26 +208,28 @@ def _percussive_events_to_c(
             f"events[{i}].offset_sample",
             f"events[{i}].offset_sec",
         )
-        if onset is None or offset is None:
-            missing = "onset" if onset is None else "offset"
+        if onset.value is None or offset.value is None:
+            missing = "onset" if onset.value is None else "offset"
             raise _refuse(f"events[{i}] needs {missing}_sample or {missing}_sec")
-        c_events[i].onset_sample = onset
-        c_events[i].offset_sample = offset
+        c_events[i].onset_sample = onset.value
+        c_events[i].offset_sample = offset.value
+        # Narrowed rather than coerced: int(0.5) is 0, which is this field's
+        # identity, so a sub-sample shift would render unmoved and report
+        # success. Int64-bounded: the ctypes field is c_int64.
+        time_offset = _resolve_time_offset(
+            event.edit.time_offset_samples,
+            event.edit.time_offset_sec,
+            sample_rate,
+            f"events[{i}].edit.time_offset_samples",
+            f"events[{i}].edit.time_offset_sec",
+        )
+        respelled.update(_respellings(onset, offset, time_offset))
         c_events[i].edit = SonarePercussiveEventEdit(
-            # Narrowed rather than coerced: int(0.5) is 0, which is this field's
-            # identity, so a sub-sample shift would render unmoved and report
-            # success. Int64-bounded: the ctypes field is c_int64.
-            time_offset_samples=_resolve_time_offset(
-                event.edit.time_offset_samples,
-                event.edit.time_offset_sec,
-                sample_rate,
-                f"events[{i}].edit.time_offset_samples",
-                f"events[{i}].edit.time_offset_sec",
-            ),
+            time_offset_samples=time_offset.value,
             gain_db=_narrow_double(event.edit.gain_db, "event.edit.gain_db"),
             muted=1 if event.edit.muted else 0,
         )
-    return c_events, count
+    return c_events, count, respelled
 
 
 def _onset_wait(onset_wait: int | None) -> int:
@@ -449,7 +456,7 @@ def render_percussive_events(
     lib = _get_lib()
 
     c_array, length = _to_c_float_array(samples)
-    c_events, count = _percussive_events_to_c(events, sample_rate)
+    c_events, count, respelled = _percussive_events_to_c(events, sample_rate)
     config = SonarePercussiveRenderConfig(
         struct_version=_PERCUSSIVE_STRUCT_VERSION,
         **_percussive_separation(
@@ -473,5 +480,6 @@ def render_percussive_events(
                 ctypes.byref(out_length),
             ),
             flattened="config",
+            respelled=respelled,
         )
         return _from_c_float_array(out, out_length.value)

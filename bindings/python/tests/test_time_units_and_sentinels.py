@@ -229,6 +229,27 @@ class TestEngine:
                     capacity_frames=128, punch=libsonare.CapturePunch(start_sample=1)
                 )
 
+    def test_a_library_refusal_names_the_spelling_the_caller_gave(self) -> None:
+        with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+            with pytest.raises(
+                SonareValueError,
+                match=r"^RealtimeEngine\.configure_capture: "
+                r"punch\.end_sec must not be before punch\.start_sec$",
+            ):
+                engine.configure_capture(
+                    capacity_frames=128,
+                    punch=libsonare.CapturePunch(start_sec=0.5, end_sec=0.1),
+                )
+            with pytest.raises(
+                SonareValueError,
+                match=r"^RealtimeEngine\.configure_capture: "
+                r"punch\.end_sample must not be before punch\.start_sec$",
+            ):
+                engine.configure_capture(
+                    capacity_frames=128,
+                    punch=libsonare.CapturePunch(start_sec=0.5, end_sample=4800),
+                )
+
     def test_render_frame_none_is_immediate_and_negative_is_refused(self) -> None:
         with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
             engine.play()

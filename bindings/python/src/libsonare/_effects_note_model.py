@@ -33,6 +33,7 @@ from ._runtime import (
     _narrow_int,
     _resolve_sample_bound,
     _resolve_time_offset,
+    _respellings,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -519,17 +520,21 @@ def _note_pitch_hz(value: float | None, name: str) -> float:
     return float(value)
 
 
-def _notes_to_c(notes: Sequence[NoteObject], sample_rate: int) -> tuple[object, int, object, int]:
+def _notes_to_c(
+    notes: Sequence[NoteObject], sample_rate: int
+) -> tuple[object, int, object, int, dict[str, str]]:
     """Marshal a note list into the C note array plus its shared envelope pool.
 
     The C ABI carries every note's envelope in one array the edits index into,
     which is an ownership arrangement rather than something a caller should have
     to build; each :class:`NoteEdit` owns its own curve, so the pool is packed
-    here and the offsets are derived.
+    here and the offsets are derived. The last element is the respelling of the
+    bounds given in seconds, for :func:`_check`.
     """
     note_count = len(notes)
     if note_count == 0:
-        return None, 0, None, 0
+        return None, 0, None, 0, {}
+    respelled: dict[str, str] = {}
 
     c_notes = (SonareNoteObject * note_count)()
     curves: list[np.ndarray] = []
@@ -557,11 +562,11 @@ def _notes_to_c(notes: Sequence[NoteObject], sample_rate: int) -> tuple[object, 
             f"notes[{i}].offset_sample",
             f"notes[{i}].offset_sec",
         )
-        if onset is None or offset is None:
-            missing = "onset" if onset is None else "offset"
+        if onset.value is None or offset.value is None:
+            missing = "onset" if onset.value is None else "offset"
             raise _refuse(f"notes[{i}] needs {missing}_sample or {missing}_sec")
-        c_notes[i].onset_sample = onset
-        c_notes[i].offset_sample = offset
+        c_notes[i].onset_sample = onset.value
+        c_notes[i].offset_sample = offset.value
         c_notes[i].frame_start = _narrow_int(
             note.frame_start, f"notes[{i}].frame_start", _C_INT_MIN, _C_INT_MAX
         )
@@ -569,19 +574,21 @@ def _notes_to_c(notes: Sequence[NoteObject], sample_rate: int) -> tuple[object, 
             note.frame_end, f"notes[{i}].frame_end", _C_INT_MIN, _C_INT_MAX
         )
         c_notes[i].median_hz = _note_pitch_hz(note.median_hz, f"notes[{i}].median_hz")
+        time_offset = _resolve_time_offset(
+            note.edit.time_offset_samples,
+            note.edit.time_offset_sec,
+            sample_rate,
+            f"notes[{i}].edit.time_offset_samples",
+            f"notes[{i}].edit.time_offset_sec",
+        )
+        respelled.update(_respellings(onset, offset, time_offset))
         c_notes[i].edit = SonareNoteEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report
             # success. Int64-bounded like onset_sample/offset_sample above: the
             # ctypes field is c_int64, and _validate_c_int_field's 32-bit range
             # would refuse an offset the C ABI, Node and WASM all accept.
-            time_offset_samples=_resolve_time_offset(
-                note.edit.time_offset_samples,
-                note.edit.time_offset_sec,
-                sample_rate,
-                f"notes[{i}].edit.time_offset_samples",
-                f"notes[{i}].edit.time_offset_sec",
-            ),
+            time_offset_samples=time_offset.value,
             envelope_offset=envelope_offset,
             envelope_count=int(curve.size),
             pitch_semitones=_narrow_double(note.edit.pitch_semitones, "note.edit.pitch_semitones"),
@@ -601,9 +608,9 @@ def _notes_to_c(notes: Sequence[NoteObject], sample_rate: int) -> tuple[object, 
         envelope_offset += int(curve.size)
 
     if envelope_offset == 0:
-        return c_notes, note_count, None, 0
+        return c_notes, note_count, None, 0, respelled
     pool, pool_count = _to_c_float_array(np.concatenate(curves))
-    return c_notes, note_count, pool, pool_count
+    return c_notes, note_count, pool, pool_count, respelled
 
 
 def _note_set_index(arg_name: str, value: int) -> int:
@@ -642,7 +649,7 @@ def _note_set_edit(
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
     prob_array, voiced_array = _note_voicing_arrays(n_frames, voiced, voiced_prob)
-    c_notes, note_count, envelopes, envelope_count = _notes_to_c(notes, sample_rate)
+    c_notes, note_count, envelopes, envelope_count, respelled = _notes_to_c(notes, sample_rate)
 
     out = SonareNoteObjectsResult()
     rc = getattr(lib, symbol)(
@@ -662,7 +669,7 @@ def _note_set_edit(
         *cut,
         ctypes.byref(out),
     )
-    _check(rc, flattened="config")
+    _check(rc, flattened="config", respelled=respelled)
     try:
         return _notes_from_c(out)
     finally:

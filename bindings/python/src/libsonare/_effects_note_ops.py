@@ -50,6 +50,7 @@ from ._runtime import (
     _narrow_float,
     _out_float_array,
     _resolve_sample_bound,
+    _respellings,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -137,9 +138,10 @@ def note_stretch(
         "sonare_note_stretch",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(0 if onset is None else onset, "onset_sample"),
-        _to_c_int(len(samples) if offset is None else offset, "offset_sample"),
+        _to_c_int(0 if onset.value is None else onset.value, "onset_sample"),
+        _to_c_int(len(samples) if offset.value is None else offset.value, "offset_sample"),
         _to_c_float(stretch_ratio, "stretch_ratio"),
+        respelled=_respellings(onset, offset),
     )
 
 
@@ -181,9 +183,10 @@ def note_move(
         "sonare_note_move",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(0 if onset is None else onset, "onset_sample"),
-        _to_c_int(len(samples) if offset is None else offset, "offset_sample"),
-        _to_c_int(0 if target is None else target, "target_onset_sample"),
+        _to_c_int(0 if onset.value is None else onset.value, "onset_sample"),
+        _to_c_int(len(samples) if offset.value is None else offset.value, "offset_sample"),
+        _to_c_int(0 if target.value is None else target.value, "target_onset_sample"),
+        respelled=_respellings(onset, offset, target),
     )
 
 
@@ -365,7 +368,7 @@ def render_notes(
     lib = _get_lib()
 
     c_array, length = _to_c_float_array(samples)
-    c_notes, note_count, envelopes, envelope_count = _notes_to_c(notes, sample_rate)
+    c_notes, note_count, envelopes, envelope_count, respelled = _notes_to_c(notes, sample_rate)
 
     f0_array = None
     voiced_array = None
@@ -413,6 +416,7 @@ def render_notes(
                 ctypes.byref(out_length),
             ),
             flattened="config",
+            respelled=respelled,
         )
         return _from_c_float_array(out, out_length.value)
 
@@ -937,7 +941,7 @@ def assign_note_targets(
             max_correction_semitones, "max_correction_semitones"
         )
 
-    c_notes, note_count, _envelopes, _envelope_count = _notes_to_c(notes, sample_rate)
+    c_notes, note_count, _envelopes, _envelope_count, respelled = _notes_to_c(notes, sample_rate)
     c_targets, target_count = _note_targets_to_c(targets)
     assigned = ctypes.c_size_t()
     _check(
@@ -951,6 +955,7 @@ def assign_note_targets(
             ctypes.byref(assigned),
         ),
         flattened="config",
+        respelled=respelled,
     )
     # The shared marshaller hands the array back as `object`, which is all its
     # other callers need; this is the one entry point that reads the rows again.

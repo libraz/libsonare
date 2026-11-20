@@ -698,15 +698,20 @@ class VocalEditDraft(_HandleOwner):
         generation = _uint64(expected_generation, "expected_generation")
         raw_ops = (SonareVocalOperation * len(ops))()
         keepalive: list[Any] = []
+        respelled: dict[str, str] = {}
         for i, operation in enumerate(ops):
-            raw_ops[i], buffers = _operation_to_c(lib, operation, self._session._sample_rate)
+            raw_ops[i], buffers, given = _operation_to_c(lib, operation, self._session._sample_rate)
             keepalive.extend(buffers)
+            respelled.update(
+                {f"operations[{i}].{key}": f"operations[{i}].{name}" for key, name in given.items()}
+            )
         with _owned_edit_result(lib) as raw:
             pointer = ctypes.cast(raw_ops, ctypes.POINTER(SonareVocalOperation)) if ops else None
             _vocal_check(
                 lib.sonare_vocal_draft_apply(
                     self._require_handle(), int(generation), pointer, len(ops), ctypes.byref(raw)
-                )
+                ),
+                respelled=respelled,
             )
             return _edit_result_from_c(raw)
 
@@ -784,23 +789,25 @@ class VocalRenderSnapshot(_HandleOwner):
             lib = _get_lib()
             raw = _new_result(lib, "sonare_vocal_render_result_init", SonareVocalRenderResult)
             callback, errors = _callback(cancel)
+            c_range, respelled = _range(
+                range,
+                output_length=self._output_length,
+                sample_rate=self._sample_rate,
+                start_sec=start_sec,
+                end_sec=end_sec,
+            )
             try:
                 _probe_check(
                     errors,
                     lib.sonare_vocal_snapshot_render(
                         self._require_handle(),
-                        _range(
-                            range,
-                            output_length=self._output_length,
-                            sample_rate=self._sample_rate,
-                            start_sec=start_sec,
-                            end_sec=end_sec,
-                        ),
+                        c_range,
                         _uint64(request_id, "request_id"),
                         callback,
                         None,
                         ctypes.byref(raw),
                     ),
+                    respelled=respelled,
                 )
                 return _render_result_from_c(raw)
             finally:
@@ -817,19 +824,21 @@ class VocalRenderSnapshot(_HandleOwner):
     ) -> VocalRenderJob:
         lib = _get_lib()
         handle = ctypes.c_void_p()
+        c_range, respelled = _range(
+            range,
+            output_length=self._output_length,
+            sample_rate=self._sample_rate,
+            start_sec=start_sec,
+            end_sec=end_sec,
+        )
         _vocal_check(
             lib.sonare_vocal_render_job_begin(
                 self._require_handle(),
-                _range(
-                    range,
-                    output_length=self._output_length,
-                    sample_rate=self._sample_rate,
-                    start_sec=start_sec,
-                    end_sec=end_sec,
-                ),
+                c_range,
                 _uint64(request_id, "request_id"),
                 ctypes.byref(handle),
-            )
+            ),
+            respelled=respelled,
         )
         return VocalRenderJob(self, handle)
 

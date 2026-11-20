@@ -26,6 +26,7 @@ from ._runtime import (
     _out_float_array,
     _require_power_of_two,
     _resolve_sample_bound,
+    _respellings,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -164,6 +165,7 @@ def spectral_edit(
 
     n_ops = len(ops)
     c_ops = None
+    respelled: dict[str, str] = {}
     if n_ops > 0:
         c_ops = (SonareSpectralRegionOp * n_ops)()
         for i, op in enumerate(ops):
@@ -183,9 +185,10 @@ def spectral_edit(
                 f"ops[{i}].end_sample",
                 f"ops[{i}].end_sec",
             )
+            respelled.update(_respellings(start_sample, end_sample))
             c_ops[i] = SonareSpectralRegionOp(
-                start_sample=0 if start_sample is None else start_sample,
-                end_sample=length if end_sample is None else end_sample,
+                start_sample=0 if start_sample.value is None else start_sample.value,
+                end_sample=length if end_sample.value is None else end_sample.value,
                 low_hz=_narrow_double(op.low_hz, f"ops[{i}].low_hz"),
                 high_hz=_spectral_high_hz(op.high_hz, f"ops[{i}].high_hz"),
                 gain_db=_narrow_double(op.gain_db, f"ops[{i}].gain_db"),
@@ -205,5 +208,6 @@ def spectral_edit(
                 ctypes.byref(out_length),
             ),
             flattened="config",
+            respelled=respelled,
         )
         return _from_c_float_array(out, out_length.value)
