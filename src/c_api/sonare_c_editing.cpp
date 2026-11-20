@@ -188,11 +188,7 @@ SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, 
   SONARE_C_ZERO_OUTS(out_db);
   SONARE_C_TRY
   const int factor = true_peak_factor(oversample_factor);
-  if (!out_db) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "metering_true_peak_dbtp: out_db must not be NULL");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(out_db);
   return run_offline("metering_true_peak_dbtp", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_db = metering::true_peak_db(audio, factor);

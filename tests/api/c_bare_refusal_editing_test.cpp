@@ -20,6 +20,13 @@ const float kNaN = std::numeric_limits<float>::quiet_NaN();
 
 }  // namespace
 
+TEST_CASE("the true-peak entry names a NULL result slot", "[c_api][editing]") {
+  const std::vector<float> samples(2048, 0.1f);
+  REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), 22050, 4, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(last_message() == "out_db must not be NULL");
+}
+
 TEST_CASE("the silence ratio entries name the refused argument", "[c_api][editing]") {
   const std::vector<float> samples(2048, 0.1f);
   float ratio = 0.0f;
