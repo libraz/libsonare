@@ -2127,6 +2127,70 @@
           "domain": null
         }
       ],
+      "mix": [
+        {
+          "name": "input",
+          "type": "path",
+          "default": [],
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": 48000,
+          "stated_default": "48000",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "scene",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
       "mix-strip": [
         {
           "name": "fader-db",
@@ -6448,11 +6512,9 @@
       ]
     },
     "mix": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a scene mixer: it renders one or more inputs through a mixer scene given as a preset or a document, which the native CLI has no equivalent of. The name previously also spelled the native channel strip, so one command line meant two capabilities; that alias is gone and mix-strip is the only spelling for the strip"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "repair": {
       "classification": "shared",
@@ -19768,6 +19830,253 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mix",
+      "options": [
+        {
+          "name": "input",
+          "type": "path",
+          "default": [],
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": 48000,
+          "stated_default": "48000",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "scene",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "loaded": {
+          "keys": {
+            "strip_count": "integer",
+            "sample_rate": "integer"
+          }
+        },
+        "rendered": {
+          "keys": {
+            "strip_count": "integer",
+            "sample_rate": "integer",
+            "rendered_samples": "integer",
+            "output": "string"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "scene_only",
+          "argv": [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "loaded",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "stated_rate",
+          "argv": [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "--sample-rate",
+            "44100",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "loaded",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "positional_inputs",
+          "argv": [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "--input",
+            "{audio}",
+            "--input",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "rendered",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "addressed_input",
+          "argv": [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "--input",
+            "vocal={audio}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "rendered",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "no_source",
+          "argv": [
+            "mix",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "both_sources",
+          "argv": [
+            "mix",
+            "--scene",
+            "{output}",
+            "--preset",
+            "vocalReverbSend",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "input_without_output",
+          "argv": [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "--input",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "output_without_input",
+          "argv": [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "unknown_strip",
+          "argv": [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "--input",
+            "nosuch={audio}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "too_few_positional_inputs",
+          "argv": [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "--input",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}

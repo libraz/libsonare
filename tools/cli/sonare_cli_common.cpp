@@ -140,6 +140,36 @@ std::string read_plain_text_file(const std::string& path) {
   return std::string(bytes.begin(), bytes.end());
 }
 
+// A struct the command fills is named by its members alone, as every binding names them.
+void throw_c_failure(SonareError err, const char* root) {
+  std::string message = sonare_last_error_message();
+  const size_t count = sonare_last_refusal_subject_count();
+  if (root != nullptr && count > 0) {
+    const std::string prefix = std::string(root) + ".";
+    std::vector<std::string> subjects;
+    std::vector<const char*> pointers;
+    subjects.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      std::string subject = sonare_last_refusal_subject(i);
+      if (subject.rfind(prefix, 0) == 0) subject.erase(0, prefix.size());
+      subjects.push_back(std::move(subject));
+    }
+    for (const std::string& subject : subjects) pointers.push_back(subject.c_str());
+    char* rendered = nullptr;
+    if (sonare_last_refusal_render(pointers.data(), nullptr, count, &rendered) == SONARE_OK) {
+      message = rendered;
+      sonare_free_string(rendered);
+    }
+  }
+  throw sonare::SonareException(static_cast<sonare::ErrorCode>(err), message);
+}
+
+void warn_downmixed_input(int channels) {
+  std::cerr << "warning: " << channels
+            << "-channel input is downmixed to mono by this CLI command; use the stereo "
+               "library API for channel-preserving processing\n";
+}
+
 namespace {
 
 std::string cli_atomic_tmp_path(const std::string& path) {

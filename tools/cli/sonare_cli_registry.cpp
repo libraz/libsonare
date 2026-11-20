@@ -406,6 +406,21 @@ CliValidationError validate_fade_sides(const CliArgs& args) {
   return {"give --fade-in-sec or --fade-out-sec"};
 }
 
+#ifdef SONARE_WITH_MIXING
+// A scene comes from exactly one source, and a render needs both its inputs and a file to write.
+CliValidationError validate_mix_sources(const CliArgs& args) {
+  const bool scene = args.has("scene");
+  const bool preset = args.has("preset");
+  if (!scene && !preset) return {"mix needs --scene or --preset"};
+  if (scene && preset) return {"--scene is mutually exclusive with --preset"};
+  const bool inputs = !args.get_string_list("input").empty();
+  const bool output = !args.output_file.empty();
+  if (inputs && !output) return {"mix with --input requires --output"};
+  if (output && !inputs) return {"mix with --output requires at least one --input"};
+  return {};
+}
+#endif
+
 // --type decides which frequencies the filter reads; one it reads is required, and one it does
 // not read is refused rather than ignored, as the library refuses it.
 CliValidationError validate_filter_frequencies(const CliArgs& args) {
@@ -1026,9 +1041,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {}, validate_repair_arguments, 0, /*preserves_stereo_input=*/true);
 #endif
 #ifdef SONARE_WITH_MIXING
-    // `mix-strip` is the only spelling for the strip. `mix` names the Python
-    // CLI's scene mixer, which this front-end has no equivalent of, so it is
-    // refused here as an unknown command rather than carried as an alias.
+    add_command(commands, "mix", false,
+                {path_value("scene"), nullable_string_value("preset"), repeatable_path("input"),
+                 int_value("sample-rate", kCliMixerSampleRate), output_value()},
+                {}, validate_mix_sources);
     add_command(commands, "mix-strip", true,
                 {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
                  with_domain(number_value("pan", 0.0), between(-1.0, 1.0)),
@@ -1046,12 +1062,12 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // `--tempo-bpm` is a string rather than a number because `auto` is one of
     // its values: the tempo is either stated or measured from the first input,
     // and a numeric option cannot spell the second.
-    add_command(
-        commands, "suggest-mix", false,
-        {repeatable_path("input"), int_value("sample-rate", 48000), string_value("params", ""),
-         tempo(make_option("tempo-bpm", CliOptionArity::RequiredValue, CliOptionScalarType::String,
-                           null_default())),
-         string_value("scene-out", "")});
+    add_command(commands, "suggest-mix", false,
+                {repeatable_path("input"), int_value("sample-rate", kCliMixerSampleRate),
+                 string_value("params", ""),
+                 tempo(make_option("tempo-bpm", CliOptionArity::RequiredValue,
+                                   CliOptionScalarType::String, null_default())),
+                 string_value("scene-out", "")});
 #endif
 
     // Feature leaves.

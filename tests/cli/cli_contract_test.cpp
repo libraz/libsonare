@@ -1003,7 +1003,7 @@ TEST_CASE("CLI rejects option typos and terminal required options before dispatc
                    "mastering-stereo-analyses"});
 #endif
 #ifdef SONARE_WITH_MIXING
-  commands.insert(commands.end(), {"mix-strip", "mixing-presets", "mixing-preset"});
+  commands.insert(commands.end(), {"mix", "mix-strip", "mixing-presets", "mixing-preset"});
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
   commands.push_back("project");
@@ -1560,41 +1560,32 @@ TEST_CASE("CLI checks --f0-min-hz against the effective --f0-max-hz, not only a 
 }
 
 #ifdef SONARE_WITH_MIXING
-TEST_CASE("CLI answers the channel strip under one spelling only",
+TEST_CASE("CLI keeps the scene mixer and the channel strip as two commands",
           "[cli][registry][argument-contract]") {
-  // `mix` was this command's deprecated alias and named a different capability
-  // on the Python CLI -- a scene mixer -- so one command line meant two things
-  // depending on which front-end ran it. The spelling is gone rather than
-  // documented, which is only true while nothing reintroduces it: a second row
-  // naming the other as an alias never uses the alias path (path lookup wins),
-  // so each name would again be validated against its own copy of the option
-  // list and an option added to one would become unknown under the other.
-  const CliCommandSpec* canonical = cli_command_spec_for_path("mix-strip");
-  REQUIRE(canonical != nullptr);
-  REQUIRE(cli_command_spec_for_path("mix") == nullptr);
-  REQUIRE(std::find(canonical->aliases.begin(), canonical->aliases.end(), "mix") ==
-          canonical->aliases.end());
+  // `mix` once also spelled the strip, so one command line meant two capabilities
+  // depending on the front-end. Each name now has one row of its own and neither
+  // aliases the other: an alias row would be validated against its own copy of
+  // the option list, and an option added to one would become unknown under the other.
+  const CliCommandSpec* strip = cli_command_spec_for_path("mix-strip");
+  const CliCommandSpec* scene = cli_command_spec_for_path("mix");
+  REQUIRE(strip != nullptr);
+  REQUIRE(scene != nullptr);
+  REQUIRE(strip->aliases.empty());
+  REQUIRE(scene->aliases.empty());
 
   size_t rows = 0;
   for (const auto& command : cli_command_registry()) {
     if (command.path == "mix" || command.path == "mix-strip") ++rows;
   }
-  REQUIRE(rows == 1);
+  REQUIRE(rows == 2);
 
-  // The removed spelling is refused as a command rather than as a bad option,
-  // which is what tells a caller the name is gone instead of mistyped.
-  auto [removed_code, removed_output] = exec_command(CLI + " mix --width 1.5");
-  REQUIRE(removed_code != 0);
-  REQUIRE_THAT(removed_output, !ContainsSubstring("Unknown option"));
-
-  // The surviving spelling still accepts its own options and rejects others.
-  auto [code, output] = exec_command(CLI + " mix-strip --definitely-unknown-option");
-  REQUIRE(code != 0);
-  REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
-
-  auto [width_code, width_output] = exec_command(CLI + " mix-strip --width 1.5");
-  REQUIRE_THAT(width_output, !ContainsSubstring("Unknown option"));
-  (void)width_code;
+  // A strip option given to the scene mixer is unknown there, and the reverse.
+  auto [scene_code, scene_output] = exec_command(CLI + " mix --preset vocalReverbSend --width 1.5");
+  REQUIRE(scene_code == 2);
+  REQUIRE_THAT(scene_output, ContainsSubstring("Unknown option"));
+  auto [strip_code, strip_output] = exec_command(CLI + " mix-strip --preset vocalReverbSend");
+  REQUIRE(strip_code == 2);
+  REQUIRE_THAT(strip_output, ContainsSubstring("Unknown option"));
 }
 #endif  // SONARE_WITH_MIXING
 

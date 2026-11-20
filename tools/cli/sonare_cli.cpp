@@ -109,7 +109,9 @@ const std::vector<CommandInfo>& get_commands() {
        cmd_repair, true},
 #endif
 #ifdef SONARE_WITH_MIXING
-      {"mix-strip", "Apply a single-input channel strip", cmd_mix, true},
+      {"mix", "Render inputs through a mixer scene given as a preset or a document", cmd_mix,
+       false},
+      {"mix-strip", "Apply a single-input channel strip", cmd_mix_strip, true},
       {"mixing-presets", "List built-in mixer scene presets", cmd_mixing_presets, false},
       {"mixing-preset", "Print a built-in mixer scene preset JSON", cmd_mixing_preset, false},
 #endif
@@ -498,11 +500,7 @@ int main(int argc, char* argv[]) {
         command_spec != nullptr &&
         ((source_channels == 2 && command_spec->preserves_stereo_input) ||
          command_spec->preserves_multichannel_input);
-    if (source_channels > 1 && !carries_every_channel) {
-      std::cerr << "warning: " << source_channels
-                << "-channel input is downmixed to mono by this CLI command; use the stereo "
-                   "library API for channel-preserving processing\n";
-    }
+    if (source_channels > 1 && !carries_every_channel) warn_downmixed_input(source_channels);
 
     if (!args.quiet && !args.json_output) {
       std::cerr << "\r" << color::green << "Loaded " << std::fixed << std::setprecision(1)

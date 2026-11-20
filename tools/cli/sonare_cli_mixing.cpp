@@ -1,3 +1,5 @@
+#include <map>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -25,7 +27,277 @@ int cmd_mixing_preset(const CliArgs& args, const Audio&) {
   return 0;
 }
 
-int cmd_mix(const CliArgs& args, const Audio& audio) {
+namespace {
+
+/// Hold one decoded plane to the offline-input policy, reported in decoder terms
+/// as every other decoded input is: an unusable rate is a malformed container,
+/// any other refusal (a non-finite sample included) a failed decode.
+void require_decoded_plane(const std::vector<float>& plane, int sample_rate) {
+  const std::string problem =
+      offline_audio_input_problem("load_audio", "input", plane.data(), plane.size(), sample_rate);
+  if (!problem.empty()) {
+    throw SonareException(
+        is_supported_sample_rate(sample_rate) ? ErrorCode::DecodeFailed : ErrorCode::InvalidFormat,
+        problem);
+  }
+}
+
+// The block a scene is rendered in; the Python CLI renders in the same one.
+constexpr size_t kMixHostChunkFrames = 4096;
+
+/// One strip's stereo input at the mixer rate.
+struct StripPair {
+  std::vector<float> left;
+  std::vector<float> right;
+};
+
+/// Load one file as the pair a strip processes: a stereo file keeps its two
+/// channels, a mono one is carried on both sides, and a wider one is downmixed
+/// with the warning every downmixing command gives.
+StripPair load_strip_pair(const std::string& path, int sample_rate) {
+  auto decoded = load_audio_input_once(path, RetainChannels::StereoIfExact);
+  if (decoded.metadata_error != nullptr) std::rethrow_exception(decoded.metadata_error);
+  StripPair pair;
+  if (decoded.source_channels == 2) {
+    if (decoded.retained_error != nullptr) std::rethrow_exception(decoded.retained_error);
+    SONARE_CHECK(decoded.retained_channels == 2 && decoded.interleaved.size() % 2 == 0,
+                 ErrorCode::DecodeFailed);
+    const size_t frames = decoded.interleaved.size() / 2;
+    pair.left.resize(frames);
+    pair.right.resize(frames);
+    for (size_t frame = 0; frame < frames; ++frame) {
+      pair.left[frame] = decoded.interleaved[2 * frame];
+      pair.right[frame] = decoded.interleaved[2 * frame + 1];
+    }
+    require_decoded_plane(pair.right, decoded.sample_rate);
+  } else {
+    if (decoded.source_channels > 2) warn_downmixed_input(decoded.source_channels);
+    pair.left = std::move(decoded.mono);
+  }
+  require_decoded_plane(pair.left, decoded.sample_rate);
+  const bool stereo = decoded.source_channels == 2;
+  if (decoded.sample_rate != sample_rate) {
+    pair.left = resample(pair.left.data(), pair.left.size(), decoded.sample_rate, sample_rate);
+    if (stereo) {
+      pair.right = resample(pair.right.data(), pair.right.size(), decoded.sample_rate, sample_rate);
+    }
+  }
+  if (!stereo) pair.right = pair.left;
+  return pair;
+}
+
+std::string joined_ids(const std::vector<std::string>& ids) {
+  std::string text;
+  for (size_t i = 0; i < ids.size(); ++i) text += (i > 0 ? ", " : "") + ids[i];
+  return text;
+}
+
+/// Resolve `--input [ID=]WAV` entries onto the scene's strips, in strip order.
+///
+/// An entry addressed by id (explicit, or a bare path whose base name names a
+/// strip) feeds that strip and leaves the others silent, which is how a scene
+/// with effect returns fed only by sends is rendered. Entries naming no strip
+/// are positional, one per strip. Every buffer is padded to the longest input,
+/// so a part entering late is not truncated away.
+std::vector<StripPair> resolve_strip_inputs(const std::vector<std::string>& entries,
+                                            const std::vector<std::string>& strip_ids,
+                                            int sample_rate, size_t* length) {
+  std::map<size_t, StripPair> resolved;
+  std::vector<StripPair> positional;
+  bool addressed = false;
+  for (const std::string& entry : entries) {
+    const auto separator = entry.find('=');
+    std::string id;
+    std::string path;
+    if (separator == std::string::npos) {
+      path = entry;
+      const auto slash = entry.find_last_of("/\\");
+      const std::string base = slash == std::string::npos ? entry : entry.substr(slash + 1);
+      const auto dot = base.find_last_of('.');
+      id = dot == std::string::npos || dot == 0 ? base : base.substr(0, dot);
+    } else {
+      id = entry.substr(0, separator);
+      path = entry.substr(separator + 1);
+      if (id.empty()) throw std::invalid_argument("--input strip id must not be empty: " + entry);
+    }
+    if (path.empty()) throw std::invalid_argument("--input requires a file path: " + entry);
+
+    StripPair pair = load_strip_pair(path, sample_rate);
+    const auto found = std::find(strip_ids.begin(), strip_ids.end(), id);
+    if (found == strip_ids.end()) {
+      // An explicit id is an assertion about the scene, so a miss is refused.
+      if (separator != std::string::npos) {
+        throw std::invalid_argument(
+            "--input names strip '" + id +
+            "', which the scene does not have (strips: " + joined_ids(strip_ids) + ")");
+      }
+      positional.push_back(std::move(pair));
+      continue;
+    }
+    const auto index = static_cast<size_t>(found - strip_ids.begin());
+    if (resolved.count(index) != 0) {
+      throw std::invalid_argument("--input names strip '" + id + "' more than once");
+    }
+    addressed = true;
+    resolved[index] = std::move(pair);
+  }
+
+  if (addressed && !positional.empty()) {
+    std::vector<std::string> sorted = strip_ids;
+    std::sort(sorted.begin(), sorted.end());
+    throw std::invalid_argument(
+        "--input entries must either all name a strip or all be positional; " + joined_ids(sorted) +
+        " are the scene's strips");
+  }
+  if (!positional.empty() && positional.size() != strip_ids.size()) {
+    throw std::invalid_argument("scene has " + std::to_string(strip_ids.size()) + " strips but " +
+                                std::to_string(positional.size()) +
+                                " inputs were given; name them as --input ID=WAV to feed only "
+                                "some of them");
+  }
+  for (size_t i = 0; i < positional.size(); ++i) resolved[i] = std::move(positional[i]);
+
+  *length = 0;
+  for (const auto& entry : resolved) *length = std::max(*length, entry.second.left.size());
+  std::vector<StripPair> strips(strip_ids.size());
+  for (size_t i = 0; i < strips.size(); ++i) {
+    const auto it = resolved.find(i);
+    if (it != resolved.end()) strips[i] = std::move(it->second);
+    strips[i].left.resize(*length, 0.0f);
+    strips[i].right.resize(*length, 0.0f);
+  }
+  return strips;
+}
+
+/// The strip ids in the order the scene declares them.
+std::vector<std::string> scene_strip_ids(const std::string& scene_json) {
+  std::vector<std::string> ids;
+  const auto root = sonare::util::json::parse(scene_json);
+  const auto* strips = root.find("strips");
+  if (strips == nullptr || !strips->is_array()) return ids;
+  for (const auto& strip : strips->as_array()) {
+    const auto* id = strip.find("id");
+    ids.push_back(id != nullptr && id->is_string() ? id->as_string() : std::string());
+  }
+  return ids;
+}
+
+void check_mixer(SonareError err) {
+  if (err != SONARE_OK) throw_c_failure(err, nullptr);
+}
+
+/// Append one rendered block to the output planes.
+void append_block(const std::vector<float>& block_left, const std::vector<float>& block_right,
+                  size_t count, std::vector<float>* left, std::vector<float>* right) {
+  left->insert(left->end(), block_left.begin(), block_left.begin() + count);
+  right->insert(right->end(), block_right.begin(), block_right.begin() + count);
+}
+
+}  // namespace
+
+// `mix --scene FILE | --preset NAME [--input [ID=]WAV ... -o OUT]` -- load a
+// mixer scene and, given inputs, render them through it, tail included.
+int cmd_mix(const CliArgs& args, const Audio&) {
+  const int sample_rate = args.get_int("sample-rate", kCliMixerSampleRate);
+  std::string scene_json;
+  if (args.has("scene")) {
+    const std::string path = args.get_string("scene");
+    std::vector<uint8_t> bytes;
+    if (!read_binary_file(path, &bytes)) {
+      throw SonareException(ErrorCode::FileNotFound, "cannot open scene file: " + path);
+    }
+    scene_json.assign(bytes.begin(), bytes.end());
+  } else {
+    const std::string preset =
+        catalog_token(args.get_string("preset"), mixing::api::scene_preset_names());
+    char* json = nullptr;
+    check_mixer(sonare_mixing_scene_preset_json(preset.c_str(), &json));
+    scene_json = json;
+    sonare_free_string(json);
+  }
+
+  SonareMixer* raw = sonare_mixer_from_scene_json(scene_json.c_str(), sample_rate,
+                                                  static_cast<int>(kMixHostChunkFrames));
+  if (raw == nullptr) throw_c_failure(sonare_last_error_code(), nullptr);
+  const std::unique_ptr<SonareMixer, decltype(&sonare_mixer_destroy)> mixer(raw,
+                                                                            sonare_mixer_destroy);
+  // Read the load's warnings before any later call clears them.
+  for (size_t i = 0; i < sonare_last_diagnostic_count(); ++i) {
+    SonareDiagnostic diagnostic;
+    sonare_diagnostic_init(&diagnostic);
+    if (sonare_last_diagnostic(i, &diagnostic) == SONARE_OK) {
+      std::cerr << "warning: " << diagnostic.message << "\n";
+    }
+  }
+  size_t strip_count = 0;
+  check_mixer(sonare_mixer_get_strip_count(mixer.get(), &strip_count));
+
+  const std::vector<std::string> entries = args.get_string_list("input");
+  size_t rendered_samples = 0;
+  if (!entries.empty()) {
+    // The ids come from the scene text and the buffers go to the compiled
+    // mixer, so a disagreement between the two would misalign every strip.
+    const std::vector<std::string> strip_ids = scene_strip_ids(scene_json);
+    if (strip_ids.size() != strip_count) {
+      throw std::invalid_argument("scene text declares " + std::to_string(strip_ids.size()) +
+                                  " strips but the mixer compiled " + std::to_string(strip_count));
+    }
+    size_t length = 0;
+    std::vector<StripPair> strips = resolve_strip_inputs(entries, strip_ids, sample_rate, &length);
+    check_mixer(sonare_mixer_compile(mixer.get()));
+    int tail_samples = 0;
+    check_mixer(sonare_mixer_tail_samples(mixer.get(), &tail_samples));
+
+    std::vector<float> out_left;
+    std::vector<float> out_right;
+    out_left.reserve(length + static_cast<size_t>(tail_samples));
+    out_right.reserve(length + static_cast<size_t>(tail_samples));
+    std::vector<float> block_left(kMixHostChunkFrames);
+    std::vector<float> block_right(kMixHostChunkFrames);
+    std::vector<const float*> lefts(strips.size());
+    std::vector<const float*> rights(strips.size());
+    for (size_t offset = 0; offset < length; offset += kMixHostChunkFrames) {
+      const size_t count = std::min(kMixHostChunkFrames, length - offset);
+      for (size_t i = 0; i < strips.size(); ++i) {
+        lefts[i] = strips[i].left.data() + offset;
+        rights[i] = strips[i].right.data() + offset;
+      }
+      check_mixer(sonare_mixer_process_stereo(mixer.get(), lefts.data(), rights.data(),
+                                              strips.size(), block_left.data(), block_right.data(),
+                                              count));
+      append_block(block_left, block_right, count, &out_left, &out_right);
+    }
+    for (size_t remaining = static_cast<size_t>(tail_samples); remaining > 0;) {
+      const size_t count = std::min(kMixHostChunkFrames, remaining);
+      check_mixer(sonare_mixer_drain_tail_stereo(mixer.get(), block_left.data(), block_right.data(),
+                                                 count));
+      append_block(block_left, block_right, count, &out_left, &out_right);
+      remaining -= count;
+    }
+    rendered_samples = out_left.size();
+    save_stereo_wav(args.output_file, out_left, out_right, sample_rate);
+  }
+
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object().kv("strip_count", strip_count).kv("sample_rate", sample_rate);
+    if (!entries.empty()) {
+      json.kv("rendered_samples", rendered_samples).kv("output", args.output_file);
+    }
+    json.end_object().print();
+  } else if (!args.quiet) {
+    std::cout << "  Mixer:\n";
+    std::cout << "    Strips:      " << strip_count << "\n";
+    std::cout << "    Sample rate: " << sample_rate << " Hz\n";
+    if (!entries.empty()) {
+      std::cout << "    Rendered:    " << rendered_samples << " samples (stereo)\n";
+      std::cout << "    Wrote: " << args.output_file << "\n";
+    }
+  }
+  return 0;
+}
+
+int cmd_mix_strip(const CliArgs& args, const Audio& audio) {
   const float width = args.get_float("width", 1.0f);
   mixing::ChannelStrip strip;
   strip.set_input_trim_db(args.get_float("input-trim-db", 0.0f));
@@ -134,19 +406,6 @@ void split_track_entry(const std::string& entry, std::string* id, std::string* p
   if (path->empty()) throw std::invalid_argument("--input requires a file path: " + entry);
 }
 
-/// Hold one decoded plane to the offline-input policy, reported in decoder terms
-/// as every other decoded input is: an unusable rate is a malformed container,
-/// any other refusal (a non-finite sample included) a failed decode.
-void require_decoded_plane(const std::vector<float>& plane, int sample_rate) {
-  const std::string problem =
-      offline_audio_input_problem("load_audio", "input", plane.data(), plane.size(), sample_rate);
-  if (!problem.empty()) {
-    throw SonareException(
-        is_supported_sample_rate(sample_rate) ? ErrorCode::DecodeFailed : ErrorCode::InvalidFormat,
-        problem);
-  }
-}
-
 /// Decode one entry at its own rate, keeping a two-channel file as a pair.
 ///
 /// The image domain is the one part of the assistant that reads both channels --
@@ -177,6 +436,7 @@ AssistantTrack decode_assistant_track(const std::string& entry, bool keep_mono_f
     }
     if (keep_mono_fold) track.mono_fold = std::move(decoded.mono);
   } else {
+    if (decoded.source_channels > 2) warn_downmixed_input(decoded.source_channels);
     track.left = std::move(decoded.mono);
   }
   track.sample_rate = decoded.sample_rate;
@@ -266,7 +526,7 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   if (entries.empty()) {
     throw std::invalid_argument("suggest-mix requires at least one --input");
   }
-  const int sample_rate = args.get_int("sample-rate", 48000);
+  const int sample_rate = args.get_int("sample-rate", kCliMixerSampleRate);
 
   auto params = parse_mastering_params(args.get_string("params"));
   std::optional<AssistantTrack> first_track;

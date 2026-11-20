@@ -565,6 +565,89 @@ TEST_CASE("CLI mix-strip --pan-mode takes the kebab spellings in any case", "[cl
   }
 }
 
+#ifdef SONARE_WITH_MIXING
+TEST_CASE("CLI mix renders inputs through a scene preset, tail included", "[cli]") {
+  const std::string vocal = unique_temp_path("_mix_vocal.wav");
+  const std::string other = unique_temp_path("_mix_other.wav");
+  create_test_wav(vocal, 0.5f);
+  create_test_wav(other, 0.5f);
+  const std::string base = CLI + " mix --preset vocalReverbSend";
+
+  SECTION("a scene alone is loaded and described") {
+    auto [code, output] = exec_command(base + " --json -q");
+    INFO(output);
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    CHECK(payload["strip_count"].as_number() == 2);
+    CHECK(payload["sample_rate"].as_number() == 48000);
+    CHECK(payload.find("rendered_samples") == nullptr);
+  }
+
+  SECTION("positional inputs are resampled to the mixer rate and rendered") {
+    const std::string out = unique_temp_path("_mix_out.wav");
+    auto [code, output] = exec_command(base + " --input " + vocal + " --input " + other + " -o " +
+                                       out + " --json -q");
+    INFO(output);
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    auto [samples, rate, channels] = load_audio_interleaved(out);
+    REQUIRE(rate == 48000);
+    REQUIRE(channels == 2);
+    // The render runs past the inputs by the scene's tail.
+    CHECK(payload["rendered_samples"].as_number() == static_cast<double>(samples.size() / 2));
+    CHECK(samples.size() / 2 > 24000);
+    std::remove(out.c_str());
+  }
+
+  SECTION("an input naming a strip the scene lacks is refused") {
+    const std::string out = unique_temp_path("_mix_unknown.wav");
+    auto [code, output] = exec_command(base + " --input nosuch=" + vocal + " -o " + out + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--input names strip 'nosuch', which the scene does "
+                                           "not have"));
+    REQUIRE_FALSE(std::ifstream(out).good());
+  }
+
+  SECTION("positional inputs must feed every strip") {
+    const std::string out = unique_temp_path("_mix_short.wav");
+    auto [code, output] = exec_command(base + " --input " + vocal + " -o " + out + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("scene has 2 strips but 1 inputs were given"));
+    REQUIRE_FALSE(std::ifstream(out).good());
+  }
+
+  SECTION("a scene file that cannot be opened is a file error") {
+    auto [code, output] = exec_command(CLI + " mix --scene /nonexistent/scene.json -q");
+    REQUIRE(code == 4);
+  }
+
+  std::remove(vocal.c_str());
+  std::remove(other.c_str());
+}
+
+TEST_CASE("CLI mix refuses an incomplete source or render before reading anything",
+          "[cli][argument-contract]") {
+  const std::string out = unique_temp_path("_mix_refused.wav");
+  const std::string unreadable = "/nonexistent/mix-input.wav";
+  const std::vector<std::pair<std::string, std::string>> rows = {
+      {" mix -q", "mix needs --scene or --preset"},
+      {" mix --scene " + unreadable + " --preset vocalReverbSend -q",
+       "--scene is mutually exclusive with --preset"},
+      {" mix --preset vocalReverbSend --input " + unreadable + " -q",
+       "mix with --input requires --output"},
+      {" mix --preset vocalReverbSend -o " + out + " -q",
+       "mix with --output requires at least one --input"},
+  };
+  for (const auto& [arguments, refusal] : rows) {
+    CAPTURE(arguments);
+    auto [code, output] = exec_command(CLI + arguments);
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(refusal));
+  }
+  REQUIRE_FALSE(std::ifstream(out).good());
+}
+#endif  // SONARE_WITH_MIXING
+
 TEST_CASE("CLI filter applies zero phase to fourth-order filters only when requested", "[cli]") {
   const std::string input = unique_temp_path("_impulse.wav");
   const std::string causal_output = unique_temp_path("_causal.wav");

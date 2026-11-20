@@ -135,6 +135,11 @@ std::string library_token(std::string_view flag, std::string_view value,
 /// library's own refusal still reports it.
 std::string catalog_token(const std::string& value, const std::vector<std::string>& tokens);
 std::string read_plain_text_file(const std::string& path);
+/// @brief Throws a failed C entry's refusal as the library's coded error; a non-null @p root is
+///        dropped from the front of each refusal subject.
+[[noreturn]] void throw_c_failure(SonareError err, const char* root);
+/// @brief Warns that a @p channels-channel input reaches the command as its mono downmix.
+void warn_downmixed_input(int channels);
 bool write_binary_file(const std::string& path, const uint8_t* data, size_t len);
 /// Upper bound on any file the CLI loads into memory (project JSON, SMF, MIDI 2.0, config and
 /// preset JSON, HRTF data), mirrored from the Python CLI's _MAX_PROJECT_OR_MIDI_BYTES. Bounds the
@@ -299,6 +304,7 @@ std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& 
 int cmd_mixing_presets(const CliArgs& args, const Audio& audio);
 int cmd_mixing_preset(const CliArgs& args, const Audio& audio);
 int cmd_mix(const CliArgs& args, const Audio& audio);
+int cmd_mix_strip(const CliArgs& args, const Audio& audio);
 #endif
 
 #ifdef SONARE_WITH_MIXING_ASSISTANT

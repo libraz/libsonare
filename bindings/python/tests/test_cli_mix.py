@@ -108,7 +108,7 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(libsonare, "Mixer", FakeMixer)
     monkeypatch.setattr(libsonare, "mixing_scene_preset", lambda name: json.loads(_ONE_STRIP_SCENE))
     args = argparse.Namespace(
-        scene="",
+        scene=None,
         preset="demo",
         input=["stem.wav"],
         output=str(tmp_path / "out.wav"),
@@ -170,7 +170,7 @@ def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) 
     )
     output = tmp_path / "mix.wav"
     args = argparse.Namespace(
-        scene="",
+        scene=None,
         preset="demo",
         input=["stem.wav"],
         output=str(output),

@@ -664,7 +664,11 @@ def _validate_mastering_selection(
 
 
 def _validate_mix_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    # Rendering needs both ends: inputs to mix and a file to write them to.
+    # A scene comes from exactly one source, and a render needs both ends.
+    if args.scene is None and args.preset is None:
+        parser.error("mix needs --scene or --preset")
+    if args.scene is not None and args.preset is not None:
+        parser.error("--scene is mutually exclusive with --preset")
     if args.input and not args.output:
         parser.error("mix with --input requires --output")
     if args.output and not args.input:
@@ -696,9 +700,7 @@ def _validate_fade_sides(args: argparse.Namespace, parser: argparse.ArgumentPars
         parser.error("give --fade-in-sec or --fade-out-sec")
 
 
-def _validate_filter_frequencies(
-    args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> None:
+def _validate_filter_frequencies(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     corner = args.type in ("high-pass", "low-pass")
     types = "high-pass or low-pass" if corner else "band-pass or notch"
     read = ("cutoff_hz",) if corner else ("center_hz", "bandwidth_hz")

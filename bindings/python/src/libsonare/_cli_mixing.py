@@ -299,13 +299,12 @@ def cmd_mix(args: argparse.Namespace) -> int:
     from . import Mixer, mixing_scene_preset
 
     # Resolve the scene JSON from either a file or a built-in preset.
-    if args.scene:
+    # The validator has settled that exactly one of the two is given.
+    if args.scene is not None:
         with open(args.scene, encoding="utf-8") as fh:
             scene_json = fh.read()
-    elif args.preset:
-        scene_json = json.dumps(mixing_scene_preset(args.preset))
     else:
-        raise ValueError("either --scene or --preset is required")
+        scene_json = json.dumps(mixing_scene_preset(args.preset))
 
     mixer = Mixer.from_json(
         scene_json, sample_rate=args.sample_rate, max_block_size=_CLI_HOST_CHUNK_FRAMES
@@ -591,12 +590,10 @@ def register_mixing_parsers(
             "--sample-rate before mixing."
         ),
     )
-    mix_group = mix_p.add_mutually_exclusive_group(required=True)
-    mix_group.add_argument("--scene", default="", help="Path to a scene JSON file")
-    mix_group.add_argument(
+    mix_p.add_argument("--scene", help="Path to a scene JSON file")
+    mix_p.add_argument(
         "--preset",
         type=_token_of(_library_catalog("mixing_scene_preset_names")),
-        default="",
         help="Built-in scene preset name",
     )
     mix_p.add_argument(

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "sonare_cli_args.h"
+#include "util/constants.h"
 
 /// Validates command-specific option names, required option values, option
 /// value domains, and positional arity. Returns an empty error when the
@@ -172,6 +173,10 @@ std::string dump_cli_contract_json();
 CliOptionValue null_default();
 const CliOptionSpec* option_for_spec(const CliCommandSpec* command, const std::string& option);
 std::string command_path_for_args(const CliArgs& args);
+
+/// The mixer rate `mix` and `suggest-mix` run at when `--sample-rate` is left out.
+inline constexpr int kCliMixerSampleRate =
+    static_cast<int>(sonare::constants::kDefaultDawSampleRate);
 
 /// The `filter --type` tokens, indexed by the SonareBiquadFilterType each one selects.
 inline const std::vector<std::string>& filter_type_tokens() {
