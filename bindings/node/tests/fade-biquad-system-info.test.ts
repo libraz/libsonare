@@ -5,13 +5,17 @@ const SR = 48000;
 
 function sine(freq: number, length: number): Float32Array {
   const out = new Float32Array(length);
-  for (let i = 0; i < length; i++) out[i] = Math.sin((2 * Math.PI * freq * i) / SR);
+  for (let i = 0; i < length; i++) {
+    out[i] = Math.sin((2 * Math.PI * freq * i) / SR);
+  }
   return out;
 }
 
 function rms(x: Float32Array, from = 0, to = x.length): number {
   let sum = 0;
-  for (let i = from; i < to; i++) sum += x[i] * x[i];
+  for (let i = from; i < to; i++) {
+    sum += x[i] * x[i];
+  }
   return Math.sqrt(sum / (to - from));
 }
 
@@ -153,6 +157,8 @@ describe('systemInfo', () => {
       expect(Number.isInteger(info.cpu.logicalCores)).toBe(true);
       expect(info.cpu.logicalCores).toBeGreaterThanOrEqual(1);
     }
-    if (info.memory.totalGb !== undefined) expect(info.memory.totalGb).toBeGreaterThan(0);
+    if (info.memory.totalGb !== undefined) {
+      expect(info.memory.totalGb).toBeGreaterThan(0);
+    }
   });
 });

@@ -213,12 +213,12 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'pseudoCqt',
     key: 'fmin',
-    run: (v) => m().pseudoCqt(pureTone300, SR, 256, v, 12, 12),
+    run: (v) => m().pseudoCqt(pureTone300, SR, 256, v, 12, 12, undefined),
   },
   {
     entry: 'hybridCqt',
     key: 'fmin',
-    run: (v) => m().hybridCqt(pureTone300, SR, 256, v, 12, 12),
+    run: (v) => m().hybridCqt(pureTone300, SR, 256, v, 12, 12, undefined),
   },
   {
     entry: 'nnlsChroma',
@@ -473,15 +473,15 @@ describe('analyzeMelody consumes the fmax/threshold it accepts', () => {
 describe('pseudoCqt and hybridCqt consume the fmin they accept', () => {
   it('pseudoCqt reads a fmin band including vs excluding a 100 Hz tone as two different magnitude totals', () => {
     const tone100 = mixTones([{ freqHz: 100, amp: 0.8 }], SR, N);
-    const inBand = m().pseudoCqt(tone100, SR, 256, 65.4, 12, 12); // band ~65-131 Hz
-    const outOfBand = m().pseudoCqt(tone100, SR, 256, 800, 12, 12); // band ~800-1600 Hz
+    const inBand = m().pseudoCqt(tone100, SR, 256, 65.4, 12, 12, undefined); // band ~65-131 Hz
+    const outOfBand = m().pseudoCqt(tone100, SR, 256, 800, 12, 12, undefined); // band ~800-1600 Hz
     expect(sumAbs(inBand.magnitude)).toBeGreaterThan(sumAbs(outOfBand.magnitude) * 3);
   });
 
   it('hybridCqt reads the same bound the same way', () => {
     const tone100 = mixTones([{ freqHz: 100, amp: 0.8 }], SR, N);
-    const inBand = m().hybridCqt(tone100, SR, 256, 65.4, 12, 12);
-    const outOfBand = m().hybridCqt(tone100, SR, 256, 800, 12, 12);
+    const inBand = m().hybridCqt(tone100, SR, 256, 65.4, 12, 12, undefined);
+    const outOfBand = m().hybridCqt(tone100, SR, 256, 800, 12, 12, undefined);
     expect(sumAbs(inBand.magnitude)).toBeGreaterThan(sumAbs(outOfBand.magnitude) * 3);
   });
 });

@@ -317,7 +317,7 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
     {
       entry: 'cqt',
       key: 'fmin',
-      run: (v) => m().cqt(cqtTone, SR, 512, v, 12, 12),
+      run: (v) => m().cqt(cqtTone, SR, 512, v, 12, 12, undefined),
     },
     {
       entry: 'vqt',
@@ -380,7 +380,7 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
     expect(Number.isFinite(melody.pitchStability)).toBe(true);
   });
   it('cqt accepts a finite fmin', () => {
-    const result = m().cqt(cqtTone, SR, 512, CQT_FMIN, 12, 12);
+    const result = m().cqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined);
     expect(result.nBins).toBe(12);
     expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
   });

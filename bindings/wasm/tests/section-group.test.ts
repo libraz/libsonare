@@ -51,13 +51,13 @@ describe('Section.group', () => {
   const samples = abab();
 
   it('analyzeSections gives an integer group per section, numbered by first appearance', () => {
-    const sections = analyzeSections(samples, SR, { minSectionSec: 4 });
+    const { sections } = analyzeSections(samples, SR, { minSectionSec: 4 });
     expect(sections.length).toBeGreaterThan(0);
     expectFirstAppearanceNumbering(sections.map((s) => s.group));
   });
 
   it('analyzeSections yields at least two distinct groups on A-B-A-B', () => {
-    const sections = analyzeSections(samples, SR, { minSectionSec: 4 });
+    const { sections } = analyzeSections(samples, SR, { minSectionSec: 4 });
     expect(new Set(sections.map((s) => s.group)).size).toBeGreaterThanOrEqual(2);
   });
 

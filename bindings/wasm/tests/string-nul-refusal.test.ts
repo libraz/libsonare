@@ -494,9 +494,15 @@ describe('embedded NUL refusal, scan', () => {
     },
     {
       file: 'effects/spectral_edit.cpp',
-      text: 'path.c_str()',
-      count: 1,
+      text: 'opPath(i, ',
+      count: 4,
       reason: 'error-subject label built from the op index and a literal member name',
+    },
+    {
+      file: 'common/note_val.h',
+      text: '(std::string(subject) + ".timeStretchRatio").c_str()',
+      count: 1,
+      reason: 'error-subject label built from a code-owned edit label and a literal key',
     },
   ];
 
