@@ -760,7 +760,7 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_harmonic, out_percussive, out_residual, out_length, out_sample_rate);
   if (const SonareError err =
-          validate_audio_params("hpss_ex", "samples", samples, length, sample_rate);
+          validate_audio_params("hpss_with_residual", "samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }

@@ -71,7 +71,7 @@ TEST_CASE("effects entries refuse the input buffer before a NULL output", "[c_ap
   REQUIRE(sonare_hpss_with_residual(nullptr, kLength, kRate, 31, 31, &harmonic, &percussive,
                                     &residual, &length,
                                     &sample_rate) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "hpss_ex: samples must be a non-empty buffer");
+  CHECK(last_message() == "hpss_with_residual: samples must be a non-empty buffer");
   CHECK(harmonic == nullptr);
   CHECK(percussive == nullptr);
   CHECK(residual == nullptr);
@@ -80,7 +80,7 @@ TEST_CASE("effects entries refuse the input buffer before a NULL output", "[c_ap
 
   REQUIRE(sonare_hpss_with_residual(nullptr, kLength, kRate, 31, 31, nullptr, nullptr, nullptr,
                                     nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "hpss_ex: samples must be a non-empty buffer");
+  CHECK(last_message() == "hpss_with_residual: samples must be a non-empty buffer");
 
   int* intervals_out = garbage_pointer<int>();
   size_t interval_count_out = 99;
