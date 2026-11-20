@@ -18,6 +18,8 @@ SONARE_VOCAL_REHYDRATE_UNRESOLVED = 2
 class SonareProjectVocalEditApplyDesc(CStruct):
     """Maps to ``SonareProjectVocalEditApplyDesc``."""
 
+    _c_init_ = "sonare_project_vocal_edit_apply_desc_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),
@@ -41,6 +43,8 @@ class SonareProjectVocalEditApplyDesc(CStruct):
 
 class SonareProjectVocalEditApplyResult(CStruct):
     """Maps to ``SonareProjectVocalEditApplyResult``."""
+
+    _c_init_ = "sonare_project_vocal_edit_apply_result_init"
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
@@ -82,6 +86,8 @@ class SonareProjectVocalEditDependency(CStruct):
 class SonareProjectVocalEditDependenciesResult(CStruct):
     """Maps to ``SonareProjectVocalEditDependenciesResult``."""
 
+    _c_init_ = "sonare_project_vocal_edit_dependencies_result_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),
@@ -119,6 +125,8 @@ class SonareProjectVocalRehydrateItem(CStruct):
 
 class SonareProjectVocalRehydrateResult(CStruct):
     """Maps to ``SonareProjectVocalRehydrateResult``."""
+
+    _c_init_ = "sonare_project_vocal_rehydrate_result_init"
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),

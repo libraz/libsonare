@@ -793,6 +793,8 @@ class SonarePitchDecompositionResult(CStruct):
 class SonarePolyphonicConfig(CStruct):
     """Maps to SonarePolyphonicConfig in sonare_c_polyphony.h."""
 
+    _c_init_ = "sonare_polyphonic_config_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
@@ -837,6 +839,8 @@ class SonarePolyphonicConfig(CStruct):
 
 class SonareBiquadFilterConfig(CStruct):
     """Maps to SonareBiquadFilterConfig in sonare_c_effects.h; fill with the init function."""
+
+    _c_init_ = "sonare_biquad_filter_config_init"
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),

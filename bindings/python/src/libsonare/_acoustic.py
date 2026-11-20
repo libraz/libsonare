@@ -256,7 +256,6 @@ def synthesize_rir(
         band_scattering, arg_name="band_scattering"
     )
     config = SonareRirSynthConfig()
-    lib.sonare_rir_synth_config_init(ctypes.byref(config))
     _fill_room_config(
         config,
         source=source,
@@ -430,7 +429,6 @@ def room_geometry_from_estimate(
         band_count=bands_count,
     )
     config = SonareRirSynthConfig()
-    lib.sonare_rir_synth_config_init(ctypes.byref(config))
     _check(lib.sonare_room_geometry_from_estimate(ctypes.byref(c_estimate), ctypes.byref(config)))
     geometry: RoomGeometry = {
         "length_m": _narrow_double(config.length_m, "config.length_m"),
@@ -496,7 +494,6 @@ def _room_morph_config(
         band_scattering, arg_name="band_scattering"
     )
     config = SonareRoomMorphConfig()
-    _get_lib().sonare_room_morph_config_init(ctypes.byref(config))
     _fill_room_config(
         config,
         source=source,

@@ -322,7 +322,6 @@ def downmix(
         raise _refuse("all channels must have the same length")
     packed = np.ascontiguousarray(np.stack(planes), dtype=np.float32)
     fold = _ffi_core.SonareDownmixOptions()
-    lib.sonare_downmix_options_init(ctypes.byref(fold))
     fold.include_lfe = 1 if include_lfe else 0
     fold.normalize = 1 if normalize else 0
     with _out_float_array(lib) as (out, _unused):

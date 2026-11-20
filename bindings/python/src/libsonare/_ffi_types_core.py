@@ -16,6 +16,8 @@ SonareCancelCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p)
 class SonareDiagnostic(CStruct):
     """Maps to SonareDiagnostic in sonare_c_types_functions.h."""
 
+    _c_init_ = "sonare_diagnostic_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("code", ctypes.c_char_p),
@@ -26,6 +28,8 @@ class SonareDiagnostic(CStruct):
 
 class SonareDownmixOptions(CStruct):
     """Maps to SonareDownmixOptions in sonare_c_types_functions.h."""
+
+    _c_init_ = "sonare_downmix_options_init"
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),

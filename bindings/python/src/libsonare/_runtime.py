@@ -261,7 +261,6 @@ def _last_diagnostics() -> list[tuple[str, str, int]]:
     out: list[tuple[str, str, int]] = []
     for index in range(int(lib.sonare_last_diagnostic_count())):
         entry = SonareDiagnostic()
-        lib.sonare_diagnostic_init(ctypes.byref(entry))
         _check(lib.sonare_last_diagnostic(_to_c_size_t(index, "index"), ctypes.byref(entry)))
         out.append(
             (

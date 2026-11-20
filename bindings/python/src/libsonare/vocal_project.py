@@ -314,7 +314,6 @@ def _apply_project_vocal_edit(
         raise _refuse("render_token must be a committed session token")
     desc = SonareProjectVocalEditApplyDesc()
     lib = _get_lib()
-    lib.sonare_project_vocal_edit_apply_desc_init(ctypes.byref(desc))
     desc.clip_id = _id(clip_id, "clip_id")
     # None binds the clip's base source (C 0); no take is allocated id 0.
     desc.take_id = 0 if take_id is None else _id(take_id, "take_id")
@@ -339,7 +338,6 @@ def _apply_project_vocal_edit(
     desc.sve1 = ctypes.cast(sve1_buffer, ctypes.POINTER(ctypes.c_uint8))
     desc.sve1_size = len(sve1_bytes)
     result = SonareProjectVocalEditApplyResult()
-    lib.sonare_project_vocal_edit_apply_result_init(ctypes.byref(result))
     _check(lib.sonare_project_apply_vocal_edit(handle, ctypes.byref(desc), ctypes.byref(result)))
     return _apply_result(result)
 
@@ -352,7 +350,6 @@ def _project_vocal_edit_dependencies(
     handle = _project_handle(project)
     lib = _get_lib()
     result = SonareProjectVocalEditDependenciesResult()
-    lib.sonare_project_vocal_edit_dependencies_result_init(ctypes.byref(result))
     try:
         _check(lib.sonare_project_get_vocal_edit_dependencies(handle, ctypes.byref(result)))
         count = _result_count(result.dependencies, result.dependency_count, "dependency")
@@ -445,7 +442,6 @@ def _rehydrate_project_vocal_edits(
     lib = _get_lib()
     handle = project._enter_native_call()
     try:
-        lib.sonare_project_vocal_rehydrate_result_init(ctypes.byref(result))
         error = lib.sonare_project_rehydrate_vocal_edits(
             handle,
             rows,

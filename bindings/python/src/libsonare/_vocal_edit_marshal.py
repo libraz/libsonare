@@ -203,7 +203,6 @@ def _vocal_check(
         return
     lib = _get_lib()
     detail = SonareVocalErrorDetail()
-    lib.sonare_vocal_error_detail_init(ctypes.byref(detail))
     lib.sonare_vocal_last_error_detail(ctypes.byref(detail))
     try:
         _check(int(rc), flattened=flattened, respelled=respelled)
@@ -314,7 +313,6 @@ def _analysis_to_c(
     if f0.ndim != 1 or f0.size != voiced.size:
         raise _refuse("analysis f0_hz and voiced must be one-dimensional and equal length")
     raw = SonareVocalAnalysis()
-    lib.sonare_vocal_analysis_init(ctypes.byref(raw))
     raw.frame_origin_sample = _finite_float(analysis.frame_origin_sample, "frame_origin_sample")
     raw.samples_per_frame = _finite_float(analysis.samples_per_frame, "samples_per_frame")
     raw.frame_length_samples = _uint32(
@@ -351,7 +349,6 @@ def _restore_options_to_c(
     max_render_jobs: int | None,
 ) -> SonareVocalRestoreOptions:
     raw = SonareVocalRestoreOptions()
-    lib.sonare_vocal_restore_options_init(ctypes.byref(raw))
     if max_history_bytes is not None:
         raw.max_history_bytes = _uint64(max_history_bytes, "max_history_bytes")
     if max_cache_bytes is not None:
@@ -387,7 +384,6 @@ def _create_options_to_c(
 ) -> tuple[SonareVocalCreateOptions, list[Any]]:
     """Seed the library defaults, then write each setting the caller gave."""
     raw = SonareVocalCreateOptions()
-    lib.sonare_vocal_create_options_init(ctypes.byref(raw))
     keepalive: list[Any] = []
     if output_length_samples is not None:
         raw.output_length_samples = _int64(output_length_samples, "output_length_samples")
@@ -436,7 +432,6 @@ def _create_options_to_c(
 
 def _edit_to_c(lib: ctypes.CDLL, edit: VocalNoteEdit) -> tuple[SonareVocalNoteEdit, list[Any]]:
     raw = SonareVocalNoteEdit()
-    lib.sonare_vocal_note_edit_init(ctypes.byref(raw))
     raw.target_mode = _token_ordinal(edit.target_mode, _VOCAL_TARGET_MODES, "target_mode")
     raw.target_midi = _finite_float(edit.target_midi, "target_midi")
     raw.amount = _finite_float(edit.amount, "amount")
@@ -521,7 +516,6 @@ def _operation_to_c(
 ) -> tuple[SonareVocalOperation, list[Any], dict[str, _Respelling]]:
     """Marshal one operation; the last element respells the positions given in seconds."""
     raw = SonareVocalOperation()
-    lib.sonare_vocal_operation_init(ctypes.byref(raw))
     keepalive: list[Any] = []
     respelled: dict[str, _Respelling] = {}
     if isinstance(operation, VocalSetNoteEdit):

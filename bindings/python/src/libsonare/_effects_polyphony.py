@@ -259,7 +259,6 @@ class PolyphonicAnalysis:
             if named_zero is not None and not isinstance(named_zero, bool) and named_zero == 0:
                 raise _refuse(f"{name} must not be 0 (leave it out for the default)")
         config = SonarePolyphonicConfig()
-        lib.sonare_polyphonic_config_init(ctypes.byref(config))
         # None keeps the value sonare_polyphonic_config_init set; a given value is
         # read literally and range-checked by the library.
         counts = {

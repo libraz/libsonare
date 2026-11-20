@@ -791,7 +791,6 @@ class Mixer:
                 raise _refuse_type(f"{name} must be a bool")
         lib = _get_lib()
         config = SonareMixerMasterMeterConfig()
-        lib.sonare_mixer_master_meter_config_init(ctypes.byref(config))
         config.enabled = int(enabled)
         config.measure_lufs = int(measure_lufs)
         config.measure_true_peak = int(measure_true_peak)

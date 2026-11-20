@@ -366,7 +366,6 @@ def biquad_filter(
     _validate_samples(samples)
     lib = _get_lib()
     config = SonareBiquadFilterConfig()
-    lib.sonare_biquad_filter_config_init(ctypes.byref(config))
     config.type = _BIQUAD_FILTER_TYPES[type]
     config.order = _to_c_int32(order, "order").value
     config.zero_phase = 1 if zero_phase else 0

@@ -33,6 +33,8 @@ class SonareVocalRange(CStruct):
 
 
 class SonareVocalAnalysis(CStruct):
+    _c_init_ = "sonare_vocal_analysis_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),
@@ -56,6 +58,8 @@ class SonareVocalAnalysis(CStruct):
 
 
 class SonareVocalRestoreOptions(CStruct):
+    _c_init_ = "sonare_vocal_restore_options_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),
@@ -67,6 +71,8 @@ class SonareVocalRestoreOptions(CStruct):
 
 
 class SonareVocalCreateOptions(CStruct):
+    _c_init_ = "sonare_vocal_create_options_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),
@@ -92,6 +98,8 @@ class SonareVocalCreateOptions(CStruct):
 
 
 class SonareVocalNoteEdit(CStruct):
+    _c_init_ = "sonare_vocal_note_edit_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),
@@ -148,6 +156,8 @@ class SonareVocalTransition(CStruct):
 
 
 class SonareVocalOperation(CStruct):
+    _c_init_ = "sonare_vocal_operation_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),
@@ -274,6 +284,8 @@ class SonareVocalCapabilities(CStruct):
 
 
 class SonareVocalErrorDetail(CStruct):
+    _c_init_ = "sonare_vocal_error_detail_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),

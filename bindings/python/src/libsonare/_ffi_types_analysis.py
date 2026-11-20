@@ -62,6 +62,8 @@ class SonareMixMeterSnapshot(CStruct):
 class SonareMixerMasterMeterConfig(CStruct):
     """Maps to SonareMixerMasterMeterConfig in sonare_c_mixing.h."""
 
+    _c_init_ = "sonare_mixer_master_meter_config_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("enabled", ctypes.c_int32),
@@ -146,6 +148,8 @@ class SonareRoomPlacement(CStruct):
 class SonareRirSynthConfig(CStruct):
     """Maps to SonareRirSynthConfig; fill with sonare_rir_synth_config_init."""
 
+    _c_init_ = "sonare_rir_synth_config_init"
+
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("length_m", ctypes.c_float),
@@ -216,6 +220,8 @@ class SonareRoomEstimate(CStruct):
 
 class SonareRoomMorphConfig(CStruct):
     """Maps to SonareRoomMorphConfig; fill with sonare_room_morph_config_init."""
+
+    _c_init_ = "sonare_room_morph_config_init"
 
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
