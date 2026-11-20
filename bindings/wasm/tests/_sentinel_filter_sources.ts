@@ -229,11 +229,48 @@ export function refusalMentioning(
   const refusal = /<\s*0|<=\s*0|isfinite|finite_|valid_c_enum/;
   const escaped = subject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const names = new RegExp(`${escaped}(?![\\w])`);
-  return source.text
+  const comparisons = source.text
     .split('\n')
     .map((line, index) => ({ line, number: index + 1 }))
     .filter((entry) => refusal.test(entry.line) && names.test(entry.line))
     .map((entry) => entry.number);
+  return [...new Set([...comparisons, ...checkCallsNaming(source.text, names)])].sort(
+    (a, b) => a - b,
+  );
+}
+
+/**
+ * The refusing helpers of `src/util/parameter_checks.h`, read from the header
+ * rather than listed here: every `void` function in it refuses its argument.
+ */
+function checkHelperNames(): string[] {
+  const header = readFileSync(join(REPO_ROOT, 'src/util/parameter_checks.h'), 'utf8');
+  return [...header.matchAll(/\bvoid\s+(\w+)\s*\(/g)].map((m) => m[1] as string);
+}
+
+/** Lines of `check::<helper>(...)` calls whose argument list names the subject. */
+function checkCallsNaming(text: string, names: RegExp): number[] {
+  const call = new RegExp(`\\bcheck::(?:${checkHelperNames().join('|')})\\s*\\(`, 'g');
+  const lines: number[] = [];
+  for (const m of text.matchAll(call)) {
+    const open = (m.index ?? 0) + m[0].length - 1;
+    let depth = 0;
+    let close = open;
+    for (; close < text.length; close += 1) {
+      if (text[close] === '(') {
+        depth += 1;
+      } else if (text[close] === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          break;
+        }
+      }
+    }
+    if (names.test(text.slice(open, close))) {
+      lines.push(text.slice(0, m.index).split('\n').length);
+    }
+  }
+  return lines;
 }
 
 /** Every distinct spelling the scan found for one `file:field` site. */
