@@ -1082,21 +1082,4 @@ void apply_chain_config_overrides(MasteringChainConfig& cfg, const Param* params
   validate_chain_multiband_config(cfg.dynamics.multiband_comp.config);
 }
 
-// ---------------------------------------------------------------------------
-// Convenience wrappers
-// ---------------------------------------------------------------------------
-
-MonoChainResult run_chain_mono_params(const Param* params, std::size_t param_count,
-                                      const float* samples, std::size_t length, int sample_rate) {
-  MasteringChain chain(parse_chain_config_params(params, param_count));
-  return chain.process_mono(samples, length, sample_rate);
-}
-
-StereoChainResult run_chain_stereo_params(const Param* params, std::size_t param_count,
-                                          const float* left, const float* right, std::size_t length,
-                                          int sample_rate) {
-  MasteringChain chain(parse_chain_config_params(params, param_count));
-  return chain.process_stereo(left, right, length, sample_rate);
-}
-
 }  // namespace sonare::mastering::api

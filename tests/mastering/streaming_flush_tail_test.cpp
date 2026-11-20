@@ -124,12 +124,9 @@ using CChain = std::unique_ptr<SonareStreamingMasteringChain,
                                decltype(&sonare_streaming_mastering_chain_destroy)>;
 
 CChain make_c_chain(int num_channels) {
-  const SonareMasteringParam params[] = {
-      {"saturation.tape.enabled", 1.0},
-      {"saturation.tape.bias", 0.1},
-  };
+  const char* config = R"({"saturation.tape.enabled":1,"saturation.tape.bias":0.1})";
   SonareStreamingMasteringChain* raw_chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(params, 2, &raw_chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(config, &raw_chain) == SONARE_OK);
   CChain chain(raw_chain, &sonare_streaming_mastering_chain_destroy);
   REQUIRE(chain != nullptr);
   REQUIRE(sonare_streaming_mastering_chain_prepare(chain.get(), static_cast<int>(kSampleRate),

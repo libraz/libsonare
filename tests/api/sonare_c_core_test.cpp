@@ -298,10 +298,13 @@ TEST_CASE("sonare_decode_channels refuses unusable input and clears its outputs"
   REQUIRE(frames == 0);
   REQUIRE(channels == 0);
   REQUIRE(rate == 0);
-  REQUIRE(std::string(sonare_last_error_message()) == "data must not be NULL");
+  REQUIRE(std::string(sonare_last_error_message()) == "data must not be NULL when length is not 0");
   REQUIRE(sonare_decode_channels(wav.data(), 0, &planar, &frames, &channels, &rate) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(std::string(sonare_last_error_message()) == "length must be an integer of at least 1");
+  REQUIRE(std::string(sonare_last_error_message()) == "data must not be empty");
+  REQUIRE(sonare_decode_channels(nullptr, 0, &planar, &frames, &channels, &rate) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) == "data must not be empty");
   REQUIRE(sonare_decode_channels(wav.data(), wav.size(), nullptr, &frames, &channels, &rate) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()) == "out_samples must not be NULL");
@@ -2470,11 +2473,11 @@ TEST_CASE("C result emitters publish nothing when an allocation fails",
     // so fail each of the final allocations of a successful call.
     const std::vector<float> body(4096, 0.1f);
     const auto run_mono = [&](SonareMasteringChainResult* r) {
-      return sonare_mastering_chain(body.data(), body.size(), 48000, nullptr, 0, r);
+      return sonare_master_audio(nullptr, body.data(), body.size(), 48000, nullptr, r);
     };
     const auto run_stereo = [&](SonareMasteringChainStereoResult* r) {
-      return sonare_mastering_chain_stereo(body.data(), body.data(), body.size(), 48000, nullptr, 0,
-                                           r);
+      return sonare_master_audio_stereo(nullptr, body.data(), body.data(), body.size(), 48000,
+                                        nullptr, r);
     };
     const auto count_allocations = [](auto call) {
       size_t count = 0;

@@ -191,8 +191,6 @@ _CORE_COVERAGE: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
     "mastering_analyze_pair_ex": ("mastering_analyze_pair", ("analyze_named_pair",)),
     "mastering_process": ("mastering_normalize_loudness", ("loudness_optimize",)),
-    "mastering_chain": ("master_audio", ("run_chain_mono_params",)),
-    "mastering_chain_stereo": ("master_audio_stereo", ("run_chain_stereo_params",)),
 }
 
 _HANDLE_ALIAS_OWNERS = {
@@ -272,10 +270,6 @@ _ALIAS_COVERAGE = {
     "vocal_session_restore": ("restore", "restore_vocal_edit_session"),
     # The loudness helper is the facades' `mastering`; Node and WASM are credited by the core claim.
     "mastering_process": ("mastering",),
-    # With no preset, master_audio runs the configured chain the chain entry runs.
-    # Node and WASM are credited by the core claim in _CORE_COVERAGE instead.
-    "mastering_chain": ("master_audio",),
-    "mastering_chain_stereo": ("master_audio_stereo",),
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
     "capability_catalog_json": ("capability_catalog",),
@@ -405,9 +399,6 @@ _ALIAS_COVERAGE = {
     # C cancellation is additive in `_ex` variants; every facade folds it into
     # the same progress-capable method rather than exposing a second spelling.
     "analyze_json_with_progress_ex": ("analyze_with_progress",),
-    # The CLI keeps its mastering-chain command; no binding has that name.
-    "mastering_chain_with_progress_ex": ("mastering_chain", "master_audio"),
-    "mastering_chain_stereo_with_progress_ex": ("master_audio_stereo",),
     "master_audio_with_progress_ex": ("master_audio",),
     "master_audio_stereo_with_progress_ex": ("master_audio_stereo",),
     # The offline render's `finalize` flag is additive in the `_ex` variant;

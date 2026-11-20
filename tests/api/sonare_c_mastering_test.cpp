@@ -350,21 +350,21 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
 
   SECTION("stereo chain rejects non-finite samples like the mono path") {
     auto samples = generate_sine(440.0f, 22050, 0.3f);
-    SonareMasteringParam params[] = {{"thresholdDb", -24.0}};
+    const char* overrides = R"({"loudness.targetLufs":-14})";
     SonareMasteringChainStereoResult bad{};
     auto nan_samples = samples;
     nan_samples[10] = std::numeric_limits<float>::quiet_NaN();
-    REQUIRE(sonare_mastering_chain_stereo(nan_samples.data(), samples.data(), samples.size(), 22050,
-                                          params, 1, &bad) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_mastering_chain_stereo(samples.data(), nan_samples.data(), samples.size(), 22050,
-                                          params, 1, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_master_audio_stereo(nullptr, nan_samples.data(), samples.data(), samples.size(),
+                                       22050, overrides, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), nan_samples.data(), samples.size(),
+                                       22050, overrides, &bad) == SONARE_ERROR_INVALID_PARAMETER);
     // Out-of-range sample rate is rejected too.
-    REQUIRE(sonare_mastering_chain_stereo(samples.data(), samples.data(), samples.size(), 0, params,
-                                          1, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), samples.data(), samples.size(), 0,
+                                       overrides, &bad) == SONARE_ERROR_INVALID_PARAMETER);
 
     SonareMasteringChainStereoResult ok{};
-    REQUIRE(sonare_mastering_chain_stereo(samples.data(), samples.data(), samples.size(), 22050,
-                                          nullptr, 0, &ok) == SONARE_OK);
+    REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), samples.data(), samples.size(),
+                                       22050, nullptr, &ok) == SONARE_OK);
     sonare_free_mastering_chain_stereo_result(&ok);
   }
 
@@ -373,7 +373,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     constexpr int kBlockSize = 128;
 
     SonareStreamingMasteringChain* mono_chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &mono_chain) ==
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0.0f, 0.0f, &mono_chain) ==
             SONARE_OK);
     REQUIRE(mono_chain != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_prepare(mono_chain, kSampleRate, kBlockSize, 1) ==
@@ -389,7 +389,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_streaming_mastering_chain_destroy(mono_chain);
 
     SonareStreamingMasteringChain* stereo_chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &stereo_chain) ==
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0.0f, 0.0f, &stereo_chain) ==
             SONARE_OK);
     REQUIRE(stereo_chain != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_prepare(stereo_chain, kSampleRate, kBlockSize, 2) ==
@@ -421,8 +421,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     constexpr int kBlockSize = 128;
 
     SonareStreamingMasteringChain* chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &chain) ==
-            SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0.0f, 0.0f, &chain) == SONARE_OK);
     REQUIRE(chain != nullptr);
 
     std::vector<float> mono(kBlockSize, 0.0f);
@@ -437,7 +436,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
 
     // Never prepared: rejected as a state error, again without reading input.
     SonareStreamingMasteringChain* unprepared = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &unprepared) ==
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0.0f, 0.0f, &unprepared) ==
             SONARE_OK);
     REQUIRE(unprepared != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_process_mono(unprepared, mono.data(), mono.size()) ==
@@ -446,7 +445,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_streaming_mastering_chain_destroy(unprepared);
 
     SonareStreamingMasteringChain* stereo_chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &stereo_chain) ==
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0.0f, 0.0f, &stereo_chain) ==
             SONARE_OK);
     REQUIRE(stereo_chain != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_prepare(stereo_chain, kSampleRate, kBlockSize, 2) ==
@@ -463,9 +462,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
   SECTION("streaming mastering chain flush drains delayed samples once") {
     constexpr int kSampleRate = 48000;
     constexpr int kBlockSize = 64;
-    const SonareMasteringParam params[] = {{"maximizer.truePeakLimiter.enabled", 1.0}};
+    const char* config = R"({"maximizer.truePeakLimiter.enabled":1})";
     SonareStreamingMasteringChain* chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create(params, 1, &chain) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_create(config, &chain) == SONARE_OK);
     REQUIRE(chain != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_prepare(chain, kSampleRate, kBlockSize, 1) ==
             SONARE_OK);
@@ -1133,26 +1132,26 @@ TEST_CASE("sonare_mastering_preset_params_json returns each preset's chain confi
   REQUIRE(json == nullptr);
 }
 
-TEST_CASE("sonare_mastering_chain_config_params_json returns a document in canonical form",
+TEST_CASE("sonare_mastering_chain_config_from_json returns a document in canonical form",
           "[c_api][mastering]") {
   char* preset_json = nullptr;
   REQUIRE(sonare_mastering_preset_params_json("pop", &preset_json) == SONARE_OK);
   char* json = nullptr;
-  REQUIRE(sonare_mastering_chain_config_params_json(preset_json, &json) == SONARE_OK);
+  REQUIRE(sonare_mastering_chain_config_from_json(preset_json, &json) == SONARE_OK);
   REQUIRE(json != nullptr);
   REQUIRE(std::string(json) == std::string(preset_json));
   sonare_free_string(json);
   sonare_free_string(preset_json);
 
   json = nullptr;
-  REQUIRE(sonare_mastering_chain_config_params_json(
+  REQUIRE(sonare_mastering_chain_config_from_json(
               R"({"version":2,"params":{"loudness.targetLufs":-9}})", &json) == SONARE_OK);
   REQUIRE(sonare::util::json::parse_strict(json)["params"]["loudness.targetLufs"].as_number() ==
           -9.0);
   sonare_free_string(json);
 }
 
-TEST_CASE("sonare_mastering_chain_config_params_json refuses a document as InvalidFormat",
+TEST_CASE("sonare_mastering_chain_config_from_json refuses a document as InvalidFormat",
           "[c_api][mastering]") {
   const char* refused[] = {
       "{",
@@ -1163,16 +1162,16 @@ TEST_CASE("sonare_mastering_chain_config_params_json refuses a document as Inval
   for (const char* document : refused) {
     CAPTURE(document);
     char* json = nullptr;
-    REQUIRE(sonare_mastering_chain_config_params_json(document, &json) ==
+    REQUIRE(sonare_mastering_chain_config_from_json(document, &json) ==
             SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(json == nullptr);
   }
   char* json = nullptr;
-  REQUIRE(sonare_mastering_chain_config_params_json(R"({"version":2,"params":{"eq.tiltDb":1}})",
-                                                    &json) == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_mastering_chain_config_from_json(R"({"version":2,"params":{"eq.tiltDb":1}})",
+                                                  &json) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE_THAT(std::string(sonare_last_error_message()),
                Catch::Matchers::ContainsSubstring("eq.tilt.tiltDb"));
-  REQUIRE(sonare_mastering_chain_config_params_json(nullptr, &json) ==
+  REQUIRE(sonare_mastering_chain_config_from_json(nullptr, &json) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(json == nullptr);
 }
@@ -1455,11 +1454,10 @@ TEST_CASE("mastering chain C result includes the before and after report", "[c_a
   constexpr int sample_rate = 22050;
   auto samples = generate_sine(440.0f, sample_rate, 4.0f);
   for (auto& sample : samples) sample *= 0.2f;
-  const SonareMasteringParam params[] = {{"loudness.targetLufs", -14.0},
-                                         {"loudness.ceilingDbtp", -1.0}};
+  const char* overrides = R"({"loudness.targetLufs":-14,"loudness.ceilingDbtp":-1})";
   SonareMasteringChainResult result{};
-  REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), sample_rate, params, 2, &result) ==
-          SONARE_OK);
+  REQUIRE(sonare_master_audio(nullptr, samples.data(), samples.size(), sample_rate, overrides,
+                              &result) == SONARE_OK);
   REQUIRE(result.report.before.integrated_lufs == result.input_lufs);
   REQUIRE(result.report.after.integrated_lufs == result.output_lufs);
   REQUIRE(result.report.after.true_peak_dbtp == result.output_true_peak_dbtp);
@@ -1498,11 +1496,12 @@ TEST_CASE("loudness_target_limited agrees across the mastering entry points",
                                              samples.size(), sample_rate, params, 2,
                                              &named) == SONARE_OK);
 
-    const SonareMasteringParam chain_params[] = {{"loudness.targetLufs", target_lufs},
-                                                 {"loudness.ceilingDbtp", ceiling_dbtp}};
+    const std::string chain_overrides =
+        "{\"loudness.targetLufs\":" + std::to_string(target_lufs) +
+        ",\"loudness.ceilingDbtp\":" + std::to_string(ceiling_dbtp) + "}";
     SonareMasteringChainResult chain{};
-    REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), sample_rate, chain_params, 2,
-                                   &chain) == SONARE_OK);
+    REQUIRE(sonare_master_audio(nullptr, samples.data(), samples.size(), sample_rate,
+                                chain_overrides.c_str(), &chain) == SONARE_OK);
 
     const std::array<int, 4> reported = {
         simple.loudness_target_limited, named.loudness_target_limited,
@@ -1540,23 +1539,22 @@ TEST_CASE("cancellation-capable mastering C APIs leave outputs empty", "[c_api][
   const auto cancel = [](void* user_data) {
     return static_cast<CancelState*>(user_data)->should_cancel ? 1 : 0;
   };
-  const SonareMasteringParam chain_params[] = {{"eq.tilt.enabled", 1.0},
-                                               {"dynamics.compressor.enabled", 1.0},
-                                               {"saturation.tape.enabled", 1.0}};
+  const char* chain_overrides =
+      R"({"eq.tilt.enabled":1,"dynamics.compressor.enabled":1,"saturation.tape.enabled":1})";
 
   SonareMasteringChainResult chain_mono{};
-  REQUIRE(sonare_mastering_chain_with_progress_ex(samples.data(), samples.size(), 22050,
-                                                  chain_params, 3, progress, &state, &chain_mono,
-                                                  cancel, &state) == SONARE_ERROR_CANCELLED);
+  REQUIRE(sonare_master_audio_with_progress_ex(nullptr, samples.data(), samples.size(), 22050,
+                                               chain_overrides, progress, &state, &chain_mono,
+                                               cancel, &state) == SONARE_ERROR_CANCELLED);
   REQUIRE(state.last_progress > 0.5f);
   REQUIRE(chain_mono.samples == nullptr);
   REQUIRE(chain_mono.stages == nullptr);
 
   state = {};
   SonareMasteringChainStereoResult chain_stereo{};
-  REQUIRE(sonare_mastering_chain_stereo_with_progress_ex(
-              samples.data(), samples.data(), samples.size(), 22050, chain_params, 3, progress,
-              &state, &chain_stereo, cancel, &state) == SONARE_ERROR_CANCELLED);
+  REQUIRE(sonare_master_audio_stereo_with_progress_ex(
+              nullptr, samples.data(), samples.data(), samples.size(), 22050, chain_overrides,
+              progress, &state, &chain_stereo, cancel, &state) == SONARE_ERROR_CANCELLED);
   REQUIRE(state.last_progress > 0.5f);
   REQUIRE(chain_stereo.left == nullptr);
   REQUIRE(chain_stereo.right == nullptr);
@@ -1565,7 +1563,7 @@ TEST_CASE("cancellation-capable mastering C APIs leave outputs empty", "[c_api][
   state = {};
   SonareMasteringChainResult preset_mono{};
   REQUIRE(sonare_master_audio_with_progress_ex("pop", samples.data(), samples.size(), 22050,
-                                               nullptr, 0, progress, &state, &preset_mono, cancel,
+                                               nullptr, progress, &state, &preset_mono, cancel,
                                                &state) == SONARE_ERROR_CANCELLED);
   REQUIRE(state.last_progress > 0.5f);
   REQUIRE(preset_mono.samples == nullptr);
@@ -1574,7 +1572,7 @@ TEST_CASE("cancellation-capable mastering C APIs leave outputs empty", "[c_api][
   state = {};
   SonareMasteringChainStereoResult preset_stereo{};
   REQUIRE(sonare_master_audio_stereo_with_progress_ex(
-              "pop", samples.data(), samples.data(), samples.size(), 22050, nullptr, 0, progress,
+              "pop", samples.data(), samples.data(), samples.size(), 22050, nullptr, progress,
               &state, &preset_stereo, cancel, &state) == SONARE_ERROR_CANCELLED);
   REQUIRE(state.last_progress > 0.5f);
   REQUIRE(preset_stereo.left == nullptr);
@@ -1614,14 +1612,12 @@ TEST_CASE("a peak-normalized source under a blocking ceiling reports limited on 
   sonare_free_mastering_result(&named);
 
   // The chain shape master_audio and the CLI --report path return.
-  const SonareMasteringParam chain_params[] = {
-      {"loudness.enabled", 1.0},
-      {"loudness.targetLufs", kTargetLufs},
-      {"loudness.ceilingDbtp", kCeilingDb},
-  };
+  const std::string chain_overrides =
+      "{\"loudness.enabled\":1,\"loudness.targetLufs\":" + std::to_string(kTargetLufs) +
+      ",\"loudness.ceilingDbtp\":" + std::to_string(kCeilingDb) + "}";
   SonareMasteringChainResult chain{};
-  REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), kSampleRate, chain_params,
-                                 std::size(chain_params), &chain) == SONARE_OK);
+  REQUIRE(sonare_master_audio(nullptr, samples.data(), samples.size(), kSampleRate,
+                              chain_overrides.c_str(), &chain) == SONARE_OK);
   REQUIRE(chain.loudness_target_limited == 1);
   REQUIRE(chain.report.loudness_target_limited == chain.loudness_target_limited);
   sonare_free_mastering_chain_result(&chain);
@@ -2293,10 +2289,9 @@ TEST_CASE("sonare_streaming_mastering_chain_non_finite_discard_count reports a l
   // A tilt shelf keeps recursive cells, which is what a discard is about. The
   // default chain has no such stage, so its count could stay at zero for a
   // reason unrelated to the entry.
-  const SonareMasteringParam params[] = {{"eq.tilt.tiltDb", 24.0}};
+  const char* config = R"({"eq.tilt.tiltDb":24})";
   SonareStreamingMasteringChain* chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create_ex(params, sizeof(params) / sizeof(params[0]),
-                                                     0.0f, 0.0f, &chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create_ex(config, 0.0f, 0.0f, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
   REQUIRE(sonare_streaming_mastering_chain_prepare(chain, kSampleRate, kBlockSize, 1) == SONARE_OK);
 
@@ -2337,7 +2332,7 @@ TEST_CASE("mastering chain entry points define the result on a rejected call",
   const std::vector<float> samples(2048, 0.1f);
   SonareMasteringChainResult mono;
   std::memset(&mono, 0xA5, sizeof(mono));
-  REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), 0, nullptr, 0, &mono) ==
+  REQUIRE(sonare_master_audio(nullptr, samples.data(), samples.size(), 0, nullptr, &mono) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(mono.samples == nullptr);
   CHECK(mono.length == 0);
@@ -2346,8 +2341,8 @@ TEST_CASE("mastering chain entry points define the result on a rejected call",
 
   SonareMasteringChainStereoResult stereo;
   std::memset(&stereo, 0xA5, sizeof(stereo));
-  REQUIRE(sonare_mastering_chain_stereo(samples.data(), samples.data(), samples.size(), 0, nullptr,
-                                        0, &stereo) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), samples.data(), samples.size(), 0,
+                                     nullptr, &stereo) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(stereo.left == nullptr);
   CHECK(stereo.right == nullptr);
   CHECK(stereo.length == 0);
@@ -2360,51 +2355,50 @@ TEST_CASE("every mastering chain entry point reports the true non-finite substit
   // A constant level whose makeup multiply overflows on every sample: the
   // compressor emits non-finite samples and the true-peak limiter replaces them.
   const std::vector<float> samples(4800, 1.0e4f);
-  const SonareMasteringParam params[] = {{"dynamics.compressor.enabled", 1.0},
-                                         {"dynamics.compressor.makeupGainDb", 760.0},
-                                         {"maximizer.truePeakLimiter.enabled", 1.0},
-                                         {"maximizer.truePeakLimiter.ceilingDbtp", -20.0},
-                                         {"maximizer.truePeakLimiter.oversampleFactor", 1.0}};
+  const char* overrides =
+      R"({"dynamics.compressor.enabled":1,"dynamics.compressor.makeupGainDb":760,)"
+      R"("maximizer.truePeakLimiter.enabled":1,"maximizer.truePeakLimiter.ceilingDbtp":-20,)"
+      R"("maximizer.truePeakLimiter.oversampleFactor":1})";
   const auto never_cancel = [](void*) { return 0; };
 
   SonareMasteringChainResult reference{};
-  REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), kSampleRate, params, 5,
-                                 &reference) == SONARE_OK);
+  REQUIRE(sonare_master_audio(nullptr, samples.data(), samples.size(), kSampleRate, overrides,
+                              &reference) == SONARE_OK);
   const uint32_t expected = reference.non_finite_substitution_count;
   REQUIRE(expected > 0);
   sonare_free_mastering_chain_result(&reference);
 
   SonareMasteringChainResult mono{};
-  REQUIRE(sonare_mastering_chain_with_progress(samples.data(), samples.size(), kSampleRate, params,
-                                               5, nullptr, nullptr, &mono) == SONARE_OK);
+  REQUIRE(sonare_master_audio_with_progress(nullptr, samples.data(), samples.size(), kSampleRate,
+                                            overrides, nullptr, nullptr, &mono) == SONARE_OK);
   CHECK(mono.non_finite_substitution_count == expected);
   sonare_free_mastering_chain_result(&mono);
 
   SonareMasteringChainResult mono_cancel{};
-  REQUIRE(sonare_mastering_chain_with_progress_ex(samples.data(), samples.size(), kSampleRate,
-                                                  params, 5, nullptr, nullptr, &mono_cancel,
-                                                  never_cancel, nullptr) == SONARE_OK);
+  REQUIRE(sonare_master_audio_with_progress_ex(nullptr, samples.data(), samples.size(), kSampleRate,
+                                               overrides, nullptr, nullptr, &mono_cancel,
+                                               never_cancel, nullptr) == SONARE_OK);
   CHECK(mono_cancel.non_finite_substitution_count == expected);
   sonare_free_mastering_chain_result(&mono_cancel);
 
   SonareMasteringChainStereoResult stereo{};
-  REQUIRE(sonare_mastering_chain_stereo(samples.data(), samples.data(), samples.size(), kSampleRate,
-                                        params, 5, &stereo) == SONARE_OK);
+  REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), samples.data(), samples.size(),
+                                     kSampleRate, overrides, &stereo) == SONARE_OK);
   CHECK(stereo.non_finite_substitution_count > 0);
   const uint32_t stereo_expected = stereo.non_finite_substitution_count;
   sonare_free_mastering_chain_stereo_result(&stereo);
 
   SonareMasteringChainStereoResult stereo_progress{};
-  REQUIRE(sonare_mastering_chain_stereo_with_progress(
-              samples.data(), samples.data(), samples.size(), kSampleRate, params, 5, nullptr,
-              nullptr, &stereo_progress) == SONARE_OK);
+  REQUIRE(sonare_master_audio_stereo_with_progress(nullptr, samples.data(), samples.data(),
+                                                   samples.size(), kSampleRate, overrides, nullptr,
+                                                   nullptr, &stereo_progress) == SONARE_OK);
   CHECK(stereo_progress.non_finite_substitution_count == stereo_expected);
   sonare_free_mastering_chain_stereo_result(&stereo_progress);
 
   SonareMasteringChainStereoResult stereo_cancel{};
-  REQUIRE(sonare_mastering_chain_stereo_with_progress_ex(
-              samples.data(), samples.data(), samples.size(), kSampleRate, params, 5, nullptr,
-              nullptr, &stereo_cancel, never_cancel, nullptr) == SONARE_OK);
+  REQUIRE(sonare_master_audio_stereo_with_progress_ex(
+              nullptr, samples.data(), samples.data(), samples.size(), kSampleRate, overrides,
+              nullptr, nullptr, &stereo_cancel, never_cancel, nullptr) == SONARE_OK);
   CHECK(stereo_cancel.non_finite_substitution_count == stereo_expected);
   sonare_free_mastering_chain_stereo_result(&stereo_cancel);
 }

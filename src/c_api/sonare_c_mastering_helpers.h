@@ -10,6 +10,7 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/presets.h"
 #include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
@@ -181,6 +182,37 @@ inline void clear_chain_result(SonareMasteringChainStereoResult* out, int sample
 }
 
 // Forward the optional progress and cancel callbacks onto a chain.
+/// @brief The chain @p preset names (the default chain when NULL) with the caller's
+///        @p overrides_json object applied, refused under the root `overrides`.
+inline sonare::mastering::api::MasteringChainConfig preset_chain_config(
+    const char* preset, const char* overrides_json) {
+  namespace api = sonare::mastering::api;
+  constexpr std::string_view kRoot = "overrides";
+  if (preset == nullptr) {
+    return overrides_json == nullptr
+               ? api::MasteringChainConfig{}
+               : api::chain_config_from_json(api::chain_params_document(overrides_json, kRoot),
+                                             api::chain_params_argument(kRoot));
+  }
+  auto config = api::preset_config(api::preset_from_string(preset));
+  if (overrides_json == nullptr) return config;
+  return api::chain_config_overrides_from_json(std::move(config),
+                                               api::chain_params_document(overrides_json, kRoot),
+                                               api::chain_params_argument(kRoot));
+}
+
+/// @brief The streaming chain the caller's @p config_json object describes (its defaults when
+///        NULL), refused under the root `config`.
+inline sonare::mastering::api::MasteringChainConfig streaming_chain_config(
+    const char* config_json) {
+  namespace api = sonare::mastering::api;
+  constexpr std::string_view kRoot = "config";
+  return api::streaming_chain_config_from_json(config_json == nullptr
+                                                   ? std::string("{\"params\":{}}")
+                                                   : api::chain_params_document(config_json, kRoot),
+                                               api::chain_params_argument(kRoot));
+}
+
 inline void attach_chain_callbacks(sonare::mastering::api::MasteringChain& chain,
                                    SonareMasteringProgressCallback callback, void* user_data,
                                    SonareCancelCallback cancel_cb, void* cancel_user_data) {

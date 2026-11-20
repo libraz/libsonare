@@ -670,6 +670,12 @@ constexpr ChainParamsOrigin chain_params_argument(std::string_view root) {
   return ChainParamsOrigin{root, ErrorCode::InvalidParameter};
 }
 
+/// @brief The chain document whose `params` block is the caller's parameter object
+///        @p params_json, for the loaders below with chain_params_argument(@p root).
+/// @throws SonareParameterRefusal(InvalidParameter) naming @p root when @p params_json is not
+///         one JSON object.
+std::string chain_params_document(const std::string& params_json, std::string_view root);
+
 /// @brief Parse a chain configuration document.
 /// `version` may be left out and otherwise must be 2. Under `params`, a dotted key and the nested
 /// objects and lists spelling the same path are interchangeable.
@@ -706,14 +712,5 @@ struct ChainFlatParam {
 ///          out-of-domain values are left to whoever applies the leaves.
 /// @throws SonareException (InvalidFormat).
 std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json);
-
-/// @brief Convenience: parse params, build chain, run mono once.
-MonoChainResult run_chain_mono_params(const Param* params, std::size_t param_count,
-                                      const float* samples, std::size_t length, int sample_rate);
-
-/// @brief Convenience: parse params, build chain, run stereo once.
-StereoChainResult run_chain_stereo_params(const Param* params, std::size_t param_count,
-                                          const float* left, const float* right, std::size_t length,
-                                          int sample_rate);
 
 }  // namespace sonare::mastering::api

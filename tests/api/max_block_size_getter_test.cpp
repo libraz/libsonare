@@ -52,7 +52,7 @@ TEST_CASE("realtime voice changer reports its default max block size", "[c-api]"
 #if defined(SONARE_WITH_MASTERING)
 TEST_CASE("streaming mastering chain reports its default max block size", "[c-api]") {
   SonareStreamingMasteringChain* handle = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &handle) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &handle) == SONARE_OK);
   REQUIRE(handle != nullptr);
   int max_block = -1;
   REQUIRE(sonare_streaming_mastering_chain_max_block_size(handle, &max_block) == SONARE_OK);

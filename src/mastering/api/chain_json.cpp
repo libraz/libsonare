@@ -441,6 +441,24 @@ MasteringChainConfig from_document(const ChainParamsOrigin& origin, Build&& buil
 
 }  // namespace
 
+std::string chain_params_document(const std::string& params_json, std::string_view root) {
+  JsonValue params;
+  try {
+    params = sonare::util::json::admit_strict(params_json, kChainJsonLimits);
+  } catch (const sonare::util::json::JsonError& e) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, std::string(root),
+                                            std::string("must be valid JSON: ") + e.what());
+  }
+  if (!params.is_object()) {
+    throw SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidParameter, std::string(root),
+        std::string("must be ") + schema::kind_text(schema::Kind::Object));
+  }
+  sonare::util::json::Object document;
+  util::json::put(document, "params", std::move(params));
+  return sonare::util::json::dump(JsonValue(std::move(document)));
+}
+
 MasteringChainConfig chain_config_from_json(const std::string& json,
                                             const ChainParamsOrigin& origin) {
   const std::vector<Param> params = document_params(json, origin);

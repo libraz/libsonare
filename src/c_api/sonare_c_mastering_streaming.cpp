@@ -67,20 +67,17 @@ SonareStreamingLoudnessGain to_c_streaming_loudness_gain(
 }  // namespace
 
 SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, int sample_rate,
-                                           const SonareMasteringParam* params, size_t param_count,
+                                           const char* config_json,
                                            SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = undefined_streaming_loudness_gain();
   SonareError err =
       validate_audio_params("streaming_loudness_gain", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
-  auto cpp_params = to_params(params, param_count);
-  const auto config = sonare::mastering::api::parse_streaming_chain_config_params(
-      cpp_params.data(), cpp_params.size());
+  const auto config = streaming_chain_config(config_json);
   *out = to_c_streaming_loudness_gain(
       sonare::mastering::api::streaming_loudness_gain_mono(config, samples, length, sample_rate));
   return SONARE_OK;
@@ -89,21 +86,17 @@ SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, 
 
 SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float* right,
                                                   size_t length, int sample_rate,
-                                                  const SonareMasteringParam* params,
-                                                  size_t param_count,
+                                                  const char* config_json,
                                                   SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = undefined_streaming_loudness_gain();
   SonareError err = validate_stereo_audio_params("streaming_loudness_gain_stereo", "left", "right",
                                                  left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
-  auto cpp_params = to_params(params, param_count);
-  const auto config = sonare::mastering::api::parse_streaming_chain_config_params(
-      cpp_params.data(), cpp_params.size());
+  const auto config = streaming_chain_config(config_json);
   *out = to_c_streaming_loudness_gain(sonare::mastering::api::streaming_loudness_gain_stereo(
       config, left, right, length, sample_rate));
   return SONARE_OK;
@@ -307,19 +300,15 @@ struct SonareStreamingMasteringChain {
   int max_block_size = 0;
 };
 
-SonareError sonare_streaming_mastering_chain_create_ex(const SonareMasteringParam* params,
-                                                       size_t param_count,
+SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
                                                        float loudness_static_gain_db,
                                                        float loudness_static_gain_peak_db,
                                                        SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
-  auto cpp_params = to_params(params, param_count);
-  auto config = sonare::mastering::api::parse_streaming_chain_config_params(cpp_params.data(),
-                                                                            cpp_params.size());
+  auto config = streaming_chain_config(config_json);
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
   if (std::isnan(loudness_static_gain_db)) {
     // Reproduce the throw-on-loudness behaviour of the non-_ex create.
@@ -338,11 +327,10 @@ SonareError sonare_streaming_mastering_chain_create_ex(const SonareMasteringPara
   SONARE_C_CATCH
 }
 
-SonareError sonare_streaming_mastering_chain_create(const SonareMasteringParam* params,
-                                                    size_t param_count,
+SonareError sonare_streaming_mastering_chain_create(const char* config_json,
                                                     SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
-  return sonare_streaming_mastering_chain_create_ex(params, param_count,
+  return sonare_streaming_mastering_chain_create_ex(config_json,
                                                     std::numeric_limits<float>::quiet_NaN(),
                                                     std::numeric_limits<float>::quiet_NaN(), out);
 }

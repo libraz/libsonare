@@ -231,76 +231,6 @@ SonareError sonare_mastering_apply_processor_stereo(
     const char* processor, const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
 
-/// @brief Run the full mastering chain on a mono buffer.
-/// @details @p params is a flat (key/value) view of the
-///   @c MasteringChainConfig hierarchy using dot-notation keys (see
-///   @c parse_chain_config_params). Unknown keys cause
-///   @c SONARE_ERROR_INVALID_PARAMETER.
-///   The multiband compressor takes `dynamics.multibandComp.crossover.cutoffsHz.<i>`
-///   (indices exactly 0..n-1), which replaces the cutoff list and sets the band count
-///   to n + 1, keeping existing bands by index; `dynamics.multibandComp.cutoff<i>Hz`,
-///   which edits one cutoff in place; `dynamics.multibandComp.bands.<i>.<field>`, a
-///   band's compressor field (the `dynamics.compressor.<field>` names); and
-///   `dynamics.multibandComp.{slope,mode,firKernelSize}`, the crossover settings. Key
-///   order does not matter. The cutoff list beside a `cutoff<i>Hz` is refused; at
-///   most 64 bands. The stage's structure is checked whether or not it is enabled. A
-///   retired spelling (`band<i>.<field>`, `crossover.slope`, `lowCutoffHz`,
-///   `low|mid|high{ThresholdDb,Ratio,AttackMs,ReleaseMs}`, `repair.nFft`, `eq.tiltDb`, ...)
-///   is refused with the current key named.
-SonareError sonare_mastering_chain(const float* samples, size_t length, int sample_rate,
-                                   const SonareMasteringParam* params, size_t param_count,
-                                   SonareMasteringChainResult* out);
-
-/// @brief Run the full mastering chain on stereo buffers.
-SonareError sonare_mastering_chain_stereo(const float* left, const float* right, size_t length,
-                                          int sample_rate, const SonareMasteringParam* params,
-                                          size_t param_count,
-                                          SonareMasteringChainStereoResult* out);
-
-/// @brief Same as sonare_mastering_chain but reports per-stage progress.
-/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
-///   call: the callback runs on the calling thread and nothing is stored once it returns.
-SonareError sonare_mastering_chain_with_progress(const float* samples, size_t length,
-                                                 int sample_rate,
-                                                 const SonareMasteringParam* params,
-                                                 size_t param_count,
-                                                 SonareMasteringProgressCallback callback,
-                                                 void* user_data, SonareMasteringChainResult* out);
-
-/// @brief Cancellation-capable equivalent of @ref sonare_mastering_chain_with_progress.
-/// @details When @p cancel_cb returns nonzero after a progress report, returns
-///          @c SONARE_ERROR_CANCELLED and leaves @p out without allocated output buffers.
-/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
-///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
-///   calling thread and nothing is stored once it returns.
-SonareError sonare_mastering_chain_with_progress_ex(
-    const float* samples, size_t length, int sample_rate, const SonareMasteringParam* params,
-    size_t param_count, SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
-
-/// @brief Same as sonare_mastering_chain_stereo but reports per-stage progress.
-/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
-///   call: the callback runs on the calling thread and nothing is stored once it returns.
-SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const float* right,
-                                                        size_t length, int sample_rate,
-                                                        const SonareMasteringParam* params,
-                                                        size_t param_count,
-                                                        SonareMasteringProgressCallback callback,
-                                                        void* user_data,
-                                                        SonareMasteringChainStereoResult* out);
-
-/// @brief Cancellation-capable equivalent of
-///        @ref sonare_mastering_chain_stereo_with_progress.
-/// @details On cancellation, @p out has no allocated output buffers.
-/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
-///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
-///   calling thread and nothing is stored once it returns.
-SonareError sonare_mastering_chain_stereo_with_progress_ex(
-    const float* left, const float* right, size_t length, int sample_rate,
-    const SonareMasteringParam* params, size_t param_count,
-    SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
-
 /// @brief Returns built-in preset identifiers, separated by '\n'.
 /// @details Backed by thread-local storage filled on first use; the pointer is
 ///   valid for the calling thread's lifetime (and stays valid across later API
@@ -322,8 +252,8 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
 
 /// @brief Validate a chain configuration document and return it in canonical form.
 /// @details Reads @p document as the native CLI's `--chain-config` reads it and returns the
-///   chain it describes in the shape of @ref sonare_mastering_preset_params_json, so its flat
-///   @c params feed @c sonare_mastering_chain or @c sonare_master_audio as a preset's do. A
+///   chain it describes in the shape of @ref sonare_mastering_preset_params_json, so its
+///   @c params object feeds @c sonare_master_audio as overrides as a preset's does. A
 ///   document that is malformed, carries a version other than 2 (it may be left out), an unknown
 ///   or earlier key spelling, a path given twice, a null, an enum given as a number or an unknown
 ///   name, or a value outside its domain returns @c SONARE_ERROR_INVALID_FORMAT and names the
@@ -331,24 +261,39 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
 /// @param document NUL-terminated chain configuration JSON; NULL returns
 ///   @c SONARE_ERROR_INVALID_PARAMETER.
 /// The returned string must be released with sonare_free_string().
-SonareError sonare_mastering_chain_config_params_json(const char* document, char** json_out);
+SonareError sonare_mastering_chain_config_from_json(const char* document, char** json_out);
 
-/// @brief Apply a preset chain to mono audio.
+/// @brief Apply a preset chain, or the default chain, to mono audio.
 /// Restoration presets' repair stages, like every classical denoise
 /// configuration, can mistake a steady tone -- a calibration tone, a drone, a
 /// long held note -- for noise and pull it down by the configured reduction
 /// depth. Check for musical sustained tones before applying one.
-/// @param preset e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
-/// @param overrides   Optional Param overrides (same flat dot-notation as
-///                    @c sonare_mastering_chain). Pass NULL/0 for preset defaults.
+/// @param preset e.g. "pop", "aiMusic" (see @c sonare_mastering_preset_names()), or NULL for the
+///   default chain.
+/// @param overrides_json NULL, or one JSON object overriding the chain @p preset names. A refusal
+///   names the key under the root `overrides` and returns @c SONARE_ERROR_INVALID_PARAMETER.
+/// @details @p overrides_json is one JSON object, a flat (key/value) view of the
+///   @c MasteringChainConfig hierarchy using dot-notation keys (see
+///   @c parse_chain_config_params). Unknown keys cause
+///   @c SONARE_ERROR_INVALID_PARAMETER.
+///   The multiband compressor takes `dynamics.multibandComp.crossover.cutoffsHz.<i>`
+///   (indices exactly 0..n-1), which replaces the cutoff list and sets the band count
+///   to n + 1, keeping existing bands by index; `dynamics.multibandComp.cutoff<i>Hz`,
+///   which edits one cutoff in place; `dynamics.multibandComp.bands.<i>.<field>`, a
+///   band's compressor field (the `dynamics.compressor.<field>` names); and
+///   `dynamics.multibandComp.{slope,mode,firKernelSize}`, the crossover settings. Key
+///   order does not matter. The cutoff list beside a `cutoff<i>Hz` is refused; at
+///   most 64 bands. The stage's structure is checked whether or not it is enabled. A
+///   retired spelling (`band<i>.<field>`, `crossover.slope`, `lowCutoffHz`,
+///   `low|mid|high{ThresholdDb,Ratio,AttackMs,ReleaseMs}`, `repair.nFft`, `eq.tiltDb`, ...)
+///   is refused with the current key named.
 SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
-                                int sample_rate, const SonareMasteringParam* overrides,
-                                size_t override_count, SonareMasteringChainResult* out);
+                                int sample_rate, const char* overrides_json,
+                                SonareMasteringChainResult* out);
 
 /// @brief Stereo equivalent of @c sonare_master_audio.
 SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
-                                       size_t length, int sample_rate,
-                                       const SonareMasteringParam* overrides, size_t override_count,
+                                       size_t length, int sample_rate, const char* overrides_json,
                                        SonareMasteringChainStereoResult* out);
 
 /// @brief Same as sonare_master_audio but reports per-stage progress.
@@ -356,30 +301,30 @@ SonareError sonare_master_audio_stereo(const char* preset, const float* left, co
 ///   call: the callback runs on the calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_with_progress(const char* preset, const float* samples,
                                               size_t length, int sample_rate,
-                                              const SonareMasteringParam* overrides,
-                                              size_t override_count,
+                                              const char* overrides_json,
                                               SonareMasteringProgressCallback callback,
                                               void* user_data, SonareMasteringChainResult* out);
 
 /// @brief Cancellation-capable equivalent of @ref sonare_master_audio_with_progress.
-/// @details On cancellation, @p out has no allocated output buffers.
+/// @details When @p cancel_cb returns nonzero after a progress report, returns
+///          @c SONARE_ERROR_CANCELLED and leaves @p out without allocated output buffers.
 /// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
 ///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
 ///   calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_with_progress_ex(
     const char* preset, const float* samples, size_t length, int sample_rate,
-    const SonareMasteringParam* overrides, size_t override_count,
-    SonareMasteringProgressCallback callback, void* user_data, SonareMasteringChainResult* out,
-    SonareCancelCallback cancel_cb, void* cancel_user_data);
+    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 /// @brief Same as sonare_master_audio_stereo but reports per-stage progress.
 /// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
 ///   call: the callback runs on the calling thread and nothing is stored once it returns.
-SonareError sonare_master_audio_stereo_with_progress(
-    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
-    const SonareMasteringParam* overrides, size_t override_count,
-    SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainStereoResult* out);
+SonareError sonare_master_audio_stereo_with_progress(const char* preset, const float* left,
+                                                     const float* right, size_t length,
+                                                     int sample_rate, const char* overrides_json,
+                                                     SonareMasteringProgressCallback callback,
+                                                     void* user_data,
+                                                     SonareMasteringChainStereoResult* out);
 
 /// @brief Cancellation-capable equivalent of
 ///        @ref sonare_master_audio_stereo_with_progress.
@@ -389,8 +334,7 @@ SonareError sonare_master_audio_stereo_with_progress(
 ///   calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_stereo_with_progress_ex(
     const char* preset, const float* left, const float* right, size_t length, int sample_rate,
-    const SonareMasteringParam* overrides, size_t override_count,
-    SonareMasteringProgressCallback callback, void* user_data,
+    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 /// @brief The mono processor ids this build supports, separated by '\n'.
@@ -832,16 +776,18 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
                                                       size_t platform_count, char** json_out);
 
 /// @brief Computes the loudness numbers for a streaming mastering chain.
-/// @details Runs the offline chain described by @p params up to its loudness
+/// @details Runs the offline chain described by @p config_json up to its loudness
 /// stage and measures there, so @c loudness_static_gain_db equals the gain the
 /// offline chain applies (ceiling clamp included) and @c true_peak_dbtp is the
 /// peak that clamp used. Pass them as @p loudness_static_gain_db and
 /// @p loudness_static_gain_peak_db of
 /// @ref sonare_streaming_mastering_chain_create_ex. The gain is computed from
-/// the @c loudness.* params whether or not the stage is enabled. @p params takes
-/// the keys @ref sonare_mastering_chain does.
+/// the @c loudness.* params whether or not the stage is enabled.
+/// @param config_json NULL for the streaming chain's defaults, or one JSON object over them with
+///   the keys @ref sonare_master_audio takes as overrides. A refusal names the key under the root
+///   `config` and returns @c SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, int sample_rate,
-                                           const SonareMasteringParam* params, size_t param_count,
+                                           const char* config_json,
                                            SonareStreamingLoudnessGain* out);
 
 /// @brief Stereo counterpart of @ref sonare_streaming_loudness_gain.
@@ -849,8 +795,7 @@ SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, 
 /// reports the larger of the two channel true peaks.
 SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float* right,
                                                   size_t length, int sample_rate,
-                                                  const SonareMasteringParam* params,
-                                                  size_t param_count,
+                                                  const char* config_json,
                                                   SonareStreamingLoudnessGain* out);
 
 /// @brief Returns the delivery-target identifiers the mastering assistant
@@ -1137,21 +1082,23 @@ void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult*
 /// @brief Opaque streaming mastering chain handle.
 typedef struct SonareStreamingMasteringChain SonareStreamingMasteringChain;
 
-/// @brief Create a streaming chain from flat params.
-/// @details Fails on an unknown key or a non-streaming stage. When the params enable the
+/// @brief Create a streaming chain from a configuration object.
+/// @param config_json NULL for the streaming chain's defaults, or one JSON object over them with
+///   the keys @ref sonare_master_audio takes as overrides; a refusal names the key under the
+///   root `config` and returns @c SONARE_ERROR_INVALID_PARAMETER.
+/// @details Fails on an unknown key or a non-streaming stage. When the config enables the
 /// loudness stage this fails (the streaming chain cannot measure whole-signal
 /// integrated LUFS); use @ref sonare_streaming_mastering_chain_create_ex to run
 /// a loudness-enabled chain with a caller-precomputed static gain.
 /// @param out Receives the handle on success, NULL on failure; destroy with
 ///        @ref sonare_streaming_mastering_chain_destroy, which must be called exactly once.
 /// @return SONARE_OK, or the error code describing the failure.
-SonareError sonare_streaming_mastering_chain_create(const SonareMasteringParam* params,
-                                                    size_t param_count,
+SonareError sonare_streaming_mastering_chain_create(const char* config_json,
                                                     SonareStreamingMasteringChain** out);
 
 /// @brief Create a streaming chain with a precomputed loudness static gain.
 /// @details Identical to @ref sonare_streaming_mastering_chain_create except
-/// that when the params enable the loudness stage, @p loudness_static_gain_db
+/// that when the config enables the loudness stage, @p loudness_static_gain_db
 /// (measured at the loudness stage's input, which
 /// @ref sonare_streaming_loudness_gain returns) is applied per block
 /// before the loudness stage's true-peak limiter instead of throwing.
@@ -1166,8 +1113,7 @@ SonareError sonare_streaming_mastering_chain_create(const SonareMasteringParam* 
 /// @param out Receives the handle on success, NULL on failure; destroy with
 ///        @ref sonare_streaming_mastering_chain_destroy.
 /// @return SONARE_OK, or the error code describing the failure.
-SonareError sonare_streaming_mastering_chain_create_ex(const SonareMasteringParam* params,
-                                                       size_t param_count,
+SonareError sonare_streaming_mastering_chain_create_ex(const char* config_json,
                                                        float loudness_static_gain_db,
                                                        float loudness_static_gain_peak_db,
                                                        SonareStreamingMasteringChain** out);

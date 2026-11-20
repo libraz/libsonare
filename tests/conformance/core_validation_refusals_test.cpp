@@ -436,7 +436,7 @@ TEST_CASE("streaming mastering chain prepare refusals are owned by the core func
         (sonare::mastering::api::MasteringChainConfig()));
     CHECK_NOTHROW(core.prepare(rate, block, channels));
     SonareStreamingMasteringChain* handle = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &handle) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &handle) == SONARE_OK);
     CHECK(sonare_streaming_mastering_chain_prepare(handle, static_cast<int>(rate), block,
                                                    channels) == SONARE_OK);
     sonare_streaming_mastering_chain_destroy(handle);
@@ -454,7 +454,7 @@ TEST_CASE("streaming mastering chain prepare refusals are owned by the core func
     require_argument_refusal([&] { core.prepare(rate, block, channels); }, message);
 
     SonareStreamingMasteringChain* handle = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &handle) == SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &handle) == SONARE_OK);
     CHECK(sonare_streaming_mastering_chain_prepare(handle, static_cast<int>(rate), block,
                                                    channels) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));

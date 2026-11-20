@@ -40,7 +40,7 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_chain_config_params_json(const char* document, char** json_out) {
+SonareError sonare_mastering_chain_config_from_json(const char* document, char** json_out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(document);
@@ -77,137 +77,99 @@ int sonare_mastering_preset_from_name(const char* name) {
   SONARE_C_CATCH_RETURN(-1)
 }
 
-SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
-                                int sample_rate, const SonareMasteringParam* overrides,
-                                size_t override_count, SonareMasteringChainResult* out) {
-  SONARE_C_API_ENTRY;
+namespace {
+
+SonareError master_mono(const char* entry, const char* preset, const float* samples, size_t length,
+                        int sample_rate, const char* overrides_json,
+                        SonareMasteringProgressCallback callback, void* user_data,
+                        SonareMasteringChainResult* out, SonareCancelCallback cancel_cb,
+                        void* cancel_user_data) {
   SONARE_C_ZERO_OUTS(out);
   if (out != nullptr) out->sample_rate = sample_rate;
-  SONARE_C_REQUIRE_NONNULL(preset);
-
-  SonareError err = validate_audio_params("master_audio", "samples", samples, length, sample_rate);
+  SonareError err = validate_audio_params(entry, "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(overrides, override_count);
   SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
-  const auto chain_preset = sonare::mastering::api::preset_from_string(preset);
-  auto cpp_overrides = to_params(overrides, override_count);
-  auto result = sonare::mastering::api::master_audio_mono(
-      chain_preset, samples, length, sample_rate, cpp_overrides.data(), cpp_overrides.size());
-  fill_mono_chain_result(result, out);
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
-
-SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
-                                       size_t length, int sample_rate,
-                                       const SonareMasteringParam* overrides, size_t override_count,
-                                       SonareMasteringChainStereoResult* out) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
-  if (out != nullptr) out->sample_rate = sample_rate;
-  SONARE_C_REQUIRE_NONNULL(preset);
-
-  // Match the mono paths: reject non-finite samples and out-of-range
-  // sample_rate/length, not just null pointers.
-  SonareError verr = validate_stereo_audio_params("master_audio_stereo", "left", "right", left,
-                                                  right, length, sample_rate);
-  if (verr != SONARE_OK) return verr;
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(overrides, override_count);
-  SONARE_C_REQUIRE_NONNULL(out);
-
-  SONARE_C_TRY
-  const auto chain_preset = sonare::mastering::api::preset_from_string(preset);
-  auto cpp_overrides = to_params(overrides, override_count);
-  auto result = sonare::mastering::api::master_audio_stereo(
-      chain_preset, left, right, length, sample_rate, cpp_overrides.data(), cpp_overrides.size());
-  fill_stereo_chain_result(result, out);
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
-
-SonareError sonare_master_audio_with_progress_ex(
-    const char* preset, const float* samples, size_t length, int sample_rate,
-    const SonareMasteringParam* overrides, size_t override_count,
-    SonareMasteringProgressCallback callback, void* user_data, SonareMasteringChainResult* out,
-    SonareCancelCallback cancel_cb, void* cancel_user_data) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out);
-  if (out != nullptr) out->sample_rate = sample_rate;
-  SONARE_C_REQUIRE_NONNULL(preset);
-
-  SonareError err = validate_audio_params("master_audio_with_progress_ex", "samples", samples,
-                                          length, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(overrides, override_count);
-  SONARE_C_REQUIRE_NONNULL(out);
-
-  SONARE_C_TRY
-  const auto chain_preset = sonare::mastering::api::preset_from_string(preset);
-  auto config = sonare::mastering::api::preset_config(chain_preset);
-  auto cpp_overrides = to_params(overrides, override_count);
-  if (!cpp_overrides.empty()) {
-    sonare::mastering::api::apply_chain_config_overrides(config, cpp_overrides.data(),
-                                                         cpp_overrides.size());
-  }
-  sonare::mastering::api::MasteringChain chain(std::move(config));
+  sonare::mastering::api::MasteringChain chain(preset_chain_config(preset, overrides_json));
   attach_chain_callbacks(chain, callback, user_data, cancel_cb, cancel_user_data);
   return process_mastering_chain_mono(chain, samples, length, sample_rate, cancel_cb, out);
   SONARE_C_CATCH
 }
 
-SonareError sonare_master_audio_stereo_with_progress_ex(
-    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
-    const SonareMasteringParam* overrides, size_t override_count,
-    SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
-  SONARE_C_API_ENTRY;
+SonareError master_stereo(const char* entry, const char* preset, const float* left,
+                          const float* right, size_t length, int sample_rate,
+                          const char* overrides_json, SonareMasteringProgressCallback callback,
+                          void* user_data, SonareMasteringChainStereoResult* out,
+                          SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_ZERO_OUTS(out);
   if (out != nullptr) out->sample_rate = sample_rate;
-  SONARE_C_REQUIRE_NONNULL(preset);
-
-  // Match the mono paths: reject non-finite samples and out-of-range
-  // sample_rate/length, not just null pointers.
-  SonareError verr = validate_stereo_audio_params("master_audio_stereo_with_progress_ex", "left",
-                                                  "right", left, right, length, sample_rate);
-  if (verr != SONARE_OK) return verr;
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(overrides, override_count);
+  SonareError err =
+      validate_stereo_audio_params(entry, "left", "right", left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
-  const auto chain_preset = sonare::mastering::api::preset_from_string(preset);
-  auto config = sonare::mastering::api::preset_config(chain_preset);
-  auto cpp_overrides = to_params(overrides, override_count);
-  if (!cpp_overrides.empty()) {
-    sonare::mastering::api::apply_chain_config_overrides(config, cpp_overrides.data(),
-                                                         cpp_overrides.size());
-  }
-  sonare::mastering::api::MasteringChain chain(std::move(config));
+  sonare::mastering::api::MasteringChain chain(preset_chain_config(preset, overrides_json));
   attach_chain_callbacks(chain, callback, user_data, cancel_cb, cancel_user_data);
   return process_mastering_chain_stereo(chain, left, right, length, sample_rate, cancel_cb, out);
   SONARE_C_CATCH
 }
 
+}  // namespace
+
+SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
+                                int sample_rate, const char* overrides_json,
+                                SonareMasteringChainResult* out) {
+  SONARE_C_API_ENTRY;
+  return master_mono("master_audio", preset, samples, length, sample_rate, overrides_json, nullptr,
+                     nullptr, out, nullptr, nullptr);
+}
+
+SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
+                                       size_t length, int sample_rate, const char* overrides_json,
+                                       SonareMasteringChainStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  return master_stereo("master_audio_stereo", preset, left, right, length, sample_rate,
+                       overrides_json, nullptr, nullptr, out, nullptr, nullptr);
+}
+
 SonareError sonare_master_audio_with_progress(const char* preset, const float* samples,
                                               size_t length, int sample_rate,
-                                              const SonareMasteringParam* overrides,
-                                              size_t override_count,
+                                              const char* overrides_json,
                                               SonareMasteringProgressCallback callback,
                                               void* user_data, SonareMasteringChainResult* out) {
   SONARE_C_API_ENTRY;
-  return sonare_master_audio_with_progress_ex(preset, samples, length, sample_rate, overrides,
-                                              override_count, callback, user_data, out, nullptr,
-                                              nullptr);
+  return master_mono("master_audio_with_progress", preset, samples, length, sample_rate,
+                     overrides_json, callback, user_data, out, nullptr, nullptr);
 }
 
-SonareError sonare_master_audio_stereo_with_progress(
-    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
-    const SonareMasteringParam* overrides, size_t override_count,
-    SonareMasteringProgressCallback callback, void* user_data,
-    SonareMasteringChainStereoResult* out) {
+SonareError sonare_master_audio_with_progress_ex(
+    const char* preset, const float* samples, size_t length, int sample_rate,
+    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
-  return sonare_master_audio_stereo_with_progress_ex(preset, left, right, length, sample_rate,
-                                                     overrides, override_count, callback, user_data,
-                                                     out, nullptr, nullptr);
+  return master_mono("master_audio_with_progress_ex", preset, samples, length, sample_rate,
+                     overrides_json, callback, user_data, out, cancel_cb, cancel_user_data);
+}
+
+SonareError sonare_master_audio_stereo_with_progress(const char* preset, const float* left,
+                                                     const float* right, size_t length,
+                                                     int sample_rate, const char* overrides_json,
+                                                     SonareMasteringProgressCallback callback,
+                                                     void* user_data,
+                                                     SonareMasteringChainStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  return master_stereo("master_audio_stereo_with_progress", preset, left, right, length,
+                       sample_rate, overrides_json, callback, user_data, out, nullptr, nullptr);
+}
+
+SonareError sonare_master_audio_stereo_with_progress_ex(
+    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
+    const char* overrides_json, SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
+  SONARE_C_API_ENTRY;
+  return master_stereo("master_audio_stereo_with_progress_ex", preset, left, right, length,
+                       sample_rate, overrides_json, callback, user_data, out, cancel_cb,
+                       cancel_user_data);
 }

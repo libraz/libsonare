@@ -1539,7 +1539,7 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_sample_bank_create r
 [[entry]]
 kind = "function"
 old = "sonare_streaming_mastering_chain_create"
-changed = "SonareError sonare_streaming_mastering_chain_create(params, param_count, &chain); read the error from the return value, the handle from chain (NULL on failure)"
+changed = "SonareError sonare_streaming_mastering_chain_create(config_json, &chain); read the error from the return value, the handle from chain (NULL on failure)"
 domain = "mastering"
 rule = "c-create"
 test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_mastering_chain_create returns its error"
@@ -1547,7 +1547,7 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_mastering_
 [[entry]]
 kind = "function"
 old = "sonare_streaming_mastering_chain_create_ex"
-changed = "SonareError sonare_streaming_mastering_chain_create_ex(params, param_count, loudness_static_gain_db, loudness_static_gain_peak_db, &chain); read the error from the return value, the handle from chain (NULL on failure)"
+changed = "SonareError sonare_streaming_mastering_chain_create_ex(config_json, loudness_static_gain_db, loudness_static_gain_peak_db, &chain); read the error from the return value, the handle from chain (NULL on failure)"
 domain = "mastering"
 rule = "c-create"
 test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_mastering_chain_create returns its error"
@@ -1588,3 +1588,109 @@ old = "sonare_analyze_sections(min_section_sec)"
 removed = "set SonareSectionOptions.min_section_sec on the options passed to sonare_analyze_sections"
 domain = "analysis"
 rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_chain"
+removed = "call sonare_master_audio with preset NULL (the default chain) and the old params as overrides_json"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_chain_stereo"
+removed = "call sonare_master_audio_stereo with preset NULL (the default chain) and the old params as overrides_json"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_chain_with_progress"
+removed = "call sonare_master_audio_with_progress with preset NULL (the default chain) and the old params as overrides_json"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_chain_with_progress_ex"
+removed = "call sonare_master_audio_with_progress_ex with preset NULL (the default chain) and the old params as overrides_json"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_chain_stereo_with_progress"
+removed = "call sonare_master_audio_stereo_with_progress with preset NULL (the default chain) and the old params as overrides_json"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_chain_stereo_with_progress_ex"
+removed = "call sonare_master_audio_stereo_with_progress_ex with preset NULL (the default chain) and the old params as overrides_json"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_master_audio"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+
+[[entry]]
+kind = "function"
+old = "sonare_master_audio_stereo"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+
+[[entry]]
+kind = "function"
+old = "sonare_master_audio_with_progress"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+
+[[entry]]
+kind = "function"
+old = "sonare_master_audio_with_progress_ex"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+
+[[entry]]
+kind = "function"
+old = "sonare_master_audio_stereo_with_progress"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+
+[[entry]]
+kind = "function"
+old = "sonare_master_audio_stereo_with_progress_ex"
+changed = "overrides and override_count became one overrides_json argument (NULL for no overrides), a JSON object of the chain's dot-notation keys; preset may be NULL for the default chain; a refusal names the key under the root \"overrides\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering chain C result includes the before and after report"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_loudness_gain"
+changed = "takes one JSON object of the chain's dot-notation keys (NULL for the streaming defaults) in place of the params array and count; a refusal names the key under the root \"config\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::sonare_streaming_loudness_gain refuses bad arguments"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_loudness_gain_stereo"
+changed = "takes one JSON object of the chain's dot-notation keys (NULL for the streaming defaults) in place of the params array and count; a refusal names the key under the root \"config\", and malformed JSON or a non-object is refused as SONARE_ERROR_INVALID_PARAMETER"
+domain = "mastering"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_streaming_test.cpp::sonare_streaming_loudness_gain refuses bad arguments"

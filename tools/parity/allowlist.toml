@@ -210,6 +210,10 @@ node = [
   "last_error_code",
   "last_diagnostic_count",
   "last_diagnostic",
+  # Read by the core respell inside the addon / embind, never through the C channel.
+  "last_refusal_subject_count",
+  "last_refusal_subject",
+  "last_refusal_render",
   "boundary_options_default",
   "meter_options_default",
   "music_analyze_options_default",
@@ -218,12 +222,6 @@ node = [
   "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
-  # Folded into masterAudio: a chain config is its `overrides` (run alone when no preset is
-  # given), and progress and cancel are its callbacks, so a second name would split one operation.
-  "mastering_chain",
-  "mastering_chain_stereo",
-  "mastering_chain_with_progress",
-  "mastering_chain_stereo_with_progress",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
   # result IS what analyze() returns, serialized via sonare_analyze_json) and
   # `analyzeWithProgress` (the progress-callback variant, which takes the same
@@ -336,6 +334,10 @@ wasm = [
   "last_error_code",
   "last_diagnostic_count",
   "last_diagnostic",
+  # Read by the core respell inside the addon / embind, never through the C channel.
+  "last_refusal_subject_count",
+  "last_refusal_subject",
+  "last_refusal_render",
   "boundary_options_default",
   "meter_options_default",
   "music_analyze_options_default",
@@ -344,12 +346,6 @@ wasm = [
   "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
-  # Folded into masterAudio: a chain config is its `overrides` (run alone when no preset is
-  # given), and progress and cancel are its callbacks, so a second name would split one operation.
-  "mastering_chain",
-  "mastering_chain_stereo",
-  "mastering_chain_with_progress",
-  "mastering_chain_stereo_with_progress",
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",
@@ -452,10 +448,6 @@ python = [
   "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
-  # Folded into masterAudio / master_audio as its progress and cancel callbacks; the plain
-  # entry point is the same call with neither, so a second name would split one operation.
-  "mastering_chain_with_progress",
-  "mastering_chain_stereo_with_progress",
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",

@@ -444,11 +444,11 @@ TEST_CASE("a scene JSON entry point separates a malformed document from an inval
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  const char* malformed = R"({"version":1,"strips":[)";
+  const char* malformed = R"({"version":2,"strips":[)";
   const char* unsupported_version =
-      R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
+      R"({"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
   const char* unknown_insert_slot =
-      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"nowhere","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]})";
+      R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"nowhere","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]})";
 
   REQUIRE(sonare_engine_set_master_strip_json(engine, malformed) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_master_strip_json(engine, unsupported_version) ==
@@ -513,7 +513,8 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
 
     record_detailed_error();
     REQUIRE(sonare_audio_from_memory(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(std::string(sonare_last_error_message()) == "data must not be NULL");
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "data must not be NULL when length is not 0");
 
     record_detailed_error();
     REQUIRE(sonare_engine_prepare(nullptr, 48000.0, 128, 16, 16) == SONARE_ERROR_INVALID_PARAMETER);
@@ -522,7 +523,7 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
 #if defined(SONARE_WITH_ARRANGEMENT)
     record_detailed_error();
     REQUIRE(sonare_project_create(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(std::string(sonare_last_error_message()).empty());
+    REQUIRE(std::string(sonare_last_error_message()) == "out must not be NULL");
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
   }
 
@@ -533,7 +534,7 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(refused_mixer == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     REQUIRE(sonare_mixer_from_scene_json(nullptr, 48000, 128) == nullptr);
-    REQUIRE(std::string(sonare_last_error_message()).find("scene JSON") != std::string::npos);
+    REQUIRE(std::string(sonare_last_error_message()) == "json must not be NULL");
 #endif  // defined(SONARE_WITH_MIXING)
 #if defined(SONARE_WITH_MASTERING)
     SonareEq* refused_eq = nullptr;
@@ -541,10 +542,10 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(refused_eq == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     SonareStreamingMasteringChain* refused_chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1, &refused_chain) ==
+    REQUIRE(sonare_streaming_mastering_chain_create("{", &refused_chain) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(refused_chain == nullptr);
-    REQUIRE(std::string(sonare_last_error_message()).find("params") != std::string::npos);
+    REQUIRE(std::string(sonare_last_error_message()).find("config") != std::string::npos);
 #endif  // defined(SONARE_WITH_MASTERING)
   }
 }
@@ -578,7 +579,7 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
 
     // A document that parses but breaks a scene rule is the document's defect: InvalidFormat.
     const char* unsupported_version =
-        R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
+        R"({"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
     REQUIRE(sonare_mixer_from_scene_json(unsupported_version, 48000, 128) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
 
@@ -586,7 +587,7 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
 
     // A valid document whose size arguments the nested create refuses.
-    const char* valid = R"({"version":1,"strips":[{"id":"a"}],"buses":[],"connections":[]})";
+    const char* valid = R"({"version":2,"strips":[{"id":"a"}],"buses":[],"connections":[]})";
     REQUIRE(sonare_mixer_from_scene_json(valid, 0, 128) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   }
@@ -637,7 +638,7 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
     REQUIRE(refused_eq == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
     SonareStreamingMasteringChain* refused_chain = nullptr;
-    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1, &refused_chain) ==
+    REQUIRE(sonare_streaming_mastering_chain_create("{", &refused_chain) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(refused_chain == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
@@ -864,15 +865,15 @@ TEST_CASE("sonare_engine_parameter_info describes a compressor insert on every s
   // A leading pre-fader EQ puts the compressor at insert index 1 on the
   // track/master strips, so the id decode is exercised on a non-zero index
   // and not just the degenerate single-insert case.
-  const std::string track_json = std::string(R"({"version":1,"strips":[{"id":"s","inserts":[)") +
+  const std::string track_json = std::string(R"({"version":2,"strips":[{"id":"s","inserts":[)") +
                                  kEq + "," + kCompressorPost +
                                  R"(]}],"buses":[],"connections":[]})";
   const std::string master_json =
-      std::string(R"({"version":1,"strips":[{"id":"master","inserts":[)") + kEq + "," +
+      std::string(R"({"version":2,"strips":[{"id":"master","inserts":[)") + kEq + "," +
       kCompressorPost + R"(]}],"buses":[],"connections":[]})";
   // sonare_engine_set_bus_strip_json reads scene.buses[0], not scene.strips[0].
   const std::string bus_json =
-      std::string(R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[)") + kCompressorPre +
+      std::string(R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[)") + kCompressorPre +
       R"(]}],"connections":[]})";
 
   SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};

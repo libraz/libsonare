@@ -14,11 +14,9 @@
 
 TEST_CASE("streaming mastering C API sets prepared realtime parameters",
           "[c_api][mastering][streaming]") {
-  const SonareMasteringParam params[] = {
-      {"maximizer.truePeakLimiter.enabled", 1.0},
-  };
+  const char* config = R"({"maximizer.truePeakLimiter.enabled":1})";
   SonareStreamingMasteringChain* chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(params, 1, &chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(config, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
 
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(
@@ -50,7 +48,7 @@ TEST_CASE("streaming mastering C API validates setter handles and keys",
                                                          -12.0) == SONARE_ERROR_INVALID_PARAMETER);
 
   SonareStreamingMasteringChain* chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(chain, nullptr, -12.0) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -72,13 +70,13 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
     left[i] = 0.05f * std::sin(6.2831853f * 330.0f * t);
     right[i] = 0.04f * std::sin(6.2831853f * 440.0f * t);
   }
-  const SonareMasteringParam params[] = {{"loudness.targetLufs", -16.0}, {"eq.tilt.tiltDb", 2.0}};
+  const char* config = R"({"loudness.targetLufs":-16,"eq.tilt.tiltDb":2})";
 
   SonareStreamingLoudnessGain mono{};
-  REQUIRE(sonare_streaming_loudness_gain(left.data(), left.size(), kRate, params, 2, &mono) ==
+  REQUIRE(sonare_streaming_loudness_gain(left.data(), left.size(), kRate, config, &mono) ==
           SONARE_OK);
   SonareMasteringChainResult mono_chain{};
-  REQUIRE(sonare_mastering_chain(left.data(), left.size(), kRate, params, 2, &mono_chain) ==
+  REQUIRE(sonare_master_audio(nullptr, left.data(), left.size(), kRate, config, &mono_chain) ==
           SONARE_OK);
   CHECK(mono.loudness_static_gain_db == mono_chain.applied_gain_db);
   CHECK(std::isfinite(mono.integrated_lufs));
@@ -87,17 +85,17 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
 
   SonareStreamingLoudnessGain stereo{};
   REQUIRE(sonare_streaming_loudness_gain_stereo(left.data(), right.data(), left.size(), kRate,
-                                                params, 2, &stereo) == SONARE_OK);
+                                                config, &stereo) == SONARE_OK);
   SonareMasteringChainStereoResult stereo_chain{};
-  REQUIRE(sonare_mastering_chain_stereo(left.data(), right.data(), left.size(), kRate, params, 2,
-                                        &stereo_chain) == SONARE_OK);
+  REQUIRE(sonare_master_audio_stereo(nullptr, left.data(), right.data(), left.size(), kRate, config,
+                                     &stereo_chain) == SONARE_OK);
   CHECK(stereo.loudness_static_gain_db == stereo_chain.applied_gain_db);
   sonare_free_mastering_chain_stereo_result(&stereo_chain);
 
   std::vector<float> silence(kRate, 0.0f);
   SonareStreamingLoudnessGain quiet{1.0f, 1.0f, 1.0f};
-  REQUIRE(sonare_streaming_loudness_gain(silence.data(), silence.size(), kRate, params, 2,
-                                         &quiet) == SONARE_OK);
+  REQUIRE(sonare_streaming_loudness_gain(silence.data(), silence.size(), kRate, config, &quiet) ==
+          SONARE_OK);
   CHECK(quiet.loudness_static_gain_db == 0.0f);
   CHECK_FALSE(std::isfinite(quiet.integrated_lufs));
 }
@@ -105,7 +103,7 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
 TEST_CASE("streaming mastering chain prepare resolves a zero block size to its default",
           "[c_api][mastering][streaming]") {
   SonareStreamingMasteringChain* chain = nullptr;
-  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &chain) == SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
   CHECK(sonare_streaming_mastering_chain_prepare(chain, 48000, -1, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -143,17 +141,19 @@ TEST_CASE("sonare_eq_create resolves a zero block size to its default",
 TEST_CASE("sonare_streaming_loudness_gain refuses bad arguments", "[c_api][mastering][streaming]") {
   std::vector<float> samples(4800, 0.1f);
   SonareStreamingLoudnessGain out{};
-  CHECK(sonare_streaming_loudness_gain(samples.data(), samples.size(), 48000, nullptr, 0,
-                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_streaming_loudness_gain(nullptr, samples.size(), 48000, nullptr, 0, &out) ==
+  CHECK(sonare_streaming_loudness_gain(samples.data(), samples.size(), 48000, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_streaming_loudness_gain(samples.data(), samples.size(), 48000, nullptr, 1, &out) ==
+  CHECK(sonare_streaming_loudness_gain(nullptr, samples.size(), 48000, nullptr, &out) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  const SonareMasteringParam unknown[] = {{"no.such.key", 1.0}};
-  CHECK(sonare_streaming_loudness_gain(samples.data(), samples.size(), 48000, unknown, 1, &out) ==
+  CHECK(sonare_streaming_loudness_gain(samples.data(), samples.size(), 48000, "{", &out) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_streaming_loudness_gain(samples.data(), samples.size(), 48000, "[]", &out) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_streaming_loudness_gain(samples.data(), samples.size(), 48000,
+                                       R"({"no.such.key":1})",
+                                       &out) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_streaming_loudness_gain_stereo(samples.data(), nullptr, samples.size(), 48000,
-                                              nullptr, 0, &out) == SONARE_ERROR_INVALID_PARAMETER);
+                                              nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 #endif  // SONARE_WITH_MASTERING
