@@ -426,7 +426,9 @@ describe('bounceWithInstruments', () => {
         ],
         auto,
       );
-    expect(bounce).toThrow(/Invalid parameter/);
+    expect(bounce).toThrow(
+      "Project.bounceWithInstruments: options.totalFrames must be positive when a hosted instrument's tail is unbounded",
+    );
     // The control: the callback did run and throw before the native failure.
     expect(prepared).toBe(true);
   });

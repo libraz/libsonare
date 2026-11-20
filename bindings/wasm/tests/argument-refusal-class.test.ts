@@ -123,11 +123,13 @@ describe('argument refusal error class', () => {
       sampleRate: 48000,
     });
     try {
-      // The library reports INVALID_PARAMETER for an unknown bus: refused by cause.
+      // An unknown bus is refused by cause, naming the argument.
       const refusal = thrown(() => mixer.busMeter('no-such-bus'));
       expect(refusal).toBeInstanceOf(RangeError);
       expect(isSonareError(refusal)).toBe(false);
-      expect((refusal as Error).message).toBe('Mixer.busMeter: Invalid parameter');
+      expect((refusal as Error).message).toBe(
+        'Mixer.busMeter: busId must be the id of a bus in this mixer',
+      );
     } finally {
       mixer.destroy();
     }

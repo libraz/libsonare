@@ -279,7 +279,11 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
     try {
       expect(() => engine.setTrackLanes([3] as never)).toThrow(TypeError);
       expect(() => engine.setTrackLanes([{ trackId: 3, sourceChannelLayout: '5.1' }])).toThrow(
-        RangeError,
+        expect.objectContaining({
+          code: ErrorCode.NotSupported,
+          message:
+            'SonareEngine.setTrackLanes: lanes[0].sourceChannelLayout other than stereo is not supported',
+        }),
       );
       engine.setTrackLanes([{ trackId: 3 }]);
       expect(engine.setTrackOutputBus(3, null)).toBeUndefined();
