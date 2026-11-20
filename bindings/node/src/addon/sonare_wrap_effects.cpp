@@ -754,6 +754,81 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::Fade(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  Napi::Float32Array samples;
+  if (!RequiredFloat32ArrayValue(env, info[0], "samples", &samples)) return env.Undefined();
+  int sample_rate = 0;
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
+  float fade_in_sec = 0.0f;
+  float fade_out_sec = 0.0f;
+  if (!OptionalFloatArg(env, info, 2, "fadeInSec", 0.0f, &fade_in_sec) ||
+      !OptionalFloatArg(env, info, 3, "fadeOutSec", 0.0f, &fade_out_sec)) {
+    return env.Undefined();
+  }
+
+  float* output = nullptr;
+  size_t output_length = 0;
+  const SonareError err = sonare_fade(samples.Data(), samples.ElementLength(), sample_rate,
+                                      fade_in_sec, fade_out_sec, &output, &output_length);
+  if (err != SONARE_OK) {
+    sonare_free_floats(output);
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  std::vector<float> result(output, output + output_length);
+  sonare_free_floats(output);
+  return VecToFloat32(env, result);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::BiquadFilter(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  Napi::Float32Array samples;
+  if (!RequiredFloat32ArrayValue(env, info[0], "samples", &samples)) return env.Undefined();
+  int sample_rate = 0;
+  int type = 0;
+  int order = 2;
+  bool zero_phase = false;
+  float cutoff_hz = 0.0f;
+  float center_hz = 0.0f;
+  float bandwidth_hz = 0.0f;
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate) ||
+      !RequiredIntArg(env, info, 2, "type", &type) ||
+      !OptionalIntArg(env, info, 3, "order", 2, &order) ||
+      !OptionalBoolArg(env, info, 4, "zeroPhase", false, &zero_phase) ||
+      !OptionalFloatArg(env, info, 5, "cutoffHz", 0.0f, &cutoff_hz) ||
+      !OptionalFloatArg(env, info, 6, "centerHz", 0.0f, &center_hz) ||
+      !OptionalFloatArg(env, info, 7, "bandwidthHz", 0.0f, &bandwidth_hz)) {
+    return env.Undefined();
+  }
+
+  SonareBiquadFilterConfig config;
+  sonare_biquad_filter_config_init(&config);
+  config.type = type;
+  config.order = order;
+  config.zero_phase = zero_phase ? 1 : 0;
+  config.cutoff_hz = cutoff_hz;
+  config.center_hz = center_hz;
+  config.bandwidth_hz = bandwidth_hz;
+
+  float* output = nullptr;
+  size_t output_length = 0;
+  const SonareError err = sonare_biquad_filter(samples.Data(), samples.ElementLength(), sample_rate,
+                                               &config, &output, &output_length);
+  if (err != SONARE_OK) {
+    sonare_free_floats(output);
+    sonare_node::ThrowSonareErrorFlattening(env, err, "config");
+    return env.Undefined();
+  }
+  std::vector<float> result(output, output + output_length);
+  sonare_free_floats(output);
+  return VecToFloat32(env, result);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 

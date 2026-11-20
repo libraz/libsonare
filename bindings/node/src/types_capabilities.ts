@@ -1,3 +1,27 @@
+/** Host CPU, memory and parallelism facts, from {@link systemInfo}; an unreported fact is absent. */
+export interface SystemInfo {
+  readonly cpu: {
+    /** Logical cores. */
+    readonly logicalCores?: number;
+    /** Physical cores. */
+    readonly physicalCores?: number;
+  };
+  readonly memory: {
+    /** Total memory in GiB. */
+    readonly totalGb?: number;
+    /** Memory available to the process in GiB. */
+    readonly availableGb?: number;
+  };
+  readonly parallel: {
+    /** Whether the library runs work in parallel. */
+    readonly enabled: boolean;
+    /** Worker count, at least 1. */
+    readonly workers: number;
+    /** Parallelism strategy name. */
+    readonly strategy: string;
+  };
+}
+
 /** Build and runtime capabilities reported by the loaded library, from {@link capabilities}. */
 export interface Capabilities {
   /** libsonare semantic version. */

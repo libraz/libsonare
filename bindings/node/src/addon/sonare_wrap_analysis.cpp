@@ -1185,6 +1185,21 @@ Napi::Value SonareWrap::AbiVersion(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::SystemInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  char* raw = nullptr;
+  const SonareError err = sonare_system_info_json(&raw);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  const std::string json(raw);
+  sonare_free_string(raw);
+  return Napi::String::New(env, json);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

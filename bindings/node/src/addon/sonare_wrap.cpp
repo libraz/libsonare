@@ -201,6 +201,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("version", Napi::Function::New(env, &SonareWrap::Version, "version"));
   exports.Set("abiVersion", Napi::Function::New(env, &SonareWrap::AbiVersion, "abiVersion"));
   exports.Set("capabilities", Napi::Function::New(env, &SonareWrap::Capabilities, "capabilities"));
+  exports.Set("systemInfo", Napi::Function::New(env, &SonareWrap::SystemInfo, "systemInfo"));
   exports.Set("capabilityCatalog",
               Napi::Function::New(env, &SonareWrap::CapabilityCatalog, "capabilityCatalog"));
 
@@ -484,6 +485,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MasteringRepairDetectTrimRangeStereo,
                                   "masteringRepairDetectTrimRangeStereo"));
   exports.Set("trim", Napi::Function::New(env, &SonareWrap::Trim, "trim"));
+  exports.Set("fade", Napi::Function::New(env, &SonareWrap::Fade, "fade"));
+  exports.Set("biquadFilter", Napi::Function::New(env, &SonareWrap::BiquadFilter, "biquadFilter"));
   exports.Set("spectralEdit", Napi::Function::New(env, &SonareWrap::SpectralEdit, "spectralEdit"));
 
   // Features - Spectrogram

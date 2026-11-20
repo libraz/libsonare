@@ -19,12 +19,16 @@ import type { WasmChromaResult } from './sonare.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertClosedToken,
   assertFiniteScalar,
+  assertFloat32Array,
   assertFloatFields,
   assertMatrix2D,
   assertNonNegativeScalar,
   assertPositiveFloatValue,
   assertPositiveInteger,
+  assertSampleRate,
+  optionalBoolean,
   requestOnly,
   sampleOneShot,
   toMatrix2D,
@@ -232,6 +236,91 @@ export function trim(...args: unknown[]): Float32Array {
     assertPositiveInteger(frameLength, 'frameLength');
     assertPositiveInteger(hopLength, 'hopLength');
     return requireModule().trimEx(r.samples, r.sampleRate, thresholdDb, frameLength, hopLength);
+  });
+}
+
+/** Request for {@link fade}. */
+export interface FadeRequest {
+  /** Mono audio samples. */
+  samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** Cosine fade-in length in seconds, finite and at least 0; clamped to the input. Default 0. */
+  fadeInSec?: number;
+  /** Cosine fade-out length in seconds, finite and at least 0; clamped to the input. Default 0. */
+  fadeOutSec?: number;
+}
+
+/**
+ * Apply a cosine fade-in and fade-out to mono audio; 0 leaves that end untouched.
+ *
+ * @returns Faded audio, the same length as the input
+ * @throws {TypeError} on a wrong-typed field or an unknown key
+ * @throws {RangeError} on a negative or non-finite length, or audio out of domain
+ */
+export function fade(request: FadeRequest): Float32Array {
+  return withEntry('fade', () => {
+    const r = requestOnly<FadeRequest>('fade', [request]);
+    assertFloat32Array(r.samples, 'samples');
+    assertSampleRate(r.sampleRate);
+    return requireModule().fade(r.samples, r.sampleRate, r.fadeInSec ?? 0, r.fadeOutSec ?? 0);
+  });
+}
+
+/** Response of a {@link biquadFilter}. */
+export type BiquadFilterType = 'highPass' | 'lowPass' | 'bandPass' | 'notch';
+
+const BIQUAD_FILTER_TYPES: readonly BiquadFilterType[] = [
+  'highPass',
+  'lowPass',
+  'bandPass',
+  'notch',
+];
+
+/** Request for {@link biquadFilter}. */
+export interface BiquadFilterRequest {
+  /** Mono audio samples. */
+  samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** Filter response. */
+  type: BiquadFilterType;
+  /** 2, or 4 for `highPass` / `lowPass` (a two-section cascade). Default 2. */
+  order?: number;
+  /** Run the filter forward and backward for zero phase shift. Default `false`. */
+  zeroPhase?: boolean;
+  /** Corner in Hz inside `(0, sampleRate / 2)`; `highPass` / `lowPass` only. */
+  cutoffHz?: number;
+  /** Center in Hz inside `(0, sampleRate / 2)`; `bandPass` / `notch` only. */
+  centerHz?: number;
+  /** Bandwidth in Hz, above 0; `bandPass` / `notch` only. */
+  bandwidthHz?: number;
+}
+
+/**
+ * Filter mono audio with a Butterworth high-pass or low-pass, or a band-pass or notch biquad. A
+ * frequency field the `type` does not read must be omitted.
+ *
+ * @returns Filtered audio, the same length as the input
+ * @throws {TypeError} on a wrong-typed field, an unknown key or a `type` that is not a string
+ * @throws {RangeError} on an unknown `type`, a frequency field out of range or one `type` does not read, or an unsupported `order`
+ */
+export function biquadFilter(request: BiquadFilterRequest): Float32Array {
+  return withEntry('biquadFilter', () => {
+    const r = requestOnly<BiquadFilterRequest>('biquadFilter', [request]);
+    assertFloat32Array(r.samples, 'samples');
+    assertSampleRate(r.sampleRate);
+    assertClosedToken(r.type, BIQUAD_FILTER_TYPES, 'type');
+    return requireModule().biquadFilter(
+      r.samples,
+      r.sampleRate,
+      BIQUAD_FILTER_TYPES.indexOf(r.type),
+      r.order ?? 2,
+      optionalBoolean(r.zeroPhase, 'zeroPhase', false),
+      r.cutoffHz ?? 0,
+      r.centerHz ?? 0,
+      r.bandwidthHz ?? 0,
+    );
   });
 }
 

@@ -119,6 +119,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Version(const Napi::CallbackInfo& info);
   static Napi::Value AbiVersion(const Napi::CallbackInfo& info);
   static Napi::Value Capabilities(const Napi::CallbackInfo& info);
+  static Napi::Value SystemInfo(const Napi::CallbackInfo& info);
 
   // Effects
   static Napi::Value Hpss(const Napi::CallbackInfo& info);
@@ -239,6 +240,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringRepairDetectTrimRange(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDetectTrimRangeStereo(const Napi::CallbackInfo& info);
   static Napi::Value Trim(const Napi::CallbackInfo& info);
+  static Napi::Value Fade(const Napi::CallbackInfo& info);
+  static Napi::Value BiquadFilter(const Napi::CallbackInfo& info);
   static Napi::Value SpectralEdit(const Napi::CallbackInfo& info);
 
   // Features - Spectrogram

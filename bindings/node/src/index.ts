@@ -1,7 +1,13 @@
 export * from './analysis.js';
 export * from './audio.js';
 export * from './audio_channels.js';
-export { abiVersion, capabilities, capabilityCatalog, version } from './capabilities.js';
+export {
+  abiVersion,
+  capabilities,
+  capabilityCatalog,
+  systemInfo,
+  version,
+} from './capabilities.js';
 export type { ChordSymbolFields } from './chord_annotation.js';
 // Named for the same reason: a helper added beside these two cannot follow without an edit.
 export { chordSymbolFromAnalysis, keyModeFromAnalysis } from './chord_annotation.js';
@@ -502,6 +508,7 @@ export type {
   SynthPatch,
   SynthRetrigger,
   SynthWaveform,
+  SystemInfo,
   TakeAlignment,
   TempogramMode,
   TimbreFrame,

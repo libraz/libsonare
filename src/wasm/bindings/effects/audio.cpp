@@ -527,6 +527,51 @@ val js_trim(val samples, const val& sample_rate, const val& threshold_db) {
                     val(constants::kDefaultHopLength));
 }
 
+// Fade and biquad filter: audio is read unvalidated so the C side's refusal is the one reported.
+val js_fade(val samples, const val& sample_rate, const val& fade_in_sec, const val& fade_out_sec) {
+  const int rate = checkedIntFromVal(sample_rate, "sampleRate");
+  const float fade_in = checkedFloatFromVal(fade_in_sec, "fadeInSec");
+  const float fade_out = checkedFloatFromVal(fade_out_sec, "fadeOutSec");
+  std::vector<float> input = float32ArrayToVector(samples);
+  float* output = nullptr;
+  size_t output_length = 0;
+  const SonareError err =
+      sonare_fade(input.data(), input.size(), rate, fade_in, fade_out, &output, &output_length);
+  if (err != SONARE_OK) {
+    sonare_free_floats(output);
+    throwCodedCError(err);
+  }
+  std::vector<float> result(output, output + output_length);
+  sonare_free_floats(output);
+  return vectorToFloat32Array(result);
+}
+
+val js_biquad_filter(val samples, const val& sample_rate, const val& type, const val& order,
+                     bool zero_phase, const val& cutoff_hz, const val& center_hz,
+                     const val& bandwidth_hz) {
+  const int rate = checkedIntFromVal(sample_rate, "sampleRate");
+  SonareBiquadFilterConfig config;
+  sonare_biquad_filter_config_init(&config);
+  config.type = checkedIntFromVal(type, "type");
+  config.order = checkedIntFromVal(order, "order");
+  config.zero_phase = zero_phase ? 1 : 0;
+  config.cutoff_hz = checkedFloatFromVal(cutoff_hz, "cutoffHz");
+  config.center_hz = checkedFloatFromVal(center_hz, "centerHz");
+  config.bandwidth_hz = checkedFloatFromVal(bandwidth_hz, "bandwidthHz");
+  std::vector<float> input = float32ArrayToVector(samples);
+  float* output = nullptr;
+  size_t output_length = 0;
+  const SonareError err =
+      sonare_biquad_filter(input.data(), input.size(), rate, &config, &output, &output_length);
+  if (err != SONARE_OK) {
+    sonare_free_floats(output);
+    throwCodedCErrorFlattening(err, "config");
+  }
+  std::vector<float> result(output, output + output_length);
+  sonare_free_floats(output);
+  return vectorToFloat32Array(result);
+}
+
 void registerEffectsAudioBindings() {
   function("hpss", &js_hpss);
   function("hpssEx", &js_hpss_ex);
@@ -552,6 +597,8 @@ void registerEffectsAudioBindings() {
   function("normalizeStereo", &js_normalize_stereo);
   function("trim", &js_trim);
   function("trimEx", &js_trim_ex);
+  function("fade", &js_fade);
+  function("biquadFilter", &js_biquad_filter);
 }
 
 #endif  // __EMSCRIPTEN__

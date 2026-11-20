@@ -126,9 +126,11 @@ import type {
 } from './feature_spectral.js';
 import type {
   BassChromaRequest,
+  BiquadFilterRequest,
   ChromaCensRequest,
   ChromaCqtRequest,
   ChromaRequest,
+  FadeRequest,
   MelDeltaRequest,
   MelSpectrogramRequest,
   MfccRequest,
@@ -2143,6 +2145,17 @@ const TranscribeRequestKeys = keysOf<TranscribeRequest>()([
   'f0MinHz',
   'f0MaxHz',
 ]);
+const FadeRequestKeys = keysOf<FadeRequest>()(['samples', 'sampleRate', 'fadeInSec', 'fadeOutSec']);
+const BiquadFilterRequestKeys = keysOf<BiquadFilterRequest>()([
+  'samples',
+  'sampleRate',
+  'type',
+  'order',
+  'zeroPhase',
+  'cutoffHz',
+  'centerHz',
+  'bandwidthHz',
+]);
 const TrimRequestKeys = keysOf<TrimRequest>()([
   'samples',
   'sampleRate',
@@ -2797,6 +2810,7 @@ export const REQUEST_SHAPES = {
   assignNoteTargets: { keys: AssignNoteTargetsRequestKeys },
   autoTune: { keys: AutoTuneRequestKeys, hints: { key: AutoTuneKeyKeys } },
   bassChroma: { keys: BassChromaRequestKeys },
+  biquadFilter: { keys: BiquadFilterRequestKeys },
   chirp: { keys: ChirpRequestKeys },
   chordFunctionalAnalysis: { keys: ChordFunctionalAnalysisRequestKeys },
   chordFunctions: { keys: ChordFunctionsRequestKeys },
@@ -2834,6 +2848,7 @@ export const REQUEST_SHAPES = {
   estimateTuning: { keys: EstimateTuningRequestKeys },
   extractNotes: { keys: ExtractNotesRequestKeys },
   extractPercussiveEvents: { keys: ExtractPercussiveEventsRequestKeys },
+  fade: { keys: FadeRequestKeys },
   fixFrames: { keys: FixFramesRequestKeys },
   fixLength: { keys: FixLengthRequestKeys },
   fourierTempogram: { keys: FourierTempogramRequestKeys },

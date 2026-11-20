@@ -26,7 +26,7 @@ import {
   notInitializedError,
   setSonareModule,
 } from './module_state.js';
-import type { Capabilities, CapabilityCatalog, ModuleHandle } from './public_types.js';
+import type { Capabilities, CapabilityCatalog, ModuleHandle, SystemInfo } from './public_types.js';
 import type { SonareModule } from './sonare.js';
 
 export { alignTakeToReference } from './align_take.js';
@@ -367,9 +367,12 @@ export type {
 } from './feature_spectral.js';
 export type {
   BassChromaRequest,
+  BiquadFilterRequest,
+  BiquadFilterType,
   ChromaCensRequest,
   ChromaCqtRequest,
   ChromaRequest,
+  FadeRequest,
   MelDeltaRequest,
   MelSpectrogramRequest,
   MfccRequest,
@@ -384,6 +387,7 @@ export {
   analyzeMelody,
   analyzeSections,
   bassChroma,
+  biquadFilter,
   chirp,
   chroma,
   chromaCens,
@@ -401,6 +405,7 @@ export {
   detectBoundaries,
   ebur128LoudnessRangeLu,
   estimateTuning,
+  fade,
   fixFrames,
   fixLength,
   fourierTempogram,
@@ -1028,6 +1033,7 @@ export type {
   StreamingRetuneConfig,
   SurroundPan,
   SynthesizeRirRequest,
+  SystemInfo,
   TempogramMode,
   TimbreFrame,
   TimbreResult,
@@ -1356,6 +1362,45 @@ export function capabilities(): Capabilities {
       throw notInitializedError();
     }
     return module.capabilities();
+  });
+}
+
+/** Parses a native count: `undefined` stays absent. */
+function optionalFact(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+/**
+ * Return the host's core counts, memory sizes and how the library parallelizes on it. A fact
+ * the platform cannot report is absent from its object, never 0.
+ *
+ * @throws SonareError `InvalidState` before {@link init} has resolved.
+ */
+export function systemInfo(): SystemInfo {
+  return withEntry('systemInfo', () => {
+    if (!module) {
+      throw notInitializedError();
+    }
+    const raw = JSON.parse(module.systemInfo());
+    const cpu: { logicalCores?: number; physicalCores?: number } = {};
+    const memory: { totalGb?: number; availableGb?: number } = {};
+    const logicalCores = optionalFact(raw.cpu?.logical_cores);
+    const physicalCores = optionalFact(raw.cpu?.physical_cores);
+    const totalGb = optionalFact(raw.memory?.total_gb);
+    const availableGb = optionalFact(raw.memory?.available_gb);
+    if (logicalCores !== undefined) cpu.logicalCores = logicalCores;
+    if (physicalCores !== undefined) cpu.physicalCores = physicalCores;
+    if (totalGb !== undefined) memory.totalGb = totalGb;
+    if (availableGb !== undefined) memory.availableGb = availableGb;
+    return {
+      cpu,
+      memory,
+      parallel: {
+        enabled: raw.parallel.enabled === true,
+        workers: raw.parallel.workers,
+        strategy: raw.parallel.strategy,
+      },
+    };
   });
 }
 

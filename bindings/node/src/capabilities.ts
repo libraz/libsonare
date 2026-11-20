@@ -1,6 +1,6 @@
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
-import type { Capabilities, CapabilityCatalog } from './types.js';
+import type { Capabilities, CapabilityCatalog, SystemInfo } from './types.js';
 
 /** libsonare semantic version of the loaded native library, e.g. `'2.0.0'`. */
 export function version(): string {
@@ -25,6 +25,34 @@ export function abiVersion(): number {
  */
 export function capabilities(): Capabilities {
   return addon.capabilities() as Capabilities;
+}
+
+/**
+ * CPU, memory and parallelism facts of the host. A fact the platform cannot
+ * report is absent from its object, never 0.
+ */
+export function systemInfo(): SystemInfo {
+  const raw = parseRecordJson<{
+    cpu?: { logical_cores?: number; physical_cores?: number };
+    memory?: { total_gb?: number; available_gb?: number };
+    parallel: { enabled: boolean; workers: number; strategy: string };
+  }>(addon.systemInfo());
+  const { cpu, memory, parallel } = raw;
+  return {
+    cpu: {
+      ...(cpu?.logical_cores !== undefined && { logicalCores: cpu.logical_cores }),
+      ...(cpu?.physical_cores !== undefined && { physicalCores: cpu.physical_cores }),
+    },
+    memory: {
+      ...(memory?.total_gb !== undefined && { totalGb: memory.total_gb }),
+      ...(memory?.available_gb !== undefined && { availableGb: memory.available_gb }),
+    },
+    parallel: {
+      enabled: parallel.enabled,
+      workers: parallel.workers,
+      strategy: parallel.strategy,
+    },
+  };
 }
 
 /**

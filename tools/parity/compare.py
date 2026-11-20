@@ -279,6 +279,7 @@ _ALIAS_COVERAGE = {
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
     "capability_catalog_json": ("capability_catalog",),
+    "system_info_json": ("system_info",),
     # Named mastering processors and analyses, under the facades' verb-last names.
     # Each facade derives the frame counts, so one name covers the base and _ex calls.
     "mastering_apply_pair_processor_ex": ("mastering_apply_pair_processor",),

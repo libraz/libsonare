@@ -83,6 +83,33 @@ export interface Capabilities {
   readonly hardwareConcurrency: number;
 }
 
+/** Host facts from {@link systemInfo}; a fact the platform cannot report is absent. */
+export interface SystemInfo {
+  /** Processor core counts. */
+  readonly cpu: {
+    /** Logical cores. */
+    readonly logicalCores?: number;
+    /** Physical cores. */
+    readonly physicalCores?: number;
+  };
+  /** Memory sizes in GiB. */
+  readonly memory: {
+    /** Total installed memory. */
+    readonly totalGb?: number;
+    /** Memory available to new allocations. */
+    readonly availableGb?: number;
+  };
+  /** How the library parallelizes its work on this host. */
+  readonly parallel: {
+    /** True when work may run on more than one worker. */
+    readonly enabled: boolean;
+    /** Worker count, at least 1. */
+    readonly workers: number;
+    /** Name of the parallelization strategy. */
+    readonly strategy: string;
+  };
+}
+
 /** Closed vocabulary of units a numeric insert parameter declares; `none` is a declaration (a fraction, a selector index, a seed). */
 export type MasteringInsertParamUnit =
   | 'dB'

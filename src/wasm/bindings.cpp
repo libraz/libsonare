@@ -187,6 +187,18 @@ val string_array(std::initializer_list<const char*> values) {
 
 }  // namespace
 
+std::string js_system_info() {
+  char* json = nullptr;
+  const SonareError err = sonare_system_info_json(&json);
+  if (err != SONARE_OK) {
+    sonare_free_string(json);
+    throwCodedCError(err);
+  }
+  std::string result(json);
+  sonare_free_string(json);
+  return result;
+}
+
 val js_capabilities() {
   val result = val::object();
   result.set("version", std::string(SONARE_VERSION_STRING));
@@ -558,6 +570,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
 
   function("version", &js_version);
   function("capabilities", &js_capabilities);
+  function("systemInfo", &js_system_info);
   function("sonareExceptionInfo", &js_sonare_exception_info);
   function("sonareReleaseException", &js_sonare_release_exception);
   function("abiVersion", &js_abi_version);

@@ -108,9 +108,11 @@ export {
 } from './feature_spectral.js';
 export {
   bassChroma,
+  biquadFilter,
   chroma,
   chromaCens,
   chromaCqt,
+  fade,
   melDelta,
   melSpectrogram,
   mfcc,

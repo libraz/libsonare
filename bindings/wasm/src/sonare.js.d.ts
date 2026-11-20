@@ -2191,6 +2191,7 @@ export interface SonareModule {
   detectKeyCandidates: (samples: Float32Array, sampleRate: number) => WasmKeyCandidateResult[];
   version: () => string;
   capabilities: () => Capabilities;
+  systemInfo: () => string;
   capabilityCatalog: () => string;
   abiVersion: () => number;
   engineAbiVersion: () => number;
@@ -3079,6 +3080,22 @@ export interface SonareModule {
   mixingAssistantSourceClassNames: () => string[];
   mixingAssistantSourceClassFromName: (name: string) => number;
   trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;
+  fade: (
+    samples: Float32Array,
+    sampleRate: number,
+    fadeInSec: number,
+    fadeOutSec: number,
+  ) => Float32Array;
+  biquadFilter: (
+    samples: Float32Array,
+    sampleRate: number,
+    type: number,
+    order: number,
+    zeroPhase: boolean,
+    cutoffHz: number,
+    centerHz: number,
+    bandwidthHz: number,
+  ) => Float32Array;
   trimEx: (
     samples: Float32Array,
     sampleRate: number,
