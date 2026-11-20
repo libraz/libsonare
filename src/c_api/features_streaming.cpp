@@ -482,12 +482,17 @@ SonareError sonare_stream_analyzer_set_reference_hz(SonareStreamAnalyzer* analyz
   SONARE_C_CATCH
 }
 
-void sonare_free_stream_frames(SonareStreamFrames* frames) { free_stream_frame_arrays(frames); }
+void sonare_free_stream_frames(SonareStreamFrames* frames) {
+  SONARE_C_API_ENTRY;
+  free_stream_frame_arrays(frames);
+}
 
 void sonare_free_stream_frames_u8(SonareStreamFramesU8* frames) {
+  SONARE_C_API_ENTRY;
   free_stream_frame_arrays(frames);
 }
 
 void sonare_free_stream_frames_i16(SonareStreamFramesI16* frames) {
+  SONARE_C_API_ENTRY;
   free_stream_frame_arrays(frames);
 }

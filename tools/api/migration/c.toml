@@ -430,7 +430,7 @@ old = "SonareTranscribeConfig.reattack_ratio"
 changed = "0 now means no split (1.x: 0 was the default 2.0 and a negative value meant no split); a non-zero value must be finite and above 1"
 domain = "analysis"
 rule = "absent-not-sentinel"
-test = "tests/api/sonare_c_transcribe_test.cpp::reattack_ratio 0 is no split"
+test = "tests/api/sonare_c_transcribe_test.cpp::reattack_ratio absent is no split"
 
 [[entry]]
 kind = "field"
@@ -681,7 +681,7 @@ test = "tests/api/sonare_c_acoustic_test.cpp::refuses a room config below its st
 [[entry]]
 kind = "export"
 old = "SONARE_REVERB_MODEL_DEFAULT"
-removed = "start the config from sonare_rir_synth_config_init or sonare_room_morph_config_init, which sets late_model to the default (Eyring), or write SONARE_REVERB_MODEL_EYRING"
+removed = "start the config from sonare_rir_synth_config_init or sonare_room_morph_config_init, which sets prefer_eyring to 1 (the Eyring model); write 0 for Sabine"
 domain = "effects"
 rule = "absent-not-sentinel"
 
@@ -1147,7 +1147,7 @@ rule = "loudness-names"
 kind = "function"
 old = "sonare_audio_file_channel_count"
 new = "sonare_audio_file_num_channels"
-domain = "core"
+domain = "analysis"
 rule = "num-channels"
 
 [[entry]]
@@ -1741,63 +1741,48 @@ rule = "individual"
 kind = "field"
 old = "SonareRirSynthConfig.late_model"
 new = "SonareRirSynthConfig.prefer_eyring"
-changed = "an int read as a boolean: non-zero selects Eyring, 0 Sabine; the SONARE_REVERB_MODEL_* selector values are gone"
-domain = "effects"
-rule = "individual"
-
-[[entry]]
-kind = "field"
-old = "SonareRirSynthConfig.air_absorption"
-new = "SonareRirSynthConfig.air_absorption_enabled"
-changed = "an int read as a boolean: non-zero applies the atmospheric absorption; the SONARE_AIR_ABSORPTION_* selector values are gone"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRirSynthConfig.source_x"
-new = "SonareRirSynthConfig.source.x"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.source.x; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRirSynthConfig.listener_x"
-new = "SonareRirSynthConfig.listener.x"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.listener.x; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRirSynthConfig.source_y"
-new = "SonareRirSynthConfig.source.y"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.source.y; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRirSynthConfig.listener_y"
-new = "SonareRirSynthConfig.listener.y"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.listener.y; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRirSynthConfig.source_z"
-new = "SonareRirSynthConfig.source.z"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.source.z; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRirSynthConfig.listener_z"
-new = "SonareRirSynthConfig.listener.z"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.listener.z; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
@@ -1833,63 +1818,48 @@ rule = "individual"
 kind = "field"
 old = "SonareRoomMorphConfig.late_model"
 new = "SonareRoomMorphConfig.prefer_eyring"
-changed = "an int read as a boolean: non-zero selects Eyring, 0 Sabine; the SONARE_REVERB_MODEL_* selector values are gone"
-domain = "effects"
-rule = "individual"
-
-[[entry]]
-kind = "field"
-old = "SonareRoomMorphConfig.air_absorption"
-new = "SonareRoomMorphConfig.air_absorption_enabled"
-changed = "an int read as a boolean: non-zero applies the atmospheric absorption; the SONARE_AIR_ABSORPTION_* selector values are gone"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRoomMorphConfig.source_x"
-new = "SonareRoomMorphConfig.source.x"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.source.x; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRoomMorphConfig.listener_x"
-new = "SonareRoomMorphConfig.listener.x"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.listener.x; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRoomMorphConfig.source_y"
-new = "SonareRoomMorphConfig.source.y"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.source.y; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRoomMorphConfig.listener_y"
-new = "SonareRoomMorphConfig.listener.y"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.listener.y; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRoomMorphConfig.source_z"
-new = "SonareRoomMorphConfig.source.z"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.source.z; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "SonareRoomMorphConfig.listener_z"
-new = "SonareRoomMorphConfig.listener.z"
-changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+removed = "read and write the config.listener.z; source and listener are SonareRoomPlacement members {x, y, z}"
 domain = "effects"
 rule = "individual"
 
@@ -1941,6 +1911,7 @@ old = "SonareSectionResult"
 changed = "gains an owned char* form, one letter per section in time order, freed by sonare_free_section_result"
 domain = "analysis"
 rule = "individual"
+test = "tests/api/sonare_c_music_test.cpp::reports each section's material group"
 
 [[entry]]
 kind = "field"
@@ -2187,3 +2158,122 @@ changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_leng
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "export"
+old = "SONARE_REVERB_MODEL_EYRING"
+removed = "set prefer_eyring to a non-zero value on SonareRirSynthConfig or SonareRoomMorphConfig"
+domain = "effects"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "export"
+old = "SONARE_REVERB_MODEL_SABINE"
+removed = "set prefer_eyring to 0 on SonareRirSynthConfig or SonareRoomMorphConfig"
+domain = "effects"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "SonareDecomposeStemsConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_decompose_stems_config_init"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareNoteExtractorConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_note_extractor_config_init"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareNoteRenderConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_note_render_config_init"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareNoteSegmenterConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_note_segmenter_config_init"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonarePercussiveEventConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_percussive_event_config_init"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonarePercussiveRenderConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_percussive_render_config_init"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_realtime_voice_changer_config_init"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareVoiceChangeConfig.struct_version"
+removed = "the field is gone; set pitch_semitones, formant_factor and formant_mode directly"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_note_target_assign_config_default"
+removed = "call sonare_note_target_assign_config_init(&config) on a caller-owned struct instead"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_pitch_correction_config_default"
+removed = "call sonare_pitch_correction_config_init(&config) on a caller-owned struct instead"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_realtime_voice_changer_config_default"
+removed = "call sonare_realtime_voice_changer_config_init(&config) on a caller-owned struct instead"
+domain = "effects"
+rule = "options-struct"
+
+[[entry]]
+kind = "option"
+old = "sonare_cqt(fmin)"
+new = "sonare_cqt(fmin_hz)"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "option"
+old = "sonare_hybrid_cqt(fmin)"
+new = "sonare_hybrid_cqt(fmin_hz)"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "option"
+old = "sonare_pseudo_cqt(fmin)"
+new = "sonare_pseudo_cqt(fmin_hz)"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "option"
+old = "sonare_vqt(fmin)"
+new = "sonare_vqt(fmin_hz)"
+domain = "analysis"
+rule = "frequency-bounds"

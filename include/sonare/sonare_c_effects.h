@@ -1154,6 +1154,7 @@ typedef struct {
 } SonareDecomposeStemsConfig;
 
 /// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+/// @details Allocates nothing and does not transfer ownership; @c init points at a static string.
 void sonare_decompose_stems_config_init(SonareDecomposeStemsConfig* config);
 
 /// @brief NMF separation that CARRIES the original phase, so each component is
