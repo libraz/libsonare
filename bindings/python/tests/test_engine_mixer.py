@@ -169,12 +169,19 @@ def test_engine_track_buses_route_lane_sends() -> None:
             "5.1",
             "7.1",
         ):
-            with pytest.raises(SonareError, match="must be stereo"):
+            with pytest.raises(
+                SonareError,
+                match=r"^\[6\] RealtimeEngine\.set_track_lanes: lanes\[0\]\.source_channel_layout "
+                r"other than stereo is not supported$",
+            ):
                 engine.set_track_lanes([{"track_id": 10, "source_channel_layout": layout}])
 
         assert MAX_TRACK_LANES == 32
         engine.set_track_lanes([{"track_id": i} for i in range(1, MAX_TRACK_LANES + 1)])
-        with pytest.raises(SonareError, match="at most 32 track lanes"):
+        with pytest.raises(
+            SonareError,
+            match=r"^RealtimeEngine\.set_track_lanes: lane_count must be an integer in \[0, 32\]$",
+        ):
             engine.set_track_lanes([{"track_id": i} for i in range(1, MAX_TRACK_LANES + 2)])
 
         engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0}]}])

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from pathlib import Path
 
 import pytest
@@ -672,7 +673,7 @@ def test_set_output_bus_routes_a_strip_through_a_submix_to_the_master() -> None:
         mixer.close()
 
 
-def test_set_output_bus_refusals_name_the_ids_and_leave_the_scene_unchanged() -> None:
+def test_set_output_bus_refusals_name_the_argument_and_leave_the_scene_unchanged() -> None:
     from libsonare import ErrorCode
 
     mixer = _empty_mixer()
@@ -683,14 +684,15 @@ def test_set_output_bus_refusals_name_the_ids_and_leave_the_scene_unchanged() ->
         mixer.set_output_bus("sub", "sub2")
         before = mixer.to_json()
         cases = [
-            ("ghost", "sub", "ghost"),
-            ("a", "ghost", "ghost"),
-            ("a", "a", "a"),
-            ("master", "sub", "master"),
-            ("sub2", "sub", "sub2"),
+            ("ghost", "sub", "source_id must be the id of a strip or a bus in this mixer"),
+            ("a", "ghost", "bus_id must be the id of a bus in this mixer"),
+            ("a", "a", "bus_id must be the id of a bus, not of a strip"),
+            ("master", "sub", "source_id must not be the id of the master bus"),
+            ("sub", "sub", "bus_id must not be the same id as source_id"),
+            ("sub2", "sub", "bus_id must not name a bus whose routing leads back to source_id"),
         ]
-        for source, destination, named in cases:
-            with pytest.raises(SonareValueError, match=named) as info:
+        for source, destination, text in cases:
+            with pytest.raises(SonareValueError, match=re.escape(text) + "$") as info:
                 mixer.set_output_bus(source, destination)
             assert info.value.code == int(ErrorCode.INVALID_PARAMETER)
             assert mixer.to_json() == before

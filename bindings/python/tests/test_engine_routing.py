@@ -215,9 +215,21 @@ def test_set_track_output_bus_matches_set_track_lanes_with_the_same_final_config
 def test_partial_lane_edits_refuse_bad_input_and_leave_the_lane_rendering() -> None:
     with _routing_engine([{"track_id": 10, "output_bus_id": 1, "sends": _SEND_TO_2}]) as engine:
         before = _render_last(engine)
-        with pytest.raises(SonareError, match="unknown track id 99"):
+        with pytest.raises(
+            SonareValueError,
+            match=(
+                r"^RealtimeEngine\.set_track_sends: "
+                r"track_id must be the id of a track in this engine$"
+            ),
+        ):
             engine.set_track_sends(99, [])
-        with pytest.raises(SonareError, match="unknown track id 99"):
+        with pytest.raises(
+            SonareValueError,
+            match=(
+                r"^RealtimeEngine\.set_track_output_bus: "
+                r"track_id must be the id of a track in this engine$"
+            ),
+        ):
             engine.set_track_output_bus(99, None)
         with pytest.raises(SonareError):
             engine.set_track_sends(10, [{"bus_id": 7}])
@@ -233,7 +245,13 @@ def test_partial_lane_edits_refuse_bad_input_and_leave_the_lane_rendering() -> N
 def test_partial_lane_edits_refuse_every_track_before_the_first_lane_list() -> None:
     with (
         RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine,
-        pytest.raises(SonareError, match="unknown track id 10"),
+        pytest.raises(
+            SonareValueError,
+            match=(
+                r"^RealtimeEngine\.set_track_sends: "
+                r"track_id must be the id of a track in this engine$"
+            ),
+        ),
     ):
         engine.set_track_sends(10, [])
 
