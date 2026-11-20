@@ -231,13 +231,15 @@ SonareError sonare_engine_set_time_signature(SonareEngine* engine, int numerator
 ///   @c bpm in (0, 100000]; a non-zero @c end_bpm ramps to a value in the same
 ///   range. Passing zero segments clears the map back to the single-tempo
 ///   value. @c start_sample and @c end_ppq of the descriptor are ignored
-///   (derived internally).
+///   (derived internally). Of two segments at one @c start_ppq, the
+///   later-supplied one takes effect.
 SonareError sonare_engine_set_tempo_segments(SonareEngine* engine,
                                              const SonareProjectTempoSegment* segments,
                                              size_t segment_count);
 /// @brief Installs a time-signature map from @p segment_count segments (control
 ///   thread only). Each segment needs a finite non-negative @c start_ppq and a
-///   positive @c numerator / @c denominator.
+///   positive @c numerator / @c denominator. Of two segments at one
+///   @c start_ppq, the later-supplied one takes effect.
 SonareError sonare_engine_set_time_signature_segments(
     SonareEngine* engine, const SonareProjectTimeSignatureSegment* segments, size_t segment_count);
 /// @brief Converts a position in quarter notes to a timeline sample through the tempo map.
