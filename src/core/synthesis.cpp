@@ -24,9 +24,10 @@ size_t checked_sample_count(float duration, int sample_rate, const char* subject
   const double samples = static_cast<double>(duration) * sample_rate;
   if (!std::isfinite(duration) || duration < 0.0f || samples < 0.0 ||
       samples > static_cast<double>(resource::kMaxOfflineAudioSamples)) {
-    util::check::refuse_relation({subject, "sr"},
-                                 "{0} * {1} must be at most " +
-                                     util::refusal::bound_text(resource::kMaxOfflineAudioSamples));
+    util::check::refuse_relation(
+        {subject, "sr"},
+        "{0} * {1} must be at most " + util::refusal::integer_bound_text(
+                                           static_cast<double>(resource::kMaxOfflineAudioSamples)));
   }
   return static_cast<size_t>(samples);
 }
@@ -141,9 +142,10 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
     const double rounded = std::round(static_cast<double>(t) * sr);
     if (rounded > static_cast<double>(resource::kMaxOfflineAudioSamples) ||
         rounded > static_cast<double>(std::numeric_limits<int>::max())) {
-      util::check::refuse_relation(
-          {"times", "sr"}, "{0} * {1} must be at most " +
-                               util::refusal::bound_text(resource::kMaxOfflineAudioSamples));
+      util::check::refuse_relation({"times", "sr"},
+                                   "{0} * {1} must be at most " +
+                                       util::refusal::integer_bound_text(
+                                           static_cast<double>(resource::kMaxOfflineAudioSamples)));
     }
     positions.push_back(static_cast<int>(rounded));
   }
@@ -156,10 +158,10 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
       if (p > max_pos) max_pos = p;
     }
     if (static_cast<size_t>(max_pos) > resource::kMaxOfflineAudioSamples - click_count) {
-      util::check::refuse_relation(
-          {"times", "sr", "click_duration"},
-          "max({0}) * {1} + {2} * {1} must be at most " +
-              util::refusal::bound_text(resource::kMaxOfflineAudioSamples));
+      util::check::refuse_relation({"times", "sr", "click_duration"},
+                                   "max({0}) * {1} + {2} * {1} must be at most " +
+                                       util::refusal::integer_bound_text(
+                                           static_cast<double>(resource::kMaxOfflineAudioSamples)));
     }
     out_len = static_cast<int>(static_cast<size_t>(max_pos) + click_count);
   } else {

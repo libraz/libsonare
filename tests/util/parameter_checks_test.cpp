@@ -214,3 +214,12 @@ TEST_CASE("a finite-only double is refused by name, and an indexed member names 
       [] { check::finite(INFINITY, check::indexed_subject("bands", 0, "gain_db").c_str()); });
   CHECK(std::string(check::camel_spelled(indexed).what()) == "bands[0].gainDb must be finite");
 }
+
+TEST_CASE("an integer bound is written in plain digits, never in exponent form",
+          "[util][refusal]") {
+  CHECK(refusal_text([] { check::integer_in_range(600000000, 0, 500000000, "count"); }) ==
+        "count must be an integer in [0, 500000000]");
+  CHECK(refusal::integer_bound_text(500000000.0) == "500000000");
+  CHECK(refusal::integer_bound_text(4294967295.0) == "4294967295");
+  CHECK(refusal::integer_bound_text(0.5) == "0.5");
+}

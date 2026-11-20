@@ -117,9 +117,19 @@ inline constexpr const char* kFloatRangePredicate =
 /// @brief The domain of a value held as a double, for one with no narrower declared range.
 inline constexpr const char* kFiniteDoublePredicate = "must be finite";
 
+/// @brief An integer bound in plain digits; a bound past the 64-bit range keeps bound_text.
+inline std::string integer_bound_text(double value) {
+  constexpr double kInt64Limit = 9223372036854775808.0;
+  if (std::isfinite(value) && std::nearbyint(value) == value && value > -kInt64Limit &&
+      value < kInt64Limit) {
+    return std::to_string(static_cast<long long>(value));
+  }
+  return bound_text(value);
+}
+
 /// @brief "must be an integer in [lo, hi]".
 inline std::string integer_range_predicate(double lo, double hi) {
-  return "must be an integer in [" + bound_text(lo) + ", " + bound_text(hi) + "]";
+  return "must be an integer in [" + integer_bound_text(lo) + ", " + integer_bound_text(hi) + "]";
 }
 
 /// @brief "must be a power of two in [lo, hi]".
