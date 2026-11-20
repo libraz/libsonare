@@ -7,6 +7,7 @@
 #include "core/audio_io.h"
 #include "core/audio_io_detail.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -154,8 +155,7 @@ Audio audio_from_decoded_mono(std::vector<float> samples, int sample_rate) {
 Audio Audio::from_file_channel(const std::string& path, int channel_index) {
   auto [interleaved, sample_rate, channels] = load_audio_interleaved(path);
   SONARE_CHECK_MSG(channels > 0, ErrorCode::DecodeFailed, "decoded audio reports no channels");
-  SONARE_CHECK_MSG(channel_index >= 0 && channel_index < channels, ErrorCode::InvalidParameter,
-                   "Audio::from_file_channel: channel index is outside the file's channels");
+  util::check::integer_in_range(channel_index, 0, channels - 1, "channel_index");
   const std::size_t frames = interleaved.size() / static_cast<std::size_t>(channels);
   std::vector<float> plane(frames);
   for (std::size_t frame = 0; frame < frames; ++frame) {

@@ -338,7 +338,8 @@ TEST_CASE("Audio from_file_channel keeps the channels apart", "[audio]") {
 
   // A channel the file does not have is refused rather than clamped onto the
   // last one, and so is the second channel of a mono file.
-  REQUIRE_THROWS_AS(Audio::from_file_channel(path, 2), SonareException);
+  REQUIRE_THROWS_WITH(Audio::from_file_channel(path, 2),
+                      "channel_index must be an integer in [0, 1]");
   REQUIRE_THROWS_AS(Audio::from_file_channel(path, -1), SonareException);
   std::remove(path.c_str());
 

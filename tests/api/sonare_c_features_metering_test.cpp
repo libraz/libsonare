@@ -1473,3 +1473,31 @@ TEST_CASE("array transforms refuse a non-finite input in the core function they 
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()).find("NULL") != std::string::npos);
 }
+
+TEST_CASE("every constant-Q entry bounds its hop at the CQT's maximum on both sides",
+          "[c_api][feature]") {
+  const std::vector<float> samples(22050, 0.1f);
+  const std::vector<float> magnitude(84 * 4, 0.1f);
+  for (const int hop : {0, -1, 65537}) {
+    INFO("hop_length " << hop);
+    SonareChromaResult chroma{};
+    CHECK(sonare_chroma_cqt(samples.data(), samples.size(), 22050, hop, 12, &chroma) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "hop_length must be an integer in [1, 65536]");
+    CHECK(sonare_chroma_cens(samples.data(), samples.size(), 22050, hop, 12, &chroma) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "hop_length must be an integer in [1, 65536]");
+    float* out = nullptr;
+    size_t out_length = 0;
+    CHECK(sonare_cqt_to_audio(magnitude.data(), 84, 4, 22050, hop, 32.70f, 12, 2, &out,
+                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "hop_length must be an integer in [1, 65536]");
+    CHECK(sonare_vqt_to_audio(magnitude.data(), 84, 4, 22050, hop, 32.70f, 12, 0.0f, 2, &out,
+                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "hop_length must be an integer in [1, 65536]");
+  }
+}

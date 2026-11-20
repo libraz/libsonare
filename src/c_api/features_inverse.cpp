@@ -37,7 +37,7 @@ SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, in
         check::integer_at_least(n_bins, 1, "n_bins");
         check::integer_at_least(n_frames, 1, "n_frames");
         check::integer_in_range(sample_rate, kMinSampleRate, kMaxSampleRate, "sample_rate");
-        check::integer_at_least(hop_length, 1, "hop_length");
+        check::integer_in_range(hop_length, 1, sonare::kMaxCqtHopLength, "hop_length");
         check::greater_than(fmin, 0.0, "fmin");
         check::integer_at_least(bins_per_octave, 1, "bins_per_octave");
         if (gamma != nullptr) validate_vqt_gamma(*gamma);

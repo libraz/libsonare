@@ -127,10 +127,11 @@ constexpr int kChromaCqtOctaves = 7;
 
 /// @brief The ChromaCqtConfig a public chroma_cqt / chroma_cens entry point runs with.
 /// @details Spans @ref kChromaCqtOctaves octaves at @p bins_per_octave.
-/// @throws SonareParameterRefusal(InvalidParameter) unless hop_length and n_chroma are positive
-///         and bins_per_octave is a positive multiple of n_chroma whose octave span fits an int.
+/// @throws SonareParameterRefusal(InvalidParameter) unless hop_length is in [1, kMaxCqtHopLength],
+///         n_chroma is positive and bins_per_octave is a positive multiple of n_chroma whose octave
+///         span fits an int.
 inline ChromaCqtConfig make_chroma_cqt_config(int hop_length, int n_chroma, int bins_per_octave) {
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_in_range(hop_length, 1, kMaxCqtHopLength, "hop_length");
   util::check::integer_at_least(n_chroma, 1, "n_chroma");
   util::check::integer_in_range(
       bins_per_octave, 1, std::numeric_limits<int>::max() / kChromaCqtOctaves, "bins_per_octave");

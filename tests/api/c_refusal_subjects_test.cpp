@@ -97,6 +97,18 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
                                           take.size(), 22050, nullptr, nullptr, &count,
                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_anchors must not be NULL");
+
+  SonareTakeAlignConfig config{};
+  config.bins_per_octave = 18;
+  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
+                                          take.size(), 22050, &config, nullptr, &count,
+                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.bins_per_octave must be a multiple of 12");
+  config.bins_per_octave = -12;
+  CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
+                                          take.size(), 22050, &config, &anchors, &count,
+                                          &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.bins_per_octave must be an integer in [0, 2147483647]");
 }
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
 
@@ -140,8 +152,7 @@ TEST_CASE("the CQT inverse refuses each member by its core name", "[c_api][featu
         "n_frames must be an integer in [1, 2147483647]");
   CHECK(message(24, 4, 100, 512, 32.7f, 12, 4) ==
         "sample_rate must be an integer in [8000, 384000]");
-  CHECK(message(24, 4, 22050, 0, 32.7f, 12, 4) ==
-        "hop_length must be an integer in [1, 2147483647]");
+  CHECK(message(24, 4, 22050, 0, 32.7f, 12, 4) == "hop_length must be an integer in [1, 65536]");
   CHECK(message(24, 4, 22050, 512, 0.0f, 12, 4) == "fmin must be finite and greater than 0");
   CHECK(message(24, 4, 22050, 512, 32.7f, 0, 4) ==
         "bins_per_octave must be an integer in [1, 2147483647]");
@@ -231,9 +242,11 @@ TEST_CASE("the audio handle entries refuse a NULL argument by its name", "[c_api
   const std::vector<uint8_t> bytes(16, 0);
   SonareAudio* audio = nullptr;
   CHECK(sonare_audio_from_memory(nullptr, 1, &audio) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "data must not be NULL");
+  CHECK(last_message() == "data must not be NULL when length is not 0");
   CHECK(sonare_audio_from_memory(bytes.data(), 0, &audio) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "length must be an integer of at least 1");
+  CHECK(last_message() == "data must not be empty");
+  CHECK(sonare_audio_from_memory(nullptr, 0, &audio) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "data must not be empty");
   CHECK(sonare_audio_from_memory(bytes.data(), bytes.size(), nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out must not be NULL");
@@ -408,14 +421,14 @@ TEST_CASE("the second-set entries name the first refused argument in header orde
   const std::vector<float> features(4 * 9, 0.5f);
   CHECK(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 0, 12, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "hop_length must be an integer in [1, 2147483647]");
+  CHECK(last_message() == "hop_length must be an integer in [1, 65536]");
   CHECK(sonare_mel_delta(nullptr, 4, 9, 9, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "features must not be NULL");
   CHECK(sonare_segment_cross_similarity(nullptr, 2, 3, features.data(), 2, 3, 0, "cosine",
                                         "affinity", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "x must not be NULL");
   CHECK(sonare_audio_from_memory(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "data must not be NULL");
+  CHECK(last_message() == "data must not be NULL when length is not 0");
   CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options must not be NULL");

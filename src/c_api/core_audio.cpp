@@ -22,11 +22,9 @@ SonareError sonare_audio_from_buffer(const float* data, size_t length, int sampl
 SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareAudio** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  SONARE_C_REQUIRE_NONNULL(data);
-  if (const SonareError err =
-          run_validation([&] { util::check::integer_at_least(length, 1, "length"); });
-      err != SONARE_OK) {
-    return err;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(data, length);
+  if (length == 0) {
+    return run_validation([] { util::check::refuse("data", util::refusal::kNonEmptyPredicate); });
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -40,11 +38,9 @@ SonareError sonare_decode_channels(const uint8_t* data, size_t length, float** o
                                    size_t* out_frames, int* out_channels, int* out_sample_rate) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_samples, out_frames, out_channels, out_sample_rate);
-  SONARE_C_REQUIRE_NONNULL(data);
-  if (const SonareError err =
-          run_validation([&] { util::check::integer_at_least(length, 1, "length"); });
-      err != SONARE_OK) {
-    return err;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(data, length);
+  if (length == 0) {
+    return run_validation([] { util::check::refuse("data", util::refusal::kNonEmptyPredicate); });
   }
   SONARE_C_REQUIRE_NONNULL(out_samples);
   SONARE_C_REQUIRE_NONNULL(out_frames);

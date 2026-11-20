@@ -542,6 +542,18 @@ SonareError sonare_align_take_to_reference_ex(
                              "{0} resampled from {1} to {2} must not exceed the buffer size limit");
     });
   }
+  // Chroma folds the grid into 12 classes, so a grid it cannot fold is refused by its C member.
+  if (config != nullptr && config->bins_per_octave != 0) {
+    if (const SonareError err = run_validation([&] {
+          check::integer_at_least(config->bins_per_octave, 0, "config.bins_per_octave");
+          if (config->bins_per_octave % 12 != 0) {
+            check::refuse("config.bins_per_octave", "must be a multiple of 12");
+          }
+        });
+        err != SONARE_OK) {
+      return err;
+    }
+  }
   SONARE_C_REQUIRE_NONNULL(out_anchors);
   SONARE_C_REQUIRE_NONNULL(out_count);
 
