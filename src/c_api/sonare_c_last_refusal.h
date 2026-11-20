@@ -21,6 +21,10 @@ const sonare::SonareParameterRefusal* last_parameter_refusal() noexcept;
 /// @brief Backs sonare_last_refusal_subject_count: the refusal's subjects plus a named successor.
 size_t last_refusal_subject_count() noexcept;
 
+/// @brief Backs sonare_last_refusal_entry: the refused call's c-entry-name key, or nullptr
+///        when no parameter refusal is recorded.
+const char* last_refusal_entry() noexcept;
+
 /// @brief Backs sonare_last_refusal_subject; NULL past the count.
 const char* last_refusal_subject(size_t index) noexcept;
 

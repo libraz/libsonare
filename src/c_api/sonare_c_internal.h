@@ -104,6 +104,16 @@ inline bool struct_size_accepted(uint32_t struct_size, size_t expected, const ch
                  (std::string(name) + ".struct_size is below sizeof").c_str());
   return false;
 }
+/// @brief Refuses a caller-filled struct whose @c struct_size is below the layout this
+///        library was built with, which is what a struct not started from its _init carries.
+/// @throws sonare::SonareParameterRefusal naming "<subject>.struct_size" and @p init_name.
+inline void require_struct_size(uint32_t struct_size, size_t expected, const std::string& subject,
+                                const char* init_name) {
+  if (struct_size >= expected) return;
+  throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter,
+                                                  subject + ".struct_size",
+                                                  std::string("must be set by ") + init_name);
+}
 /// @brief Records @p code with @p msg, a string with static storage duration.
 /// @details Never allocates: the message is read through the fallback pointer
 ///          instead of being copied, so a refusal made before any buffer exists
@@ -115,6 +125,9 @@ void set_last_error_static(SonareError code, const char* msg) noexcept;
 ///          an earlier call can never leak into an unrelated later call. See the
 ///          @ref sonare_last_error_message contract in sonare_c.h.
 void clear_last_error() noexcept;
+/// @brief Clears the last error and marks @p entry (the exported function's __func__) as the
+///        entry running on this thread, so a parameter refusal it records can name it.
+void enter_c_api(const char* entry) noexcept;
 /// @brief Clears the thread-local structured diagnostic list. Called at the entry
 /// of the C-ABI calls that may publish one, so a stale entry never leaks forward.
 void clear_last_diagnostics() noexcept;
@@ -397,7 +410,7 @@ inline std::string join_names(const std::vector<std::string>& values) {
 // destroy it. SONARE_C_TRY also clears defensively for legacy/helper entry paths.
 // tests/conformance/check_c_api_entry_guard.py holds every exported entry to this
 // family: cleared on entry, and everything that can throw inside SONARE_C_TRY.
-#define SONARE_C_API_ENTRY sonare_c_detail::clear_last_error()
+#define SONARE_C_API_ENTRY sonare_c_detail::enter_c_api(__func__)
 
 namespace sonare_c_detail {
 

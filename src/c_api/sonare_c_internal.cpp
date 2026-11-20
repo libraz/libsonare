@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <optional>
+#include <string>
+#include <string_view>
 
 #include "c_api/sonare_c_error_mapping.h"
 #include "c_api/sonare_c_last_refusal.h"
@@ -24,6 +26,32 @@ const char*& last_error_fallback_storage() noexcept {
 std::optional<sonare::SonareParameterRefusal>& last_refusal_storage() noexcept {
   static thread_local std::optional<sonare::SonareParameterRefusal> refusal;
   return refusal;
+}
+
+const char*& current_entry_storage() noexcept {
+  static thread_local const char* entry = nullptr;
+  return entry;
+}
+
+std::string& last_refusal_entry_storage() noexcept {
+  static thread_local std::string key;
+  return key;
+}
+
+/// The c-entry-name key of @p entry: no "sonare_" prefix, a second-form suffix folded away.
+std::string c_entry_key(const char* entry) {
+  std::string key(entry != nullptr ? entry : "");
+  constexpr std::string_view kPrefix = "sonare_";
+  if (key.compare(0, kPrefix.size(), kPrefix) == 0) key.erase(0, kPrefix.size());
+  for (const std::string_view suffix :
+       {"_with_progress", "_with_options", "_checked", "_ex2", "_ex", "_v2"}) {
+    if (key.size() > suffix.size() &&
+        key.compare(key.size() - suffix.size(), suffix.size(), suffix) == 0) {
+      key.erase(key.size() - suffix.size());
+      break;
+    }
+  }
+  return key;
 }
 
 }  // namespace
@@ -58,6 +86,11 @@ void set_last_error_static(SonareError code, const char* msg) noexcept {
   last_error_code_storage() = code;
   last_refusal_storage().reset();
   last_error_fallback_storage() = msg;
+}
+
+void enter_c_api(const char* entry) noexcept {
+  current_entry_storage() = entry;
+  clear_last_error();
 }
 
 void clear_last_error() noexcept {
@@ -105,6 +138,11 @@ size_t refusal_subject_count(const sonare::SonareParameterRefusal& refusal) {
 size_t last_refusal_subject_count() noexcept {
   const sonare::SonareParameterRefusal* refusal = last_parameter_refusal();
   return refusal == nullptr ? 0 : refusal_subject_count(*refusal);
+}
+
+const char* last_refusal_entry() noexcept {
+  if (last_parameter_refusal() == nullptr) return nullptr;
+  return last_refusal_entry_storage().c_str();
 }
 
 const char* last_refusal_subject(size_t index) noexcept {
@@ -197,8 +235,10 @@ SonareError record_current_exception() noexcept {
     const SonareError code = map_sonare_exception(e);
     set_last_error(code, e.what());
     try {
+      last_refusal_entry_storage() = c_entry_key(current_entry_storage());
       last_refusal_storage() = e;
     } catch (...) {
+      last_refusal_storage().reset();
       // The flat message is already recorded; a binding then renders it as C spells it.
     }
     return code;
