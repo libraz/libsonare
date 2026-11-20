@@ -132,14 +132,20 @@ describe('RealtimeEngine native binding', () => {
     expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
     for (const layout of ['mono', '5.1', '7.1'] as const) {
       expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: layout }])).toThrow(
-        /must be stereo/,
+        expect.objectContaining({
+          code: ErrorCode.NotSupported,
+          message:
+            'RealtimeEngine.setTrackLanes: lanes[0].sourceChannelLayout other than stereo is not supported',
+        }),
       );
     }
     // The lane cap is exported and its refusal names it.
     const lanes = Array.from({ length: MAX_TRACK_LANES + 1 }, (_, i) => ({ trackId: i + 1 }));
     expect(MAX_TRACK_LANES).toBe(32);
     expect(() => engine.setTrackLanes(lanes.slice(0, MAX_TRACK_LANES))).not.toThrow();
-    expect(() => engine.setTrackLanes(lanes)).toThrow(/at most 32 track lanes/);
+    expect(() => engine.setTrackLanes(lanes)).toThrow(
+      'RealtimeEngine.setTrackLanes: laneCount must be an integer in [0, 32]',
+    );
     expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
     // A layout is a name: an ordinal never reaches the narrowing in the addon.
     // @ts-expect-error deliberately a number where a layout name belongs.

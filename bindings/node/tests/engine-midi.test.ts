@@ -39,7 +39,7 @@ describe('RealtimeEngine native binding', () => {
     expect(isSonareError(badGroupError)).toBe(false);
 
     expect(() => engine.pushMidiNoteOn(5, 0, 16, 60, 100)).toThrow(
-      new RangeError('RealtimeEngine.pushMidiNoteOn: channel must be in [0, 15]'),
+      new RangeError('RealtimeEngine.pushMidiNoteOn: channel must be an integer in [0, 15]'),
     );
 
     let badSoundFontError: unknown;
@@ -419,28 +419,36 @@ describe('live MIDI push argument and state rule', () => {
   // only the range rule can refuse it. The input source stays disabled: an
   // argument is judged before the source state.
   const refusals: [string, (engine: RealtimeEngine) => void, string][] = [
-    ['pushMidiNoteOn', (e) => e.pushMidiNoteOn(0, 0, 16, 60, 100), 'channel must be in [0, 15]'],
-    ['pushMidiNoteOff', (e) => e.pushMidiNoteOff(0, 0, 0, 60, 128), 'velocity must be in [0, 127]'],
-    ['pushMidiCc', (e) => e.pushMidiCc(0, 0, 0, 7, 128), 'value must be in [0, 127]'],
+    [
+      'pushMidiNoteOn',
+      (e) => e.pushMidiNoteOn(0, 0, 16, 60, 100),
+      'channel must be an integer in [0, 15]',
+    ],
+    [
+      'pushMidiNoteOff',
+      (e) => e.pushMidiNoteOff(0, 0, 0, 60, 128),
+      'velocity must be an integer in [0, 127]',
+    ],
+    ['pushMidiCc', (e) => e.pushMidiCc(0, 0, 0, 7, 128), 'value must be an integer in [0, 127]'],
     [
       'pushMidiPitchBend',
       (e) => e.pushMidiPitchBend(0, 0, 0, 16384),
-      'bend14 must be in [0, 16383]',
+      'bend14 must be an integer in [0, 16383]',
     ],
     [
       'pushMidiChannelPressure',
       (e) => e.pushMidiChannelPressure(0, 0, 0, 128),
-      'pressure must be in [0, 127]',
+      'pressure must be an integer in [0, 127]',
     ],
     [
       'pushMidiPolyPressure',
       (e) => e.pushMidiPolyPressure(0, 0, 0, 128, 64),
-      'note must be in [0, 127]',
+      'note must be an integer in [0, 127]',
     ],
     [
       'pushMidiProgram',
       (e) => e.pushMidiProgram(0, 0, 0, 0, { msb: 128, lsb: 0 }),
-      'bank_msb must be in [0, 127]',
+      'bank_msb must be an integer in [0, 127]',
     ],
     [
       'pushMidiUmp',
@@ -450,33 +458,37 @@ describe('live MIDI push argument and state rule', () => {
     [
       'pushMidiInputNoteOn',
       (e) => e.pushMidiInputNoteOn(16, 0, 60, 100),
-      'group must be in [0, 15]',
+      'group must be an integer in [0, 15]',
     ],
     [
       'pushMidiInputNoteOff',
       (e) => e.pushMidiInputNoteOff(0, 0, 128, 0),
-      'note must be in [0, 127]',
+      'note must be an integer in [0, 127]',
     ],
-    ['pushMidiInputCc', (e) => e.pushMidiInputCc(0, 0, 128, 0), 'controller must be in [0, 127]'],
+    [
+      'pushMidiInputCc',
+      (e) => e.pushMidiInputCc(0, 0, 128, 0),
+      'controller must be an integer in [0, 127]',
+    ],
     [
       'pushMidiInputPitchBend',
       (e) => e.pushMidiInputPitchBend(0, 0, 16384),
-      'bend14 must be in [0, 16383]',
+      'bend14 must be an integer in [0, 16383]',
     ],
     [
       'pushMidiInputChannelPressure',
       (e) => e.pushMidiInputChannelPressure(0, 16, 64),
-      'channel must be in [0, 15]',
+      'channel must be an integer in [0, 15]',
     ],
     [
       'pushMidiInputPolyPressure',
       (e) => e.pushMidiInputPolyPressure(0, 0, 60, 128),
-      'pressure must be in [0, 127]',
+      'pressure must be an integer in [0, 127]',
     ],
     [
       'pushMidiInputProgram',
       (e) => e.pushMidiInputProgram(0, 0, 128),
-      'program must be in [0, 127]',
+      'program must be an integer in [0, 127]',
     ],
     [
       'pushMidiInputUmp',

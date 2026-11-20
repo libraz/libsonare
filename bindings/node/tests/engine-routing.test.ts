@@ -245,13 +245,13 @@ describe('RealtimeEngine per-lane sends and output bus', () => {
     replaced.destroy();
   });
 
-  it('refuses an unknown track with a coded error naming the id', () => {
+  it('refuses an unknown track as a RangeError naming the trackId subject', () => {
     const engine = partialOpsEngine();
     const before = renderBlocks(engine);
-    for (const call of [
-      () => engine.setTrackSends(99, []),
-      () => engine.setTrackOutputBus(99, null),
-    ]) {
+    for (const [name, call] of [
+      ['setTrackSends', () => engine.setTrackSends(99, [])],
+      ['setTrackOutputBus', () => engine.setTrackOutputBus(99, null)],
+    ] as const) {
       let error: unknown;
       try {
         call();
@@ -260,7 +260,9 @@ describe('RealtimeEngine per-lane sends and output bus', () => {
       }
       expect(error).toBeInstanceOf(RangeError);
       expect(isSonareError(error)).toBe(false);
-      expect((error as Error).message).toMatch(/unknown track id 99/);
+      expect((error as Error).message).toBe(
+        `RealtimeEngine.${name}: trackId must be the id of a track in this engine`,
+      );
     }
     expectSameRender(renderBlocks(engine), before);
     engine.destroy();
