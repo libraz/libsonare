@@ -341,6 +341,26 @@ def _compare_payloads(
             absolute,
             relative,
         )
+    if path == "system-info":
+        if not isinstance(left, dict) or not isinstance(right, dict):
+            return f"{path}.{case_id}: expected objects for surface comparison"
+        # Available memory is read live by each process at its own moment, so its
+        # value is not a property of the front-end; its presence still is.
+
+        def without_available(payload: dict[str, Any]) -> dict[str, Any]:
+            memory = payload.get("memory")
+            if not isinstance(memory, dict) or "available_gb" not in memory:
+                return payload
+            kept = {key: value for key, value in memory.items() if key != "available_gb"}
+            return {**payload, "memory": kept}
+
+        return _compare_values(
+            without_available(left),
+            without_available(right),
+            f"{path}.{case_id}",
+            absolute,
+            relative,
+        )
     if path == "synthesize-rir":
         if not isinstance(left, dict) or not isinstance(right, dict):
             return f"{path}.{case_id}: expected objects for surface comparison"
