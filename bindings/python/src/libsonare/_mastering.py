@@ -3,7 +3,7 @@
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._mastering_offline import *  # noqa: F403
 from ._mastering_offline import (
-    _chain_params as _chain_params,
+    _chain_config_json as _chain_config_json,
 )
 from ._mastering_offline import (
     _extract_stages as _extract_stages,

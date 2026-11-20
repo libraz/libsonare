@@ -572,7 +572,7 @@ def _chain_config_paths(config: Mapping[str, Any] | None) -> dict[str, Any]:
     Leaves are returned unconverted. A dotted key and a nested object name the
     same path, and a list recurses as ``<path>.<index>`` (``crossover.cutoffsHz``
     -> ``crossover.cutoffsHz.0``). Content is not screened here: an input config
-    has already been read by the core's document reader (:func:`_chain_params`).
+    has already been read by the core's document reader.
     """
     paths: dict[str, Any] = {}
     if not config:
@@ -664,11 +664,11 @@ def _check_chain_document(config: Mapping[str, Any]) -> None:
     naming the path.
     """
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_chain_config_params_json", _WITHOUT_MASTERING)
+    _require_export(lib, "sonare_mastering_chain_config_from_json", _WITHOUT_MASTERING)
     document = json.dumps({"version": 2, "params": dict(config)})
     json_ptr = ctypes.c_char_p()
     _check(
-        lib.sonare_mastering_chain_config_params_json(
+        lib.sonare_mastering_chain_config_from_json(
             _utf8_arg(document, "config"), ctypes.byref(json_ptr)
         )
     )
@@ -676,22 +676,17 @@ def _check_chain_document(config: Mapping[str, Any]) -> None:
         lib.sonare_free_string(json_ptr)
 
 
-def _chain_params(config: Mapping[str, Any] | None, name: str) -> tuple[Any, int]:
-    if config is not None and not isinstance(config, Mapping):
+def _chain_config_json(config: Mapping[str, Any] | None, name: str) -> bytes | None:
+    """Serialize a chain config for the C entries that take it as JSON; None is absent.
+
+    The core reads it rooted at ``name``, so every content refusal names the
+    caller's own argument.
+    """
+    if config is None:
+        return None
+    if not isinstance(config, Mapping):
         raise _refuse_type(f"{name} must be a mapping (parse JSON text with json.loads first)")
-    if config:
-        _check_chain_document(config)
-    flat = _flatten_chain_config(config)
-    items = list(flat.items())
-    array_type = SonareMasteringParam * len(items)
-    key_buffers = [_utf8_arg(str(key), "key") for key, _ in items]
-    array = array_type(
-        *[
-            SonareMasteringParam(key=key_buffers[index], value=float(value))
-            for index, (_, value) in enumerate(items)
-        ]
-    )
-    return array, len(items)
+    return _utf8_arg(json.dumps(dict(config)), name)
 
 
 def _extract_stages(stages_ptr: object, count: int) -> list[str]:
@@ -766,9 +761,8 @@ def _run_mastering(
     out: Any,
     release: Callable[[Any], None],
 ) -> None:
-    """Call ``symbol`` or its progress variant with ``head`` plus the chain params into ``out``."""
-    param_array, param_count = _chain_params(overrides, "overrides")
-    tail = (param_array, _to_c_size_t(param_count, "param_count"))
+    """Call ``symbol`` or its progress variant with ``head`` plus the overrides into ``out``."""
+    tail = (_chain_config_json(overrides, "overrides"),)
     state = CancellationState(cancel)
     if on_progress is None and cancel is None:
         rc = getattr(lib, symbol)(*head, *tail, ctypes.byref(out))
@@ -857,9 +851,9 @@ def master_audio(
             ``{"dynamics": {"compressor": {"thresholdDb": -24}},
             "loudness.targetLufs": -14}``, applied on top of the preset defaults
             when a preset is given. A boolean toggles a module/processor's
-            ``enabled`` flag. The core reads it as a version 2 chain document, so
-            an unknown key, a path given twice or a null raises ``SonareError``
-            (``InvalidFormat``) naming the path. The color stages ``saturation.tape`` and
+            ``enabled`` flag. The core reads it rooted at ``overrides``, so an
+            unknown key, a path given twice or a null raises SonareValueError
+            naming ``overrides.<path>``. The color stages ``saturation.tape`` and
             ``saturation.exciter`` are engaged from an override only when you
             pass ``enabled=True`` explicitly: on a preset where they are off,
             ``{"saturation": {"tape": {"driveDb": 6}}}`` alone has no audible
@@ -882,13 +876,9 @@ def master_audio(
     audio = (c_array, _to_c_size_t(length, "length"), _to_c_int(sample_rate, "sample_rate"))
     if preset is None and overrides is None:
         raise _refuse("give preset or overrides")
-    head: tuple[Any, ...]
-    if preset is None:
-        _require_export(lib, "sonare_mastering_chain", _WITHOUT_MASTERING)
-        symbol, head = "sonare_mastering_chain", audio
-    else:
-        _require_export(lib, "sonare_master_audio", _WITHOUT_MASTERING)
-        symbol, head = "sonare_master_audio", (_utf8_arg(preset, "preset"), *audio)
+    _require_export(lib, "sonare_master_audio", _WITHOUT_MASTERING)
+    symbol = "sonare_master_audio"
+    head = (None if preset is None else _utf8_arg(preset, "preset"), *audio)
     out = SonareMasteringChainResult()
     release = lib.sonare_free_mastering_chain_result
     _run_mastering(lib, symbol, head, overrides, on_progress, cancel, out, release)
@@ -932,13 +922,9 @@ def master_audio_stereo(
     )
     if preset is None and overrides is None:
         raise _refuse("give preset or overrides")
-    head: tuple[Any, ...]
-    if preset is None:
-        _require_export(lib, "sonare_mastering_chain_stereo", _WITHOUT_MASTERING)
-        symbol, head = "sonare_mastering_chain_stereo", audio
-    else:
-        _require_export(lib, "sonare_master_audio_stereo", _WITHOUT_MASTERING)
-        symbol, head = "sonare_master_audio_stereo", (_utf8_arg(preset, "preset"), *audio)
+    _require_export(lib, "sonare_master_audio_stereo", _WITHOUT_MASTERING)
+    symbol = "sonare_master_audio_stereo"
+    head = (None if preset is None else _utf8_arg(preset, "preset"), *audio)
     out = SonareMasteringChainStereoResult()
     release = lib.sonare_free_mastering_chain_stereo_result
     _run_mastering(lib, symbol, head, overrides, on_progress, cancel, out, release)

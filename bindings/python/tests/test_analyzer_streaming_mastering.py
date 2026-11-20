@@ -400,8 +400,8 @@ def test_streaming_mastering_chain_names_the_new_spelling_of_a_renamed_key() -> 
 
     with pytest.raises(
         SonareError,
-        match=r"unknown key params\.dynamics\.deesser\.bandpassQ "
-        r"\(renamed to params\.dynamics\.deesser\.bandPassQ\)$",
+        match=r"unknown key config\.dynamics\.deesser\.bandpassQ "
+        r"\(renamed to config\.dynamics\.deesser\.bandPassQ\)$",
     ):
         StreamingMasteringChain(
             {"dynamics": {"deesser": {"enabled": True, "bandpassQ": 2.0}}},
@@ -650,23 +650,23 @@ _CHAIN_CONFIG_CALLS = {
 _CHAIN_CONTENT_REFUSALS = {
     "duplicate_path": (
         {"eq": {"tilt": {"tiltDb": 1.0}}, "eq.tilt.tiltDb": 1.0},
-        r"params\.eq\.tilt\.tiltDb must not be given twice$",
+        r"{root}\.eq\.tilt\.tiltDb must not be given twice$",
     ),
     "null_leaf": (
         {"loudness": {"targetLufs": None}},
-        r"params\.loudness\.targetLufs must be a number, a boolean or a token",
+        r"{root}\.loudness\.targetLufs must be a number, a boolean or a token",
     ),
     "number_for_a_token": (
         {"dynamics": {"compressor": {"detector": 1}}},
-        r"params\.dynamics\.compressor\.detector must be one of peak, rms, logRms$",
+        r"{root}\.dynamics\.compressor\.detector must be one of peak, rms, logRms$",
     ),
     "clip_threshold_above_full_scale": (
         {"repair": {"declip": {"clipThresholdDb": 1.0}}},
-        r"params\.repair\.declip\.clipThresholdDb must be finite and in \[-890, 0\]$",
+        r"{root}\.repair\.declip\.clipThresholdDb must be finite and in \[-890, 0\]$",
     ),
     "earlier_true_peak_ceiling_spelling": (
         {"loudness": {"ceilingDb": -1.0}},
-        r"loudness\.ceilingDb.*ceilingDbtp",
+        r"{root}\.loudness\.ceilingDb.*ceilingDbtp",
     ),
 }
 
@@ -685,7 +685,9 @@ def test_chain_config_content_is_refused_by_the_core_naming_the_path(
     name: str, refusal: str
 ) -> None:
     config, message = _CHAIN_CONTENT_REFUSALS[refusal]
-    with raises_coded(libsonare.ErrorCode.INVALID_FORMAT, match=message):
+    # A per-call bag is an argument, so it is refused under the caller's own name.
+    root = "config" if name.lower().startswith("streaming") else "overrides"
+    with raises_coded(libsonare.ErrorCode.INVALID_PARAMETER, match=message.format(root=root)):
         _CHAIN_CONFIG_CALLS[name](config)
 
 

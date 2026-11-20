@@ -923,10 +923,10 @@ def mastering_chain_config_from_json(document: str) -> MasteringChainConfig:
     """
     _require_instance(document, str, "document")
     lib = _get_lib()
-    _require_export(lib, "sonare_mastering_chain_config_params_json", _WITHOUT_MASTERING)
+    _require_export(lib, "sonare_mastering_chain_config_from_json", _WITHOUT_MASTERING)
     json_ptr = ctypes.c_char_p()
     _check(
-        lib.sonare_mastering_chain_config_params_json(
+        lib.sonare_mastering_chain_config_from_json(
             _utf8_arg(document, "document"), ctypes.byref(json_ptr)
         )
     )

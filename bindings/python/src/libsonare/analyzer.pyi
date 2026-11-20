@@ -1101,7 +1101,7 @@ def master_audio(
     "bands": [{"ratio": 2.0}, ...]}}}`` carries an arbitrary-band multiband
     compressor: ``cutoffsHz`` replaces the cutoff list (band count is its length
     plus one) and a band field left out keeps the base or default value. Content
-    refusals are the core's ``SonareError`` (``InvalidFormat``) naming the path.
+    refusals are SonareValueError naming ``overrides.<path>``.
     """
 
 def master_audio_stereo(

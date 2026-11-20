@@ -9,6 +9,7 @@ render exactly like the typed config through the same entry point.
 from __future__ import annotations
 
 import json
+import re
 
 import numpy as np
 import pytest
@@ -92,7 +93,9 @@ def test_a_dotted_key_and_a_nested_object_name_the_same_path() -> None:
         master_audio(LEFT, SR, overrides=FLAT).samples,
         master_audio(LEFT, SR, overrides=TYPED).samples,
     )
-    with raises_coded(ErrorCode.INVALID_FORMAT, match=rf"duplicate key params\.{MB}\.enabled"):
+    with raises_coded(
+        ErrorCode.INVALID_PARAMETER, match=rf"overrides\.{MB}\.enabled must not be given twice$"
+    ):
         master_audio(
             LEFT,
             SR,
@@ -161,8 +164,8 @@ def test_streaming_chain_typed_matches_flat_keys() -> None:
 )
 def test_empty_list_is_refused_by_path(config: dict, path: str) -> None:
     with raises_coded(
-        ErrorCode.INVALID_FORMAT,
-        match=r"params\." + path.replace(".", r"\.") + " must not be an empty list",
+        ErrorCode.INVALID_PARAMETER,
+        match=r"overrides\." + path.replace(".", r"\.") + " must not be an empty list$",
     ):
         master_audio(LEFT, SR, overrides=config)
 
@@ -205,7 +208,10 @@ def test_a_v2_document_returns_its_params_as_the_core_wrote_them() -> None:
 
 def test_a_v2_document_refuses_a_number_for_a_token() -> None:
     slope = int(_enum_value(None, f"{MB}.crossover.slope", "lr8"))
-    with raises_coded(ErrorCode.INVALID_FORMAT, match=rf"{MB}\.crossover\.slope takes a token"):
+    with raises_coded(
+        ErrorCode.INVALID_FORMAT,
+        match=rf"params\.{MB}\.crossover\.slope must be one of lr2, lr4, lr8$",
+    ):
         mastering_chain_config_from_json(_v2_document(slope))  # type: ignore[arg-type]
 
 
@@ -221,5 +227,8 @@ def test_multiband_shorthand_keys_are_refused_naming_the_current_key(
     config: dict, current: str
 ) -> None:
     """The three-band shorthand is gone; the refusal names the list spelling."""
-    with raises_coded(ErrorCode.INVALID_FORMAT, match=current.replace(".", r"\.")):
+    with raises_coded(
+        ErrorCode.INVALID_PARAMETER,
+        match=r"\(renamed to " + re.escape(f"overrides.{MB}.{current}") + r"\)$",
+    ):
         master_audio(LEFT, SR, overrides={"dynamics": {"multibandComp": config}})

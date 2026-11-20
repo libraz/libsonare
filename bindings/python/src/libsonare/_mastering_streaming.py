@@ -15,7 +15,7 @@ from ._ffi import (
     SonareEqSnapshot,
     SonareStreamingLoudnessGain,
 )
-from ._mastering_offline import _chain_params
+from ._mastering_offline import _chain_config_json
 from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -98,14 +98,13 @@ def streaming_loudness_gain(
     lib = _get_lib()
     _require_export(lib, "sonare_streaming_loudness_gain", _WITHOUT_MASTERING)
     c_array, length = _to_c_float_array(samples)
-    param_array, param_count = _chain_params(config, "config")
+    config_json = _chain_config_json(config, "config")
     out = SonareStreamingLoudnessGain()
     rc = lib.sonare_streaming_loudness_gain(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        param_array,
-        _to_c_size_t(param_count, "param_count"),
+        config_json,
         ctypes.byref(out),
     )
     _check(rc)
@@ -131,15 +130,14 @@ def streaming_loudness_gain_stereo(
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
         raise _refuse("left and right must have the same length")
-    param_array, param_count = _chain_params(config, "config")
+    config_json = _chain_config_json(config, "config")
     out = SonareStreamingLoudnessGain()
     rc = lib.sonare_streaming_loudness_gain_stereo(
         left_array,
         right_array,
         _to_c_size_t(left_length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        param_array,
-        _to_c_size_t(param_count, "param_count"),
+        config_json,
         ctypes.byref(out),
     )
     _check(rc)
@@ -228,7 +226,7 @@ class StreamingMasteringChain:
         # layout remembered here would then differ from the one asked for.
         max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
         channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
-        param_array, param_count = _chain_params(config, "config")
+        config_json = _chain_config_json(config, "config")
         handle = ctypes.c_void_p()
         if loudness_static_gain_db is not None:
             _require_export(lib, "sonare_streaming_mastering_chain_create_ex", _WITHOUT_MASTERING)
@@ -241,16 +239,13 @@ class StreamingMasteringChain:
                 else _narrow_float(loudness_static_gain_peak_db, "loudness_static_gain_peak_db")
             )
             rc = lib.sonare_streaming_mastering_chain_create_ex(
-                param_array,
-                _to_c_size_t(param_count, "param_count"),
+                config_json,
                 _to_c_float(loudness_static_gain_db, "loudness_static_gain_db"),
                 ctypes.c_float(peak),
                 ctypes.byref(handle),
             )
         else:
-            rc = lib.sonare_streaming_mastering_chain_create(
-                param_array, _to_c_size_t(param_count, "param_count"), ctypes.byref(handle)
-            )
+            rc = lib.sonare_streaming_mastering_chain_create(config_json, ctypes.byref(handle))
         _check(rc)
         self._lib = lib
         self._handle = handle
