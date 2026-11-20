@@ -360,7 +360,7 @@ Napi::Value SonareWrap::MeteringTruePeakDb(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int oversample{};
-  if (!OptionalIntArg(env, info, 2, "oversample", 4, &oversample)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 2, "oversampleFactor", 4, &oversample)) return env.Undefined();
   float out_value = 0.0f;
   SonareError err = sonare_metering_true_peak_dbtp(typed.Data(), typed.ElementLength(), sr,
                                                    oversample, &out_value);
@@ -884,7 +884,7 @@ Napi::Value SonareWrap::TruePeakDbInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int oversample{};
-  if (!OptionalIntArg(env, info, 0, "oversample", 4, &oversample)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 0, "oversampleFactor", 4, &oversample)) return env.Undefined();
   float out_value = 0.0f;
   SonareError err = sonare_audio_true_peak_dbtp(audio_, oversample, &out_value);
   if (err != SONARE_OK) {

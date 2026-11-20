@@ -117,12 +117,12 @@ bool ReadStereoPairShape(const Napi::CallbackInfo& info, size_t left_index, size
     return false;
   }
   if (source_left->ElementLength() != source_right->ElementLength()) {
-    Napi::RangeError::New(env, "sourceLeft and sourceRight channel lengths must match")
+    Napi::RangeError::New(env, "sourceLeft and sourceRight must have the same length")
         .ThrowAsJavaScriptException();
     return false;
   }
   if (reference_left->ElementLength() != reference_right->ElementLength()) {
-    Napi::RangeError::New(env, "referenceLeft and referenceRight channel lengths must match")
+    Napi::RangeError::New(env, "referenceLeft and referenceRight must have the same length")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -143,7 +143,7 @@ bool ReadStereoPair(const char* left_name, const char* right_name, const Napi::C
     return false;
   }
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -484,7 +484,8 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
   auto left = info[1].As<Napi::Float32Array>();
   auto right = info[2].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right lengths must match").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "left and right must have the same length")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.

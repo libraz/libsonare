@@ -464,7 +464,8 @@ val js_downmix(val channels, val target_layout_value, val options) {
       frames = plane.size();
       packed.reserve(frames * count);
     } else if (plane.size() != frames) {
-      throw WasmRangeError("channel lengths must match");
+      throw WasmRangeError("channels[" + std::to_string(index) +
+                           "] must have the same length as channels[0]");
     }
     packed.insert(packed.end(), plane.begin(), plane.end());
   }

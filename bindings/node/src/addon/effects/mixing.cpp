@@ -160,7 +160,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     left_arrays.push_back(left_value.As<Napi::Float32Array>());
     right_arrays.push_back(right_value.As<Napi::Float32Array>());
     if (left_arrays.back().ElementLength() != right_arrays.back().ElementLength()) {
-      Napi::RangeError::New(env, "left and right channel lengths must match")
+      const std::string at = "strips[" + std::to_string(index) + "]";
+      Napi::RangeError::New(env, at + ".left and " + at + ".right must have the same length")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
@@ -216,7 +217,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   for (size_t index = 0; index < count; ++index) {
     SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
     if (strip == nullptr) {
-      sonare_node::ThrowLastSonareError(env, "failed to add mixer strip: ");
+      sonare_node::ThrowLastSonareError(env, "");
       return env.Undefined();
     }
     strips.push_back(strip);

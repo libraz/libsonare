@@ -178,8 +178,8 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
         floatProperty(options, "absoluteThreshold", config.absolute_threshold);
     config.n_mfcc = intProperty(options, "nMfcc", config.n_mfcc);
     config.n_chroma = intProperty(options, "nChroma", config.n_chroma);
-    config.peak_distance = floatProperty(options, "peakDistance", config.peak_distance);
-    config.reference_window = floatProperty(options, "referenceWindow", config.reference_window);
+    config.peak_distance = floatProperty(options, "peakDistanceSec", config.peak_distance);
+    config.reference_window = floatProperty(options, "referenceWindowSec", config.reference_window);
     config.use_mfcc = boolProperty(options, "useMfcc", config.use_mfcc);
     config.use_chroma = boolProperty(options, "useChroma", config.use_chroma);
   }

@@ -252,7 +252,7 @@ Napi::Value StreamingMasteringChainWrap::ProcessStereo(const Napi::CallbackInfo&
   Napi::Float32Array left = info[0].As<Napi::Float32Array>();
   Napi::Float32Array right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -582,7 +582,7 @@ Napi::Value StreamingEqualizerWrap::SetSidechainStereo(const Napi::CallbackInfo&
   Napi::Float32Array left = info[0].As<Napi::Float32Array>();
   Napi::Float32Array right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right sidechain lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -682,7 +682,7 @@ Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info
   Napi::Float32Array left = info[0].As<Napi::Float32Array>();
   Napi::Float32Array right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

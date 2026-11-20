@@ -379,7 +379,7 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   validate_sample_rate(sample_rate);
   std::vector<float> data =
       load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");
@@ -409,7 +409,7 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   validate_sample_rate(sample_rate);
   std::vector<float> data =
       load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");

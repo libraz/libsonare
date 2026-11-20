@@ -121,7 +121,7 @@ describe('boundary regressions (WASM)', () => {
       actual.setSidechainStereo(key, key);
 
       expect(() => actual.setSidechainStereo(key, new Float32Array(BLOCK / 2))).toThrow(
-        /lengths must match/,
+        /left and right must have the same length/,
       );
       // Exercise other raw native frames before processing; the borrowed outer
       // pointer array must remain valid regardless of stack reuse.

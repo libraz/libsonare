@@ -1102,11 +1102,7 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
     const raw: Native = addon.detectBoundaries(
       request.samples,
       request.sampleRate,
-      compact({
-        ...without(request, 'samples', 'sampleRate', 'peakDistanceSec', 'referenceWindowSec'),
-        peakDistance: request.peakDistanceSec,
-        referenceWindow: request.referenceWindowSec,
-      }),
+      compact(without(request, 'samples', 'sampleRate')),
     );
     // The frame count is the novelty curve's length; the result does not repeat it.
     const { nFrames: _nFrames, ...rest } = raw;

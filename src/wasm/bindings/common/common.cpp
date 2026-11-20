@@ -174,7 +174,7 @@ void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, c
   const std::size_t second_count =
       accumulateWasmFloat32ArrayLength(second, second_subject, &cumulative_count);
   if (require_matching_lengths && first_count != second_count) {
-    throw WasmRangeError("channel lengths must match");
+    throw WasmRangeError("left and right must have the same length");
   }
 }
 
@@ -230,7 +230,8 @@ std::vector<Audio> loadChannelSet(const char* name, const val& channels, int sam
     if (index == 0) {
       length = frames;
     } else if (frames != length) {
-      throw WasmRangeError("channel lengths must match");
+      throw WasmRangeError("channels[" + std::to_string(index) +
+                           "] must have the same length as channels[0]");
     }
     if (validation == ChannelSetValidation::Offline) {
       const std::string channel_name = std::string(name) + "[" + std::to_string(index) + "]";

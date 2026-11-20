@@ -222,7 +222,7 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
         channels: [full, full.slice(0, full.length - 1)],
         sampleRate: SR,
       }),
-    ).toThrow(/channel lengths must match/);
+    ).toThrow(/channels\[1\] must have the same length as channels\[0\]/);
   });
 
   it('rejects a NaN sample rate and a non-power-of-two nFft', () => {
@@ -387,7 +387,7 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
         channels: [full, full.slice(0, full.length - 1)],
         sampleRate: SR,
       }),
-    ).toThrow(/channel lengths must match/);
+    ).toThrow(/channels\[1\] must have the same length as channels\[0\]/);
   });
 
   it('rejects a NaN sample rate and a non-power-of-two nFft', () => {

@@ -174,7 +174,7 @@ class EqualizerWrapper {
     const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right sidechain");
     validateWasmFloat32ElementBudget({left_length, right_length});
     if (left_length != right_length) {
-      throw WasmRangeError("sidechain channel lengths must match");
+      throw WasmRangeError("left and right must have the same length");
     }
     if (left_length == 0) return clearSidechain();
     validateBlockLength(left_length, "sidechain");
@@ -222,7 +222,7 @@ class EqualizerWrapper {
     const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right process block");
     validateWasmFloat32ElementBudget({left_length, right_length});
     if (left_length != right_length) {
-      throw WasmRangeError("stereo channel lengths must match");
+      throw WasmRangeError("left and right must have the same length");
     }
     validateBlockLength(left_length, "process block");
     std::vector<float> left = float32ArrayToVector(left_samples);

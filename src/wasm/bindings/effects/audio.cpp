@@ -77,7 +77,7 @@ val js_percussive(val samples, const val& sample_rate) {
 // Time stretch
 val js_time_stretch_ex(val samples, const val& sample_rate, const val& rate_val, const val& n_fft,
                        const val& hop_length) {
-  const float rate = checkedFloatFromVal(rate_val, "rate");
+  const float rate = checkedFloatFromVal(rate_val, "speedRatio");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   TimeStretchConfig config;
@@ -192,8 +192,11 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   const size_t n_frames = f0.size();
   std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
   std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
-  if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
-    throw WasmRangeError("voiced and voicedProb must match f0Hz length");
+  if (has_voiced && voiced_vec.size() != n_frames) {
+    throw WasmRangeError("voiced must have the same length as f0Hz");
+  }
+  if (has_prob && prob_vec.size() != n_frames) {
+    throw WasmRangeError("voicedProb must have the same length as f0Hz");
   }
 
   const editing::pitch_editor::F0Track track =
@@ -277,8 +280,11 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     if (has_voiced) voiced_vec = float32ArrayToVector(voiced);
     if (has_prob) prob_vec = float32ArrayToVector(voiced_prob);
   }
-  if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
-    throw WasmRangeError("voiced and voicedProb must match f0Hz length");
+  if (has_voiced && voiced_vec.size() != n_frames) {
+    throw WasmRangeError("voiced must have the same length as f0Hz");
+  }
+  if (has_prob && prob_vec.size() != n_frames) {
+    throw WasmRangeError("voicedProb must have the same length as f0Hz");
   }
   if (!scale_mode && (!std::isfinite(target_midi) || target_midi < 0.0f || target_midi > 127.0f)) {
     throw WasmRangeError("targetMidi must be finite and in [0, 127]");
@@ -436,7 +442,7 @@ val js_hpss_with_residual(val samples, const val& sample_rate, const val& kernel
 val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_val,
                      const val& n_fft_val, const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const float rate = checkedFloatFromVal(rate_val, "rate");
+  const float rate = checkedFloatFromVal(rate_val, "speedRatio");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   // A hop of 0 is absent and runs a quarter of nFft, as the C entry resolves it.
   const int hop_length =

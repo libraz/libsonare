@@ -373,7 +373,7 @@ val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val op
   std::vector<float> left_data = float32ArrayToVector(left);
   std::vector<float> right_data = float32ArrayToVector(right);
   if (left_data.size() != right_data.size()) {
-    throw WasmRangeError("Stereo channel lengths must match.");
+    throw WasmRangeError("left and right must have the same length");
   }
   Audio left_audio = acousticAudioFromVector("left", std::move(left_data), sample_rate);
   Audio right_audio = acousticAudioFromVector("right", std::move(right_data), sample_rate);

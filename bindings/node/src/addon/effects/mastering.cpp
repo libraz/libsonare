@@ -184,7 +184,7 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   int oversample = 0;
   float release_ms = 0.0f;
   bool apply_gain_at_input_rate = false;
-  if (!OptionalIntArg(env, info, 4, "oversample", 0, &oversample) ||
+  if (!OptionalIntArg(env, info, 4, "oversampleFactor", 0, &oversample) ||
       !OptionalFiniteFloatArg(env, info, 5, "releaseMs", 0.0f, &release_ms) ||
       !OptionalBoolArg(env, info, 6, "applyGainAtInputRate", false, &apply_gain_at_input_rate)) {
     return env.Undefined();
@@ -278,7 +278,7 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
   auto left = info[1].As<Napi::Float32Array>();
   auto right = info[2].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -363,7 +363,7 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -452,7 +452,7 @@ Napi::Value SonareWrap::MasteringStreamingLoudnessGainStereo(const Napi::Callbac
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -754,8 +754,7 @@ Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
   auto right_typed = info[2].As<Napi::Float32Array>();
   if (left_typed.ElementLength() != right_typed.ElementLength()) {
     auto deferred = Napi::Promise::Deferred::New(env);
-    deferred.Reject(
-        Napi::RangeError::New(env, "left and right channel lengths must match").Value());
+    deferred.Reject(Napi::RangeError::New(env, "left and right must have the same length").Value());
     return deferred.Promise();
   }
   std::vector<float> left(left_typed.Data(), left_typed.Data() + left_typed.ElementLength());
@@ -798,7 +797,7 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
   auto left = info[1].As<Napi::Float32Array>();
   auto right = info[2].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -901,7 +900,7 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -1007,7 +1006,7 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
   auto left = info[1].As<Napi::Float32Array>();
   auto right = info[2].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right channel lengths must match")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

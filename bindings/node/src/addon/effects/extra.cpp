@@ -458,12 +458,12 @@ Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "rate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "speedRatio must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = node_narrow_int(env, info[1], "sampleRate");
-  float rate = node_narrow_finite_float(env, info[2], "rate");
+  float rate = node_narrow_finite_float(env, info[2], "speedRatio");
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", sonare::constants::kDefaultNFft, &n_fft))
     return env.Undefined();

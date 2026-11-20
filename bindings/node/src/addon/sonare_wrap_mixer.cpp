@@ -105,7 +105,7 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
 
   mixer_ = sonare_mixer_from_scene_json(json.c_str(), sample_rate_, block_size_);
   if (mixer_ == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "failed to build mixer from scene JSON: ");
+    sonare_node::ThrowLastSonareError(env, "");
     return;
   }
   // Capture the load's warnings (e.g. insert params no processor read)
@@ -184,7 +184,9 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
     left_arrays.push_back(left_value.As<Napi::Float32Array>());
     right_arrays.push_back(right_value.As<Napi::Float32Array>());
     if (left_arrays.back().ElementLength() != right_arrays.back().ElementLength()) {
-      Napi::RangeError::New(env, "left and right channel lengths must match")
+      const std::string at = "[" + std::to_string(index) + "]";
+      Napi::RangeError::New(
+          env, "leftChannels" + at + " and rightChannels" + at + " must have the same length")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }

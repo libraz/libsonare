@@ -38,7 +38,7 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
   // is mixer-owned and never reaches JS: strips are addressed by index or id.
   if (sonare_mixer_add_strip_ex(mixer_, id.c_str(), enabled ? 1 : 0, lufs ? 1 : 0,
                                 true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "failed to add strip: ");
+    sonare_node::ThrowLastSonareError(env, "");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

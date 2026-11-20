@@ -368,12 +368,14 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMonoImpl(const Napi::CallbackInfo& 
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
   if (with_carrier &&
       info[carrier_index].As<Napi::Float32Array>().ElementLength() != input.ElementLength()) {
-    Napi::RangeError::New(env, "carrier and input lengths must match").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "carrier must have the same length as input")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (into &&
       info[output_index].As<Napi::Float32Array>().ElementLength() != input.ElementLength()) {
-    Napi::RangeError::New(env, "input and output lengths must match").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "output must have the same length as input")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (input.ElementLength() > static_cast<size_t>(max_block_size_)) {
@@ -428,7 +430,8 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
   const int channels = sonare_node::node_narrow_int(env, info[channels_index], "channels");
   if (into &&
       info[output_index].As<Napi::Float32Array>().ElementLength() != input.ElementLength()) {
-    Napi::RangeError::New(env, "input and output lengths must match").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "output must have the same length as input")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (channels < 1 || channels > channels_ ||
@@ -509,7 +512,8 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereoImpl(const Napi::Callba
   Napi::Float32Array left = info[0].As<Napi::Float32Array>();
   Napi::Float32Array right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "left and right lengths must match").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "left and right must have the same length")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const size_t frames = left.ElementLength();
@@ -518,7 +522,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereoImpl(const Napi::Callba
     return env.Undefined();
   }
   if (with_carrier && info[2].As<Napi::Float32Array>().ElementLength() != frames) {
-    Napi::RangeError::New(env, "carrier and channel lengths must match")
+    Napi::RangeError::New(env, "carrier must have the same length as left")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

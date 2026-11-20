@@ -141,8 +141,8 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
       const std::size_t right_frames =
           accumulateWasmFloat32ArrayLength(right, "rightChannels entry", &budget);
       if (right_frames != frames) {
-        throw WasmRangeError("track " + std::to_string(index) +
-                             " left and right lengths must match");
+        const std::string at = "tracks[" + std::to_string(index) + "]";
+        throw WasmRangeError(at + ".left and " + at + ".right must have the same length");
       }
       input.right[index] = float32ArrayToVector(right);
     }

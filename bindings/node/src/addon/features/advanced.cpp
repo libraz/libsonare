@@ -152,7 +152,7 @@ Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
   int hop_length{};
   if (!OptionalIntArg(env, info, 4, "hopLength", 512, &hop_length)) return env.Undefined();
   float fmin{};
-  if (!OptionalFiniteFloatArg(env, info, 5, "fmin", sonare::constants::kC1Hz, &fmin))
+  if (!OptionalFiniteFloatArg(env, info, 5, "fminHz", sonare::constants::kC1Hz, &fmin))
     return env.Undefined();
   int bins_per_octave{};
   if (!OptionalIntArg(env, info, 6, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();
@@ -184,7 +184,7 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   int hop_length{};
   if (!OptionalIntArg(env, info, 4, "hopLength", 512, &hop_length)) return env.Undefined();
   float fmin{};
-  if (!OptionalFiniteFloatArg(env, info, 5, "fmin", sonare::constants::kC1Hz, &fmin))
+  if (!OptionalFiniteFloatArg(env, info, 5, "fminHz", sonare::constants::kC1Hz, &fmin))
     return env.Undefined();
   int bins_per_octave{};
   if (!OptionalIntArg(env, info, 6, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();

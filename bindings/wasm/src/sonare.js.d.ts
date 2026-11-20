@@ -814,8 +814,8 @@ export interface WasmBoundaryOptions {
   absoluteThreshold?: number;
   nMfcc?: number;
   nChroma?: number;
-  peakDistance?: number;
-  referenceWindow?: number;
+  peakDistanceSec?: number;
+  referenceWindowSec?: number;
   useMfcc?: boolean;
   useChroma?: boolean;
 }

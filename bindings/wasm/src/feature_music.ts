@@ -489,15 +489,7 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
     if (request.useMfcc === false && request.useChroma === false) {
       throw refuse('require useMfcc or useChroma');
     }
-    const { peakDistanceSec, referenceWindowSec, ...rest } = request;
-    // Native keeps the unsuffixed spellings of the two durations.
-    const nativeOptions: Record<string, unknown> = { ...rest };
-    if (peakDistanceSec != null) {
-      nativeOptions.peakDistance = peakDistanceSec;
-    }
-    if (referenceWindowSec != null) {
-      nativeOptions.referenceWindow = referenceWindowSec;
-    }
+    const nativeOptions: Record<string, unknown> = { ...request };
     const result = requireModule().detectBoundaries(samples, sampleRate, nativeOptions);
     // Re-root the embind array as a plain Array, for the reason analyzeSections
     // spells out: chaining onto it propagates a constructor structuredClone

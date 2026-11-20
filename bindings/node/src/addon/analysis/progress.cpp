@@ -221,9 +221,10 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
         FiniteFloatProperty(bag, "absoluteThreshold", options.absolute_threshold);
     options.n_mfcc = IntProperty(bag, "nMfcc", options.n_mfcc);
     options.n_chroma = IntProperty(bag, "nChroma", options.n_chroma);
-    options.peak_distance_sec = FiniteFloatProperty(bag, "peakDistance", options.peak_distance_sec);
+    options.peak_distance_sec =
+        FiniteFloatProperty(bag, "peakDistanceSec", options.peak_distance_sec);
     options.reference_window_sec =
-        FiniteFloatProperty(bag, "referenceWindow", options.reference_window_sec);
+        FiniteFloatProperty(bag, "referenceWindowSec", options.reference_window_sec);
     options.use_mfcc = BoolProperty(bag, "useMfcc", options.use_mfcc != 0) ? 1 : 0;
     options.use_chroma = BoolProperty(bag, "useChroma", options.use_chroma != 0) ? 1 : 0;
   }

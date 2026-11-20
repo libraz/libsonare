@@ -332,7 +332,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['Mixer.setPan', 'panMode', () => withMixer((mixer) => mixer.setPan('s', 0, 'x'))],
   ['Audio.fromBuffer', 'sampleRate', () => addon.Audio.fromBuffer(readerTone, 'x')],
   ['Audio.spectrumFrame', 'frameOffset', () => readerAudio().spectrumFrame('x')],
-  ['addon.mastering', 'oversample', () => addon.mastering(readerTone, 22050, -14, -1, 'x')],
+  ['addon.mastering', 'oversampleFactor', () => addon.mastering(readerTone, 22050, -14, -1, 'x')],
   ['addon.mastering', 'releaseMs', () => addon.mastering(readerTone, 22050, -14, -1, 0, 'x')],
   [
     'addon.mastering',
@@ -353,7 +353,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.midiPerNoteControllerName', 'index', () => addon.midiPerNoteControllerName('x')],
   ['Project.setMixerSceneJson', 'sceneJson', () => withProject((p) => p.setMixerSceneJson(5))],
   ['Audio.silenceRatio', 'thresholdDb', () => readerAudio().silenceRatio('x')],
-  ['Audio.truePeakDb', 'oversample', () => readerAudio().truePeakDb('x')],
+  ['Audio.truePeakDb', 'oversampleFactor', () => readerAudio().truePeakDb('x')],
   [
     'addon.masteringInsertParamInfo',
     'sampleRate',

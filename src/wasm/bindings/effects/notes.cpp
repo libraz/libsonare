@@ -94,8 +94,11 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
   }
   std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
   std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
-  if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
-    throw WasmRangeError("voiced and voicedProb must match f0Hz length");
+  if (has_voiced && voiced_vec.size() != n_frames) {
+    throw WasmRangeError("voiced must have the same length as f0Hz");
+  }
+  if (has_prob && prob_vec.size() != n_frames) {
+    throw WasmRangeError("voicedProb must have the same length as f0Hz");
   }
   for (size_t i = 0; i < n_frames; ++i) {
     // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
@@ -140,7 +143,7 @@ std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced,
     accumulateWasmFloat32ArrayLength(voiced, "voiced", cumulative_count);
     voiced_vec = float32ArrayToVector(voiced);
     if (voiced_vec.size() != f0.size()) {
-      throw WasmRangeError("voiced must match f0Hz length");
+      throw WasmRangeError("voiced must have the same length as f0Hz");
     }
   }
 

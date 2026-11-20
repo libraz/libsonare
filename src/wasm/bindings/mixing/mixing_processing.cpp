@@ -51,7 +51,9 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
     const size_t right_length =
         accumulateWasmFloat32ArrayLength(right_channels[index], "right channel", &cumulative_count);
     if (left_length != right_length) {
-      throw WasmRangeError("left and right channel lengths must match");
+      const std::string at = "[" + std::to_string(index) + "]";
+      throw WasmRangeError("leftChannels" + at + " and rightChannels" + at +
+                           " must have the same length");
     }
     if (index == 0) {
       length = left_length;

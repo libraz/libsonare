@@ -151,7 +151,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[2].IsNumber()) {
-    Napi::TypeError::New(env, "rate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "speedRatio must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -160,7 +160,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
-  float rate = node_narrow_finite_float(env, info[2], "rate");
+  float rate = node_narrow_finite_float(env, info[2], "speedRatio");
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};

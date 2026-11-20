@@ -338,7 +338,8 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     const size_t left_length = wasmFloat32ArrayLength(left_channels[index], "left channel");
     const size_t right_length = wasmFloat32ArrayLength(right_channels[index], "right channel");
     if (left_length != right_length) {
-      throw WasmRangeError("left and right channel lengths must match");
+      const std::string at = "strips[" + std::to_string(index) + "]";
+      throw WasmRangeError(at + ".left and " + at + ".right must have the same length");
     }
     if (index == 0) {
       length = left_length;
