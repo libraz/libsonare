@@ -1504,9 +1504,11 @@ TEST_CASE("a lone CQT bin takes the bandwidth of its grid spacing on all four tr
   const float first_of_two =
       wavelet_lengths(cqt_frequencies(440.0f, 2, config.bins_per_octave), 22050, scale)[0];
   CHECK_THAT(lone, WithinRel(first_of_two, 1e-5f));
-  CHECK(vqt_bandwidths({440.0f}, config.bins_per_octave, 0.0f)[0] ==
-        vqt_bandwidths(cqt_frequencies(440.0f, 2, config.bins_per_octave), config.bins_per_octave,
-                       0.0f)[0]);
+  // Two paths derive the spacing (closed form vs neighbour ratio), so they agree to rounding.
+  CHECK_THAT(vqt_bandwidths({440.0f}, config.bins_per_octave, 0.0f)[0],
+             WithinRel(vqt_bandwidths(cqt_frequencies(440.0f, 2, config.bins_per_octave),
+                                      config.bins_per_octave, 0.0f)[0],
+                       1e-5f));
 }
 
 TEST_CASE(
