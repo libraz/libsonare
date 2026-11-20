@@ -270,10 +270,12 @@ def writes(body: str, name: str) -> list[int]:
         rf"\*\s*{escaped}\s*{_ASSIGN}",
         rf"\b{escaped}\s*->\s*\w+\s*(?:\[[^\]]*\]\s*)?{_ASSIGN}",
         rf"\b{escaped}\s*\[[^\]]*\]\s*{_ASSIGN}",
-        # The shared definers: begin_string_output sets *out to NULL, and a
-        # public sonare_*_init fills the struct, before anything can return.
+        # The shared definers: begin_string_output sets *out to NULL, a public
+        # sonare_*_init fills the struct, and SONARE_C_ZERO_OUTS clears every out
+        # it names, before anything can return.
         rf"\bbegin_string_output\s*\(\s*{escaped}\s*\)",
         rf"\bsonare_\w+_init\s*\(\s*{escaped}\s*\)",
+        rf"\bSONARE_C_ZERO_OUTS\s*\([^()]*?\b{escaped}\b",
     )
     return sorted(m.start() for p in patterns for m in re.finditer(p, body))
 
