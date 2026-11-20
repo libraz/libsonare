@@ -199,7 +199,7 @@ describe('normalizeStereo refusals', () => {
     const error = invalidParameter(() =>
       normalizeStereo({ left: loud(), right: quiet(), sampleRate: SR, targetDb: 1 }),
     );
-    expect(error.message).toMatch(/target_db/);
+    expect(error.message).toBe('normalizeStereo: targetDb must be at most 0 when clip is set');
   });
 
   it('refuses a non-finite target', () => {

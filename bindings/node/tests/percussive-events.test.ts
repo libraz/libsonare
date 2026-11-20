@@ -301,15 +301,15 @@ function capture(run: () => unknown): unknown {
 
 /**
  * The core refused it. A refused argument is a RangeError whichever layer
- * refuses it, so the wording says which one did: the core's guards carry no
- * detail or say `StftConfig: ...`, where the addon's own readers name the field.
+ * refuses it. The core names the field it refused; a per-event span or gain
+ * refusal still carries no detail.
  */
 function expectInvalidParameter(run: () => unknown): void {
   const error = capture(run);
   expect(error).toBeInstanceOf(RangeError);
   expect(isSonareError(error)).toBe(false);
   expect((error as Error).message).toMatch(
-    /^(extract|render)PercussiveEvents: (Invalid parameter|StftConfig: )/,
+    /^(extract|render)PercussiveEvents: (Invalid parameter|[a-z][A-Za-z.]* must be )/,
   );
 }
 

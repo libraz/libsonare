@@ -88,8 +88,8 @@ describe('Node async API', () => {
       }
       expect(caught).toBeInstanceOf(RangeError);
       expect(isSonareError(caught)).toBe(false);
-      expect((caught as Error).message).toMatch(
-        /^analyzeAsync: MusicAnalyzerConfig: hopLength must be positive/,
+      expect((caught as Error).message).toBe(
+        'analyzeAsync: hopLength must be an integer in [1, 2147483647]',
       );
     });
 
@@ -97,7 +97,7 @@ describe('Node async API', () => {
       const rejection = analyzeAsync(generateSine(440, 0.1), SR, { nFft: 1 });
       await expect(rejection).rejects.toBeInstanceOf(RangeError);
       await expect(rejection).rejects.toThrow(
-        /^analyzeAsync: MusicAnalyzerConfig: nFft must be an even value/,
+        new RangeError('analyzeAsync: nFft must be an even integer in [2, 2147483647]'),
       );
     });
 

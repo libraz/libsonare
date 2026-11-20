@@ -277,11 +277,9 @@ describe('the HPSS positional readers default only an omitted argument', () => {
           const error = captureError(() => entry.run(...args)) as SonareErrorShape;
           expect(error).toBeInstanceOf(RangeError);
           expect(error?.code).toBeUndefined();
-          // Which of the two was wrong, not merely that one of them was, and in
-          // the core's StftConfig wording rather than an addon reader's.
-          expect(error?.message).toMatch(
-            new RegExp(`^${entry.name}: StftConfig: ${argument} must be`),
-          );
+          // Which of the two was wrong, not merely that one of them was, in the
+          // core's wording rather than an addon reader's.
+          expect(error?.message).toMatch(new RegExp(`^${entry.name}: ${argument} must be an `));
         });
       }
     }

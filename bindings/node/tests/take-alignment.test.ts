@@ -159,7 +159,7 @@ describe('alignTakeToReference', () => {
     // library says so instead of handing back a map setWarpMap would refuse.
     let caught: unknown;
     try {
-      alignTakeToReference(request({ hopLength: 1_000_000 }));
+      alignTakeToReference(request({ hopLength: 65_536 }));
     } catch (e) {
       caught = e;
     }

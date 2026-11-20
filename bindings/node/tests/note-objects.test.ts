@@ -1160,7 +1160,9 @@ describe('splitNote and mergeNotes', () => {
       }
       expect(caught).toBeInstanceOf(RangeError);
       // The extractor's own refusal; the length mismatch above is the facade's.
-      expect((caught as Error).message).toBe('extractNotes: Invalid parameter');
+      expect((caught as Error).message).toBe(
+        'extractNotes: voicedProb must be finite and in [0, 1]',
+      );
     }
   });
 

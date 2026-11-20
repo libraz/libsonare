@@ -257,7 +257,7 @@ describe('transcribe', () => {
         f0MinHz: 1800,
         tempoBpm: 120,
       }),
-    ).toThrow(/^transcribe: f0_max_hz \(1760 Hz\) must be above f0_min_hz \(1800 Hz\)$/);
+    ).toThrow(new RangeError('transcribe: f0MaxHz must be greater than f0MinHz'));
   });
 
   it('refuses a zero the C ABI would have read as its default', () => {
@@ -432,7 +432,11 @@ describe('Project.transcribeToClip', () => {
           minNoteDivision: 32,
           minNoteMs: 50,
         }),
-      ).toThrow(/min_note_division/);
+      ).toThrow(
+        new RangeError(
+          'Project.transcribeToClip: minNoteDivision and minNoteMs cannot both be set',
+        ),
+      );
       expect(() =>
         project.transcribeToClip({ clipId, samples: audio, sampleRate: SR, minNoteDivision: 0 }),
       ).toThrow(/minNoteDivision/);
@@ -631,7 +635,7 @@ describe('transcribe polyphonic tuning', () => {
   it('surfaces the C refusal of a polyphonic field on the monophonic tracker', () => {
     expect(() =>
       transcribe({ samples: audio, sampleRate: SR, tempoBpm: 120, maxPolyphony: 3 }),
-    ).toThrow(/max_polyphony/);
+    ).toThrow(new RangeError('transcribe: maxPolyphony requires polyphonic transcription'));
   });
 });
 
@@ -666,7 +670,9 @@ describe('transcribe minNoteDivision', () => {
   });
 
   it('surfaces the C refusal of both spellings together', () => {
-    expect(() => run({ minNoteDivision: 16, minNoteMs: 100 })).toThrow(/min_note_division/);
+    expect(() => run({ minNoteDivision: 16, minNoteMs: 100 })).toThrow(
+      new RangeError('transcribe: minNoteDivision and minNoteMs cannot both be set'),
+    );
   });
 });
 

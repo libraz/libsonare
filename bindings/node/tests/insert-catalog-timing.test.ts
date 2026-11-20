@@ -86,7 +86,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
         sampleRate: 48000,
       }),
     ).toThrowError(
-      new RangeError(
+      new TypeError(
         'masteringInsertTiming: unknown key notAKey (expected aliasing, ceiling, driveDb, mix)',
       ),
     );
