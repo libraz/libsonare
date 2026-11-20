@@ -28,6 +28,8 @@ public declaration's ``///`` block states ``ACCESSOR_CONTRACT``; its returns are
 their own line, not filed by class and not ratcheted. Without the statement they are filed as usual.
 Audio-thread entries (opened with ``SONARE_C_RT_API_ENTRY``) keep a bare code the same way, since
 writing the thread-local message is not realtime-safe; they are counted on a line of their own.
+A return directly under ``case ...ErrorCode::InvalidParameter:`` translates a core error whose
+text was recorded where it was raised, so it is not a refusal and is counted apart as well.
 
 ``interim_no_cause`` counts the sites that state no cause because the engine does not report one
 yet: a literal carrying one of ``INTERIM_MARKERS``, and each call of a helper whose body holds such a
@@ -70,6 +72,7 @@ ACCESSOR_PREFIX = "sonare_last_"
 ACCESSOR_CONTRACT = "Like every sonare_last_* accessor, it records no error"
 HEADER_DIR = "include/sonare"
 RT_ENTRY = "SONARE_C_RT_API_ENTRY"
+TRANSLATION_CASE = re.compile(r"\bcase\s+[\w:]*\bErrorCode::InvalidParameter\s*:\s*$")
 NOT_FUNCTIONS = frozenset({"if", "for", "while", "switch", "catch", "return", "sizeof"})
 
 MESSAGE_CALL = re.compile(r"\b(set_last_error(?:_static)?|refuse\w*|\w+_or_refuse)\s*\(")
@@ -225,7 +228,12 @@ def classify_disjunct(part: str, refusing: set[str]) -> str:
             if preferred in kinds:
                 return preferred
         return "unclassified"
-    if re.search(r"(?:==|!=)\s*(?:nullptr|NULL)\b|\b(?:nullptr|NULL)\s*(?:==|!=)", part):
+    both = re.fullmatch(r"(\(.*\))\s*(?:==|!=)\s*(\(.*\))", part)
+    if both and match_forward(both.group(1), 0) == len(both.group(1)) - 1:
+        # Two tests compared with each other: a both-or-neither rule.
+        return "relation"
+    # Only an equality refuses a missing pointer; ``p != nullptr`` tests what a present one holds.
+    if re.search(r"==\s*(?:nullptr|NULL)\b|\b(?:nullptr|NULL)\s*==", part):
         return "null"
     if VALUE_CALL.search(part):
         return "value"
@@ -309,6 +317,8 @@ class Scan:
     accessor_returns: int = 0
     # Bare returns inside audio-thread entries, which write no message.
     realtime_returns: int = 0
+    # Returns that translate a core ErrorCode::InvalidParameter into the C code.
+    translation_returns: int = 0
 
 
 def enclosing_function(code: str, pos: int) -> tuple[str, int] | None:
@@ -423,6 +433,9 @@ def scan_text(
             continue
         if owner is not None and RT_ENTRY in code[owner[1] : pos]:
             scan.realtime_returns += 1
+            continue
+        if TRANSLATION_CASE.search(code[max(0, pos - 200) : pos]):
+            scan.translation_returns += 1
             continue
         line = code.count("\n", 0, pos) + 1
         braceless = if_condition_before(code, pos)
@@ -598,6 +611,10 @@ def main(argv: list[str]) -> int:
     )
     print(
         f"audio-thread entries ({RT_ENTRY}): {result.realtime_returns} bare returns, not ratcheted"
+    )
+    print(
+        "error-code translations (ErrorCode::InvalidParameter): "
+        f"{result.translation_returns} returns, not refusals"
     )
     if args.table:
         args.table.write_text(table(result), encoding="utf-8")

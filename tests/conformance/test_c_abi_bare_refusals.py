@@ -84,6 +84,34 @@ class ClassifyTest(unittest.TestCase):
         found = read(source)
         self.assertEqual([(r.classes, r.state) for r in found], [({"helper"}, "helper")])
 
+    def test_a_present_pointer_test_is_not_a_null_refusal(self) -> None:
+        r = one(
+            "SonareError f(const char* error) {\n"
+            '  if (error != nullptr) { set_last_error(SONARE_ERROR_INVALID_PARAMETER, error);\n'
+            "    return SONARE_ERROR_INVALID_PARAMETER; }\n}\n"
+        )
+        self.assertEqual((r.classes, r.state), ({"value"}, "text"))
+
+    def test_two_pointer_tests_compared_are_a_relation(self) -> None:
+        r = one(
+            "SonareError f(float* a, float* b) {\n"
+            "  if ((a == nullptr) != (b == nullptr)) return SONARE_ERROR_INVALID_PARAMETER;\n}\n"
+        )
+        self.assertEqual(r.classes, {"relation"})
+
+    def test_an_error_code_translation_is_counted_apart(self) -> None:
+        source = (
+            "SonareError map(sonare::ErrorCode code) {\n  switch (code) {\n"
+            "    case sonare::ErrorCode::InvalidParameter:\n"
+            "      return SONARE_ERROR_INVALID_PARAMETER;\n  }\n}\n"
+            "SonareError g(Status s) {\n  switch (s) {\n    case Status::kBad:\n"
+            "      return SONARE_ERROR_INVALID_PARAMETER;\n  }\n}\n"
+        )
+        result = scanner.Scan()
+        scanner.scan_text("t.cpp", source, set(), result)
+        self.assertEqual(result.translation_returns, 1)
+        self.assertEqual([r.line for r in result.refusals], [10])
+
     def test_a_return_with_no_guard_is_unclassified_and_listed(self) -> None:
         r = one("SonareError f() {\n  return SONARE_ERROR_INVALID_PARAMETER;\n}\n")
         self.assertEqual((r.classes, r.guard), ({"unclassified"}, "(no guard)"))
