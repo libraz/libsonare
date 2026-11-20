@@ -1367,7 +1367,10 @@ def _c_error_path_files(root: Path) -> list[dict]:
 
 
 # A validator call naming its refusal: a literal function name, then a literal argument name.
-_C_NAMED_CALL = re.compile(r'\b[A-Za-z_]\w*\s*(?:<[^;()]*>)?\(\s*"([A-Za-z_][\w:]*)"\s*,\s*"')
+# A refuse* helper takes the refused subject first, not the entry, so it is not one.
+_C_NAMED_CALL = re.compile(
+    r'\b(?!(?:[A-Za-z_]\w*::)*refuse\w*\s*\()[A-Za-z_][\w:]*\s*(?:<[^;()]*>)?\(\s*"([A-Za-z_][\w:]*)"\s*,\s*"'
+)
 _C_FORWARD = re.compile(r"\breturn\s+(sonare_\w+)\s*\(")
 
 
@@ -1454,51 +1457,34 @@ def _c_error_path_violation(r: dict) -> str | None:
 
 
 _C_ERROR_PATH_PENDING: dict[str, int] = {
-    "src/c_api/core_analysis.cpp": 21,
-    "src/c_api/core_audio.cpp": 21,
-    "src/c_api/core_cqt.cpp": 2,
-    "src/c_api/core_quick.cpp": 19,
-    "src/c_api/features_inverse.cpp": 48,
-    "src/c_api/features_music.cpp": 7,
-    "src/c_api/features_segment.cpp": 14,
-    "src/c_api/features_spectral_pitch.cpp": 44,
-    "src/c_api/features_spectrogram_mel.cpp": 6,
-    "src/c_api/features_streaming.cpp": 24,
-    "src/c_api/mixing_assistant.cpp": 1,
-    "src/c_api/mixing_graph.cpp": 6,
-    "src/c_api/mixing_mixer.cpp": 24,
-    "src/c_api/mixing_strip.cpp": 49,
+    "src/c_api/core_audio.cpp": 1,
+    "src/c_api/features_inverse.cpp": 22,
+    "src/c_api/features_spectral_pitch.cpp": 11,
+    "src/c_api/mixing_graph.cpp": 3,
+    "src/c_api/mixing_mixer.cpp": 2,
+    "src/c_api/mixing_strip.cpp": 5,
     "src/c_api/project_core.cpp": 2,
     "src/c_api/project_midi.cpp": 10,
     "src/c_api/project_soundfont.cpp": 1,
-    "src/c_api/sonare_c_acoustic.cpp": 6,
-    "src/c_api/sonare_c_assist.cpp": 2,
-    "src/c_api/sonare_c_compat.cpp": 26,
-    "src/c_api/sonare_c_daw.cpp": 44,
-    "src/c_api/sonare_c_editing.cpp": 37,
-    "src/c_api/sonare_c_effects.cpp": 40,
-    "src/c_api/sonare_c_engine.cpp": 63,
-    "src/c_api/sonare_c_engine_clips.cpp": 13,
-    "src/c_api/sonare_c_engine_controller.cpp": 19,
-    "src/c_api/sonare_c_engine_midi.cpp": 99,
-    "src/c_api/sonare_c_engine_mixing.cpp": 108,
+    "src/c_api/sonare_c_acoustic.cpp": 1,
+    "src/c_api/sonare_c_compat.cpp": 7,
+    "src/c_api/sonare_c_editing.cpp": 11,
+    "src/c_api/sonare_c_effects.cpp": 9,
+    "src/c_api/sonare_c_engine.cpp": 4,
+    "src/c_api/sonare_c_engine_controller.cpp": 8,
+    "src/c_api/sonare_c_engine_midi.cpp": 45,
+    "src/c_api/sonare_c_engine_mixing.cpp": 48,
     "src/c_api/sonare_c_engine_render.cpp": 2,
-    "src/c_api/sonare_c_engine_timeline.cpp": 1,
-    "src/c_api/sonare_c_mastering_apply.cpp": 10,
-    "src/c_api/sonare_c_mastering_chain.cpp": 4,
-    "src/c_api/sonare_c_mastering_dynamics.cpp": 3,
-    "src/c_api/sonare_c_mastering_eq.cpp": 13,
-    "src/c_api/sonare_c_mastering_preset.cpp": 7,
-    "src/c_api/sonare_c_mastering_repair.cpp": 12,
-    "src/c_api/sonare_c_mastering_streaming.cpp": 25,
+    "src/c_api/sonare_c_mastering_apply.cpp": 4,
+    "src/c_api/sonare_c_mastering_eq.cpp": 2,
+    "src/c_api/sonare_c_mastering_repair.cpp": 5,
+    "src/c_api/sonare_c_mastering_streaming.cpp": 15,
     "src/c_api/sonare_c_memory.cpp": 1,
-    "src/c_api/sonare_c_playback.cpp": 20,
-    "src/c_api/sonare_c_polyphony.cpp": 15,
-    "src/c_api/sonare_c_sample_bank.cpp": 9,
+    "src/c_api/sonare_c_playback.cpp": 3,
+    "src/c_api/sonare_c_polyphony.cpp": 8,
+    "src/c_api/sonare_c_sample_bank.cpp": 1,
     "src/c_api/sonare_c_streaming_retune.cpp": 7,
-    "src/c_api/sonare_c_transcribe.cpp": 2,
-    "src/c_api/sonare_c_voice_changer.cpp": 40,
-    "src/c_api/synth_catalog.cpp": 1,
+    "src/c_api/sonare_c_voice_changer.cpp": 22,
 }
 
 

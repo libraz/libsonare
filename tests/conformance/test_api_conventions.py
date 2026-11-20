@@ -1175,6 +1175,18 @@ class CEntryNameRule(unittest.TestCase):
         verdict = self.judge("c-entry-name", "Spectrogram::compute")
         self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/a.cpp:2"])
 
+    def test_a_refusal_helper_naming_its_subject_is_not_read(self) -> None:
+        self.SOURCE = (
+            "SonareError sonare_stft(const float* samples, size_t length, int sample_rate) {\n"
+            '  util::check::refuse("samples", "must not be null");\n'
+            '  refuse_unknown_id("clip_id", "a clip", "project");\n'
+            '  return run_offline("stft", "samples", samples, length, sample_rate);\n'
+            "}\n"
+        )
+        verdict = self.judge("c-entry-name", "stft")
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
     def test_a_forwarding_entry_is_counted(self) -> None:
         verdict = self.judge("c-entry-forward", "stft")
         self.assertEqual(verdict.read, 1)
