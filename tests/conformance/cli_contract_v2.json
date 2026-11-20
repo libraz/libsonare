@@ -87,6 +87,58 @@
           "domain": null
         }
       ],
+      "amplitude-to-db": [
+        {
+          "name": "amin",
+          "type": "number",
+          "default": null,
+          "stated_default": "1e-05",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ref",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "top-db",
+          "type": "number",
+          "default": null,
+          "stated_default": "80.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
       "analyze": [
         {
           "name": "chroma-high-pass-hz",
@@ -173,6 +225,170 @@
           "domain": null
         }
       ],
+      "boundaries": [
+        {
+          "name": "absolute-threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.005",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "kernel-size",
+          "type": "integer",
+          "default": null,
+          "stated_default": "64",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-chroma",
+          "type": "integer",
+          "default": null,
+          "stated_default": "12",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-mfcc",
+          "type": "integer",
+          "default": null,
+          "stated_default": "13",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "no-chroma",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "no-mfcc",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "peak-distance",
+          "type": "number",
+          "default": null,
+          "stated_default": "2.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "reference-window",
+          "type": "number",
+          "default": null,
+          "stated_default": "60.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.3",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
       "bpm": [
         {
           "name": "json",
@@ -183,6 +399,98 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        }
+      ],
+      "chirp": [
+        {
+          "name": "duration-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "exponential",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fmax-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": 0,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "stated_default": "22050",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         }
       ],
       "chords": [
@@ -300,7 +608,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "no-beat-sync",
@@ -391,6 +705,270 @@
           "domain": null
         }
       ],
+      "clicks": [
+        {
+          "name": "click-duration-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.1",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "frequency-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "1000.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "through the last click and its decay",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 500000000,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "stated_default": "22050",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "times",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "clipping": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-region",
+          "type": "integer",
+          "default": null,
+          "stated_default": "1",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.999",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "cqt": [
+        {
+          "name": "bins-per-octave",
+          "type": "integer",
+          "default": null,
+          "stated_default": "12",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 65536,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-bins",
+          "type": "integer",
+          "default": null,
+          "stated_default": "84",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "db-to-amplitude": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ref",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "db-to-power": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ref",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
       "decompose-stems": [
         {
           "name": "beta",
@@ -410,7 +988,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "init",
@@ -449,7 +1033,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "n-components",
@@ -459,7 +1049,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "n-fft",
@@ -469,13 +1065,59 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "n-iter",
           "type": "integer",
           "default": null,
           "stated_default": "100",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "deemphasis": [
+        {
+          "name": "coef",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.97",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -518,6 +1160,82 @@
           "domain": null
         }
       ],
+      "dynamic-range": [
+        {
+          "name": "high-percentile",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.95",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "low-percentile",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.1",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "window-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "3.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
       "dynamics": [
         {
           "name": "hop-length",
@@ -527,7 +1245,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -1210,7 +1934,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "profile",
@@ -1360,12 +2090,49 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "",
+          "default": null,
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "pop",
+              "edm",
+              "acoustic",
+              "hipHop",
+              "aiMusic",
+              "speech",
+              "streaming",
+              "youtube",
+              "broadcast",
+              "podcast",
+              "audiobook",
+              "cinema",
+              "jpop",
+              "ambient",
+              "lofi",
+              "classical",
+              "drumAndBass",
+              "techno",
+              "metal",
+              "trap",
+              "rnb",
+              "jazz",
+              "kpop",
+              "trance",
+              "gameOst",
+              "vinyl",
+              "tapeHiss",
+              "fieldRecording",
+              "voiceMemo",
+              "shellac78"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "report",
@@ -1539,7 +2306,19 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [
+              "match.referenceLoudness",
+              "match.tonalBalance",
+              "match.tonalBalanceLogBands",
+              "match.matchEqCurve",
+              "match.estimateReferenceDelaySamples"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -1632,7 +2411,18 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [
+              "match.applyMatchEq",
+              "match.alignReferenceToSource",
+              "match.abSwitch",
+              "match.abCrossfade"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "reference",
@@ -1729,7 +2519,104 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [
+              "dynamics.brickwallLimiter",
+              "dynamics.compressor",
+              "dynamics.deesser",
+              "dynamics.expander",
+              "dynamics.gate",
+              "dynamics.limiter",
+              "dynamics.parallelComp",
+              "dynamics.sidechainRouter",
+              "dynamics.duckingProcessor",
+              "dynamics.transientShaper",
+              "dynamics.upwardCompressor",
+              "dynamics.upwardExpander",
+              "dynamics.vocalRider",
+              "eq.bandPass",
+              "eq.cutFilter",
+              "eq.dynamic",
+              "eq.equalizer",
+              "eq.graphic",
+              "eq.linearPhase",
+              "eq.midSide",
+              "eq.minimumPhase",
+              "eq.parametric",
+              "eq.passiveTube",
+              "eq.shelving",
+              "eq.steppedProportionalQ",
+              "eq.tilt",
+              "final.bitDepth",
+              "final.dither",
+              "final.outputChain",
+              "maximizer.adaptiveRelease",
+              "maximizer.loudnessOptimize",
+              "maximizer.maximizer",
+              "maximizer.softKneeMax",
+              "maximizer.truePeakLimiter",
+              "multiband.compressor",
+              "multiband.dynamicEq",
+              "multiband.expander",
+              "multiband.imager",
+              "multiband.limiter",
+              "multiband.saturation",
+              "repair.declick",
+              "repair.declip",
+              "repair.decrackle",
+              "repair.dehum",
+              "repair.denoiseClassical",
+              "repair.dereverbClassical",
+              "repair.trimSilence",
+              "saturation.bitcrusher",
+              "saturation.distortion",
+              "saturation.exciter",
+              "saturation.hardClipper",
+              "saturation.multibandExciter",
+              "saturation.overdrive",
+              "saturation.ampSim",
+              "saturation.softClipper",
+              "saturation.tape",
+              "saturation.transformer",
+              "saturation.tube",
+              "saturation.waveshaper",
+              "spectral.airBand",
+              "spectral.lowEndFocus",
+              "spectral.presenceEnhancer",
+              "spectral.spectralShaper",
+              "stereo.autoPan",
+              "stereo.binaural",
+              "stereo.haasEnhancer",
+              "stereo.imager",
+              "stereo.monoMaker",
+              "stereo.phaseAlign",
+              "stereo.stereoBalance",
+              "utility.gain",
+              "effects.gsEfx",
+              "effects.reverb.plate",
+              "effects.reverb.fdn",
+              "effects.reverb.velvet",
+              "effects.reverb.convolution",
+              "effects.reverb.room",
+              "effects.acoustic.roomMorph",
+              "effects.filter.vowel",
+              "effects.modulation.chorus",
+              "effects.modulation.ensemble",
+              "effects.modulation.flanger",
+              "effects.modulation.phaser",
+              "effects.modulation.wah",
+              "effects.modulation.autoWah",
+              "effects.modulation.rotary",
+              "effects.modulation.ringModulator",
+              "effects.modulation.pitchShifter",
+              "effects.delay.stereo",
+              "voice.changer"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         }
       ],
       "mastering-processors": [
@@ -1766,6 +2653,18 @@
           "domain": null
         }
       ],
+      "mastering-stereo-analyses": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
       "mastering-stereo-analyze": [
         {
           "name": "analysis",
@@ -1775,7 +2674,16 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [
+              "stereo.monoCompatCheck",
+              "stereo.monoCompatCheckLogBands"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -1904,12 +2812,49 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "",
+          "default": null,
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "pop",
+              "edm",
+              "acoustic",
+              "hipHop",
+              "aiMusic",
+              "speech",
+              "streaming",
+              "youtube",
+              "broadcast",
+              "podcast",
+              "audiobook",
+              "cinema",
+              "jpop",
+              "ambient",
+              "lofi",
+              "classical",
+              "drumAndBass",
+              "techno",
+              "metal",
+              "trap",
+              "rnb",
+              "jazz",
+              "kpop",
+              "trance",
+              "gameOst",
+              "vinyl",
+              "tapeHiss",
+              "fieldRecording",
+              "voiceMemo",
+              "shellac78"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "speech-mono-amount",
@@ -2038,6 +2983,346 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
+          "domain": null
+        }
+      ],
+      "mel-to-audio": [
+        {
+          "name": "fmax-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "the Nyquist frequency",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-iter",
+          "type": "integer",
+          "default": null,
+          "stated_default": "32",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": null,
+          "stated_default": "128",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "melody": [
+        {
+          "name": "f0-max-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "2093.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "f0-min-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "65.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "256",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.1",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "meter": [
+        {
+          "name": "clip-threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.999",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "oversample",
+          "type": "integer",
+          "default": null,
+          "stated_default": "4",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "1",
+              "2",
+              "4",
+              "8",
+              "16"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "mfcc-to-audio": [
+        {
+          "name": "fmax-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "the Nyquist frequency",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-iter",
+          "type": "integer",
+          "default": null,
+          "stated_default": "32",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": null,
+          "stated_default": "128",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-mfcc",
+          "type": "integer",
+          "default": null,
+          "stated_default": "20",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -2178,7 +3463,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "scene",
@@ -2667,6 +3958,282 @@
           "name": "json",
           "type": "boolean",
           "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "pad-center": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "pad-value",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "size",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "pcen": [
+        {
+          "name": "bias",
+          "type": "number",
+          "default": null,
+          "stated_default": "2.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "eps",
+          "type": "number",
+          "default": null,
+          "stated_default": "1e-06",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "gain",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.98",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-bins",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-frames",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "power",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.5",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "stated_default": "22050",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "time-constant",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.4",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "peak-pick": [
+        {
+          "name": "delta",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "post-avg",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "post-max",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "pre-avg",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "pre-max",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "wait",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "phase": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
@@ -3366,6 +4933,92 @@
           }
         }
       ],
+      "power-to-db": [
+        {
+          "name": "amin",
+          "type": "number",
+          "default": null,
+          "stated_default": "1e-10",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ref",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "top-db",
+          "type": "number",
+          "default": null,
+          "stated_default": "80.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "preemphasis": [
+        {
+          "name": "coef",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.97",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
       "project.abi": [
         {
           "name": "json",
@@ -3715,7 +5368,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         }
       ],
       "project.synth-presets": [
@@ -3839,12 +5498,49 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "",
+          "default": null,
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "pop",
+              "edm",
+              "acoustic",
+              "hipHop",
+              "aiMusic",
+              "speech",
+              "streaming",
+              "youtube",
+              "broadcast",
+              "podcast",
+              "audiobook",
+              "cinema",
+              "jpop",
+              "ambient",
+              "lofi",
+              "classical",
+              "drumAndBass",
+              "techno",
+              "metal",
+              "trap",
+              "rnb",
+              "jazz",
+              "kpop",
+              "trance",
+              "gameOst",
+              "vinyl",
+              "tapeHiss",
+              "fieldRecording",
+              "voiceMemo",
+              "shellac78"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "stages",
@@ -3888,7 +5584,13 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         }
       ],
       "rhythm": [
@@ -4189,6 +5891,60 @@
           "domain": null
         }
       ],
+      "samples-to-frames": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "no centring offset",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "samples",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
       "scale-quantize": [
         {
           "name": "json",
@@ -4334,6 +6090,28 @@
         },
         {
           "name": "write-takes",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "stereo": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference",
           "type": "path",
           "default": null,
           "stated_default": null,
@@ -4544,7 +6322,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "seed",
@@ -4639,6 +6423,38 @@
           "type": "integer",
           "default": null,
           "stated_default": "128",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "win-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "384",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "tempogram-ratio": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4763,6 +6579,118 @@
           "domain": null
         }
       ],
+      "tone": [
+        {
+          "name": "amplitude",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "duration-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "frequency-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "phase",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "stated_default": "22050",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "tonnetz": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
       "transcribe": [
         {
           "name": "channel",
@@ -4772,7 +6700,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 15,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "f0-max-hz",
@@ -4782,7 +6716,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "f0-min-hz",
@@ -4792,7 +6732,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "fixed-velocity",
@@ -4802,7 +6748,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 127,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -4870,7 +6822,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "min-ridge-peak-ratio",
@@ -4947,7 +6905,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "segmentation-threshold-cents",
@@ -4957,7 +6921,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "tempo-bpm",
@@ -4983,7 +6953,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": 0,
+            "exclusive_maximum": true
+          }
         }
       ],
       "trim-silence": [
@@ -5150,6 +7126,59 @@
             "maximum": null,
             "exclusive_maximum": false
           }
+        }
+      ],
+      "vector-normalize": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "norm-type",
+          "type": "integer",
+          "default": null,
+          "stated_default": "0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
         }
       ],
       "version": [
@@ -5687,6 +7716,240 @@
           "domain": null
         }
       ],
+      "fix-frames": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "no-pad",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "x-max",
+          "type": "integer",
+          "default": null,
+          "stated_default": "no upper bound",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "x-min",
+          "type": "integer",
+          "default": null,
+          "stated_default": "0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "fix-length": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "pad-value",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "size",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "fourier-tempogram": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "win-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "384",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "frame-signal": [
+        {
+          "name": "frame-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "frames-to-samples": [
+        {
+          "name": "frames",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "no centring offset",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        }
+      ],
       "gain": [
         {
           "name": "gain-db",
@@ -6141,53 +8404,39 @@
       "reason": "both front-ends take the same options, but the Python section result does not carry the form yet, so the Python payload has no form key"
     },
     "melody": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the measurement is already a Python entry point, libsonare.analyze_melody(), so the CLI would only add a JSON round trip"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "boundaries": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the measurement is already a Python entry point, libsonare.detect_boundaries(), so the CLI would only add a JSON round trip; the C ABI entry it needed now exists, which is what closed the gap the row previously recorded"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "meter": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a convenience bundle over libsonare.metering_peak_db(), libsonare.metering_rms_db() and libsonare.metering_crest_factor_db(), each already a Python entry point"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "clipping": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the measurement is already a Python entry point, libsonare.metering_detect_clipping(), so the CLI would only add a JSON round trip"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "dynamic-range": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the measurement is already a Python entry point, libsonare.metering_dynamic_range(), so the CLI would only add a JSON round trip"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "stereo": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the two figures are Python entry points already, libsonare.metering_stereo_correlation() and libsonare.metering_stereo_width()"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "phase": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the measurement is already a Python entry point, libsonare.metering_phase_scope(), so the CLI would only add a JSON round trip"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "polyphonic-notes": {
       "classification": "shared",
@@ -6214,18 +8463,14 @@
       ]
     },
     "preemphasis": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.preemphasis() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "deemphasis": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.deemphasis() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "split-silence": {
       "classification": "shared",
@@ -6248,25 +8493,19 @@
       "option_status": "active"
     },
     "tone": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.tone() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "chirp": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.chirp() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "clicks": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the measurement is already a Python entry point, libsonare.clicks(), so the CLI would only add a JSON round trip"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mastering-pair-processor": {
       "classification": "shared",
@@ -6285,42 +8524,29 @@
       ]
     },
     "mastering-stereo-analyses": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "requires": [
-        "mastering"
-      ],
-      "reason_kind": "by_design",
-      "reason": "the measurement is already a Python entry point, libsonare.mastering_stereo_analysis_names(), so the CLI would only add a JSON round trip"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "fourier-tempogram": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.fourier_tempogram() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "tempogram-ratio": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.tempogram_ratio() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "tonnetz": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.tonnetz() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "cqt": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.cqt() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "vqt": {
       "classification": "native_only",
@@ -6330,109 +8556,79 @@
       "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.vqt() over the array it already holds, where it composes"
     },
     "mel-to-audio": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.mel_to_audio() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mfcc-to-audio": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.mfcc_to_audio() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "frames-to-samples": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.frames_to_samples() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "samples-to-frames": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.samples_to_frames() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "power-to-db": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.power_to_db() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "amplitude-to-db": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.amplitude_to_db() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "db-to-power": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.db_to_power() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "db-to-amplitude": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.db_to_amplitude() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "frame-signal": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.frame_signal() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "pad-center": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.pad_center() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "fix-length": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.fix_length() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "fix-frames": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.fix_frames() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "peak-pick": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.peak_pick() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "vector-normalize": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.vector_normalize() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "pcen": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.pcen() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "system-info": {
       "classification": "shared",
@@ -6919,7 +9115,7 @@
             "3,x",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -7394,7 +9590,7 @@
             "malformed",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -7766,7 +9962,7 @@
             "",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -7783,7 +9979,7 @@
             "nope",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -8175,12 +10371,49 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "",
+          "default": null,
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "pop",
+              "edm",
+              "acoustic",
+              "hipHop",
+              "aiMusic",
+              "speech",
+              "streaming",
+              "youtube",
+              "broadcast",
+              "podcast",
+              "audiobook",
+              "cinema",
+              "jpop",
+              "ambient",
+              "lofi",
+              "classical",
+              "drumAndBass",
+              "techno",
+              "metal",
+              "trap",
+              "rnb",
+              "jazz",
+              "kpop",
+              "trance",
+              "gameOst",
+              "vinyl",
+              "tapeHiss",
+              "fieldRecording",
+              "voiceMemo",
+              "shellac78"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "report",
@@ -8302,7 +10535,7 @@
             "repair.denoise.enabled=1,repair.denoise.noiseEstimator=1",
             "--json"
           ],
-          "exit": 5,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -8683,7 +10916,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "seed",
@@ -9715,7 +11954,104 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [
+              "dynamics.brickwallLimiter",
+              "dynamics.compressor",
+              "dynamics.deesser",
+              "dynamics.expander",
+              "dynamics.gate",
+              "dynamics.limiter",
+              "dynamics.parallelComp",
+              "dynamics.sidechainRouter",
+              "dynamics.duckingProcessor",
+              "dynamics.transientShaper",
+              "dynamics.upwardCompressor",
+              "dynamics.upwardExpander",
+              "dynamics.vocalRider",
+              "eq.bandPass",
+              "eq.cutFilter",
+              "eq.dynamic",
+              "eq.equalizer",
+              "eq.graphic",
+              "eq.linearPhase",
+              "eq.midSide",
+              "eq.minimumPhase",
+              "eq.parametric",
+              "eq.passiveTube",
+              "eq.shelving",
+              "eq.steppedProportionalQ",
+              "eq.tilt",
+              "final.bitDepth",
+              "final.dither",
+              "final.outputChain",
+              "maximizer.adaptiveRelease",
+              "maximizer.loudnessOptimize",
+              "maximizer.maximizer",
+              "maximizer.softKneeMax",
+              "maximizer.truePeakLimiter",
+              "multiband.compressor",
+              "multiband.dynamicEq",
+              "multiband.expander",
+              "multiband.imager",
+              "multiband.limiter",
+              "multiband.saturation",
+              "repair.declick",
+              "repair.declip",
+              "repair.decrackle",
+              "repair.dehum",
+              "repair.denoiseClassical",
+              "repair.dereverbClassical",
+              "repair.trimSilence",
+              "saturation.bitcrusher",
+              "saturation.distortion",
+              "saturation.exciter",
+              "saturation.hardClipper",
+              "saturation.multibandExciter",
+              "saturation.overdrive",
+              "saturation.ampSim",
+              "saturation.softClipper",
+              "saturation.tape",
+              "saturation.transformer",
+              "saturation.tube",
+              "saturation.waveshaper",
+              "spectral.airBand",
+              "spectral.lowEndFocus",
+              "spectral.presenceEnhancer",
+              "spectral.spectralShaper",
+              "stereo.autoPan",
+              "stereo.binaural",
+              "stereo.haasEnhancer",
+              "stereo.imager",
+              "stereo.monoMaker",
+              "stereo.phaseAlign",
+              "stereo.stereoBalance",
+              "utility.gain",
+              "effects.gsEfx",
+              "effects.reverb.plate",
+              "effects.reverb.fdn",
+              "effects.reverb.velvet",
+              "effects.reverb.convolution",
+              "effects.reverb.room",
+              "effects.acoustic.roomMorph",
+              "effects.filter.vowel",
+              "effects.modulation.chorus",
+              "effects.modulation.ensemble",
+              "effects.modulation.flanger",
+              "effects.modulation.phaser",
+              "effects.modulation.wah",
+              "effects.modulation.autoWah",
+              "effects.modulation.rotary",
+              "effects.modulation.ringModulator",
+              "effects.modulation.pitchShifter",
+              "effects.delay.stereo",
+              "voice.changer"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         }
       ],
       "positionals": [
@@ -11597,7 +13933,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "profile",
@@ -11715,7 +14057,7 @@
             "",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -11730,7 +14072,7 @@
             "",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -11760,7 +14102,7 @@
             "0",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -11886,7 +14228,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "no-beat-sync",
@@ -12062,7 +14410,7 @@
             "0",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -12132,7 +14480,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -12985,7 +15339,13 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         }
       ],
       "positionals": [
@@ -13410,7 +15770,19 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [
+              "match.referenceLoudness",
+              "match.tonalBalance",
+              "match.tonalBalanceLogBands",
+              "match.matchEqCurve",
+              "match.estimateReferenceDelaySamples"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -13760,7 +16132,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         }
       ],
       "positionals": [],
@@ -13798,7 +16176,7 @@
             "{new_project_output}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -14494,7 +16872,7 @@
             "{align_takes_finer_output}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
@@ -14987,7 +17365,7 @@
               "type": "array",
               "items": "number|null"
             },
-            "absorption_bands": {
+            "band_absorption": {
               "type": "array",
               "items": "number|null"
             }
@@ -15408,12 +17786,49 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "",
+          "default": null,
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "pop",
+              "edm",
+              "acoustic",
+              "hipHop",
+              "aiMusic",
+              "speech",
+              "streaming",
+              "youtube",
+              "broadcast",
+              "podcast",
+              "audiobook",
+              "cinema",
+              "jpop",
+              "ambient",
+              "lofi",
+              "classical",
+              "drumAndBass",
+              "techno",
+              "metal",
+              "trap",
+              "rnb",
+              "jazz",
+              "kpop",
+              "trance",
+              "gameOst",
+              "vinyl",
+              "tapeHiss",
+              "fieldRecording",
+              "voiceMemo",
+              "shellac78"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "stages",
@@ -15949,7 +18364,18 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [
+              "match.applyMatchEq",
+              "match.alignReferenceToSource",
+              "match.abSwitch",
+              "match.abCrossfade"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "reference",
@@ -16028,7 +18454,16 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
+          "domain": {
+            "choices": [
+              "stereo.monoCompatCheck",
+              "stereo.monoCompatCheckLogBands"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -17154,12 +19589,49 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "",
+          "default": null,
           "stated_default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "pop",
+              "edm",
+              "acoustic",
+              "hipHop",
+              "aiMusic",
+              "speech",
+              "streaming",
+              "youtube",
+              "broadcast",
+              "podcast",
+              "audiobook",
+              "cinema",
+              "jpop",
+              "ambient",
+              "lofi",
+              "classical",
+              "drumAndBass",
+              "techno",
+              "metal",
+              "trap",
+              "rnb",
+              "jazz",
+              "kpop",
+              "trance",
+              "gameOst",
+              "vinyl",
+              "tapeHiss",
+              "fieldRecording",
+              "voiceMemo",
+              "shellac78"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "speech-mono-amount",
@@ -17278,7 +19750,7 @@
             "malformed",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17380,7 +19852,7 @@
             "preset=jazz",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17440,7 +19912,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "init",
@@ -17479,7 +19957,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "n-components",
@@ -17489,7 +19973,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "n-fft",
@@ -17499,7 +19989,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "n-iter",
@@ -17509,7 +20005,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "output",
@@ -17595,7 +20097,7 @@
             "0",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17612,7 +20114,7 @@
             "0.5",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17629,7 +20131,7 @@
             "0",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17774,7 +20276,7 @@
             "",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17793,7 +20295,7 @@
             "no-such-preset",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -17912,7 +20414,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 15,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "f0-max-hz",
@@ -17922,7 +20430,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "f0-min-hz",
@@ -17932,7 +20446,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "fixed-velocity",
@@ -17942,7 +20462,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 127,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -18010,7 +20536,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "min-ridge-peak-ratio",
@@ -18087,7 +20619,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "segmentation-threshold-cents",
@@ -18097,7 +20635,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "tempo-bpm",
@@ -18123,7 +20667,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": 0,
+            "exclusive_maximum": true
+          }
         }
       ],
       "positionals": [
@@ -18207,7 +20757,7 @@
             "100",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18224,7 +20774,7 @@
             "200",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18241,7 +20791,7 @@
             "20",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18427,7 +20977,7 @@
           "argv": [
             "suggest-mix"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18442,7 +20992,7 @@
             "--params",
             "notAKey=1"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18459,7 +21009,7 @@
             "--params",
             "tempoBpm=120"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -19887,7 +22437,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "scene",
@@ -20077,6 +22633,3652 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "tone",
+      "options": [
+        {
+          "name": "amplitude",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "duration-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "frequency-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "phase",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "stated_default": "22050",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "frequency_hz": "number",
+            "sample_rate": "integer",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "tone",
+            "--frequency-hz",
+            "440",
+            "--duration-sec",
+            "0.1",
+            "--sample-rate",
+            "8000",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "sample_rate_out_of_domain",
+          "argv": [
+            "tone",
+            "--frequency-hz",
+            "440",
+            "--sample-rate",
+            "100",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "missing_frequency",
+          "argv": [
+            "tone",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "chirp",
+      "options": [
+        {
+          "name": "duration-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "exponential",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fmax-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": 0,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "stated_default": "22050",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "fmin_hz": "number",
+            "fmax_hz": "number",
+            "sample_rate": "integer",
+            "duration": "number",
+            "linear": "boolean"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "chirp",
+            "--fmax-hz",
+            "2000",
+            "--duration-sec",
+            "0.1",
+            "--sample-rate",
+            "8000",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "fmax_not_positive",
+          "argv": [
+            "chirp",
+            "--fmax-hz",
+            "0",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "exponential_needs_positive_fmin",
+          "argv": [
+            "chirp",
+            "--fmax-hz",
+            "2000",
+            "--exponential",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "clicks",
+      "options": [
+        {
+          "name": "click-duration-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.1",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "frequency-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "1000.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "through the last click and its decay",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 500000000,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "stated_default": "22050",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 8000,
+            "exclusive_minimum": false,
+            "maximum": 384000,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "times",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "n_clicks": "integer",
+            "sample_rate": "integer",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "clicks",
+            "--times",
+            "0.1,0.2",
+            "--length",
+            "2000",
+            "--sample-rate",
+            "8000",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "times_not_a_list",
+          "argv": [
+            "clicks",
+            "--times",
+            "0.1,x",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "frames-to-samples",
+      "options": [
+        {
+          "name": "frames",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "no centring offset",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "samples": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "frames-to-samples",
+            "--frames",
+            "3",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "missing_frames",
+          "argv": [
+            "frames-to-samples",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "samples-to-frames",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "no centring offset",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "samples",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "frames": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "samples-to-frames",
+            "--samples",
+            "3000",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "missing_samples",
+          "argv": [
+            "samples-to-frames",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "power-to-db",
+      "options": [
+        {
+          "name": "amin",
+          "type": "number",
+          "default": null,
+          "stated_default": "1e-10",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ref",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "top-db",
+          "type": "number",
+          "default": null,
+          "stated_default": "80.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "power-to-db",
+            "--values",
+            "1,10,100",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "power-to-db",
+            "--values",
+            "1,x",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "missing_values",
+          "argv": [
+            "power-to-db",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "amplitude-to-db",
+      "options": [
+        {
+          "name": "amin",
+          "type": "number",
+          "default": null,
+          "stated_default": "1e-05",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ref",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "top-db",
+          "type": "number",
+          "default": null,
+          "stated_default": "80.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "amplitude-to-db",
+            "--values",
+            "1,10",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "amplitude-to-db",
+            "--values",
+            "1,x",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "db-to-power",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ref",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "db-to-power",
+            "--values",
+            "0,10",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "db-to-power",
+            "--values",
+            "1,x",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "db-to-amplitude",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ref",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "db-to-amplitude",
+            "--values",
+            "0,20",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "db-to-amplitude",
+            "--values",
+            "1,x",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "frame-signal",
+      "options": [
+        {
+          "name": "frame-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "n_frames": "integer",
+            "frames": {
+              "type": "array",
+              "items": "number"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "frame-signal",
+            "--values",
+            "1,2,3,4,5,6",
+            "--frame-length",
+            "4",
+            "--hop-length",
+            "2",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "frame-signal",
+            "--values",
+            "1,x",
+            "--frame-length",
+            "4",
+            "--hop-length",
+            "2",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "frame_length_zero",
+          "argv": [
+            "frame-signal",
+            "--values",
+            "1,2,3",
+            "--frame-length",
+            "0",
+            "--hop-length",
+            "2",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "pad-center",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "pad-value",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "size",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "pad-center",
+            "--values",
+            "1,2,3",
+            "--size",
+            "7",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "size_below_input",
+          "argv": [
+            "pad-center",
+            "--values",
+            "1,2,3",
+            "--size",
+            "2",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "pad-center",
+            "--values",
+            "1,x",
+            "--size",
+            "7",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "fix-length",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "pad-value",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "size",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "fix-length",
+            "--values",
+            "1,2,3",
+            "--size",
+            "5",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "fix-length",
+            "--values",
+            "1,x",
+            "--size",
+            "5",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "fix-frames",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "no-pad",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "x-max",
+          "type": "integer",
+          "default": null,
+          "stated_default": "no upper bound",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "x-min",
+          "type": "integer",
+          "default": null,
+          "stated_default": "0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "integer"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "fix-frames",
+            "--values",
+            "3,5,9",
+            "--x-max",
+            "7",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "values_not_integers",
+          "argv": [
+            "fix-frames",
+            "--values",
+            "3,5.5",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "frames_decreasing",
+          "argv": [
+            "fix-frames",
+            "--values",
+            "5,3",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "peak-pick",
+      "options": [
+        {
+          "name": "delta",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "post-avg",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "post-max",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "pre-avg",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "pre-max",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "wait",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "integer"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "peak-pick",
+            "--values",
+            "0,1,0,0,2,0,0,3,0",
+            "--pre-max",
+            "1",
+            "--post-max",
+            "1",
+            "--pre-avg",
+            "1",
+            "--post-avg",
+            "1",
+            "--delta",
+            "0.1",
+            "--wait",
+            "1",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "peak-pick",
+            "--values",
+            "0,x",
+            "--pre-max",
+            "1",
+            "--post-max",
+            "1",
+            "--pre-avg",
+            "1",
+            "--post-avg",
+            "1",
+            "--delta",
+            "0.1",
+            "--wait",
+            "1",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "missing_wait",
+          "argv": [
+            "peak-pick",
+            "--values",
+            "0,1,0",
+            "--pre-max",
+            "1",
+            "--post-max",
+            "1",
+            "--pre-avg",
+            "1",
+            "--post-avg",
+            "1",
+            "--delta",
+            "0.1",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "vector-normalize",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "norm-type",
+          "type": "integer",
+          "default": null,
+          "stated_default": "0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "vector-normalize",
+            "--values",
+            "3,4",
+            "--norm-type",
+            "2",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "norm_type_out_of_domain",
+          "argv": [
+            "vector-normalize",
+            "--values",
+            "3,4",
+            "--norm-type",
+            "5",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "vector-normalize",
+            "--values",
+            "3,x",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "pcen",
+      "options": [
+        {
+          "name": "bias",
+          "type": "number",
+          "default": null,
+          "stated_default": "2.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "eps",
+          "type": "number",
+          "default": null,
+          "stated_default": "1e-06",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "gain",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.98",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-bins",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-frames",
+          "type": "integer",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "power",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.5",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "stated_default": "22050",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "time-constant",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.4",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "values",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "pcen",
+            "--values",
+            "1,2,3,4,5,6",
+            "--n-bins",
+            "2",
+            "--n-frames",
+            "3",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "value_count_mismatch",
+          "argv": [
+            "pcen",
+            "--values",
+            "1,2,3,4,5,6",
+            "--n-bins",
+            "2",
+            "--n-frames",
+            "2",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "values_not_a_list",
+          "argv": [
+            "pcen",
+            "--values",
+            "1,x",
+            "--n-bins",
+            "1",
+            "--n-frames",
+            "2",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-stereo-analyses",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "analyses": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mastering-stereo-analyses",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "melody",
+      "options": [
+        {
+          "name": "f0-max-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "2093.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "f0-min-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "65.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "256",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.1",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "pitch_range_octaves": "number",
+            "mean_frequency_hz": "number",
+            "pitch_stability": "number",
+            "vibrato_rate_hz": "number",
+            "pitch_count": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "melody",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "band_relation",
+          "argv": [
+            "melody",
+            "{audio}",
+            "--f0-min-hz",
+            "3000"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "threshold_domain",
+          "argv": [
+            "melody",
+            "{audio}",
+            "--threshold",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "boundaries",
+      "options": [
+        {
+          "name": "absolute-threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.005",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "kernel-size",
+          "type": "integer",
+          "default": null,
+          "stated_default": "64",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-chroma",
+          "type": "integer",
+          "default": null,
+          "stated_default": "12",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-mfcc",
+          "type": "integer",
+          "default": null,
+          "stated_default": "13",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "no-chroma",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "no-mfcc",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "peak-distance",
+          "type": "number",
+          "default": null,
+          "stated_default": "2.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "reference-window",
+          "type": "number",
+          "default": null,
+          "stated_default": "60.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.3",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "count": "integer",
+            "boundaries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "keys": {
+                  "time": "number",
+                  "frame": "integer",
+                  "strength": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "boundaries",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "kernel_size_domain",
+          "argv": [
+            "boundaries",
+            "{audio}",
+            "--kernel-size",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "meter",
+      "options": [
+        {
+          "name": "clip-threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.999",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "oversample",
+          "type": "integer",
+          "default": null,
+          "stated_default": "4",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "1",
+              "2",
+              "4",
+              "8",
+              "16"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "peak_db": "number",
+            "rms_db": "number",
+            "crest_factor_db": "number",
+            "true_peak_db": "number",
+            "clipping_ratio": "number",
+            "silence_ratio": "number",
+            "dc_offset": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "meter",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "oversample_domain",
+          "argv": [
+            "meter",
+            "{audio}",
+            "--oversample",
+            "3",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "clipping",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-region",
+          "type": "integer",
+          "default": null,
+          "stated_default": "1",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.999",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "clipped_samples": "integer",
+            "clipping_ratio": "number",
+            "max_clipped_peak": "number",
+            "regions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "keys": {
+                  "start_sample": "integer",
+                  "end_sample": "integer",
+                  "length": "integer",
+                  "peak": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "clipping",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "min_region_domain",
+          "argv": [
+            "clipping",
+            "{audio}",
+            "--min-region",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "threshold_above_one",
+          "argv": [
+            "clipping",
+            "{audio}",
+            "--threshold",
+            "2",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "dynamic-range",
+      "options": [
+        {
+          "name": "high-percentile",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.95",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "low-percentile",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.1",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 1,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "window-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": "3.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "dynamic_range_db": "number",
+            "low_percentile_db": "number",
+            "high_percentile_db": "number",
+            "window_rms_db": {
+              "type": "array",
+              "items": "number"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "dynamic-range",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "window_domain",
+          "argv": [
+            "dynamic-range",
+            "{audio}",
+            "--window-sec",
+            "-1",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "percentile_order",
+          "argv": [
+            "dynamic-range",
+            "{audio}",
+            "--low-percentile",
+            "0.9",
+            "--high-percentile",
+            "0.1",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "stereo",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "correlation": "number",
+            "stereo_width": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "stereo",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_missing",
+          "argv": [
+            "stereo",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--reference is required"
+          ]
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "phase",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "correlation": "number",
+            "average_abs_angle_rad": "number",
+            "max_radius": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "phase",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_missing",
+          "argv": [
+            "phase",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "--reference is required"
+          ]
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "tonnetz",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "n_dims": "integer",
+            "n_frames": "integer",
+            "stats": {
+              "keys": {
+                "max": "number",
+                "mean": "number",
+                "min": "number",
+                "std": "number"
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "tonnetz",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "hop_not_positive",
+          "argv": [
+            "tonnetz",
+            "{audio}",
+            "--hop-length",
+            "0",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "hop_length must be an integer in [1, 2147483647]"
+          ]
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "fourier-tempogram",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "win-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "384",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "win_length": "integer",
+            "n_bins": "integer",
+            "n_frames": "integer",
+            "stats": {
+              "keys": {
+                "max": "number",
+                "mean": "number",
+                "min": "number",
+                "std": "number"
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "fourier-tempogram",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "window_too_short",
+          "argv": [
+            "fourier-tempogram",
+            "{audio}",
+            "--win-length",
+            "1",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "win_length must be an integer in [2, 12288]"
+          ]
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "tempogram-ratio",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "win-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "384",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "win_length": "integer",
+            "ratios": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "keys": {
+                  "factor": "number",
+                  "value": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "tempogram-ratio",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "window_too_short",
+          "argv": [
+            "tempogram-ratio",
+            "{audio}",
+            "--win-length",
+            "1",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "win_length must be an integer in [2, 12288]"
+          ]
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "cqt",
+      "options": [
+        {
+          "name": "bins-per-octave",
+          "type": "integer",
+          "default": null,
+          "stated_default": "12",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 65536,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-bins",
+          "type": "integer",
+          "default": null,
+          "stated_default": "84",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "n_bins": "integer",
+            "n_frames": "integer",
+            "duration": "number",
+            "fmin_hz": "number",
+            "bins_per_octave": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "cqt",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "fmin_above_nyquist",
+          "argv": [
+            "cqt",
+            "{audio}",
+            "--fmin-hz",
+            "20000",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "must be less than sr / 2"
+          ]
+        },
+        {
+          "id": "hop_domain",
+          "argv": [
+            "cqt",
+            "{audio}",
+            "--hop-length",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "preemphasis",
+      "options": [
+        {
+          "name": "coef",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.97",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "coef": "number",
+            "samples": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "preemphasis",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--coef",
+            "0.9",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "deemphasis",
+      "options": [
+        {
+          "name": "coef",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.97",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "coef": "number",
+            "samples": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "deemphasis",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--coef",
+            "0.9",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mel-to-audio",
+      "options": [
+        {
+          "name": "fmax-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "the Nyquist frequency",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-iter",
+          "type": "integer",
+          "default": null,
+          "stated_default": "32",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": null,
+          "stated_default": "128",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "n_mels": "integer",
+            "n_frames": "integer",
+            "n_iter": "integer",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mel-to-audio",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--n-iter",
+            "4",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mfcc-to-audio",
+      "options": [
+        {
+          "name": "fmax-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "the Nyquist frequency",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": "0.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2048",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-iter",
+          "type": "integer",
+          "default": null,
+          "stated_default": "32",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": null,
+          "stated_default": "128",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-mfcc",
+          "type": "integer",
+          "default": null,
+          "stated_default": "20",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "n_mfcc": "integer",
+            "n_frames": "integer",
+            "n_iter": "integer",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mfcc-to-audio",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--n-iter",
+            "4",
+            "--n-mfcc",
+            "13",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}

@@ -136,6 +136,7 @@ from ._cli_effects import (
 from ._cli_effects import (
     _UNMATCHED_POLICY_NAMES as _UNMATCHED_POLICY_NAMES,
 )
+from ._cli_features import *  # noqa: F403
 from ._cli_inventory import (
     _cli_domain as _cli_domain,
 )
@@ -250,6 +251,7 @@ def _build_parser() -> _ContractArgumentParser:
     register_analysis_parsers(sub, shared)
     register_effects_parsers(sub, shared)
     register_dsp_parsers(sub, shared)
+    register_feature_parsers(sub, shared)
     register_acoustic_parsers(sub, shared)
     register_advanced_parsers(sub, shared)
     register_mastering_parsers(sub, shared)
@@ -287,8 +289,23 @@ def _build_parser() -> _ContractArgumentParser:
         "time-stretch",
         "normalize",
         "gain",
+        "melody",
+        "boundaries",
+        "meter",
+        "clipping",
+        "dynamic-range",
+        "stereo",
+        "phase",
+        "fourier-tempogram",
+        "tempogram-ratio",
+        "tonnetz",
+        "cqt",
         "fade",
         "filter",
+        "preemphasis",
+        "deemphasis",
+        "mel-to-audio",
+        "mfcc-to-audio",
         "trim-silence",
         "resample",
         "voice-change",
@@ -444,7 +461,39 @@ def _dispatch() -> None:
         "gain": cmd_gain,
         "fade": cmd_fade,
         "filter": cmd_filter,
+        "preemphasis": cmd_preemphasis,
+        "deemphasis": cmd_deemphasis,
+        "mel-to-audio": cmd_mel_to_audio,
+        "mfcc-to-audio": cmd_mfcc_to_audio,
         "system-info": cmd_system_info,
+        "melody": cmd_melody,
+        "boundaries": cmd_boundaries,
+        "meter": cmd_meter,
+        "clipping": cmd_clipping,
+        "dynamic-range": cmd_dynamic_range,
+        "stereo": cmd_stereo,
+        "phase": cmd_phase,
+        "fourier-tempogram": cmd_fourier_tempogram,
+        "tempogram-ratio": cmd_tempogram_ratio,
+        "tonnetz": cmd_tonnetz,
+        "cqt": cmd_cqt,
+        "tone": cmd_tone,
+        "chirp": cmd_chirp,
+        "clicks": cmd_clicks,
+        "frames-to-samples": cmd_frames_to_samples,
+        "samples-to-frames": cmd_samples_to_frames,
+        "power-to-db": cmd_power_to_db,
+        "amplitude-to-db": cmd_amplitude_to_db,
+        "db-to-power": cmd_db_to_power,
+        "db-to-amplitude": cmd_db_to_amplitude,
+        "frame-signal": cmd_frame_signal,
+        "pad-center": cmd_pad_center,
+        "fix-length": cmd_fix_length,
+        "fix-frames": cmd_fix_frames,
+        "peak-pick": cmd_peak_pick,
+        "vector-normalize": cmd_vector_normalize,
+        "pcen": cmd_pcen,
+        "mastering-stereo-analyses": cmd_mastering_stereo_analyses,
     }
 
     handler = commands.get(args.command)

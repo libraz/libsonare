@@ -651,7 +651,7 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
         .kv("confidence", est.confidence)
         .key("rt60_bands")
         .float_array(pad_with_nan(est.rt60_bands))
-        .key("absorption_bands")
+        .key("band_absorption")
         .float_array(pad_with_nan(est.absorption_bands))
         .end_object()
         .print();
@@ -970,8 +970,7 @@ int cmd_meter(const CliArgs& args, const Audio& audio) {
 int cmd_clipping(const CliArgs& args, const Audio& audio) {
   const float threshold = args.get_float("threshold", metering::kDefaultClippingThreshold);
   const auto min_region = static_cast<size_t>(
-      args.get_int_in_range("min-region", 1, std::numeric_limits<int>::max(),
-                            static_cast<int>(metering::kDefaultClippingMinRegionSamples)));
+      args.get_int("min-region", static_cast<int>(metering::kDefaultClippingMinRegionSamples)));
 
   metering::ClippingResult result = metering::detect_clipping(audio, threshold, min_region);
 

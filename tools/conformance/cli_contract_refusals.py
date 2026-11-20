@@ -66,6 +66,13 @@ def _bound_text(value: float) -> str:
     return bare(f"{value:.17g}")
 
 
+def _integer_bound_text(value: float) -> str:
+    """The library's ``integer_bound_text``: a whole bound in plain digits."""
+    if math.isfinite(value) and float(value).is_integer() and abs(value) < 2.0**63:
+        return str(int(value))
+    return _bound_text(value)
+
+
 def expected_predicate(domain: dict[str, Any], scalar_type: str) -> str:
     """The predicate both front-ends must state for ``domain``, in the library's words."""
     if domain["choices"]:
@@ -76,7 +83,7 @@ def expected_predicate(domain: dict[str, Any], scalar_type: str) -> str:
         if high is None:
             return f"must be an integer of at least {int(low)}"
         high = high - 1 if domain["exclusive_maximum"] else high
-        return f"must be an integer in [{_bound_text(low)}, {_bound_text(high)}]"
+        return f"must be an integer in [{_integer_bound_text(low)}, {_integer_bound_text(high)}]"
     if low is not None and high is not None:
         opening = "(" if domain["exclusive_minimum"] else "["
         closing = ")" if domain["exclusive_maximum"] else "]"
@@ -252,6 +259,72 @@ def run_domain_refusals(
 # input and ``{output}`` a scratch path; each pair is legal option by option.
 CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     (
+        ["bpm", "{input}", "-o", "{output}"],
+        "Command 'bpm' does not produce a file output; remove -o/--output",
+    ),
+    (["suggest-mix"], "suggest-mix requires at least one --input"),
+    (["suggest-mix", "--input", "=x"], "--input track id must not be empty: =x"),
+    (["suggest-mix", "--input", "a="], "--input requires a file path: a="),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "novalue"],
+        "invalid parameter entry: 'novalue' (expected key=value)",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "tempoBpm=abc"],
+        "invalid numeric value for parameter 'tempoBpm'",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "enable_eq=1"],
+        "assistant param enable_eq is an earlier spelling; write enableEq",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "nosuchkey=1"],
+        "unknown key nosuchkey (expected enableBalance, enableDynamics, enableEq, enableGain, enableHighPass, enableImage, enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, nFft, suggestionStrength, targetTrackLufs, tempoBpm)",
+    ),
+    (
+        ["suggest-mix", "--input", "{input}", "--params", "tempoBpm=100", "--tempo-bpm", "120"],
+        "--tempo-bpm and --params tempoBpm= set the same value",
+    ),
+    (
+        ["mix", "--preset", "vocalReverbSend", "--input", "=x", "-o", "{output}"],
+        "--input strip id must not be empty: =x",
+    ),
+    (
+        ["mix", "--preset", "vocalReverbSend", "--input", "a=", "-o", "{output}"],
+        "--input requires a file path: a=",
+    ),
+    (
+        ["project", "bounce", "{input}", "-o", "{output}", "--synth", "nosuchsynth"],
+        "argument --synth: unknown synth preset 'nosuchsynth'",
+    ),
+    (
+        ["midi-render", "{input}", "-o", "{output}", "--synth", "nosuchsynth"],
+        "argument --synth: unknown synth preset 'nosuchsynth'",
+    ),
+    (
+        ["project", "bounce", "{input}", "-o", "{output}", "--audio", "nofile"],
+        "argument --audio: must be <source_id>=FILE",
+    ),
+    (
+        ["project", "bounce", "{input}", "-o", "{output}", "--audio", "0=a.wav"],
+        "argument --audio: <source_id> must be an integer in [1, 4294967295]",
+    ),
+    (
+        ["project", "align-takes", "{input}", "-o", "{output}", "--reference-source", "1"]
+        + ["--audio", "nofile"],
+        "argument --audio: must be <source_id>=FILE",
+    ),
+    (
+        ["project", "abi", "-o", "{output}"],
+        "Command 'project' does not produce a file output; remove -o/--output",
+    ),
+    (["key", "{input}", "--profile", "bogus"], "invalid key profile: bogus"),
+    (["key", "{input}", "--modes", "bogus"], "invalid mode: bogus"),
+    (["key", "{input}", "--modes", ""], "--modes must contain at least one mode"),
+    (["chords", "{input}", "--key-root", "X"], "invalid pitch class: X"),
+    (["chords", "{input}", "--key-mode", "bogus"], "invalid mode: bogus"),
+    (["analyze", "{input}", "--meter-candidates", "3,x"], "invalid meter numerator: x"),
+    (
         ["key", "{input}", "--hpss", "--hop-length", "8"],
         "--hop-length must be at least 16 with --hpss (got 8)",
     ),
@@ -319,6 +392,117 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
     (
         ["repair", "{input}", "-o", "{output}", "--params", "eq.enabled=1"],
         "--params key must be a repair.* field: eq.enabled",
+    ),
+    (
+        ["repair", "{input}", "-o", "{output}", "--params", "novalue"],
+        "argument --params: must be a comma-separated list of key=value entries",
+    ),
+    (
+        [
+            "repair",
+            "{input}",
+            "-o",
+            "{output}",
+            "--stages",
+            "declip",
+            "--params",
+            "repair.denoise.nFft=512",
+        ],
+        "repair.denoise.nFft names a stage --stages does not run",
+    ),
+    (
+        ["repair", "{input}", "-o", "{output}", "--params", "repair.bogus.x=1"],
+        "unknown key params.repair.bogus.x",
+    ),
+    (
+        [
+            "repair",
+            "{input}",
+            "-o",
+            "{output}",
+            "--stages",
+            "declip",
+            "--params",
+            "repair.bogus.x=1,repair.denoise.nFft=512",
+        ],
+        "unknown key params.repair.bogus.x",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--params", "bogus.x=1"],
+        "unknown key params.bogus.x",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--params", "novalue"],
+        "argument --params: must be a comma-separated list of key=value entries",
+    ),
+    (
+        ["mastering-profile", "{input}", "--params", "=1"],
+        "argument --params: must be a comma-separated list of key=value entries",
+    ),
+    (
+        [
+            "mastering-pair-processor",
+            "{input}",
+            "--processor",
+            "match.abCrossfade",
+            "--reference",
+            "{input}",
+            "--params",
+            "mix=",
+        ],
+        "argument --params: must be a comma-separated list of key=value entries",
+    ),
+    (
+        [
+            "mastering-pair-analyze",
+            "{input}",
+            "--analysis",
+            "match.tonalBalance",
+            "--reference",
+            "{input}",
+            "--params",
+            "a=1,,b=2",
+        ],
+        "argument --params: must be a comma-separated list of key=value entries",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "novalue"],
+        "argument --params: must be a comma-separated list of key=value entries",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--params", "target_platform=club"],
+        "--params target_platform is an earlier spelling; write targetPlatform",
+    ),
+    (
+        ["mastering-suggest", "{input}", "--target-lufs", "-12", "--params", "targetLufs=-12"],
+        "--target-lufs and --params targetLufs= set the same value",
+    ),
+    (
+        [
+            "mastering-processor",
+            "{input}",
+            "--processor",
+            "dynamics.compressor",
+            "--params",
+            "nosuchkey=1",
+        ],
+        "unknown --params key for dynamics.compressor: nosuchkey",
+    ),
+    (
+        ["mastering-processor", "{input}", "--processor", "dynamics.compressor", "--params", "x"],
+        "argument --params: must be a comma-separated list of key=value entries",
+    ),
+    (
+        ["eq", "{input}", "--params", "band0.gainDb=1", "--frequency-hz", "1500", "--q", "2"],
+        "--frequency-hz cannot be combined with --params",
+    ),
+    (
+        ["eq", "{input}", "--params", "nosuchkey=1"],
+        "unknown --params key for eq.equalizer: nosuchkey",
+    ),
+    (
+        ["eq", "{input}", "--params", "novalue"],
+        "argument --params: must be a comma-separated list of key=value entries",
     ),
     (["mix"], "mix needs --scene or --preset"),
     (
@@ -515,6 +699,69 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
             "4",
         ],
         "--order must be 2 when --type is band-pass or notch",
+    ),
+    (
+        ["hpss", "{input}", "--harmonic-only", "--percussive-only", "-o", "{output}"],
+        "hpss output modes are mutually exclusive: choose one of --harmonic-only, "
+        "--percussive-only, or --with-residual",
+    ),
+    (
+        ["trim-silence", "{input}", "--threshold-db", "-50", "--top-db", "30"],
+        "--threshold-db and --top-db are mutually exclusive",
+    ),
+    (
+        ["voice-change", "{input}", "--preset", "neutralMonitor", "--preset-json", "x.json"]
+        + ["-o", "{output}"],
+        "voice-change preset selectors are mutually exclusive: choose one of --preset, "
+        "--preset-json, or --preset-pack",
+    ),
+    (
+        ["voice-change", "{input}", "--preset-pack", "p.json", "-o", "{output}"],
+        "--preset-pack requires --preset to select an entry",
+    ),
+    (
+        ["voice-change", "{input}", "--set", "a=1", "-o", "{output}"],
+        "--set requires --preset, --preset-json, or --preset-pack",
+    ),
+    (
+        ["voice-change", "{input}", "--preset", "neutralMonitor", "--set", "=1", "-o", "{output}"],
+        "invalid --set assignment: =1",
+    ),
+    (
+        ["voice-change", "{input}", "--preset", "neutralMonitor", "--set", "..=1"]
+        + ["-o", "{output}"],
+        "empty --set path",
+    ),
+    (["voice-preset-validate", "p.json", "--set", "nopath"], "invalid --set assignment: nopath"),
+    (
+        ["voice-change", "{input}", "--preset", "noSuchPreset", "-o", "{output}"],
+        "argument --preset: must be one of neutralMonitor, brightIdol, softWhisper, "
+        "deepNarrator, robotMascot, darkVillain, hardTune, robotMonotone, choirHarmony, "
+        "vocoderStrings, megaphone, radioVoice",
+    ),
+    (
+        ["polyphonic-render", "{input}", "--edit", "0.bogus=1", "-o", "{output}"],
+        "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db, "
+        "time_offset_samples, time_stretch_ratio, formant_shift_semitones, "
+        "vibrato_depth_change, drift_change, muted",
+    ),
+    (
+        ["transcribe", "{input}", "--reattack-ratio", "0.5", "-o", "{output}"],
+        "--reattack-ratio must be 0 (no split) or greater than 1",
+    ),
+    (
+        ["transcribe", "{input}", "--min-note-division", "8", "--min-note-ms", "50"]
+        + ["-o", "{output}"],
+        "--min-note-division and --min-note-ms cannot both be given",
+    ),
+    (
+        ["transcribe", "{input}", "--polyphonic", "--monophonic-model", "singing"]
+        + ["-o", "{output}"],
+        "--monophonic-model singing cannot be combined with --polyphonic",
+    ),
+    (
+        ["transcribe", "{input}", "--f0-min-hz", "100", "--f0-max-hz", "50", "-o", "{output}"],
+        "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 100, --f0-max-hz 50)",
     ),
 )
 

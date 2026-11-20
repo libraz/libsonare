@@ -653,7 +653,7 @@ rule = "sample-rate-name"
 [[entry]]
 kind = "command"
 old = "resample"
-changed = "the JSON names the two rates source_sample_rate and target_sample_rate; source_rate and sample_rate are gone"
+changed = "the JSON names the two rates source_sample_rate and target_sample_rate; source_rate and sample_rate are gone; a --target-sample-rate outside [8000, 384000] is refused as a usage error (exit 2) before the input is read, with one text on both front-ends"
 domain = "effects"
 rule = "sample-rate-name"
 test = "tests/cli/cli_effects_test.cpp::CLI resample names both of its rates as sample rates"
@@ -677,7 +677,7 @@ rule = "onset-strength"
 kind = "command"
 old = "tone"
 frontend = "native"
-changed = "the JSON frequency key is frequency_hz and sr is sample_rate, named as the flags are"
+changed = "the JSON frequency key is frequency_hz and sr is sample_rate, named as the flags are; leaving out --frequency-hz is refused as a usage error (exit 2) rather than exit 3"
 domain = "core"
 rule = "unit-in-name"
 test = 'tests/cli/cli_analysis_test.cpp::CLI generator and edit flags carry their unit'
@@ -835,7 +835,7 @@ test = "tests/cli/cli_effects_test.cpp::CLI voice-change rejects a realtime pres
 [[entry]]
 kind = "flag"
 old = "voice-change --preset"
-changed = "a built-in preset is named by its library id (neutralMonitor, brightIdol, hardTune, ...) in any letter case, and the JSON preset field reports that id; the kebab-case spellings, an unknown id and an empty value are refused as an invalid parameter (exit 3) on both CLIs, the empty value no longer read as not given; a --preset-pack entry is matched by its id exactly as written"
+changed = "a built-in preset is named by its library id (neutralMonitor, brightIdol, hardTune, ...) in any letter case, and the JSON preset field reports that id; the kebab-case spellings, an unknown id, an empty value, a selector combination and a malformed --set assignment are refused as a usage error (exit 2) before the input is read, with one text on both front-ends, the empty value no longer read as not given; a --preset-pack entry is matched by its id exactly as written"
 domain = "effects"
 rule = "token-case"
 test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
@@ -843,7 +843,7 @@ test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
 [[entry]]
 kind = "flag"
 old = "voice-preset --preset"
-changed = "takes the library preset id in any letter case and defaults to neutralMonitor; the kebab-case spellings are refused as an invalid parameter (exit 3)"
+changed = "takes the library preset id in any letter case and defaults to neutralMonitor; the kebab-case spellings and an unknown id are refused as a usage error (exit 2) naming the accepted ids"
 domain = "effects"
 rule = "token-case"
 test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
@@ -859,7 +859,7 @@ test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
 [[entry]]
 kind = "flag"
 old = "project.bounce --synth"
-changed = "takes the library synth preset id (sawLead, warmPad, ...) in any letter case; the kebab-case spellings are refused as an invalid parameter (exit 3)"
+changed = "takes the library synth preset id (sawLead, warmPad, ...) in any letter case; the kebab-case spellings and a name no NativeSynth preset carries are refused as a usage error (exit 2) before the project is read"
 domain = "engine"
 rule = "token-case"
 test = "tests/cli/cli_project_test.cpp::CLI project command group"
@@ -962,19 +962,19 @@ rule = "cli-positional-input"
 kind = "flag"
 old = "frames-to-samples --n-fft"
 frontend = "native"
-changed = "omitted, no centring offset is applied, as the library does; pass --n-fft 2048 to keep the 1.x offset of 1024 samples"
+changed = "omitted, no centring offset is applied, as the library does; pass --n-fft 2048 to keep the 1.x offset of 1024 samples; a spelled value below 1 is refused as a usage error (exit 2) rather than read as the same thing as omitting it"
 domain = "core"
 rule = "library-owned-defaults"
-test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
+test = "tests/cli/cli_contract_test.cpp::CLI states no sentinel for an option left out and refuses it spelled"
 
 [[entry]]
 kind = "flag"
 old = "samples-to-frames --n-fft"
 frontend = "native"
-changed = "omitted, no centring offset is applied, as the library does; pass --n-fft 2048 to keep the 1.x offset of 1024 samples"
+changed = "omitted, no centring offset is applied, as the library does; pass --n-fft 2048 to keep the 1.x offset of 1024 samples; a spelled value below 1 is refused as a usage error (exit 2) rather than read as the same thing as omitting it"
 domain = "core"
 rule = "library-owned-defaults"
-test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
+test = "tests/cli/cli_contract_test.cpp::CLI states no sentinel for an option left out and refuses it spelled"
 
 [[entry]]
 kind = "flag"
@@ -1074,7 +1074,7 @@ test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU un
 [[entry]]
 kind = "flag"
 old = "key --modes"
-changed = "omitted, the library's candidate modes apply; an explicit empty value is refused as an invalid parameter (exit 3) rather than read as not given"
+changed = "omitted, the library's candidate modes apply; an explicit empty value and an unknown mode are refused as a usage error (exit 2) before the input is read rather than read as not given, and entries are no longer trimmed of spaces on the Python front-end"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::modes_empty_refused"
@@ -1082,7 +1082,7 @@ test = "tests/conformance/cli_contract_v2.json::modes_empty_refused"
 [[entry]]
 kind = "flag"
 old = "key --profile"
-changed = "omitted, the genre hint chooses the profile; an explicit empty value is refused as an invalid parameter (exit 3) rather than read as not given"
+changed = "omitted, the genre hint chooses the profile; an explicit empty value and an unknown profile name are refused as a usage error (exit 2) before the input is read rather than read as not given"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::profile_empty_refused"
@@ -1090,7 +1090,7 @@ test = "tests/conformance/cli_contract_v2.json::profile_empty_refused"
 [[entry]]
 kind = "flag"
 old = "analyze --meter-candidates"
-changed = "omitted, the core's candidate set (3,4,6) applies; an explicit empty value is refused as an invalid parameter (exit 3) rather than read as not given"
+changed = "omitted, the core's candidate set (3,4,6) applies; an explicit empty value and an entry that is not an integer are refused as a usage error (exit 2) before the input is read rather than read as not given"
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::meter_candidates_empty_refused"
@@ -1098,7 +1098,7 @@ test = "tests/conformance/cli_contract_v2.json::meter_candidates_empty_refused"
 [[entry]]
 kind = "flag"
 old = "project.new --sample-rate"
-changed = "omitted, the project keeps its own rate; an explicit 0 is refused as an invalid parameter (exit 3) rather than read as not given"
+changed = "omitted, the project keeps its own rate; an explicit 0 or any rate outside 8000-384000 is refused as a usage error (exit 2) rather than read as not given"
 domain = "project"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::sample_rate_zero_refused"
@@ -1106,7 +1106,7 @@ test = "tests/conformance/cli_contract_v2.json::sample_rate_zero_refused"
 [[entry]]
 kind = "flag"
 old = "midi-render --synth"
-changed = "omitted, notes follow GM program and channel routing; an explicit empty value is refused as an invalid parameter (exit 3) rather than read as GM routing"
+changed = "omitted, notes follow GM program and channel routing; an explicit empty value and a name no NativeSynth preset carries are refused as a usage error (exit 2) before the project is read, the empty value no longer read as GM routing"
 domain = "project"
 rule = "library-owned-defaults"
 test = "tests/conformance/cli_contract_v2.json::synth_empty_refused"
@@ -2026,3 +2026,412 @@ frontend = "native"
 domain = "effects"
 rule = "cli-front-end-parity"
 test = "tests/cli/cli_contract_test.cpp::a missing required option is refused before dispatch"
+
+[[entry]]
+kind = "command"
+old = "power-to-db"
+changed = "a missing --values is refused as 'Missing required option', and a --values that is not a comma-separated list of finite numbers (an empty list, a non-number, an infinity or a value past the float range) as 'argument --values: must be a comma-separated list of finite numbers' without echoing the value, both as usage errors (exit 2) rather than exit 3 with 'invalid float value in --values: X'"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "amplitude-to-db"
+changed = "a missing --values is refused as 'Missing required option', and a --values that is not a comma-separated list of finite numbers (an empty list, a non-number, an infinity or a value past the float range) as 'argument --values: must be a comma-separated list of finite numbers' without echoing the value, both as usage errors (exit 2) rather than exit 3 with 'invalid float value in --values: X'"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "db-to-power"
+changed = "a missing --values is refused as 'Missing required option', and a --values that is not a comma-separated list of finite numbers (an empty list, a non-number, an infinity or a value past the float range) as 'argument --values: must be a comma-separated list of finite numbers' without echoing the value, both as usage errors (exit 2) rather than exit 3 with 'invalid float value in --values: X'"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "db-to-amplitude"
+changed = "a missing --values is refused as 'Missing required option', and a --values that is not a comma-separated list of finite numbers (an empty list, a non-number, an infinity or a value past the float range) as 'argument --values: must be a comma-separated list of finite numbers' without echoing the value, both as usage errors (exit 2) rather than exit 3 with 'invalid float value in --values: X'"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "frame-signal --values"
+changed = "a missing --values is refused as 'Missing required option', and a --values that is not a comma-separated list of finite numbers (an empty list, a non-number, an infinity or a value past the float range) as 'argument --values: must be a comma-separated list of finite numbers' without echoing the value, both as usage errors (exit 2) rather than exit 3 with 'invalid float value in --values: X'"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "fix-frames"
+changed = "a missing --values is refused as 'Missing required option', and a --values that is not a comma-separated list of finite numbers (an empty list, a non-number, an infinity or a value past the float range) as 'argument --values: must be a comma-separated list of finite numbers' without echoing the value, both as usage errors (exit 2) rather than exit 3 with 'invalid float value in --values: X'"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "peak-pick --values"
+changed = "a missing --values is refused as 'Missing required option', and a --values that is not a comma-separated list of finite numbers (an empty list, a non-number, an infinity or a value past the float range) as 'argument --values: must be a comma-separated list of finite numbers' without echoing the value, both as usage errors (exit 2) rather than exit 3 with 'invalid float value in --values: X'"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "vector-normalize"
+changed = "a missing --values is refused as 'Missing required option', and a --values that is not a comma-separated list of finite numbers (an empty list, a non-number, an infinity or a value past the float range) as 'argument --values: must be a comma-separated list of finite numbers' without echoing the value, both as usage errors (exit 2) rather than exit 3 with 'invalid float value in --values: X'"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "pad-center"
+changed = "a missing --size, a --size below 1 and a --values that is not a comma-separated list of finite numbers are refused as usage errors (exit 2) rather than exit 3"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "fix-length"
+changed = "a missing --size, a --size below 1 and a --values that is not a comma-separated list of finite numbers are refused as usage errors (exit 2) rather than exit 3"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "pcen"
+changed = "a missing or sub-1 --n-bins or --n-frames, a --values that is not a comma-separated list of finite numbers, and a --values whose count is not --n-bins times --n-frames ('argument --values: must hold --n-bins times --n-frames values') are refused as usage errors (exit 2) rather than exit 3"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "clipping"
+changed = "a --min-region below 1 is refused as a usage error (exit 2) rather than exit 3"
+frontend = "native"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "dynamic-range"
+changed = "a --window-sec or --hop-sec at or below 0, a percentile outside [0, 1] and a --low-percentile above --high-percentile are refused as usage errors (exit 2) before the input is read, rather than exit 3"
+frontend = "native"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "meter"
+changed = "an --oversample other than 1, 2, 4, 8 or 16 is refused as a usage error (exit 2) before the input is read, rather than exit 3"
+frontend = "native"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "cqt --n-bins"
+changed = "an --n-bins or --bins-per-octave below 1 is refused as a usage error (exit 2) before the input is read, rather than exit 3"
+frontend = "native"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "vqt --n-bins"
+changed = "an --n-bins or --bins-per-octave below 1 and a --filter-scale at or below 0 are refused as usage errors (exit 2) before the input is read, rather than exit 3"
+frontend = "native"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "mel-to-audio"
+changed = "an --n-iter below 1 is refused as a usage error (exit 2) before the input is read, rather than exit 3"
+frontend = "native"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "command"
+old = "mfcc-to-audio"
+changed = "an --n-mfcc or --n-iter below 1 and an --n-mfcc above --n-mels are refused as usage errors (exit 2) before the input is read, rather than exit 3"
+frontend = "native"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "chirp --exponential"
+changed = "with a --fmin-hz at or below 0 (or none) is refused as a usage error (exit 2) before anything is written, rather than exit 3"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "clicks --times"
+changed = "leaving it out or giving anything but a comma-separated list of finite numbers is refused as a usage error (exit 2) naming --times, rather than exit 3 naming --values and echoing the entry"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "clicks --length"
+changed = "leaving it out ends the track after the last click and its decay; the option no longer states a 0 default, and a spelled value outside 1 to 500000000 (the library's offline length cap) is refused as a usage error (exit 2) rather than read as the same thing as leaving it out"
+frontend = "native"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "tests/cli/cli_contract_test.cpp::CLI states no sentinel for an option left out and refuses it spelled"
+
+[[entry]]
+kind = "flag"
+old = "fix-frames --x-max"
+changed = "leaving it out means no upper bound; the option no longer states a -1 default, and a spelled negative value is refused as a usage error (exit 2) rather than read as the same thing as leaving it out"
+frontend = "native"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "tests/cli/cli_contract_test.cpp::CLI states no sentinel for an option left out and refuses it spelled"
+
+[[entry]]
+kind = "flag"
+old = "frames-to-samples --hop-length"
+changed = "a value below 1 is refused as a usage error (exit 2), as the Python library refuses it, rather than read as a zero hop"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI states no sentinel for an option left out and refuses it spelled"
+
+[[entry]]
+kind = "flag"
+old = "samples-to-frames --hop-length"
+changed = "a value below 1 is refused as a usage error (exit 2), as the Python library refuses it, rather than read as a zero hop"
+frontend = "native"
+domain = "core"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI states no sentinel for an option left out and refuses it spelled"
+
+[[entry]]
+kind = "flag"
+old = "key --n-fft"
+changed = "a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "chords --n-fft"
+changed = "a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "dynamics --hop-length"
+changed = "a value below 1 is refused as a usage error (exit 2) naming --hop-length before the input is read, with one text on both front-ends"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "chords --key-root"
+changed = "an invalid pitch class is refused as a usage error (exit 2) before the input is read, whether or not --key-context is given"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "chords --key-mode"
+changed = "an invalid mode name is refused as a usage error (exit 2) before the input is read, whether or not --key-context is given"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
+
+[[entry]]
+kind = "flag"
+old = "hpss --harmonic-only"
+changed = "giving more than one output mode is refused as a usage error (exit 2) before the input is read, with one text on both front-ends"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are decided from argv before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "trim-silence --top-db"
+changed = "giving it with --threshold-db is refused as a usage error (exit 2) before the input is read on both front-ends"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are decided from argv before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "decompose-stems --n-components"
+changed = "a value below 1 is refused as a usage error (exit 2) before the input is read; --n-iter, --n-fft, --hop-length and --mask-power (at least 1) are refused the same way"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are decided from argv before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "voice-preset-validate --set"
+changed = "a malformed assignment is refused as a usage error (exit 2) with one text on both front-ends"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are decided from argv before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "polyphonic-render --edit"
+changed = "a malformed assignment, a non-integer note, an unknown field or a value of the wrong type is refused as a usage error (exit 2) before the input is read"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are decided from argv before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --reattack-ratio"
+changed = "a value that is neither 0 nor above 1 is refused as a usage error (exit 2) before the input is read; 0 means no split on both front-ends"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are decided from argv before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --reference-hz"
+changed = "reference-hz, f0-min-hz, f0-max-hz, min-note-ms and segmentation-threshold-cents above 0, velocity-floor-db below 0, fixed-velocity in 1-127, channel in 0-15, f0-max-hz above f0-min-hz, and the min-note-division/min-note-ms and singing/polyphonic pairs are refused as a usage error (exit 2) before the input is read on both front-ends"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::CLI effect and note-editing refusals are decided from argv before the input is read"
+
+[[entry]]
+kind = "flag"
+old = "mastering --params"
+changed = "an entry that is not key=value is refused as a usage error (exit 2) before the input is read, with the one text 'argument --params: must be a comma-separated list of key=value entries' on both front-ends and on repair, eq, mastering-processor, mastering-pair-processor, mastering-pair-analyze, mastering-stereo-analyze, mastering-profile and mastering-suggest; the text no longer echoes the entry"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI named mastering processors and pair analyses"
+
+[[entry]]
+kind = "flag"
+old = "mastering-processor --params"
+changed = "a key the processor does not read is refused as a usage error (exit 2) before the input is read, as is a shortcut option beside eq --params (the first one supplied is named) and an earlier mastering-suggest --params spelling or a setting given both as an option and as a key"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI mastering --params keys the processor does not read"
+
+[[entry]]
+kind = "flag"
+old = "mastering --preset"
+changed = "a name outside the catalog is refused as a usage error (exit 2) before the input is read with 'argument --preset: must be one of ...'; the same holds for repair --preset, mastering-suggest --preset, mastering-processor --processor, mastering-pair-processor --processor, mastering-pair-analyze --analysis and mastering-stereo-analyze --analysis"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI mastering family refuses an unknown catalog name before the read"
+
+[[entry]]
+kind = "flag"
+old = "suggest-mix --input"
+changed = "an entry with an empty track id or an empty path, and a call with no entry, are refused as a usage error (exit 2) before any input is read"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed inputs and params from argv"
+
+[[entry]]
+kind = "flag"
+old = "suggest-mix --params"
+changed = "a malformed entry, a non-numeric value, an unknown or snake_case key and a tempoBpm clash with --tempo-bpm are refused as a usage error (exit 2) before any input is read, with one text on both front-ends"
+domain = "mastering"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed inputs and params from argv"
+
+[[entry]]
+kind = "flag"
+old = "mix --input"
+changed = "an entry with an empty strip id or an empty path is refused as a usage error (exit 2) before any input is read"
+domain = "engine"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed inputs and params from argv"
+
+[[entry]]
+kind = "flag"
+old = "mix --sample-rate"
+changed = "a rate outside 8000-384000 is refused as a usage error (exit 2) before any input is read"
+domain = "engine"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_mastering_test.cpp::CLI mixer commands refuse malformed inputs and params from argv"
+
+[[entry]]
+kind = "flag"
+old = "synthesize-rir --sample-rate"
+changed = "a rate outside 8000-384000 is refused as a usage error (exit 2) before any input is read"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_project_test.cpp::CLI project commands refuse synth, audio bindings and outputs from argv"
+
+[[entry]]
+kind = "flag"
+old = "project.bounce --audio"
+changed = "a binding that is not <source_id>=FILE, or whose id is outside 1-4294967295, is refused as a usage error (exit 2) before the project is read"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_project_test.cpp::CLI project commands refuse synth, audio bindings and outputs from argv"
+
+[[entry]]
+kind = "flag"
+old = "project.align-takes --audio"
+changed = "a binding that is not <source_id>=FILE, or whose id is outside 1-4294967295, is refused as a usage error (exit 2) before the project is read"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_project_test.cpp::CLI project commands refuse synth, audio bindings and outputs from argv"
+
+[[entry]]
+kind = "command"
+old = "estimate-room"
+changed = "the JSON absorption_bands key is band_absorption, as the library names it"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_option_effects_v2.py::test_estimate_room_json_names_the_band_absorption_as_the_library_does"
+
+[[entry]]
+kind = "command"
+old = "sections"
+frontend = "python"
+changed = "the JSON carries form, the section letters the native command already reported"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_sections_stems_transcribe_mix.py::test_sections_reports_the_boundaries_it_found"

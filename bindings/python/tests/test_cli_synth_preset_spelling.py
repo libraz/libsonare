@@ -1,7 +1,7 @@
 """``project bounce --synth`` takes the library preset id the CLI lists.
 
 The command line names a preset by its lowerCamel library id in any letter case
-and leaves any other spelling, kebab-case included, for the library to refuse.
+and refuses any other spelling, kebab-case included, as a usage error.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from ._helpers import LIB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
-EXIT_INVALID_PARAMETER = 3
+EXIT_USAGE = 2
 
 _CLEAN_PROJECT = {"version": 7, "sampleRate": 48000, "tracks": [], "clips": []}
 
@@ -63,6 +63,6 @@ def test_a_library_preset_id_is_accepted_in_any_case(tmp_path: Path, spelling: s
 @pytest.mark.parametrize("spelling", ["saw-lead", "saw_lead", "SAW-LEAD"])
 def test_another_spelling_is_refused_before_rendering(tmp_path: Path, spelling: str) -> None:
     result, output = _bounce(tmp_path, spelling)
-    assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
+    assert result.returncode == EXIT_USAGE, result.stderr
     assert "synth preset" in result.stderr
     assert not output.exists()

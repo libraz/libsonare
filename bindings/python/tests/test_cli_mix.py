@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import os
 from types import SimpleNamespace
 from typing import Any
 
@@ -453,3 +455,69 @@ def test_suggest_mix_tempo_auto_decodes_each_input_once(monkeypatch) -> None:
     assert options["tempo_bpm"] == 96.0
     assert [track.id for track in tracks] == ["vox", "bass"]
     assert [len(track.channels) for track in tracks] == [2, 1]
+
+
+_ASSISTANT_KEYS = (
+    "enableBalance, enableDynamics, enableEq, enableGain, enableHighPass, enableImage, "
+    "enableStructure, eqMaxCutDb, hopLength, mixBusHeadroomDbtp, nFft, suggestionStrength, "
+    "targetTrackLufs, tempoBpm"
+)
+
+
+def test_mixer_commands_refuse_malformed_argv_before_reading_inputs(tmp_path) -> None:
+    """Entry grammar, `--params` and the tempo clash are usage errors decided from argv."""
+    missing = str(tmp_path / "absent.wav")
+    out = str(tmp_path / "out.wav")
+    rows = [
+        (["suggest-mix"], "suggest-mix requires at least one --input"),
+        (["suggest-mix", "--input", "=x"], "--input track id must not be empty: =x"),
+        (["suggest-mix", "--input", "a="], "--input requires a file path: a="),
+        (
+            ["suggest-mix", "--input", missing, "--params", "novalue"],
+            "invalid parameter entry: 'novalue' (expected key=value)",
+        ),
+        (
+            ["suggest-mix", "--input", missing, "--params", "tempoBpm=abc"],
+            "invalid numeric value for parameter 'tempoBpm'",
+        ),
+        (
+            ["suggest-mix", "--input", missing, "--params", "enable_eq=1"],
+            "assistant param enable_eq is an earlier spelling; write enableEq",
+        ),
+        (
+            ["suggest-mix", "--input", missing, "--params", "nosuchkey=1"],
+            f"unknown key nosuchkey (expected {_ASSISTANT_KEYS})",
+        ),
+        (
+            ["suggest-mix", "--input", missing, "--params", "tempoBpm=100", "--tempo-bpm", "120"],
+            "--tempo-bpm and --params tempoBpm= set the same value",
+        ),
+        (
+            ["mix", "--preset", "vocalReverbSend", "--input", "=x", "-o", out],
+            "--input strip id must not be empty: =x",
+        ),
+        (
+            ["mix", "--preset", "vocalReverbSend", "--input", "a=", "-o", out],
+            "--input requires a file path: a=",
+        ),
+        (
+            ["mix", "--preset", "vocalReverbSend", "--sample-rate", "100"],
+            "argument --sample-rate: must be an integer in [8000, 384000]",
+        ),
+    ]
+    for argv, text in rows:
+        result = _run_cli(argv)
+        assert result.returncode == 2, (argv, result.stderr)
+        assert text in result.stderr, (argv, result.stderr)
+
+
+def test_suggest_mix_bare_path_id_splits_at_the_platform_separator(tmp_path) -> None:
+    """A backslash is an ordinary file-name character on POSIX, so it stays in the id."""
+    if os.sep != "/":
+        return
+    track = tmp_path / "a\\b.wav"
+    _write_test_wav(str(track), [0.3 * math.sin(0.05 * i) for i in range(48000)], 48000)
+    result = _run_cli(["suggest-mix", "--input", str(track)])
+
+    assert result.returncode == 0, result.stderr
+    assert [strip["id"] for strip in json.loads(result.stdout)["scene"]["strips"]][0] == "a\\b"

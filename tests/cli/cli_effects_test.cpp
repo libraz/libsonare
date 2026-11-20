@@ -997,7 +997,7 @@ TEST_CASE("CLI voice-change formant mode", "[cli][voice-change][argument-contrac
   auto [preset_code, preset_output] =
       exec_command(CLI + " voice-change --preset brightIdol --formant-mode absolute " + wav +
                    " -o " + out + " 2>&1");
-  REQUIRE(preset_code == 3);
+  REQUIRE(preset_code == 2);
   REQUIRE_THAT(preset_output, ContainsSubstring("cannot be combined with a realtime preset"));
 
   std::remove(wav.c_str());
@@ -1295,4 +1295,97 @@ TEST_CASE("CLI pitch-correct-timevarying corrects against the unrefined pYIN tra
   CAPTURE(raw_error, refined_gap);
   REQUIRE(refined_gap > 100.0f * kPcmStep);
   REQUIRE(raw_error <= 2.0f * kPcmStep);
+}
+
+TEST_CASE("CLI effect and note-editing refusals are decided from argv before the input is read",
+          "[cli][argument-contract]") {
+  // The input does not exist: a refusal reached only after the read would exit 4.
+  const std::string missing = "/nonexistent/argv-refusal-input.wav";
+  const std::string out = unique_temp_path("_argv_refusal.wav");
+  struct Row {
+    std::string argv;
+    std::string text;
+  };
+  const std::vector<Row> rows = {
+      {"hpss --harmonic-only --percussive-only " + missing + " -o " + out,
+       "hpss output modes are mutually exclusive: choose one of --harmonic-only, "
+       "--percussive-only, or --with-residual"},
+      {"trim-silence --threshold-db -50 --top-db 30 " + missing,
+       "--threshold-db and --top-db are mutually exclusive"},
+      {"decompose-stems --hop-length 0 " + missing + " -o " + out,
+       "argument --hop-length: must be an integer in [1, 2147483647]"},
+      {"decompose-stems --n-components 0 " + missing + " -o " + out,
+       "argument --n-components: must be an integer in [1, 2147483647]"},
+      {"decompose-stems --n-iter 0 " + missing + " -o " + out,
+       "argument --n-iter: must be an integer in [1, 2147483647]"},
+      {"decompose-stems --n-fft 0 " + missing + " -o " + out,
+       "argument --n-fft: must be an integer in [1, 2147483647]"},
+      {"decompose-stems --mask-power 0.5 " + missing + " -o " + out,
+       "argument --mask-power: must be finite and at least 1"},
+      {"voice-change --preset neutralMonitor --preset-json x.json " + missing + " -o " + out,
+       "voice-change preset selectors are mutually exclusive: choose one of --preset, "
+       "--preset-json, or --preset-pack"},
+      {"voice-change --preset-pack p.json --preset-json x.json " + missing + " -o " + out,
+       "--preset-pack and --preset-json are mutually exclusive"},
+      {"voice-change --preset-pack p.json " + missing + " -o " + out,
+       "--preset-pack requires --preset to select an entry"},
+      {"voice-change --preset neutralMonitor --pitch-semitones 2 " + missing + " -o " + out,
+       "cannot be combined with a realtime preset"},
+      {"voice-change --set a=1 " + missing + " -o " + out,
+       "--set requires --preset, --preset-json, or --preset-pack"},
+      {"voice-change --preset neutralMonitor --set nopath " + missing + " -o " + out,
+       "invalid --set assignment: nopath"},
+      {"voice-change --preset neutralMonitor --set =1 " + missing + " -o " + out,
+       "invalid --set assignment: =1"},
+      {"voice-change --preset neutralMonitor --set ..=1 " + missing + " -o " + out,
+       "empty --set path"},
+      {"voice-preset-validate --set nopath p.json", "invalid --set assignment: nopath"},
+      {"voice-preset-validate --set ..=1 p.json", "empty --set path"},
+#ifdef SONARE_WITH_VOICE_CHANGER
+      {"voice-change --preset noSuchPreset " + missing + " -o " + out,
+       "argument --preset: must be one of neutralMonitor"},
+      {"voice-preset --preset noSuchPreset", "argument --preset: must be one of neutralMonitor"},
+#endif
+      {"polyphonic-render --edit nonsense " + missing + " -o " + out,
+       "argument --edit: must be NOTE.FIELD=VALUE"},
+      {"polyphonic-render --edit x.gain_db=1 " + missing + " -o " + out,
+       "argument --edit: NOTE must be an integer"},
+      {"polyphonic-render --edit 0.bogus=1 " + missing + " -o " + out,
+       "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db"},
+      {"polyphonic-render --edit 0.gain_db=abc " + missing + " -o " + out,
+       "argument --edit: gain_db must be a number"},
+      {"polyphonic-render --edit 0.muted=maybe " + missing + " -o " + out,
+       "argument --edit: muted must be one of true, 1, yes, on, false, 0, no, off"},
+#ifdef SONARE_WITH_ARRANGEMENT
+      {"transcribe --reattack-ratio 0.5 " + missing + " -o " + out,
+       "--reattack-ratio must be 0 (no split) or greater than 1"},
+      {"transcribe --min-note-division 8 --min-note-ms 50 " + missing + " -o " + out,
+       "--min-note-division and --min-note-ms cannot both be given"},
+      {"transcribe --polyphonic --monophonic-model singing " + missing + " -o " + out,
+       "--monophonic-model singing cannot be combined with --polyphonic"},
+      {"transcribe --f0-min-hz 100 --f0-max-hz 50 " + missing + " -o " + out,
+       "--f0-max-hz must be greater than --f0-min-hz"},
+      {"transcribe --reference-hz 0 " + missing + " -o " + out,
+       "argument --reference-hz: must be finite and greater than 0"},
+      {"transcribe --f0-min-hz 0 " + missing + " -o " + out,
+       "argument --f0-min-hz: must be finite and greater than 0"},
+      {"transcribe --min-note-ms 0 " + missing + " -o " + out,
+       "argument --min-note-ms: must be finite and greater than 0"},
+      {"transcribe --segmentation-threshold-cents 0 " + missing + " -o " + out,
+       "argument --segmentation-threshold-cents: must be finite and greater than 0"},
+      {"transcribe --velocity-floor-db 5 " + missing + " -o " + out,
+       "argument --velocity-floor-db: must be finite and less than 0"},
+      {"transcribe --fixed-velocity 200 " + missing + " -o " + out,
+       "argument --fixed-velocity: must be an integer in [1, 127]"},
+      {"transcribe --channel 16 " + missing + " -o " + out,
+       "argument --channel: must be an integer in [0, 15]"},
+#endif
+  };
+  for (const auto& row : rows) {
+    CAPTURE(row.argv);
+    auto [code, output] = exec_command(CLI + " " + row.argv + " -q 2>&1");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(row.text));
+  }
+  REQUIRE_FALSE(std::ifstream(out).good());
 }

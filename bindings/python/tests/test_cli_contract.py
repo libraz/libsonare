@@ -132,6 +132,38 @@ TOP_LEVEL_ROUTES = (
     "mix",
     "mix-strip",
     "playback",
+    "tone",
+    "chirp",
+    "clicks",
+    "frames-to-samples",
+    "samples-to-frames",
+    "power-to-db",
+    "amplitude-to-db",
+    "db-to-power",
+    "db-to-amplitude",
+    "frame-signal",
+    "pad-center",
+    "fix-length",
+    "fix-frames",
+    "peak-pick",
+    "vector-normalize",
+    "pcen",
+    "mastering-stereo-analyses",
+    "melody",
+    "boundaries",
+    "meter",
+    "clipping",
+    "dynamic-range",
+    "stereo",
+    "phase",
+    "tonnetz",
+    "fourier-tempogram",
+    "tempogram-ratio",
+    "cqt",
+    "preemphasis",
+    "deemphasis",
+    "mel-to-audio",
+    "mfcc-to-audio",
 )
 
 
@@ -200,8 +232,29 @@ def _project_tree() -> ast.AST:
     return ast.parse(source.read_text(encoding="utf-8"))
 
 
+def _loop_names(loop: ast.For) -> dict[str, set[str]]:
+    """The string constants a loop binds to each target, as `for name, x in (("a", 1), ...)`."""
+    names: dict[str, set[str]] = {}
+    if not isinstance(loop.iter, (ast.Tuple, ast.List)):
+        return names
+    targets = loop.target.elts if isinstance(loop.target, ast.Tuple) else [loop.target]
+    for index, target in enumerate(targets):
+        if not isinstance(target, ast.Name):
+            continue
+        for element in loop.iter.elts:
+            item = element.elts[index] if isinstance(element, ast.Tuple) else element
+            if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                names.setdefault(target.id, set()).add(item.value)
+    return names
+
+
 def _parser_routes(tree: ast.AST, owner: str) -> set[str]:
     routes: set[str] = set()
+    enclosing: dict[ast.AST, dict[str, set[str]]] = {}
+    for loop in ast.walk(tree):
+        if isinstance(loop, ast.For):
+            for inner in ast.walk(loop):
+                enclosing.setdefault(inner, {}).update(_loop_names(loop))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
@@ -212,6 +265,8 @@ def _parser_routes(tree: ast.AST, owner: str) -> set[str]:
         name = node.args[0]
         if isinstance(name, ast.Constant) and isinstance(name.value, str):
             routes.add(name.value)
+        elif isinstance(name, ast.Name):
+            routes |= enclosing.get(node, {}).get(name.id, set())
     return routes
 
 
@@ -291,7 +346,7 @@ def test_route_manifest_matches_parsers_and_dispatch_tables() -> None:
 
     assert _parser_routes(cli_tree, "sub") == expected_top
     assert _handler_routes(cli_tree) == expected_top
-    assert _parser_routes(cli_tree, "project_sub") == expected_project - {"validate", "compile"}
+    assert _parser_routes(cli_tree, "project_sub") == expected_project
     assert _project_handler_routes(_project_tree()) == expected_project
 
     for route in TOP_LEVEL_ROUTES:
@@ -660,9 +715,9 @@ def _native_function_body(source: str, signature: str) -> str:
     return source[start : source.index("\n}", start)]
 
 
-def _native_processing_source() -> str:
+def _native_args_source() -> str:
     return (
-        Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_processing.cpp"
+        Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_args.cpp"
     ).read_text(encoding="utf-8")
 
 
@@ -674,7 +729,7 @@ def test_polyphonic_edit_fields_match_the_native_cli() -> None:
     """
     from libsonare.cli import _POLYPHONIC_EDIT_FIELDS
 
-    body = _native_function_body(_native_processing_source(), "void apply_polyphonic_note_edit")
+    body = _native_function_body(_native_args_source(), "PolyphonicEdit parse_polyphonic_edit")
     for field in _POLYPHONIC_EDIT_FIELDS:
         assert f'field == "{field}"' in body, field
     # And nothing the native side accepts is missing from the Python set.
@@ -686,7 +741,7 @@ def test_polyphonic_edit_flag_literals_match_the_native_cli() -> None:
     from libsonare._cli_effects import _parse_polyphonic_edit_bool
     from libsonare.cli import _FALSE_FLAG_LITERALS, _TRUE_FLAG_LITERALS
 
-    body = _native_function_body(_native_processing_source(), "bool parse_edit_bool")
+    body = _native_function_body(_native_args_source(), "bool parse_edit_flag")
     for literal in _TRUE_FLAG_LITERALS:
         assert f'lowered == "{literal}"' in body, literal
         assert _parse_polyphonic_edit_bool("muted", literal.upper()) is True

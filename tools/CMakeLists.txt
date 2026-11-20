@@ -3,6 +3,7 @@ add_executable(sonare
   cli/sonare_cli.cpp
   cli/sonare_cli_analysis.cpp
   cli/sonare_cli_args.cpp
+  cli/sonare_cli_argv_refusals.cpp
   cli/sonare_cli_common.cpp
   cli/sonare_cli_console.cpp
   cli/sonare_cli_dsp.cpp

@@ -5,11 +5,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _atomic_write_bytes,
     _load_channels_or_downmix,
+    _params_entries,
+    _params_grammar_refusal,
+    _params_keys,
     _parse_kv_params,
     _strict_json_dumps,
     _write_channel_output,
@@ -35,7 +39,7 @@ from ._cli_repair import (
 from ._cli_repair import (
     register_repair_parsers,
 )
-from ._errors import _unknown_error
+from ._errors import SonareError, _unknown_error
 from ._mastering_offline import _chain_config_paths, _check_chain_document, _nest_chain_config
 from ._result_records import _result_to_json_dict
 
@@ -112,20 +116,9 @@ def _assistant_params_from_args(
     than a precedence question. Unknown keys are the library's to refuse.
     """
     params: dict[str, float | int | bool | str] = {}
-    for item in params_raw.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        if "=" not in item:
-            raise ValueError(f"invalid param (expected key=value): {item}")
+    # _assistant_params_refusal() has settled the entries' grammar and names before the read.
+    for item in _params_entries(params_raw):
         key, raw = (part.strip() for part in item.split("=", 1))
-        if key == "target_platform":
-            raise ValueError(
-                "--params target_platform is an earlier spelling; write targetPlatform"
-            )
-        for named_key, option in _ASSISTANT_OPTIONS:
-            if key == named_key and _option_supplied(args, option):
-                raise ValueError(f"--{option} and --params {key}= set the same value")
         if key in _NAMED_ASSISTANT_KEYS:
             params[key] = raw
         else:
@@ -187,7 +180,7 @@ def _mastering_chain_payload(
 
 
 # Every ``eq`` option that selects part of the band --params would otherwise
-# specify in full, in the native handler's order.
+# specify in full, in the native validator's order.
 _EQ_SHORTCUT_NAMES = (
     "type",
     "frequency-hz",
@@ -199,25 +192,81 @@ _EQ_SHORTCUT_NAMES = (
     "proportional-q",
     "dynamic",
     "threshold-db",
-    "auto-threshold",
     "ratio",
     "range-db",
     "attack-ms",
     "release-ms",
     "detector-delay-ms",
-    "sidechain-freq-hz",
-    "sidechain-q",
     "phase-mode",
     "resolution",
     "auto-gain",
     "gain-scale",
     "output-gain-db",
     "output-pan",
+    "auto-threshold",
+    "sidechain-freq-hz",
+    "sidechain-q",
 )
 
 
-def _eq_shortcut_names(args: argparse.Namespace) -> list[str]:
-    return [name for name in _EQ_SHORTCUT_NAMES if _option_supplied(args, name)]
+def _chain_params_refusal(args: argparse.Namespace) -> str | None:
+    """The refusal of ``mastering --params`` read as a chain document, or None."""
+    raw = getattr(args, "params", "") or ""
+    if (refusal := _params_grammar_refusal(raw)) is not None:
+        return refusal
+    if not raw:
+        return None
+    try:
+        _check_chain_document(_parse_kv_params(raw, names=True))
+    except SonareError as exc:
+        # The core's own words, without the binding's "[code] " prefix.
+        return str(exc).partition("] ")[2]
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def _processor_params_refusal(args: argparse.Namespace) -> str | None:
+    """The refusal of ``mastering-processor --params`` decided from argv, or None."""
+    raw = getattr(args, "params", "") or ""
+    if (refusal := _params_grammar_refusal(raw)) is not None:
+        return refusal
+    try:
+        _reject_unknown_processor_params(args.processor, _params_keys(raw))
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def _eq_params_refusal(args: argparse.Namespace) -> str | None:
+    """The refusal of ``eq --params`` decided from argv, or None."""
+    if not _option_supplied(args, "params"):
+        return None
+    if (refusal := _params_grammar_refusal(args.params or "")) is not None:
+        return refusal
+    # --params fully specifies the EQ, so a shortcut beside it is refused rather than dropped.
+    for name in _EQ_SHORTCUT_NAMES:
+        if _option_supplied(args, name):
+            return f"--{name} cannot be combined with --params"
+    try:
+        _reject_unknown_processor_params("eq.equalizer", _params_keys(args.params or ""))
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def _assistant_params_refusal(args: argparse.Namespace) -> str | None:
+    """The refusal of ``mastering-suggest --params`` decided from argv, or None."""
+    raw = getattr(args, "params", "") or ""
+    if (refusal := _params_grammar_refusal(raw)) is not None:
+        return refusal
+    for key in _params_keys(raw):
+        if key == "target_platform":
+            return "--params target_platform is an earlier spelling; write targetPlatform"
+        for named_key, option in _ASSISTANT_OPTIONS:
+            if key == named_key and _option_supplied(args, option):
+                return f"--{option} and --params {key}= set the same value"
+    return None
 
 
 # Highest accepted index of every ``eq`` option that selects an enumerator, keyed
@@ -236,7 +285,7 @@ _EQ_ENUM_BOUNDS = {
 }
 
 
-def _reject_unknown_processor_params(processor: str, params: dict[str, float]) -> None:
+def _reject_unknown_processor_params(processor: str, keys: Sequence[str]) -> None:
     """Reject a supplied ``--params`` key the named processor does not read.
 
     ``mastering_insert_param_names`` builds the processor against an empty param
@@ -256,7 +305,7 @@ def _reject_unknown_processor_params(processor: str, params: dict[str, float]) -
     known = set(mastering_insert_param_names(processor))
     if not known:
         return
-    unknown = [key for key in params if key not in known]
+    unknown = [key for key in keys if key not in known]
     if unknown:
         joined = ", ".join(unknown)
         raise ValueError(f"unknown --params key for {processor}: {joined}")
@@ -274,11 +323,8 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     params_raw = getattr(args, "params", "") or ""
     bits = _wav_bits(args)
 
-    # _validate_mastering_selection() has settled the chain selector before the input was read.
+    # The selector and the params document were settled before the input was read.
     params = _parse_kv_params(params_raw, names=True) if params_raw else {}
-    # Read as a chain document's params, as on the native CLI, so a refusal names params.<path>.
-    if params:
-        _check_chain_document(params)
 
     def _run_chain(config: dict[str, Any]) -> Any:
         """Run one chain config over however many channels the source has."""
@@ -476,7 +522,6 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     params = _parse_kv_params(params_raw, names=True) if params_raw else {}
     bits = _wav_bits(args)
     processor = getattr(args, "processor", None) or ""
-    _reject_unknown_processor_params(processor, params)
     processor_name = cast("SoloProcessor", processor)
     stereo_only = {entry.id for entry in mastering_processor_catalog() if entry.stereo_only}
     # The file's own channel count and the library's own stereo-only set decide
@@ -541,12 +586,7 @@ def cmd_eq(args: argparse.Namespace) -> int:
     params_raw = getattr(args, "params", "") or ""
     bits = _wav_bits(args)
     if params_raw:
-        conflicts = _eq_shortcut_names(args)
-        if conflicts:
-            joined = ", ".join(f"--{name}" for name in conflicts)
-            raise ValueError(f"{joined} cannot be combined with --params")
         params = _parse_kv_params(params_raw)
-        _reject_unknown_processor_params("eq.equalizer", params)
     else:
         params = {
             "band0.enabled": 1.0,
@@ -918,8 +958,11 @@ def register_mastering_parsers(
         parents=[common],
         help="Master through a preset, a chain config or the assistant",
     )
-    mastering_p.add_argument(
-        "--preset", type=_token_of(_library_catalog("mastering_preset_names")), default=""
+    _cli_domain(
+        mastering_p.add_argument(
+            "--preset", type=_token_of(_library_catalog("mastering_preset_names"))
+        ),
+        choices=_library_catalog("mastering_preset_names"),
     )
     # "--chain-config" names a complete chain config in the core's own
     # ``{params, version}`` form.
@@ -948,10 +991,13 @@ def register_mastering_parsers(
     mproc_p = sub.add_parser(
         "mastering-processor", parents=[common], help="Apply a named mastering processor"
     )
-    mproc_p.add_argument(
-        "--processor",
-        type=_token_of(_library_catalog("mastering_processor_names")),
-        help="Processor name",
+    _cli_domain(
+        mproc_p.add_argument(
+            "--processor",
+            type=_token_of(_library_catalog("mastering_processor_names")),
+            help="Processor name",
+        ),
+        choices=_library_catalog("mastering_processor_names"),
     )
     mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
     _add_wav_bits_argument(mproc_p)
@@ -1039,10 +1085,13 @@ def register_mastering_parsers(
         help="Run a two-input mastering analysis (always JSON output)",
     )
     mpa_p.add_argument("--reference", help="Reference audio file")
-    mpa_p.add_argument(
-        "--analysis",
-        type=_token_of(_library_catalog("mastering_pair_analysis_names")),
-        help="Analysis name",
+    _cli_domain(
+        mpa_p.add_argument(
+            "--analysis",
+            type=_token_of(_library_catalog("mastering_pair_analysis_names")),
+            help="Analysis name",
+        ),
+        choices=_library_catalog("mastering_pair_analysis_names"),
     )
     mpa_p.add_argument("--params", default="")
     mpp_p = sub.add_parser(
@@ -1050,10 +1099,13 @@ def register_mastering_parsers(
         parents=[common],
         help="Apply a two-input mastering processor",
     )
-    mpp_p.add_argument(
-        "--processor",
-        type=_token_of(_library_catalog("mastering_pair_processor_names")),
-        help="Pair processor name",
+    _cli_domain(
+        mpp_p.add_argument(
+            "--processor",
+            type=_token_of(_library_catalog("mastering_pair_processor_names")),
+            help="Pair processor name",
+        ),
+        choices=_library_catalog("mastering_pair_processor_names"),
     )
     mpp_p.add_argument("--reference", help="Reference audio file")
     mpp_p.add_argument("--params", default="")
@@ -1064,10 +1116,13 @@ def register_mastering_parsers(
         help="Run a stereo mastering analysis (always JSON output)",
     )
     msa_p.add_argument("--reference", help="Right-channel audio file")
-    msa_p.add_argument(
-        "--analysis",
-        type=_token_of(_library_catalog("mastering_stereo_analysis_names")),
-        help="Analysis name",
+    _cli_domain(
+        msa_p.add_argument(
+            "--analysis",
+            type=_token_of(_library_catalog("mastering_stereo_analysis_names")),
+            help="Analysis name",
+        ),
+        choices=_library_catalog("mastering_stereo_analysis_names"),
     )
     msa_p.add_argument("--params", default="")
     mstream_p = sub.add_parser(
@@ -1093,11 +1148,13 @@ def register_mastering_parsers(
         default="",
         help="Assistant params as k=v,k=v; targetPlatform and preset take a name",
     )
-    msuggest_p.add_argument(
-        "--preset",
-        type=_token_of(_library_catalog("mastering_preset_names")),
-        default="",
-        help="Mastering preset the suggestion starts from",
+    _cli_domain(
+        msuggest_p.add_argument(
+            "--preset",
+            type=_token_of(_library_catalog("mastering_preset_names")),
+            help="Mastering preset the suggestion starts from",
+        ),
+        choices=_library_catalog("mastering_preset_names"),
     )
     msuggest_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
     msuggest_p.add_argument("--ceiling-dbtp", type=_finite_float, default=-1.0)

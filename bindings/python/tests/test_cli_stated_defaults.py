@@ -64,6 +64,51 @@ _ROWS: tuple[tuple[str, str, str, str, int | None], ...] = (
     ("analyze", "--meter-denominator", "_analysis_reports:analyze", "meter_denominator", None),
     ("pitch", "--threshold", "_features_pitch:pitch_pyin", "threshold", None),
     ("filter", "--order", "_effects_level:biquad_filter", "order", None),
+    ("tone", "--sample-rate", "_features_core:tone", "sr", None),
+    ("tone", "--duration-sec", "_features_core:tone", "duration", None),
+    ("tone", "--phase", "_features_core:tone", "phi", None),
+    ("tone", "--amplitude", "_features_core:tone", "amplitude", None),
+    ("chirp", "--sample-rate", "_features_core:chirp", "sr", None),
+    ("chirp", "--duration-sec", "_features_core:chirp", "duration", None),
+    ("clicks", "--sample-rate", "_features_core:clicks", "sr", None),
+    ("clicks", "--frequency-hz", "_features_core:clicks", "click_freq", None),
+    ("clicks", "--click-duration-sec", "_features_core:clicks", "click_duration", None),
+    ("frames-to-samples", "--hop-length", "_conversions:frames_to_samples", "hop_length", None),
+    ("samples-to-frames", "--hop-length", "_conversions:samples_to_frames", "hop_length", None),
+    ("power-to-db", "--ref", "_conversions:power_to_db", "ref", None),
+    ("power-to-db", "--amin", "_conversions:power_to_db", "amin", None),
+    ("power-to-db", "--top-db", "_conversions:power_to_db", "top_db", None),
+    ("amplitude-to-db", "--ref", "_conversions:amplitude_to_db", "ref", None),
+    ("amplitude-to-db", "--amin", "_conversions:amplitude_to_db", "amin", None),
+    ("amplitude-to-db", "--top-db", "_conversions:amplitude_to_db", "top_db", None),
+    ("db-to-power", "--ref", "_conversions:db_to_power", "ref", None),
+    ("db-to-amplitude", "--ref", "_conversions:db_to_amplitude", "ref", None),
+    ("pad-center", "--pad-value", "_conversions:pad_center", "pad_value", None),
+    ("fix-length", "--pad-value", "_conversions:fix_length", "pad_value", None),
+    ("fix-frames", "--x-min", "_conversions:fix_frames", "x_min", None),
+    ("vector-normalize", "--threshold", "_conversions:vector_normalize", "threshold", None),
+    ("pcen", "--sample-rate", "_conversions:pcen", "sr", None),
+    ("pcen", "--time-constant", "_conversions:pcen", "time_constant", None),
+    ("pcen", "--gain", "_conversions:pcen", "gain", None),
+    ("pcen", "--bias", "_conversions:pcen", "bias", None),
+    ("pcen", "--power", "_conversions:pcen", "power", None),
+    ("pcen", "--eps", "_conversions:pcen", "eps", None),
+    ("pcen", "--hop-length", "_conversions:pcen", "hop_length", None),
+    ("preemphasis", "--coef", "_conversions:preemphasis", "coef", None),
+    ("deemphasis", "--coef", "_conversions:deemphasis", "coef", None),
+    ("mel-to-audio", "--n-iter", "_features_transforms:mel_to_audio", "n_iter", None),
+    ("mfcc-to-audio", "--n-iter", "_features_transforms:mfcc_to_audio", "n_iter", None),
+    ("mfcc-to-audio", "--n-mfcc", "_features_core:mfcc", "n_mfcc", None),
+    *(
+        (command, flag, "_features_core:mel_spectrogram", parameter, None)
+        for command in ("mel-to-audio", "mfcc-to-audio")
+        for flag, parameter in (
+            ("--n-fft", "n_fft"),
+            ("--hop-length", "hop_length"),
+            ("--n-mels", "n_mels"),
+            ("--fmin-hz", "fmin_hz"),
+        )
+    ),
     ("pitch", "--f0-min-hz", "_features_pitch:pitch_pyin", "f0_min_hz", None),
     ("pitch", "--f0-max-hz", "_features_pitch:pitch_pyin", "f0_max_hz", None),
     ("hpss", "--kernel-harmonic", "_effects_separation:hpss", "kernel_harmonic", None),
@@ -164,6 +209,46 @@ _ROWS: tuple[tuple[str, str, str, str, int | None], ...] = (
     ("hpss", "--n-fft", "_effects_separation:hpss", "n_fft", None),
     ("pitch-shift", "--n-fft", "_effects_timepitch:pitch_shift", "n_fft", None),
     ("time-stretch", "--n-fft", "_effects_timepitch:time_stretch", "n_fft", None),
+    ("melody", "--threshold", "_analysis_music:analyze_melody", "threshold", None),
+    ("melody", "--hop-length", "_analysis_music:analyze_melody", "hop_length", None),
+    ("melody", "--f0-min-hz", "_analysis_music:analyze_melody", "f0_min_hz", None),
+    ("melody", "--f0-max-hz", "_analysis_music:analyze_melody", "f0_max_hz", None),
+    ("boundaries", "--threshold", "_analysis_music:detect_boundaries", "threshold", None),
+    (
+        "boundaries",
+        "--absolute-threshold",
+        "_analysis_music:detect_boundaries",
+        "absolute_threshold",
+        None,
+    ),
+    ("boundaries", "--kernel-size", "_analysis_music:detect_boundaries", "kernel_size", None),
+    ("boundaries", "--n-mfcc", "_analysis_music:detect_boundaries", "n_mfcc", None),
+    ("boundaries", "--n-chroma", "_analysis_music:detect_boundaries", "n_chroma", None),
+    (
+        "boundaries",
+        "--peak-distance",
+        "_analysis_music:detect_boundaries",
+        "peak_distance_sec",
+        None,
+    ),
+    (
+        "boundaries",
+        "--reference-window",
+        "_analysis_music:detect_boundaries",
+        "reference_window_sec",
+        None,
+    ),
+    ("boundaries", "--n-fft", "_analysis_music:detect_boundaries", "n_fft", None),
+    ("boundaries", "--hop-length", "_analysis_music:detect_boundaries", "hop_length", None),
+    ("tonnetz", "--n-fft", "_features_core:chroma", "n_fft", None),
+    ("tonnetz", "--hop-length", "_features_core:chroma", "hop_length", None),
+    ("fourier-tempogram", "--win-length", "_conversions:fourier_tempogram", "win_length", None),
+    ("fourier-tempogram", "--hop-length", "_conversions:fourier_tempogram", "hop_length", None),
+    ("tempogram-ratio", "--win-length", "_conversions:tempogram", "win_length", None),
+    ("tempogram-ratio", "--hop-length", "_conversions:tempogram_ratio", "hop_length", None),
+    ("cqt", "--n-bins", "_features_transforms:cqt", "n_bins", None),
+    ("cqt", "--bins-per-octave", "_features_transforms:cqt", "bins_per_octave", None),
+    ("cqt", "--hop-length", "_features_transforms:cqt", "hop_length", None),
 )
 
 # Axes of the tuple-valued ``source`` / ``listener`` defaults, one flag per axis.
@@ -178,8 +263,13 @@ _AXES = tuple(
 # because ``None`` is how the library is told to choose, or because the stated value is not
 # a single number. The value noted is what the library then uses.
 _NOT_A_SIGNATURE_DEFAULT: dict[tuple[str, str], str] = {
+    ("vector-normalize", "--norm-type"): "None selects the max norm; the stated value indexes it",
     ("estimate-room", "--reference-absorption"): "None selects the C default, 0.15",
     ("synthesize-rir", "--seed"): "None selects the core seed, 1",
+    ("clicks", "--length"): "None renders through the last click and its decay",
+    ("fix-frames", "--x-max"): "None leaves the frames unbounded above",
+    ("frames-to-samples", "--n-fft"): "None applies no centring offset",
+    ("samples-to-frames", "--n-fft"): "None applies no centring offset",
     ("room-morph", "--seed"): "None selects the core seed, 1",
     ("room-morph", "--receiver-spacing"): "None selects the core spacing, 0.5 m",
     ("synthesize-rir", "--max-sec"): "None is the natural length",
@@ -212,6 +302,8 @@ _NOT_A_SIGNATURE_DEFAULT: dict[tuple[str, str], str] = {
     ("sections", "--threshold"): "None selects the core section threshold",
     ("analyze", "--meter-candidates"): "None selects the core set, 3,4,6",
     ("mel", "--fmax-hz"): "None is the Nyquist frequency",
+    ("mel-to-audio", "--fmax-hz"): "None is the Nyquist frequency",
+    ("mfcc-to-audio", "--fmax-hz"): "None is the Nyquist frequency",
     ("normalize", "--target-db"): "None selects the mode's level, 0.0 (peak) or -20.0 (rms)",
     ("voice-change", "--preset"): "None selects the non-preset path",
     ("project.bounce", "--frames"): "None derives the length from the project",
@@ -235,6 +327,14 @@ _NOT_A_SIGNATURE_DEFAULT: dict[tuple[str, str], str] = {
     ("transcribe", "--min-note-ms"): "depends on the model",
     ("transcribe", "--velocity-floor-db"): "None selects -48",
     ("transcribe", "--reference-hz"): "None selects 440",
+    ("meter", "--clip-threshold"): "None selects the core clipping threshold, 0.999",
+    ("meter", "--oversample"): "None selects the core true-peak oversampling, 4",
+    ("clipping", "--threshold"): "None selects the core clipping threshold, 0.999",
+    ("clipping", "--min-region"): "None selects the core minimum region, 1",
+    ("dynamic-range", "--window-sec"): "None selects the core window, 3 s",
+    ("dynamic-range", "--hop-sec"): "None selects the core hop, 1 s",
+    ("dynamic-range", "--low-percentile"): "None selects the core low percentile, 0.1",
+    ("dynamic-range", "--high-percentile"): "None selects the core high percentile, 0.95",
 }
 
 
@@ -329,9 +429,13 @@ def test_key_options_left_out_are_not_passed(monkeypatch: pytest.MonkeyPatch) ->
         assert name not in seen
 
 
-def test_an_empty_modes_value_is_forwarded_as_given(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The library refuses an empty mode set; the CLI hands it over rather than deciding.
-    assert _key_call(monkeypatch, "--modes", "")["modes"] == []
+def test_an_empty_modes_value_is_refused_on_the_command_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        _key_call(monkeypatch, "--modes", "")
+    assert exit_info.value.code == 2
+    assert "--modes must contain at least one mode" in capsys.readouterr().err
 
 
 def test_an_empty_synth_name_is_not_the_bare_flag() -> None:

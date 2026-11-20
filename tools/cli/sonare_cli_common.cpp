@@ -14,28 +14,6 @@
 
 #include "sonare_cli.h"
 
-namespace {
-
-template <typename T, typename Parse>
-std::vector<T> parse_number_list(const std::string& text, Parse parse, const char* kind,
-                                 const char* empty_message) {
-  std::vector<T> values;
-  for (const auto& item : split_string(text, ',')) {
-    try {
-      size_t consumed = 0;
-      const T parsed = parse(item, &consumed);
-      if (consumed != item.size()) throw std::invalid_argument("trailing characters");
-      values.push_back(parsed);
-    } catch (const std::exception&) {
-      throw std::invalid_argument(std::string("invalid ") + kind + " value in --values: " + item);
-    }
-  }
-  if (values.empty()) throw std::invalid_argument(empty_message);
-  return values;
-}
-
-}  // namespace
-
 int print_name_catalog(const CliArgs& args, std::string_view key,
                        const std::vector<std::string>& names) {
   if (args.json_output) {
@@ -81,16 +59,21 @@ std::string catalog_token(const std::string& value, const std::vector<std::strin
   return find_cli_token(value, tokens).value_or(value);
 }
 
+// The registry's list validator has already refused anything but finite numbers.
 std::vector<float> parse_float_list(const std::string& text) {
-  return parse_number_list<float>(
-      text, [](const std::string& item, size_t* consumed) { return std::stof(item, consumed); },
-      "float", "--values must contain at least one number");
+  std::vector<float> values;
+  for (const auto& item : split_string(text, ',')) {
+    values.push_back(parse_float_strict("values", item));
+  }
+  return values;
 }
 
 std::vector<int> parse_int_list(const std::string& text) {
-  return parse_number_list<int>(
-      text, [](const std::string& item, size_t* consumed) { return std::stoi(item, consumed); },
-      "integer", "--values must contain at least one integer");
+  std::vector<int> values;
+  for (const auto& item : split_string(text, ',')) {
+    values.push_back(parse_int_strict("values", item));
+  }
+  return values;
 }
 
 // The seek/tell probe only sizes the allocation: it is a snapshot the read
@@ -245,8 +228,7 @@ Audio load_reference_audio_impl(const CliArgs& args, std::optional<int> expected
   if (expected_size && samples.size() != *expected_size) {
     throw std::invalid_argument("reference length must match input length");
   }
-  validate_offline_audio_input("load_audio", "reference", samples.data(), samples.size(),
-                               sample_rate);
+  validate_offline_audio_input("reference", samples.data(), samples.size(), sample_rate);
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
@@ -336,22 +318,6 @@ void save_stereo_wav(const std::string& path, const Audio& left, const Audio& ri
                        bits);
 }
 
-std::string lowercase_cli_value(std::string value) {
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return value;
-}
-
-std::vector<std::string> split_string(const std::string& text, char delimiter) {
-  std::vector<std::string> values;
-  std::stringstream stream(text);
-  std::string item;
-  while (std::getline(stream, item, delimiter)) {
-    if (!item.empty()) values.push_back(item);
-  }
-  return values;
-}
-
 sonare::util::json::Value parse_cli_json_scalar(const std::string& raw) {
   try {
     return sonare::util::json::parse(raw);
@@ -408,70 +374,13 @@ std::string apply_voice_preset_sets(std::string config_text,
   auto root = sonare::util::json::parse(config_text);
   for (const auto& assignment : assignments) {
     if (assignment.empty()) continue;
+    // The command validator (voice_set_refusal) has already refused a malformed assignment.
     const auto eq = assignment.find('=');
-    if (eq == std::string::npos || eq == 0) {
-      throw std::invalid_argument("invalid --set assignment: " + assignment);
-    }
     const std::string path = assignment.substr(0, eq);
     auto value = parse_cli_json_scalar(assignment.substr(eq + 1));
     set_json_path(root, path, value);
   }
   return sonare::util::json::dump(root);
-}
-
-PitchClass parse_pitch_class_option(const std::string& value) {
-  static const std::map<std::string, PitchClass> names = {
-      {"C", PitchClass::C},   {"C#", PitchClass::Cs}, {"DB", PitchClass::Cs},
-      {"D", PitchClass::D},   {"D#", PitchClass::Ds}, {"EB", PitchClass::Ds},
-      {"E", PitchClass::E},   {"F", PitchClass::F},   {"F#", PitchClass::Fs},
-      {"GB", PitchClass::Fs}, {"G", PitchClass::G},   {"G#", PitchClass::Gs},
-      {"AB", PitchClass::Gs}, {"A", PitchClass::A},   {"A#", PitchClass::As},
-      {"BB", PitchClass::As}, {"B", PitchClass::B},
-  };
-  std::string key = value;
-  std::transform(key.begin(), key.end(), key.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-  auto it = names.find(key);
-  if (it == names.end()) {
-    throw std::invalid_argument("invalid pitch class: " + value);
-  }
-  return it->second;
-}
-
-std::vector<Mode> parse_mode_list_option(const std::string& value) {
-  const std::string key = lowercase_cli_value(value);
-  if (key == "all" || key == "modal") {
-    return {Mode::Major,  Mode::Minor,      Mode::Dorian, Mode::Phrygian,
-            Mode::Lydian, Mode::Mixolydian, Mode::Locrian};
-  }
-  if (key == "major-minor" || key == "majmin" || key == "diatonic") {
-    return {Mode::Major, Mode::Minor};
-  }
-
-  std::vector<Mode> modes;
-  for (const auto& item : split_string(value, ',')) {
-    modes.push_back(parse_mode_option(item));
-  }
-  if (modes.empty()) {
-    throw std::invalid_argument("--modes must contain at least one mode");
-  }
-  return modes;
-}
-
-KeyProfileType parse_key_profile_option(const std::string& value) {
-  const std::string key = lowercase_cli_value(value);
-  if (key == "ks" || key == "krumhansl" || key == "krumhansl-schmuckler") {
-    return KeyProfileType::KrumhanslSchmuckler;
-  }
-  if (key == "temperley") return KeyProfileType::Temperley;
-  if (key == "shaath" || key == "keyfinder") return KeyProfileType::Shaath;
-  if (key == "faraldo-edmt" || key == "edmt") return KeyProfileType::FaraldoEDMT;
-  if (key == "faraldo-edma" || key == "edma") return KeyProfileType::FaraldoEDMA;
-  if (key == "faraldo-edmm" || key == "edmm") return KeyProfileType::FaraldoEDMM;
-  if (key == "bellman-budge" || key == "bellman" || key == "budge") {
-    return KeyProfileType::BellmanBudge;
-  }
-  throw std::invalid_argument("invalid key profile: " + value);
 }
 
 void print_float_values(const CliArgs& args, const std::vector<float>& values) {
@@ -502,12 +411,10 @@ void print_int_values(const CliArgs& args, const std::vector<int>& values) {
 }
 
 std::vector<float> require_float_values(const CliArgs& args) {
-  if (!args.has("values")) throw std::invalid_argument("--values required");
   return parse_float_list(args.get_string("values"));
 }
 
 std::vector<int> require_int_values(const CliArgs& args) {
-  if (!args.has("values")) throw std::invalid_argument("--values required");
   return parse_int_list(args.get_string("values"));
 }
 
@@ -691,16 +598,14 @@ int cmd_frame_signal(const CliArgs& args, const Audio&) {
 
 int cmd_pad_center(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  const auto size =
-      static_cast<size_t>(args.require_int_in_range("size", 1, std::numeric_limits<int>::max()));
+  const auto size = static_cast<size_t>(args.get_int("size", 0));
   print_float_values(args, pad_center(values, size, args.get_float("pad-value", kDefaultPadValue)));
   return 0;
 }
 
 int cmd_fix_length(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  const auto size =
-      static_cast<size_t>(args.require_int_in_range("size", 1, std::numeric_limits<int>::max()));
+  const auto size = static_cast<size_t>(args.get_int("size", 0));
   print_float_values(args, fix_length(values, size, args.get_float("pad-value", kDefaultPadValue)));
   return 0;
 }
@@ -744,8 +649,8 @@ int cmd_pcen(const CliArgs& args, const Audio&) {
   config.bias = args.get_float("bias", config.bias);
   config.power = args.get_float("power", config.power);
   config.eps = args.get_float("eps", config.eps);
-  const int n_bins = args.require_int_in_range("n-bins", 1, std::numeric_limits<int>::max());
-  const int n_frames = args.require_int_in_range("n-frames", 1, std::numeric_limits<int>::max());
+  const int n_bins = args.get_int("n-bins", 0);
+  const int n_frames = args.get_int("n-frames", 0);
   print_float_values(args, pcen(values, n_bins, n_frames, config));
   return 0;
 }

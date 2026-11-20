@@ -73,7 +73,7 @@ def test_voice_change_preset_rejects_simple_knob_conflict() -> None:
             ]
         )
 
-        assert result.returncode == 3
+        assert result.returncode == 2
         assert "cannot be combined with a realtime preset" in result.stderr
 
 
@@ -241,7 +241,7 @@ def test_analysis_only_cli_rejects_output_path() -> None:
         result = _run_cli(["bpm", wav_path, "--output", output_path])
 
         assert result.returncode != 0
-        assert "bpm does not produce an audio file" in result.stderr
+        assert "Command 'bpm' does not produce a file output" in result.stderr
         assert not os.path.exists(output_path)
 
 

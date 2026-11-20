@@ -10,10 +10,12 @@ import numpy as np
 
 from ._cli_common import (
     _load_channels_or_downmix,
+    _params_entries,
+    _params_grammar_refusal,
     _strict_json_dumps,
     _write_channel_output,
 )
-from ._cli_inventory import _token_of
+from ._cli_inventory import _cli_domain, _token_of
 from ._cli_options import (
     SharedParsers,
     _add_wav_bits_argument,
@@ -101,12 +103,9 @@ def _parse_repair_params(raw: str) -> dict[str, float | str]:
     key. This parser deliberately carries no second list of either kind of field.
     """
     params: dict[str, float | str] = {}
-    for item in raw.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        if "=" not in item:
-            raise ValueError(f"invalid param (expected key=value): {item}")
+    if (refusal := _params_grammar_refusal(raw)) is not None:
+        raise ValueError(refusal)
+    for item in _params_entries(raw):
         key, value = (part.strip() for part in item.split("=", 1))
         if not key.startswith("repair."):
             raise ValueError(f"--params key must be a repair.* field: {key}")
@@ -447,11 +446,13 @@ def register_repair_parsers(
             "(declip/declick/decrackle/dehum/denoise/dereverb, in that order)"
         ),
     )
-    repair_p.add_argument(
-        "--preset",
-        type=_token_of(_library_catalog("mastering_preset_names")),
-        default="",
-        help="Repair preset name (omitted: measure and choose)",
+    _cli_domain(
+        repair_p.add_argument(
+            "--preset",
+            type=_token_of(_library_catalog("mastering_preset_names")),
+            help="Repair preset name (omitted: measure and choose)",
+        ),
+        choices=_library_catalog("mastering_preset_names"),
     )
     repair_p.add_argument(
         "--stages",

@@ -34,6 +34,15 @@ void project_report_error(const std::string& what, SonareError err);
 int project_exit_code(SonareError err);
 /// The NativeSynth preset names, as the library spells them.
 std::vector<std::string> synth_preset_name_list();
+/// Splits one `--audio <source_id>=FILE` assignment, throwing std::invalid_argument when malformed.
+void parse_audio_binding(const std::string& assignment, uint32_t* out_source_id,
+                         std::string* out_path);
+/// The first malformed `--audio <source_id>=FILE` assignment, or empty; decided from the command
+/// line alone.
+std::string project_audio_binding_refusal(const CliArgs& args);
+/// The refusal of a `--synth` naming no NativeSynth preset, or empty. A bare flag, or `true`,
+/// selects GM routing where @p bare_flag_selects_gm.
+std::string project_synth_refusal(const CliArgs& args, bool bare_flag_selects_gm);
 int report_output_write_failure(const std::string& path);
 std::string project_input_path(const CliArgs& args);
 bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,

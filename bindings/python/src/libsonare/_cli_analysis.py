@@ -285,11 +285,12 @@ def cmd_sections(args: argparse.Namespace) -> int:
         threshold=args.threshold,
         **_given(args, "n_fft", "hop_length", min_section_sec="min_duration_sec"),
     )
-    sections = result
+    sections = result.sections
     if args.json:
         print(
             _strict_json_dumps(
                 {
+                    "form": result.form,
                     "count": len(sections),
                     "sections": [
                         {
@@ -620,7 +621,10 @@ def register_analysis_parsers(
     sub.add_parser("bpm", parents=[stdout_options], help="Detect BPM")
     key_p = sub.add_parser("key", parents=[stdout_options], help="Detect musical key")
     # Declared here rather than inherited: key takes no --win-length or --window options.
-    key_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
+    _cli_domain(
+        key_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"),
+        minimum=1,
+    )
     key_p.add_argument("--hop-length", type=_c_int, default=None, help="Hop length (default: 512)")
     key_p.add_argument(
         "--candidates",
@@ -669,8 +673,15 @@ def register_analysis_parsers(
     sub.add_parser("beats", parents=[stdout_options], help="Detect beat times")
     sub.add_parser("downbeats", parents=[stdout_options], help="Detect downbeat times")
     sub.add_parser("onsets", parents=[stdout_options], help="Detect onset times")
-    chords_p = sub.add_parser(
-        "chords", parents=[fft_stdout_options], help="Detect chord progression"
+    chords_p = sub.add_parser("chords", parents=[stdout_options], help="Detect chord progression")
+    _cli_domain(
+        chords_p.add_argument(
+            "--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"
+        ),
+        minimum=1,
+    )
+    chords_p.add_argument(
+        "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
     )
     chords_p.add_argument(
         "--min-duration-sec",

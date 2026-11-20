@@ -147,7 +147,7 @@ def test_voice_change_absolute_mode_reports_mode_and_refuses_unreachable_factor(
         "--formant-mode",
         "absolute",
     )
-    assert with_preset.returncode == 3
+    assert with_preset.returncode == 2
     assert "cannot be combined with a realtime preset" in with_preset.stderr
 
 
@@ -283,7 +283,7 @@ def test_voice_change_preset_pack_requires_an_entry_selector(tmp_path: Path) -> 
         "--json",
     )
 
-    assert result.returncode == 3
+    assert result.returncode == 2
     assert "--preset-pack requires --preset" in result.stderr
     assert not output.exists()
 
@@ -305,7 +305,7 @@ def test_voice_change_preset_pack_entry_selector_precedes_the_set_rule(tmp_path:
         "--json",
     )
 
-    assert result.returncode == 3
+    assert result.returncode == 2
     assert "--preset-pack requires --preset" in result.stderr
 
 
@@ -321,8 +321,8 @@ def test_voice_presets_are_named_by_their_library_ids_in_any_case() -> None:
     assert json.loads(accepted.stdout)["id"] == "hardTune"
 
     refused = _run_cli("voice-preset", "--preset", "hard-tune")
-    assert refused.returncode == 3
-    assert "unknown realtime voice changer preset" in refused.stderr
+    assert refused.returncode == 2
+    assert "argument --preset: must be one of neutralMonitor" in refused.stderr
 
 
 def test_voice_preset_validate_malformed_set_is_preprocessing_error(tmp_path: Path) -> None:
@@ -339,10 +339,9 @@ def test_voice_preset_validate_malformed_set_is_preprocessing_error(tmp_path: Pa
         "--json",
     )
 
-    assert result.returncode == 3
+    assert result.returncode == 2
     assert result.stdout == ""
-    assert result.stderr
-    assert "ok" not in result.stderr
+    assert "invalid --set assignment: malformed-assignment" in result.stderr
 
 
 def test_voice_preset_validate_missing_input_is_file_error() -> None:

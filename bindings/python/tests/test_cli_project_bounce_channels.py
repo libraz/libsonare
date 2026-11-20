@@ -129,3 +129,46 @@ def test_bounce_renders_channels_up_to_a_surround_masters_width(tmp_path: Path) 
         "project", "bounce", str(project_51), "-o", str(output), "--channels", "8"
     )
     assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
+
+
+def test_project_commands_refuse_synth_audio_and_output_before_the_project_is_read(
+    tmp_path,
+) -> None:
+    """A preset, an --audio binding or an --output on a stdout-only leaf is a usage error."""
+    missing = str(tmp_path / "absent.json")
+    out = str(tmp_path / "out.wav")
+    rows = [
+        (
+            ["project", "bounce", missing, "-o", out, "--synth", "nosuchsynth"],
+            "argument --synth: unknown synth preset 'nosuchsynth'",
+        ),
+        (
+            ["midi-render", missing, "-o", out, "--synth", "nosuchsynth"],
+            "argument --synth: unknown synth preset 'nosuchsynth'",
+        ),
+        (
+            ["project", "bounce", missing, "-o", out, "--audio", "nofile"],
+            "argument --audio: must be <source_id>=FILE",
+        ),
+        (
+            ["project", "bounce", missing, "-o", out, "--audio", "0=a.wav"],
+            "argument --audio: <source_id> must be an integer in [1, 4294967295]",
+        ),
+        (
+            ["project", "align-takes", missing, "-o", out, "--reference-source", "1"]
+            + ["--audio", "nofile"],
+            "argument --audio: must be <source_id>=FILE",
+        ),
+        (
+            ["project", "abi", "-o", out],
+            "Command 'project' does not produce a file output; remove -o/--output",
+        ),
+        (
+            ["project", "new", "-o", out, "--sample-rate", "100"],
+            "argument --sample-rate: must be an integer in [8000, 384000]",
+        ),
+    ]
+    for argv, text in rows:
+        result = _run_console(*argv)
+        assert result.returncode == 2, (argv, result.stderr)
+        assert text in result.stderr, (argv, result.stderr)

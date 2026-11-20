@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from types import ModuleType, SimpleNamespace
 
 import numpy as np
@@ -171,8 +172,8 @@ def test_hpss_residual_mode_writes_three_artifacts_and_conflicts_are_rejected(
     assert effects.cmd_hpss(_args(output="split.wav", with_residual=True)) == 0
     assert writes == ["split_harmonic.wav", "split_percussive.wav", "split_residual.wav"]
 
-    with pytest.raises(ValueError, match="mutually exclusive"):
-        effects.cmd_hpss(_args(harmonic_only=True, percussive_only=True))
+    refusal = effects._hpss_refusal(_args(harmonic_only=True, percussive_only=True))
+    assert refusal is not None and "mutually exclusive" in refusal
 
 
 def test_normalize_mode_and_trim_controls_forward_to_the_matching_facade(
@@ -214,9 +215,8 @@ def test_normalize_mode_and_trim_controls_forward_to_the_matching_facade(
 def test_trim_threshold_and_top_db_conflict_is_semantic_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(effects, "_load_audio", lambda _path: ([0.1], 22050))
-    with pytest.raises(ValueError, match="threshold-db.*top-db"):
-        effects.cmd_trim_silence(_args(threshold_db=-40.0, top_db=24.0))
+    refusal = effects._trim_silence_refusal(_args(threshold_db=-40.0, top_db=24.0))
+    assert refusal is not None and "threshold-db" in refusal and "top-db" in refusal
 
 
 def test_acoustic_text_prints_a_dash_for_what_a_blind_estimate_does_not_measure(
@@ -342,6 +342,35 @@ def test_estimate_room_leaves_omitted_band_controls_to_the_library(
     ]
 
 
+def test_estimate_room_json_names_the_band_absorption_as_the_library_does(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(acoustic, "_load_audio", lambda _path: ([0.1], 48000))
+    result = SimpleNamespace(
+        volume=10.0,
+        length_m=3.0,
+        width_m=2.0,
+        height_m=1.7,
+        drr_db=0.0,
+        confidence=0.5,
+        rt60_bands=[0.4],
+        band_absorption=[0.2],
+    )
+    monkeypatch.setattr(libsonare, "estimate_room", lambda _samples, **_kwargs: result)
+    args = _args(
+        aspect_lw=1.0,
+        aspect_lh=1.0,
+        reference_absorption=0.15,
+        sabine=False,
+        n_octave_bands=None,
+        json=True,
+    )
+    assert acoustic.cmd_estimate_room(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["band_absorption"] == [0.2]
+    assert "absorption_bands" not in payload
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -354,10 +383,4 @@ def test_estimate_room_leaves_omitted_band_controls_to_the_library(
 def test_voice_change_rejects_noop_selector_combinations(
     monkeypatch: pytest.MonkeyPatch, kwargs: dict[str, object]
 ) -> None:
-    monkeypatch.setattr(
-        effects,
-        "_load_audio",
-        lambda _path: pytest.fail("semantic rejection must happen before audio loading"),
-    )
-    with pytest.raises(ValueError):
-        effects.cmd_voice_change(_args(**kwargs))
+    assert effects._voice_change_refusal(_args(**kwargs)) is not None

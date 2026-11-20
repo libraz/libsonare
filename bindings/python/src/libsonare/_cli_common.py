@@ -684,6 +684,33 @@ def _array_stats(vals: list[float], *, with_count: bool = True) -> dict[str, flo
     return stats
 
 
+_PARAMS_GRAMMAR_REFUSAL = "argument --params: must be a comma-separated list of key=value entries"
+
+
+def _params_entries(value: str) -> list[str]:
+    """Split ``--params`` text into its entries, as the native CLI's line reader does.
+
+    A trailing comma ends the list and an empty text holds no entry; any other empty
+    entry is kept, so the grammar check refuses it.
+    """
+    entries = value.split(",")
+    return entries[:-1] if entries[-1] == "" else entries
+
+
+def _params_grammar_refusal(value: str) -> str | None:
+    """The refusal for a ``--params`` entry that is not ``key=value``, or None."""
+    for entry in _params_entries(value):
+        key, separator, raw = entry.partition("=")
+        if not separator or not key or not raw:
+            return _PARAMS_GRAMMAR_REFUSAL
+    return None
+
+
+def _params_keys(value: str) -> list[str]:
+    """The key of each entry of a ``--params`` text that already passed the grammar check."""
+    return [entry.partition("=")[0] for entry in _params_entries(value)]
+
+
 def _parse_kv_params(value: str, *, names: bool = False) -> dict[str, Any]:
     """Parse a ``k=v,k=v`` string into a dict of floats.
 
@@ -691,12 +718,10 @@ def _parse_kv_params(value: str, *, names: bool = False) -> dict[str, Any]:
     resolve as the ``choices`` name of an enum-valued key (``noiseEstimator=mcra``).
     """
     params: dict[str, Any] = {}
-    for item in value.split(","):
+    if (refusal := _params_grammar_refusal(value)) is not None:
+        raise ValueError(refusal)
+    for item in _params_entries(value):
         item = item.strip()
-        if not item:
-            continue
-        if "=" not in item:
-            raise ValueError(f"invalid param (expected key=value): {item}")
         key, raw = item.split("=", 1)
         text = raw.strip()
         try:
@@ -807,6 +832,19 @@ def _set_nested_value(root: dict[str, Any], path: str, value: object) -> None:
     cursor[parts[-1]] = value
 
 
+def _voice_set_refusal(assignments: Iterable[str] | None) -> str | None:
+    """The refusal of the ``--set`` assignments (an empty one is skipped), or None."""
+    for assignment in assignments or ():
+        if not assignment:
+            continue
+        path, separator, _ = assignment.partition("=")
+        if not separator or not path:
+            return f"invalid --set assignment: {assignment}"
+        if not path.strip("."):
+            return "empty --set path"
+    return None
+
+
 def _apply_voice_sets(
     preset: str | dict[str, Any], assignments: list[str] | None
 ) -> str | dict[str, Any]:
@@ -823,8 +861,7 @@ def _apply_voice_sets(
     for assignment in assignments:
         if not assignment:
             continue
-        if "=" not in assignment:
-            raise ValueError(f"invalid --set assignment: {assignment}")
+        # The command validator (_voice_set_refusal) has already refused a malformed one.
         path, raw = assignment.split("=", 1)
         value = _parse_voice_set_value(raw)
         _set_nested_value(root, path, value)
@@ -902,7 +939,10 @@ def _parse_modes(value: str) -> list[KeyMode]:
         return ["major", "minor"]
     if key in ("all", "modal"):
         return list(get_args(KeyMode))
-    return [_parse_mode(item.strip()) for item in value.split(",") if item.strip()]
+    modes = [_parse_mode(item) for item in value.split(",") if item]
+    if not modes:
+        raise ValueError("--modes must contain at least one mode")
+    return modes
 
 
 def _parse_meter_candidates(value: str) -> list[int]:

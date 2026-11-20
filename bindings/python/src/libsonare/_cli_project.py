@@ -40,6 +40,7 @@ from ._cli_options import (
     _read_integer_text,
     _tempo_bpm,
 )
+from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._runtime import ErrorCode, SonareError
 
 # A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
@@ -51,10 +52,6 @@ _SOURCE_KIND_AUDIO = 0
 # so resolving one is this front-end's own file I/O, and it has no business
 # fetching over a network to feed a render.
 _FILE_URI_SCHEME = "file"
-
-# Subcommands whose result goes to stdout only; accepting -o would silently
-# discard the requested destination, so it is rejected instead.
-_PROJECT_NO_OUTPUT = frozenset({"abi", "compile", "synth-presets"})
 
 # The mode an aligned clip plays its warp map through. Anchors encode a rate
 # difference, and a clip left in any other mode ignores it.
@@ -204,13 +201,40 @@ def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> 
         )
 
 
+# The value the native parser stores for a bare `project bounce --synth`; it spells GM routing too.
+_BARE_SYNTH_SPELLING = "true"
+
+
+def project_audio_refusal(args: argparse.Namespace) -> str | None:
+    """The first malformed ``--audio <source_id>=FILE`` assignment, or None; argv alone decides."""
+    for assignment in list(getattr(args, "audio", None) or []):
+        try:
+            _parse_audio_binding(assignment)
+        except ValueError as exc:
+            return str(exc)
+    return None
+
+
+def project_synth_refusal(args: argparse.Namespace, *, bare_flag: bool) -> str | None:
+    """The refusal of a ``--synth`` naming no NativeSynth preset, or None."""
+    value = getattr(args, "synth", None)
+    if value is None or (bare_flag and value in ("", _BARE_SYNTH_SPELLING)):
+        return None
+    from . import synth_preset_names
+
+    names = synth_preset_names()
+    if _catalog_token(value, names) in names:
+        return None
+    return f"argument --synth: unknown synth preset '{value}'"
+
+
 def _synth_preset(value: str | None, *, bare_flag: bool) -> str | None:
     """Resolve ``--synth`` to a library preset id in any letter case.
 
     Absent means GM auto-select, and so does the bare flag where there is one; a value
     spelled empty anywhere else is looked up like any other.
     """
-    if value is None or (bare_flag and value == ""):
+    if value is None or (bare_flag and value in ("", _BARE_SYNTH_SPELLING)):
         return None
     from . import synth_preset_names
 
@@ -456,8 +480,6 @@ def cmd_project(args: argparse.Namespace) -> int:
     from . import Project, project_abi_version, synth_preset_names
 
     subcommand = args.project_command
-    if subcommand in _PROJECT_NO_OUTPUT and getattr(args, "output", None):
-        raise ValueError(f"project {subcommand} does not write an output file; remove --output")
     if subcommand == "abi":
         # The CLI contract prints 0 when arrangement support is compiled out.
         version = project_abi_version() or 0
@@ -650,6 +672,25 @@ def cmd_midi_render(args: argparse.Namespace) -> int:
     )
 
 
+def _transcribe_refusal(args: argparse.Namespace) -> str | None:
+    """The refusal of a --transcribe combination decided from argv, or None when it reads."""
+    f0_min, f0_max = args.f0_min_hz, args.f0_max_hz
+    if f0_min is not None and f0_max is not None and f0_max <= f0_min:
+        return (
+            f"--f0-max-hz must be greater than --f0-min-hz "
+            f"(--f0-min-hz {f0_min:g}, --f0-max-hz {f0_max:g})"
+        )
+    # 0 is "no split"; a given ratio otherwise has to exceed 1 (the facade's reattack_ratio rule).
+    if args.reattack_ratio is not None and args.reattack_ratio != 0 and args.reattack_ratio <= 1:
+        return "--reattack-ratio must be 0 (no split) or greater than 1"
+    # The C ABI refuses both pairs (sonare_c_transcribe.cpp), naming the fields.
+    if args.min_note_division is not None and args.min_note_ms is not None:
+        return "--min-note-division and --min-note-ms cannot both be given"
+    if args.polyphonic and (args.monophonic_model or "segments") != "segments":
+        return "--monophonic-model singing cannot be combined with --polyphonic"
+    return None
+
+
 def cmd_transcribe(args: argparse.Namespace) -> int:
     from . import Project
 
@@ -684,7 +725,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             max_polyphony=args.max_polyphony,
             min_frame_peak_ratio=args.min_frame_peak_ratio,
             min_ridge_peak_ratio=args.min_ridge_peak_ratio,
-            reattack_ratio=args.reattack_ratio,
+            reattack_ratio=args.reattack_ratio or None,
             min_note_division=args.min_note_division,
             monophonic_model=args.monophonic_model,
             **_given(args, "channel"),
@@ -737,11 +778,15 @@ def register_project_parsers(
     pnew = project_sub.add_parser(
         "new", parents=[project_common], help="Create an empty project JSON"
     )
-    pnew.add_argument(
-        "--sample-rate",
-        type=_c_int,
-        default=None,
-        help="Project sample rate (default: the project's own)",
+    _cli_domain(
+        pnew.add_argument(
+            "--sample-rate",
+            type=_c_int,
+            default=None,
+            help="Project sample rate (default: the project's own)",
+        ),
+        minimum=_MIN_GENERATOR_SAMPLE_RATE,
+        maximum=_MAX_GENERATOR_SAMPLE_RATE,
     )
     for pname in ("validate", "compile"):
         if pname == "validate":
@@ -976,30 +1021,46 @@ def register_project_parsers(
         action="store_true",
         help="Read the multi-F0 chain, which finds overlapping notes",
     )
-    transcribe_p.add_argument(
-        "--reference-hz",
-        type=_finite_float,
-        default=None,
-        help="Tuning reference the MIDI note numbers are measured against (default: 440.0)",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--reference-hz",
+            type=_finite_float,
+            default=None,
+            help="Tuning reference the MIDI note numbers are measured against (default: 440.0)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
     )
-    transcribe_p.add_argument(
-        "--f0-min-hz",
-        type=_finite_float,
-        default=None,
-        help="Low end of the F0 tracker range in Hz; omitted uses 65 mono or 55 poly",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--f0-min-hz",
+            type=_finite_float,
+            default=None,
+            help="Low end of the F0 tracker range in Hz; omitted uses 65 mono or 55 poly",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
     )
-    transcribe_p.add_argument(
-        "--f0-max-hz",
-        type=_finite_float,
-        default=None,
-        help="High end of the F0 tracker range in Hz; omitted uses 2093 mono or 1760 poly",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--f0-max-hz",
+            type=_finite_float,
+            default=None,
+            help="High end of the F0 tracker range in Hz; omitted uses 2093 mono or 1760 poly",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
     )
-    transcribe_p.add_argument(
-        "--min-note-ms",
-        type=_finite_float,
-        default=None,
-        help="Shortest span kept as a note, in ms "
-        "(default: 30.0 (segments), 45.0 (singing) or 60.0 (polyphonic))",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--min-note-ms",
+            type=_finite_float,
+            default=None,
+            help="Shortest span kept as a note, in ms "
+            "(default: 30.0 (segments), 45.0 (singing) or 60.0 (polyphonic))",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
     )
     _cli_domain(
         transcribe_p.add_argument(
@@ -1051,14 +1112,18 @@ def register_project_parsers(
         type=_finite_float,
         default=None,
         help="Polyphonic only: split a ridge where its salience climbs past this "
-        "multiple of the level before, above 1 (default: 2.0)",
+        "multiple of the level before, above 1, or 0 for no split (default: 2.0)",
     )
-    transcribe_p.add_argument(
-        "--segmentation-threshold-cents",
-        type=_finite_float,
-        default=None,
-        help="Monophonic: segments ends a note where the pitch moves this many cents; "
-        "singing reads it as the pitch movement kept within one note (default: 50.0)",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--segmentation-threshold-cents",
+            type=_finite_float,
+            default=None,
+            help="Monophonic: segments ends a note where the pitch moves this many cents; "
+            "singing reads it as the pitch movement kept within one note (default: 50.0)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
     )
     _cli_domain(
         transcribe_p.add_argument(
@@ -1071,22 +1136,34 @@ def register_project_parsers(
         ),
         choices=["segments", "singing"],
     )
-    transcribe_p.add_argument(
-        "--velocity-floor-db",
-        type=_finite_float,
-        default=None,
-        help="Level mapped to velocity 1; must be negative (default: -48.0)",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--velocity-floor-db",
+            type=_finite_float,
+            default=None,
+            help="Level mapped to velocity 1; must be negative (default: -48.0)",
+        ),
+        maximum=0,
+        exclusive_maximum=True,
     )
-    transcribe_p.add_argument(
-        "--fixed-velocity",
-        type=_c_int,
-        default=None,
-        metavar="N",
-        help="Give every note velocity N (1-127) and skip the level measurement",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--fixed-velocity",
+            type=_c_int,
+            default=None,
+            metavar="N",
+            help="Give every note velocity N (1-127) and skip the level measurement",
+        ),
+        minimum=1,
+        maximum=127,
     )
-    transcribe_p.add_argument(
-        "--channel",
-        type=_c_int,
-        default=None,
-        help="MIDI channel the events are emitted on (default: 0)",
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--channel",
+            type=_c_int,
+            default=None,
+            help="MIDI channel the events are emitted on (default: 0)",
+        ),
+        minimum=0,
+        maximum=15,
     )

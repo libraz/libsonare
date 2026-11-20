@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <filesystem>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <optional>
@@ -34,7 +37,7 @@ namespace {
 /// any other refusal (a non-finite sample included) a failed decode.
 void require_decoded_plane(const std::vector<float>& plane, int sample_rate) {
   const std::string problem =
-      offline_audio_input_problem("load_audio", "input", plane.data(), plane.size(), sample_rate);
+      offline_audio_input_problem("input", plane.data(), plane.size(), sample_rate);
   if (!problem.empty()) {
     throw SonareException(
         is_supported_sample_rate(sample_rate) ? ErrorCode::DecodeFailed : ErrorCode::InvalidFormat,
@@ -111,16 +114,11 @@ std::vector<StripPair> resolve_strip_inputs(const std::vector<std::string>& entr
     std::string path;
     if (separator == std::string::npos) {
       path = entry;
-      const auto slash = entry.find_last_of("/\\");
-      const std::string base = slash == std::string::npos ? entry : entry.substr(slash + 1);
-      const auto dot = base.find_last_of('.');
-      id = dot == std::string::npos || dot == 0 ? base : base.substr(0, dot);
+      id = bare_path_id(entry);
     } else {
       id = entry.substr(0, separator);
       path = entry.substr(separator + 1);
-      if (id.empty()) throw std::invalid_argument("--input strip id must not be empty: " + entry);
     }
-    if (path.empty()) throw std::invalid_argument("--input requires a file path: " + entry);
 
     StripPair pair = load_strip_pair(path, sample_rate);
     const auto found = std::find(strip_ids.begin(), strip_ids.end(), id);
@@ -388,24 +386,6 @@ struct AssistantTrack {
   int sample_rate = 0;
 };
 
-/// Split `[ID=]WAV` into its two halves. A bare path takes the file's own name
-/// as the id, which is what the scene then addresses the strip by.
-void split_track_entry(const std::string& entry, std::string* id, std::string* path) {
-  const auto separator = entry.find('=');
-  if (separator == std::string::npos) {
-    *path = entry;
-    const auto slash = entry.find_last_of("/\\");
-    const std::string base = slash == std::string::npos ? entry : entry.substr(slash + 1);
-    const auto dot = base.find_last_of('.');
-    *id = dot == std::string::npos ? base : base.substr(0, dot);
-  } else {
-    *id = entry.substr(0, separator);
-    *path = entry.substr(separator + 1);
-  }
-  if (id->empty()) throw std::invalid_argument("--input track id must not be empty: " + entry);
-  if (path->empty()) throw std::invalid_argument("--input requires a file path: " + entry);
-}
-
 /// Decode one entry at its own rate, keeping a two-channel file as a pair.
 ///
 /// The image domain is the one part of the assistant that reads both channels --
@@ -523,21 +503,12 @@ std::string mix_suggestion_json_for_cli(const std::string& core_json) {
 // reason for every decision.
 int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   const std::vector<std::string> entries = args.get_string_list("input");
-  if (entries.empty()) {
-    throw std::invalid_argument("suggest-mix requires at least one --input");
-  }
   const int sample_rate = args.get_int("sample-rate", kCliMixerSampleRate);
 
   auto params = parse_mastering_params(args.get_string("params"));
   std::optional<AssistantTrack> first_track;
   if (args.has("tempo-bpm")) {
     const std::string tempo_text = args.get_string("tempo-bpm");
-    // Naming it twice is a contradiction rather than a precedence question.
-    for (const auto& param : params) {
-      if (param.key == "tempoBpm") {
-        throw std::invalid_argument("--tempo-bpm and --params tempoBpm= set the same value");
-      }
-    }
     params.push_back(
         {"tempoBpm", resolve_assistant_tempo(tempo_text, entries.front(), &first_track)});
   }

@@ -21,7 +21,16 @@ import sys
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, NoReturn, cast
 
-from ._cli_common import EXIT_USAGE, _cli_mode_names, _parse_mode
+from ._cli_common import (
+    EXIT_USAGE,
+    _cli_mode_names,
+    _params_grammar_refusal,
+    _parse_key_profile,
+    _parse_meter_candidates,
+    _parse_mode,
+    _parse_modes,
+    _parse_pitch_class,
+)
 from ._cli_inventory import (
     _REQUIRED_OPTIONS,
     _action_domain,
@@ -158,6 +167,7 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         self._record_supplied_options(parsed, argv)
         _restore_parser_compat_defaults(parsed)
         _reject_stdout_output(parsed, self)
+        _reject_leaf_output(parsed, extras, self)
         # Run once, on the top-level parser, where a flag spelled before the
         # project subcommand has been merged into the namespace.
         path = _command_path(parsed) if " " not in self.prog else None
@@ -263,6 +273,13 @@ def _bare_exponent(text: str) -> str:
     return f"{mantissa}e{sign}{exponent.lstrip('+-').lstrip('0') or '0'}"
 
 
+def _integer_bound_text(value: float) -> str:
+    """``integer_bound_text`` in util/refusal_predicates.h: a whole bound in plain digits."""
+    if math.isfinite(value) and float(value).is_integer() and abs(value) < 2.0**63:
+        return str(int(value))
+    return _bound_text(value)
+
+
 def _bound_text(value: float) -> str:
     """``bound_text`` in util/refusal_predicates.h: the shortest decimal reading back as ``value``.
 
@@ -294,7 +311,7 @@ def _domain_predicate(domain: dict[str, Any], scalar_type: str) -> str:
         if maximum is None:
             return f"must be an integer of at least {int(low)}"
         high = maximum - 1 if domain["exclusive_maximum"] else maximum
-        return f"must be an integer in [{_bound_text(low)}, {_bound_text(high)}]"
+        return f"must be an integer in [{_integer_bound_text(low)}, {_integer_bound_text(high)}]"
     if minimum is not None and maximum is not None:
         opening = "(" if domain["exclusive_minimum"] else "["
         closing = ")" if domain["exclusive_maximum"] else "]"
@@ -593,6 +610,14 @@ _MIN_KEY_HPSS_HOP_LENGTH = 16
 
 
 def _validate_key_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    # The names are decided from the command line alone, so refused before the input is read.
+    try:
+        if getattr(args, "profile", None) is not None:
+            _parse_key_profile(args.profile)
+        if getattr(args, "modes", None) is not None:
+            _parse_modes(args.modes)
+    except ValueError as error:
+        parser.error(str(error))
     hop_length = getattr(args, "hop_length", None)
     if not getattr(args, "hpss", False) or hop_length is None:
         return
@@ -601,6 +626,54 @@ def _validate_key_namespace(args: argparse.Namespace, parser: argparse.ArgumentP
             f"--hop-length must be at least {_MIN_KEY_HPSS_HOP_LENGTH} with --hpss "
             f"(got {hop_length})"
         )
+
+
+def _validate_chords_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    try:
+        if args.key_root is not None:
+            _parse_pitch_class(args.key_root)
+        if args.key_mode is not None:
+            _parse_mode(args.key_mode)
+    except ValueError as error:
+        parser.error(str(error))
+
+
+def _validate_analyze_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.meter_candidates is None:
+        return
+    try:
+        _parse_meter_candidates(args.meter_candidates)
+    except ValueError as error:
+        parser.error(str(error))
+
+
+def _validate_project_bounce(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    # The command's own module owns the checks; imported here to keep the module graph acyclic.
+    from ._cli_project import project_audio_refusal, project_synth_refusal
+
+    _validate_render_channels(args, parser)
+    refusal = project_synth_refusal(args, bare_flag=True) or project_audio_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
+def _validate_midi_render(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    from ._cli_project import project_synth_refusal
+
+    _validate_render_channels(args, parser)
+    refusal = project_synth_refusal(args, bare_flag=False)
+    if refusal is not None:
+        parser.error(refusal)
+
+
+def _validate_project_align_takes(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    from ._cli_project import project_audio_refusal
+
+    refusal = project_audio_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
 
 
 def _validate_render_channels(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -663,16 +736,75 @@ def _validate_mastering_selection(
             parser.error(f"--{name} requires --assistant")
 
 
+def _validate_mastering_arguments(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    from ._cli_mastering import _chain_params_refusal
+
+    _validate_mastering_selection(args, parser)
+    refusal = _chain_params_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
+def _validate_params_grammar(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    # The entries of a --params text are command-line text, so they are refused before the read.
+    refusal = _params_grammar_refusal(getattr(args, "params", "") or "")
+    if refusal is not None:
+        parser.error(refusal)
+
+
+def _validate_processor_params(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    from ._cli_mastering import _processor_params_refusal
+
+    refusal = _processor_params_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
+def _validate_eq_params(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    from ._cli_mastering import _eq_params_refusal
+
+    refusal = _eq_params_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
+def _validate_assistant_params(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    from ._cli_mastering import _assistant_params_refusal
+
+    refusal = _assistant_params_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
 def _validate_mix_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     # A scene comes from exactly one source, and a render needs both ends.
     if args.scene is None and args.preset is None:
         parser.error("mix needs --scene or --preset")
     if args.scene is not None and args.preset is not None:
         parser.error("--scene is mutually exclusive with --preset")
+    # The command's module owns the entry grammar; imported here to keep the graph acyclic.
+    from ._cli_mixing import mix_input_refusal
+
+    refusal = mix_input_refusal(args.input)
+    if refusal is not None:
+        parser.error(refusal)
     if args.input and not args.output:
         parser.error("mix with --input requires --output")
     if args.output and not args.input:
         parser.error("mix with --output requires at least one --input")
+
+
+def _validate_suggest_mix_namespace(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    # The command's own module owns the checks; imported here to keep the module graph acyclic.
+    from ._cli_mixing import suggest_mix_refusal
+
+    refusal = suggest_mix_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
 
 
 def _refuse_both_bound_spellings(
@@ -715,6 +847,46 @@ def _validate_filter_frequencies(args: argparse.Namespace, parser: argparse.Argu
         parser.error(f"--order must be 2 when --type is {types}")
 
 
+def _validate_utility_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    # The command's own module owns the checks; imported here to keep the module graph acyclic.
+    from ._cli_utilities import _utility_argument_refusal
+
+    refusal = _utility_argument_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
+# The percentile ranks metering_dynamic_range uses when a bound is left out.
+_DYNAMIC_RANGE_LOW_PERCENTILE = 0.1
+_DYNAMIC_RANGE_HIGH_PERCENTILE = 0.95
+
+
+def _validate_dynamic_range_percentiles(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    low = _DYNAMIC_RANGE_LOW_PERCENTILE if args.low_percentile is None else args.low_percentile
+    high = _DYNAMIC_RANGE_HIGH_PERCENTILE if args.high_percentile is None else args.high_percentile
+    if high < low:
+        parser.error(
+            f"--high-percentile must be at least --low-percentile "
+            f"(--low-percentile {low:g}, --high-percentile {high:g})"
+        )
+
+
+def _refusal_validator(
+    module: str, function: str
+) -> Callable[[argparse.Namespace, argparse.ArgumentParser], None]:
+    """Build a validator running ``module.function(args)``, a refusal text or None."""
+
+    def validate(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+        # The command's own module owns the check; imported here to keep the module graph acyclic.
+        refusal = getattr(importlib.import_module(f".{module}", __package__), function)(args)
+        if refusal is not None:
+            parser.error(refusal)
+
+    return validate
+
+
 # Cross-option checks, keyed by command path, run once parsing has succeeded and
 # before any handler reads its input -- the native registry's command validators.
 # Each refuses as a usage failure: it is decided from the command line alone.
@@ -723,16 +895,54 @@ _COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentPa
     "vocal-notes": _validate_vocal_notes_namespace,
     "rhythm": _validate_rhythm_namespace,
     "key": _validate_key_namespace,
+    "chords": _validate_chords_namespace,
+    "analyze": _validate_analyze_namespace,
     "mix": _validate_mix_namespace,
+    "suggest-mix": _validate_suggest_mix_namespace,
     "note-move": _validate_note_move_bounds,
     "note-stretch": _validate_note_stretch_bounds,
     "repair": _validate_repair_namespace,
-    "mastering": _validate_mastering_selection,
+    "mastering": _validate_mastering_arguments,
+    "mastering-processor": _validate_processor_params,
+    "eq": _validate_eq_params,
+    "mastering-suggest": _validate_assistant_params,
+    "mastering-profile": _validate_params_grammar,
+    "mastering-pair-processor": _validate_params_grammar,
+    "mastering-pair-analyze": _validate_params_grammar,
+    "mastering-stereo-analyze": _validate_params_grammar,
     "mastering-streaming": _validate_streaming_platforms,
-    "project.bounce": _validate_render_channels,
-    "midi-render": _validate_render_channels,
+    "project.bounce": _validate_project_bounce,
+    "project.align-takes": _validate_project_align_takes,
+    "midi-render": _validate_midi_render,
     "fade": _validate_fade_sides,
+    "melody": _validate_pitch_namespace,
+    "dynamic-range": _validate_dynamic_range_percentiles,
     "filter": _validate_filter_frequencies,
+    "hpss": _refusal_validator("_cli_effects", "_hpss_refusal"),
+    "trim-silence": _refusal_validator("_cli_effects", "_trim_silence_refusal"),
+    "voice-change": _refusal_validator("_cli_effects", "_voice_change_refusal"),
+    "voice-preset": _refusal_validator("_cli_effects", "_voice_preset_refusal"),
+    "voice-preset-validate": _refusal_validator("_cli_effects", "_voice_preset_validate_refusal"),
+    "polyphonic-render": _refusal_validator("_cli_note_edit", "_polyphonic_edit_refusal"),
+    "transcribe": _refusal_validator("_cli_project", "_transcribe_refusal"),
+    **{
+        name: _validate_utility_arguments
+        for name in (
+            "chirp",
+            "clicks",
+            "power-to-db",
+            "amplitude-to-db",
+            "db-to-power",
+            "db-to-amplitude",
+            "frame-signal",
+            "pad-center",
+            "fix-length",
+            "fix-frames",
+            "peak-pick",
+            "vector-normalize",
+            "pcen",
+        )
+    },
 }
 
 
@@ -783,6 +993,13 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "gain",
         "fade",
         "filter",
+        "tone",
+        "chirp",
+        "clicks",
+        "preemphasis",
+        "deemphasis",
+        "mel-to-audio",
+        "mfcc-to-audio",
         "trim-silence",
         "resample",
         "voice-change",
@@ -803,6 +1020,11 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
 )
 
 
+# The `project` leaves that write nothing; the native registry declares no `output` on them.
+_PROJECT_STDOUT_LEAVES = frozenset({"abi", "compile", "synth-presets"})
+_NO_FILE_OUTPUT_REFUSAL = "Command 'project' does not produce a file output; remove -o/--output"
+
+
 def _stdout_only_commands(parser: argparse.ArgumentParser) -> frozenset[str]:
     """Commands that produce no audio artifact, derived from the parser.
 
@@ -816,7 +1038,7 @@ def _reject_stdout_output(args: argparse.Namespace, parser: argparse.ArgumentPar
     """Reject output destinations before a stdout-only handler can run."""
     command = getattr(args, "command", "")
     if command in _stdout_only_commands(parser) and getattr(args, "output", None) is not None:
-        parser.error(f"{command} does not produce an audio file; remove --output")
+        parser.error(f"Command '{command}' does not produce a file output; remove -o/--output")
 
     # The project parser intentionally accepts project-wide flags before the
     # leaf subcommand so ``project --json validate ...`` remains valid.  A
@@ -824,17 +1046,28 @@ def _reject_stdout_output(args: argparse.Namespace, parser: argparse.ArgumentPar
     # such as ``abi`` and ``compile`` at the same parser boundary.
     if (
         command == "project"
-        and getattr(args, "project_command", "")
-        in {
-            "abi",
-            "compile",
-            "synth-presets",
-        }
+        and getattr(args, "project_command", "") in _PROJECT_STDOUT_LEAVES
         and getattr(args, "output", None) is not None
     ):
-        parser.error(
-            f"project {args.project_command} does not produce an output file; remove --output"
+        parser.error(_NO_FILE_OUTPUT_REFUSAL)
+
+
+def _reject_leaf_output(
+    args: argparse.Namespace, extras: list[str], parser: argparse.ArgumentParser
+) -> None:
+    """Refuse -o/--output on a project leaf that declares no output option.
+
+    The leaf's parser leaves the flag unparsed, so it arrives as an extra and
+    would otherwise end as argparse's generic "unrecognized arguments".
+    """
+    if (
+        getattr(args, "command", "") == "project"
+        and getattr(args, "project_command", "") in _PROJECT_STDOUT_LEAVES
+        and any(
+            token in ("-o", "--output") or token.startswith(("--output=", "-o")) for token in extras
         )
+    ):
+        parser.error(_NO_FILE_OUTPUT_REFUSAL)
 
 
 @dataclasses.dataclass(frozen=True)

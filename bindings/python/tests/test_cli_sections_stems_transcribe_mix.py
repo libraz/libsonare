@@ -146,6 +146,7 @@ def test_sections_reports_the_boundaries_it_found() -> None:
 
     sections = payload["sections"]
     assert payload["count"] == len(sections)
+    assert isinstance(payload["form"], str) and payload["form"]
     assert len(sections) >= 2
     assert sections[0]["start"] == 0.0
     for section in sections:
@@ -473,8 +474,8 @@ def test_transcribe_refuses_an_out_of_domain_reattack_ratio(melody_wav: str) -> 
         result = _run_cli(
             ["transcribe", melody_wav, "-o", output, "--polyphonic", "--reattack-ratio", "1"]
         )
-        assert result.returncode != 0
-        assert "reattack_ratio" in result.stderr
+        assert result.returncode == 2
+        assert "--reattack-ratio must be 0 (no split) or greater than 1" in result.stderr
 
 
 @pytest.mark.parametrize("division", ["0", "129"])
@@ -504,8 +505,8 @@ def test_transcribe_refuses_min_note_division_with_min_note_ms(melody_wav: str) 
                 "32",
             ]
         )
-        assert result.returncode != 0
-        assert "min_note_division" in result.stderr
+        assert result.returncode == 2
+        assert "--min-note-division and --min-note-ms cannot both be given" in result.stderr
         assert not os.path.exists(output)
 
 
@@ -565,8 +566,8 @@ def test_suggest_mix_names_an_unknown_param() -> None:
         result = _run_cli(
             ["suggest-mix", "--input", track, "--sample-rate", str(SR), "--params", "loudness=-9"]
         )
-    assert result.returncode == 3
-    assert "loudness" in result.stderr
+    assert result.returncode == 2
+    assert "unknown key loudness" in result.stderr
     assert result.stdout == ""
 
 
@@ -686,7 +687,7 @@ def test_suggest_mix_tempo_option_and_param_are_one_value() -> None:
             ],
             # fmt: on
         )
-    assert clash.returncode == 3
+    assert clash.returncode == 2
     assert "same value" in clash.stderr
 
 
@@ -726,5 +727,5 @@ def test_suggest_mix_measures_a_stereo_track_as_a_pair() -> None:
 
 def test_suggest_mix_requires_an_input() -> None:
     result = _run_cli(["suggest-mix", "--sample-rate", str(SR)])
-    assert result.returncode == 3
+    assert result.returncode == 2
     assert "--input" in result.stderr

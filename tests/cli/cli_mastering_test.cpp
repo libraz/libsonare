@@ -270,16 +270,26 @@ TEST_CASE("CLI mastering-suggest options", "[cli][mastering]") {
   SECTION("mastering-suggest refuses an earlier --params spelling naming the current key") {
     auto [code, output] = exec_command(CLI + " mastering-suggest " + TEST_WAV +
                                        " --params target_platform=broadcast --json 2>&1");
-    CHECK(code == 3);
+    CHECK(code == 2);
     CHECK_THAT(output, ContainsSubstring("target_platform"));
     CHECK_THAT(output, ContainsSubstring("targetPlatform"));
   }
 
-  SECTION("mastering-suggest refuses a contradiction, an unknown key and an index") {
+  SECTION("mastering-suggest refuses a contradiction or a malformed entry before the read") {
     for (const std::string extra :
-         {" --preset jazz --params preset=jazz", " --target-lufs -12 --params targetLufs=-12",
-          " --target-platform club --params target_platform=club", " --params notAKey=1",
-          " --params preset=3", " --params targetPlatform=2"}) {
+         {" --preset classical --params preset=classical",
+          " --target-lufs -12 --params targetLufs=-12",
+          " --target-platform club --params target_platform=club", " --params novalue"}) {
+      CAPTURE(extra);
+      auto [code, output] =
+          exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json");
+      REQUIRE(code == 2);
+    }
+  }
+
+  SECTION("mastering-suggest refuses an unknown key and an index") {
+    for (const std::string extra :
+         {" --params notAKey=1", " --params preset=3", " --params targetPlatform=2"}) {
       CAPTURE(extra);
       auto [code, output] =
           exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json");
@@ -335,8 +345,9 @@ TEST_CASE("CLI named mastering processors and pair analyses", "[cli][mastering]"
   SECTION("rejects malformed parameter entries") {
     auto [code, output] = exec_command(CLI + " mastering-processor " + TEST_WAV +
                                        " --processor dynamics.compressor --params ratio-2 -q");
-    REQUIRE(code != 0);
-    REQUIRE_THAT(output, ContainsSubstring("expected key=value"));
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("argument --params: must be a comma-separated list "
+                                           "of key=value entries"));
   }
 
   SECTION("runs unified equalizer shortcut") {
@@ -369,7 +380,7 @@ TEST_CASE("CLI named mastering processors and pair analyses", "[cli][mastering]"
     auto [params_code, params_output] = exec_command(
         CLI + " eq " + TEST_WAV +
         " --params band0.enabled=1 --auto-threshold --sidechain-freq-hz 1000 --sidechain-q 0.7 -q");
-    REQUIRE(params_code == 3);
+    REQUIRE(params_code == 2);
     REQUIRE_THAT(params_output,
                  ContainsSubstring("--auto-threshold cannot be combined with --params"));
   }
@@ -509,7 +520,7 @@ TEST_CASE("CLI mastering --params keys the processor does not read", "[cli][mast
   const std::string eq_out = unique_temp_path("_eq_params.wav");
   auto [code, output] =
       exec_command(CLI + " eq " + TEST_WAV + " --params band0.bogusKey=42 -o " + eq_out + " -q");
-  REQUIRE(code == 3);
+  REQUIRE(code == 2);
   REQUIRE_THAT(output, ContainsSubstring("unknown --params key for eq.equalizer"));
   REQUIRE_THAT(output, ContainsSubstring("band0.bogusKey"));
 
@@ -522,9 +533,43 @@ TEST_CASE("CLI mastering --params keys the processor does not read", "[cli][mast
   auto [processor_code, processor_output] =
       exec_command(CLI + " mastering-processor " + TEST_WAV +
                    " --processor dynamics.compressor --params bogusKey=1 -q");
-  REQUIRE(processor_code == 3);
+  REQUIRE(processor_code == 2);
   REQUIRE_THAT(processor_output, ContainsSubstring("unknown --params key"));
   std::remove(eq_out.c_str());
+}
+
+TEST_CASE("CLI mastering and repair refuse an unknown chain key before the read",
+          "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
+  for (const std::string& command :
+       {"mastering " + TEST_WAV + " --preset pop --params bogus.x=1",
+        "repair " + TEST_WAV + " -o x.wav --params repair.bogus.x=1",
+        "repair " + TEST_WAV + " -o x.wav --stages declip --params repair.bogus.x=1"}) {
+    CAPTURE(command);
+    auto [code, output] = exec_command(CLI + " " + command + " 2>&1");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("unknown key params."));
+  }
+}
+
+TEST_CASE("CLI mastering family refuses an unknown catalog name before the read",
+          "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
+  const std::string missing = "/nonexistent-reference.wav";
+  for (const std::string& command :
+       {"mastering " + TEST_WAV + " --preset nosuch",
+        "repair " + TEST_WAV + " -o x.wav --preset nosuch",
+        "mastering-suggest " + TEST_WAV + " --preset nosuch",
+        "mastering-processor " + TEST_WAV + " --processor nosuch",
+        "mastering-pair-processor " + TEST_WAV + " --reference " + missing + " --processor nosuch",
+        "mastering-pair-analyze " + TEST_WAV + " --reference " + missing + " --analysis nosuch",
+        "mastering-stereo-analyze " + TEST_WAV + " --reference " + missing +
+            " --analysis nosuch"}) {
+    CAPTURE(command);
+    auto [code, output] = exec_command(CLI + " " + command + " 2>&1");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(": must be one of "));
+  }
 }
 
 #ifdef SONARE_WITH_MASTERING
@@ -687,7 +732,7 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a numb
   auto [number_code, number_output] =
       exec_command(run + " --preset pop -o " + unique_temp_path("_enum_by_number.wav") +
                    " --params repair.denoise.enabled=1,repair.denoise.noiseEstimator=1 -q 2>&1");
-  CHECK(number_code == 5);
+  CHECK(number_code == 2);
   CHECK_THAT(number_output,
              ContainsSubstring(
                  "Error: params.repair.denoise.noiseEstimator must be one of quantile, mcra, "
@@ -716,7 +761,7 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a numb
   // A name on a number-valued key is refused as a token the key does not take.
   auto [number_key_code, number_key_output] =
       exec_command(run + " --preset pop --params loudness.targetLufs=loud -q 2>&1");
-  CHECK(number_key_code == 5);
+  CHECK(number_key_code == 2);
   CHECK_THAT(
       number_key_output,
       ContainsSubstring("Error: params.loudness.targetLufs must be a number or a boolean\n"));
@@ -1654,5 +1699,57 @@ TEST_CASE("CLI text and HRTF readers refuse an input that outgrows the byte cap"
 #endif
 
   std::remove(fifo.c_str());
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_MIXING_ASSISTANT)
+TEST_CASE("CLI mixer commands refuse malformed inputs and params from argv",
+          "[cli][argument-contract][mixing]") {
+  // The input does not exist: a refusal reached only after the read would exit 4.
+  const std::string missing = "/nonexistent/argv-refusal-input.wav";
+  const std::string out = unique_temp_path("_mix_refusal.wav");
+  struct Row {
+    std::string argv;
+    std::string text;
+  };
+  const std::vector<Row> rows = {
+      {"suggest-mix", "suggest-mix requires at least one --input"},
+      {"suggest-mix --input =x", "--input track id must not be empty: =x"},
+      {"suggest-mix --input a=", "--input requires a file path: a="},
+      {"suggest-mix --input " + missing + " --params novalue",
+       "invalid parameter entry: 'novalue' (expected key=value)"},
+      {"suggest-mix --input " + missing + " --params tempoBpm=abc",
+       "invalid numeric value for parameter 'tempoBpm'"},
+      {"suggest-mix --input " + missing + " --params enable_eq=1",
+       "assistant param enable_eq is an earlier spelling; write enableEq"},
+      {"suggest-mix --input " + missing + " --params nosuchkey=1",
+       "unknown key nosuchkey (expected "},
+      {"suggest-mix --input " + missing + " --params tempoBpm=100 --tempo-bpm 120",
+       "--tempo-bpm and --params tempoBpm= set the same value"},
+      {"mix --preset vocalReverbSend --input =x -o " + out,
+       "--input strip id must not be empty: =x"},
+      {"mix --preset vocalReverbSend --input a= -o " + out, "--input requires a file path: a="},
+      {"mix --preset vocalReverbSend --sample-rate 100",
+       "argument --sample-rate: must be an integer in [8000, 384000]"},
+  };
+  for (const Row& row : rows) {
+    const auto [code, output] = exec_command(CLI + " " + row.argv + " -q");
+    INFO(row.argv << ": " << output);
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(row.text));
+  }
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING_ASSISTANT)
+TEST_CASE("CLI suggest-mix derives a bare path's id at the platform separator", "[cli][mixing]") {
+  // A backslash is an ordinary file-name character on POSIX, so it stays in the id.
+  const std::string track = unique_temp_path("a\\b.wav");
+  create_test_wav(track, 1.0f, 220.0f);
+  const auto [code, output] = exec_command(CLI + " suggest-mix --input '" + track + "'");
+  INFO(output);
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, ContainsSubstring("a\\\\b\""));
+  std::remove(track.c_str());
 }
 #endif

@@ -18,11 +18,13 @@ from ._cli_common import (
     _audio_array,
     _catalog_token,
     _emit_effect_result,
+    _find_cli_token,
     _load_channels_or_downmix,
     _load_voice_preset_pack,
     _mean_abs,
     _resample,
     _strict_json_dumps,
+    _voice_set_refusal,
     _write_wav,
 )
 from ._cli_common import (
@@ -79,7 +81,80 @@ from ._cli_options import (
     _finite_float,
     _given,
 )
+from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._effects_level import _DEFAULT_NORMALIZE_TARGET_DB
+
+
+def _hpss_refusal(args: argparse.Namespace) -> str | None:
+    modes = ("harmonic_only", "percussive_only", "with_residual")
+    if sum(bool(getattr(args, name, False)) for name in modes) > 1:
+        return (
+            "hpss output modes are mutually exclusive: choose one of --harmonic-only, "
+            "--percussive-only, or --with-residual"
+        )
+    return None
+
+
+def _trim_silence_refusal(args: argparse.Namespace) -> str | None:
+    if (
+        getattr(args, "threshold_db", None) is not None
+        and getattr(args, "top_db", None) is not None
+    ):
+        return "--threshold-db and --top-db are mutually exclusive"
+    return None
+
+
+def _builtin_voice_preset_refusal(value: str) -> str | None:
+    from . import realtime_voice_changer_preset_names
+
+    names = realtime_voice_changer_preset_names()
+    if _find_cli_token(value, names) is not None:
+        return None
+    return "argument --preset: must be one of " + ", ".join(names)
+
+
+def _voice_change_refusal(args: argparse.Namespace) -> str | None:
+    preset = getattr(args, "preset", None)
+    preset_json = getattr(args, "preset_json", None) or None
+    preset_pack = getattr(args, "preset_pack", None) or None
+    selected = preset is not None or preset_json is not None
+    if preset is not None and preset_json is not None:
+        return (
+            "voice-change preset selectors are mutually exclusive: choose one of --preset, "
+            "--preset-json, or --preset-pack"
+        )
+    if preset_pack and preset_json:
+        return "--preset-pack and --preset-json are mutually exclusive"
+    # A pack names the file, --preset the entry inside it; reported ahead of the rules below.
+    if preset_pack and preset is None:
+        return "--preset-pack requires --preset to select an entry"
+    # The default mode is a no-op, so only an explicit absolute request conflicts with a preset.
+    if selected and (
+        getattr(args, "pitch_semitones", None) is not None
+        or getattr(args, "formant_factor", None) is not None
+        or (getattr(args, "formant_mode", None) or "relative") != "relative"
+    ):
+        return (
+            "--pitch-semitones/--formant-factor/--formant-mode cannot be combined with a "
+            "realtime preset"
+        )
+    assignments = getattr(args, "set", None) or []
+    if assignments and not selected:
+        return "--set requires --preset, --preset-json, or --preset-pack"
+    if preset is not None and not preset_pack:
+        refusal = _builtin_voice_preset_refusal(preset)
+        if refusal is not None:
+            return refusal
+    return _voice_set_refusal(assignments)
+
+
+def _voice_preset_refusal(args: argparse.Namespace) -> str | None:
+    preset = getattr(args, "preset", None)
+    return None if preset is None else _builtin_voice_preset_refusal(preset)
+
+
+def _voice_preset_validate_refusal(args: argparse.Namespace) -> str | None:
+    return _voice_set_refusal(getattr(args, "set", None))
 
 
 def cmd_hpss(args: argparse.Namespace) -> int:
@@ -90,8 +165,6 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         for name in ("harmonic_only", "percussive_only", "with_residual")
         if bool(getattr(args, name, False))
     ]
-    if len(modes) > 1:
-        raise ValueError("hpss output modes are mutually exclusive: " + ", ".join(modes))
 
     # A setting the caller left out is not passed, so the library chooses it.
     separation = {
@@ -301,8 +374,6 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     threshold_db = getattr(args, "threshold_db", None)
     top_db = getattr(args, "top_db", None)
-    if threshold_db is not None and top_db is not None:
-        raise ValueError("--threshold-db and --top-db are mutually exclusive")
     geometry = _given(args, frame_length="n_fft", hop_length="hop_length")
     facade: Any
     extra: dict[str, Any]
@@ -469,27 +540,8 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
     preset_json = raw_preset_json if isinstance(raw_preset_json, str) and raw_preset_json else None
     preset_pack = raw_preset_pack if isinstance(raw_preset_pack, str) and raw_preset_pack else None
     assignments = list(getattr(args, "set", None) or [])
-    selectors = [
-        (name, value)
-        for name, value in (
-            ("--preset", preset_id),
-            ("--preset-json", preset_json),
-        )
-        if value is not None
-    ]
-    if len(selectors) > 1:
-        raise ValueError(
-            "voice-change preset selectors are mutually exclusive: "
-            + ", ".join(name for name, _ in selectors)
-        )
-    if preset_pack and preset_json:
-        raise ValueError("--preset-pack and --preset-json are mutually exclusive")
-    # A pack names the file, --preset names the entry inside it, so the pair is
-    # one selector. This check precedes the ones below so that a pack without an
-    # entry reports the missing --preset rather than a downstream rule that
-    # reads as if no selector had been given at all.
-    if preset_pack and preset_id is None:
-        raise ValueError("--preset-pack requires --preset to select an entry")
+    # The selector relations are _voice_change_refusal's, decided before the input is read.
+    selectors = [value for value in (preset_id, preset_json) if value is not None]
     pitch_semitones = getattr(args, "pitch_semitones", None)
     formant_factor = getattr(args, "formant_factor", None)
     raw_formant_mode = getattr(args, "formant_mode", None) or "relative"
@@ -497,16 +549,6 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         "absolute" if raw_formant_mode == "absolute" else "relative"
     )
     preset_source = bool(selectors or preset_pack)
-    # The default mode is a no-op, so only an explicit absolute request conflicts with a preset.
-    if preset_source and (
-        pitch_semitones is not None or formant_factor is not None or formant_mode != "relative"
-    ):
-        raise ValueError(
-            "--pitch-semitones/--formant-factor/--formant-mode cannot be combined with a "
-            "realtime preset"
-        )
-    if assignments and not preset_source:
-        raise ValueError("--set requires --preset, --preset-json, or --preset-pack")
 
     samples, sr = _load_audio(args.file)
     input_length = len(samples)
@@ -673,15 +715,30 @@ def register_effects_parsers(
         help="Separate into NMF components that keep the original phase",
     )
     # The hop is derived from the FFT size, so this command states its own geometry.
-    stems_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
-    stems_p.add_argument(
-        "--hop-length", type=_c_int, default=None, help="Hop length (default: n_fft/4)"
+    _cli_domain(
+        stems_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"),
+        minimum=1,
     )
-    stems_p.add_argument(
-        "--n-components", type=_c_int, default=None, help="Number of NMF components (default: 4)"
+    _cli_domain(
+        stems_p.add_argument(
+            "--hop-length", type=_c_int, default=None, help="Hop length (default: n_fft/4)"
+        ),
+        minimum=1,
     )
-    stems_p.add_argument(
-        "--n-iter", type=_c_int, default=None, help="NMF update iterations (default: 100)"
+    _cli_domain(
+        stems_p.add_argument(
+            "--n-components",
+            type=_c_int,
+            default=None,
+            help="Number of NMF components (default: 4)",
+        ),
+        minimum=1,
+    )
+    _cli_domain(
+        stems_p.add_argument(
+            "--n-iter", type=_c_int, default=None, help="NMF update iterations (default: 100)"
+        ),
+        minimum=1,
     )
     stems_p.add_argument(
         "--beta",
@@ -697,11 +754,14 @@ def register_effects_parsers(
         ),
         choices=("random", "nndsvd"),
     )
-    stems_p.add_argument(
-        "--mask-power",
-        type=_finite_float,
-        default=None,
-        help="Soft-mask exponent, >= 1; 2 is the Wiener-style power ratio (default: 1.0)",
+    _cli_domain(
+        stems_p.add_argument(
+            "--mask-power",
+            type=_finite_float,
+            default=None,
+            help="Soft-mask exponent, >= 1; 2 is the Wiener-style power ratio (default: 1.0)",
+        ),
+        minimum=1.0,
     )
 
     register_note_edit_parsers(sub, shared)
@@ -801,11 +861,15 @@ def register_effects_parsers(
     resample_p = sub.add_parser(
         "resample", parents=[common], help="Resample audio to a target sample rate"
     )
-    resample_p.add_argument(
-        "--target-sample-rate",
-        dest="target_sample_rate",
-        type=_c_int,
-        help="Target sample rate in Hz",
+    _cli_domain(
+        resample_p.add_argument(
+            "--target-sample-rate",
+            dest="target_sample_rate",
+            type=_c_int,
+            help="Target sample rate in Hz",
+        ),
+        minimum=_MIN_GENERATOR_SAMPLE_RATE,
+        maximum=_MAX_GENERATOR_SAMPLE_RATE,
     )
     voice_change_p = sub.add_parser(
         "voice-change", parents=[common], help="Apply a voice-change effect"

@@ -101,15 +101,15 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"id\":\"hardTune\""));
 
     auto [kebab_code, kebab] = exec_command(CLI + " voice-preset --preset hard-tune");
-    REQUIRE(kebab_code == 3);
-    REQUIRE_THAT(kebab, ContainsSubstring("unknown realtime voice changer preset"));
+    REQUIRE(kebab_code == 2);
+    REQUIRE_THAT(kebab, ContainsSubstring("argument --preset: must be one of neutralMonitor"));
   }
 
   SECTION("voice-change preset rejects simple knob conflicts") {
     auto [code, output] = exec_command(
         CLI + " voice-change --preset neutralMonitor --pitch-semitones 5 --formant-factor 1.1 " +
         TEST_WAV + " -o " + TEST_OUT + " -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("cannot be combined with a realtime preset"));
   }
 
@@ -129,7 +129,7 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     auto [code, output] =
         exec_command(CLI + " voice-change --preset-pack " + pack + " --set dsp.outputGainDb=-2 " +
                      TEST_WAV + " -o " + TEST_OUT + " -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("--preset-pack requires --preset"));
   }
 
@@ -621,7 +621,7 @@ TEST_CASE("CLI project command group", "[cli]") {
 
     auto [cc, co] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                  " --frames 256 --synth saw-lead -q");
-    REQUIRE(cc == 3);
+    REQUIRE(cc == 2);
     REQUIRE_THAT(co, ContainsSubstring("unknown synth preset 'saw-lead'"));
 
     std::remove(proj.c_str());
@@ -1027,11 +1027,11 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
     }
   }
 
-  SECTION("a reattack ratio between 0 and 1 is an invalid parameter") {
+  SECTION("a reattack ratio between 0 and 1 is a usage error") {
     for (const char* bad : {"--reattack-ratio 0.5", "--reattack-ratio -1"}) {
       auto [code, output] = exec_command(base + " " + bad);
       INFO(bad << ": " << output);
-      REQUIRE(code == 3);
+      REQUIRE(code == 2);
     }
   }
 
@@ -1062,7 +1062,7 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
     }
     auto [both_code, both_output] = exec_command(base + " --min-note-division 32 --min-note-ms 30");
     INFO(both_output);
-    REQUIRE(both_code == 3);
+    REQUIRE(both_code == 2);
   }
 
   SECTION("the monophonic model is accepted by name and an unknown name is refused") {
@@ -1103,3 +1103,38 @@ TEST_CASE("CLI pitch-correct-timevarying holds the pYIN frame as a duration",
     REQUIRE(f.good());
   }
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("CLI project commands refuse synth, audio bindings and outputs from argv",
+          "[cli][argument-contract][project]") {
+  // The project does not exist: a refusal reached only after the read would exit 4.
+  const std::string missing = "/nonexistent/argv-refusal-project.json";
+  const std::string out = unique_temp_path("_project_refusal.wav");
+  struct Row {
+    std::string argv;
+    std::string text;
+  };
+  const std::vector<Row> rows = {
+      {"project bounce " + missing + " -o " + out + " --synth nosuchsynth",
+       "argument --synth: unknown synth preset 'nosuchsynth'"},
+      {"midi-render " + missing + " -o " + out + " --synth nosuchsynth",
+       "argument --synth: unknown synth preset 'nosuchsynth'"},
+      {"project bounce " + missing + " -o " + out + " --audio nofile",
+       "argument --audio: must be <source_id>=FILE"},
+      {"project bounce " + missing + " -o " + out + " --audio 0=a.wav",
+       "argument --audio: <source_id> must be an integer in [1, 4294967295]"},
+      {"project align-takes " + missing + " -o " + out + " --reference-source 1 --audio nofile",
+       "argument --audio: must be <source_id>=FILE"},
+      {"project new -o " + out + " --sample-rate 100",
+       "argument --sample-rate: must be an integer in [8000, 384000]"},
+      {"synthesize-rir -o " + out + " --sample-rate 100",
+       "argument --sample-rate: must be an integer in [8000, 384000]"},
+  };
+  for (const Row& row : rows) {
+    const auto [code, output] = exec_command(CLI + " " + row.argv + " -q");
+    INFO(row.argv << ": " << output);
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(row.text));
+  }
+}
+#endif

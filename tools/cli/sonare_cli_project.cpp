@@ -173,12 +173,6 @@ int cmd_project_synth_presets(const CliArgs& args) {
   return print_name_catalog(args, "presets", synth_preset_name_list());
 }
 
-std::vector<std::string> synth_preset_name_list() {
-  const char* joined = sonare_synth_preset_names();
-  return joined != nullptr && joined[0] != '\0' ? split_string(joined, '\n')
-                                                : std::vector<std::string>{};
-}
-
 // `project new -o out.json` — create an empty project and serialize it to disk.
 // The registry declares `-o` required for this leaf, so the missing-output case
 // is refused before dispatch and is not re-checked here.

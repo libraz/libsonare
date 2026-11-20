@@ -346,8 +346,11 @@ def register_advanced_parsers(
     )
     # Dynamics windows the loudness series but runs no FFT, so it takes the hop
     # control without the matching --n-fft.
-    dynamics_p.add_argument(
-        "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
+    _cli_domain(
+        dynamics_p.add_argument(
+            "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
+        ),
+        minimum=1,
     )
     sub.add_parser("timbre", parents=[mel_options], help="Analyze timbre/spectral shape")
     lufs_p = sub.add_parser("lufs", parents=[stdout_options], help="Compute LUFS loudness")

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 
 #include "analysis/key_profiles.h"
@@ -156,6 +157,102 @@ int parse_int_strict(const std::string& option, const std::string& value) {
   return parse_int_text(option_subject(option), value);
 }
 
+std::string number_list_refusal(const std::string& option, const std::string& text, bool integral,
+                                size_t* count) {
+  size_t read = 0;
+  size_t begin = 0;
+  while (begin <= text.size()) {
+    size_t end = text.find(',', begin);
+    if (end == std::string::npos) end = text.size();
+    const std::string item = text.substr(begin, end - begin);
+    begin = end + 1;
+    if (item.empty()) continue;
+    try {
+      if (integral) {
+        parse_int_strict(option, item);
+      } else {
+        parse_float_strict(option, item);
+      }
+    } catch (const std::invalid_argument&) {
+      read = 0;
+      break;
+    }
+    ++read;
+  }
+  if (count != nullptr) *count = read;
+  if (read > 0) return {};
+  return option_subject(option) + " must be a comma-separated list of finite numbers";
+}
+
+std::string voice_set_refusal(const std::vector<std::string>& assignments) {
+  for (const auto& assignment : assignments) {
+    if (assignment.empty()) continue;
+    const auto eq = assignment.find('=');
+    if (eq == std::string::npos || eq == 0) return "invalid --set assignment: " + assignment;
+    if (assignment.find_first_not_of('.') >= eq) return "empty --set path";
+  }
+  return {};
+}
+
+// The flag literals the parser's own `--flag=false` form accepts, so one spelling does not mean
+// two things depending on where it is written.
+static bool parse_edit_flag(const std::string& field, const std::string& value) {
+  std::string lowered = value;
+  std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on") return true;
+  if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off") return false;
+  throw std::invalid_argument("argument --edit: " + field +
+                              " must be one of true, 1, yes, on, false, 0, no, off");
+}
+
+// One --edit occurrence is one NOTE.FIELD=VALUE assignment: the dot path and the single
+// assignment per occurrence are --set's grammar, with the note index as the path's first element.
+PolyphonicEdit parse_polyphonic_edit(const std::string& assignment) {
+  const auto equals = assignment.find('=');
+  if (equals == std::string::npos || equals == 0) {
+    throw std::invalid_argument("argument --edit: must be NOTE.FIELD=VALUE");
+  }
+  const std::string path = assignment.substr(0, equals);
+  const std::string value = assignment.substr(equals + 1);
+  const auto dot = path.rfind('.');
+  if (dot == std::string::npos || dot == 0 || dot + 1 == path.size()) {
+    throw std::invalid_argument("argument --edit: must be NOTE.FIELD=VALUE");
+  }
+  PolyphonicEdit edit;
+  edit.note = parse_int_text("argument --edit: NOTE", path.substr(0, dot));
+  edit.field = path.substr(dot + 1);
+  const std::string& field = edit.field;
+  if (field == "time_offset_samples") {
+    // An int is the whole reachable range: the chain refuses audio longer than an int can
+    // index, so a wider offset only ever moves a note off the end.
+    edit.integer = parse_int_text("argument --edit: time_offset_samples", value);
+  } else if (field == "muted") {
+    edit.flag = parse_edit_flag(field, value);
+  } else if (field == "pitch_shift_semitones" || field == "gain_db" ||
+             field == "time_stretch_ratio" || field == "formant_shift_semitones" ||
+             field == "vibrato_depth_change" || field == "drift_change") {
+    edit.number = parse_float_text("argument --edit: " + field, value);
+  } else {
+    // The amplitude envelope is the one edit field missing: it is a curve, and nothing on a
+    // command line states one.
+    throw std::invalid_argument(
+        "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db, "
+        "time_offset_samples, time_stretch_ratio, formant_shift_semitones, "
+        "vibrato_depth_change, drift_change, muted");
+  }
+  return edit;
+}
+
+std::string polyphonic_edit_refusal(const std::vector<std::string>& assignments) {
+  try {
+    for (const auto& assignment : assignments) parse_polyphonic_edit(assignment);
+  } catch (const std::invalid_argument& refusal) {
+    return refusal.what();
+  }
+  return {};
+}
+
 std::optional<std::string> find_cli_token(std::string_view value,
                                           const std::vector<std::string>& tokens) {
   const auto fold = [](char c) {
@@ -210,6 +307,27 @@ sonare::Mode parse_mode_option(const std::string& value) {
     if (key == entry.name) return entry.mode;
   }
   throw std::invalid_argument("invalid mode: " + value);
+}
+
+std::vector<int> parse_meter_numerators(const std::string& text) {
+  std::vector<int> numerators;
+  std::stringstream stream(text);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    const size_t begin = item.find_first_not_of(" \t");
+    if (begin == std::string::npos) continue;
+    const size_t end = item.find_last_not_of(" \t");
+    const std::string trimmed = item.substr(begin, end - begin + 1);
+    try {
+      size_t consumed = 0;
+      const int numerator = std::stoi(trimmed, &consumed);
+      if (consumed != trimmed.size()) throw std::invalid_argument(trimmed);
+      numerators.push_back(numerator);
+    } catch (const std::exception&) {
+      throw std::invalid_argument("invalid meter numerator: " + trimmed);
+    }
+  }
+  return numerators;
 }
 
 namespace {

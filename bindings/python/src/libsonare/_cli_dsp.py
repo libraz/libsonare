@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from ._cli_common import (
@@ -22,6 +22,7 @@ from ._cli_options import (
     _effective,
     _finite_float,
     _given,
+    _positive_finite_float,
 )
 from ._effects_level import BiquadFilterType
 
@@ -106,10 +107,101 @@ def cmd_filter(args: argparse.Namespace) -> int:
     )
 
 
+def _emphasis(args: argparse.Namespace, apply: Callable[..., Any]) -> int:
+    samples, sr = _load_audio(args.file)
+    coef = _effective(args, apply, "coef")
+    result = apply(samples, **_given(args, "coef"))
+    _write_wav(args.output, result, sr)
+    if args.json:
+        print(_strict_json_dumps({"output": args.output, "coef": coef, "samples": len(result)}))
+    else:
+        print(f"Saved to {args.output}", file=sys.stderr)
+    return 0
+
+
+def cmd_preemphasis(args: argparse.Namespace) -> int:
+    from . import preemphasis
+
+    return _emphasis(args, preemphasis)
+
+
+def cmd_deemphasis(args: argparse.Namespace) -> int:
+    from . import deemphasis
+
+    return _emphasis(args, deemphasis)
+
+
+def _mel_geometry(args: argparse.Namespace) -> dict[str, Any]:
+    """The mel analysis geometry, with the hop pinned to the analysis default the inverse shares."""
+    from . import mel_spectrogram
+
+    return {
+        "n_fft": _effective(args, mel_spectrogram, "n_fft"),
+        "hop_length": _effective(args, mel_spectrogram, "hop_length"),
+        "n_mels": _effective(args, mel_spectrogram, "n_mels"),
+    }
+
+
+def cmd_mel_to_audio(args: argparse.Namespace) -> int:
+    from . import mel_spectrogram, mel_to_audio
+
+    samples, sr = _load_audio(args.file)
+    geometry = _mel_geometry(args)
+    edges = _given(args, "fmin_hz", "fmax_hz")
+    mel = mel_spectrogram(samples, sr, **geometry, **edges)
+    n_iter = _effective(args, mel_to_audio, "n_iter")
+    result = mel_to_audio(
+        mel.power,
+        sr=sr,
+        n_fft=geometry["n_fft"],
+        hop_length=geometry["hop_length"],
+        **_given(args, n_iter="n_iter", fmin="fmin_hz", fmax="fmax_hz"),
+    )
+    n_mels, n_frames = mel.power.shape
+    _write_wav(args.output, result, sr)
+    return _report_inverse(
+        args, len(result) / sr, {"n_mels": n_mels, "n_frames": n_frames, "n_iter": n_iter}
+    )
+
+
+def cmd_mfcc_to_audio(args: argparse.Namespace) -> int:
+    from . import mfcc, mfcc_to_audio
+
+    samples, sr = _load_audio(args.file)
+    geometry = _mel_geometry(args)
+    n_mfcc = _effective(args, mfcc, "n_mfcc")
+    n_iter = _effective(args, mfcc_to_audio, "n_iter")
+    edges = _given(args, fmin="fmin_hz", fmax="fmax_hz")
+    coefficients = mfcc(samples, sr, **geometry, n_mfcc=n_mfcc, **edges).coefficients
+    result = mfcc_to_audio(
+        coefficients,
+        n_mels=geometry["n_mels"],
+        sr=sr,
+        n_fft=geometry["n_fft"],
+        hop_length=geometry["hop_length"],
+        n_iter=n_iter,
+        **edges,
+    )
+    _write_wav(args.output, result, sr)
+    return _report_inverse(
+        args,
+        len(result) / sr,
+        {"n_mfcc": n_mfcc, "n_frames": coefficients.shape[1], "n_iter": n_iter},
+    )
+
+
+def _report_inverse(args: argparse.Namespace, duration: float, fields: dict[str, Any]) -> int:
+    if args.json:
+        print(_strict_json_dumps({"output": args.output, **fields, "duration": duration}))
+    else:
+        print(f"Saved to {args.output}", file=sys.stderr)
+    return 0
+
+
 def register_dsp_parsers(
     sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
 ) -> None:
-    """Register the gain, fade and filter commands."""
+    """Register the gain, fade, filter, emphasis and mel/MFCC inversion commands."""
     common = shared.common
 
     gain_p = sub.add_parser("gain", parents=[common], help="Apply gain in dB")
@@ -179,3 +271,55 @@ def register_dsp_parsers(
         action="store_true",
         help="Run the filter forward and backward, which cancels the phase shift",
     )
+
+    for name, help_text in (
+        ("preemphasis", "Apply pre-emphasis filtering"),
+        ("deemphasis", "Apply de-emphasis filtering"),
+    ):
+        emphasis_p = sub.add_parser(name, parents=[common], help=help_text)
+        emphasis_p.add_argument(
+            "--coef", type=_finite_float, default=None, help="Filter coefficient (default: 0.97)"
+        )
+
+    for name, help_text in (
+        ("mel-to-audio", "Reconstruct audio from a mel spectrogram"),
+        ("mfcc-to-audio", "Reconstruct audio from MFCC"),
+    ):
+        inverse_p = sub.add_parser(name, parents=[common], help=help_text)
+        if name == "mfcc-to-audio":
+            _cli_domain(
+                inverse_p.add_argument(
+                    "--n-mfcc", type=_c_int, default=None, help="MFCC count (default: 20)"
+                ),
+                minimum=1,
+            )
+        _cli_domain(
+            inverse_p.add_argument(
+                "--n-iter", type=_c_int, default=None, help="Griffin-Lim iterations (default: 32)"
+            ),
+            minimum=1,
+        )
+        inverse_p.add_argument(
+            "--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"
+        )
+        inverse_p.add_argument(
+            "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
+        )
+        inverse_p.add_argument(
+            "--n-mels", type=_c_int, default=None, help="Number of mel bands (default: 128)"
+        )
+        _cli_domain(
+            inverse_p.add_argument(
+                "--fmin-hz",
+                type=_finite_float,
+                default=None,
+                help="Lowest mel band frequency in Hz (default: 0.0)",
+            ),
+            minimum=0,
+        )
+        inverse_p.add_argument(
+            "--fmax-hz",
+            type=_positive_finite_float,
+            default=None,
+            help="Highest mel band frequency in Hz (default: the Nyquist frequency)",
+        )

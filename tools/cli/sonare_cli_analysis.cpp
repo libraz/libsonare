@@ -1,4 +1,5 @@
 #include <limits>
+#include <memory>
 
 #include "sonare_cli.h"
 
@@ -25,6 +26,18 @@ const char* canonical_section_type(SectionType type) {
   }
   return "unknown";
 }
+
+// The C and C++ section enums share one ordering; the asserts keep the cast honest.
+static_assert(static_cast<int>(SectionType::Intro) == SONARE_SECTION_INTRO);
+static_assert(static_cast<int>(SectionType::Verse) == SONARE_SECTION_VERSE);
+static_assert(static_cast<int>(SectionType::PreChorus) == SONARE_SECTION_PRE_CHORUS);
+static_assert(static_cast<int>(SectionType::Chorus) == SONARE_SECTION_CHORUS);
+static_assert(static_cast<int>(SectionType::Bridge) == SONARE_SECTION_BRIDGE);
+static_assert(static_cast<int>(SectionType::Instrumental) == SONARE_SECTION_INSTRUMENTAL);
+static_assert(static_cast<int>(SectionType::Outro) == SONARE_SECTION_OUTRO);
+static_assert(static_cast<int>(SectionType::Unknown) == SONARE_SECTION_UNKNOWN);
+
+SectionType section_type_from_c(SonareSectionType type) { return static_cast<SectionType>(type); }
 
 /// Writes one named summary block for a per-frame series, in the shape both
 /// CLIs publish for an array statistic.
@@ -58,9 +71,7 @@ int cmd_bpm(const CliArgs& args, const Audio& audio) {
 
 int cmd_key(const CliArgs& args, const Audio& audio) {
   KeyConfig config;
-  // The analyzer never reads the FFT size without --hpss, so a zero ran here while the C ABI the
-  // other surfaces call refuses it; the range read reports that same invalid-parameter class.
-  config.n_fft = args.get_int_in_range("n-fft", 1, std::numeric_limits<int>::max(), config.n_fft);
+  config.n_fft = args.get_int("n-fft", config.n_fft);
   config.hop_length = args.get_int("hop-length", config.hop_length);
   config.use_hpss = args.has("hpss");
   config.loudness_weighted = args.has("loudness-weighted");
@@ -198,8 +209,7 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
   config.smoothing_window = args.get_float("smoothing-window", config.smoothing_window);
   config.threshold = args.get_float("threshold", config.threshold);
   config.use_triads_only = !args.has("with-seventh");
-  // CQT chroma never reads the FFT size, so a zero must be refused here as the C ABI refuses it.
-  config.n_fft = args.get_int_in_range("n-fft", 1, std::numeric_limits<int>::max(), config.n_fft);
+  config.n_fft = args.get_int("n-fft", config.n_fft);
   config.hop_length = args.get_int("hop-length", config.hop_length);
   config.use_beat_sync = !args.has("no-beat-sync");
   // The registry has already refused any value outside cqt, stft and nnls.
@@ -265,22 +275,35 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_sections(const CliArgs& args, const Audio& audio) {
-  SectionConfig config;
-  config.min_section_sec = args.get_float("min-duration-sec", config.min_section_sec);
-  config.boundary_threshold = args.get_float("threshold", config.boundary_threshold);
-  config.n_fft = args.get_int("n-fft", config.n_fft);
-  config.hop_length = args.get_int("hop-length", config.hop_length);
+  SonareSectionOptions options = sonare_section_options_default();
+  options.min_section_sec = args.get_float("min-duration-sec", options.min_section_sec);
+  options.threshold = args.get_float("threshold", options.threshold);
+  options.n_fft = args.get_int("n-fft", options.n_fft);
+  options.hop_length = args.get_int("hop-length", options.hop_length);
 
-  SectionAnalyzer analyzer(audio, config);
-  const auto& sections = analyzer.sections();
+  SonareSectionResult raw{};
+  const SonareError err =
+      sonare_analyze_sections(audio.data(), audio.size(), audio.sample_rate(), &options, &raw);
+  if (err != SONARE_OK) {
+    throw_c_failure(err, nullptr);
+  }
+  std::unique_ptr<SonareSectionResult, void (*)(SonareSectionResult*)> owned(
+      &raw, sonare_free_section_result);
+  const std::string form = raw.form != nullptr ? raw.form : "";
+  std::vector<Section> sections(raw.section_count);
+  for (size_t i = 0; i < raw.section_count; ++i) {
+    const SonareSection& c = raw.sections[i];
+    sections[i].type = section_type_from_c(c.type);
+    sections[i].start = c.start_sec;
+    sections[i].end = c.end_sec;
+    sections[i].energy_level = c.energy_level;
+    sections[i].confidence = c.confidence;
+    sections[i].group = c.group;
+  }
 
   if (args.json_output) {
     JsonBuilder json;
-    json.begin_object()
-        .kv("form", analyzer.form())
-        .kv("count", sections.size())
-        .key("sections")
-        .begin_array();
+    json.begin_object().kv("form", form).kv("count", sections.size()).key("sections").begin_array();
     for (const auto& s : sections) {
       json.begin_object()
           // The same canonical spelling `analyze` serializes. A consumer that
@@ -302,8 +325,8 @@ int cmd_sections(const CliArgs& args, const Audio& audio) {
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::yellow << "> Duration: " << std::fixed << std::setprecision(1)
               << audio.duration() << "s" << color::reset << "\n";
-    std::cout << "  " << color::blue << "> Structure: " << analyzer.form() << " ("
-              << sections.size() << " sections)" << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Structure: " << form << " (" << sections.size()
+              << " sections)" << color::reset << "\n";
     std::cout << "  " << color::blue << "> Section Details:" << color::reset << "\n";
     for (size_t i = 0; i < sections.size(); ++i) {
       const auto& s = sections[i];
@@ -364,12 +387,7 @@ int cmd_timbre(const CliArgs& args, const Audio& audio) {
 int cmd_dynamics(const CliArgs& args, const Audio& audio) {
   DynamicsConfig config;
   config.window_sec = args.get_float("window-sec", config.window_sec);
-  // The C ABI the other surfaces call refuses a non-positive hop; reaching the
-  // analyzer directly skipped that and silently clamped to 1, so the same
-  // argument ran here and was rejected everywhere else. Rejecting through
-  // get_int_in_range reports the invalid-parameter class the C ABI returns.
-  config.hop_length =
-      args.get_int_in_range("hop-length", 1, std::numeric_limits<int>::max(), config.hop_length);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
 
   DynamicsAnalyzer analyzer(audio, config);
   const Dynamics& d = analyzer.dynamics();
@@ -551,32 +569,9 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
   config.use_triads_only = !args.has("with-seventh");
   config.use_hpss = args.has("hpss");
   config.chroma_highpass_hz = args.get_float("chroma-high-pass-hz", config.chroma_highpass_hz);
-  // Only the shape is parsed here; which numerators are acceptable and how many
-  // is validated by the core, so a CLI list is rejected for the same reason a
-  // facade list is. An option that was not given leaves the core default in
-  // place; one given empty is passed on as the empty set, which the core rejects.
+  // Only the shape is parsed; the core holds which numerators are acceptable and how many.
   if (args.has("meter-candidates")) {
-    const std::string meter_candidates = args.get_string("meter-candidates");
-    std::vector<int> numerators;
-    std::stringstream stream(meter_candidates);
-    std::string item;
-    while (std::getline(stream, item, ',')) {
-      const size_t begin = item.find_first_not_of(" \t");
-      if (begin == std::string::npos) continue;
-      const size_t end = item.find_last_not_of(" \t");
-      const std::string trimmed = item.substr(begin, end - begin + 1);
-      try {
-        size_t consumed = 0;
-        const int numerator = std::stoi(trimmed, &consumed);
-        if (consumed != trimmed.size()) throw std::invalid_argument(trimmed);
-        numerators.push_back(numerator);
-      } catch (const std::exception&) {
-        std::cerr << color::red << "Error: invalid meter numerator: " << trimmed << color::reset
-                  << "\n";
-        return 3;
-      }
-    }
-    config.meter_candidate_numerators = std::move(numerators);
+    config.meter_candidate_numerators = parse_meter_numerators(args.get_string("meter-candidates"));
   }
   config.meter_denominator = args.get_int("meter-denominator", config.meter_denominator);
 

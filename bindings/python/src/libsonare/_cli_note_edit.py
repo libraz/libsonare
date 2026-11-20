@@ -309,12 +309,13 @@ def _parse_polyphonic_edit_bool(field: str, value: str) -> bool:
     raise ValueError(f"argument --edit: {field} must be one of true, 1, yes, on, false, 0, no, off")
 
 
-def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
-    """Apply one ``NOTE.FIELD=VALUE`` assignment in place, returning the note index.
+def _parse_polyphonic_edit(assignment: str) -> tuple[int, str, float | int | bool]:
+    """Read one ``NOTE.FIELD=VALUE`` assignment into (note index, field, typed value).
 
     One occurrence is one assignment, as ``--set`` does, with the note index as
     the dot path's first element: an edit addresses a note rather than a JSON
-    document, and nothing else about the spelling has to differ.
+    document, and nothing else about the spelling has to differ. What the
+    analysis found (the note count) is not decidable from the argument alone.
     """
     path, separator, value = assignment.partition("=")
     if not separator or not path:
@@ -323,27 +324,40 @@ def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
     if not dot or not index_text or not field:
         raise ValueError("argument --edit: must be NOTE.FIELD=VALUE")
     index = _parse_polyphonic_edit_int("NOTE", index_text)
-    if not edits:
-        raise ValueError("argument --edit: the analysis found no notes")
-    if index < 0 or index >= len(edits):
-        raise ValueError(f"argument --edit: NOTE must be an integer in [0, {len(edits) - 1}]")
-    edit = edits[index]
+    typed: float | int | bool
     if field == "time_offset_samples":
-        edit.time_offset_samples = _parse_polyphonic_edit_int(field, value)
+        typed = _parse_polyphonic_edit_int(field, value)
     elif field == "muted":
-        edit.muted = _parse_polyphonic_edit_bool(field, value)
+        typed = _parse_polyphonic_edit_bool(field, value)
     elif field in _POLYPHONIC_EDIT_FLOAT_FIELDS:
-        setattr(
-            edit,
-            _POLYPHONIC_EDIT_ATTRIBUTES.get(field, field),
-            _parse_polyphonic_edit_float(field, value),
-        )
+        typed = _parse_polyphonic_edit_float(field, value)
     else:
         # The accepted set is named at the refusal because the help carries no
         # per-field text, so this is the only place a caller can read it.
         raise ValueError(
             f"argument --edit: FIELD must be one of {', '.join(_POLYPHONIC_EDIT_FIELDS)}"
         )
+    return index, field, typed
+
+
+def _polyphonic_edit_refusal(args: argparse.Namespace) -> str | None:
+    """The first refusal among the ``--edit`` assignments, or None when each reads."""
+    for assignment in getattr(args, "edit", None) or ():
+        try:
+            _parse_polyphonic_edit(assignment)
+        except ValueError as exc:
+            return str(exc)
+    return None
+
+
+def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
+    """Apply one ``NOTE.FIELD=VALUE`` assignment in place, returning the note index."""
+    index, field, value = _parse_polyphonic_edit(assignment)
+    if not edits:
+        raise ValueError("argument --edit: the analysis found no notes")
+    if index < 0 or index >= len(edits):
+        raise ValueError(f"argument --edit: NOTE must be an integer in [0, {len(edits) - 1}]")
+    setattr(edits[index], _POLYPHONIC_EDIT_ATTRIBUTES.get(field, field), value)
     return index
 
 

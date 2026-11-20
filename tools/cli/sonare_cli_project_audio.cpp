@@ -152,27 +152,6 @@ std::vector<uint32_t> project_unresolved_audio_source_ids(const SonareProject* p
   return ids;
 }
 
-// Splits one `--audio <source_id>=FILE` assignment at the FIRST '=', so a path
-// containing one stays intact. A source is addressed by id alone: its URI is
-// unique too, but accepting either spelling would put two addresses on one
-// binding, and the id is what the unresolved-source report already names.
-void parse_audio_binding(const std::string& assignment, uint32_t* out_source_id,
-                         std::string* out_path) {
-  const size_t separator = assignment.find('=');
-  if (separator == 0 || separator == std::string::npos || separator + 1 >= assignment.size()) {
-    throw std::invalid_argument("argument --audio: must be <source_id>=FILE");
-  }
-  const long long source_id =
-      parse_int64_text("argument --audio: <source_id>", assignment.substr(0, separator));
-  if (source_id <= 0 || source_id > static_cast<long long>(UINT32_MAX)) {
-    throw std::invalid_argument(
-        "argument --audio: <source_id> " +
-        sonare::util::refusal::integer_range_predicate(1.0, static_cast<double>(UINT32_MAX)));
-  }
-  *out_source_id = static_cast<uint32_t>(source_id);
-  *out_path = assignment.substr(separator + 1);
-}
-
 // Decodes an audio file and registers its PCM against one audio source.
 SonareError bind_source_audio(SonareProject* project, uint32_t source_id, const std::string& path) {
   auto [interleaved, sample_rate, channels] = load_audio_interleaved(path);
@@ -306,14 +285,13 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
       // same if the routing is ever asked to yield.
       synth_binding.patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
     } else {
-      // The preset is named by its library id in any letter case; the library refuses an
-      // unknown one.
+      // The preset is named by its library id in any letter case; an unknown one was refused
+      // with the other command-line checks.
       const std::string preset = catalog_token(requested, synth_preset_name_list());
       const SonareError patch_error =
           sonare_synth_preset_patch(preset.c_str(), &synth_binding.patch);
       if (patch_error != SONARE_OK) {
-        std::cerr << color::red << "Error: unknown synth preset '" << requested << "'"
-                  << color::reset << "\n";
+        project_report_error("select synth preset '" + preset + "'", patch_error);
         return project_exit_code(patch_error);
       }
     }

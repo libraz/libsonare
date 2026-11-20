@@ -40,8 +40,11 @@ from ._cli_options import (
     _ContractArgumentParser,
     _finite_float,
     _library_catalog,
+    _NumericTextError,
+    _read_number_text,
     _tempo_bpm,
 )
+from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._result_records import _result_to_json_dict
 
 
@@ -54,13 +57,11 @@ def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
     rather than handed a number, and an integral value for an integer option is
     narrowed, since ``--params`` parses every value as a float.
     """
-    from .mixing_assistant import _INTEGER_PARAMS, _PARAM_KEYS
+    from .mixing_assistant import _INTEGER_PARAMS
 
     options: dict[str, Any] = {}
     for key, value in params.items():
         name = _json_key_to_snake_case(key)
-        if name not in _PARAM_KEYS:
-            raise ValueError(f"unknown suggest-mix param: {key}")
         if name.startswith("enable_"):
             options[name] = value != 0.0
         elif name in _INTEGER_PARAMS and value.is_integer():
@@ -68,6 +69,77 @@ def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
         else:
             options[name] = value
     return options
+
+
+def mix_input_refusal(entries: list[str]) -> str | None:
+    """The first malformed ``mix --input [ID=]WAV`` entry, or None; decided from argv alone."""
+    for entry in entries:
+        _, separator, path = entry.partition("=")
+        if separator and entry.startswith("="):
+            return f"--input strip id must not be empty: {entry}"
+        if not (path if separator else entry):
+            return f"--input requires a file path: {entry}"
+    return None
+
+
+def _earlier_spelling(key: str) -> str:
+    """The camelCase key a snake_case spelling of ``key`` stands for, as the library reads it."""
+    camel = ""
+    upper_next = False
+    for char in key:
+        if char == "_":
+            upper_next = True
+        elif upper_next and "a" <= char <= "z":
+            camel += char.upper()
+            upper_next = False
+        else:
+            camel += char
+            upper_next = False
+    return camel
+
+
+def suggest_mix_refusal(args: argparse.Namespace) -> str | None:
+    """The first refusal of ``suggest-mix``'s inputs and ``--params``, or None.
+
+    Everything here is decided from the command line alone, so it is refused before
+    any track is decoded; the wording is the native command's.
+    """
+    from .mixing_assistant import _PARAM_KEYS
+
+    if not args.input:
+        return "suggest-mix requires at least one --input"
+    for entry in args.input:
+        track_id, separator, path = entry.partition("=")
+        if not separator:
+            path = entry
+            track_id = os.path.splitext(os.path.basename(path))[0]
+        if not track_id:
+            return f"--input track id must not be empty: {entry}"
+        if not path:
+            return f"--input requires a file path: {entry}"
+    known = sorted(_PARAM_KEYS.values())
+    # One entry per comma, as the native reader splits: a trailing comma adds none.
+    items = args.params.split(",")
+    if items[-1] == "":
+        items.pop()
+    for item in items:
+        key, separator, text = item.partition("=")
+        if not separator or not key or not text:
+            return f"invalid parameter entry: '{item}' (expected key=value)"
+        try:
+            _read_number_text(text)
+        except _NumericTextError:
+            return f"invalid numeric value for parameter '{key}'"
+        camel = _earlier_spelling(key)
+        if "_" in key and camel in known:
+            return f"assistant param {key} is an earlier spelling; write {camel}"
+        if key not in known:
+            return f"unknown key {key} (expected {', '.join(known)})"
+    # The dedicated option and `--params tempoBpm=` reach one field, so naming both
+    # is a contradiction rather than a precedence question.
+    if args.tempo_bpm is not None and any(item.partition("=")[0] == "tempoBpm" for item in items):
+        return "--tempo-bpm and --params tempoBpm= set the same value"
+    return None
 
 
 def _mix_assistant_tracks(entries: list[str]) -> list[Any]:
@@ -90,10 +162,6 @@ def _mix_assistant_tracks(entries: list[str]) -> list[Any]:
             # Bare path: the file's own name is the id the scene addresses it by.
             path = entry
             track_id = os.path.splitext(os.path.basename(path))[0]
-        if not track_id:
-            raise ValueError(f"--input track id must not be empty: {entry}")
-        if not path:
-            raise ValueError(f"--input requires a file path: {entry}")
         planes, track_rate = _load_channels_or_downmix(path)
         tracks.append(
             MixAssistantTrack(
@@ -148,15 +216,9 @@ def _resolve_tempo_bpm(raw: str | float, entries: list[str]) -> tuple[float, lis
 def cmd_suggest_mix(args: argparse.Namespace) -> int:
     from . import mixing_assistant_suggest
 
-    if not args.input:
-        raise ValueError("suggest-mix requires at least one --input")
     tracks: list[Any] = []
     options = _mix_assistant_options(_parse_kv_params(args.params) if args.params else {})
     if args.tempo_bpm is not None:
-        # The dedicated option and `--params tempoBpm=` reach the same field, so
-        # naming both is a contradiction rather than a precedence question.
-        if "tempo_bpm" in options:
-            raise ValueError("--tempo-bpm and --params tempoBpm= set the same value")
         options["tempo_bpm"], tracks = _resolve_tempo_bpm(args.tempo_bpm, args.input)
     tracks += _mix_assistant_tracks(args.input[len(tracks) :])
     result = mixing_assistant_suggest(tracks, sample_rate=args.sample_rate, **options)
@@ -247,10 +309,6 @@ def _mix_strip_channels(
         if not separator:
             path = entry
             track_id = os.path.splitext(os.path.basename(path))[0]
-        elif not track_id:
-            raise ValueError(f"--input strip id must not be empty: {entry}")
-        if not path:
-            raise ValueError(f"--input requires a file path: {entry}")
 
         pair = _load_strip_pair(path, sample_rate)
 
@@ -609,7 +667,11 @@ def register_mixing_parsers(
             "instead, one per strip in scene order"
         ),
     )
-    mix_p.add_argument("--sample-rate", type=_c_int, default=48000, help="Mixer sample rate")
+    _cli_domain(
+        mix_p.add_argument("--sample-rate", type=_c_int, default=48000, help="Mixer sample rate"),
+        minimum=_MIN_GENERATOR_SAMPLE_RATE,
+        maximum=_MAX_GENERATOR_SAMPLE_RATE,
+    )
 
     mix_strip_p = sub.add_parser(
         "mix-strip",

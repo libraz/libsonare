@@ -168,11 +168,7 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
     return 1;
   }
   const int source_sr = audio.sample_rate();
-  // The core resample() only checks for a positive rate, so an unbounded value
-  // reaches allocation and can write a multi-gigabyte file instead of failing.
-  // Bound it to the same supported range the library documents for Audio.
-  const int target_sr = args.get_int_in_range("target-sample-rate", kMinAudioSampleRate,
-                                              kMaxAudioSampleRate, source_sr);
+  const int target_sr = args.get_int("target-sample-rate", source_sr);
   Audio result = resample(audio, target_sr);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
@@ -191,10 +187,6 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_tone(const CliArgs& args, const Audio&) {
-  if (!args.has("frequency-hz")) {
-    std::cerr << color::red << "Error: --frequency-hz required" << color::reset << "\n";
-    return 1;
-  }
   const float frequency = args.get_float("frequency-hz", 0.0f);
   const int sr = args.get_int("sample-rate", constants::kDefaultSampleRate);
   const float duration = args.get_float("duration-sec", kDefaultSynthesisDurationSec);
@@ -223,12 +215,6 @@ int cmd_chirp(const CliArgs& args, const Audio&) {
   const float fmin = args.fmin;
   const float fmax = args.fmax;
   const bool linear = !args.has("exponential");
-  // The registry has already required --fmax-hz above 0.
-  if (!linear && fmin <= 0.0f) {
-    std::cerr << color::red << "Error: --fmin-hz must be > 0 for an exponential sweep"
-              << color::reset << "\n";
-    return 1;
-  }
   const int sr = args.get_int("sample-rate", constants::kDefaultSampleRate);
   const float duration = args.get_float("duration-sec", kDefaultSynthesisDurationSec);
 
@@ -253,10 +239,6 @@ int cmd_chirp(const CliArgs& args, const Audio&) {
 }
 
 int cmd_clicks(const CliArgs& args, const Audio&) {
-  if (!args.has("times")) {
-    std::cerr << color::red << "Error: --times required" << color::reset << "\n";
-    return 1;
-  }
   const std::vector<float> times = parse_float_list(args.get_string("times"));
   const int sr = args.get_int("sample-rate", constants::kDefaultSampleRate);
   const int length = args.get_int("length", kClicksFitLength);

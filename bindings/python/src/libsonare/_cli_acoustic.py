@@ -36,6 +36,7 @@ from ._cli_options import (
     _positive_finite_float,
     _positive_int,
 )
+from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._errors import SonareError
 
 # Upper bound of the receiver spacing, in metres; the library's own limit.
@@ -167,7 +168,7 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
                     "drr_db": est.drr_db,
                     "confidence": est.confidence,
                     "rt60_bands": [float(value) for value in est.rt60_bands],
-                    "absorption_bands": [float(value) for value in est.band_absorption],
+                    "band_absorption": [float(value) for value in est.band_absorption],
                 }
             )
         )
@@ -435,7 +436,13 @@ def register_acoustic_parsers(
         "synthesize-rir", parents=[common], help="Synthesize a room impulse response from geometry"
     )
     _add_room_geometry(synth_rir_p, library_geometry=True)
-    synth_rir_p.add_argument("--sample-rate", type=_c_int, default=48000, help="Output sample rate")
+    _cli_domain(
+        synth_rir_p.add_argument(
+            "--sample-rate", type=_c_int, default=48000, help="Output sample rate"
+        ),
+        minimum=_MIN_GENERATOR_SAMPLE_RATE,
+        maximum=_MAX_GENERATOR_SAMPLE_RATE,
+    )
 
     room_morph_p = sub.add_parser(
         "room-morph", parents=[common], help="Morph reverberation toward a target room"

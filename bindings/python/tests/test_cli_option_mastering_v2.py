@@ -293,22 +293,21 @@ def test_mastering_processor_stereo_only_catalog_auto_routes(monkeypatch, capsys
     assert json.loads(capsys.readouterr().out)["stereo"] is True
 
 
-def test_eq_params_and_shortcut_conflict_is_invalid_parameter(monkeypatch) -> None:
-    """A shortcut spelled alongside --params is refused, default-valued or not.
+def test_eq_params_and_shortcut_conflict_is_a_usage_refusal(capsys) -> None:
+    """A shortcut spelled alongside --params is refused before any read, default-valued or not.
 
     Driven through the parser rather than a hand-built namespace: whether a
-    shortcut was supplied is something only argv answers, so a namespace
-    carrying a non-default value pinned a comparison the CLI no longer makes.
+    shortcut was supplied is something only argv answers.
     """
-    from libsonare import _cli_mastering, cli
+    from libsonare import cli
 
-    patch_mono_decode(monkeypatch, lambda path: ([0.0], 44_100))
-    for shortcut in (["--frequency-hz", "1500"], ["--q", "1.0"]):
-        args = cli._build_parser().parse_args(
-            ["eq", "input.wav", "--params", "band0.gainDb=1", *shortcut]
-        )
-        with pytest.raises(ValueError, match="cannot be combined"):
-            _cli_mastering.cmd_eq(args)
+    for shortcut, name in ((["--frequency-hz", "1500"], "frequency-hz"), (["--q", "1.0"], "q")):
+        with pytest.raises(SystemExit) as exc_info:
+            cli._build_parser().parse_args(
+                ["eq", "input.wav", "--params", "band0.gainDb=1", *shortcut]
+            )
+        assert exc_info.value.code == 2
+        assert f"--{name} cannot be combined with --params" in capsys.readouterr().err
 
 
 def test_mastering_pair_analyze_forwards_params(monkeypatch) -> None:
@@ -399,10 +398,11 @@ def test_python_wav_writer_emits_24_bit_header(tmp_path) -> None:
 
 
 def test_native_handler_source_consumes_bits_and_rejects_eq_conflicts() -> None:
-    source = Path(__file__).parents[3] / "tools" / "cli" / "sonare_cli_mastering.cpp"
-    text = source.read_text(encoding="utf-8")
+    tools = Path(__file__).parents[3] / "tools" / "cli"
+    text = (tools / "sonare_cli_mastering.cpp").read_text(encoding="utf-8")
     assert 'args.get_int("bits", 16)' in text
-    assert '" cannot be combined with --params"' in text
+    registry = (tools / "sonare_cli_registry.cpp").read_text(encoding="utf-8")
+    assert '" cannot be combined with --params"' in registry
     assert "args.source_channels == 2 || is_stereo_only_processor(processor)" in text
     # Negatively too, because the positive assertion above is satisfied by a
     # substring: a surviving `args.has("stereo")` would sit beside it happily and
@@ -750,16 +750,17 @@ def test_eq_refuses_an_enumerator_index_outside_its_enumeration(
     assert getattr(args, option.replace("-", "_")) == last_accepted
 
 
-def test_eq_names_and_refuses_a_params_key_the_processor_does_not_read(monkeypatch) -> None:
+def test_eq_names_and_refuses_a_params_key_the_processor_does_not_read(monkeypatch, capsys) -> None:
     """A supplied key no config builder probes took no effect at all."""
     from libsonare import _cli_mastering, cli
 
     patch_mono_decode(monkeypatch, lambda path: ([0.0] * 2048, 48_000))
-    args = cli._build_parser().parse_args(
-        ["eq", "input.wav", "--params", "band0.bogusKey=42", "--json"]
-    )
-    with pytest.raises(ValueError, match="unknown --params key for eq.equalizer"):
-        _cli_mastering.cmd_eq(args)
+    with pytest.raises(SystemExit) as exc_info:
+        cli._build_parser().parse_args(
+            ["eq", "input.wav", "--params", "band0.bogusKey=42", "--json"]
+        )
+    assert exc_info.value.code == 2
+    assert "unknown --params key for eq.equalizer: band0.bogusKey" in capsys.readouterr().err
 
     # A key the processor does read still runs.
     good = cli._build_parser().parse_args(
@@ -818,10 +819,25 @@ def test_mastering_suggest_named_options_reach_the_assistant(monkeypatch, capsys
 @pytest.mark.parametrize(
     ("extra", "match"),
     [
-        (("--preset", "jazz", "--params", "preset=jazz"), "set the same value"),
+        (("--preset", "classical", "--params", "preset=classical"), "set the same value"),
         (("--target-lufs", "-12", "--params", "targetLufs=-12"), "set the same value"),
         (("--target-platform", "club", "--params", "targetPlatform=club"), "set the same value"),
         (("--params", "target_platform=club"), "earlier spelling; write targetPlatform"),
+        (("--params", "novalue"), "must be a comma-separated list of key=value entries"),
+    ],
+)
+def test_mastering_suggest_refuses_a_contradiction_before_the_read(
+    monkeypatch, capsys, extra, match
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        _suggest(monkeypatch, capsys, *extra)
+    assert exc_info.value.code == 2
+    assert match in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
         (("--params", "notAKey=1"), "notAKey"),
         # The index the C ABI carries is a transport detail, not a CLI value.
         (("--params", "preset=3"), "params.preset must be one of "),

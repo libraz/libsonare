@@ -192,3 +192,19 @@ std::string repair_argument_refusal(const CliArgs& args);
 /// "argument --platforms: ", or empty; defined in sonare_cli_mastering_args.cpp.
 std::string streaming_platforms_refusal(const CliArgs& args);
 #endif
+
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_MIXING_ASSISTANT)
+/// The id a bare `--input` path stands for: the file name without its last extension.
+std::string bare_path_id(const std::string& entry);
+#endif
+#ifdef SONARE_WITH_MIXING
+/// The first malformed `mix --input [ID=]WAV` entry, or empty.
+std::string mix_input_refusal(const CliArgs& args);
+#endif
+#ifdef SONARE_WITH_MIXING_ASSISTANT
+/// Split `[ID=]WAV` into its two halves; a bare path takes the file's own name as the id.
+void split_track_entry(const std::string& entry, std::string* id, std::string* path);
+/// The first refusal of `suggest-mix`'s `--input` entries and `--params` list, or its
+/// `--tempo-bpm` clash with `--params`, decided from the command line alone, or empty.
+std::string suggest_mix_argument_refusal(const CliArgs& args);
+#endif

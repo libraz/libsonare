@@ -57,27 +57,29 @@ TEST_CASE("CLI numeric option validation", "[cli]") {
     for (const std::string command : {"pad-center", "fix-length"}) {
       auto [code, output] = exec_command(CLI + " " + command + " --values 1,2,3 --size -1");
       INFO(command);
-      REQUIRE(code == 3);
-      REQUIRE_THAT(output, ContainsSubstring("argument --size: must be an integer of at least 1"));
+      REQUIRE(code == 2);
+      REQUIRE_THAT(output,
+                   ContainsSubstring("argument --size: must be an integer in [1, 2147483647]"));
     }
   }
 
   SECTION("a size option with no usable default is required, not silently empty") {
     auto [fix_code, fix_output] = exec_command(CLI + " fix-length --values 1,2,3");
-    REQUIRE(fix_code == 3);
-    REQUIRE_THAT(fix_output, ContainsSubstring("--size"));
+    REQUIRE(fix_code == 2);
+    REQUIRE_THAT(fix_output, ContainsSubstring("Missing required option '--size'"));
 
     auto [pcen_code, pcen_output] = exec_command(CLI + " pcen --values 1,2,3,4");
-    REQUIRE(pcen_code == 3);
-    REQUIRE_THAT(pcen_output, ContainsSubstring("--n-bins"));
+    REQUIRE(pcen_code == 2);
+    REQUIRE_THAT(pcen_output, ContainsSubstring("Missing required option '--n-bins'"));
   }
 
   SECTION("a negative region length is rejected instead of yielding contradictory output") {
     const std::string clipped = unique_temp_path("_clipped.wav");
     create_clipped_wav(clipped);
     auto [code, output] = exec_command(CLI + " clipping " + clipped + " --min-region -1 --json");
-    REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--min-region"));
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output,
+                 ContainsSubstring("argument --min-region: must be an integer in [1, 2147483647]"));
     std::remove(clipped.c_str());
   }
 
@@ -102,11 +104,117 @@ TEST_CASE("CLI numeric option validation", "[cli]") {
   }
 
   SECTION("a list element names the option and the element that failed") {
+    const std::string list_refusal_text =
+        "argument --values: must be a comma-separated list of finite numbers";
     auto [code, output] = exec_command(CLI + " fix-frames --values a,b,c");
-    REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--values"));
-    REQUIRE_THAT(output, ContainsSubstring("a"));
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(list_refusal_text));
+    REQUIRE_THAT(output, !ContainsSubstring("a,b,c"));
   }
+}
+
+TEST_CASE("CLI utility commands refuse what the command line decides before reading input",
+          "[cli]") {
+  const std::string out = unique_temp_path("_utility_refused.wav");
+  const std::string list_refusal =
+      "argument --values: must be a comma-separated list of finite numbers";
+  const std::pair<std::string, std::string> refusals[] = {
+      {"tone -o " + out, "Missing required option '--frequency-hz'"},
+      {"chirp -o " + out + " --fmax-hz 1000 --exponential",
+       "--fmin-hz must be greater than 0 for an exponential sweep"},
+      {"chirp -o " + out + " --fmax-hz 1000 --exponential --fmin-hz 0",
+       "--fmin-hz must be greater than 0 for an exponential sweep"},
+      {"clicks -o " + out, "Missing required option '--times'"},
+      {"clicks -o " + out + " --times 1,a",
+       "argument --times: must be a comma-separated list of finite numbers"},
+      {"clicks -o " + out + " --times ''",
+       "argument --times: must be a comma-separated list of finite numbers"},
+      {"clicks -o " + out + " --times 1,nan",
+       "argument --times: must be a comma-separated list of finite numbers"},
+      {"power-to-db", "Missing required option '--values'"},
+      {"power-to-db --values 1,x", list_refusal},
+      {"db-to-power --values ''", list_refusal},
+      {"amplitude-to-db --values 1,inf", list_refusal},
+      {"fix-frames --values 1,2.5", list_refusal},
+      {"pad-center --values 1,2", "Missing required option '--size'"},
+      {"fix-length --values 1,2 --size 0",
+       "argument --size: must be an integer in [1, 2147483647]"},
+      {"pcen --values 1,2,3 --n-bins 0 --n-frames 3",
+       "argument --n-bins: must be an integer in [1, 2147483647]"},
+      {"pcen --values 1,2,3 --n-bins 2 --n-frames 2",
+       "argument --values: must hold --n-bins times --n-frames values"},
+      {"pcen --values 1,x --n-bins 1 --n-frames 2", list_refusal},
+      {"dynamic-range --low-percentile 0.9 --high-percentile 0.1 /nonexistent.wav",
+       "--high-percentile must be at least --low-percentile"},
+      {"dynamic-range --window-sec 0 /nonexistent.wav", "argument --window-sec:"},
+      {"meter --oversample 3 /nonexistent.wav", "argument --oversample: must be one of"},
+      {"cqt --n-bins 0 /nonexistent.wav",
+       "argument --n-bins: must be an integer in [1, 2147483647]"},
+      {"vqt --filter-scale 0 /nonexistent.wav", "argument --filter-scale:"},
+      {"mel-to-audio --n-iter 0 -o " + out + " /nonexistent.wav",
+       "argument --n-iter: must be an integer in [1, 2147483647]"},
+      {"mfcc-to-audio --n-mfcc 200 -o " + out + " /nonexistent.wav",
+       "--n-mfcc must be at most --n-mels"},
+      {"key --n-fft 0 /nonexistent.wav", "argument --n-fft: must be an integer in [1,"},
+      {"chords --n-fft 0 /nonexistent.wav", "argument --n-fft: must be an integer in [1,"},
+      {"dynamics --hop-length 0 /nonexistent.wav",
+       "argument --hop-length: must be an integer in [1,"},
+      {"key --profile bogus /nonexistent.wav", "invalid key profile: bogus"},
+      {"key --modes bogus /nonexistent.wav", "invalid mode: bogus"},
+      {"key --modes '' /nonexistent.wav", "--modes must contain at least one mode"},
+      {"chords --key-root X /nonexistent.wav", "invalid pitch class: X"},
+      {"chords --key-mode bogus /nonexistent.wav", "invalid mode: bogus"},
+      {"analyze --meter-candidates 3,x /nonexistent.wav", "invalid meter numerator: x"},
+      {"resample --target-sample-rate 100 -o " + out + " /nonexistent.wav",
+       "argument --target-sample-rate: must be an integer in [8000, 384000]"},
+  };
+  for (const auto& [arguments, message] : refusals) {
+    CAPTURE(arguments);
+    auto [code, output] = exec_command(CLI + " " + arguments + " -q");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(message));
+    REQUIRE_THAT(output, !ContainsSubstring("nonexistent"));
+  }
+  REQUIRE_FALSE(std::ifstream(out).good());
+}
+
+TEST_CASE("CLI states no sentinel for an option left out and refuses it spelled", "[cli]") {
+  const std::pair<const char*, const char*> omitted[] = {{"clicks", "length"},
+                                                         {"frames-to-samples", "n-fft"},
+                                                         {"samples-to-frames", "n-fft"},
+                                                         {"fix-frames", "x-max"}};
+  for (const auto& [command, option] : omitted) {
+    CAPTURE(command, option);
+    const CliOptionSpec* spec = cli_option_spec_for_command(command, option);
+    REQUIRE(spec != nullptr);
+    CHECK(spec->default_value.kind == CliOptionDefaultKind::Null);
+    CHECK_FALSE(spec->stated_default.empty());
+    CHECK(std::isalpha(static_cast<unsigned char>(spec->stated_default[0])));
+  }
+  const std::string out = unique_temp_path("_sentinel_refused.wav");
+  const std::pair<std::string, std::string> refusals[] = {
+      {"clicks --times 0.1 -o " + out + " --length 0", "argument --length:"},
+      {"clicks --times 0.1 -o " + out + " --length -1", "argument --length:"},
+      {"clicks --times 0.1 -o " + out + " --length 500000001",
+       "argument --length: must be an integer in [1, 500000000]"},
+      {"frames-to-samples --frames 4 --hop-length 0",
+       "argument --hop-length: must be an integer in [1, 2147483647]"},
+      {"samples-to-frames --samples 4 --hop-length -3",
+       "argument --hop-length: must be an integer in [1, 2147483647]"},
+      {"frames-to-samples --frames 4 --n-fft 0", "argument --n-fft: must be an integer in [1,"},
+      {"samples-to-frames --samples 4 --n-fft -1", "argument --n-fft: must be an integer in [1,"},
+      {"fix-frames --values 1,2 --x-max -1", "argument --x-max: must be an integer in [0,"},
+  };
+  for (const auto& [arguments, message] : refusals) {
+    CAPTURE(arguments);
+    auto [code, output] = exec_command(CLI + " " + arguments + " -q");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring(message));
+  }
+  REQUIRE_FALSE(std::ifstream(out).good());
+  // Left out, each option reaches the library as "not given".
+  REQUIRE(exec_command(CLI + " frames-to-samples --frames 4 --hop-length 512 -q").first == 0);
+  REQUIRE(exec_command(CLI + " fix-frames --values 1,2 -q").first == 0);
 }
 
 TEST_CASE("CLI version command", "[cli]") {
@@ -1694,12 +1802,10 @@ TEST_CASE("CLI global options", "[cli]") {
 
 #ifdef SONARE_WITH_ARRANGEMENT
   SECTION("project bounce rejects an unknown NativeSynth preset") {
-    // The rejected preset is an invalid parameter, and it stays one: the family
-    // rule that rewrote every project failure to the invalid-state code is gone,
-    // so this reports the class the C ABI actually returned.
+    // The preset name is command-line text, refused before the project is read.
     auto [code, output] =
         exec_command(CLI + " project bounce missing.json -o ignored.wav --synth not-a-preset -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("unknown synth preset 'not-a-preset'"));
   }
 #endif
@@ -1802,11 +1908,8 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"pad-center", "--values 1,2 --size 4", "pad-value", "9"},
       {"fix-length", "--values 1,2 --size 4", "pad-value", "9"},
       {"fix-frames", "--values 3,5", "x-min", "1"},
-      {"fix-frames", "--values 3,5", "x-max", "10"},
       {"vector-normalize", "--values 3,4", "norm-type", "2"},
       {"vector-normalize", "--values 0.3,0.4", "threshold", "1"},
-      {"frames-to-samples", "--frames 10", "n-fft", "2048"},
-      {"samples-to-frames", "--samples 5000", "n-fft", "2048"},
       {"frames-to-samples", "--frames 10", "hop-length", "256"},
       {"samples-to-frames", "--samples 5000", "hop-length", "256"},
       {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "sample-rate", "44100"},
@@ -1823,7 +1926,6 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"chirp", "--fmin-hz 100 --fmax-hz 1000" + to_out, "sample-rate", "16000"},
       {"chirp", "--fmin-hz 100 --fmax-hz 1000" + to_out, "duration-sec", "0.5"},
       {"clicks", "--times 0.1" + to_out, "sample-rate", "16000"},
-      {"clicks", "--times 0.1" + to_out, "length", "44100"},
       {"clicks", "--times 0.1" + to_out, "frequency-hz", "500"},
       {"clicks", "--times 0.1" + to_out, "click-duration-sec", "0.05"},
       {"melody", p.noisy_wav + " --json -q", "threshold", "0.9"},
@@ -2078,7 +2180,13 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
   tables.prose = {
       {"key", "profile", "the genre hint picks the profile family"},
       {"mel", "fmax-hz", "half the input's sample rate"},
+      {"mel-to-audio", "fmax-hz", "half the sample rate"},
+      {"mfcc-to-audio", "fmax-hz", "half the sample rate"},
       {"voice-change", "preset", "no preset is applied"},
+      {"clicks", "length", "the track ends after the last click and its decay"},
+      {"frames-to-samples", "n-fft", "no centring offset is applied"},
+      {"samples-to-frames", "n-fft", "no centring offset is applied"},
+      {"fix-frames", "x-max", "the indices have no upper bound"},
 #ifdef SONARE_WITH_ACOUSTIC_SIM
       {"synthesize-rir", "max-sec", "the synthesized tail runs to its own end"},
       {"room-morph", "max-sec", "the synthesized tail runs to its own end"},

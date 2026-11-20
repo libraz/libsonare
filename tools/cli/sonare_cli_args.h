@@ -187,6 +187,30 @@ int parse_int_strict(const std::string& option, const std::string& value);
 /// whose declared domain reaches above `INT_MAX` is parsed with this instead, so
 /// the range is the domain's rather than the parser's.
 long long parse_int64_strict(const std::string& option, const std::string& value);
+/// The refusal of @p text as the comma-separated list of finite numbers (integers when
+/// @p integral) that --@p option takes, or empty when it reads. An empty entry is skipped and a
+/// list with no entry is refused; the typed text is never echoed. @p count, when given, receives
+/// the number of entries read.
+std::string number_list_refusal(const std::string& option, const std::string& text, bool integral,
+                                size_t* count = nullptr);
+/// The refusal of the repeated --set assignments (PATH=VALUE, an empty one skipped), or empty
+/// when each reads: an assignment with no `=` or an empty left side is `invalid --set
+/// assignment: X`, and a path with no segment is `empty --set path`.
+std::string voice_set_refusal(const std::vector<std::string>& assignments);
+/// One parsed `--edit NOTE.FIELD=VALUE`; only the member @p field names holds the value.
+struct PolyphonicEdit {
+  int note = 0;
+  std::string field;
+  float number = 0.0f;
+  int integer = 0;
+  bool flag = false;
+};
+/// Reads one `--edit` assignment: its shape, the note index, a known field and a value of the
+/// field's type. What the analysis found (the note count) is not decidable here.
+/// @throws std::invalid_argument naming `argument --edit`.
+PolyphonicEdit parse_polyphonic_edit(const std::string& assignment);
+/// The first refusal among the `--edit` assignments, or empty when each reads.
+std::string polyphonic_edit_refusal(const std::vector<std::string>& assignments);
 /// The token among @p tokens that @p value names. Every closed-set token flag is
 /// read in any letter case and resolves to the library's own spelling here, so the
 /// library below sees an exact token; nullopt when @p value names none of them.
@@ -196,6 +220,10 @@ std::optional<std::string> find_cli_token(std::string_view value,
 /// church modes, case-insensitive. Every option naming a mode reads it.
 /// @throws std::invalid_argument for a name outside the table.
 sonare::Mode parse_mode_option(const std::string& value);
+/// Reads the comma-separated integer numerators of --meter-candidates; an empty entry is skipped.
+/// Only the shape is checked here: which numerators are acceptable, and how many, is the core's.
+/// @throws std::invalid_argument naming the first entry that is not an integer.
+std::vector<int> parse_meter_numerators(const std::string& text);
 /// Reads a scale mask given as a decimal integer or as a mode name, the name
 /// resolving to `scale_mask_for_mode` of the mode. The mask's range is the
 /// option's domain, so an integer is returned as written.

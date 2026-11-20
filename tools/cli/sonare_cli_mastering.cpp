@@ -9,7 +9,6 @@
 #include "util/json.h"
 
 #ifdef SONARE_WITH_MASTERING
-#include "mastering/api/insert_factory.h"
 #include "mastering/assistant/config_from_params.h"
 
 /// Rewrite one camelCase JSON key as snake_case ("gainToMatchDb" ->
@@ -88,14 +87,14 @@ std::string suggestion_json_for_cli(const std::string& core_json) {
 std::vector<mastering::api::Param> parse_mastering_params(const std::string& text,
                                                           bool resolve_names,
                                                           const std::string& processor) {
+  if (const std::string refusal = params_grammar_refusal(text); !refusal.empty()) {
+    throw std::invalid_argument(refusal);
+  }
   std::vector<mastering::api::Param> params;
   std::stringstream stream(text);
   std::string item;
   while (std::getline(stream, item, ',')) {
     const auto eq = item.find('=');
-    if (eq == std::string::npos || eq == 0 || eq + 1 == item.size()) {
-      throw std::invalid_argument("invalid parameter entry: '" + item + "' (expected key=value)");
-    }
     // Locale-independent parse: std::stod follows LC_NUMERIC, which DAW plugin
     // hosts sometimes set to e.g. de_DE (comma as decimal separator). Imbue the
     // classic locale so "1.5" always parses as 1.5 regardless of host locale.
@@ -121,37 +120,6 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
   }
   return params;
 }
-
-namespace {
-
-// Refuses a supplied --params key the named processor does not read.
-//
-// insert_param_names() builds the processor against an empty map and reports
-// every key its config builder probed, so a supplied key outside that set took
-// no effect at all: `band0.bogusKey=42` used to ship a chain containing none of
-// the edit the caller asked for, under exit 0 and a normal --json payload. The
-// list is sorted, which is what makes the membership test a binary search.
-//
-// A name with no published key set is left alone rather than rejected wholesale:
-// only a realtime insert can be probed this way, so an empty list means "not an
-// insert" (an offline-only processor, or one whose build feature is off), not
-// "reads nothing". Those ids keep the old silent-ignore behaviour, which is the
-// remaining half of this gap.
-void reject_unknown_processor_params(const std::string& processor,
-                                     const std::vector<mastering::api::Param>& params) {
-  const std::vector<std::string> known = mastering::api::insert_param_names(processor);
-  if (known.empty()) return;
-  std::string unknown;
-  for (const auto& param : params) {
-    if (std::binary_search(known.begin(), known.end(), param.key)) continue;
-    if (!unknown.empty()) unknown += ", ";
-    unknown += param.key;
-  }
-  if (unknown.empty()) return;
-  throw std::invalid_argument("unknown --params key for " + processor + ": " + unknown);
-}
-
-}  // namespace
 
 std::string read_text_file(const std::string& path) {
   std::vector<uint8_t> bytes;
@@ -264,22 +232,6 @@ void print_loudness_result_text(const LoudnessResult& result, const std::string&
 
 namespace {
 
-/// A named assistant option and the flat-param key it sets.
-struct AssistantOption {
-  const char* key;
-  const char* option;
-};
-
-constexpr AssistantOption kAssistantOptions[] = {
-    {"targetLufs", "target-lufs"},
-    {"ceilingDbtp", "ceiling-dbtp"},
-    {"enableRepair", "enable-repair"},
-    {"preferStreamingSafe", "no-streaming-safe"},
-    {"speechMonoAmount", "speech-mono-amount"},
-    {"targetPlatform", "target-platform"},
-    {"preset", "preset"},
-};
-
 /// Build the mastering assistant's config from the command line.
 /// @details `mastering --assistant` and `mastering-suggest` declare the same
 ///   named options, and `mastering-suggest` also takes them as `--params`. Both
@@ -300,21 +252,7 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
   std::string item;
   while (std::getline(stream, item, ',')) {
     const auto eq = item.find('=');
-    if (eq == std::string::npos || eq == 0 || eq + 1 == item.size()) {
-      throw std::invalid_argument("invalid parameter entry: '" + item + "' (expected key=value)");
-    }
     const std::string key = item.substr(0, eq);
-    if (key == "target_platform") {
-      throw std::invalid_argument(
-          "--params target_platform is an earlier spelling; write "
-          "targetPlatform");
-    }
-    for (const AssistantOption& named : kAssistantOptions) {
-      if (key == named.key && args.has(named.option)) {
-        throw std::invalid_argument(std::string("--") + named.option + " and --params " + key +
-                                    "= set the same value");
-      }
-    }
     if (key == "targetPlatform") {
       platform = item.substr(eq + 1);
       has_platform = true;
@@ -592,7 +530,6 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
     return 1;
   }
   const auto params = parse_mastering_params(args.get_string("params"), true, processor);
-  reject_unknown_processor_params(processor, params);
   // The file's own channel count and the library's own stereo-only set decide
   // this, with nothing in between. A two-channel source takes the stereo entry
   // point, which accepts every processor: whether a given one links its decision
@@ -641,22 +578,6 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
 int cmd_eq(const CliArgs& args, const Audio& audio) {
   const std::string params_text = args.get_string("params");
   std::vector<mastering::api::Param> params = parse_mastering_params(params_text);
-  if (args.has("params")) {
-    // --params fully specifies the EQ. Reject shortcut combinations rather
-    // than silently dropping an explicitly supplied selector.
-    for (const char* shortcut :
-         {"type",         "frequency-hz",   "gain-db",           "q",          "coeff-mode",
-          "slope-db-oct", "placement",      "proportional-q",    "dynamic",    "threshold-db",
-          "ratio",        "range-db",       "attack-ms",         "release-ms", "detector-delay-ms",
-          "phase-mode",   "resolution",     "auto-gain",         "gain-scale", "output-gain-db",
-          "output-pan",   "auto-threshold", "sidechain-freq-hz", "sidechain-q"}) {
-      if (args.has(shortcut)) {
-        throw std::invalid_argument(std::string("--") + shortcut +
-                                    " cannot be combined with --params");
-      }
-    }
-    reject_unknown_processor_params("eq.equalizer", params);
-  }
   if (params_text.empty()) {
     params.push_back({"band0.enabled", 1.0});
     params.push_back({"band0.type", static_cast<double>(args.get_int("type", 0))});

@@ -75,9 +75,29 @@ _REQUIRED_OPTIONS: dict[str, tuple[str, ...]] = {
             "voice-change",
         )
     },
+    "amplitude-to-db": ("values",),
+    "chirp": ("output", "fmax-hz"),
+    "clicks": ("times", "output"),
+    "db-to-amplitude": ("values",),
+    "db-to-power": ("values",),
     "fade": ("output",),
+    "fix-frames": ("values",),
+    "fix-length": ("values", "size"),
+    "frame-signal": ("values", "frame-length", "hop-length"),
+    "frames-to-samples": ("frames",),
     "filter": ("type", "output"),
     "gain": ("gain-db", "output"),
+    "pad-center": ("values", "size"),
+    "pcen": ("values", "n-bins", "n-frames"),
+    "peak-pick": ("values", "pre-max", "post-max", "pre-avg", "post-avg", "delta", "wait"),
+    "power-to-db": ("values",),
+    "samples-to-frames": ("samples",),
+    "tone": ("frequency-hz", "output"),
+    "vector-normalize": ("values",),
+    "preemphasis": ("output",),
+    "deemphasis": ("output",),
+    "mel-to-audio": ("output",),
+    "mfcc-to-audio": ("output",),
     "mastering-pair-analyze": ("analysis", "reference"),
     "mastering-pair-processor": ("processor", "reference"),
     "mastering-processor": ("processor",),
@@ -92,15 +112,16 @@ _REQUIRED_OPTIONS: dict[str, tuple[str, ...]] = {
 
 def _domain_record(
     *,
-    choices: tuple[object, ...] | list[object] | None = None,
+    choices: tuple[object, ...] | list[object] | Callable[[], Sequence[object]] | None = None,
     minimum: float | None = None,
     exclusive_minimum: bool = False,
     maximum: float | None = None,
     exclusive_maximum: bool = False,
 ) -> dict[str, Any]:
-    """Build one published domain record."""
+    """Build one published domain record; a callable names a library catalog, read here."""
+    resolved = choices() if callable(choices) else choices
     return {
-        "choices": [str(choice) for choice in (choices or ())],
+        "choices": [str(choice) for choice in (resolved or ())],
         "minimum": minimum,
         "exclusive_minimum": exclusive_minimum,
         "maximum": maximum,
@@ -132,6 +153,7 @@ def _cli_domain(target: _TargetT, **domain: Any) -> _TargetT:
         isinstance(target, argparse.Action)
         and target.type is None
         and choices
+        and not callable(choices)
         and all(isinstance(choice, str) for choice in choices)
     ):
         target.type = _token_of(tuple(choices))

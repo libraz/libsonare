@@ -174,7 +174,7 @@ def test_polyphonic_render_cli_applies_one_edit_per_occurrence() -> None:
     ],
 )
 def test_polyphonic_render_cli_refuses_a_bad_edit(assignment: str, message: str) -> None:
-    """An unusable --edit fails as a parameter error instead of being ignored."""
+    """An unusable --edit is refused; only the note range waits for the analysis (exit 3)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "chord.wav")
         out_path = os.path.join(tmpdir, "rendered.wav")
@@ -184,7 +184,7 @@ def test_polyphonic_render_cli_refuses_a_bad_edit(assignment: str, message: str)
             ["polyphonic-render", wav_path, "-o", out_path, "--edit", assignment, "--json"]
         )
 
-        assert result.returncode == 3, result.stdout
+        assert result.returncode == (3 if "NOTE must be an integer in [0, " in message else 2)
         assert message in result.stderr
         assert not os.path.exists(out_path)
 

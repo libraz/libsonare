@@ -342,70 +342,35 @@ std::vector<float> polyphonic_note_salience(const editing::polyphony::Polyphonic
   return span;
 }
 
-// The flag literals the parser's own `--flag=false` form accepts, so one spelling
-// does not mean two things depending on where it is written.
-bool parse_edit_bool(const std::string& field, const std::string& value) {
-  const std::string lowered = lowercase_cli_value(value);
-  if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on") return true;
-  if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off") return false;
-  throw std::invalid_argument("argument --edit: " + field +
-                              " must be one of true, 1, yes, on, false, 0, no, off");
-}
-
-// One --edit occurrence is one NOTE.FIELD=VALUE assignment: the dot path and the
-// single assignment per occurrence are --set's grammar, with the note index as
-// the path's first element, because an edit addresses a note rather than a JSON
-// document and nothing else about the spelling has to differ.
+// Applies one assignment parse_polyphonic_edit has already read; only the note range is left to
+// check, because it depends on what the analysis found.
 void apply_polyphonic_note_edit(std::vector<editing::note_model::NoteObject>& notes,
                                 const std::string& assignment) {
-  const auto equals = assignment.find('=');
-  if (equals == std::string::npos || equals == 0) {
-    throw std::invalid_argument("argument --edit: must be NOTE.FIELD=VALUE");
-  }
-  const std::string path = assignment.substr(0, equals);
-  const std::string value = assignment.substr(equals + 1);
-  const auto dot = path.rfind('.');
-  if (dot == std::string::npos || dot == 0 || dot + 1 == path.size()) {
-    throw std::invalid_argument("argument --edit: must be NOTE.FIELD=VALUE");
-  }
-  const std::string index_text = path.substr(0, dot);
-  const int index = parse_int_text("argument --edit: NOTE", index_text);
+  const PolyphonicEdit parsed = parse_polyphonic_edit(assignment);
   if (notes.empty()) throw std::invalid_argument("argument --edit: the analysis found no notes");
-  if (index < 0 || static_cast<size_t>(index) >= notes.size()) {
+  if (parsed.note < 0 || static_cast<size_t>(parsed.note) >= notes.size()) {
     throw std::invalid_argument(
         "argument --edit: NOTE " +
         sonare::util::refusal::integer_range_predicate(0.0, static_cast<double>(notes.size() - 1)));
   }
-  const std::string field = path.substr(dot + 1);
-  auto& edit = notes[static_cast<size_t>(index)].edit;
+  auto& edit = notes[static_cast<size_t>(parsed.note)].edit;
+  const std::string& field = parsed.field;
   if (field == "pitch_shift_semitones") {
-    edit.pitch_shift_semitones = parse_float_text("argument --edit: pitch_shift_semitones", value);
+    edit.pitch_shift_semitones = parsed.number;
   } else if (field == "gain_db") {
-    edit.gain_db = parse_float_text("argument --edit: gain_db", value);
+    edit.gain_db = parsed.number;
   } else if (field == "time_offset_samples") {
-    // An int is the whole reachable range: the chain refuses audio longer than
-    // an int can index, so a wider offset only ever moves a note off the end.
-    edit.time_offset_samples = parse_int_text("argument --edit: time_offset_samples", value);
+    edit.time_offset_samples = parsed.integer;
   } else if (field == "time_stretch_ratio") {
-    edit.time_stretch_ratio = parse_float_text("argument --edit: time_stretch_ratio", value);
+    edit.time_stretch_ratio = parsed.number;
   } else if (field == "formant_shift_semitones") {
-    edit.formant_shift_semitones =
-        parse_float_text("argument --edit: formant_shift_semitones", value);
+    edit.formant_shift_semitones = parsed.number;
   } else if (field == "vibrato_depth_change") {
-    edit.vibrato_depth_change = parse_float_text("argument --edit: vibrato_depth_change", value);
+    edit.vibrato_depth_change = parsed.number;
   } else if (field == "drift_change") {
-    edit.drift_change = parse_float_text("argument --edit: drift_change", value);
-  } else if (field == "muted") {
-    edit.muted = parse_edit_bool(field, value);
+    edit.drift_change = parsed.number;
   } else {
-    // The accepted set is named at the refusal because the option inventory the
-    // help prints carries no per-option text, so this is the only place a caller
-    // can read it. The amplitude envelope is the one edit field missing from it:
-    // it is a curve, and nothing on a command line states one.
-    throw std::invalid_argument(
-        "argument --edit: FIELD must be one of pitch_shift_semitones, gain_db, "
-        "time_offset_samples, "
-        "time_stretch_ratio, formant_shift_semitones, vibrato_depth_change, drift_change, muted");
+    edit.muted = parsed.flag;
   }
 }
 
@@ -762,36 +727,10 @@ int cmd_tune_to_midi(const CliArgs& args, const Audio& audio) {
 #if defined(SONARE_WITH_VOICE_CHANGER)
 
 int cmd_voice_change(const CliArgs& args, const Audio& audio) {
+  // The selector relations are validate_voice_change's, decided before the input is read.
   const bool has_preset = args.has("preset");
-  const bool has_preset_json = args.has("preset-json");
   const bool has_preset_pack = args.has("preset-pack");
-  const int selector_count = static_cast<int>(has_preset) + static_cast<int>(has_preset_json);
-  if (selector_count > 1) {
-    throw std::invalid_argument(
-        "voice-change preset selectors are mutually exclusive: choose one of --preset, "
-        "--preset-json, or --preset-pack");
-  }
-  if (has_preset_pack && has_preset_json) {
-    throw std::invalid_argument("--preset-pack and --preset-json are mutually exclusive");
-  }
-  // A pack names the file, --preset names the entry inside it, so the pair is
-  // one selector. This check precedes the ones below so that a pack without an
-  // entry reports the missing --preset rather than a downstream rule that reads
-  // as if no selector had been given at all.
-  if (has_preset_pack && !has_preset) {
-    throw std::invalid_argument("--preset-pack requires --preset to select an entry");
-  }
-  // The default mode is a no-op, so only an explicit absolute request conflicts with a preset.
-  if (selector_count > 0 && (args.has("pitch-semitones") || args.has("formant-factor") ||
-                             args.get_string("formant-mode", "relative") != "relative")) {
-    throw std::invalid_argument(
-        "--pitch-semitones/--formant-factor/--formant-mode cannot be combined with a realtime "
-        "preset");
-  }
-  if (args.has("set") && selector_count == 0) {
-    throw std::invalid_argument("--set requires --preset, --preset-json, or --preset-pack");
-  }
-  const bool uses_realtime_preset = selector_count > 0 || args.has("set");
+  const bool uses_realtime_preset = has_preset || args.has("preset-json") || args.has("set");
 
   Audio result;
   std::string preset_id;
@@ -1000,10 +939,8 @@ int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
   config.n_components = args.get_int("n-components", config.n_components);
   config.n_fft = args.get_int("n-fft", config.n_fft);
   // The core config spells "a quarter of the FFT size" as a zero hop, so only an absent flag may
-  // send it; an explicit zero is refused as the C ABI refuses it.
-  if (args.has("hop-length")) {
-    config.hop_length = args.get_int_in_range("hop-length", 1, std::numeric_limits<int>::max(), 0);
-  }
+  // send it; the registry domain refuses an explicit zero.
+  if (args.has("hop-length")) config.hop_length = args.get_int("hop-length", 0);
   config.n_iter = args.get_int("n-iter", config.n_iter);
   config.beta = args.get_float("beta", config.beta);
   config.init = args.get_string("init", config.init);
@@ -1077,15 +1014,6 @@ int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_hpss(const CliArgs& args, const Audio& audio) {
-  const int output_mode_count = static_cast<int>(args.has("harmonic-only")) +
-                                static_cast<int>(args.has("percussive-only")) +
-                                static_cast<int>(args.has("with-residual"));
-  if (output_mode_count > 1) {
-    throw std::invalid_argument(
-        "hpss output modes are mutually exclusive: choose one of --harmonic-only, "
-        "--percussive-only, or --with-residual");
-  }
-
   HpssConfig config;
   config.kernel_size_harmonic = args.get_int("kernel-harmonic", config.kernel_size_harmonic);
   config.kernel_size_percussive = args.get_int("kernel-percussive", config.kernel_size_percussive);
@@ -1244,10 +1172,7 @@ int cmd_deemphasis(const CliArgs& args, const Audio& audio) {
 int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
   // Match Python's public trim() command: an absolute dB threshold. --top-db
   // remains a native compatibility alias for the legacy relative algorithm.
-  if (args.has("threshold-db") && args.has("top-db")) {
-    throw std::invalid_argument("--threshold-db and --top-db are mutually exclusive");
-  }
-  const bool use_legacy_top_db = args.has("top-db") && !args.has("threshold-db");
+  const bool use_legacy_top_db = args.has("top-db");
   const float threshold_db = args.get_float("threshold-db", sonare::kDefaultAbsoluteSilenceDb);
   const float top_db = args.get_float("top-db", sonare::kDefaultSilenceTopDb);
   const int frame_length = args.get_int("n-fft", sonare::kDefaultSilenceFrameLength);

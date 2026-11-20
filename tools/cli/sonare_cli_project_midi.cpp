@@ -152,11 +152,8 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
     config.min_ridge_peak_ratio = read_ratio("min-ridge-peak-ratio");
   }
   if (args.has("reattack-ratio")) {
-    const float value = args.get_float("reattack-ratio", 0.0f);
-    if (value != 0.0f && !(std::isfinite(value) && value > 1.0f)) {
-      throw std::invalid_argument("--reattack-ratio must be 0 (no split) or greater than 1");
-    }
-    config.reattack_ratio = value;
+    // validate_transcribe has already refused a ratio that is neither 0 nor above 1.
+    config.reattack_ratio = args.get_float("reattack-ratio", 0.0f);
   } else if (config.polyphonic != 0) {
     // The C ABI reads 0 as "no split", so the polyphonic transcription default is spelled out.
     config.reattack_ratio = kDefaultReattackRatio;

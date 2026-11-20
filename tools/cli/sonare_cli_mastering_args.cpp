@@ -13,18 +13,53 @@
 // What the mastering and repair commands decide from the command line alone, so the
 // registry's validators and the handlers read one implementation.
 #ifdef SONARE_WITH_MASTERING
-std::vector<mastering::api::Param> parse_chain_params(const std::string& text) {
-  namespace json = sonare::util::json;
-  // Read as the flat params of a chain document, so the core decides a choice-valued key
-  // (a name is resolved, a number refused) in its own words.
-  json::Object params;
+std::string params_grammar_refusal(const std::string& text) {
   std::stringstream stream(text);
   std::string item;
   while (std::getline(stream, item, ',')) {
     const auto eq = item.find('=');
     if (eq == std::string::npos || eq == 0 || eq + 1 == item.size()) {
-      throw std::invalid_argument("invalid parameter entry: '" + item + "' (expected key=value)");
+      return "argument --params: must be a comma-separated list of key=value entries";
     }
+  }
+  return {};
+}
+
+// Refuses a supplied --params key the named processor does not read.
+//
+// insert_param_names() builds the processor against an empty map and reports
+// every key its config builder probed, so a supplied key outside that set took
+// no effect at all. The list is sorted, which makes the membership test a binary
+// search. A name with no published key set is left alone: only a realtime insert
+// can be probed this way, so an empty list means "not an insert", not "reads nothing".
+std::string unknown_processor_params_refusal(const std::string& processor,
+                                             const std::string& text) {
+  const std::vector<std::string> known = mastering::api::insert_param_names(processor);
+  if (known.empty()) return {};
+  std::stringstream stream(text);
+  std::string item;
+  std::string unknown;
+  while (std::getline(stream, item, ',')) {
+    const std::string key = item.substr(0, item.find('='));
+    if (std::binary_search(known.begin(), known.end(), key)) continue;
+    if (!unknown.empty()) unknown += ", ";
+    unknown += key;
+  }
+  if (unknown.empty()) return {};
+  return "unknown --params key for " + processor + ": " + unknown;
+}
+
+namespace {
+
+// The `--params` list as a chain document, so the core decides a choice-valued key
+// (a name is resolved, a number refused) in its own words.
+std::string chain_params_document(const std::string& text) {
+  namespace json = sonare::util::json;
+  json::Object params;
+  std::stringstream stream(text);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    const auto eq = item.find('=');
     const std::string value_text = item.substr(eq + 1);
     std::istringstream ss(value_text);
     ss.imbue(std::locale::classic());
@@ -36,9 +71,26 @@ std::vector<mastering::api::Param> parse_chain_params(const std::string& text) {
   json::Object document;
   document.emplace("version", json::Value(2.0));
   document.emplace("params", json::Value(std::move(params)));
+  return json::dump(json::Value(std::move(document)));
+}
+
+}  // namespace
+
+std::string chain_params_refusal(const std::string& text) {
+  try {
+    mastering::api::chain_config_from_json(chain_params_document(text));
+  } catch (const std::exception& error) {
+    return error.what();
+  }
+  return {};
+}
+
+std::vector<mastering::api::Param> parse_chain_params(const std::string& text) {
+  if (const std::string refusal = params_grammar_refusal(text); !refusal.empty()) {
+    throw std::invalid_argument(refusal);
+  }
   std::vector<mastering::api::Param> out;
-  for (auto& leaf :
-       mastering::api::chain_config_flat_params(json::dump(json::Value(std::move(document))))) {
+  for (auto& leaf : mastering::api::chain_config_flat_params(chain_params_document(text))) {
     out.push_back({std::move(leaf.key), leaf.value});
   }
   return out;
@@ -134,6 +186,10 @@ std::string repair_argument_refusal(const CliArgs& args) {
         has_stages ? parse_repair_stages(args.get_string("stages")) : std::vector<std::string>{};
     const auto overrides = parse_chain_params(args.get_string("params"));
     reject_non_repair_overrides(overrides);
+    if (const std::string refusal = chain_params_refusal(args.get_string("params"));
+        !refusal.empty()) {
+      return refusal;
+    }
     if (has_stages) reject_unlisted_stage_overrides(overrides, stages);
   } catch (const std::exception& error) {
     return error.what();

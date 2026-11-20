@@ -279,6 +279,19 @@ sonare::util::json::Value json_keys_to_snake_case(const sonare::util::json::Valu
 std::vector<mastering::api::Param> parse_mastering_params(const std::string& text,
                                                           bool resolve_names = false,
                                                           const std::string& processor = {});
+/// The refusal text for a `--params` list with an entry that is not `key=value`, or empty;
+/// defined in sonare_cli_mastering_args.cpp.
+std::string params_grammar_refusal(const std::string& text);
+/// The refusal text for a `--params` list naming a key @p processor does not read, or empty;
+/// the list must already satisfy @ref params_grammar_refusal. Defined in
+/// sonare_cli_mastering_args.cpp.
+std::string unknown_processor_params_refusal(const std::string& processor, const std::string& text);
+/// The core's refusal of a `--params` list read as a chain document (unknown key, wrong type,
+/// out-of-domain value), or empty; the list must already satisfy @ref params_grammar_refusal.
+/// Defined in sonare_cli_mastering_args.cpp.
+std::string chain_params_refusal(const std::string& text);
+/// The refusal text for `mastering-suggest --params` and its named options, or empty.
+std::string assistant_params_refusal(const CliArgs& args);
 /// Parses a chain `--params` list through the core's chain document reader; defined in
 /// sonare_cli_mastering_args.cpp.
 std::vector<mastering::api::Param> parse_chain_params(const std::string& text);
