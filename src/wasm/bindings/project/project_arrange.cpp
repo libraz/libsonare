@@ -241,10 +241,11 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
   SonareProjectWarpAnchor* rows = nullptr;
   size_t count = 0;
   SonareTakeAlignment alignment{};
-  checkCodedCError(sonare_align_take_to_reference_ex(
+  const SonareError err = sonare_align_take_to_reference_ex(
       reference_buffer.empty() ? nullptr : reference_buffer.data(), reference_buffer.size(),
       sample_rate, take_buffer.empty() ? nullptr : take_buffer.data(), take_buffer.size(),
-      take_sample_rate, &resolved, &rows, &count, &alignment));
+      take_sample_rate, &resolved, &rows, &count, &alignment);
+  if (err != SONARE_OK) throwCodedCErrorFlattening(err, "config");
   // Copied out and released before anything JS-facing is built, so a throw while
   // marshalling cannot leak the heap block.
   std::vector<SonareProjectWarpAnchor> anchors;

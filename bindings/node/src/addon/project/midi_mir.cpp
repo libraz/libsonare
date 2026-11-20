@@ -631,8 +631,10 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
       reference.Data(), reference.ElementLength(), sample_rate, take.Data(), take.ElementLength(),
       take_sample_rate, &config, &raw_anchors, &count, &alignment);
   std::unique_ptr<SonareProjectWarpAnchor, WarpAnchorArrayDeleter> anchors(raw_anchors);
-  ThrowIfError(env, code);
-  if (env.IsExceptionPending()) return env.Undefined();
+  if (code != SONARE_OK) {
+    ThrowSonareErrorFlattening(env, code, "config");
+    return env.Undefined();
+  }
 
   Napi::Array out_anchors = Napi::Array::New(env, count);
   for (size_t i = 0; i < count; ++i) {

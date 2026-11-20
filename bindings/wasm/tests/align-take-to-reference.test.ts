@@ -130,8 +130,9 @@ describe('WASM alignTakeToReference', () => {
 
     // And this is what proves the value is forwarded rather than accepted and
     // dropped: each pitch class takes the mean of a whole number of CQT bins, so a
-    // resolution that is not a multiple of twelve is refused by the CORE. The
-    // surface reader only checks the sign, so it cannot be the one refusing this.
+    // resolution that is not a multiple of twelve is refused by the CORE, under the
+    // request key. The surface reader only checks the shape, so it cannot be the one
+    // refusing this.
     let thrown: unknown;
     try {
       alignTakeToReference({ reference, take, sampleRate, binsPerOctave: 13 });
@@ -139,7 +140,9 @@ describe('WASM alignTakeToReference', () => {
       thrown = error;
     }
     expect(thrown).toBeDefined();
-    expect(expectArgumentRefusal(thrown).message).toBe('alignTakeToReference: Invalid parameter');
+    expect(expectArgumentRefusal(thrown).message).toBe(
+      'alignTakeToReference: binsPerOctave must be a multiple of 12',
+    );
   });
 
   it('reads an absent resolution field as the library value however absence is spelled', () => {
@@ -209,14 +212,11 @@ describe('WASM alignTakeToReference', () => {
     }
   });
 
-  it('names the field for a value it cannot read, and does not for one it cannot use', () => {
-    // Two layers refuse, and which one answers decides what the caller is told.
-    // The reader knows the field's name and nothing about its domain, so a value
-    // of the wrong shape comes back named. A well-formed value the measurement
-    // cannot use travels past the reader, and the core reports the condition
-    // without knowing which argument carried it. Asserting the difference is what
-    // keeps a domain check from drifting back into this layer, where it would
-    // duplicate the core's own and could disagree with it.
+  it('names the field for a value it cannot read, and the core for one it cannot use', () => {
+    // Two layers refuse. The reader knows the field's name and nothing about its
+    // domain, so a value of the wrong shape comes back named by it. A well-formed
+    // value the measurement cannot use travels past the reader and is refused by
+    // the core, which keeps the domain check out of this layer.
     const unreadable: Array<[string, Partial<AlignTakeToReferenceRequest>, RegExp]> = [
       ['a string where a number belongs', { hopLength: '512' as unknown as number }, /hopLength/],
       ['a fraction where a whole number belongs', { hopLength: 512.5 }, /hopLength/],
@@ -232,16 +232,24 @@ describe('WASM alignTakeToReference', () => {
       expect((thrown as Error).message, name).toMatch(field);
     }
 
-    const unusable: Array<[string, Partial<AlignTakeToReferenceRequest>]> = [
-      ['a negative hop', { hopLength: -256 }],
-      ['a negative resolution', { binsPerOctave: -12 }],
+    const unusable: Array<[string, Partial<AlignTakeToReferenceRequest>, string]> = [
+      ['a negative hop', { hopLength: -256 }, 'Invalid parameter'],
+      [
+        'a negative resolution',
+        { binsPerOctave: -12 },
+        'binsPerOctave must be an integer in [0, 2147483647]',
+      ],
       // Positive and a whole number, and still refused: the chroma folds onto
       // twelve pitch classes and 18 does not divide by them. Nothing short of the
       // core's own grid knows that, which is why this case is here rather than
       // among the named ones above.
-      ['a resolution off the twelve-bin grid', { binsPerOctave: 18 }],
+      [
+        'a resolution off the twelve-bin grid',
+        { binsPerOctave: 18 },
+        'binsPerOctave must be a multiple of 12',
+      ],
     ];
-    for (const [name, options] of unusable) {
+    for (const [name, options, message] of unusable) {
       let thrown: unknown;
       try {
         alignTakeToReference({ reference, take, sampleRate, ...options });
@@ -249,9 +257,8 @@ describe('WASM alignTakeToReference', () => {
         thrown = error;
       }
       expect(thrown, name).toBeDefined();
-      // The core's refusal, which cannot say which argument carried the value.
       expect(expectArgumentRefusal(thrown, RangeError, name).message, name).toBe(
-        'alignTakeToReference: Invalid parameter',
+        `alignTakeToReference: ${message}`,
       );
     }
   });
