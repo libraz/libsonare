@@ -654,9 +654,13 @@ describe('the constant-Q family answers the shared corpus with one text on every
           } catch (error) {
             caught = error;
           }
-          if (caught === undefined) return;
+          if (caught === undefined) {
+            return;
+          }
           expect((caught as Error).message).not.toMatch(/std::|bad_alloc/);
-          if (caught instanceof SonareError) expect(caught.codeName).toBe('OutOfMemory');
+          if (caught instanceof SonareError) {
+            expect(caught.codeName).toBe('OutOfMemory');
+          }
           return;
         }
         const refusal = testCase.message

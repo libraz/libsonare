@@ -401,7 +401,7 @@
   "scene_insert_refusal": {
     "fn": "Mixer.from_json",
     "options": {"sample_rate": 48000, "max_block_size": 256},
-    "scene": {"version": 1, "strips": [{"id": "s", "inserts": [{"slot": "post", "processor": "eq.parametric", "params": {}}]}], "buses": [{"id": "master", "role": "master"}], "connections": []},
+    "scene": {"version": 2, "strips": [{"id": "s", "inserts": [{"slot": "post", "processor": "eq.parametric", "params": {}}]}], "buses": [{"id": "master", "role": "master"}], "connections": []},
     "cases": [
       { "id": "band0_frequency_accepted", "param": "band0.frequencyHz", "value": 1000, "accepted": true },
       { "id": "band0_frequency_zero", "param": "band0.frequencyHz", "value": 0, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.frequencyHz must be finite and in (0, 24000)", "pending": {"node": "the addon prefixes 'failed to build mixer from scene JSON: ' ahead of the core text"} },
@@ -445,7 +445,7 @@
       { "id": "gamma_wrong_type", "key": "gamma", "value": "1", "only": ["vqt"], "refused": "type", "predicate": "must be a number" },
       { "id": "fmin_hz_over_nyquist", "options": {"fmin_hz": 20000}, "refused": "range", "message": "fmin_hz * 2^((n_bins - 1) / bins_per_octave) must be less than sample_rate / 2", "pending": {"node": "the core refuses the Nyquist relation untexted", "wasm": "the core refuses the Nyquist relation untexted"} },
       { "id": "top_bin_over_nyquist", "options": {"fmin_hz": 1000, "n_bins": 84}, "refused": "range", "message": "fmin_hz * 2^((n_bins - 1) / bins_per_octave) must be less than sample_rate / 2", "pending": {"node": "the core refuses the Nyquist relation untexted", "wasm": "the core refuses the Nyquist relation untexted"} },
-      { "id": "hop_length_one_names_no_internal_failure", "options": {"hop_length": 1}, "only": ["pseudo_cqt"], "no_internal_text": true, "pending": {"wasm": "an allocation failure reaches JS as SonareError \"std::bad_alloc\" rather than OutOfMemory or a budget refusal"} }
+      { "id": "hop_length_one_names_no_internal_failure", "options": {"hop_length": 1}, "only": ["pseudo_cqt"], "no_internal_text": true }
     ]
   }
 }
