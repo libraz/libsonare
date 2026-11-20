@@ -33,7 +33,7 @@ export function respellRefusal(error: unknown, respelled: Respelled): unknown {
     ? [...refusal.subjects, refusal.renamedTo]
     : [...refusal.subjects];
   const own = (subject: string): Respelling | undefined =>
-    Object.prototype.hasOwnProperty.call(respelled, subject) ? respelled[subject] : undefined;
+    Object.hasOwn(respelled, subject) ? respelled[subject] : undefined;
   if (!subjects.some((subject) => own(subject) !== undefined)) {
     return error;
   }
