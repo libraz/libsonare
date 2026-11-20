@@ -98,7 +98,7 @@ def test_mix_cli_keeps_a_stereo_stem_stereo(tmp_path) -> None:
     scene.write_text(
         json.dumps(
             {
-                "version": 1,
+                "version": 2,
                 "strips": [{"id": "vocal"}],
                 "buses": [{"id": "master", "role": "master"}],
                 "connections": [{"source": "vocal", "destination": "master"}],

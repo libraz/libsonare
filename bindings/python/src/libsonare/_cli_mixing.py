@@ -410,7 +410,7 @@ def _mix_strip_scene_json(pan_mode: str) -> str:
     """
     return json.dumps(
         {
-            "version": 1,
+            "version": 2,
             "buses": [{"id": "master", "role": "master", "inserts": []}],
             "connections": [{"source": "s", "destination": "master"}],
             "strips": [

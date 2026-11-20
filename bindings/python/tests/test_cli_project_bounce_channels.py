@@ -50,7 +50,7 @@ def _surround_master_project(layout: str) -> dict:
     return {
         **_CLEAN_PROJECT,
         "scene": {
-            "version": 1,
+            "version": 2,
             "buses": [{"id": "bus.main", "role": "master", "layout": layout}],
         },
     }
