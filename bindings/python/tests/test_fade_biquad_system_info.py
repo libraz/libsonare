@@ -64,7 +64,7 @@ class TestBiquadFilter:
     def test_a_cutoff_on_a_band_pass_is_refused_with_the_c_text(self) -> None:
         with pytest.raises(
             SonareValueError,
-            match=(r"^biquad_filter: cutoff_hz must be 0 when type is band-pass or notch$"),
+            match=(r"^biquad_filter: cutoff_hz does not apply when type is bandPass or notch$"),
         ):
             libsonare.biquad_filter(
                 sine(440.0, 0.1, SR),

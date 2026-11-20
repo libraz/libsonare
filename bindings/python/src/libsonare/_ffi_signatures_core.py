@@ -1021,6 +1021,19 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_last_error_message.restype = ctypes.c_char_p
     lib.sonare_last_error_message.argtypes = []
 
+    # The subjects of the last parameter refusal, and its message rendered with others
+    # in their place; a facade that flattens a struct drops the struct's root.
+    lib.sonare_last_refusal_subject_count.restype = ctypes.c_size_t
+    lib.sonare_last_refusal_subject_count.argtypes = []
+    lib.sonare_last_refusal_subject.restype = ctypes.c_char_p
+    lib.sonare_last_refusal_subject.argtypes = [ctypes.c_size_t]
+    lib.sonare_last_refusal_render.restype = ctypes.c_int32
+    lib.sonare_last_refusal_render.argtypes = [
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_char_p),
+    ]
+
     # sonare_last_error_code: the thread-local code recorded beside the message, so a
     # pointer-returning constructor that returned NULL still carries a real code.
     lib.sonare_last_error_code.restype = ctypes.c_int
