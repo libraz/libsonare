@@ -576,7 +576,7 @@ Napi::Value SonareWrap::MasteringChainConfigParams(const Napi::CallbackInfo& inf
   SONARE_NODE_TRY
   const std::string document = node_narrow_string(env, info[0], "document");
   char* json_out = nullptr;
-  const SonareError err = sonare_mastering_chain_config_params_json(document.c_str(), &json_out);
+  const SonareError err = sonare_mastering_chain_config_from_json(document.c_str(), &json_out);
   if (err != SONARE_OK) {
     sonare_free_string(json_out);
     sonare_node::ThrowSonareError(env, err);
