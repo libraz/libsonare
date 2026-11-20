@@ -1,23 +1,26 @@
 /** Host CPU, memory and parallelism facts, from {@link systemInfo}; an unreported fact is absent. */
 export interface SystemInfo {
+  /** Processor core counts. */
   readonly cpu: {
     /** Logical cores. */
     readonly logicalCores?: number;
     /** Physical cores. */
     readonly physicalCores?: number;
   };
+  /** Memory sizes in GiB. */
   readonly memory: {
-    /** Total memory in GiB. */
+    /** Total installed memory. */
     readonly totalGb?: number;
-    /** Memory available to the process in GiB. */
+    /** Memory available to new allocations. */
     readonly availableGb?: number;
   };
+  /** How the library parallelizes its work on this host. */
   readonly parallel: {
-    /** Whether the library runs work in parallel. */
+    /** True when work may run on more than one worker. */
     readonly enabled: boolean;
     /** Worker count, at least 1. */
     readonly workers: number;
-    /** Parallelism strategy name. */
+    /** Name of the parallelization strategy. */
     readonly strategy: string;
   };
 }

@@ -107,6 +107,8 @@ const TABLE: Entry[] = [
   ].map((name) => mono(name)),
   mono('chordFunctionalAnalysis', { keyRoot: 0 }),
   mono('roomMorph'),
+  mono('fade'),
+  mono('biquadFilter', { type: 'lowPass', cutoffHz: 1000 }),
   stereo('roomMorphStereo'),
   // Spectral and pitch features
   ...[
@@ -356,6 +358,7 @@ const NOT_AUDIO: string[] = [
     'version',
     'capabilities',
     'capabilityCatalog',
+    'systemInfo',
     'abiVersion',
     'engineAbiVersion',
     'projectAbiVersion',
