@@ -242,7 +242,7 @@ describe('argument refusal classes shared with the Node surface', () => {
     }
   });
 
-  it('refuses an unread key of a solo mastering processor with a RangeError', () => {
+  it('refuses an unread key of a solo mastering processor with a TypeError', () => {
     const error = thrown(() =>
       masteringApplyProcessor({
         processor: 'utility.gain',
@@ -251,7 +251,9 @@ describe('argument refusal classes shared with the Node surface', () => {
         params: { gainDb: 3 } as never,
       }),
     );
-    expect(error).toBeInstanceOf(RangeError);
+    expect(error).toEqual(
+      new TypeError('masteringApplyProcessor: unknown key gainDb (expected levelDb)'),
+    );
     expect(isSonareError(error)).toBe(false);
   });
 
@@ -278,7 +280,7 @@ describe('argument refusal classes shared with the Node surface', () => {
     }
   });
 
-  it('refuses an unknown masteringInsertTiming parameter key with a RangeError', () => {
+  it('refuses an unknown masteringInsertTiming parameter key with a TypeError', () => {
     const error = thrown(() =>
       masteringInsertTiming({
         insert: 'utility.gain',
@@ -286,7 +288,9 @@ describe('argument refusal classes shared with the Node surface', () => {
         sampleRate: 48000,
       }),
     );
-    expect(error).toBeInstanceOf(RangeError);
+    expect(error).toEqual(
+      new TypeError('masteringInsertTiming: unknown key bogus (expected levelDb)'),
+    );
     expect(isSonareError(error)).toBe(false);
   });
 

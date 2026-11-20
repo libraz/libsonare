@@ -56,9 +56,9 @@ const expectRangeRefusal = (fn: () => unknown): void => {
   expectRefusalOf(fn);
 };
 
-/** The core's `MusicAnalyzerConfig` guard answered, not a facade or reader of the binding. */
-const expectConfigRefusal = (fn: () => unknown): void => {
-  expect(expectRefusalOf(fn).message).toMatch(/^analyze: MusicAnalyzerConfig: /);
+/** The core's analyzer guard answered, naming the option it refused. */
+const expectConfigRefusal = (fn: () => unknown, message: string): void => {
+  expect(expectRefusalOf(fn).message).toBe(`analyze: ${message}`);
 };
 
 const expectTypeRefusal = (fn: () => unknown): void => {
@@ -186,16 +186,28 @@ describe('offline render honours the prepared channel count', () => {
 
 describe('analyze rejects the same configurations as the C ABI', () => {
   const samples = makeSine(0.25, 440);
-  const rejected: Array<[string, AnalyzeOptions]> = [
-    ['bpmMin below zero', { bpmMin: 0 }],
-    ['an inverted bpm range', { bpmMin: 120, bpmMax: 60 }],
-    ['a negative chroma highpass', { chromaHighPassHz: -1 }],
-    ['a non-positive chord HMM beam width', { chordHmmBeamWidth: 0 }],
+  const rejected: Array<[string, AnalyzeOptions, string]> = [
+    ['bpmMin below zero', { bpmMin: 0 }, 'bpmMin must be finite and greater than 0'],
+    [
+      'an inverted bpm range',
+      { bpmMin: 120, bpmMax: 60 },
+      'bpmMax must be finite and at least bpmMin',
+    ],
+    [
+      'a negative chroma highpass',
+      { chromaHighPassHz: -1 },
+      'chromaHighpassHz must be finite and at least 0',
+    ],
+    [
+      'a non-positive chord HMM beam width',
+      { chordHmmBeamWidth: 0 },
+      'chordHmmBeamWidth must be an integer in [1, 2147483647]',
+    ],
   ];
 
-  for (const [label, options] of rejected) {
+  for (const [label, options, message] of rejected) {
     it(`rejects ${label}`, () => {
-      expectConfigRefusal(() => analyze(samples, SR, options));
+      expectConfigRefusal(() => analyze(samples, SR, options), message);
     });
   }
 
@@ -205,7 +217,10 @@ describe('analyze rejects the same configurations as the C ABI', () => {
   });
 
   it('rejects an odd nFft, which has no n_fft/2 + 1 bin layout', () => {
-    expectConfigRefusal(() => analyze(samples, SR, { nFft: 2047 }));
+    expectConfigRefusal(
+      () => analyze(samples, SR, { nFft: 2047 }),
+      'nFft must be an even integer in [2, 2147483647]',
+    );
   });
 });
 

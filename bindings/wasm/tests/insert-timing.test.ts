@@ -60,7 +60,9 @@ describe('insert timing and construction-key catalog (WASM)', () => {
 
   it('rejects a key the insert does not read, naming it', () => {
     expect(() => timingOf('saturation.softClipper', { notARealKey: 1 }, 48000)).toThrow(
-      /does not read parameter\(s\).*notARealKey/,
+      new TypeError(
+        'masteringInsertTiming: unknown key notARealKey (expected aliasing, ceiling, driveDb, mix)',
+      ),
     );
   });
 

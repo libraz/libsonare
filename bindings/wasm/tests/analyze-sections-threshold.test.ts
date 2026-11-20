@@ -55,7 +55,7 @@ describe('analyzeSections threshold', () => {
 
   it('refuses a negative threshold as a RangeError from the library', () => {
     expect(() => analyzeSections(SIGNAL, SR, { ...OPTIONS, threshold: -0.1 })).toThrow(
-      /boundary_threshold must be finite and non-negative/,
+      new RangeError('analyzeSections: boundaryThreshold must be finite and at least 0'),
     );
     expect(() => analyzeSections(SIGNAL, SR, { ...OPTIONS, threshold: -0.1 })).toThrow(RangeError);
   });

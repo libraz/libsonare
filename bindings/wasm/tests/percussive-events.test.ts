@@ -293,8 +293,8 @@ function expectRangeRefusal(action: () => void): void {
 /**
  * Asserts that @p action is refused by the core rather than by the binding. Both
  * arrive as a RangeError, so the wording says which answered: the core's guards
- * either carry no detail (`Invalid parameter`) or say `StftConfig: ...`, while the
- * binding's own refusals name the entry point or the field.
+ * either carry no detail (`Invalid parameter`) or name the refused STFT field,
+ * while the binding's own refusals name the entry point or the field.
  */
 function expectCoreRefusal(action: () => void, wording: string | RegExp = 'Invalid parameter') {
   const error = expectRefusalOf(action);
@@ -330,7 +330,7 @@ const brokenFramings: readonly { nFft: number; hopLength: number }[] = [
 
 /**
  * Refuses a broken framing: a negative size is the binding's own refusal, every
- * other break is the STFT configuration's, worded `StftConfig: ...` by the core.
+ * other break is the STFT configuration's, which the core refuses by field name.
  */
 function expectBrokenFraming(framing: { nFft: number; hopLength: number }, run: () => void) {
   if (framing.nFft < 0 || framing.hopLength < 0) {
@@ -339,7 +339,10 @@ function expectBrokenFraming(framing: { nFft: number; hopLength: number }, run: 
       /^(extractPercussiveEvents|renderPercussiveEvents): the framing and kernel sizes must be integers in \[0, 2147483647\]$/,
     );
   } else {
-    expectCoreRefusal(run, /^(extractPercussiveEvents|renderPercussiveEvents): StftConfig: /);
+    expectCoreRefusal(
+      run,
+      /^(extractPercussiveEvents|renderPercussiveEvents): (nFft|hopLength) must be /,
+    );
   }
 }
 

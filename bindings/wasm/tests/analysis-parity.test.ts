@@ -191,7 +191,7 @@ describe('WASM wave3 analysis parity', () => {
     // smoothing off and still detects chords.
     it('throws on a negative smoothingWindow and accepts 0', () => {
       expect(() => detectChords(samples, SR, { smoothingWindowSec: -1 })).toThrow(
-        new RangeError('detectChords: ChordConfig: smoothing_window must be finite and at least 0'),
+        new RangeError('detectChords: smoothingWindow must be finite and at least 0'),
       );
       expect(detectChords(samples, SR, { smoothingWindowSec: 0 }).chords.length).toBeGreaterThan(0);
     });
@@ -270,9 +270,7 @@ describe('WASM wave3 analysis parity', () => {
     it('throws on a negative smoothingWindow and accepts 0', () => {
       const request = { samples, sampleRate: SR, keyRoot: PitchClass.C, keyMode: 'major' as const };
       expect(() => chordFunctionalAnalysis({ ...request, smoothingWindowSec: -1 })).toThrow(
-        new RangeError(
-          'chordFunctionalAnalysis: ChordConfig: smoothing_window must be finite and at least 0',
-        ),
+        new RangeError('chordFunctionalAnalysis: smoothingWindow must be finite and at least 0'),
       );
       expect(chordFunctionalAnalysis({ ...request, smoothingWindowSec: 0 }).length).toBeGreaterThan(
         0,

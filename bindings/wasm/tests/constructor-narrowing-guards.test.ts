@@ -209,35 +209,35 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'StreamAnalyzer',
     field: 'sampleRate',
     legal: 44100,
-    domainRefusal: 'sample_rate must be within the supported range',
+    domainRefusal: 'sampleRate must be an integer in [8000, 384000]',
     construct: (sampleRate) => newAnalyzer({ sampleRate }),
   },
   {
     entry: 'StreamAnalyzer',
     field: 'nFft',
     legal: 512,
-    domainRefusal: 'n_fft must be positive',
+    domainRefusal: 'nFft must be an integer in [1, 524288]',
     construct: (nFft) => newAnalyzer({ nFft }),
   },
   {
     entry: 'StreamAnalyzer',
     field: 'hopLength',
     legal: 64,
-    domainRefusal: 'hop_length must be positive',
+    domainRefusal: 'hopLength must be an integer in [1, 2147483647]',
     construct: (hopLength) => newAnalyzer({ hopLength }),
   },
   {
     entry: 'StreamAnalyzer',
     field: 'nMels',
     legal: 32,
-    domainRefusal: 'n_mels must be positive',
+    domainRefusal: 'nMels must be an integer in [1, 4096]',
     construct: (nMels) => newAnalyzer({ nMels }),
   },
   {
     entry: 'StreamAnalyzer',
     field: 'emitEveryNFrames',
     legal: 2,
-    domainRefusal: 'emit_every_n_frames must be positive',
+    domainRefusal: 'emitEveryNFrames must be an integer in [1, 2147483647]',
     construct: (emitEveryNFrames) => newAnalyzer({ emitEveryNFrames }),
   },
   {
@@ -301,16 +301,17 @@ describe('a narrowed constructor position refuses what a wrap made legal', () =>
       expect(error.message).toContain(slot.domainRefusal);
       // Both layers refuse as a RangeError, so the wording says whose guard it was:
       // the engine's and the two ordinal guards are the binding's own, the
-      // analyzer's other guards are the core's StreamConfig validation.
+      // analyzer's other guards are the core's stream configuration validation.
       if (slot.entry.startsWith('RealtimeEngine')) {
         expect(error.message).toMatch(/^RealtimeEngine: /);
       } else if (BINDING_GUARDS.has(slot.field)) {
-        expect(error.message).not.toMatch(/^StreamAnalyzer: StreamConfig: /);
+        expect(error.message).not.toMatch(/ must be an integer in \[/);
       } else {
-        expect(error.message).toMatch(/^StreamAnalyzer: StreamConfig: /);
+        expect(error.message).toBe(`StreamAnalyzer: ${slot.domainRefusal}`);
       }
       expect(error.message).not.toContain(READER_RANGE);
-      expect(error.message).not.toContain(READER_FRACTIONAL);
+      // The core states an integer domain too, so only the reader's bare ending is its own.
+      expect(error.message).not.toMatch(new RegExp(`${READER_FRACTIONAL}$`));
     });
 
     it(`${slot.entry} still constructs for a legal ${slot.field}`, () => {
@@ -422,7 +423,7 @@ describe('the untouched neighbours of the narrowed positions are unchanged', () 
     ['NaN', 'fmin must be finite and in [-3.4028235e38, 3.4028235e38]'],
     ['Infinity', 'fmin must be finite and in [-3.4028235e38, 3.4028235e38]'],
     ['1.5', 'constructs'],
-    ['-1', 'StreamConfig: fmin/fmax must be finite and non-negative'],
+    ['-1', 'fmin must be finite and at least 0'],
   ];
 
   it('fmin answers each shape as a float position, not as a narrowed one', () => {
