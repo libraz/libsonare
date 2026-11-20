@@ -45,8 +45,8 @@ const VALID = {
   absoluteThreshold: 0.005,
   nMfcc: 13,
   nChroma: 12,
-  peakDistance: 2.0,
-  referenceWindow: 60,
+  peakDistanceSec: 2.0,
+  referenceWindowSec: 60,
   useMfcc: true,
   useChroma: true,
 };
@@ -76,8 +76,8 @@ describe('detectBoundaries wrong-typed options', () => {
       'nChroma',
       'threshold',
       'absoluteThreshold',
-      'peakDistance',
-      'referenceWindow',
+      'peakDistanceSec',
+      'referenceWindowSec',
     ] as const) {
       expect(() =>
         module.detectBoundaries(samples, SAMPLE_RATE, { ...VALID, [key]: String(VALID[key]) }),

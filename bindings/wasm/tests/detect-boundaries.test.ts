@@ -179,7 +179,7 @@ describe('detectBoundaries', () => {
       absoluteThreshold: 0.005,
       nMfcc: 13,
       nChroma: 12,
-      peakDistance: 2.0,
+      peakDistanceSec: 2.0,
       referenceWindowSec: 60,
       useMfcc: true,
       useChroma: true,
@@ -194,9 +194,9 @@ describe('detectBoundaries', () => {
       { nChroma: 0 },
       { threshold: Number.NaN },
       { absoluteThreshold: -1 },
-      { peakDistance: Number.POSITIVE_INFINITY },
-      { referenceWindow: -1 },
-      { referenceWindow: Number.NaN },
+      { peakDistanceSec: Number.POSITIVE_INFINITY },
+      { referenceWindowSec: -1 },
+      { referenceWindowSec: Number.NaN },
       { useMfcc: false, useChroma: false },
     ]) {
       expect(() => module.detectBoundaries(samples, SAMPLE_RATE, { ...valid, ...bad })).toThrow();
