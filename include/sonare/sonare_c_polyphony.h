@@ -268,7 +268,7 @@ SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, 
 /// @details What the estimation saw rather than what survived: a frame reported as
 ///          three voices with two notes spanning it is the difference between the two
 ///          stages, which is the figure a host deciding what to edit wants.
-/// @param out Receives up to @p capacity counts, one per frame from frame 0.
+/// @param out Receives up to @p capacity counts, one per frame from frame 0, only on success.
 /// @param out_count Receives the number written.
 SonareError sonare_polyphonic_polyphony(const SonarePolyphonicAnalysis* analysis, int32_t* out,
                                         size_t capacity, size_t* out_count);
