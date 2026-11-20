@@ -1,4 +1,4 @@
-"""Level normalization and silence trimming (librosa mirrors)."""
+"""Level normalization, fades, biquad filtering and silence trimming."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Literal, TypeAlias
 import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type
-from ._ffi import SonareNormalizeStereoResult
+from ._ffi import SonareBiquadFilterConfig, SonareNormalizeStereoResult
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -24,6 +24,7 @@ from ._runtime import (
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
+    _to_c_int32,
     _to_c_size_t,
     _validate_samples,
     _validate_scalar,
@@ -275,4 +276,117 @@ def trim(
             ctypes.byref(out_length),
         )
         _check(rc)
+        return _from_c_float_array(out, out_length.value)
+
+
+@_entry("fade")
+def fade(
+    samples: Sequence[float] | list[float],
+    sample_rate: int,
+    *,
+    fade_in_sec: float = 0.0,
+    fade_out_sec: float = 0.0,
+) -> np.ndarray:
+    """Apply a cosine fade-in and fade-out to mono audio.
+
+    Each length is clamped to the input; 0 leaves that end untouched, so the
+    defaults return the input unchanged. The fade-in is applied first, then the
+    fade-out.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz.
+        fade_in_sec: Fade-in length in seconds; finite and at least 0.
+        fade_out_sec: Fade-out length in seconds; finite and at least 0.
+
+    Returns:
+        ``float32`` array of faded samples.
+    """
+    _validate_samples(samples)
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_fade(
+            c_array,
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_float(fade_in_sec, "fade_in_sec"),
+            _to_c_float(fade_out_sec, "fade_out_sec"),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
+        return _from_c_float_array(out, out_length.value)
+
+
+BiquadFilterType: TypeAlias = Literal["highPass", "lowPass", "bandPass", "notch"]
+"""The response :func:`biquad_filter` applies."""
+
+_BIQUAD_FILTER_TYPES = {"highPass": 0, "lowPass": 1, "bandPass": 2, "notch": 3}
+_BIQUAD_FILTER_TOKENS = "highPass, lowPass, bandPass, notch"
+
+
+@_entry("biquad_filter")
+def biquad_filter(
+    samples: Sequence[float] | list[float],
+    sample_rate: int,
+    *,
+    type: BiquadFilterType,  # noqa: A002 - the public keyword, shared with Node and WASM
+    order: int = 2,
+    zero_phase: bool = False,
+    cutoff_hz: float | None = None,
+    center_hz: float | None = None,
+    bandwidth_hz: float | None = None,
+) -> np.ndarray:
+    """Filter mono audio with a biquad, or a cascade of two for order 4.
+
+    ``"highPass"`` and ``"lowPass"`` read ``cutoff_hz``; ``"bandPass"`` and
+    ``"notch"`` read ``center_hz`` and ``bandwidth_hz``. A frequency the type
+    does not read must be left out (``None``); giving one is refused.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz.
+        type: ``"highPass"``, ``"lowPass"``, ``"bandPass"`` or ``"notch"``.
+        order: 2, or 4 for ``"highPass"`` / ``"lowPass"`` (a two-section cascade).
+        zero_phase: Run the filter forward and backward, which cancels the phase shift.
+        cutoff_hz: High-pass / low-pass corner, in (0, sample_rate / 2).
+        center_hz: Band-pass / notch center, in (0, sample_rate / 2).
+        bandwidth_hz: Band-pass / notch bandwidth, greater than 0.
+
+    Returns:
+        ``float32`` array of filtered samples.
+    """
+    if not isinstance(type, str):
+        raise _refuse_type(f"type must be one of {_BIQUAD_FILTER_TOKENS}")
+    if type not in _BIQUAD_FILTER_TYPES:
+        raise _refuse(f"type must be one of {_BIQUAD_FILTER_TOKENS}")
+    if not isinstance(zero_phase, bool):
+        raise _refuse_type("zero_phase must be a bool")
+    _validate_samples(samples)
+    lib = _get_lib()
+    config = SonareBiquadFilterConfig()
+    lib.sonare_biquad_filter_config_init(ctypes.byref(config))
+    config.type = _BIQUAD_FILTER_TYPES[type]
+    config.order = _to_c_int32(order, "order").value
+    config.zero_phase = 1 if zero_phase else 0
+    # None is written as 0, which the C entry reads as "not given".
+    for name, value in (
+        ("cutoff_hz", cutoff_hz),
+        ("center_hz", center_hz),
+        ("bandwidth_hz", bandwidth_hz),
+    ):
+        if value is not None:
+            setattr(config, name, _to_c_float(value, name).value)
+    c_array, length = _to_c_float_array(samples)
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_biquad_filter(
+            c_array,
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.byref(config),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc, flattened="config")
         return _from_c_float_array(out, out_length.value)

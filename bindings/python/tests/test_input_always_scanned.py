@@ -31,6 +31,7 @@ ROSTER: dict[str, tuple[str, ...]] = {
     "decompose_stems": ("samples",),
     "decompose_stems_linked": ("channels",),
     "ebur128_loudness_range_lu": ("samples",),
+    "fade": ("samples",),
     "harmonic": ("samples",),
     "hpss": ("samples",),
     "hpss_with_residual": ("samples",),

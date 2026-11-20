@@ -709,6 +709,7 @@ def vqt(
 ) -> CqtResult: ...
 def version() -> str: ...
 def capabilities() -> Capabilities: ...
+def system_info() -> dict[str, Any]: ...
 def hpss(
     samples: FloatSamples,
     sample_rate: int,
@@ -955,6 +956,27 @@ def normalize(
     *,
     mode: NormalizeMode = "peak",
     target_db: float | None = None,
+) -> np.ndarray[Any, Any]: ...
+def fade(
+    samples: FloatSamples,
+    sample_rate: int,
+    *,
+    fade_in_sec: float = 0.0,
+    fade_out_sec: float = 0.0,
+) -> np.ndarray[Any, Any]: ...
+
+BiquadFilterType: TypeAlias = Literal["highPass", "lowPass", "bandPass", "notch"]
+
+def biquad_filter(
+    samples: FloatSamples,
+    sample_rate: int,
+    *,
+    type: BiquadFilterType,  # noqa: A002
+    order: int = 2,
+    zero_phase: bool = False,
+    cutoff_hz: float | None = None,
+    center_hz: float | None = None,
+    bandwidth_hz: float | None = None,
 ) -> np.ndarray[Any, Any]: ...
 def normalize_stereo(
     left: FloatSamples,

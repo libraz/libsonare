@@ -1046,6 +1046,11 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_capabilities_json.restype = ctypes.c_int32
     lib.sonare_capabilities_json.argtypes = [ctypes.POINTER(ctypes.c_char_p)]
 
+    # sonare_system_info_json: host cpu/memory/parallel document, caller-owned
+    # (released with sonare_free_string).
+    lib.sonare_system_info_json.restype = ctypes.c_int32
+    lib.sonare_system_info_json.argtypes = [ctypes.POINTER(ctypes.c_char_p)]
+
     # sonare_abi_version: aggregate ABI version folding every subsystem ABI macro
     # into one 32-bit value (see sonare_c.h).
     lib.sonare_abi_version.restype = ctypes.c_uint32

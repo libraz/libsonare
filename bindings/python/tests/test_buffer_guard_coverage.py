@@ -114,6 +114,8 @@ _EMPTY_INPUT_IS_DEFINED = frozenset(
 _SCALAR_ARGS: dict[str, Any] = {
     "sample_rate": 22050,
     "channels": 1,
+    # biquad_filter takes its filter type as a required token.
+    "type": "lowPass",
     "num_channels": 1,
     "source_sample_rate": 22050,
     "target_sample_rate": 44100,

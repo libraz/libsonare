@@ -155,7 +155,7 @@ def detect_chords(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return ChordAnalysisResult(chords=_chords_from_c(out), tuning_cents=float(out.tuning_cents))
     finally:
@@ -229,7 +229,7 @@ def chord_functional_analysis(
         ctypes.byref(roman),
         ctypes.byref(functions),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return [
             FunctionalChord(
@@ -377,7 +377,7 @@ def analyze_sections(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return [
             Section(
@@ -486,7 +486,7 @@ def detect_boundaries(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return BoundaryResult(
             boundaries=[
@@ -581,6 +581,23 @@ def version() -> str:
     lib = _get_lib()
     v = lib.sonare_version()
     return v.decode("utf-8") if v else ""
+
+
+@_entry("system_info")
+def system_info() -> dict[str, Any]:
+    """Return the host this library runs on: CPU cores, memory and parallelism.
+
+    Keys are ``cpu`` (``logical_cores``, ``physical_cores``), ``memory``
+    (``total_gb``, ``available_gb``) and ``parallel`` (``enabled``, ``workers``,
+    ``strategy``). A fact the platform cannot report is absent from its object.
+
+    Returns:
+        The parsed document, keyed as the C ABI spells it.
+    """
+    document = json.loads(_call_string(_get_lib().sonare_system_info_json))
+    if not isinstance(document, dict):
+        raise _unknown_error("libsonare returned a non-object system info document")
+    return document
 
 
 def _capabilities_document() -> dict[str, Any]:

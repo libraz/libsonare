@@ -245,6 +245,54 @@
     ],
     "size": 16
   },
+  "SonareBiquadFilterConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "type",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "order",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "zero_phase",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "cutoff_hz",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "center_hz",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "bandwidth_hz",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 28
+  },
   "SonareBoundary": {
     "align": 4,
     "fields": [

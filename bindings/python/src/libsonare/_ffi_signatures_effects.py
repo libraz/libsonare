@@ -683,6 +683,31 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_free_normalize_stereo_result.restype = None
     lib.sonare_free_normalize_stereo_result.argtypes = [ctypes.POINTER(SonareNormalizeStereoResult)]
 
+    # sonare_fade
+    lib.sonare_fade.restype = ctypes.c_int32
+    lib.sonare_fade.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_biquad_filter
+    lib.sonare_biquad_filter_config_init.restype = None
+    lib.sonare_biquad_filter_config_init.argtypes = [ctypes.POINTER(SonareBiquadFilterConfig)]
+    lib.sonare_biquad_filter.restype = ctypes.c_int32
+    lib.sonare_biquad_filter.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareBiquadFilterConfig),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     # sonare_trim
     lib.sonare_trim.restype = ctypes.c_int32
     lib.sonare_trim.argtypes = [

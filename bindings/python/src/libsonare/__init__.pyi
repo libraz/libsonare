@@ -85,6 +85,9 @@ from ._runtime import ErrorCodeName as ErrorCodeName
 from ._runtime import SonareError as SonareError
 from ._runtime import SonareValueError as SonareValueError
 from .analyzer import AssignNoteTargetsResult as AssignNoteTargetsResult
+from .analyzer import (
+    BiquadFilterType as BiquadFilterType,
+)
 from .analyzer import CharacterType as CharacterType
 from .analyzer import DecomposeResult as DecomposeResult
 from .analyzer import FormantMode as FormantMode
@@ -204,6 +207,9 @@ from .analyzer import (
     bass_chroma as bass_chroma,
 )
 from .analyzer import (
+    biquad_filter as biquad_filter,
+)
+from .analyzer import (
     capabilities as capabilities,
 )
 from .analyzer import (
@@ -304,6 +310,9 @@ from .analyzer import (
 )
 from .analyzer import (
     extract_percussive_events as extract_percussive_events,
+)
+from .analyzer import (
+    fade as fade,
 )
 from .analyzer import (
     fix_frames as fix_frames,
@@ -796,6 +805,9 @@ from .analyzer import (
 )
 from .analyzer import (
     synthesize_rir as synthesize_rir,
+)
+from .analyzer import (
+    system_info as system_info,
 )
 from .analyzer import (
     tempogram as tempogram,

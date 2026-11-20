@@ -804,3 +804,17 @@ class SonarePolyphonicConfig(CStruct):
         ("min_note_ms", ctypes.c_float),
         ("reference_hz", ctypes.c_float),
     ]
+
+
+class SonareBiquadFilterConfig(CStruct):
+    """Maps to SonareBiquadFilterConfig in sonare_c_effects.h; fill with the init function."""
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("type", ctypes.c_int32),
+        ("order", ctypes.c_int32),
+        ("zero_phase", ctypes.c_int32),
+        ("cutoff_hz", ctypes.c_float),
+        ("center_hz", ctypes.c_float),
+        ("bandwidth_hz", ctypes.c_float),
+    ]
