@@ -3,8 +3,9 @@
  * STFT and resynthesized.
  */
 
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { mergeRespelled, type Respelled, refuse, refuseType, withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
+import { withRespelled } from './internal/respell.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './types.js';
@@ -38,25 +39,26 @@ function resolveRegionTimes(
   { startSec, endSec, ...op }: SpectralRegionOp,
   index: number,
   sampleRate: number,
-): SpectralRegionOp {
+): { op: SpectralRegionOp; respelled: Respelled } {
   const at = `ops[${index}]`;
   assertRegionHighHz(op.highHz, at);
+  const start = resolveSampleBound(
+    op.startSample,
+    startSec,
+    sampleRate,
+    `${at}.startSample`,
+    `${at}.startSec`,
+  );
+  const end = resolveSampleBound(
+    op.endSample,
+    endSec,
+    sampleRate,
+    `${at}.endSample`,
+    `${at}.endSec`,
+  );
   return {
-    ...op,
-    startSample: resolveSampleBound(
-      op.startSample,
-      startSec,
-      sampleRate,
-      `${at}.startSample`,
-      `${at}.startSec`,
-    ),
-    endSample: resolveSampleBound(
-      op.endSample,
-      endSec,
-      sampleRate,
-      `${at}.endSample`,
-      `${at}.endSec`,
-    ),
+    op: { ...op, startSample: start.value, endSample: end.value },
+    respelled: mergeRespelled(start.respelled, end.respelled),
   };
 }
 
@@ -105,11 +107,19 @@ export function spectralEdit(...args: unknown[]): Float32Array {
         assertInt32(value, field);
       }
     }
+    const respellings: Respelled[] = [];
     const nativeOps = Array.isArray(ops)
-      ? ops.map((op, index) =>
-          op === null || typeof op !== 'object' ? op : resolveRegionTimes(op, index, sampleRate),
-        )
+      ? ops.map((op, index) => {
+          if (op === null || typeof op !== 'object') {
+            return op;
+          }
+          const resolved = resolveRegionTimes(op, index, sampleRate);
+          respellings.push(resolved.respelled);
+          return resolved.op;
+        })
       : ops;
-    return addon.spectralEdit(input, sampleRate, nativeOps, requestOptions);
+    return withRespelled(mergeRespelled(...respellings), () =>
+      addon.spectralEdit(input, sampleRate, nativeOps, requestOptions),
+    );
   });
 }

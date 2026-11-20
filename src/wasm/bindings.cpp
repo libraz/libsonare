@@ -6,9 +6,14 @@
 #include <cxxabi.h>
 #include <emscripten/emscripten.h>
 
+#include <string>
+#include <vector>
+
 #include "bindings/common/common.h"
 #include "c_api/capability_features.h"
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_api/sonare_c_last_refusal.h"
+#include "c_api/sonare_c_refusal_record.h"
 #include "c_entry_names.h"
 #include "util/error_classification.h"
 #include "util/parameter_checks.h"
@@ -187,6 +192,7 @@ val string_array(std::initializer_list<const char*> values) {
 
 }  // namespace
 
+#if !defined(SONARE_WASM_ANALYSIS_ONLY)
 std::string js_system_info() {
   char* json = nullptr;
   const SonareError err = sonare_system_info_json(&json);
@@ -198,6 +204,7 @@ std::string js_system_info() {
   sonare_free_string(json);
   return result;
 }
+#endif
 
 val js_capabilities() {
   val result = val::object();
@@ -243,6 +250,86 @@ val js_capabilities() {
 // linked into WASM, so the values are written out here rather than referenced).
 // The switch carries no default:, so a new ErrorCode enumerator fails the build
 // here instead of reaching JS as Unknown/99.
+namespace {
+
+// A refusal as the plain parts a facade hands back to renderRefusal; text is what the caller read.
+val refusal_object(const sonare::SonareParameterRefusal& refusal) {
+  const sonare_c_detail::RefusalParts parts = sonare_c_detail::refusal_parts(refusal);
+  val out = val::object();
+  out.set("code", static_cast<int>(parts.code));
+  out.set("form", parts.form);
+  val subjects = val::array();
+  for (const std::string& subject : parts.subjects) subjects.call<void>("push", subject);
+  out.set("subjects", subjects);
+  out.set("predicate", parts.predicate);
+  out.set("renamedTo", parts.renamed_to);
+  out.set("expected", parts.expected);
+  out.set("callerSpelled", parts.caller_spelled);
+  out.set("text", std::string(refusal.what()));
+  if (parts.domain) {
+    val domain = val::object();
+    if (parts.domain->lo) domain.set("lo", *parts.domain->lo);
+    if (parts.domain->hi) domain.set("hi", *parts.domain->hi);
+    domain.set("loIncluded", parts.domain->lo_included);
+    domain.set("hiIncluded", parts.domain->hi_included);
+    out.set("domain", domain);
+  }
+  return out;
+}
+
+#if !defined(SONARE_WASM_ANALYSIS_ONLY)
+std::string string_field(const val& object, const char* key) {
+  const val value = object[key];
+  return value.isString() ? value.as<std::string>() : std::string();
+}
+
+sonare::SonareParameterRefusal refusal_from_object(const val& object) {
+  sonare_c_detail::RefusalParts parts;
+  parts.code = static_cast<sonare::ErrorCode>(object["code"].as<int>());
+  parts.form = string_field(object, "form");
+  const val subjects = object["subjects"];
+  const int count = subjects.isArray() ? subjects["length"].as<int>() : 0;
+  for (int i = 0; i < count; ++i) parts.subjects.push_back(subjects[i].as<std::string>());
+  parts.predicate = string_field(object, "predicate");
+  parts.renamed_to = string_field(object, "renamedTo");
+  parts.expected = string_field(object, "expected");
+  parts.caller_spelled = object["callerSpelled"].as<bool>();
+  const val domain = object["domain"];
+  if (domain.typeOf().as<std::string>() == "object" && !domain.isNull()) {
+    sonare::RefusalDomain parsed;
+    if (domain["lo"].isNumber()) parsed.lo = domain["lo"].as<double>();
+    if (domain["hi"].isNumber()) parsed.hi = domain["hi"].as<double>();
+    parsed.lo_included = domain["loIncluded"].as<bool>();
+    parsed.hi_included = domain["hiIncluded"].as<bool>();
+    parts.domain = parsed;
+  }
+  return sonare_c_detail::refusal_from_parts(parts);
+}
+
+// renderRefusal(refusal, subjects, scales): the refusal under the caller's names and units.
+val js_render_refusal(const val& refusal, const val& names, const val& scales) {
+  const sonare::SonareParameterRefusal parsed = refusal_from_object(refusal);
+  std::vector<std::string> subjects;
+  const int count = names["length"].as<int>();
+  for (int i = 0; i < count; ++i) subjects.push_back(names[i].as<std::string>());
+  std::vector<const char*> pointers;
+  for (const std::string& subject : subjects) pointers.push_back(subject.c_str());
+  std::vector<double> factors;
+  if (scales.isArray()) {
+    const int scale_count = scales["length"].as<int>();
+    for (int i = 0; i < scale_count; ++i) factors.push_back(scales[i].as<double>());
+  }
+  const sonare::SonareParameterRefusal rendered = sonare_c_detail::respelled_refusal(
+      parsed, pointers.data(), factors.empty() ? nullptr : factors.data(), pointers.size());
+  val out = val::object();
+  out.set("message", std::string(rendered.what()));
+  out.set("refusal", refusal_object(rendered));
+  return out;
+}
+#endif
+
+}  // namespace
+
 val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   val info = val::object();
   int code = 99;  // SONARE_ERROR_UNKNOWN
@@ -253,7 +340,9 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
     message = base->what();
     // A core refusal not yet in the caller's spelling is rendered in request-object keys.
     if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(base)) {
-      message = sonare::util::check::camel_spelled(*refusal).what();
+      const sonare::SonareParameterRefusal shown = sonare::util::check::camel_spelled(*refusal);
+      message = shown.what();
+      info.set("refusal", refusal_object(shown));
       // An unknown key or a wrong type refuses the request's shape: a TypeError, not a RangeError.
       if (refusal->shape_error() && refusal->code() == sonare::ErrorCode::InvalidParameter) {
         info.set("kind", std::string("TypeError"));
@@ -570,7 +659,10 @@ EMSCRIPTEN_BINDINGS(sonare) {
 
   function("version", &js_version);
   function("capabilities", &js_capabilities);
+#if !defined(SONARE_WASM_ANALYSIS_ONLY)
   function("systemInfo", &js_system_info);
+  function("renderRefusal", &js_render_refusal);
+#endif
   function("sonareExceptionInfo", &js_sonare_exception_info);
   function("sonareReleaseException", &js_sonare_release_exception);
   function("abiVersion", &js_abi_version);

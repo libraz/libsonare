@@ -84,7 +84,7 @@ export function buildCaptureConfig(
         ['startPpq', 'startSample', 'startSec'],
         sampleRate,
         sampleAtPpq,
-      ),
+      ).value,
       endSample: capturePunchBound(
         window.endPpq,
         window.endSample,
@@ -92,7 +92,7 @@ export function buildCaptureConfig(
         ['endPpq', 'endSample', 'endSec'],
         sampleRate,
         sampleAtPpq,
-      ),
+      ).value,
     };
   }
   const config: CaptureSyncConfig = {

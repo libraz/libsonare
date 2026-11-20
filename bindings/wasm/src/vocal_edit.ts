@@ -3,11 +3,14 @@ import {
   codedError,
   entryClass,
   invalidState,
+  mergeRespelled,
+  type Respelled,
   refuse,
   refuseType,
   withEntry,
 } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
+import { withRespelled } from './internal/respell.js';
 import { attachVocalErrorDetail, vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -38,6 +41,7 @@ import {
   requestObject,
   requireSampleBound,
   resolveSampleBound,
+  type SampleBound,
 } from './validation.js';
 
 /** Native symbols registered by the full vocal-edit WASM binding. */
@@ -256,32 +260,30 @@ function resolveRange(
   range: VocalRangeInput,
   sampleRate: number,
   outputLengthSamples: number,
-): VocalRange {
+): { range: VocalRange; respelled: Respelled } {
   if (!range || typeof range !== 'object') {
     throw refuseType('range must be an object');
   }
-  const start =
-    resolveSampleBound(
-      range.startSample,
-      range.startSec,
-      sampleRate,
-      'range.startSample',
-      'range.startSec',
-    ) ?? 0;
-  const end =
-    resolveSampleBound(
-      range.endSample,
-      range.endSec,
-      sampleRate,
-      'range.endSample',
-      'range.endSec',
-    ) ?? outputLengthSamples;
-  const startSample = requireSample(start, 'range.startSample');
-  const endSample = requireSample(end, 'range.endSample');
-  if (endSample < startSample) {
-    throw refuse('range.endSample must be >= startSample');
-  }
-  return { startSample, endSample };
+  const start = resolveSampleBound(
+    range.startSample,
+    range.startSec,
+    sampleRate,
+    'range.startSample',
+    'range.startSec',
+  );
+  const end = resolveSampleBound(
+    range.endSample,
+    range.endSec,
+    sampleRate,
+    'range.endSample',
+    'range.endSec',
+  );
+  const startSample = requireSample(start.value ?? 0, 'range.startSample');
+  const endSample = requireSample(end.value ?? outputLengthSamples, 'range.endSample');
+  return {
+    range: { startSample, endSample },
+    respelled: mergeRespelled(start.respelled, end.respelled),
+  };
 }
 
 /** Resolves one operation position, refusing an omitted one by name rather than reading it as 0. */
@@ -292,7 +294,7 @@ function requiredOperationBound(
   sampleRate: number,
   sampleName: string,
   secName: string,
-): number {
+): SampleBound & { readonly value: number } {
   return requireSampleBound(sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
 }
 
@@ -303,39 +305,49 @@ function requiredOperationBound(
 function resolveOperationTimes(
   operations: readonly VocalEditOperation[],
   sampleRate: number,
-): readonly VocalEditOperation[] {
-  return operations.map((operation, index) => {
+): { operations: readonly VocalEditOperation[]; respelled: Respelled } {
+  const respellings: Respelled[] = [];
+  const bound = (
+    at: string,
+    sample: number | undefined,
+    sec: number | undefined,
+    sampleName: string,
+    secName: string,
+  ): number => {
+    const resolvedBound = requiredOperationBound(at, sample, sec, sampleRate, sampleName, secName);
+    respellings.push(resolvedBound.respelled);
+    return resolvedBound.value;
+  };
+  const resolved = operations.map((operation, index) => {
     const at = `operations[${index}]`;
     if (operation?.kind === 'setSourceSpan') {
       const { sourceStartSec, sourceEndSec, destinationStartSec, destinationLengthSec, ...rest } =
         operation;
-      const bound = (
-        sample: number | undefined,
-        sec: number | undefined,
-        sampleName: string,
-        secName: string,
-      ) => requiredOperationBound(at, sample, sec, sampleRate, sampleName, secName);
       return {
         ...rest,
         sourceStartSample: bound(
+          at,
           rest.sourceStartSample,
           sourceStartSec,
           'sourceStartSample',
           'sourceStartSec',
         ),
         sourceEndSample: bound(
+          at,
           rest.sourceEndSample,
           sourceEndSec,
           'sourceEndSample',
           'sourceEndSec',
         ),
         destinationStartSample: bound(
+          at,
           rest.destinationStartSample,
           destinationStartSec,
           'destinationStartSample',
           'destinationStartSec',
         ),
         destinationLengthSamples: bound(
+          at,
           rest.destinationLengthSamples,
           destinationLengthSec,
           'destinationLengthSamples',
@@ -347,18 +359,12 @@ function resolveOperationTimes(
       const { sourceSec, ...rest } = operation;
       return {
         ...rest,
-        sourceSample: requiredOperationBound(
-          at,
-          rest.sourceSample,
-          sourceSec,
-          sampleRate,
-          'sourceSample',
-          'sourceSec',
-        ),
+        sourceSample: bound(at, rest.sourceSample, sourceSec, 'sourceSample', 'sourceSec'),
       } as VocalEditOperation;
     }
     return operation;
   });
+  return { operations: resolved, respelled: mergeRespelled(...respellings) };
 }
 
 function copyToken(token: VocalStateToken): VocalStateToken {
@@ -534,17 +540,24 @@ function normalizeRequest(
 ): {
   range: VocalRange;
   requestId: string;
+  respelled: Respelled;
 } {
-  const range =
+  const resolved =
     request.range === undefined
-      ? { startSample: 0, endSample: requireSample(outputLengthSamples, 'outputLengthSamples') }
+      ? {
+          range: {
+            startSample: 0,
+            endSample: requireSample(outputLengthSamples, 'outputLengthSamples'),
+          },
+          respelled: {},
+        }
       : resolveRange(
           request.range,
           sampleRate,
           requireSample(outputLengthSamples, 'outputLengthSamples'),
         );
   const requestId = requireToken(request.requestId, 'requestId');
-  return { range, requestId };
+  return { range: resolved.range, requestId, respelled: resolved.respelled };
 }
 
 /** Advances a render job to completion, polling `cancel` before each work unit. */
@@ -831,11 +844,10 @@ export class VocalEditDraft {
     if (!Array.isArray(request.operations)) {
       throw refuseType('operations must be an array');
     }
+    const resolved = resolveOperationTimes(request.operations, this.sampleRate);
     return copyEditResult(
-      module().vocalEditDraftApply(
-        this.native(),
-        generation,
-        resolveOperationTimes(request.operations, this.sampleRate),
+      withRespelled(resolved.respelled, () =>
+        module().vocalEditDraftApply(this.native(), generation, resolved.operations),
       ),
     );
   }
@@ -956,11 +968,13 @@ export class VocalRenderSnapshot {
     }
     const normalized = normalizeRequest(request, this.outputLengthSamples, this.sampleRate);
     return copyRender(
-      module().vocalEditSnapshotRender(
-        handle,
-        normalized.range.startSample,
-        normalized.range.endSample,
-        normalized.requestId,
+      withRespelled(normalized.respelled, () =>
+        module().vocalEditSnapshotRender(
+          handle,
+          normalized.range.startSample,
+          normalized.range.endSample,
+          normalized.requestId,
+        ),
       ),
     );
   }
@@ -970,11 +984,13 @@ export class VocalRenderSnapshot {
     const handle = this.native();
     const normalized = normalizeRequest(request, this.outputLengthSamples, this.sampleRate);
     return new VocalRenderJobHandle(
-      module().vocalEditRenderJobBegin(
-        handle,
-        normalized.range.startSample,
-        normalized.range.endSample,
-        normalized.requestId,
+      withRespelled(normalized.respelled, () =>
+        module().vocalEditRenderJobBegin(
+          handle,
+          normalized.range.startSample,
+          normalized.range.endSample,
+          normalized.requestId,
+        ),
       ),
     );
   }

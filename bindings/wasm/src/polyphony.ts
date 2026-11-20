@@ -1,5 +1,6 @@
-import { entryClass, refuse, withEntry } from './internal/entry.js';
+import { entryClass, type Respelled, refuse, withEntry } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
+import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
 import type {
   NoteEditInput,
@@ -144,21 +145,22 @@ export class PolyphonicAnalysis {
    */
   setNoteEdit(note: number, edit?: NoteEditInput): void {
     let nativeEdit: NoteEditInput = edit ?? {};
+    let respelled: Respelled = {};
     if (nativeEdit !== null && typeof nativeEdit === 'object' && !Array.isArray(nativeEdit)) {
       const { timeOffsetSec, ...rest } = nativeEdit;
-      nativeEdit = {
-        ...rest,
-        timeOffsetSamples: resolveSampleBound(
-          rest.timeOffsetSamples,
-          timeOffsetSec,
-          this.sampleRate,
-          'edit.timeOffsetSamples',
-          'edit.timeOffsetSec',
-          'signed',
-        ),
-      };
+      const offset = resolveSampleBound(
+        rest.timeOffsetSamples,
+        timeOffsetSec,
+        this.sampleRate,
+        'edit.timeOffsetSamples',
+        'edit.timeOffsetSec',
+        'signed',
+      );
+      respelled = offset.respelled;
+      nativeEdit = { ...rest, timeOffsetSamples: offset.value };
     }
-    this.handle().setNoteEdit(note, nativeEdit);
+    const resolvedEdit = nativeEdit;
+    withRespelled(respelled, () => this.handle().setNoteEdit(note, resolvedEdit));
   }
 
   /**

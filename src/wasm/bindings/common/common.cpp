@@ -354,45 +354,6 @@ bool hasProperty(val object, const char* key) {
   return !object[key].isUndefined() && !object[key].isNull();
 }
 
-void refuseUnknownKeys(val object, const std::vector<const char*>& allowed,
-                       std::initializer_list<const char*> extra) {
-  if (object.isNull() || object.isUndefined() || object.typeOf().as<std::string>() != "object") {
-    return;
-  }
-  const val keys = val::global("Object").call<val>("keys", object);
-  const unsigned count = keys["length"].as<unsigned>();
-  for (unsigned i = 0; i < count; ++i) {
-    const std::string key = keys[i].as<std::string>();
-    const auto matches = [&key](const char* name) { return key == name; };
-    if (std::any_of(allowed.begin(), allowed.end(), matches) ||
-        std::any_of(extra.begin(), extra.end(), matches)) {
-      continue;
-    }
-    namespace schema = sonare::util::json::schema;
-    std::vector<std::string> accepted(allowed.begin(), allowed.end());
-    accepted.insert(accepted.end(), extra.begin(), extra.end());
-    throw WasmTypeError(schema::unknown_key_expected(sonare::util::json::escape_key(key),
-                                                     schema::expected_keys(accepted)));
-  }
-}
-
-void refuseUnknownDocumentKeys(const val& object, const std::string& path,
-                               std::initializer_list<const char*> allowed) {
-  if (object.isNull() || object.isUndefined() || object.typeOf().as<std::string>() != "object") {
-    return;
-  }
-  const val keys = val::global("Object").call<val>("keys", object);
-  const unsigned count = keys["length"].as<unsigned>();
-  for (unsigned i = 0; i < count; ++i) {
-    const std::string key = keys[i].as<std::string>();
-    const auto matches = [&key](const char* name) { return key == name; };
-    if (std::none_of(allowed.begin(), allowed.end(), matches)) {
-      namespace schema = sonare::util::json::schema;
-      throw WasmTypeError(schema::unknown_key(schema::child_path(path, key)));
-    }
-  }
-}
-
 val requireTypedProperty(const val& object, const char* key, const char* subject,
                          const char* js_type, const char* article_type) {
   namespace schema = sonare::util::json::schema;

@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include "realtime_engine_wasm.h"
+#include "util/parameter_checks.h"
 
 namespace {
 
@@ -46,12 +47,14 @@ void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
 
 void RealtimeEngineWasm::armCapture(bool armed) { engine_.set_capture_armed(armed); }
 void RealtimeEngineWasm::setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled) {
-  if (start_sample < 0 || end_sample < start_sample) {
-    throw WasmRangeError("capture punch range must satisfy 0 <= start <= end");
+  sonare::util::check::integer_at_least(start_sample, 0, "start_sample");
+  if (end_sample < start_sample) {
+    sonare::util::check::refuse_relation({"end_sample", "start_sample"},
+                                         "{0} must not be before {1}");
   }
   // An enabled empty window would read as "no punch" and record everything.
   if (enabled && end_sample == start_sample) {
-    throw WasmRangeError("an enabled capture punch window must satisfy start < end");
+    sonare::util::check::refuse_relation({"end_sample", "start_sample"}, "{0} must not equal {1}");
   }
   engine_.set_capture_punch(start_sample, end_sample, enabled);
 }

@@ -2,8 +2,9 @@
  * Silence trimming, with the range detector it shares its geometry with.
  */
 
-import { withEntry } from './internal/entry.js';
+import { type Respelled, withEntry } from './internal/entry.js';
 import { repairNativeOptions } from './internal/repair_common.js';
+import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MasteringRepairTrimSilenceResult,
@@ -54,7 +55,10 @@ export interface MasteringRepairTrimSilenceStereoRequest extends TrimSilenceOpti
 }
 
 /** The native options, with `paddingSec` folded into `paddingSamples`, which is what the core reads. */
-function nativeTrimOptions(request: object, sampleRate: number): Record<string, unknown> {
+function nativeTrimOptions(
+  request: object,
+  sampleRate: number,
+): { options: Record<string, unknown>; respelled: Respelled } {
   const native = repairNativeOptions(request);
   const padding = resolveSampleBound(
     native.paddingSamples as number | undefined,
@@ -64,10 +68,10 @@ function nativeTrimOptions(request: object, sampleRate: number): Record<string, 
     'paddingSec',
   );
   delete native.paddingSec;
-  if (padding !== undefined) {
-    native.paddingSamples = padding;
+  if (padding.value !== undefined) {
+    native.paddingSamples = padding.value;
   }
-  return native;
+  return { options: native, respelled: padding.respelled };
 }
 
 /** Offline silence trimmer (peak threshold or LUFS-gated). */
@@ -83,10 +87,9 @@ export function masteringRepairTrimSilence(...args: unknown[]): TrimSilenceResul
   return withEntry('masteringRepairTrimSilence', () => {
     const r = sampleOneShot<MasteringRepairTrimSilenceRequest>('masteringRepairTrimSilence', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairTrimSilence(
-      r.samples,
-      r.sampleRate,
-      nativeTrimOptions(r, r.sampleRate),
+    const trim = nativeTrimOptions(r, r.sampleRate);
+    return withRespelled(trim.respelled, () =>
+      requireModule().masteringRepairTrimSilence(r.samples, r.sampleRate, trim.options),
     );
   });
 }
@@ -153,11 +156,9 @@ export function masteringRepairTrimSilenceStereo(
     );
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
-    const native = requireModule().masteringRepairTrimSilenceStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      nativeTrimOptions(r, r.sampleRate),
+    const trim = nativeTrimOptions(r, r.sampleRate);
+    const native = withRespelled(trim.respelled, () =>
+      requireModule().masteringRepairTrimSilenceStereo(r.left, r.right, r.sampleRate, trim.options),
     );
     return {
       channels: [native.left, native.right],
@@ -213,10 +214,9 @@ export function masteringRepairDetectTrimRange(...args: unknown[]): TrimRange {
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDetectTrimRange(
-      r.samples,
-      r.sampleRate,
-      nativeTrimOptions(r, r.sampleRate),
+    const trim = nativeTrimOptions(r, r.sampleRate);
+    return withRespelled(trim.respelled, () =>
+      requireModule().masteringRepairDetectTrimRange(r.samples, r.sampleRate, trim.options),
     );
   });
 }
@@ -250,11 +250,14 @@ export function masteringRepairDetectTrimRangeStereo(...args: unknown[]): TrimRa
     );
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
-    return requireModule().masteringRepairDetectTrimRangeStereo(
-      r.left,
-      r.right,
-      r.sampleRate,
-      nativeTrimOptions(r, r.sampleRate),
+    const trim = nativeTrimOptions(r, r.sampleRate);
+    return withRespelled(trim.respelled, () =>
+      requireModule().masteringRepairDetectTrimRangeStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        trim.options,
+      ),
     );
   });
 }

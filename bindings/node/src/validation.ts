@@ -1,4 +1,4 @@
-import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { type Respelled, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
 import { NESTED_REQUEST_KEYS, REQUEST_KEYS, type RequestFn } from './request_keys.js';
 import type { ProjectMidiEvent } from './types.js';
@@ -553,7 +553,7 @@ export function requireSampleBound(
   sampleName: string,
   secName: string,
   sign: SampleBoundSign = 'non-negative',
-): number {
+): SampleBound & { readonly value: number } {
   requireOneOf(
     [sampleName, secName],
     [
@@ -561,17 +561,38 @@ export function requireSampleBound(
       secValue !== undefined && secValue !== null,
     ],
   );
-  return resolveSampleBound(sampleValue, secValue, sampleRate, sampleName, secName, sign) as number;
+  return resolveSampleBound(
+    sampleValue,
+    secValue,
+    sampleRate,
+    sampleName,
+    secName,
+    sign,
+  ) as SampleBound & { readonly value: number };
+}
+
+/** A sample bound read from its samples or seconds spelling, with the respelling its refusal needs. */
+export interface SampleBound {
+  /** The bound in samples, or undefined when neither spelling was given. */
+  readonly value: number | undefined;
+  /** `{ [sampleName]: { name: secName, scale: sampleRate } }` when seconds were given, else empty. */
+  readonly respelled: Respelled;
 }
 
 /**
  * Resolve one time bound that is spelled either in samples or in seconds.
  *
- * `undefined` / `null` on both spellings is absence, and the result is
+ * Returns the declaration both the conversion and the refusal's respelling
+ * read: the value, and the respelling that names the seconds spelling when it
+ * was the one given.
+ *
+ * `undefined` / `null` on both spellings is absence, and the value is
  * `undefined` so the caller applies its own default (an end bound's default is
  * the end of the signal). Giving both spellings is refused by name. A position
  * is `'non-negative'`; a displacement (a time offset, which may move a note
  * earlier) is `'signed'`. A negative value is refused, never read as "absent".
+ * `subject` is the name the native layer refuses the bound under, when it is not
+ * `sampleName` (a request path such as `punch.endSample` over a bare `endSample`).
  */
 export function resolveSampleBound(
   sampleValue: number | null | undefined,
@@ -580,25 +601,31 @@ export function resolveSampleBound(
   sampleName: string,
   secName: string,
   sign: SampleBoundSign = 'non-negative',
-): number | undefined {
+  subject: string = sampleName,
+): SampleBound {
   const hasSample = sampleValue !== undefined && sampleValue !== null;
   const hasSec = secValue !== undefined && secValue !== null;
   if (!hasSample && !hasSec) {
-    return undefined;
+    return { value: undefined, respelled: {} };
   }
   requireOneOf([sampleName, secName], [hasSample, hasSec]);
+  const respelled: Respelled = hasSec
+    ? { [subject]: { name: secName, scale: sampleRate } }
+    : subject !== sampleName
+      ? { [subject]: { name: sampleName, scale: 1 } }
+      : {};
   const value = hasSec
     ? secondsToSampleCount(secValue as number, sampleRate, secName)
     : (sampleValue as number);
   const name = hasSec ? secName : sampleName;
   // A non-number or non-finite sample value is left for the native layer to refuse by name.
   if (typeof value !== 'number' || (!hasSec && !Number.isFinite(value))) {
-    return value;
+    return { value, respelled };
   }
   if (sign === 'non-negative' && value < 0) {
     throw refuse(`${name} must be at least 0`);
   }
-  return value === 0 ? 0 : value;
+  return { value: value === 0 ? 0 : value, respelled };
 }
 
 /** C ABI value for "apply at the next block head", spelled as absence on the facade. */
@@ -655,10 +682,13 @@ type NestedKeysOf<N extends RequestFn> = N extends keyof typeof NESTED_REQUEST_K
 /** Field names present in exactly one of `A` and `B`. */
 type KeyDrift<A, B> = Exclude<keyof A, keyof B> | Exclude<keyof B, keyof A>;
 
+/** The object a nested field carries: the field itself, or each element of an array field. */
+type NestedObject<V> = V extends readonly (infer E)[] ? E : V;
+
 /** Drift of every nested object whose keys are refused, named by the field holding it. */
 type NestedDrift<T, N extends RequestFn> = {
   [F in keyof NestedKeysOf<N>]: F extends keyof T
-    ? KeyDrift<Exclude<NonNullable<T[F]>, string>, NestedKeysOf<N>[F]>
+    ? KeyDrift<NestedObject<Exclude<NonNullable<T[F]>, string>>, NestedKeysOf<N>[F]>
     : F;
 }[keyof NestedKeysOf<N>];
 
@@ -707,12 +737,18 @@ export function assertKnownRequestKeys(
   }
   for (const [field, set] of Object.entries(nested)) {
     const options = value[field];
-    if (!isPlainObject(options)) {
-      continue;
-    }
-    for (const key of Object.keys(options)) {
-      if (!ownKey(set, key)) {
-        throw refuseUnknownKey(`${field}.${key}`, Object.keys(set));
+    // A nested field is one object, or an array whose elements each carry the declared keys.
+    const items: [string, unknown][] = Array.isArray(options)
+      ? options.map((item, i) => [`${field}[${i}]`, item])
+      : [[field, options]];
+    for (const [path, item] of items) {
+      if (!isPlainObject(item)) {
+        continue;
+      }
+      for (const key of Object.keys(item)) {
+        if (!ownKey(set, key)) {
+          throw refuseUnknownKey(`${path}.${key}`, Object.keys(set));
+        }
       }
     }
   }

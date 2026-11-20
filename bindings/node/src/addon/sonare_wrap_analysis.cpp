@@ -404,6 +404,7 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
     if (err != SONARE_OK) {
       error_code_ = err;
       shape_refusal_ = LastRefusalIsShape();
+      refusal_ = sonare_node::ShownLastRefusal();
       SetError(ErrorMessageForCode(err));
       return;
     }
@@ -446,7 +447,7 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
 
   void OnError(const Napi::Error& error) override {
     Napi::HandleScope scope(Env());
-    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_, shape_refusal_);
+    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_, shape_refusal_, refusal_);
     deferred_.Reject(error.Value());
   }
 
@@ -461,6 +462,7 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
   std::string json_string_;
   SonareError error_code_ = SONARE_ERROR_UNKNOWN;
   bool shape_refusal_ = false;
+  std::optional<sonare::SonareParameterRefusal> refusal_;
 };
 
 }  // namespace

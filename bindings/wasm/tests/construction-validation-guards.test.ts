@@ -430,34 +430,41 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
       expect(engine.graphNodeCount).toBe(2);
       expect(engine.graphConnectionCount).toBe(1);
       type GraphSpec = Parameters<typeof engine.setGraph>[0];
+      // An array-like in place of an element list is refused by its undeclared key before any length is read.
       for (const length of [-1, 1.5, 2e9]) {
-        expectRangeRefusal(() =>
-          engine.setGraph({
-            nodes: { length } as unknown as GraphSpec['nodes'],
-            connections: [],
-            inputNode: 'a',
-            outputNode: 'a',
-            numChannels: 1,
-          }),
+        expectRefusalOf(
+          () =>
+            engine.setGraph({
+              nodes: { length } as unknown as GraphSpec['nodes'],
+              connections: [],
+              inputNode: 'a',
+              outputNode: 'a',
+              numChannels: 1,
+            }),
+          TypeError,
         );
-        expectRangeRefusal(() =>
-          engine.setGraph({
-            nodes: [{ id: 'a', numPorts: 1 }],
-            connections: { length } as unknown as GraphSpec['connections'],
-            inputNode: 'a',
-            outputNode: 'a',
-            numChannels: 1,
-          }),
+        expectRefusalOf(
+          () =>
+            engine.setGraph({
+              nodes: [{ id: 'a', numPorts: 1 }],
+              connections: { length } as unknown as GraphSpec['connections'],
+              inputNode: 'a',
+              outputNode: 'a',
+              numChannels: 1,
+            }),
+          TypeError,
         );
-        expectRangeRefusal(() =>
-          engine.setGraph({
-            nodes: [{ id: 'a', numPorts: 1 }],
-            connections: [],
-            inputNode: 'a',
-            outputNode: 'a',
-            numChannels: 1,
-            parameterBindings: { length } as unknown as GraphSpec['parameterBindings'],
-          }),
+        expectRefusalOf(
+          () =>
+            engine.setGraph({
+              nodes: [{ id: 'a', numPorts: 1 }],
+              connections: [],
+              inputNode: 'a',
+              outputNode: 'a',
+              numChannels: 1,
+              parameterBindings: { length } as unknown as GraphSpec['parameterBindings'],
+            }),
+          TypeError,
         );
       }
     } finally {

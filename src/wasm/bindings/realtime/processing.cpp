@@ -8,7 +8,6 @@
 
 #include "realtime_engine_wasm.h"
 #include "sonare/sonare_c_types_engine.h"
-#include "util/json_schema.h"
 #include "util/resource_limits.h"
 
 namespace {
@@ -101,8 +100,6 @@ mastering::final::DitherType RealtimeEngineWasm::ditherTypeFromInt(int value) {
 
 void RealtimeEngineWasm::setGraph(val spec) {
 #if defined(SONARE_WITH_GRAPH)
-  refuseUnknownKeys(spec, {"nodes", "connections", "inputNode", "outputNode", "numChannels",
-                           "parameterBindings"});
   auto graph = std::make_unique<sonare::graph::Graph>();
   val nodes = spec["nodes"];
   const int node_count = static_cast<int>(wasmArrayLikeLength(nodes, "nodes"));
@@ -112,8 +109,6 @@ void RealtimeEngineWasm::setGraph(val spec) {
   const int num_channels = intProperty(spec, "numChannels", 2);
   for (int i = 0; i < node_count; ++i) {
     val node = nodes[i];
-    refuseUnknownDocumentKeys(node, sonare::util::json::schema::index_path("nodes", i),
-                              {"id", "type", "numPorts", "gainDb"});
     auto processor = makeWasmGraphProcessor(node);
     if (!processor) {
       throw WasmRangeError("unsupported graph node type");
@@ -141,8 +136,6 @@ void RealtimeEngineWasm::setGraph(val spec) {
   const int connection_count = static_cast<int>(wasmArrayLikeLength(connections, "connections"));
   for (int i = 0; i < connection_count; ++i) {
     val connection = connections[i];
-    refuseUnknownDocumentKeys(connection, sonare::util::json::schema::index_path("connections", i),
-                              {"sourceNode", "sourcePort", "destNode", "destPort", "mix"});
     sonare::graph::Connection graph_connection{};
     graph_connection.source_node = stringProperty(connection, "sourceNode", "");
     graph_connection.source_port = intProperty(connection, "sourcePort", 0);
@@ -173,9 +166,6 @@ void RealtimeEngineWasm::setGraph(val spec) {
     parameter_bindings.reserve(static_cast<size_t>(std::max(binding_count, 0)));
     for (int i = 0; i < binding_count; ++i) {
       val binding = bindings[i];
-      refuseUnknownDocumentKeys(binding,
-                                sonare::util::json::schema::index_path("parameterBindings", i),
-                                {"paramId", "nodeId"});
       parameter_bindings.push_back(
           {uintProperty(binding, "paramId", 0), stringProperty(binding, "nodeId", "")});
     }

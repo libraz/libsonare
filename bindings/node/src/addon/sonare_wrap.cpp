@@ -200,6 +200,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
       Napi::Function::New(env, &SonareWrap::ScalePitchClassEnabled, "scalePitchClassEnabled"));
   exports.Set("version", Napi::Function::New(env, &SonareWrap::Version, "version"));
   exports.Set("abiVersion", Napi::Function::New(env, &SonareWrap::AbiVersion, "abiVersion"));
+  exports.Set("renderRefusal",
+              Napi::Function::New(env, &sonare_node::RenderRefusal, "renderRefusal"));
   exports.Set("capabilities", Napi::Function::New(env, &SonareWrap::Capabilities, "capabilities"));
   exports.Set("systemInfo", Napi::Function::New(env, &SonareWrap::SystemInfo, "systemInfo"));
   exports.Set("capabilityCatalog",

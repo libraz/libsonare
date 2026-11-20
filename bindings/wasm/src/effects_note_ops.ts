@@ -9,8 +9,9 @@ import {
   resolveEntryTimes,
   toVoicedFloat32,
 } from './internal/effects_common.js';
-import { codedError, refuse, refuseType, withEntry } from './internal/entry.js';
+import { codedError, mergeRespelled, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
+import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AssignNoteTargetsResult,
@@ -270,19 +271,28 @@ export function noteStretch(...args: unknown[]): Float32Array {
     assertAudioInput(request.samples, request.sampleRate, request);
     assertFloatValue(request.stretchRatio, 'stretchRatio');
     const rate = request.sampleRate;
-    return requireModule().noteStretch(
-      request.samples,
+    const onset = resolveSampleBound(
+      request.onsetSample,
+      request.onsetSec,
       rate,
-      resolveSampleBound(request.onsetSample, request.onsetSec, rate, 'onsetSample', 'onsetSec') ??
-        0,
-      resolveSampleBound(
-        request.offsetSample,
-        request.offsetSec,
+      'onsetSample',
+      'onsetSec',
+    );
+    const offset = resolveSampleBound(
+      request.offsetSample,
+      request.offsetSec,
+      rate,
+      'offsetSample',
+      'offsetSec',
+    );
+    return withRespelled(mergeRespelled(onset.respelled, offset.respelled), () =>
+      requireModule().noteStretch(
+        request.samples,
         rate,
-        'offsetSample',
-        'offsetSec',
-      ) ?? request.samples.length,
-      request.stretchRatio,
+        onset.value ?? 0,
+        offset.value ?? request.samples.length,
+        request.stretchRatio,
+      ),
     );
   });
 }
@@ -315,19 +325,28 @@ export function noteMove(...args: unknown[]): Float32Array {
       'targetOnsetSample',
       'targetOnsetSec',
     );
-    return requireModule().noteMove(
-      request.samples,
+    const onset = resolveSampleBound(
+      request.onsetSample,
+      request.onsetSec,
       rate,
-      resolveSampleBound(request.onsetSample, request.onsetSec, rate, 'onsetSample', 'onsetSec') ??
-        0,
-      resolveSampleBound(
-        request.offsetSample,
-        request.offsetSec,
+      'onsetSample',
+      'onsetSec',
+    );
+    const offset = resolveSampleBound(
+      request.offsetSample,
+      request.offsetSec,
+      rate,
+      'offsetSample',
+      'offsetSec',
+    );
+    return withRespelled(mergeRespelled(target.respelled, onset.respelled, offset.respelled), () =>
+      requireModule().noteMove(
+        request.samples,
         rate,
-        'offsetSample',
-        'offsetSec',
-      ) ?? request.samples.length,
-      target,
+        onset.value ?? 0,
+        offset.value ?? request.samples.length,
+        target.value,
+      ),
     );
   });
 }
@@ -495,8 +514,15 @@ export function renderNotes(...args: unknown[]): Float32Array {
       assertPitchTrackLengths(f0Hz, publicVoiced);
     }
     const options = { ...withoutVoiced, voiced };
-    const notes = resolveEntryTimes(request.notes, 'notes', request.sampleRate, true);
-    return requireModule().renderNotes(request.samples, request.sampleRate, notes, options);
+    const { entries: notes, respelled } = resolveEntryTimes(
+      request.notes,
+      'notes',
+      request.sampleRate,
+      true,
+    );
+    return withRespelled(respelled, () =>
+      requireModule().renderNotes(request.samples, request.sampleRate, notes, options),
+    );
   });
 }
 
@@ -628,18 +654,25 @@ export function splitNote(...args: unknown[]): NoteObject[] {
     if (!Array.isArray(request.notes)) {
       throw refuseType('notes must be an array');
     }
-    const notes = resolveEntryTimes(request.notes, 'notes', request.sampleRate, false);
-    return requireModule().splitNote(
-      request.samples,
+    const { entries: notes, respelled } = resolveEntryTimes(
+      request.notes,
+      'notes',
       request.sampleRate,
-      request.f0Hz,
-      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-      voicedF32,
-      request.frameRate,
-      notes,
-      request.index,
-      frame,
-      request,
+      false,
+    );
+    return withRespelled(respelled, () =>
+      requireModule().splitNote(
+        request.samples,
+        request.sampleRate,
+        request.f0Hz,
+        request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+        voicedF32,
+        request.frameRate,
+        notes,
+        request.index,
+        frame,
+        request,
+      ),
     );
   });
 }
@@ -699,18 +732,25 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
     if (!Array.isArray(request.notes)) {
       throw refuseType('notes must be an array');
     }
-    const notes = resolveEntryTimes(request.notes, 'notes', request.sampleRate, false);
-    return requireModule().mergeNotes(
-      request.samples,
+    const { entries: notes, respelled } = resolveEntryTimes(
+      request.notes,
+      'notes',
       request.sampleRate,
-      request.f0Hz,
-      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-      voicedF32,
-      request.frameRate,
-      notes,
-      request.first,
-      request.last,
-      request,
+      false,
+    );
+    return withRespelled(respelled, () =>
+      requireModule().mergeNotes(
+        request.samples,
+        request.sampleRate,
+        request.f0Hz,
+        request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+        voicedF32,
+        request.frameRate,
+        notes,
+        request.first,
+        request.last,
+        request,
+      ),
     );
   });
 }

@@ -3,8 +3,9 @@
  * STFT and resynthesized.
  */
 
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { mergeRespelled, type Respelled, refuse, refuseType, withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
+import { withRespelled } from './internal/respell.js';
 import { windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './public_types.js';
@@ -33,25 +34,26 @@ function resolveRegionTimes(
   { startSec, endSec, ...op }: SpectralRegionOp,
   index: number,
   sampleRate: number,
-): SpectralRegionOp {
+): { op: SpectralRegionOp; respelled: Respelled } {
   const at = `ops[${index}]`;
   assertRegionHighHz(op.highHz, at);
+  const start = resolveSampleBound(
+    op.startSample,
+    startSec,
+    sampleRate,
+    `${at}.startSample`,
+    `${at}.startSec`,
+  );
+  const end = resolveSampleBound(
+    op.endSample,
+    endSec,
+    sampleRate,
+    `${at}.endSample`,
+    `${at}.endSec`,
+  );
   return {
-    ...op,
-    startSample: resolveSampleBound(
-      op.startSample,
-      startSec,
-      sampleRate,
-      `${at}.startSample`,
-      `${at}.startSec`,
-    ),
-    endSample: resolveSampleBound(
-      op.endSample,
-      endSec,
-      sampleRate,
-      `${at}.endSample`,
-      `${at}.endSec`,
-    ),
+    op: { ...op, startSample: start.value, endSample: end.value },
+    respelled: mergeRespelled(start.respelled, end.respelled),
   };
 }
 
@@ -91,19 +93,24 @@ export function spectralEdit(...args: unknown[]): Float32Array {
     // Each of the three is its own "0 => the documented default" on the C side.
     refuseZeroSentinel(request, ['nFft', 'hopLength', 'healRadiusFrames']);
     // A non-Array array-like goes to the native reader, which bounds its length.
+    const respellings: Respelled[] = [];
     const nativeOps = Array.isArray(requestOps)
       ? requestOps.map((op, index) => {
           if (op === null || typeof op !== 'object') {
             throw refuseType(`ops[${index}] must be an object`);
           }
-          return resolveRegionTimes(op, index, request.sampleRate);
+          const resolved = resolveRegionTimes(op, index, request.sampleRate);
+          respellings.push(resolved.respelled);
+          return resolved.op;
         })
       : (requestOps as SpectralRegionOp[]);
-    return requireModule().spectralEdit(
-      request.samples,
-      request.sampleRate,
-      nativeOps,
-      request as unknown as Record<string, unknown>,
+    return withRespelled(mergeRespelled(...respellings), () =>
+      requireModule().spectralEdit(
+        request.samples,
+        request.sampleRate,
+        nativeOps,
+        request as unknown as Record<string, unknown>,
+      ),
     );
   });
 }

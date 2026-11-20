@@ -80,11 +80,6 @@ bool ReadRange(Napi::Env env, const Napi::Value& value, SonareVocalRange* out) {
       !RequiredSafeIntegerValue(env, object.Get("endSample"), "range.endSample", &end, 0)) {
     return false;
   }
-  if (end < start) {
-    Napi::RangeError::New(env, "range.endSample must be at least startSample")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
   out->start_sample = start;
   out->end_sample = end;
   return true;
@@ -632,6 +627,9 @@ Napi::Error MakeVocalError(Napi::Env env, SonareError error,
   Napi::Error js_error = sonare_node::MakeSonareError(
       env, error, sonare_node::ErrorMessageForCode(error), sonare_node::LastRefusalIsShape());
   Napi::Object object = js_error.Value();
+  if (const auto shown = sonare_node::ShownLastRefusal()) {
+    sonare_node::AttachRefusal(env, object, *shown);
+  }
   object.Set("reason", detail == nullptr ? 0u : detail->reason);
   object.Set("field", detail == nullptr ? "" : detail->field);
   object.Set("expected", detail == nullptr
@@ -970,7 +968,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
     Napi::HandleScope scope(Env());
     DetachSignal();
     Napi::Object value = error.Value();
-    sonare_node::DecorateSonareError(Env(), value, error_code_, shape_refusal_);
+    sonare_node::DecorateSonareError(Env(), value, error_code_, shape_refusal_, refusal_);
     value.Set("reason", detail_.reason);
     value.Set("field", detail_.field);
     value.Set("expected", detail_.expected_text[0] == '\0' ? Uint64String(detail_.expected)
@@ -998,6 +996,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
   void CaptureError(SonareError error) {
     error_code_ = error;
     shape_refusal_ = sonare_node::LastRefusalIsShape();
+    refusal_ = sonare_node::ShownLastRefusal();
     sonare_vocal_error_detail_init(&detail_);
     sonare_vocal_last_error_detail(&detail_);
     // Runs on the render worker thread, whose thread-local holds the refusal's detail.
@@ -1033,6 +1032,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
   bool result_initialized_ = false;
   SonareError error_code_ = SONARE_ERROR_UNKNOWN;
   bool shape_refusal_ = false;
+  std::optional<sonare::SonareParameterRefusal> refusal_;
   SonareVocalErrorDetail detail_{};
 };
 

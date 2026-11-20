@@ -4,7 +4,7 @@
 
 import type { VoicedFlags } from '../types.js';
 import { assertInt64, resolveSampleBound } from '../validation.js';
-import { refuse, refuseType } from './entry.js';
+import { mergeRespelled, type Respelled, refuse, refuseType } from './entry.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so validate and normalize here rather than at the
@@ -50,6 +50,12 @@ interface TimedEntry {
   edit?: { timeOffsetSamples?: number; timeOffsetSec?: number };
 }
 
+/** Entries with their time fields in samples, and the respelling their refusals need. */
+export interface ResolvedEntries<T> {
+  readonly entries: T[];
+  readonly respelled: Respelled;
+}
+
 /**
  * Resolve the time fields of a note or event set into the samples the addon
  * reads, and check the pending time offsets before the addon narrows them.
@@ -65,8 +71,9 @@ export function resolveEntryTimes<T extends TimedEntry>(
   arrayName: string,
   sampleRate: number,
   spans: boolean,
-): T[] {
-  return entries.map((entry, index) => {
+): ResolvedEntries<T> {
+  const respellings: Respelled[] = [];
+  const resolvedEntries = entries.map((entry, index) => {
     if (entry === null || typeof entry !== 'object') {
       return entry;
     }
@@ -74,20 +81,23 @@ export function resolveEntryTimes<T extends TimedEntry>(
     const { onsetSec, offsetSec, ...rest } = entry;
     const resolved: TimedEntry = { ...rest };
     if (spans) {
-      resolved.onsetSample = resolveSampleBound(
+      const onset = resolveSampleBound(
         entry.onsetSample,
         onsetSec,
         sampleRate,
         `${at}.onsetSample`,
         `${at}.onsetSec`,
       );
-      resolved.offsetSample = resolveSampleBound(
+      const offsetBound = resolveSampleBound(
         entry.offsetSample,
         offsetSec,
         sampleRate,
         `${at}.offsetSample`,
         `${at}.offsetSec`,
       );
+      resolved.onsetSample = onset.value;
+      resolved.offsetSample = offsetBound.value;
+      respellings.push(onset.respelled, offsetBound.respelled);
     }
     if (isPlainObject(entry.edit)) {
       const { timeOffsetSec, ...edit } = entry.edit;
@@ -99,14 +109,16 @@ export function resolveEntryTimes<T extends TimedEntry>(
         `${at}.edit.timeOffsetSec`,
         'signed',
       );
-      if (offset !== undefined) {
-        assertInt64(offset, `${at}.edit.timeOffsetSamples`);
+      if (offset.value !== undefined) {
+        assertInt64(offset.value, `${at}.edit.timeOffsetSamples`);
       }
-      resolved.edit = { ...entry.edit, timeOffsetSamples: offset };
+      respellings.push(offset.respelled);
+      resolved.edit = { ...entry.edit, timeOffsetSamples: offset.value };
       delete (resolved.edit as { timeOffsetSec?: number }).timeOffsetSec;
     }
     return resolved as T;
   });
+  return { entries: resolvedEntries, respelled: mergeRespelled(...respellings) };
 }
 
 /** Common audio input fields for stateless effect requests. */

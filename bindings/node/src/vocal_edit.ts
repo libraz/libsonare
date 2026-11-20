@@ -3,10 +3,13 @@ import {
   codedError,
   entryClass,
   invalidState,
+  mergeRespelled,
+  type Respelled,
   refuse,
   refuseType,
   withEntry,
 } from './internal/entry.js';
+import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type {
   VocalAnalysis,
@@ -37,6 +40,7 @@ import {
   requestObject,
   requireSampleBound,
   resolveSampleBound,
+  type SampleBound,
 } from './validation.js';
 
 /** A note as the addon returns it: frame indices are decimal strings. */
@@ -401,9 +405,12 @@ export class VocalEditDraft implements Disposable {
   apply(request: VocalApplyRequest): VocalEditResult {
     this.requireAlive();
     requestObject('vocalApply', request, 'request', true);
-    return this.native.apply(
-      request.expectedGeneration ?? this.native.token().generation,
-      resolveVocalOperationTimes(request.operations, this.sampleRate),
+    const resolved = resolveVocalOperationTimes(request.operations, this.sampleRate);
+    return withRespelled(resolved.respelled, () =>
+      this.native.apply(
+        request.expectedGeneration ?? this.native.token().generation,
+        resolved.operations,
+      ),
     );
   }
 
@@ -528,7 +535,10 @@ export class VocalRenderSnapshot implements Disposable {
     this.requireAlive();
     const cancel = request.cancel;
     if (cancel === undefined) {
-      return convertRenderResult(this.native.render(this.resolveRange(request), request.requestId));
+      const { range, respelled } = this.resolveRange(request);
+      return convertRenderResult(
+        withRespelled(respelled, () => this.native.render(range, request.requestId)),
+      );
     }
     if (typeof cancel !== 'function') {
       throw refuseType('cancel must be a function');
@@ -541,11 +551,10 @@ export class VocalRenderSnapshot implements Disposable {
     this.requireAlive();
     throwIfAborted(request.signal);
     try {
+      const { range, respelled } = this.resolveRange(request);
       return convertRenderResult(
-        await this.native.renderAsync(
-          this.resolveRange(request),
-          request.requestId,
-          request.signal,
+        await withRespelled(respelled, () =>
+          this.native.renderAsync(range, request.requestId, request.signal),
         ),
       );
     } catch (error) {
@@ -562,8 +571,9 @@ export class VocalRenderSnapshot implements Disposable {
   /** Starts an incremental render job. */
   beginRenderJob(request: VocalRenderJobRequest): VocalRenderJob {
     this.requireAlive();
+    const { range, respelled } = this.resolveRange(request);
     return wrapVocalRenderJob(
-      this.native.beginRenderJob(this.resolveRange(request), request.requestId),
+      withRespelled(respelled, () => this.native.beginRenderJob(range, request.requestId)),
     );
   }
 
@@ -587,7 +597,10 @@ export class VocalRenderSnapshot implements Disposable {
     }
   }
 
-  private resolveRange(request: VocalRenderJobRequest): VocalRange {
+  private resolveRange(request: VocalRenderJobRequest): {
+    range: VocalRange;
+    respelled: Respelled;
+  } {
     const range: VocalRangeInput = request.range ?? {};
     const start = resolveSampleBound(
       range.startSample,
@@ -604,8 +617,11 @@ export class VocalRenderSnapshot implements Disposable {
       'range.endSec',
     );
     return {
-      startSample: start ?? 0,
-      endSample: end ?? this.native.outputLengthSamples(),
+      range: {
+        startSample: start.value ?? 0,
+        endSample: end.value ?? this.native.outputLengthSamples(),
+      },
+      respelled: mergeRespelled(start.respelled, end.respelled),
     };
   }
 }
@@ -718,7 +734,7 @@ function requiredOperationBound(
   sampleRate: number,
   sampleName: string,
   secName: string,
-): number {
+): SampleBound & { readonly value: number } {
   return requireSampleBound(sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
 }
 
@@ -729,21 +745,33 @@ function requiredOperationBound(
 function resolveVocalOperationTimes(
   operations: readonly VocalEditOperation[],
   sampleRate: number,
-): readonly VocalEditOperation[] {
+): { operations: readonly VocalEditOperation[]; respelled: Respelled } {
   if (!Array.isArray(operations)) {
-    return operations;
+    return { operations, respelled: {} };
   }
-  return operations.map((operation, index) => {
+  const respellings: Respelled[] = [];
+  const resolved = operations.map((operation, index) => {
     const at = `operations[${index}]`;
+    const bound = (
+      sample: number | undefined,
+      sec: number | undefined,
+      sampleName: string,
+      secName: string,
+    ): number => {
+      const resolvedBound = requiredOperationBound(
+        at,
+        sample,
+        sec,
+        sampleRate,
+        sampleName,
+        secName,
+      );
+      respellings.push(resolvedBound.respelled);
+      return resolvedBound.value;
+    };
     if (operation?.kind === 'setSourceSpan') {
       const { sourceStartSec, sourceEndSec, destinationStartSec, destinationLengthSec, ...rest } =
         operation;
-      const bound = (
-        sample: number | undefined,
-        sec: number | undefined,
-        sampleName: string,
-        secName: string,
-      ) => requiredOperationBound(at, sample, sec, sampleRate, sampleName, secName);
       return {
         ...rest,
         sourceStartSample: bound(
@@ -776,18 +804,12 @@ function resolveVocalOperationTimes(
       const { sourceSec, ...rest } = operation;
       return {
         ...rest,
-        sourceSample: requiredOperationBound(
-          at,
-          rest.sourceSample,
-          sourceSec,
-          sampleRate,
-          'sourceSample',
-          'sourceSec',
-        ),
+        sourceSample: bound(rest.sourceSample, sourceSec, 'sourceSample', 'sourceSec'),
       } as VocalEditOperation;
     }
     return operation;
   });
+  return { operations: resolved, respelled: mergeRespelled(...respellings) };
 }
 
 /**

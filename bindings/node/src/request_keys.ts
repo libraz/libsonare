@@ -1271,6 +1271,15 @@ const CONFIGURE_CAPTURE_REQUEST_KEYS = keySet(
   'punch',
 );
 const CAPTURE_INPUT_MONITOR_KEYS = keySet('enabled', 'gain');
+const ENGINE_GRAPH_NODE_KEYS = keySet('id', 'type', 'gainDb', 'numPorts');
+const ENGINE_GRAPH_CONNECTION_KEYS = keySet(
+  'sourceNode',
+  'sourcePort',
+  'destNode',
+  'destPort',
+  'mix',
+);
+const ENGINE_GRAPH_PARAMETER_BINDING_KEYS = keySet('paramId', 'nodeId');
 const CAPTURE_PUNCH_KEYS = keySet(
   'startPpq',
   'startSample',
@@ -1875,6 +1884,11 @@ export const NESTED_REQUEST_KEYS = {
   midi2Program: { bank: keySet('msb', 'lsb') },
   midiBankProgram: { bank: keySet('msb', 'lsb') },
   configureCapture: { inputMonitor: CAPTURE_INPUT_MONITOR_KEYS, punch: CAPTURE_PUNCH_KEYS },
+  setGraph: {
+    nodes: ENGINE_GRAPH_NODE_KEYS,
+    connections: ENGINE_GRAPH_CONNECTION_KEYS,
+    parameterBindings: ENGINE_GRAPH_PARAMETER_BINDING_KEYS,
+  },
   restoreVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
   createVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
 } as const;

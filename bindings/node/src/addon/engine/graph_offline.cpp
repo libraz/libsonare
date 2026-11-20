@@ -93,8 +93,6 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Object obj = entry.As<Napi::Object>();
-    RefuseUnknownDocumentKeys(obj, sonare::util::json::schema::index_path("nodes", i),
-                              {"id", "type", "gainDb", "numPorts"});
     SonareEngineGraphNode node{};
     if (!RequiredStringProperty(env, obj, "id", &text)) return env.Undefined();
     if (!CopyString(env, node.id, sizeof(node.id), text, "graph node id")) return env.Undefined();
@@ -116,8 +114,6 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Object obj = entry.As<Napi::Object>();
-    RefuseUnknownDocumentKeys(obj, sonare::util::json::schema::index_path("connections", i),
-                              {"sourceNode", "sourcePort", "destNode", "destPort", "mix"});
     SonareEngineGraphConnection connection{};
     if (!RequiredStringProperty(env, obj, "sourceNode", &text)) return env.Undefined();
     if (!CopyString(env, connection.source_node, sizeof(connection.source_node), text,
@@ -156,8 +152,6 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
         return env.Undefined();
       }
       Napi::Object obj = entry.As<Napi::Object>();
-      RefuseUnknownDocumentKeys(obj, sonare::util::json::schema::index_path("parameterBindings", i),
-                                {"paramId", "nodeId"});
       SonareEngineGraphParameterBinding binding{};
       if (!RequiredUint32Property(env, obj, "paramId", &binding.param_id)) return env.Undefined();
       if (!RequiredStringProperty(env, obj, "nodeId", &text)) return env.Undefined();

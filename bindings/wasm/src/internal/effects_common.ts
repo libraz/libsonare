@@ -4,7 +4,7 @@
 
 import type { VoicedFlags } from '../public_types.js';
 import { resolveSampleBound } from '../validation.js';
-import { refuse, refuseType } from './entry.js';
+import { mergeRespelled, type Respelled, refuse, refuseType } from './entry.js';
 
 // The embind layer reads the companion voicing array as Float32Array. Keep the
 // public union a runtime contract before conversion: strings, Float64Arrays and
@@ -60,6 +60,12 @@ interface TimedEntry {
   edit?: { timeOffsetSamples?: number; timeOffsetSec?: number };
 }
 
+/** Entries with their time fields in samples, and the respelling their refusals need. */
+export interface ResolvedEntries<T> {
+  readonly entries: T[];
+  readonly respelled: Respelled;
+}
+
 /**
  * Resolve the time fields of a note or event set into the samples the core
  * reads. A bound or offset may be spelled in samples or in seconds (rounded to
@@ -71,8 +77,9 @@ export function resolveEntryTimes<T extends TimedEntry>(
   arrayName: string,
   sampleRate: number,
   spans: boolean,
-): T[] {
-  return entries.map((entry, index) => {
+): ResolvedEntries<T> {
+  const respellings: Respelled[] = [];
+  const resolvedEntries = entries.map((entry, index) => {
     if (entry === null || typeof entry !== 'object') {
       return entry;
     }
@@ -80,35 +87,38 @@ export function resolveEntryTimes<T extends TimedEntry>(
     const { onsetSec, offsetSec, ...rest } = entry;
     const resolved: TimedEntry = { ...rest };
     if (spans) {
-      resolved.onsetSample = resolveSampleBound(
+      const onset = resolveSampleBound(
         entry.onsetSample,
         onsetSec,
         sampleRate,
         `${at}.onsetSample`,
         `${at}.onsetSec`,
       );
-      resolved.offsetSample = resolveSampleBound(
+      const offsetBound = resolveSampleBound(
         entry.offsetSample,
         offsetSec,
         sampleRate,
         `${at}.offsetSample`,
         `${at}.offsetSec`,
       );
+      resolved.onsetSample = onset.value;
+      resolved.offsetSample = offsetBound.value;
+      respellings.push(onset.respelled, offsetBound.respelled);
     }
     if (isPlainObject(entry.edit)) {
       const { timeOffsetSec, ...edit } = entry.edit;
-      resolved.edit = {
-        ...edit,
-        timeOffsetSamples: resolveSampleBound(
-          edit.timeOffsetSamples,
-          timeOffsetSec,
-          sampleRate,
-          `${at}.edit.timeOffsetSamples`,
-          `${at}.edit.timeOffsetSec`,
-          'signed',
-        ),
-      };
+      const offset = resolveSampleBound(
+        edit.timeOffsetSamples,
+        timeOffsetSec,
+        sampleRate,
+        `${at}.edit.timeOffsetSamples`,
+        `${at}.edit.timeOffsetSec`,
+        'signed',
+      );
+      respellings.push(offset.respelled);
+      resolved.edit = { ...edit, timeOffsetSamples: offset.value };
     }
     return resolved as T;
   });
+  return { entries: resolvedEntries, respelled: mergeRespelled(...respellings) };
 }

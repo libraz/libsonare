@@ -24,7 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include "util/json_schema.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_node {
@@ -300,44 +299,6 @@ inline void node_require_property_type(Napi::Env env, bool ok, const char* key,
                                        const char* expected) {
   if (env.IsExceptionPending() || ok) return;
   throw Napi::TypeError::New(env, std::string(key) + " must be " + expected);
-}
-
-/// @brief Refuses an own enumerable key of @p obj that is in neither @p allowed nor @p extra,
-///        so a renamed key cannot be silently read as absent.
-/// @throws Napi::TypeError "unknown key <key> (expected <the accepted keys, sorted>)".
-inline void RefuseUnknownKeys(const Napi::Object& obj, const std::vector<const char*>& allowed,
-                              std::initializer_list<const char*> extra = {}) {
-  const Napi::Array names = obj.GetPropertyNames();
-  for (uint32_t i = 0; i < names.Length(); ++i) {
-    const std::string key = names.Get(i).ToString().Utf8Value();
-    const auto matches = [&key](const char* name) { return key == name; };
-    if (std::any_of(allowed.begin(), allowed.end(), matches) ||
-        std::any_of(extra.begin(), extra.end(), matches)) {
-      continue;
-    }
-    namespace schema = sonare::util::json::schema;
-    std::vector<std::string> accepted(allowed.begin(), allowed.end());
-    accepted.insert(accepted.end(), extra.begin(), extra.end());
-    throw Napi::TypeError::New(obj.Env(),
-                               schema::unknown_key_expected(sonare::util::json::escape_key(key),
-                                                            schema::expected_keys(accepted)));
-  }
-}
-
-/// @brief Refuses an own enumerable key of the document object @p obj at @p path that is not in
-///        @p allowed, naming it by its path from the document root.
-/// @throws Napi::TypeError "unknown key <path>.<key>".
-inline void RefuseUnknownDocumentKeys(const Napi::Object& obj, const std::string& path,
-                                      std::initializer_list<const char*> allowed) {
-  const Napi::Array names = obj.GetPropertyNames();
-  for (uint32_t i = 0; i < names.Length(); ++i) {
-    const std::string key = names.Get(i).ToString().Utf8Value();
-    const auto matches = [&key](const char* name) { return key == name; };
-    if (std::none_of(allowed.begin(), allowed.end(), matches)) {
-      namespace schema = sonare::util::json::schema;
-      throw Napi::TypeError::New(obj.Env(), schema::unknown_key(schema::child_path(path, key)));
-    }
-  }
 }
 
 /// @brief Read an int property: undefined/null returns the fallback, any other

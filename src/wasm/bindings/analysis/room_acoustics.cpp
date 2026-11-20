@@ -79,30 +79,6 @@ val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_oct
 // which is why the guard has to be reachable from the core rather than sitting
 // in the C-ABI translation unit.
 
-// The room and synthesis keys synthesizeRir, roomMorph and roomMorphStereo share; each entry point
-// adds its own on top.
-const std::vector<const char*>& roomKeys() {
-  static const std::vector<const char*> keys = {"lengthM",
-                                                "widthM",
-                                                "heightM",
-                                                "absorption",
-                                                "bandAbsorption",
-                                                "bandScattering",
-                                                "materialPreset",
-                                                "source",
-                                                "listener",
-                                                "ismOrder",
-                                                "seed",
-                                                "maxSec",
-                                                "preferEyring",
-                                                "mixingTimeMs",
-                                                "crossfadeMs",
-                                                "airAbsorptionEnabled",
-                                                "airTemperatureC",
-                                                "airHumidityPercent"};
-  return keys;
-}
-
 // Builds a uniform shoebox from a JS options object, honouring the same wall-
 // material precedence as the C ABI: materialPreset (non-zero) > per-band
 // bandAbsorption (Float32Array/number[]) > scalar absorption.
@@ -223,7 +199,6 @@ val diagnosticsArray(const std::vector<sonare::Diagnostic>& diagnostics) {
 }
 
 val js_synthesize_rir(val opts) {
-  refuseUnknownKeys(opts, roomKeys(), {"sampleRate"});
   const int sample_rate = intProperty(opts, "sampleRate", 48000);
   validateAcousticSampleRate(sample_rate);
   sonare::acoustic::RirSynthConfig config;
@@ -260,10 +235,6 @@ val js_synthesize_rir(val opts) {
 val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  // samples and sampleRate ride along from the request object and are not read here.
-  refuseUnknownKeys(
-      opts, {"aspectHintLw", "aspectHintLh", "referenceAbsorption", "preferEyring", "nOctaveBands",
-             "minDecayDb", "noiseFloorMarginDb", "mode", "samples", "sampleRate"});
   Audio audio = loadAcousticAudio("samples", samples, sample_rate);
   sonare::RoomEstimateConfig config;
   // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
@@ -344,7 +315,6 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opt
 val js_room_morph(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  refuseUnknownKeys(opts, roomKeys(), {"wet", "sourceTailSuppression", "samples", "sampleRate"});
   Audio audio = loadAcousticAudio("samples", samples, sample_rate);
   // The config's own validation runs inside the respelling, so it refuses in the request's keys.
   const auto result = sonare::util::check::with_camel_paths(
@@ -367,9 +337,6 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
 val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  refuseUnknownKeys(
-      opts, roomKeys(),
-      {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right", "sampleRate"});
   std::vector<float> left_data = float32ArrayToVector(left);
   std::vector<float> right_data = float32ArrayToVector(right);
   if (left_data.size() != right_data.size()) {

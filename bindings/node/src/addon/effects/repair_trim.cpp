@@ -55,7 +55,6 @@ sonare::mastering::repair::TrimSilenceConfig ReadTrimConfig(const Napi::Object& 
                                                             float* threshold_db) {
   sonare::mastering::repair::TrimSilenceConfig config;
   *threshold_db = sonare::mastering::repair::kTrimThresholdDefaultDb;
-  RefuseUnknownKeys(options, {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
   config.threshold = DbfsAsLinearProperty(
       options, "thresholdDb", config.threshold, [threshold_db](float db, const char* key) {
         *threshold_db = db;

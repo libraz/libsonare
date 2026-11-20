@@ -6,6 +6,7 @@
 
 #include <exception>
 #include <new>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,18 @@ std::string ExceptionMessage(const std::exception& e);
 /// Whether @p e refuses the request's shape (an unknown key or a wrong type), which surfaces as a
 /// TypeError rather than the RangeError of a value outside its domain.
 bool IsShapeRefusal(const std::exception& e);
+
+/// @brief The last C-ABI parameter refusal as the caller reads it (in request keys), or none.
+std::optional<sonare::SonareParameterRefusal> ShownLastRefusal();
+
+/// @brief Carries @p shown, the refusal whose text @p error's message ends with, on @p error as
+///        plain parts under Symbol.for('libsonare.refusal'), so a facade that converted an
+///        argument can re-render it under the name and unit its caller wrote.
+void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown);
+
+/// @brief `renderRefusal(refusal, subjects, scales)`: the attached refusal with its subjects
+///        replaced and its domain divided by `scales[0]`, as `{ message, refusal }`.
+Napi::Value RenderRefusal(const Napi::CallbackInfo& info);
 
 /// @brief Canonical name for a C-ABI error code ("InvalidParameter", ...).
 ///        Mirrors the JS-exposed ErrorCode enum; used as the error's codeName.
@@ -104,8 +117,10 @@ void MarkPendingForeign(Napi::Env env);
 /// @brief Add the public SonareError shape to an existing JavaScript Error, or
 /// re-class it as a RangeError for INVALID_PARAMETER (see MakeSonareError).
 /// Used by AsyncWorker completion handlers before rejecting their Promise.
-/// A shape refusal (@p shape_refusal) is re-classed as a TypeError instead.
-void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal);
+/// A shape refusal (@p shape_refusal) is re-classed as a TypeError instead, and a refusal the
+/// worker captured (@p shown) is attached as @ref AttachRefusal does on the synchronous path.
+void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal,
+                         const std::optional<sonare::SonareParameterRefusal>& shown);
 
 /// @brief Whether the calling thread's last C-ABI failure was a shape refusal; an async worker
 ///        records it on its own thread beside the code.

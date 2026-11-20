@@ -1,7 +1,15 @@
 import type { ClipPageSampleRequest } from './clip_page_provider.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { nativeClipPageProviderOf } from './internal/clip_page_native.js';
-import { codedError, entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
+import {
+  codedError,
+  entryClass,
+  invalidState,
+  mergeRespelled,
+  type Respelled,
+  refuse,
+  refuseType,
+} from './internal/entry.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
@@ -9,6 +17,7 @@ import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene
 import { requireOneOf } from './internal/one_of.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
+import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
@@ -77,6 +86,7 @@ import {
   requireBoolean,
   resolveRenderFrame,
   resolveSampleBound,
+  type SampleBound,
 } from './validation.js';
 import {
   AUTOMATION_CURVE_VALUES,
@@ -1898,16 +1908,22 @@ export class RealtimeEngine {
     if (punch === undefined) {
       this.native.setCapturePunch(0, 0, false);
     } else {
-      this.native.setCapturePunch(punch.start, punch.end, true);
+      withRespelled(punch.respelled, () =>
+        this.native.setCapturePunch(punch.start, punch.end, true),
+      );
     }
   }
 
-  private resolvePunch(punch: CapturePunch): { start: number; end: number } {
+  private resolvePunch(punch: CapturePunch): {
+    start: number;
+    end: number;
+    respelled: Respelled;
+  } {
     if (!isObjectValue(punch)) {
       throw refuseType(`punch must be an object`);
     }
     const request = punch as Record<string, unknown>;
-    const bound = (edge: 'start' | 'end'): number => {
+    const bound = (edge: 'start' | 'end'): SampleBound & { readonly value: number } => {
       const ppqName = `${edge}Ppq`;
       const sampleName = `${edge}Sample`;
       const secName = `${edge}Sec`;
@@ -1917,21 +1933,29 @@ export class RealtimeEngine {
         names.map((name) => !isAbsent(request[name])),
       );
       if (given === 0) {
-        const ppq = requireFinite(request[ppqName], ppqName);
+        const ppq = requireFinite(request[ppqName], `punch.${ppqName}`);
         if (ppq < 0) {
-          throw refuse(`${ppqName} must be at least 0`);
+          throw refuse(`punch.${ppqName} must be at least 0`);
         }
-        return Math.round(this.native.sampleAtPpq(ppq));
+        return { value: Math.round(this.native.sampleAtPpq(ppq)), respelled: {} };
       }
       return resolveSampleBound(
         request[sampleName] as number | undefined,
         request[secName] as number | undefined,
         this.sampleRate,
+        `punch.${sampleName}`,
+        `punch.${secName}`,
+        'non-negative',
         sampleName,
-        secName,
-      ) as number;
+      ) as SampleBound & { readonly value: number };
     };
-    return { start: bound('start'), end: bound('end') };
+    const start = bound('start');
+    const end = bound('end');
+    return {
+      start: start.value,
+      end: end.value,
+      respelled: mergeRespelled(start.respelled, end.respelled),
+    };
   }
 
   /** Arms or disarms capture. */

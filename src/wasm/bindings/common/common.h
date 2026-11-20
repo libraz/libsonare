@@ -376,18 +376,6 @@ std::vector<int32_t> int32ArrayToVector(val arr);
 std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
-/// @brief Refuses an own enumerable key of @p object that is in neither @p allowed nor
-///        @p extra, so a renamed key cannot be silently read as absent.
-/// @details An absent or non-object @p object is left to the property readers.
-/// @throws WasmTypeError "unknown key <key> (expected <the accepted keys, sorted>)".
-void refuseUnknownKeys(val object, const std::vector<const char*>& allowed,
-                       std::initializer_list<const char*> extra = {});
-/// @brief Refuses an own enumerable key of the document object @p object at @p path that is not
-///        in @p allowed, naming it by its path from the document root.
-/// @details An absent or non-object @p object is left to the property readers.
-/// @throws WasmTypeError "unknown key <path>.<key>".
-void refuseUnknownDocumentKeys(const val& object, const std::string& path,
-                               std::initializer_list<const char*> allowed);
 /// @brief Presence- AND type-checked float reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS number validated by @ref checkedFloatFromVal.

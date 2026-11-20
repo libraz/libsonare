@@ -70,6 +70,77 @@ function setPrefix(error: NamedError, text: string, entry: string): void {
 }
 
 /** Refusal of an out-of-domain argument; the entry the caller invoked prefixes its name. */
+const REFUSAL = Symbol.for('libsonare.refusal');
+
+/** A core parameter refusal as plain parts: what its native translation point attached. */
+export interface RefusalRecord {
+  readonly code: number;
+  readonly form: 'predicate' | 'wrongType' | 'unknownKey' | 'relation';
+  readonly subjects: readonly string[];
+  readonly predicate: string;
+  readonly renamedTo: string;
+  readonly expected: string;
+  readonly callerSpelled: boolean;
+  /** The text the caller read, without the entry prefix. */
+  readonly text: string;
+  readonly domain?: {
+    readonly lo?: number;
+    readonly hi?: number;
+    readonly loIncluded: boolean;
+    readonly hiIncluded: boolean;
+  };
+}
+
+/** How a refused subject reaches the caller: the name it wrote, and how many of the subject's units one of its own holds (the sample rate, for seconds given in place of samples). */
+export interface Respelling {
+  readonly name: string;
+  readonly scale: number;
+}
+
+/** Respellings keyed by the subject the caller would otherwise read. */
+export type Respelled = Readonly<Record<string, Respelling>>;
+
+/** The respellings of several converted arguments, as one declaration for their call. */
+export function mergeRespelled(...parts: readonly Respelled[]): Respelled {
+  return Object.assign({}, ...parts);
+}
+
+/** Carries @p refusal on @p error, as the native translation points do. */
+export function attachRefusal<E extends Error>(error: E, refusal: RefusalRecord): E {
+  Object.defineProperty(error, REFUSAL, { value: refusal, configurable: true });
+  return error;
+}
+
+/** The core refusal @p error carries, or undefined. */
+export function refusalOf(error: unknown): RefusalRecord | undefined {
+  if (error === null || typeof error !== 'object') {
+    return undefined;
+  }
+  return (error as { [REFUSAL]?: RefusalRecord })[REFUSAL];
+}
+
+/**
+ * Replaces the refusal @p error carries with @p refusal, whose text @p text is, keeping the error's
+ * class, code and any entry prefix already in front of the old text.
+ */
+export function retextRefusal(error: Error, refusal: RefusalRecord, text: string): void {
+  const named = error as NamedError;
+  const old = refusalOf(error)?.text ?? '';
+  const swap = (message: string): string =>
+    message.endsWith(old) ? `${message.slice(0, message.length - old.length)}${text}` : message;
+  const before = `${error.name}: ${error.message}`;
+  error.message = swap(error.message);
+  const stack = error.stack;
+  if (typeof stack === 'string' && stack.startsWith(before)) {
+    error.stack = `${error.name}: ${error.message}${stack.slice(before.length)}`;
+  }
+  const unprefixed = named[UNPREFIXED];
+  if (unprefixed !== undefined) {
+    mark(named, swap(unprefixed));
+  }
+  attachRefusal(error, refusal);
+}
+
 export function refuse(text: string): RangeError {
   return mark(new RangeError(text), text);
 }

@@ -213,9 +213,6 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
                                  const val& hop_length_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  refuseUnknownKeys(options, {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask",
-                              "scaleReferenceMidi", "retuneAmount", "maxCorrectionSemitones",
-                              "retuneSpeedMs", "vibratoThresholdCents", "voiced", "voicedProb"});
   val voiced = val::undefined();
   val voiced_prob = val::undefined();
   bool has_voiced = false;
@@ -311,8 +308,6 @@ val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, va
     named = Key{static_cast<PitchClass>(root), modeFromVal(key_val["mode"], "key.mode"), 1.0f};
   }
 
-  refuseUnknownKeys(options, {"retuneAmount", "scaleReferenceMidi", "maxCorrectionSemitones",
-                              "retuneSpeedMs", "vibratoThresholdCents"});
   editing::pitch_editor::PitchCorrectionConfig config{};
   if (!options.isUndefined() && !options.isNull()) {
     config.retune_amount = floatProperty(options, "retuneAmount", config.retune_amount);

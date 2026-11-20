@@ -117,7 +117,6 @@ mastering::repair::DeclickConfig readMasteringRepairDeclick(const val& options) 
 mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options) {
   mastering::repair::DeclipConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
-  refuseUnknownKeys(options, {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
   // An absent key leaves the library default untouched rather than round-tripping it through dB.
   if (hasProperty(options, "clipThresholdDb")) {
     cfg.clip_threshold = mastering::repair::clip_threshold_from_db(
@@ -527,7 +526,6 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name)
 mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
     const val& options, mastering::repair::TrimSilenceConfig config) {
   if (options.isUndefined() || options.isNull()) return config;
-  refuseUnknownKeys(options, {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
   if (hasProperty(options, "thresholdDb")) {
     config.threshold = mastering::repair::trim_threshold_from_db(
         domainFloatProperty(options, "thresholdDb", 0.0f), "thresholdDb");

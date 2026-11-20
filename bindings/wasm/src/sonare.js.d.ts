@@ -3832,6 +3832,11 @@ export interface SonareModule {
   // before rethrowing its pointer into JS. Nothing else ever drops it, so the
   // module-error wrapper releases every pointer it surfaces.
   sonareReleaseException: (ptr: number) => void;
+  renderRefusal: (
+    refusal: unknown,
+    subjects: string[],
+    scales: number[],
+  ) => { message: string; refusal: unknown };
 }
 
 // The polyphonic editing analysis. `noteCount` and `frameCount` are embind

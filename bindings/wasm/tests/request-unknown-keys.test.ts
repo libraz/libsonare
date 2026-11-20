@@ -179,6 +179,28 @@ describe('a class-method request refuses its keys through an instance', () => {
     }
   });
 
+  it.each(Object.keys(REQUEST_SHAPES.setGraph.nested))(
+    'setGraph refuses an undeclared key inside %s[0] by its path',
+    (field) => {
+      const engine = new api.RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      try {
+        const spec = {
+          nodes: [{ id: 'a', type: 'gain' }],
+          connections: [],
+          inputNode: 'a',
+          outputNode: 'a',
+          parameterBindings: [],
+          [field]: [{ bogus: 1 }],
+        };
+        expect(() => engine.setGraph(spec as never)).toThrow(
+          unknownKeyError(`RealtimeEngine.setGraph: unknown key ${field}[0].bogus`),
+        );
+      } finally {
+        engine.destroy();
+      }
+    },
+  );
+
   it.each(
     (Object.keys(REQUEST_SHAPES) as RequestFn[]).filter((name) => name.startsWith('Project.')),
   )('%s refuses an undeclared key by name through an instance', (name) => {

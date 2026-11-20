@@ -1,4 +1,5 @@
 import { entryClass, refuse, withEntry } from './internal/entry.js';
+import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type {
   NoteEditInput,
@@ -189,10 +190,12 @@ export class PolyphonicAnalysis {
       'edit.timeOffsetSec',
       'signed',
     );
-    if (offset !== undefined) {
-      assertInt64(offset, 'edit.timeOffsetSamples');
+    if (offset.value !== undefined) {
+      assertInt64(offset.value, 'edit.timeOffsetSamples');
     }
-    this.native.setNoteEdit(note, { ...rest, timeOffsetSamples: offset });
+    withRespelled(offset.respelled, () =>
+      this.native.setNoteEdit(note, { ...rest, timeOffsetSamples: offset.value }),
+    );
   }
 
   /**

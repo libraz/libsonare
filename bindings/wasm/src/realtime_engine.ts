@@ -20,6 +20,8 @@ import {
   codedError,
   entryClass,
   invalidState,
+  mergeRespelled,
+  type Respelled,
   refuse,
   refuseType,
   refuseUnknownKey,
@@ -32,6 +34,7 @@ import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
+import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -2614,26 +2617,29 @@ export class RealtimeEngine {
         gain,
       };
     }
-    let punch: { start: number; end: number } | undefined;
+    let punch: { start: number; end: number; respelled: Respelled } | undefined;
     if (options.punch !== undefined && options.punch !== null) {
       requireObject('punch', options.punch);
+      const start = capturePunchBound(
+        options.punch.startPpq,
+        options.punch.startSample,
+        options.punch.startSec,
+        ['startPpq', 'startSample', 'startSec'],
+        this.sampleRate,
+        (ppq) => this.sampleAtPpq(ppq),
+      );
+      const end = capturePunchBound(
+        options.punch.endPpq,
+        options.punch.endSample,
+        options.punch.endSec,
+        ['endPpq', 'endSample', 'endSec'],
+        this.sampleRate,
+        (ppq) => this.sampleAtPpq(ppq),
+      );
       punch = {
-        start: capturePunchBound(
-          options.punch.startPpq,
-          options.punch.startSample,
-          options.punch.startSec,
-          ['startPpq', 'startSample', 'startSec'],
-          this.sampleRate,
-          (ppq) => this.sampleAtPpq(ppq),
-        ),
-        end: capturePunchBound(
-          options.punch.endPpq,
-          options.punch.endSample,
-          options.punch.endSec,
-          ['endPpq', 'endSample', 'endSec'],
-          this.sampleRate,
-          (ppq) => this.sampleAtPpq(ppq),
-        ),
+        start: start.value,
+        end: end.value,
+        respelled: mergeRespelled(start.respelled, end.respelled),
       };
     }
     const native = this.native;
@@ -2641,7 +2647,8 @@ export class RealtimeEngine {
     if (punch === undefined) {
       native.setCapturePunch(0, 1, false);
     } else {
-      native.setCapturePunch(punch.start, punch.end, true);
+      const { start, end } = punch;
+      withRespelled(punch.respelled, () => native.setCapturePunch(start, end, true));
     }
     const current = this.captureBuffer;
     if (

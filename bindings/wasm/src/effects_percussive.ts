@@ -5,6 +5,7 @@
 
 import { resolveEntryTimes } from './internal/effects_common.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -263,7 +264,14 @@ export function renderPercussiveEvents(...args: unknown[]): Float32Array {
     if (!Array.isArray(request.events)) {
       throw refuseType('events must be an array');
     }
-    const events = resolveEntryTimes(request.events, 'events', request.sampleRate, true);
-    return requireModule().renderPercussiveEvents(samples, request.sampleRate, events, request);
+    const { entries: events, respelled } = resolveEntryTimes(
+      request.events,
+      'events',
+      request.sampleRate,
+      true,
+    );
+    return withRespelled(respelled, () =>
+      requireModule().renderPercussiveEvents(samples, request.sampleRate, events, request),
+    );
   });
 }

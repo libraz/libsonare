@@ -298,7 +298,6 @@ using sonare_node::OptionalStringArg;
 using sonare_node::OptionalUint16Arg;
 using sonare_node::OptionalUint32Arg;
 using sonare_node::ReadBuiltinWaveform;
-using sonare_node::RefuseUnknownDocumentKeys;
 using sonare_node::RequiredArrayValue;
 using sonare_node::RequiredBoolArg;
 using sonare_node::RequiredDoubleArg;

@@ -8,8 +8,9 @@ import {
   resolveEntryTimes,
   toVoicedInt32,
 } from './internal/effects_common.js';
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { mergeRespelled, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
+import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type {
   AssignNoteTargetsResult,
@@ -260,19 +261,28 @@ export function noteStretch(...args: unknown[]): Float32Array {
     const rate = request.sampleRate;
     assertAudioInput(request.samples, rate, request);
     assertFloatValue(request.stretchRatio, 'stretchRatio');
-    return addon.noteStretch(
-      request.samples,
+    const onset = resolveSampleBound(
+      request.onsetSample,
+      request.onsetSec,
       rate,
-      resolveSampleBound(request.onsetSample, request.onsetSec, rate, 'onsetSample', 'onsetSec') ??
-        0,
-      resolveSampleBound(
-        request.offsetSample,
-        request.offsetSec,
+      'onsetSample',
+      'onsetSec',
+    );
+    const offset = resolveSampleBound(
+      request.offsetSample,
+      request.offsetSec,
+      rate,
+      'offsetSample',
+      'offsetSec',
+    );
+    return withRespelled(mergeRespelled(onset.respelled, offset.respelled), () =>
+      addon.noteStretch(
+        request.samples,
         rate,
-        'offsetSample',
-        'offsetSec',
-      ) ?? request.samples.length,
-      request.stretchRatio,
+        onset.value ?? 0,
+        offset.value ?? request.samples.length,
+        request.stretchRatio,
+      ),
     );
   });
 }
@@ -305,19 +315,28 @@ export function noteMove(...args: unknown[]): Float32Array {
       'targetOnsetSample',
       'targetOnsetSec',
     );
-    return addon.noteMove(
-      request.samples,
+    const onset = resolveSampleBound(
+      request.onsetSample,
+      request.onsetSec,
       rate,
-      resolveSampleBound(request.onsetSample, request.onsetSec, rate, 'onsetSample', 'onsetSec') ??
-        0,
-      resolveSampleBound(
-        request.offsetSample,
-        request.offsetSec,
+      'onsetSample',
+      'onsetSec',
+    );
+    const offset = resolveSampleBound(
+      request.offsetSample,
+      request.offsetSec,
+      rate,
+      'offsetSample',
+      'offsetSec',
+    );
+    return withRespelled(mergeRespelled(target.respelled, onset.respelled, offset.respelled), () =>
+      addon.noteMove(
+        request.samples,
         rate,
-        'offsetSample',
-        'offsetSec',
-      ) ?? request.samples.length,
-      target,
+        onset.value ?? 0,
+        offset.value ?? request.samples.length,
+        target.value,
+      ),
     );
   });
 }
@@ -472,10 +491,12 @@ export function renderNotes(...args: unknown[]): Float32Array {
       }
       assertPitchTrackLengths(options.f0Hz, voiced);
     }
-    const nativeNotes = resolveEntryTimes(notes, 'notes', sampleRate, true);
+    const { entries: nativeNotes, respelled } = resolveEntryTimes(notes, 'notes', sampleRate, true);
     const nativeOptions =
       nativeVoiced === undefined ? options : { ...options, voiced: nativeVoiced };
-    return addon.renderNotes(samples, sampleRate, nativeNotes, nativeOptions);
+    return withRespelled(respelled, () =>
+      addon.renderNotes(samples, sampleRate, nativeNotes, nativeOptions),
+    );
   });
 }
 
@@ -615,20 +636,18 @@ export function splitNote(...args: unknown[]): NoteObject[] {
     }
     assertFloatValue(index, 'index');
     assertNoteSetEntries(notes);
-    const nativeNotes = resolveEntryTimes(notes, 'notes', sampleRate, false);
-    const split: NoteObject[] = addon.splitNote(
-      samples,
+    const { entries: nativeNotes, respelled } = resolveEntryTimes(
+      notes,
+      'notes',
       sampleRate,
-      f0Hz,
-      frameRate,
-      nativeNotes,
-      index,
-      frame,
-      {
+      false,
+    );
+    const split: NoteObject[] = withRespelled(respelled, () =>
+      addon.splitNote(samples, sampleRate, f0Hz, frameRate, nativeNotes, index, frame, {
         ...options,
         voiced: nativeVoiced,
         voicedProb: voicedProb ?? undefined,
-      },
+      }),
     );
     return split;
   });
@@ -703,20 +722,18 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
     assertFloatValue(first, 'first');
     assertFloatValue(last, 'last');
     assertNoteSetEntries(notes);
-    const nativeNotes = resolveEntryTimes(notes, 'notes', sampleRate, false);
-    const merged: NoteObject[] = addon.mergeNotes(
-      samples,
+    const { entries: nativeNotes, respelled } = resolveEntryTimes(
+      notes,
+      'notes',
       sampleRate,
-      f0Hz,
-      frameRate,
-      nativeNotes,
-      first,
-      last,
-      {
+      false,
+    );
+    const merged: NoteObject[] = withRespelled(respelled, () =>
+      addon.mergeNotes(samples, sampleRate, f0Hz, frameRate, nativeNotes, first, last, {
         ...options,
         voiced: nativeVoiced,
         voicedProb: voicedProb ?? undefined,
-      },
+      }),
     );
     return merged;
   });

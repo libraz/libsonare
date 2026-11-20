@@ -240,10 +240,6 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['RequiredStringProperty', 'Reads a string, and takes an out-pointer rather than a fallback.'],
   ['DbfsAsLinearProperty', 'Reads a float in dBFS; truncation is not in play.'],
   ['XyzProperty', 'Reads three floats; truncation is not in play.'],
-  [
-    'RefuseUnknownDocumentKeys',
-    'Checks key names against a document path and reads no value, so it has no fallback at all.',
-  ],
 ]);
 
 const NO_FLOOR = { tagged: 0, sites: 0 };

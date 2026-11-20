@@ -1,10 +1,12 @@
 import { EXPECTED_ABI_VERSION } from './abi.js';
 import { ErrorCode, type SonareError } from './errors.js';
 import {
+  attachRefusal,
   codedError,
   invalidState,
   nameNativeError,
   passForeign,
+  type RefusalRecord,
   refuse,
   refuseType,
 } from './internal/entry.js';
@@ -26,6 +28,8 @@ interface NativeExceptionInfo {
   message: string;
   /** Present when the binding refused an argument itself: the JS class to rebuild it as. */
   kind?: 'TypeError' | 'RangeError';
+  /** Present for a core parameter refusal: its parts, for a facade to re-render. */
+  refusal?: RefusalRecord;
 }
 
 /**
@@ -73,6 +77,7 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
   let code: number = ErrorCode.Unknown;
   let kind: NativeExceptionInfo['kind'];
   let message = `libsonare native exception (${thrown})`;
+  let refusal: RefusalRecord | undefined;
   try {
     const info = (
       raw as unknown as { sonareExceptionInfo?: (ptr: number) => NativeExceptionInfo }
@@ -81,6 +86,7 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
       code = info.code ?? code;
       message = info.message || message;
       kind = info.kind;
+      refusal = info.refusal;
     }
   } catch {
     // Fall back to the generic message if decoding fails.
@@ -92,13 +98,13 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
       // object; it just keeps leaking, which is what this replaces.
     }
   }
-  if (kind === 'TypeError') {
-    return refuseType(message);
-  }
-  if (kind === 'RangeError') {
-    return refuse(message);
-  }
-  return codedError(code as ErrorCode, message);
+  const error =
+    kind === 'TypeError'
+      ? refuseType(message)
+      : kind === 'RangeError'
+        ? refuse(message)
+        : codedError(code as ErrorCode, message);
+  return refusal === undefined ? error : attachRefusal(error, refusal);
 }
 
 /**

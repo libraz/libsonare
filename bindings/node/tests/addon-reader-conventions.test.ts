@@ -174,8 +174,6 @@ const NON_OPTION_SHARED_READERS: ReadonlySet<string> = new Set([
   // Reads a per-band array off a RESULT record (a room estimate), not off an
   // options bag, so a call to it says nothing about its caller's options.
   'FloatArrayProperty',
-  // Refuses unknown keys of a document element (a graph node or connection) by its path; it reads no value.
-  'RefuseUnknownDocumentKeys',
   'RequiredIntProperty',
   'RequiredInt64Property',
   'RequiredUint32Property',
@@ -1286,6 +1284,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['_synthPatchRoundTrip', 'Internal round-trip probe, covered by synth-patch.test.ts.'],
       ['addClip', 'Needs a project with a registered audio source.'],
       ['addLoopRecordingTakes', 'Needs a capture session with recorded takes.'],
+      [
+        'renderRefusal',
+        'Reads a refusal record the addon itself attached to an error; driven through the respelled refusals in respell-converted-bounds.test.ts.',
+      ],
       [
         'applyVocalEdit',
         'Vocal project apply requests combine required source identity fields with rendered buffers; the full lifecycle and malformed-input cases are covered by vocal_project.test.ts.',

@@ -5,6 +5,7 @@
 
 import { resolveEntryTimes, toSamples } from './internal/effects_common.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -294,7 +295,14 @@ export function renderPercussiveEvents(...args: unknown[]): Float32Array {
     }
     assertPercussiveSeparation(options);
     refuseZeroDefaults(options, ['fadeMs']);
-    const nativeEvents = resolveEntryTimes(events, 'events', sampleRate, true);
-    return addon.renderPercussiveEvents(samples, sampleRate, nativeEvents, options);
+    const { entries: nativeEvents, respelled } = resolveEntryTimes(
+      events,
+      'events',
+      sampleRate,
+      true,
+    );
+    return withRespelled(respelled, () =>
+      addon.renderPercussiveEvents(samples, sampleRate, nativeEvents, options),
+    );
   });
 }
