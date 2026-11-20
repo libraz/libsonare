@@ -86,6 +86,46 @@ const sonare::SonareParameterRefusal* last_parameter_refusal() noexcept {
   return refusal.has_value() ? &*refusal : nullptr;
 }
 
+size_t last_refusal_subject_count() noexcept {
+  const sonare::SonareParameterRefusal* refusal = last_parameter_refusal();
+  if (refusal == nullptr) return 0;
+  return refusal->subjects().size() + (refusal->renamed_to().empty() ? 0 : 1);
+}
+
+const char* last_refusal_subject(size_t index) noexcept {
+  const sonare::SonareParameterRefusal* refusal = last_parameter_refusal();
+  if (refusal == nullptr) return nullptr;
+  const std::vector<std::string>& subjects = refusal->subjects();
+  if (index < subjects.size()) return subjects[index].c_str();
+  if (index == subjects.size() && !refusal->renamed_to().empty()) {
+    return refusal->renamed_to().c_str();
+  }
+  return nullptr;
+}
+
+SonareError render_last_refusal(const char* const* subjects, size_t subject_count,
+                                char** out_text) noexcept {
+  if (out_text == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_text = nullptr;
+  const sonare::SonareParameterRefusal* refusal = last_parameter_refusal();
+  if (refusal == nullptr) return SONARE_ERROR_INVALID_STATE;
+  if (subject_count != last_refusal_subject_count()) return SONARE_ERROR_INVALID_PARAMETER;
+  if (subject_count > 0 && subjects == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t i = 0; i < subject_count; ++i) {
+    if (subjects[i] == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  try {
+    size_t next = 0;
+    const sonare::SonareParameterRefusal rendered = refusal->respelled(
+        refusal->code(), [&](const std::string&) { return std::string(subjects[next++]); },
+        refusal->caller_spelled());
+    *out_text = copy_string(rendered.what());
+    return SONARE_OK;
+  } catch (...) {
+    return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+}
+
 SonareError map_sonare_exception(const SonareException& e) {
   return c_error_from_error_code(e.code());
 }

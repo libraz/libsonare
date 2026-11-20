@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 
+#include "c_api/sonare_c_last_refusal.h"
 #include "capability_features.h"
 #include "rt/command.h"
 #include "sonare.h"
@@ -278,6 +279,15 @@ SonareError sonare_last_diagnostic(size_t index, SonareDiagnostic* out) {
       break;
   }
   return SONARE_OK;
+}
+
+size_t sonare_last_refusal_subject_count(void) { return last_refusal_subject_count(); }
+
+const char* sonare_last_refusal_subject(size_t index) { return last_refusal_subject(index); }
+
+SonareError sonare_last_refusal_render(const char* const* subjects, size_t subject_count,
+                                       char** out_text) {
+  return render_last_refusal(subjects, subject_count, out_text);
 }
 
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }

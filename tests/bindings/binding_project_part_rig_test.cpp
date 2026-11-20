@@ -201,10 +201,10 @@ TEST_CASE("project part rig entries refuse an argument by its header name",
   CHECK(message() == "part must be an integer in [0, 15] or 255");
   REQUIRE(sonare_project_set_part_rig(project, kDestination, 0, SONARE_PART_RIG_CHAIN, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "inserts_json must not be NULL when mode is SONARE_PART_RIG_CHAIN");
+  CHECK(message() == "inserts_json must not be NULL when mode is chain");
   REQUIRE(sonare_project_set_part_rig(project, kDestination, 0, SONARE_PART_RIG_NONE,
                                       kSoftClipChain) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "inserts_json must be NULL unless mode is SONARE_PART_RIG_CHAIN");
+  CHECK(message() == "inserts_json must be NULL unless mode is chain");
 
   int mode = 7;
   int present = 7;

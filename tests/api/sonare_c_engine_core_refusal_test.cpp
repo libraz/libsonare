@@ -426,7 +426,7 @@ TEST_CASE("engine clip refusals name the clip field", "[c_api][engine_refusal]")
   clip.warp_mode = SONARE_ENGINE_WARP_MODE_TEMPO_SYNC;
   clip.loop = 1;
   CHECK(sonare_engine_upsert_clip(engine, &clip) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "clip.loop must be 0 when clip.warp_mode is tempo sync");
+  CHECK(last_message() == "clip.loop must be 0 when clip.warp_mode is tempoSync");
   clip = valid_clip(channels);
   clip.length_samples = -1;
   CHECK(sonare_engine_upsert_clip(engine, &clip) == SONARE_ERROR_INVALID_PARAMETER);
@@ -446,7 +446,7 @@ TEST_CASE("engine clip refusals name the clip field", "[c_api][engine_refusal]")
   clip.warp_anchor_count = 2;
   CHECK(sonare_engine_upsert_clip(engine, &clip) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        "clip.loop must be 0 for a repitch or time-stretch clip when clip.warp_anchor_count is "
+        "clip.loop must be 0 for a repitch or timeStretch clip when clip.warp_anchor_count is "
         "at least 2");
 
   clip = valid_clip(channels);
@@ -613,14 +613,14 @@ TEST_CASE("engine controller profile refusals", "[c_api][engine_refusal]") {
   bad = binding;
   bad.axis = SONARE_CONTROLLER_AXIS_NONE;
   CHECK(sonare_engine_bind_controller(engine, 3, &bad) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "binding.axis must not be the none axis");
+  CHECK(last_message() == "binding.axis must not be none");
   bad = binding;
   bad.input = SONARE_CONTROLLER_INPUT_POLY_PRESSURE;
   bad.axis = SONARE_CONTROLLER_AXIS_LOUDNESS;
   CHECK(sonare_engine_bind_controller(engine, 3, &bad) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        "binding.axis must be an excitation axis when binding.input is poly "
-        "pressure");
+        "binding.axis must be an excitation axis when binding.input is "
+        "polyPressure");
 
   // A destination with no instrument bound.
   CHECK(sonare_engine_bind_controller(engine, 9, &binding) == SONARE_ERROR_INVALID_PARAMETER);

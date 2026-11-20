@@ -55,7 +55,9 @@ _RT_ENTRY = re.compile(r"\s*SONARE_C_RT_API_ENTRY\s*;")
 _RECORDS_ERROR = re.compile(
     r"\b(?:set_last_error|record_current_exception)\s*\(|SONARE_C_TRY\b|SONARE_C_CATCH"
 )
-_READS_DIAGNOSTICS = re.compile(r"\blast_\w*_storage\s*\(|\blast_error_message\s*\(")
+_READS_DIAGNOSTICS = re.compile(
+    r"\blast_\w*_storage\s*\(|\blast_error_message\s*\(|\brender_last_refusal\s*\("
+)
 _CALL = re.compile(r"(\.|->)?\s*\b([A-Za-z_]\w*)\s*(?:<[^;(){}<>]*>)?\s*\(")
 _COMPOUND = re.compile(r"(?:if|for|while|switch|else|try|catch|do)\b|\{")
 _DIRECTIVE = re.compile(r"^[ \t]*#[ \t]*(\w+)")

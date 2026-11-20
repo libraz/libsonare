@@ -55,12 +55,12 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
         rig.mode = static_cast<midi::PartRigMode>(mode);
         const bool chain = rig.mode == midi::PartRigMode::kChain;
         if (chain && inserts_json == nullptr) {
-          sonare::util::check::refuse_relation(
-              {"inserts_json", "mode"}, "{0} must not be NULL when {1} is SONARE_PART_RIG_CHAIN");
+          sonare::util::check::refuse_relation({"inserts_json", "mode"},
+                                               "{0} must not be NULL when {1} is chain");
         }
         if (!chain && inserts_json != nullptr) {
-          sonare::util::check::refuse_relation(
-              {"inserts_json", "mode"}, "{0} must be NULL unless {1} is SONARE_PART_RIG_CHAIN");
+          sonare::util::check::refuse_relation({"inserts_json", "mode"},
+                                               "{0} must be NULL unless {1} is chain");
         }
       });
       err != SONARE_OK) {

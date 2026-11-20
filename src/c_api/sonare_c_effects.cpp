@@ -344,20 +344,20 @@ void check_biquad_filter_config(const SonareBiquadFilterConfig& config, int samp
   const double nyquist = static_cast<double>(sample_rate) / 2.0;
   const auto unread = [](const char* subject, const char* types) {
     throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter, {subject, "config.type"},
-                                           std::string("{0} must be 0 when {1} is ") + types);
+                                           std::string("{0} does not apply when {1} is ") + types);
   };
   if (corner) {
     check::in_interval(config.cutoff_hz, 0.0, false, nyquist, false, "config.cutoff_hz");
-    if (config.center_hz != 0.0f) unread("config.center_hz", "high-pass or low-pass");
-    if (config.bandwidth_hz != 0.0f) unread("config.bandwidth_hz", "high-pass or low-pass");
+    if (config.center_hz != 0.0f) unread("config.center_hz", "highPass or lowPass");
+    if (config.bandwidth_hz != 0.0f) unread("config.bandwidth_hz", "highPass or lowPass");
   } else {
-    if (config.cutoff_hz != 0.0f) unread("config.cutoff_hz", "band-pass or notch");
+    if (config.cutoff_hz != 0.0f) unread("config.cutoff_hz", "bandPass or notch");
     check::in_interval(config.center_hz, 0.0, false, nyquist, false, "config.center_hz");
     check::greater_than(config.bandwidth_hz, 0.0, "config.bandwidth_hz");
     if (config.order != 2) {
       throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter,
                                              {"config.order", "config.type"},
-                                             "{0} must be 2 when {1} is band-pass or notch");
+                                             "{0} must be 2 when {1} is bandPass or notch");
     }
   }
 }

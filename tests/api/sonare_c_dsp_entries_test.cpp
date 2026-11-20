@@ -138,7 +138,8 @@ TEST_CASE("sonare_biquad_filter refuses a field its type does not read and an or
   config.bandwidth_hz = 10.0f;
   CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,
                              &out.length) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "config.bandwidth_hz must be 0 when config.type is high-pass or low-pass");
+  CHECK(last_error() ==
+        "config.bandwidth_hz does not apply when config.type is highPass or lowPass");
 
   sonare_biquad_filter_config_init(&config);
   config.type = SONARE_BIQUAD_FILTER_NOTCH;
@@ -147,7 +148,7 @@ TEST_CASE("sonare_biquad_filter refuses a field its type does not read and an or
   config.bandwidth_hz = 100.0f;
   CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,
                              &out.length) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "config.order must be 2 when config.type is band-pass or notch");
+  CHECK(last_error() == "config.order must be 2 when config.type is bandPass or notch");
 
   config.order = 3;
   CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,
@@ -181,4 +182,47 @@ TEST_CASE("sonare_system_info_json reports exactly the host facts the platform k
   CHECK(doc["parallel"]["strategy"].as_string() == sonare::system_info::parallel_strategy());
 
   CHECK(sonare_system_info_json(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("the last parameter refusal re-renders with the subjects a binding supplies",
+          "[c_api][dsp_entries]") {
+  const std::vector<float> samples = test_signal();
+  Floats out;
+  SonareBiquadFilterConfig config;
+  sonare_biquad_filter_config_init(&config);
+  config.type = SONARE_BIQUAD_FILTER_BAND_PASS;
+  config.cutoff_hz = 1000.0f;
+  config.center_hz = 2000.0f;
+  config.bandwidth_hz = 100.0f;
+  REQUIRE(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,
+                               &out.length) == SONARE_ERROR_INVALID_PARAMETER);
+  const std::string message = last_error();
+  CHECK(message == "config.cutoff_hz does not apply when config.type is bandPass or notch");
+
+  REQUIRE(sonare_last_refusal_subject_count() == 2);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "config.cutoff_hz");
+  CHECK(std::string(sonare_last_refusal_subject(1)) == "config.type");
+  CHECK(sonare_last_refusal_subject(2) == nullptr);
+
+  const char* flattened[] = {"cutoff_hz", "type"};
+  char* text = reinterpret_cast<char*>(0x1);
+  REQUIRE(sonare_last_refusal_render(flattened, 2, &text) == SONARE_OK);
+  CHECK(std::string(text) == "cutoff_hz does not apply when type is bandPass or notch");
+  sonare_free_string(text);
+
+  CHECK(sonare_last_refusal_render(flattened, 1, &text) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(text == nullptr);
+  const char* with_null[] = {"cutoff_hz", nullptr};
+  CHECK(sonare_last_refusal_render(with_null, 2, &text) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_refusal_render(flattened, 2, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == message);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_fade(samples.data(), samples.size(), kSampleRate, 0.0f, 0.0f, &out.data,
+                      &out.length) == SONARE_OK);
+  CHECK(sonare_last_refusal_subject_count() == 0);
+  CHECK(sonare_last_refusal_subject(0) == nullptr);
+  text = reinterpret_cast<char*>(0x1);
+  CHECK(sonare_last_refusal_render(nullptr, 0, &text) == SONARE_ERROR_INVALID_STATE);
+  CHECK(text == nullptr);
 }

@@ -107,18 +107,18 @@ void check_clip(const SonareEngineClip& clip, const std::string& prefix) {
   util::check::one_of(clip.warp_mode, std::array<int, 4>{0, 1, 2, 3}, subject("warp_mode").c_str());
   if (paged && clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
     util::check::refuse_relation({subject("warp_mode"), subject("page_provider")},
-                                 "{1} must be NULL when {0} is tempo sync");
+                                 "{1} must be NULL when {0} is tempoSync");
   }
   if (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC && clip.loop != 0) {
     util::check::refuse_relation({subject("loop"), subject("warp_mode")},
-                                 "{0} must be 0 when {1} is tempo sync");
+                                 "{0} must be 0 when {1} is tempoSync");
   }
   if ((clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH ||
        clip.warp_mode == SONARE_ENGINE_WARP_MODE_TIME_STRETCH) &&
       clip.loop != 0 && clip.warp_anchor_count >= 2) {
     util::check::refuse_relation(
         {subject("loop"), subject("warp_anchor_count")},
-        "{0} must be 0 for a repitch or time-stretch clip when {1} is at least 2");
+        "{0} must be 0 for a repitch or timeStretch clip when {1} is at least 2");
   }
   util::check::non_null_when_count(clip.warp_anchors, clip.warp_anchor_count,
                                    subject("warp_anchors").c_str(),

@@ -191,14 +191,13 @@ SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destina
 
   // The binding itself is checked before the table, so a full table never hides a bad binding.
   if (axis == sonare::midi::ControllerAxis::kNone) {
-    return run_validation(
-        [&] { util::check::refuse("binding.axis", "must not be the none axis"); });
+    return run_validation([&] { util::check::refuse("binding.axis", "must not be none"); });
   }
   if (input == sonare::midi::ControllerInput::kPolyPressure &&
       !sonare::midi::controller_axis_is_excitation(axis)) {
     return run_validation([&] {
       util::check::refuse_relation({"binding.input", "binding.axis"},
-                                   "{1} must be an excitation axis when {0} is poly pressure");
+                                   "{1} must be an excitation axis when {0} is polyPressure");
     });
   }
   if (!profile.bind(entry)) {

@@ -603,6 +603,36 @@ size_t sonare_last_diagnostic_count(void);
 ///   of the call being inspected survives the read.
 SonareError sonare_last_diagnostic(size_t index, SonareDiagnostic* out);
 
+/// @brief Number of subjects in the parameter refusal the most recent failing call on the calling
+///        thread recorded, or 0 when that failure was not a parameter refusal.
+/// @details A subject is the path of what was refused, rooted at the argument the call was given:
+///   `sample_rate`, `config.cutoff_hz`, `stages[2].stage`. The list holds the subjects in the
+///   order the message names them, followed by the successor key when an unknown-key refusal
+///   names one. A binding that passes a struct or document under a name its caller never wrote
+///   drops that leading path segment from each subject and renders the message again with
+///   @ref sonare_last_refusal_render, rather than editing the message text. Like the other
+///   sonare_last_* accessors it neither clears nor records an error.
+size_t sonare_last_refusal_subject_count(void);
+
+/// @brief Subject @p index of the last parameter refusal, or NULL when @p index is not below
+///        @ref sonare_last_refusal_subject_count.
+/// @details Borrowed: owned by the library and valid until the next API call that records or
+///   clears an error on the same thread.
+const char* sonare_last_refusal_subject(size_t index);
+
+/// @brief Renders the last parameter refusal's message with @p subjects in place of its own.
+/// @param subjects @p subject_count replacement subjects, in the order of
+///   @ref sonare_last_refusal_subject.
+/// @param subject_count Must equal @ref sonare_last_refusal_subject_count.
+/// @param[out] out_text Receives the message, released with @ref sonare_free_string; set to NULL
+///   on failure.
+/// @return SONARE_ERROR_INVALID_STATE when no parameter refusal is recorded;
+///   SONARE_ERROR_INVALID_PARAMETER when @p out_text is NULL, @p subject_count differs from the
+///   recorded count, or a subject is NULL; SONARE_ERROR_OUT_OF_MEMORY when the copy cannot be
+///   allocated. Records no error, so the refusal being rendered survives the call.
+SonareError sonare_last_refusal_render(const char* const* subjects, size_t subject_count,
+                                       char** out_text);
+
 // Version
 /// @brief Returns the library version string (e.g. "1.2.3").
 /// @details A string literal with static storage duration: never NULL, never
