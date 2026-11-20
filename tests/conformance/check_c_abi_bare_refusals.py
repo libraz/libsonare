@@ -26,6 +26,8 @@ forwards to with ``return f(...)``) never write the channel, so a refusal they r
 contract: recording it would overwrite the error being read. An accessor is exempt only while its
 public declaration's ``///`` block states ``ACCESSOR_CONTRACT``; its returns are then counted on
 their own line, not filed by class and not ratcheted. Without the statement they are filed as usual.
+Audio-thread entries (opened with ``SONARE_C_RT_API_ENTRY``) keep a bare code the same way, since
+writing the thread-local message is not realtime-safe; they are counted on a line of their own.
 
 ``interim_no_cause`` counts the sites that state no cause because the engine does not report one
 yet: a literal carrying one of ``INTERIM_MARKERS``, and each call of a helper whose body holds such a
@@ -67,6 +69,7 @@ CEILING_ONLY = True
 ACCESSOR_PREFIX = "sonare_last_"
 ACCESSOR_CONTRACT = "Like every sonare_last_* accessor, it records no error"
 HEADER_DIR = "include/sonare"
+RT_ENTRY = "SONARE_C_RT_API_ENTRY"
 NOT_FUNCTIONS = frozenset({"if", "for", "while", "switch", "catch", "return", "sizeof"})
 
 MESSAGE_CALL = re.compile(r"\b(set_last_error(?:_static)?|refuse\w*|\w+_or_refuse)\s*\(")
@@ -304,17 +307,19 @@ class Scan:
     interim: list[tuple[str, int, str]] = field(default_factory=list)
     # Bare returns inside error-channel accessors, which never text a refusal by contract.
     accessor_returns: int = 0
+    # Bare returns inside audio-thread entries, which write no message.
+    realtime_returns: int = 0
 
 
-def enclosing_function(code: str, pos: int) -> str | None:
-    """Name of the outermost function definition whose body holds ``pos``."""
+def enclosing_function(code: str, pos: int) -> tuple[str, int] | None:
+    """Name and body start of the outermost function definition whose body holds ``pos``."""
     for m in FUNCTION_HEAD.finditer(code, 0, pos):
         if m.group(1) in NOT_FUNCTIONS:
             continue
         open_ = m.end() - 1
         close = match_forward(code, open_)
         if open_ < pos < close:
-            return m.group(1)
+            return m.group(1), open_
     return None
 
 
@@ -413,8 +418,11 @@ def scan_text(
             break
         start = pos + len(RETURN)
         owner = enclosing_function(code, pos)
-        if owner is not None and owner in accessors:
+        if owner is not None and owner[0] in accessors:
             scan.accessor_returns += 1
+            continue
+        if owner is not None and RT_ENTRY in code[owner[1] : pos]:
+            scan.realtime_returns += 1
             continue
         line = code.count("\n", 0, pos) + 1
         braceless = if_condition_before(code, pos)
@@ -587,6 +595,9 @@ def main(argv: list[str]) -> int:
     print(
         f"error-channel accessors ({ACCESSOR_PREFIX}*): {result.accessor_returns} bare returns, "
         "untexted by contract, not ratcheted"
+    )
+    print(
+        f"audio-thread entries ({RT_ENTRY}): {result.realtime_returns} bare returns, not ratcheted"
     )
     if args.table:
         args.table.write_text(table(result), encoding="utf-8")

@@ -180,6 +180,24 @@ class AccessorTest(unittest.TestCase):
         self.assertEqual([(r.line, r.state) for r in result.refusals], [(8, "none"), (12, "none")])
         self.assertEqual(scanner.counts(result)["no_text"], 2)
 
+    def test_an_audio_thread_entry_return_is_counted_apart(self) -> None:
+        source = """
+SonareError sonare_rt_process(float* x) {
+  SONARE_C_RT_API_ENTRY;
+  if (!x) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+}
+SonareError sonare_entry(float* x) {
+  SONARE_C_API_ENTRY;
+  if (!x) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+}
+"""
+        result = scanner.Scan()
+        scanner.scan_text("t.cpp", source, set(), result)
+        self.assertEqual(result.realtime_returns, 1)
+        self.assertEqual([r.line for r in result.refusals], [9])
+
     def test_the_tree_has_stated_accessors(self) -> None:
         self.assertGreater(scanner.scan(scanner.ROOT).accessor_returns, 0)
 
