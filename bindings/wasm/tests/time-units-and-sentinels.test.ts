@@ -154,6 +154,57 @@ describe('note stretch and move time bounds', () => {
     ).toThrow(/targetOnsetSample.*targetOnsetSec/);
     expect(() => noteMove({ samples, sampleRate: SR, targetOnsetSec: -0.5 })).toThrow(RangeError);
   });
+
+  it('names the refused note region and move target in the spelling the caller wrote', () => {
+    // The core refuses by the C parameter; the message has to come back under the
+    // request key, and a bound given in seconds under its seconds key and unit.
+    const last = samples.length - 1;
+    const region = { samples, sampleRate: SR, onsetSample: 100, offsetSample: 2000 };
+    const cases: Array<[() => unknown, string]> = [
+      [
+        () => noteMove({ ...region, targetOnsetSample: samples.length }),
+        `noteMove: targetOnsetSample must be an integer in [0, ${last}]`,
+      ],
+      [
+        () => noteMove({ ...region, targetOnsetSec: 1.5 }),
+        // The last sample, 11024 / 22050 s, rounded down so the stated bound stays inside.
+        'noteMove: targetOnsetSec must be finite and in [0, 0.4999]',
+      ],
+      [
+        () =>
+          noteMove({
+            samples,
+            sampleRate: SR,
+            onsetSample: samples.length + 5,
+            offsetSample: samples.length + 10,
+            targetOnsetSample: 0,
+          }),
+        `noteMove: onsetSample must be an integer in [0, ${last}]`,
+      ],
+      [
+        () => noteMove({ ...region, offsetSample: 50, targetOnsetSample: 0 }),
+        'noteMove: offsetSample must be greater than onsetSample',
+      ],
+      [
+        () =>
+          noteMove({
+            samples,
+            sampleRate: SR,
+            onsetSec: 0.3,
+            offsetSec: 0.2,
+            targetOnsetSample: 0,
+          }),
+        'noteMove: offsetSec must be greater than onsetSec',
+      ],
+      [
+        () => noteStretch({ ...region, stretchRatio: 0 }),
+        'noteStretch: stretchRatio must be finite and greater than 0',
+      ],
+    ];
+    for (const [call, message] of cases) {
+      expect(call).toThrow(new RangeError(message));
+    }
+  });
 });
 
 describe('note objects and percussive events in seconds', () => {
