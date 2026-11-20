@@ -1690,7 +1690,7 @@ export class RealtimeEngine {
   /**
    * Installs a tempo map from ramp segments. Each segment needs a finite non-negative `startPpq` and a
    * `bpm` in (0, 100000]; a non-zero `endBpm` uses the same range. An empty array clears the map to the
-   * single tempo.
+   * single tempo. Of two segments at one `startPpq`, the later-supplied one takes effect.
    */
   setTempoSegments(segments: readonly EngineTempoSegment[]): void {
     this.native.setTempoSegments([...segments]);
@@ -1705,7 +1705,7 @@ export class RealtimeEngine {
 
   /**
    * Installs a time-signature map. Each segment needs a finite non-negative `startPpq` and a positive
-   * `numerator` / `denominator`.
+   * `numerator` / `denominator`. Of two segments at one `startPpq`, the later-supplied one takes effect.
    */
   setTimeSignatureSegments(segments: readonly EngineTimeSignatureSegment[]): void {
     this.native.setTimeSignatureSegments([...segments]);
