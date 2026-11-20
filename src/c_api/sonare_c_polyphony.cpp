@@ -14,6 +14,7 @@
 
 #include "core/audio.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -134,7 +135,11 @@ void fill_note(const sonare::editing::note_model::NoteObject& from, SonareNoteOb
 SonareError copy_curve(const std::vector<float>& values, float* out, size_t capacity,
                        size_t* out_count) {
   const size_t written = std::min(values.size(), capacity);
-  if (written > 0 && out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation(
+          [&] { sonare::util::check::non_null_when_count(out, written, "out", "capacity"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out_count);
   std::copy(values.begin(), values.begin() + static_cast<ptrdiff_t>(written), out);
   *out_count = written;
@@ -144,7 +149,10 @@ SonareError copy_curve(const std::vector<float>& values, float* out, size_t capa
 /// @brief Common preamble of every per-note accessor.
 SonareError check_note(const SonarePolyphonicAnalysis* analysis, size_t note) {
   SONARE_C_REQUIRE_NONNULL(analysis);
-  if (note >= analysis->analysis.notes.size()) return SONARE_ERROR_INVALID_PARAMETER;
+  if (note >= analysis->analysis.notes.size()) {
+    return run_validation(
+        [&] { sonare::util::check::refuse("note", "must be less than the number of notes"); });
+  }
   return SONARE_OK;
 }
 
@@ -288,7 +296,11 @@ SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, So
   SONARE_C_REQUIRE_NONNULL(analysis);
   const auto& notes = analysis->analysis.notes;
   const size_t written = std::min(notes.size(), capacity);
-  if (written > 0 && out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation(
+          [&] { sonare::util::check::non_null_when_count(out, written, "out", "capacity"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out_count);
   for (size_t i = 0; i < written; ++i) fill_note(notes[i], out[i]);
   *out_count = written;
@@ -303,9 +315,9 @@ SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, 
                                             size_t envelope_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (analysis == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (note >= analysis->analysis.notes.size()) return SONARE_ERROR_INVALID_PARAMETER;
-  if (envelope_count > 0 && envelope == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analysis);
+  if (const SonareError err = check_note(analysis, note); err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(envelope, envelope_count);
 
   SONARE_C_TRY
   sonare::editing::note_model::NoteEdit replacement;
@@ -347,7 +359,11 @@ SonareError sonare_polyphonic_polyphony(const SonarePolyphonicAnalysis* analysis
   SONARE_C_REQUIRE_NONNULL(analysis);
   const auto& counts = analysis->analysis.track.polyphony;
   const size_t written = std::min(counts.size(), capacity);
-  if (written > 0 && out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation(
+          [&] { sonare::util::check::non_null_when_count(out, written, "out", "capacity"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out_count);
   for (size_t i = 0; i < written; ++i) out[i] = static_cast<int32_t>(counts[i]);
   *out_count = written;

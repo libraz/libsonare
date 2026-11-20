@@ -15,6 +15,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -35,12 +36,6 @@ using sonare_c_detail::run_offline;
 namespace {
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-// The material selector set make_room maps; anything else is refused.
-bool valid_material_preset(int selector) {
-  return sonare_c_detail::valid_c_enum(selector, SONARE_MATERIAL_PRESET_NONE,
-                                       SONARE_MATERIAL_PRESET_GLASS);
-}
-
 // Build a uniform shoebox whose single wall material is chosen by precedence:
 //   material_preset (non-zero) > per-band absorption array > scalar absorption.
 // All six walls share the resulting material (this ABI exposes only uniform
@@ -63,6 +58,29 @@ sonare::acoustic::ShoeboxRoom make_room(float length, float width, float height,
   }
   request.absorption = absorption;
   return make_uniform_room(sonare::RoomDimensions{length, width, height}, request);
+}
+
+// The wall-material fields both room configs carry, refused by member name.
+template <typename Config>
+void check_wall_material(const Config& config) {
+  namespace check = sonare::util::check;
+  const auto bands = [](const float* values, size_t count, const char* name,
+                        const std::string& count_name) {
+    check::at_most(static_cast<double>(count),
+                   static_cast<double>(sonare::acoustic::kMaxMaterialBands), count_name.c_str());
+    check::non_null_when_count(values, count, name, count_name.c_str());
+    for (size_t i = 0; i < count; ++i) {
+      const std::string element = std::string(name) + "[" + std::to_string(i) + "]";
+      check::in_range(values[i], 0.0, 1.0, element.c_str());
+    }
+  };
+  check::in_range(config.absorption, 0.0, 1.0, "config.absorption");
+  bands(config.band_absorption, config.band_absorption_count, "config.band_absorption",
+        "config.band_absorption_count");
+  bands(config.band_scattering, config.band_scattering_count, "config.band_scattering",
+        "config.band_scattering_count");
+  check::integer_in_range(config.material_preset, SONARE_MATERIAL_PRESET_NONE,
+                          SONARE_MATERIAL_PRESET_GLASS, "config.material_preset");
 }
 
 // Publishes the synthesizer's whole diagnostic list, in its own order, so a C
@@ -213,38 +231,29 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   SONARE_C_TRY
   require_struct_size(config->struct_size, sizeof(SonareRirSynthConfig), "config",
                       "sonare_rir_synth_config_init");
-  if (sample_rate < sonare_c_detail::kMinSampleRate ||
-      sample_rate > sonare_c_detail::kMaxSampleRate) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  const auto finite = [](float value) { return std::isfinite(value); };
-  const auto unit = [&](float value) { return finite(value) && value >= 0.0f && value <= 1.0f; };
-  if (!finite(config->length_m) || !finite(config->width_m) || !finite(config->height_m) ||
-      !finite(config->source.x) || !finite(config->source.y) || !finite(config->source.z) ||
-      !finite(config->listener.x) || !finite(config->listener.y) || !finite(config->listener.z) ||
-      !unit(config->absorption) || config->ism_order < 0 || !std::isfinite(config->max_sec) ||
-      config->max_sec < 0.0f || config->max_sec > sonare::acoustic::kMaxRirSeconds ||
-      !std::isfinite(config->mixing_time_ms) || config->mixing_time_ms < 0.0f ||
-      config->mixing_time_ms > sonare::acoustic::kMaxRirMixingTimeMs ||
-      !std::isfinite(config->crossfade_ms) || config->crossfade_ms < 0.0f ||
-      config->crossfade_ms > sonare::acoustic::kMaxRirCrossfadeMs ||
-      config->band_absorption_count > sonare::acoustic::kMaxMaterialBands ||
-      config->band_scattering_count > sonare::acoustic::kMaxMaterialBands ||
-      (config->band_absorption_count > 0 && config->band_absorption == nullptr) ||
-      (config->band_scattering_count > 0 && config->band_scattering == nullptr) ||
-      !valid_material_preset(config->material_preset)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  namespace check = sonare::util::check;
+  check::integer_in_range(sample_rate, sonare_c_detail::kMinSampleRate,
+                          sonare_c_detail::kMaxSampleRate, "sample_rate");
+  check::finite_float(config->length_m, "config.length_m");
+  check::finite_float(config->width_m, "config.width_m");
+  check::finite_float(config->height_m, "config.height_m");
+  check::finite_float(config->source.x, "config.source.x");
+  check::finite_float(config->source.y, "config.source.y");
+  check::finite_float(config->source.z, "config.source.z");
+  check::finite_float(config->listener.x, "config.listener.x");
+  check::finite_float(config->listener.y, "config.listener.y");
+  check::finite_float(config->listener.z, "config.listener.z");
+  check::integer_at_least(config->ism_order, 0, "config.ism_order");
+  check::in_range(config->max_sec, 0.0, sonare::acoustic::kMaxRirSeconds, "config.max_sec");
+  check::in_range(config->mixing_time_ms, 0.0, sonare::acoustic::kMaxRirMixingTimeMs,
+                  "config.mixing_time_ms");
+  check::in_range(config->crossfade_ms, 0.0, sonare::acoustic::kMaxRirCrossfadeMs,
+                  "config.crossfade_ms");
+  check_wall_material(*config);
   sonare::acoustic::RirSynthConfig rc;
   rc.late_model = config->prefer_eyring != 0 ? sonare::acoustic::ReverbModel::Eyring
                                              : sonare::acoustic::ReverbModel::Sabine;
   rc.air_absorption_enabled = config->air_absorption_enabled != 0;
-  for (size_t i = 0; i < config->band_absorption_count; ++i) {
-    if (!unit(config->band_absorption[i])) return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  for (size_t i = 0; i < config->band_scattering_count; ++i) {
-    if (!unit(config->band_scattering[i])) return SONARE_ERROR_INVALID_PARAMETER;
-  }
   SONARE_C_REQUIRE_NONNULL(out);
   using namespace sonare::acoustic;
   const ShoeboxRoom room =
@@ -297,12 +306,13 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
   SONARE_C_TRY
   require_struct_size(config->struct_size, sizeof(SonareRoomEstimateConfig), "config",
                       "sonare_room_estimate_config_init");
+  namespace check = sonare::util::check;
   sonare::AcousticConfig::Mode mode = sonare::AcousticConfig::Mode::Auto;
   if (!sonare_c_detail::ordinal_to_enum(config->mode, SONARE_ACOUSTIC_MODE_AUTO,
                                         SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE, &mode)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    check::integer_in_range(config->mode, SONARE_ACOUSTIC_MODE_AUTO,
+                            SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE, "config.mode");
   }
-  namespace check = sonare::util::check;
   check::greater_than(config->aspect_hint_lw, 0.0, "config.aspect_hint_lw");
   check::greater_than(config->aspect_hint_lh, 0.0, "config.aspect_hint_lh");
   check::in_range(config->reference_absorption, sonare::kRoomReferenceAbsorptionMin,
@@ -369,25 +379,11 @@ void sonare_free_room_estimate(SonareRoomEstimate* result) {
 namespace {
 
 // The scalar and band checks the core does not repeat, shared by both morph entries.
-bool room_morph_config_is_valid(const SonareRoomMorphConfig& config) {
-  const auto unit = [](float value) {
-    return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
-  };
-  if (!unit(config.absorption) || !unit(config.source_tail_suppression) || !unit(config.wet) ||
-      config.band_absorption_count > sonare::acoustic::kMaxMaterialBands ||
-      config.band_scattering_count > sonare::acoustic::kMaxMaterialBands ||
-      (config.band_absorption_count > 0 && config.band_absorption == nullptr) ||
-      (config.band_scattering_count > 0 && config.band_scattering == nullptr) ||
-      !valid_material_preset(config.material_preset)) {
-    return false;
-  }
-  for (size_t i = 0; i < config.band_absorption_count; ++i) {
-    if (!unit(config.band_absorption[i])) return false;
-  }
-  for (size_t i = 0; i < config.band_scattering_count; ++i) {
-    if (!unit(config.band_scattering[i])) return false;
-  }
-  return true;
+void check_room_morph_config(const SonareRoomMorphConfig& config) {
+  namespace check = sonare::util::check;
+  check_wall_material(config);
+  check::in_range(config.source_tail_suppression, 0.0, 1.0, "config.source_tail_suppression");
+  check::in_range(config.wet, 0.0, 1.0, "config.wet");
 }
 
 sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
@@ -428,11 +424,12 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
   SONARE_C_TRY
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
   require_struct_size(config->struct_size, sizeof(SonareRoomMorphConfig), "config",
                       "sonare_room_morph_config_init");
-  if (!room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  check_room_morph_config(*config);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   return run_mono_offline("room_morph", "samples", samples, length, sample_rate, out, out_length,
                           [&](const Audio& audio) -> Audio {
                             sonare::effects::acoustic::RoomMorphResult result =
@@ -446,7 +443,8 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
                           });
   SONARE_C_CATCH
 #else
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);
 #endif
 }
@@ -465,11 +463,11 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
                                                sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
   require_struct_size(config->struct_size, sizeof(SonareRoomMorphConfig), "config",
                       "sonare_room_morph_config_init");
-  if (!room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  check_room_morph_config(*config);
+  SONARE_C_REQUIRE_NONNULL(out);
   const sonare::effects::acoustic::RoomMorphStereoResult result =
       sonare::effects::acoustic::room_morph_stereo(Audio::from_buffer(left, length, sample_rate),
                                                    Audio::from_buffer(right, length, sample_rate),
@@ -487,7 +485,7 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_STUB_NOT_SUPPORTED(left, right, length, sample_rate, config);
 #endif
 }

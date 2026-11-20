@@ -108,15 +108,28 @@ SonareError sonare_metering_rms_db(const float* samples, size_t length, int samp
                      });
 }
 
+namespace {
+
+SonareError validate_silence_ratio_params(float threshold_db, int frame_length, int hop_length) {
+  return run_validation([&] {
+    util::check::finite_float(threshold_db, "threshold_db");
+    util::check::integer_at_least(frame_length, 1, "frame_length");
+    util::check::integer_at_least(hop_length, 1, "hop_length");
+  });
+}
+
+}  // namespace
+
 SonareError sonare_metering_silence_ratio(const float* samples, size_t length, int sample_rate,
                                           float threshold_db, int frame_length, int hop_length,
                                           float* out_ratio) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_ratio);
-  if (!std::isfinite(threshold_db) || frame_length <= 0 || hop_length <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_silence_ratio_params(threshold_db, frame_length, hop_length);
+      err != SONARE_OK) {
+    return err;
   }
-  if (!out_ratio) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_ratio);
   return run_offline("metering_silence_ratio", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_ratio =
@@ -557,10 +570,12 @@ SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold
                                        int frame_length, int hop_length, float* out_ratio) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_ratio);
-  if (!audio || !std::isfinite(threshold_db) || frame_length <= 0 || hop_length <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(audio);
+  if (const SonareError err = validate_silence_ratio_params(threshold_db, frame_length, hop_length);
+      err != SONARE_OK) {
+    return err;
   }
-  if (!out_ratio) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_ratio);
   SONARE_C_TRY
   *out_ratio = metering::silence_ratio(audio->audio, threshold_db, frame_length, hop_length);
   return SONARE_OK;
@@ -779,6 +794,13 @@ editing::pitch_editor::ScaleQuantizerConfig make_scale_config(int root, uint16_t
   }
   return cfg;
 }
+
+SonareError validate_scale_args(int root, uint16_t mode_mask) {
+  return run_validation([&] {
+    util::check::integer_in_range(root, 0, 11, "root");
+    util::check::integer_in_range(mode_mask, 1, 0x0FFF, "mode_mask");
+  });
+}
 #endif
 
 }  // namespace
@@ -789,8 +811,10 @@ SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float scale
   // Zeroed before the gate: the stub below returns without reaching the real body.
   SONARE_C_ZERO_OUTS(out_quantized_midi);
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!editing::pitch_editor::valid_scale_args(root, mode_mask) || !std::isfinite(midi)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_scale_args(root, mode_mask); err != SONARE_OK) return err;
+  if (const SonareError err = run_validation([&] { util::check::finite_float(midi, "midi"); });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(out_quantized_midi);
   SONARE_C_TRY
@@ -811,8 +835,10 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask,
   // Zeroed before the gate: the stub below returns without reaching the real body.
   SONARE_C_ZERO_OUTS(out_semitones);
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!editing::pitch_editor::valid_scale_args(root, mode_mask) || !std::isfinite(midi)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_scale_args(root, mode_mask); err != SONARE_OK) return err;
+  if (const SonareError err = run_validation([&] { util::check::finite_float(midi, "midi"); });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(out_semitones);
   SONARE_C_TRY
@@ -832,10 +858,12 @@ SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int p
   // Zeroed before the gate: the stub below returns without reaching the real body.
   SONARE_C_ZERO_OUTS(out_enabled);
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!editing::pitch_editor::valid_scale_args(root, mode_mask)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_scale_args(root, mode_mask); err != SONARE_OK) return err;
+  if (const SonareError err =
+          run_validation([&] { util::check::integer_in_range(pitch_class, 0, 11, "pitch_class"); });
+      err != SONARE_OK) {
+    return err;
   }
-  if (pitch_class < 0 || pitch_class > 11) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_REQUIRE_NONNULL(out_enabled);
   SONARE_C_TRY
   editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, 0.0f));
@@ -852,11 +880,9 @@ SonareError sonare_scale_mask_for_mode(int root, SonareMode mode, uint16_t* out_
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_mask);
   SONARE_C_TRY
-  Mode core_mode = Mode::Major;
-  if (!valid_c_enum(root, SONARE_PITCH_C, SONARE_PITCH_B) ||
-      !ordinal_to_enum(mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, &core_mode)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  util::check::integer_in_range(root, SONARE_PITCH_C, SONARE_PITCH_B, "root");
+  util::check::integer_in_range(mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, "mode");
+  const Mode core_mode = admitted_ordinal_to_enum<Mode>(mode);
   SONARE_C_REQUIRE_NONNULL(out_mask);
   *out_mask = scale_mask_for_mode(core_mode);
   return SONARE_OK;

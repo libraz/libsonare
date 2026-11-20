@@ -1,5 +1,6 @@
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -63,12 +64,27 @@ void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
   core_config->mask_power = config.mask_power;
 }
 
+/// Refuses an optional factor buffer given without its length, or a length without its buffer.
+SonareError check_factor_output_pairs(const void* out_w, const void* out_w_length,
+                                      const void* out_h, const void* out_h_length) {
+  return run_validation([&] {
+    if ((out_w != nullptr) != (out_w_length != nullptr)) {
+      sonare::util::check::refuse_relation({"out_w", "out_w_length"},
+                                           "{0} and {1} must be given together");
+    }
+    if ((out_h != nullptr) != (out_h_length != nullptr)) {
+      sonare::util::check::refuse_relation({"out_h", "out_h_length"},
+                                           "{0} and {1} must be given together");
+    }
+  });
+}
+
 template <typename DecomposeResult>
 SonareError copy_decompose_factors(const DecomposeResult& result, float** out_w,
                                    size_t* out_w_length, float** out_h, size_t* out_h_length) {
-  if ((out_w != nullptr) != (out_w_length != nullptr) ||
-      (out_h != nullptr) != (out_h_length != nullptr)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = check_factor_output_pairs(out_w, out_w_length, out_h, out_h_length);
+      err != SONARE_OK) {
+    return err;
   }
 
   // Stage both factor buffers before publishing either output.
@@ -122,7 +138,11 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
   }
   // The FFT size is refused before any input is decoded. A hop of 0 is absent and
   // the core runs a quarter of n_fft; it names a negative one.
-  if (n_fft <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err =
+          run_validation([&] { sonare::util::check::integer_at_least(n_fft, 1, "n_fft"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   if (with_residual != 0) SONARE_C_REQUIRE_NONNULL(out_residual);
 
@@ -500,7 +520,13 @@ SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate,
       err != SONARE_OK) {
     return err;
   }
-  if (frame_length <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        sonare::util::check::integer_at_least(frame_length, 1, "frame_length");
+        sonare::util::check::integer_at_least(hop_length, 1, "hop_length");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   return run_mono_prevalidated(samples, length, sample_rate, out, out_length,
@@ -527,7 +553,10 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
   // Reject dims whose product would overflow size_t before the core indexes
   // n_features * n_frames elements of the caller-owned buffer.
   if (static_cast<size_t>(n_features) > SIZE_MAX / static_cast<size_t>(n_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([&] {
+      sonare::util::check::refuse_relation({"n_features", "n_frames"},
+                                           "the product of {0} and {1} is too large to address");
+    });
   }
   SONARE_C_REQUIRE_NONNULL(out_w);
   SONARE_C_REQUIRE_NONNULL(out_w_length);
@@ -560,11 +589,20 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(s);
-  if (n_features <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        sonare::util::check::integer_at_least(n_features, 1, "n_features");
+        sonare::util::check::integer_at_least(n_frames, 1, "n_frames");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   // Reject dims whose product would overflow size_t before the core indexes
   // n_features * n_frames elements of the caller-owned buffer.
   if (static_cast<size_t>(n_features) > SIZE_MAX / static_cast<size_t>(n_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([&] {
+      sonare::util::check::refuse_relation({"n_features", "n_frames"},
+                                           "the product of {0} and {1} is too large to address");
+    });
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
@@ -647,9 +685,9 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
   SONARE_C_REQUIRE_NONNULL(out_component_count);
   SONARE_C_REQUIRE_NONNULL(out_component_length);
   // An optional pointer given without its length has nowhere to write the length.
-  if (((out_w != nullptr) != (out_w_length != nullptr)) ||
-      ((out_h != nullptr) != (out_h_length != nullptr))) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = check_factor_output_pairs(out_w, out_w_length, out_h, out_h_length);
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_prevalidated_offline(
@@ -660,7 +698,9 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
         const size_t component_length = result.components.front().size();
         if (component_length == 0) return SONARE_OK;
         if (result.components.size() > SIZE_MAX / component_length) {
-          return SONARE_ERROR_INVALID_PARAMETER;
+          return run_validation([&] {
+            sonare::util::check::refuse("length", "is too large to hold the decomposed components");
+          });
         }
         auto flat = std::make_unique<float[]>(result.components.size() * component_length);
         for (size_t component = 0; component < result.components.size(); ++component) {
@@ -687,8 +727,15 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_component_count, out_num_channels, out_component_length, out_w,
                      out_w_length, out_h, out_h_length);
-  if (channels == nullptr || num_channels == 0 || num_channels > kMaxDecomposeStemsLinkedChannels) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        sonare::util::check::non_null(channels, "channels");
+        sonare::util::check::integer_in_range(
+            static_cast<long long>(
+                std::min<size_t>(num_channels, kMaxDecomposeStemsLinkedChannels + 1)),
+            1, static_cast<long long>(kMaxDecomposeStemsLinkedChannels), "num_channels");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   for (size_t c = 0; c < num_channels; ++c) {
     SonareError err = validate_audio_params("decompose_stems_linked", "channels", channels[c],
@@ -704,9 +751,9 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
   SONARE_C_REQUIRE_NONNULL(out_num_channels);
   SONARE_C_REQUIRE_NONNULL(out_component_length);
   // Same output-pair guard as sonare_decompose_stems.
-  if (((out_w != nullptr) != (out_w_length != nullptr)) ||
-      ((out_h != nullptr) != (out_h_length != nullptr))) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = check_factor_output_pairs(out_w, out_w_length, out_h, out_h_length);
+      err != SONARE_OK) {
+    return err;
   }
 
   std::vector<Audio> audio;
@@ -726,9 +773,16 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
   if (component_length == 0) return SONARE_OK;
   // Overflow-checked the same way as sonare_decompose_stems: reject rather than
   // wrap before the flat [component][channel][sample] allocation is sized.
-  if (num_channels > SIZE_MAX / component_length) return SONARE_ERROR_INVALID_PARAMETER;
+  const char* const too_large = "{0} channels of {1} samples are too large to hold the components";
+  if (num_channels > SIZE_MAX / component_length) {
+    return run_validation(
+        [&] { sonare::util::check::refuse_relation({"num_channels", "length"}, too_large); });
+  }
   const size_t per_component = num_channels * component_length;
-  if (result.components.size() > SIZE_MAX / per_component) return SONARE_ERROR_INVALID_PARAMETER;
+  if (result.components.size() > SIZE_MAX / per_component) {
+    return run_validation(
+        [&] { sonare::util::check::refuse_relation({"num_channels", "length"}, too_large); });
+  }
 
   auto flat = std::make_unique<float[]>(result.components.size() * per_component);
   for (size_t component = 0; component < result.components.size(); ++component) {
@@ -896,13 +950,14 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
           check::integer_at_least(config->n_fft, 1, "config.n_fft");
           check_stft_hop(config->hop_length, "config.hop_length");
           check::integer_at_least(config->heal_radius_frames, 1, "config.heal_radius_frames");
+          check::integer_in_range(config->window, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR,
+                                  "config.window");
         });
         err != SONARE_OK) {
       return err;
     }
     core_config.n_fft = config->n_fft;
     core_config.hop_length = config->hop_length == SONARE_STFT_HOP_AUTO ? 0 : config->hop_length;
-    if (!valid_window(config->window)) return SONARE_ERROR_INVALID_PARAMETER;
     core_config.window = to_window_type(config->window);
     core_config.heal_radius_frames = config->heal_radius_frames;
   }
@@ -919,14 +974,14 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
           if (!std::isnan(ops[i].high_hz)) {
             sonare::util::check::greater_than(ops[i].high_hz, 0.0, (subject + ".high_hz").c_str());
           }
+          sonare::util::check::integer_in_range(ops[i].mode, SONARE_SPECTRAL_EDIT_MODE_GAIN,
+                                                SONARE_SPECTRAL_EDIT_MODE_HEAL,
+                                                (subject + ".mode").c_str());
         });
         err != SONARE_OK) {
       return err;
     }
-    if (!ordinal_to_enum(ops[i].mode, SONARE_SPECTRAL_EDIT_MODE_GAIN,
-                         SONARE_SPECTRAL_EDIT_MODE_HEAL, &core_ops[i].mode)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    core_ops[i].mode = admitted_ordinal_to_enum<SpectralEditMode>(ops[i].mode);
     core_ops[i].start_sample = ops[i].start_sample;
     core_ops[i].end_sample = ops[i].end_sample;
     core_ops[i].low_hz = ops[i].low_hz;

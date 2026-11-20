@@ -165,10 +165,10 @@ TEST_CASE("voice changer one-shots refuse the input buffer before a NULL output"
   CHECK(out == nullptr);
   CHECK(out_length == 0);
 
-  // A refused channel count precedes the NULL outputs and records no message of its own.
+  // A refused channel count precedes the NULL outputs.
   REQUIRE(sonare_voice_change_realtime(samples.data(), kLength, kRate, nullptr, 3, nullptr,
                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message().empty());
+  CHECK(last_message() == "channels must be an integer in [1, 2]");
 }
 
 TEST_CASE("voice changer creation refuses its arguments before a NULL handle output",

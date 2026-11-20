@@ -12,6 +12,7 @@
 
 #include "core/audio.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -91,11 +92,24 @@ SonareError process_planar_stereo_block(SonareRealtimeVoiceChanger* handle, floa
   return ok ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
 }
 
+void check_interleaved_stereo_length(size_t length) {
+  if (length % 2 != 0) {
+    util::check::refuse_relation({"length", "channels"}, "{0} must be even when {1} is 2");
+  }
+}
+
 SonareError process_realtime_voice_change_compensated(SonareRealtimeVoiceChanger* handle,
                                                       const float* samples, size_t length,
                                                       int channels, int block_size, float* output) {
-  if (!handle || !samples || !output || channels < 1 || channels > 2 || block_size <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::non_null(handle, "handle");
+        util::check::non_null(samples, "samples");
+        util::check::non_null(output, "output");
+        util::check::integer_in_range(channels, 1, 2, "channels");
+        util::check::integer_at_least(block_size, 1, "block_size");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   int latency = handle->changer.latency_samples();  // per-channel frame count
   if (latency < 0) latency = 0;
@@ -118,7 +132,10 @@ SonareError process_realtime_voice_change_compensated(SonareRealtimeVoiceChanger
     return SONARE_OK;
   }
 
-  if (length % 2 != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] { check_interleaved_stereo_length(length); });
+      err != SONARE_OK) {
+    return err;
+  }
   const size_t frames = length / 2;
   const size_t total_frames = frames + latency_frames;
   std::vector<float> in(total_frames * 2, 0.0f);
@@ -179,9 +196,14 @@ SonareError sonare_voice_change_ex(const float* samples, size_t length, int samp
       err != SONARE_OK) {
     return err;
   }
-  if (config == nullptr || (config->formant_mode != SONARE_FORMANT_MODE_RELATIVE &&
-                            config->formant_mode != SONARE_FORMANT_MODE_ABSOLUTE)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
+  if (const SonareError err = run_validation([&] {
+        constexpr std::array<int, 2> kFormantModes = {SONARE_FORMANT_MODE_RELATIVE,
+                                                      SONARE_FORMANT_MODE_ABSOLUTE};
+        util::check::one_of(config->formant_mode, kFormantModes, "config.formant_mode");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
@@ -214,8 +236,11 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
   SonareError err =
       validate_audio_params("voice_change_realtime", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
-  if (channels < 1 || channels > 2) return SONARE_ERROR_INVALID_PARAMETER;
-  if (channels == 2 && length % 2 != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  err = run_validation([&] {
+    util::check::integer_in_range(channels, 1, 2, "channels");
+    if (channels == 2) check_interleaved_stereo_length(length);
+  });
+  if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
 
@@ -448,7 +473,12 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
   // Reject an out-of-range preset ordinal instead of silently substituting
   // NeutralMonitor. This matches sonare_voice_character_preset_id, which returns
   // nullptr for the same input, and every other surface's strict handling.
-  if (!vc_preset_is_valid(preset)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!vc_preset_is_valid(preset)) {
+    return run_validation([&] {
+      util::check::integer_in_range(preset, SONARE_VC_PRESET_NEUTRAL_MONITOR,
+                                    SONARE_VC_PRESET_RADIO_VOICE, "preset");
+    });
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   const auto config =

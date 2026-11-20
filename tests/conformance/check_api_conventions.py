@@ -1466,14 +1466,11 @@ _C_ERROR_PATH_PENDING: dict[str, int] = {
     "src/c_api/project_core.cpp": 2,
     "src/c_api/project_midi.cpp": 8,
     "src/c_api/project_soundfont.cpp": 1,
-    "src/c_api/sonare_c_acoustic.cpp": 1,
-    "src/c_api/sonare_c_editing.cpp": 9,
-    "src/c_api/sonare_c_effects.cpp": 9,
     "src/c_api/sonare_c_mastering_repair.cpp": 1,
     "src/c_api/sonare_c_memory.cpp": 1,
-    "src/c_api/sonare_c_polyphony.cpp": 8,
+    "src/c_api/sonare_c_polyphony.cpp": 3,
     "src/c_api/sonare_c_sample_bank.cpp": 1,
-    "src/c_api/sonare_c_voice_changer.cpp": 2,
+    "src/c_api/sonare_c_voice_changer.cpp": 1,
 }
 
 

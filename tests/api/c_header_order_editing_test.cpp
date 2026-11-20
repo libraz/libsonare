@@ -136,7 +136,7 @@ TEST_CASE("acoustic entries refuse the config before the output", "[c_api][heade
   CHECK(result.sample_rate == -5);
 
   REQUIRE(sonare_synthesize_rir(&config, -5, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message().empty());
+  CHECK(last_message().rfind("sample_rate must be an integer in [", 0) == 0);
 }
 #endif  // defined(SONARE_WITH_ACOUSTIC_SIM)
 

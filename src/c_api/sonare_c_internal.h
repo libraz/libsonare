@@ -308,7 +308,8 @@ T* copy_vector(const std::vector<T>& values) {
 ///          @c SONARE_ERROR_INVALID_PARAMETER.
 template <typename T>
 SonareError copy_vector(const std::vector<T>& values, T** out, size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return refuse_null("out");
+  if (!out_length) return refuse_null("out_length");
   *out = nullptr;
   *out_length = 0;
   std::unique_ptr<T[]> staged(copy_vector(values));
@@ -367,7 +368,8 @@ inline void copy_text(char* dest, size_t capacity, const char* src) {
 ///          with @c *out_length == 0, matching the analysis emitters'
 ///          (null, 0) convention. sonare_free_floats(nullptr) is a safe no-op.
 inline SonareError copy_audio_result(const Audio& result, float** out, size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return refuse_null("out");
+  if (!out_length) return refuse_null("out_length");
   *out = nullptr;
   *out_length = 0;
   std::unique_ptr<float[]> staged;
