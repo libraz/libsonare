@@ -71,6 +71,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import os
 import re
 import shlex
 import sys
@@ -137,13 +138,63 @@ def split_define_bodies(text: str) -> tuple[str, dict[str, str]]:
     return "\n".join(kept), bodies
 
 
+def _closing(code: str, open_: int, pair: str) -> int:
+    """Index of the delimiter closing ``code[open_]`` (``pair`` is e.g. ``"{}"``), or -1."""
+    depth = 0
+    for i in range(open_, len(code)):
+        if code[i] == pair[0]:
+            depth += 1
+        elif code[i] == pair[1]:
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def template_catchers(code: str) -> tuple[dict[str, tuple[int, int]], list[int]]:
+    """Function templates whose body catches, and the catches outside any of them.
+
+    A catch inside a function template is emitted only where the template is
+    instantiated, so a header holding one reaches a unit only through a call.
+    Returns ({name: (start, end) of the definition}, [offsets of other catches]).
+    """
+    spans: dict[str, tuple[int, int]] = {}
+    for match in re.finditer(r"\btemplate\s*<", code):
+        close = _closing(code, match.end() - 1, "<>")
+        brace = code.find("{", close) if close >= 0 else -1
+        if brace < 0 or ";" in code[close:brace]:
+            continue
+        head = re.findall(r"\b([A-Za-z_]\w*)\s*\(", code[close:brace])
+        end = _closing(code, brace, "{}")
+        if head and end > 0 and _CATCH.search(code, brace, end):
+            spans[head[0]] = (match.start(), end + 1)
+    loose = [
+        m.start()
+        for m in _CATCH.finditer(code)
+        if not any(start <= m.start() < end for start, end in spans.values())
+    ]
+    return spans, loose
+
+
 class FileScan:
     """Exception-handling facts about one repo-owned source or header file."""
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, header: bool = False) -> None:
         code, self.macro_bodies = split_define_bodies(strip_comments_and_literals(text))
         self.text = code
         self.direct_catch = bool(_CATCH.search(code))
+        # A header's catching function templates count only where a unit calls them.
+        self.templates: dict[str, tuple[int, int]] = {}
+        self.uses = code
+        if header and self.direct_catch:
+            spans, loose = template_catchers(code)
+            if spans and not loose:
+                self.direct_catch = False
+                self.templates = spans
+                blank = list(code)
+                for start, end in spans.values():
+                    blank[start:end] = [" "] * (end - start)
+                self.uses = "".join(blank)
         # A caller's catch also needs this unit's RAII cleanup landing pads.
         # Require an explicit, reasoned source annotation instead of treating
         # every flag without a catch as justified.
@@ -158,7 +209,9 @@ class FileScan:
 
     @classmethod
     def from_path(cls, path: Path) -> FileScan:
-        return cls(path.read_text(encoding="utf-8", errors="replace"))
+        return cls(
+            path.read_text(encoding="utf-8", errors="replace"), path.suffix in _HEADER_SUFFIXES
+        )
 
 
 def catching_macros(scans: list[FileScan]) -> set[str]:
@@ -206,10 +259,17 @@ class Scanner:
                 self._cache[path] = None
         return self._cache[path]
 
-    def catches(self, scan: FileScan) -> bool:
+    def catches(self, scan: FileScan, closure: list[FileScan] = ()) -> bool:
+        """Whether @p scan catches; a catching template counts when @p closure calls it."""
         if scan.direct_catch:
             return True
-        return self.macro_use is not None and bool(self.macro_use.search(scan.text))
+        if self.macro_use is not None and self.macro_use.search(scan.text):
+            return True
+        return any(
+            re.search(rf"\b{re.escape(name)}\s*(?:<[^;{{}}]*>)?\s*\(", other.uses)
+            for name in scan.templates
+            for other in closure
+        )
 
 
 def _tokens(path: Path) -> list[str]:
@@ -315,11 +375,17 @@ def module_objects(build_dir: Path) -> list[Path]:
     return objects
 
 
-def owned_headers(dep_file: Path) -> list[Path]:
-    """Repo-owned headers in a unit's dependency closure, from its ``.o.d``."""
+def owned_headers(dep_file: Path, directory: Path) -> list[Path]:
+    """Repo-owned headers in a unit's dependency closure, from its ``.o.d``.
+
+    A compiler may write the closure relative to the directory it ran in, so each
+    path is resolved against that directory before it is compared with the tree.
+    """
     text = dep_file.read_text(encoding="utf-8", errors="replace")
     text = text.split(":", 1)[-1].replace("\\\n", " ").replace("\\ ", "\0")
-    paths = (Path(t.replace("\0", " ")) for t in text.split() if t != "\\")
+    paths = (
+        Path(os.path.normpath(directory / t.replace("\0", " "))) for t in text.split() if t != "\\"
+    )
     return [
         path
         for path in paths
@@ -395,9 +461,11 @@ def audit(build_dir: Path) -> AuditResult:
         sites: list[str] = []
         if scanner.catches(source_scan) or source_scan.unwind_reason:
             sites.append("itself")
-        for header in owned_headers(dep_file):
-            header_scan = scanner.scan(header)
-            if header_scan is not None and scanner.catches(header_scan):
+        headers = owned_headers(dep_file, Path(entry["directory"]))
+        scans = {header: scanner.scan(header) for header in headers}
+        closure = [source_scan, *(s for s in scans.values() if s is not None)]
+        for header, header_scan in scans.items():
+            if header_scan is not None and scanner.catches(header_scan, closure):
                 sites.append(_display(header))
         flagged = "-fexceptions" in entry["command"]
         name = f"{_target_of(obj)}: {_display(source)}"

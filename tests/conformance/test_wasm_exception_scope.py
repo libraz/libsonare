@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -43,7 +44,6 @@ GATED_IN_ANALYSIS_BUILD = frozenset(
         "wasm/bindings/common/common.cpp",
         "wasm/bindings/analysis/quick.cpp",
         "wasm/bindings/analysis/quick_detailed.cpp",
-        "wasm/bindings/analysis/room_acoustics.cpp",
         "wasm/bindings/features/core.cpp",
         "wasm/bindings/features/music.cpp",
         "wasm/bindings/features/pitch.cpp",
@@ -207,6 +207,36 @@ class SyntheticBuildTest(unittest.TestCase):
         ):
             status = CHECKER.main()
         return status, out.getvalue(), err.getvalue()
+
+    def test_a_dependency_file_written_relative_to_its_directory_is_followed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build = self._tree(root, with_catches=True)
+            dep = build / "sub/CMakeFiles/mod.dir/module_unit.cpp.o.d"
+            bindir = build / "sub"
+            text = dep.read_text().replace(str(root / "src"), os.path.relpath(root / "src", bindir))
+            dep.write_text(text)
+            self.assertNotIn(str(root), text)
+            result = self._audit(root, build)
+            self.assertIn("mod: module_unit.cpp  [via inline_catch.h]", result.uncovered)
+
+    def test_a_header_template_catch_reaches_only_a_unit_that_calls_it(self) -> None:
+        for body, reached in (("return wrap([] { return 1; });", True), ("return 1;", False)):
+            with self.subTest(reached=reached), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                build = self._tree(root, with_catches=True)
+                _write(
+                    root / "src" / "inline_catch.h",
+                    "template <typename F>\nint wrap(F&& f) {\n"
+                    "  try { return f(); } catch (...) { return 0; }\n}\n",
+                )
+                _write(
+                    root / "src" / "module_unit.cpp",
+                    f'#include "inline_catch.h"\nint k() {{ {body} }}\n',
+                )
+                result = self._audit(root, build)
+                names = "\n".join(result.uncovered)
+                self.assertEqual("module_unit.cpp" in names, reached)
 
     def test_explicit_unwind_requirement_needs_a_flag_without_a_catch(self) -> None:
         for flagged in ((), ("lib_unit.cpp",)):
