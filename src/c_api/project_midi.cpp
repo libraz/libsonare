@@ -39,10 +39,12 @@ void check_midi_head(double ppq, uint8_t group, uint8_t channel) {
 template <typename Check, typename Build>
 SonareError emit_midi_pod(SonareMidiEventPod* out, double ppq, Check&& check_fields,
                           Build&& build) {
+  SONARE_C_TRY
   if (const SonareError err = run_validation(check_fields); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
   *out = pod_from_ump(ppq, build());
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 }  // namespace
