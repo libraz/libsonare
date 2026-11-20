@@ -494,6 +494,95 @@ describe('chain config: nested form only, tokens only', () => {
     );
   });
 
+  describe('chain content is refused by the core under the caller argument it arrived in', () => {
+    const mono = () => tone(440);
+    const CALLS: ReadonlyArray<[string, string, (config: Record<string, unknown>) => unknown]> = [
+      [
+        'masterAudio',
+        'masterAudio: overrides.',
+        (c) =>
+          sonare.masterAudio({ samples: mono(), sampleRate, overrides: c as MasteringChainConfig }),
+      ],
+      [
+        'masterAudio preset',
+        'masterAudio: overrides.',
+        (c) =>
+          sonare.masterAudio({
+            samples: mono(),
+            sampleRate,
+            preset: 'pop',
+            overrides: c as MasteringChainConfig,
+          }),
+      ],
+      [
+        'masterAudioStereo',
+        'masterAudioStereo: overrides.',
+        (c) =>
+          sonare.masterAudioStereo({
+            left: mono(),
+            right: mono(),
+            sampleRate,
+            overrides: c as MasteringChainConfig,
+          }),
+      ],
+      [
+        'streamingLoudnessGain',
+        'streamingLoudnessGain: config.',
+        (c) => sonare.streamingLoudnessGain({ samples: mono(), sampleRate, config: c as never }),
+      ],
+      [
+        'streamingLoudnessGainStereo',
+        'streamingLoudnessGainStereo: config.',
+        (c) =>
+          sonare.streamingLoudnessGainStereo({
+            left: mono(),
+            right: mono(),
+            sampleRate,
+            config: c as never,
+          }),
+      ],
+      [
+        'StreamingMasteringChain',
+        'StreamingMasteringChain: ',
+        (c) => new sonare.StreamingMasteringChain({ sampleRate, numChannels: 1, ...c }),
+      ],
+    ];
+    const REFUSALS: ReadonlyArray<[string, Record<string, unknown>, ErrorConstructor, string]> = [
+      [
+        'a path given twice',
+        { eq: { tilt: { tiltDb: 1 } }, 'eq.tilt.tiltDb': 1 },
+        TypeError,
+        'eq.tilt.tiltDb must not be given twice',
+      ],
+      [
+        'a null leaf',
+        { loudness: { targetLufs: null } },
+        TypeError,
+        'loudness.targetLufs must be a number, a boolean or a token',
+      ],
+      [
+        'a number for a token',
+        { dynamics: { compressor: { detector: 1 } } },
+        TypeError,
+        'dynamics.compressor.detector must be one of peak, rms, logRms',
+      ],
+      [
+        'a clip threshold above full scale',
+        { repair: { declip: { clipThresholdDb: 1 } } },
+        RangeError,
+        'repair.declip.clipThresholdDb must be finite and in [-890, 0]',
+      ],
+    ];
+    for (const [call, prefix, run] of CALLS) {
+      it.each(REFUSALS)(`${call}: %s`, (_name, config, cls, text) => {
+        const error = errorOf(() => run(config));
+        expect(error).toBeInstanceOf(cls);
+        expect(error).not.toBeInstanceOf(SonareError);
+        expect((error as Error).message).toBe(`${prefix}${text}`);
+      });
+    }
+  });
+
   it('refuses a string on a number leaf the same way offline and streaming', () => {
     const bad = { maximizer: { truePeakLimiter: { ceilingDbtp: '-1.0' } } } as never;
     const message = 'maximizer.truePeakLimiter.ceilingDbtp must be a number or a boolean';
