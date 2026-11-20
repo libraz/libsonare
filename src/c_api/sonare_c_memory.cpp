@@ -1,10 +1,9 @@
 #include <sonare/sonare_c.h>
 
+#include <cstdio>
 #include <cstring>
-#include <iomanip>
 #include <limits>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <thread>
 
@@ -337,13 +336,14 @@ void append_gigabytes(std::string& json, bool& first, const char* key,
   if (!bytes) return;
   if (!first) json += ',';
   first = false;
-  std::ostringstream number;
-  number << std::setprecision(std::numeric_limits<float>::max_digits10)
-         << static_cast<float>(*bytes) / (1024.0f * 1024.0f * 1024.0f);
+  // printf keeps iostream and its locale facets out of the WASM module.
+  char number[32];
+  std::snprintf(number, sizeof number, "%.*g", std::numeric_limits<float>::max_digits10,
+                static_cast<double>(static_cast<float>(*bytes) / (1024.0f * 1024.0f * 1024.0f)));
   json += '"';
   json += key;
   json += "\":";
-  json += number.str();
+  json += number;
 }
 
 /// @brief Appends `"key":<count>` when @p count is known.
