@@ -9772,7 +9772,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_
 kind = "type"
 old = "DeclickStereoResult"
 changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
-domain = "effects"
+domain = "mastering"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
 
@@ -9780,7 +9780,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_
 kind = "type"
 old = "DeclipStereoResult"
 changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
-domain = "effects"
+domain = "mastering"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
 
@@ -9788,7 +9788,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_
 kind = "type"
 old = "DecrackleStereoResult"
 changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
-domain = "effects"
+domain = "mastering"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
 
@@ -9796,7 +9796,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_
 kind = "type"
 old = "DehumStereoResult"
 changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
-domain = "effects"
+domain = "mastering"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
 
@@ -9804,7 +9804,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_
 kind = "type"
 old = "DenoiseStereoResult"
 changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
-domain = "effects"
+domain = "mastering"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
 
@@ -9812,7 +9812,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_
 kind = "type"
 old = "DereverbStereoResult"
 changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
-domain = "effects"
+domain = "mastering"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
 
@@ -9956,7 +9956,7 @@ test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_
 kind = "type"
 old = "TrimSilenceStereoResult"
 changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
-domain = "effects"
+domain = "mastering"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
 
@@ -12462,18 +12462,18 @@ test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_sep
 [[entry]]
 kind = "option"
 old = "extract_percussive_events(onset_wait)"
-changed = "an explicit 0 raises SonareValueError instead of running at the library default; 0 is a real wait the C configuration cannot yet express, so omit it (None) for the default"
+changed = "a given 0 is read literally as a zero wait instead of as the library default; omit it (None) for the default"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_reads_a_given_zero_literally"
 
 [[entry]]
 kind = "option"
 old = "extract_percussive_events(onset_delta)"
-changed = "an explicit 0 raises SonareValueError instead of running at the library default; 0 is a real offset the C configuration cannot yet express, so omit it (None) for the default"
+changed = "a given 0 is read literally as a zero offset instead of as the library default; omit it (None) for the default"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_reads_a_given_zero_literally"
 
 [[entry]]
 kind = "option"
@@ -12481,7 +12481,7 @@ old = "extract_percussive_events(max_event_ms)"
 changed = "an explicit 0 raises SonareValueError instead of reading as the library default; omit it (None) for the default"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_percussive_detection_refuses_a_zero_event_cap"
 
 [[entry]]
 kind = "option"
