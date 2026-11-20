@@ -748,6 +748,26 @@ TEST_CASE("sonare waveform peak pyramid returns requested levels", "[c_api][mete
   REQUIRE(result.levels == nullptr);
 }
 
+TEST_CASE("sonare waveform peak entries refuse their arguments by name", "[c_api][meter]") {
+  const std::vector<float> samples(10, 0.25f);
+  const size_t levels[] = {2, 4};
+  SonareWaveformPeaksResult peaks{};
+  SonareWaveformPeakPyramidResult pyramid{};
+  const auto refused = [](SonareError code, const char* subject) {
+    CAPTURE(subject);
+    CHECK(code == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_last_refusal_subject_count() >= 1);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == subject);
+  };
+  refused(sonare_waveform_peaks(samples.data(), 5, 0, 2, &peaks), "num_channels");
+  refused(sonare_waveform_peaks(nullptr, 5, 2, 2, &peaks), "samples");
+  refused(sonare_waveform_peak_pyramid(samples.data(), 5, 0, levels, 2, &pyramid), "num_channels");
+  refused(sonare_waveform_peak_pyramid(samples.data(), 5, 2, levels, 0, &pyramid), "level_count");
+  refused(sonare_waveform_peak_pyramid(samples.data(), 5, 2, nullptr, 2, &pyramid),
+          "samples_per_bucket_levels");
+  refused(sonare_waveform_peak_pyramid(samples.data(), 5, 2, levels, 2, nullptr), "out");
+}
+
 TEST_CASE("sonare_metering_detect_clipping", "[c_api]") {
   SECTION("reports clipped regions and frees them") {
     // Hard-clipped signal: ones in a run.

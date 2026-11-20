@@ -654,15 +654,15 @@ SonareError sonare_audio_spectrum_frame(const SonareAudio* audio, size_t frame_o
 
 namespace {
 
-SonareError validate_interleaved_audio(const float* samples, size_t frames, int channels) {
-  if (channels <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!samples && frames > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  SONARE_C_TRY
-  if (frames > std::numeric_limits<size_t>::max() / static_cast<size_t>(channels)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_OK;
-  SONARE_C_CATCH
+SonareError validate_interleaved_audio(const float* samples, size_t frames, int num_channels) {
+  return run_validation([&] {
+    util::check::integer_at_least(num_channels, 1, "num_channels");
+    util::check::non_null_when_count(samples, frames, "samples", "frames");
+    if (frames > std::numeric_limits<size_t>::max() / static_cast<size_t>(num_channels)) {
+      util::check::refuse_relation({"frames", "num_channels"},
+                                   "{0} * {1} must not exceed the addressable sample count");
+    }
+  });
 }
 
 SonareError fill_waveform_peaks_result(const metering::WaveformPeaksResult& result,
@@ -726,12 +726,13 @@ SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, in
   SONARE_C_TRY
   SonareError err = validate_interleaved_audio(samples, frames, num_channels);
   if (err != SONARE_OK) return err;
-  if (!samples_per_bucket_levels || level_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  util::check::integer_at_least(level_count, 1, "level_count");
+  util::check::non_null(samples_per_bucket_levels, "samples_per_bucket_levels");
   std::vector<size_t> levels(samples_per_bucket_levels, samples_per_bucket_levels + level_count);
   for (size_t level : levels) {
     metering::validate_samples_per_bucket(level);
   }
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   const auto pyramid = metering::waveform_peak_pyramid(samples, frames, num_channels, levels);
   WaveformPyramidLevels c_levels(pyramid.size());
   for (size_t i = 0; i < pyramid.size(); ++i) {
