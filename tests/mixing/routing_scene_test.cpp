@@ -445,23 +445,23 @@ TEST_CASE("scene_from_json rejects out-of-range strip enums like the project wal
   // spec is not accepted through one path and refused through the other.
   using Catch::Matchers::ContainsSubstring;
   REQUIRE_THROWS_WITH(
-      sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a","panMode":5}]})"),
+      sonare::mixing::api::scene_from_json(R"({"version":2,"strips":[{"id":"a","panMode":5}]})"),
       ContainsSubstring("panMode"));
   REQUIRE_THROWS_WITH(
-      sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a","panLaw":9}]})"),
+      sonare::mixing::api::scene_from_json(R"({"version":2,"strips":[{"id":"a","panLaw":9}]})"),
       ContainsSubstring("panLaw"));
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
-                          R"({"version":1,"strips":[{"id":"a","channelDelaySamples":-3}]})"),
+                          R"({"version":2,"strips":[{"id":"a","channelDelaySamples":-3}]})"),
                       ContainsSubstring("channelDelaySamples"));
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
-                          R"({"version":1,"strips":[{"id":"a","panMode":"stereo"}]})"),
+                          R"({"version":2,"strips":[{"id":"a","panMode":"stereo"}]})"),
                       ContainsSubstring("strips[0].panMode"));
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
-                          R"({"version":1,"strips":[{"id":"a","panLaw":"equal"}]})"),
+                          R"({"version":2,"strips":[{"id":"a","panLaw":"equal"}]})"),
                       ContainsSubstring("strips[0].panLaw"));
   // A valid strip still loads.
   const auto tokens = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"strips":[{"id":"a","panMode":"dualPan","panLaw":"linear0Db"}]})");
+      R"({"version":2,"strips":[{"id":"a","panMode":"dualPan","panLaw":"linear0Db"}]})");
   REQUIRE(tokens.strips[0].pan_mode == 2);
   REQUIRE(tokens.strips[0].pan_law == 3);
 }
@@ -479,7 +479,7 @@ TEST_CASE("scene_from_json refuses a document exceeding the JSON byte budget",
 
   // An ordinary scene still loads, so the refusal above is the size and not
   // some other change to scene parsing.
-  const auto ok = sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a"}]})");
+  const auto ok = sonare::mixing::api::scene_from_json(R"({"version":2,"strips":[{"id":"a"}]})");
   REQUIRE(ok.strips.size() == 1);
 }
 
@@ -548,11 +548,10 @@ TEST_CASE("Scene surround pan round-trips and omits at the default", "[mixing][r
   REQUIRE(restored.strips[0].surround_pan.azimuth == -45.0f);
   REQUIRE(restored.strips[0].surround_pan.divergence == 0.25f);
   REQUIRE(restored.strips[0].surround_pan.lfe == 0.5f);
-  REQUIRE(restored.strips[0].surround_pan.distance == 1.0f);  // reserved default
   // The centered strip carries no surroundPan and parses back to the default.
   REQUIRE(restored.strips[1].surround_pan.azimuth == 0.0f);
   REQUIRE(restored.strips[1].surround_pan.divergence == 0.0f);
-  REQUIRE(restored.strips[1].surround_pan.distance == 1.0f);
+  REQUIRE(restored.strips[1].surround_pan.lfe == 0.0f);
 }
 
 // The scene document is the read-back mechanism a host actually uses, so a
@@ -561,9 +560,8 @@ TEST_CASE("Scene surround pan round-trips and omits at the default", "[mixing][r
 TEST_CASE("Scene refuses out-of-domain pan, width and surround scalars", "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   const auto scene = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"strips":[{"id":"a","pan":-1.0,"width":2.0,"dualPanLeft":-1.0,)"
-      R"("dualPanRight":1.0,"surroundPan":{"azimuth":-180.0,"divergence":1.0,"lfe":0.0,)"
-      R"("distance":0.0}}]})");
+      R"({"version":2,"strips":[{"id":"a","pan":-1.0,"width":2.0,"dualPanLeft":-1.0,)"
+      R"("dualPanRight":1.0,"surroundPan":{"azimuth":-180.0,"divergence":1.0,"lfe":0.0}}]})");
   REQUIRE(scene.strips.size() == 1);
   const auto& strip = scene.strips[0];
   CHECK(strip.pan == -1.0f);
@@ -573,18 +571,16 @@ TEST_CASE("Scene refuses out-of-domain pan, width and surround scalars", "[mixin
   CHECK(strip.surround_pan.azimuth == -180.0f);
   CHECK(strip.surround_pan.divergence == 1.0f);
   CHECK(strip.surround_pan.lfe == 0.0f);
-  // A distance of zero or less resolves to the default scale, as the setters store it.
-  CHECK(strip.surround_pan.distance == 1.0f);
 
   const auto restored =
       sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(scene));
   CHECK(restored.strips[0].pan == -1.0f);
   CHECK(restored.strips[0].width == 2.0f);
-  CHECK(restored.strips[0].surround_pan.distance == 1.0f);
+  CHECK(restored.strips[0].surround_pan.lfe == 0.0f);
 
   const auto load = [](const char* fields) {
     return sonare::mixing::api::scene_from_json(
-        std::string(R"({"version":1,"strips":[{"id":"a",)") + fields + "}]}");
+        std::string(R"({"version":2,"strips":[{"id":"a",)") + fields + "}]}");
   };
   REQUIRE_THROWS_WITH(load(R"("pan":1.5)"), ContainsSubstring("strips[0].pan"));
   REQUIRE_THROWS_WITH(load(R"("pan":-1.5)"), ContainsSubstring("[-1, 1]"));
@@ -606,15 +602,15 @@ TEST_CASE("Scene refuses out-of-domain pan, width and surround scalars", "[mixin
 TEST_CASE("Scene refuses an out-of-domain bus width", "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   REQUIRE_THROWS_WITH(
-      sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"wide","width":4.0}]})"),
+      sonare::mixing::api::scene_from_json(R"({"version":2,"buses":[{"id":"wide","width":4.0}]})"),
       ContainsSubstring("buses[0].width"));
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
-                          R"({"version":1,"buses":[{"id":"narrow","width":-1.0}]})"),
+                          R"({"version":2,"buses":[{"id":"narrow","width":-1.0}]})"),
                       ContainsSubstring("[0, 2]"));
 
   // The bounds themselves and a value inside the range are carried through exactly.
   const auto scene = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"buses":[{"id":"lo","width":0.0},{"id":"hi","width":2.0},)"
+      R"({"version":2,"buses":[{"id":"lo","width":0.0},{"id":"hi","width":2.0},)"
       R"({"id":"shaped","width":1.5}]})");
   REQUIRE(scene.buses.size() == 3);
   CHECK(scene.buses[0].width == 0.0f);
@@ -667,7 +663,7 @@ TEST_CASE("Scene metering round-trips and omits at the default", "[mixing][routi
   for (int factor = -1; factor <= 17; ++factor) {
     CAPTURE(factor);
     const std::string json =
-        R"({"version":1,"strips":[{"id":"a","metering":{"truePeakOversample":)" +
+        R"({"version":2,"strips":[{"id":"a","metering":{"truePeakOversample":)" +
         std::to_string(factor) + "}}]}";
     if (sonare::mixing::is_realtime_true_peak_oversample(factor)) {
       const auto parsed = sonare::mixing::api::scene_from_json(json);
@@ -687,22 +683,22 @@ TEST_CASE("Scene arrays refuse a wrong-typed container or element with InvalidFo
     const char* path;
   };
   const Case cases[] = {
-      {R"({"version":1,"strips":[{"id":"a"},3]})", "strips[1]"},
-      {R"({"version":1,"strips":[{"id":"a","inserts":[null]}]})", "inserts[0]"},
-      {R"({"version":1,"strips":[{"id":"a","sends":["x"]}]})", "sends[0]"},
-      {R"({"version":1,"buses":[true]})", "buses[0]"},
-      {R"({"version":1,"buses":[{"id":"m","role":"master","inserts":[[]]}]})", "inserts[0]"},
-      {R"({"version":1,"vcaGroups":[1]})", "vcaGroups[0]"},
-      {R"({"version":1,"connections":[null]})", "connections[0]"},
+      {R"({"version":2,"strips":[{"id":"a"},3]})", "strips[1]"},
+      {R"({"version":2,"strips":[{"id":"a","inserts":[null]}]})", "inserts[0]"},
+      {R"({"version":2,"strips":[{"id":"a","sends":["x"]}]})", "sends[0]"},
+      {R"({"version":2,"buses":[true]})", "buses[0]"},
+      {R"({"version":2,"buses":[{"id":"m","role":"master","inserts":[[]]}]})", "inserts[0]"},
+      {R"({"version":2,"vcaGroups":[1]})", "vcaGroups[0]"},
+      {R"({"version":2,"connections":[null]})", "connections[0]"},
       // A present container of the wrong type is refused rather than read as empty.
-      {R"({"version":1,"strips":{}})", "strips must be an array"},
-      {R"({"version":1,"strips":[{"id":"a","inserts":"x"}]})", "inserts must be an array"},
-      {R"({"version":1,"strips":[{"id":"a","sends":3}]})", "sends must be an array"},
-      {R"({"version":1,"buses":null})", "buses must be an array"},
-      {R"({"version":1,"buses":[{"id":"m","role":"master","inserts":{}}]})",
+      {R"({"version":2,"strips":{}})", "strips must be an array"},
+      {R"({"version":2,"strips":[{"id":"a","inserts":"x"}]})", "inserts must be an array"},
+      {R"({"version":2,"strips":[{"id":"a","sends":3}]})", "sends must be an array"},
+      {R"({"version":2,"buses":null})", "buses must be an array"},
+      {R"({"version":2,"buses":[{"id":"m","role":"master","inserts":{}}]})",
        "inserts must be an array"},
-      {R"({"version":1,"vcaGroups":true})", "vcaGroups must be an array"},
-      {R"({"version":1,"connections":"a"})", "connections must be an array"},
+      {R"({"version":2,"vcaGroups":true})", "vcaGroups must be an array"},
+      {R"({"version":2,"connections":"a"})", "connections must be an array"},
   };
   for (const auto& c : cases) {
     CAPTURE(c.json);
@@ -715,8 +711,8 @@ TEST_CASE("Scene arrays refuse a wrong-typed container or element with InvalidFo
     }
   }
   // Control: object elements parse, and an absent container still defaults to empty.
-  CHECK_NOTHROW(sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a"}]})"));
-  CHECK(sonare::mixing::api::scene_from_json(R"({"version":1})").strips.empty());
+  CHECK_NOTHROW(sonare::mixing::api::scene_from_json(R"({"version":2,"strips":[{"id":"a"}]})"));
+  CHECK(sonare::mixing::api::scene_from_json(R"({"version":2})").strips.empty());
 }
 
 TEST_CASE("Scene scalar and nested-object fields refuse a wrong type, naming the field path",
@@ -727,30 +723,30 @@ TEST_CASE("Scene scalar and nested-object fields refuse a wrong type, naming the
     const char* path;
   };
   const Case cases[] = {
-      {R"({"version":1,"strips":[{"id":"a","faderDb":"loud"}]})", "strips[0].faderDb"},
-      {R"({"version":1,"strips":[{"id":"a","pan":null}]})", "strips[0].pan"},
-      {R"({"version":1,"strips":[{"id":"a"},{"id":"b","muted":1}]})", "strips[1].muted"},
-      {R"({"version":1,"strips":[{"id":"a","soloSafe":"yes"}]})", "strips[0].soloSafe"},
-      {R"({"version":1,"strips":[{"id":"a","panLaw":[]}]})", "strips[0].panLaw"},
-      {R"({"version":1,"strips":[{"id":7}]})", "strips[0].id"},
-      {R"({"version":1,"strips":[{"id":"a","metering":{"truePeakOversample":"8"}}]})",
+      {R"({"version":2,"strips":[{"id":"a","faderDb":"loud"}]})", "strips[0].faderDb"},
+      {R"({"version":2,"strips":[{"id":"a","pan":null}]})", "strips[0].pan"},
+      {R"({"version":2,"strips":[{"id":"a"},{"id":"b","muted":1}]})", "strips[1].muted"},
+      {R"({"version":2,"strips":[{"id":"a","soloSafe":"yes"}]})", "strips[0].soloSafe"},
+      {R"({"version":2,"strips":[{"id":"a","panLaw":[]}]})", "strips[0].panLaw"},
+      {R"({"version":2,"strips":[{"id":7}]})", "strips[0].id"},
+      {R"({"version":2,"strips":[{"id":"a","metering":{"truePeakOversample":"8"}}]})",
        "strips[0].metering.truePeakOversample"},
-      {R"({"version":1,"strips":[{"id":"a","metering":3}]})", "strips[0].metering"},
-      {R"({"version":1,"strips":[{"id":"a","surroundPan":{"azimuth":true}}]})",
+      {R"({"version":2,"strips":[{"id":"a","metering":3}]})", "strips[0].metering"},
+      {R"({"version":2,"strips":[{"id":"a","surroundPan":{"azimuth":true}}]})",
        "strips[0].surroundPan.azimuth"},
-      {R"({"version":1,"strips":[{"id":"a","eq":{"enabled":"on"}}]})", "strips[0].eq.enabled"},
-      {R"({"version":1,"strips":[{"id":"a","eq":[]}]})", "strips[0].eq"},
-      {R"({"version":1,"strips":[{"id":"a","eq":{"bands":{}}}]})", "strips[0].eq.bands"},
-      {R"({"version":1,"strips":[{"id":"a","sends":[{"sendDb":"x"}]}]})",
+      {R"({"version":2,"strips":[{"id":"a","eq":{"enabled":"on"}}]})", "strips[0].eq.enabled"},
+      {R"({"version":2,"strips":[{"id":"a","eq":[]}]})", "strips[0].eq"},
+      {R"({"version":2,"strips":[{"id":"a","eq":{"bands":{}}}]})", "strips[0].eq.bands"},
+      {R"({"version":2,"strips":[{"id":"a","sends":[{"sendDb":"x"}]}]})",
        "strips[0].sends[0].sendDb"},
-      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":5}]}]})",
+      {R"({"version":2,"strips":[{"id":"a","inserts":[{"processor":5}]}]})",
        "strips[0].inserts[0].processor"},
-      {R"({"version":1,"buses":[{"id":"m","role":"master","width":"wide"}]})", "buses[0].width"},
-      {R"({"version":1,"vcaGroups":[{"id":"g","gainDb":[]}]})", "vcaGroups[0].gainDb"},
-      {R"({"version":1,"vcaGroups":[{"id":"g","members":["a",2]}]})", "vcaGroups[0].members[1]"},
-      {R"({"version":1,"vcaGroups":[{"id":"g","members":"a"}]})", "vcaGroups[0].members"},
+      {R"({"version":2,"buses":[{"id":"m","role":"master","width":"wide"}]})", "buses[0].width"},
+      {R"({"version":2,"vcaGroups":[{"id":"g","gainDb":[]}]})", "vcaGroups[0].gainDb"},
+      {R"({"version":2,"vcaGroups":[{"id":"g","members":["a",2]}]})", "vcaGroups[0].members[1]"},
+      {R"({"version":2,"vcaGroups":[{"id":"g","members":"a"}]})", "vcaGroups[0].members"},
       {R"({"version":"1"})", "version"},
-      {R"({"version":1,"connections":[{"source":1}]})", "connections[0].source"},
+      {R"({"version":2,"connections":[{"source":1}]})", "connections[0].source"},
   };
   for (const auto& c : cases) {
     CAPTURE(c.json);
@@ -764,7 +760,7 @@ TEST_CASE("Scene scalar and nested-object fields refuse a wrong type, naming the
   }
   // Control: right types parse to their values, and absent keys keep their defaults.
   const auto scene = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"strips":[{"id":"a","faderDb":-6,"muted":true},{"id":"b"}]})");
+      R"({"version":2,"strips":[{"id":"a","faderDb":-6,"muted":true},{"id":"b"}]})");
   CHECK(scene.strips[0].fader_db == -6.0f);
   CHECK(scene.strips[0].muted);
   CHECK(scene.strips[1].fader_db == sonare::mixing::api::Strip{}.fader_db);
@@ -825,7 +821,7 @@ TEST_CASE("Scene omits bus trim/width/polarity at defaults (byte-compat)", "[mix
 
 TEST_CASE("Scene JSON rejects an unknown channel layout string", "[mixing][routing]") {
   const std::string bad_bus = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master", "layout": "9.2"}],
     "strips": [{"id": "vocal"}],
     "connections": [{"source": "vocal", "destination": "master"}]
@@ -833,7 +829,7 @@ TEST_CASE("Scene JSON rejects an unknown channel layout string", "[mixing][routi
   REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(bad_bus), sonare::SonareException);
 
   const std::string bad_type = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master", "layout": 6}],
     "strips": [{"id": "vocal"}],
     "connections": [{"source": "vocal", "destination": "master"}]
@@ -960,7 +956,7 @@ TEST_CASE("Scene JSON rejects non-string insert slot and send timing", "[mixing]
   // `slot` and `timing` are string enums ("pre"/"post"). A wrong-typed value
   // must fail the parse instead of silently falling back to the default.
   const std::string bad_slot = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [{"slot": 1, "processor": "eq.tilt"}]}],
     "connections": [{"source": "vocal", "destination": "master"}]
@@ -968,7 +964,7 @@ TEST_CASE("Scene JSON rejects non-string insert slot and send timing", "[mixing]
   REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(bad_slot), sonare::SonareException);
 
   const std::string bad_timing = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master"}, {"id": "verb", "role": "aux"}],
     "strips": [{"id": "vocal", "sends": [
       {"id": "to-verb", "destinationBusId": "verb", "sendDb": -12, "timing": 1}
@@ -979,7 +975,7 @@ TEST_CASE("Scene JSON rejects non-string insert slot and send timing", "[mixing]
 
   // The string forms still parse.
   const std::string good = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [{"slot": "post", "processor": "eq.tilt"}]}],
     "connections": [{"source": "vocal", "destination": "master"}]
@@ -993,7 +989,7 @@ TEST_CASE("Scene JSON rejects non-string insert slot and send timing", "[mixing]
 TEST_CASE("Scene insert params load from an object and refuse a string", "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   const std::string embedded = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [
       {"slot": "pre", "processor": "dynamics.compressor",
@@ -1002,7 +998,7 @@ TEST_CASE("Scene insert params load from an object and refuse a string", "[mixin
     "connections": [{"source": "vocal", "destination": "master"}]
   })";
   const std::string stringified = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [
       {"slot": "pre", "processor": "dynamics.compressor",
@@ -1028,7 +1024,7 @@ TEST_CASE("Scene insert params load from an object and refuse a string", "[mixin
   // An insert that never carried params still writes a bag, so the field has one
   // type on every document.
   const auto bare = sonare::mixing::api::scene_from_json(R"({
-    "version": 1,
+    "version": 2,
     "strips": [{"id": "vocal", "inserts": [{"slot": "pre", "processor": "eq.tilt"}]}]
   })");
   const auto bare_written = sonare::util::json::parse(sonare::mixing::api::scene_to_json(bare));
@@ -1038,7 +1034,7 @@ TEST_CASE("Scene insert params load from an object and refuse a string", "[mixin
 TEST_CASE("Scene JSON refuses an insert params bag that is not an object", "[mixing][routing]") {
   // A number where the bag belongs is neither of the two accepted forms.
   REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(R"({
-    "version": 1,
+    "version": 2,
     "strips": [{"id": "vocal", "inserts": [
       {"slot": "pre", "processor": "eq.tilt", "params": 4}
     ]}]
@@ -1075,7 +1071,7 @@ TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
   // take no effect. The scene still loads, but the ignored keys are reported on
   // the dedicated warning channel (NOT last_error, which stays empty on success).
   const std::string with_unknown = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [
       {"slot": "post", "processor": "eq.parametric",
@@ -1099,7 +1095,7 @@ TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
   // A scene whose insert params are all consumed leaves the warning channel clear
   // (and clears any stale warning from the previous load on this thread).
   const std::string all_known = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [
       {"slot": "post", "processor": "eq.parametric",
@@ -1119,7 +1115,7 @@ TEST_CASE("Scene load warns about a send to an undeclared bus and still routes i
   constexpr int kBlock = 512;
   auto scene_with_destination = [](const std::string& destination) {
     return R"({
-      "version": 1,
+      "version": 2,
       "buses": [{"id": "master", "role": "master"}, {"id": "aux1", "role": "aux"}],
       "strips": [{"id": "a", "sends": [
         {"id": "s", "destinationBusId": ")" +
@@ -1151,7 +1147,7 @@ TEST_CASE("A bus insert reports its ignored params the way a strip insert does",
   constexpr int kBlock = 512;
 
   const std::string with_unknown = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master", "inserts": [
       {"slot": "post", "processor": "eq.parametric",
        "params": {"highPassHz":80,"presenceDb":4}}
@@ -1195,21 +1191,21 @@ TEST_CASE("Scene load refuses an unknown key at every nesting level, naming its 
     const char* path;
   };
   const Case cases[] = {
-      {R"({"version":1,"bogus":1})", "bogus"},
-      {R"({"version":1,"strips":[{"id":"b","faderDB":-3}]})", "strips[0].faderDB"},
-      {R"({"version":1,"buses":[{"id":"master","roel":"master"}]})", "buses[0].roel"},
-      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","sidechainkey":"k"}]}]})",
+      {R"({"version":2,"bogus":1})", "bogus"},
+      {R"({"version":2,"strips":[{"id":"b","faderDB":-3}]})", "strips[0].faderDB"},
+      {R"({"version":2,"buses":[{"id":"master","roel":"master"}]})", "buses[0].roel"},
+      {R"({"version":2,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","sidechainkey":"k"}]}]})",
        "strips[0].inserts[0].sidechainkey"},
-      {R"({"version":1,"strips":[{"id":"a","eq":{"bands":[{"freqHz":1000}]}}]})",
+      {R"({"version":2,"strips":[{"id":"a","eq":{"bands":[{"freqHz":1000}]}}]})",
        "strips[0].eq.bands[0].freqHz"},
-      {R"({"version":1,"strips":[{"id":"a","eq":{"bogus":1}}]})", "strips[0].eq.bogus"},
-      {R"({"version":1,"strips":[{"id":"a","sends":[{"id":"s","bogus":1}]}]})",
+      {R"({"version":2,"strips":[{"id":"a","eq":{"bogus":1}}]})", "strips[0].eq.bogus"},
+      {R"({"version":2,"strips":[{"id":"a","sends":[{"id":"s","bogus":1}]}]})",
        "strips[0].sends[0].bogus"},
-      {R"({"version":1,"strips":[{"id":"a","surroundPan":{"bogus":1}}]})",
+      {R"({"version":2,"strips":[{"id":"a","surroundPan":{"bogus":1}}]})",
        "strips[0].surroundPan.bogus"},
-      {R"({"version":1,"strips":[{"id":"a","metering":{"bogus":1}}]})", "strips[0].metering.bogus"},
-      {R"({"version":1,"vcaGroups":[{"id":"g","bogus":1}]})", "vcaGroups[0].bogus"},
-      {R"({"version":1,"connections":[{"source":"a","destination":"master","dest":"master"}]})",
+      {R"({"version":2,"strips":[{"id":"a","metering":{"bogus":1}}]})", "strips[0].metering.bogus"},
+      {R"({"version":2,"vcaGroups":[{"id":"g","bogus":1}]})", "vcaGroups[0].bogus"},
+      {R"({"version":2,"connections":[{"source":"a","destination":"master","dest":"master"}]})",
        "connections[0].dest"},
   };
   for (const Case& c : cases) {
@@ -1222,15 +1218,15 @@ TEST_CASE(
     "Scene load refuses an unknown key under its original array index and escapes control "
     "characters",
     "[mixing][routing]") {
-  CHECK(scene_refusal(R"({"version":1,"strips":[{"id":"a"},{"id":"b"},{"id":"c","bogus":1}]})") ==
+  CHECK(scene_refusal(R"({"version":2,"strips":[{"id":"a"},{"id":"b"},{"id":"c","bogus":1}]})") ==
         "unknown key strips[2].bogus");
   // A non-object element is refused too.
   CHECK_THROWS_AS(
-      sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[1,{"id":"b","bogus":1}]})"),
+      sonare::mixing::api::scene_from_json(R"({"version":2,"strips":[1,{"id":"b","bogus":1}]})"),
       sonare::SonareException);
 
   const auto forged = scene_refusal(
-      "{\"version\":1,\"strips\":[{\"id\":\"a\",\"x\\nunknown scene key 'strips[9].fake'\":1}]}");
+      "{\"version\":2,\"strips\":[{\"id\":\"a\",\"x\\nunknown scene key 'strips[9].fake'\":1}]}");
   REQUIRE_FALSE(forged.empty());
   CHECK(forged.find('\n') == std::string::npos);
   CHECK(forged.find("\\x0a") != std::string::npos);
@@ -1240,7 +1236,7 @@ TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing]"
   const std::string annotated = R"({
     "$schema": "https://libraz.net/schemas/libsonare/mixer-scene.schema.json",
     "x-note": "top",
-    "version": 1,
+    "version": 2,
     "strips": [{"id": "a", "x-color": "red", "$comment": "c",
       "surroundPan": {"x-a": 1}, "metering": {"$m": 1},
       "inserts": [{"processor": "dynamics.compressor", "x-i": 1}],
@@ -1251,12 +1247,12 @@ TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing]"
     "connections": [{"source": "a", "destination": "m", "x-c": 1}]
   })";
   CHECK_NOTHROW(sonare::mixing::api::scene_from_json(annotated));
-  CHECK(scene_refusal(R"({"version":1,"xnote":1})") == "unknown key xnote");
+  CHECK(scene_refusal(R"({"version":2,"xnote":1})") == "unknown key xnote");
 }
 
 TEST_CASE("Scene load reports an earlier spelling as such, not as an unknown key",
           "[mixing][routing]") {
-  const auto message = scene_refusal(R"({"version":1,"strips":[{"id":"a","fader_db":-1}]})");
+  const auto message = scene_refusal(R"({"version":2,"strips":[{"id":"a","fader_db":-1}]})");
   CHECK(message.find("is an earlier spelling; write strips[0].faderDb") != std::string::npos);
   CHECK(message.find("unknown key") == std::string::npos);
 }
@@ -1270,44 +1266,44 @@ TEST_CASE("Scene load refuses every earlier snake_case spelling, naming the curr
     const char* current;
   };
   const Case cases[] = {
-      {R"({"version":1,"strips":[{"id":"a","input_trim_db":1}]})", "strips[0].input_trim_db",
+      {R"({"version":2,"strips":[{"id":"a","input_trim_db":1}]})", "strips[0].input_trim_db",
        "inputTrimDb"},
-      {R"({"version":1,"strips":[{"id":"a","fader_db":-1}]})", "strips[0].fader_db", "faderDb"},
-      {R"({"version":1,"strips":[{"id":"a","vca_offset_db":0}]})", "strips[0].vca_offset_db",
+      {R"({"version":2,"strips":[{"id":"a","fader_db":-1}]})", "strips[0].fader_db", "faderDb"},
+      {R"({"version":2,"strips":[{"id":"a","vca_offset_db":0}]})", "strips[0].vca_offset_db",
        "vcaOffsetDb"},
-      {R"({"version":1,"strips":[{"id":"a","solo_safe":true}]})", "strips[0].solo_safe",
+      {R"({"version":2,"strips":[{"id":"a","solo_safe":true}]})", "strips[0].solo_safe",
        "soloSafe"},
-      {R"({"version":1,"strips":[{"id":"a","pan_mode":"stereoPan"}]})", "strips[0].pan_mode",
+      {R"({"version":2,"strips":[{"id":"a","pan_mode":"stereoPan"}]})", "strips[0].pan_mode",
        "panMode"},
-      {R"({"version":1,"strips":[{"id":"a","dual_pan_left":-0.5}]})", "strips[0].dual_pan_left",
+      {R"({"version":2,"strips":[{"id":"a","dual_pan_left":-0.5}]})", "strips[0].dual_pan_left",
        "dualPanLeft"},
-      {R"({"version":1,"strips":[{"id":"a","dual_pan_right":0.5}]})", "strips[0].dual_pan_right",
+      {R"({"version":2,"strips":[{"id":"a","dual_pan_right":0.5}]})", "strips[0].dual_pan_right",
        "dualPanRight"},
-      {R"({"version":1,"strips":[{"id":"a","polarity_invert_left":true}]})",
+      {R"({"version":2,"strips":[{"id":"a","polarity_invert_left":true}]})",
        "strips[0].polarity_invert_left", "polarityInvertLeft"},
-      {R"({"version":1,"strips":[{"id":"a","polarity_invert_right":true}]})",
+      {R"({"version":2,"strips":[{"id":"a","polarity_invert_right":true}]})",
        "strips[0].polarity_invert_right", "polarityInvertRight"},
-      {R"({"version":1,"strips":[{"id":"a","pan_law":"const6Db"}]})", "strips[0].pan_law",
+      {R"({"version":2,"strips":[{"id":"a","pan_law":"const6Db"}]})", "strips[0].pan_law",
        "panLaw"},
-      {R"({"version":1,"strips":[{"id":"a","channel_delay_samples":4}]})",
+      {R"({"version":2,"strips":[{"id":"a","channel_delay_samples":4}]})",
        "strips[0].channel_delay_samples", "channelDelaySamples"},
-      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor_name":"dynamics.compressor"}]}]})",
+      {R"({"version":2,"strips":[{"id":"a","inserts":[{"processor_name":"dynamics.compressor"}]}]})",
        "strips[0].inserts[0].processor_name", "processor"},
-      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","params_json":"{}"}]}]})",
+      {R"({"version":2,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","params_json":"{}"}]}]})",
        "strips[0].inserts[0].params_json", "params"},
-      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","sidechain_key":"k"}]}]})",
+      {R"({"version":2,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","sidechain_key":"k"}]}]})",
        "strips[0].inserts[0].sidechain_key", "sidechainKey"},
-      {R"({"version":1,"strips":[{"id":"a","sends":[{"id":"s","destination_bus_id":"m"}]}]})",
+      {R"({"version":2,"strips":[{"id":"a","sends":[{"id":"s","destination_bus_id":"m"}]}]})",
        "strips[0].sends[0].destination_bus_id", "destinationBusId"},
-      {R"({"version":1,"strips":[{"id":"a","sends":[{"id":"s","send_db":-6}]}]})",
+      {R"({"version":2,"strips":[{"id":"a","sends":[{"id":"s","send_db":-6}]}]})",
        "strips[0].sends[0].send_db", "sendDb"},
-      {R"({"version":1,"buses":[{"id":"m","input_trim_db":1}]})", "buses[0].input_trim_db",
+      {R"({"version":2,"buses":[{"id":"m","input_trim_db":1}]})", "buses[0].input_trim_db",
        "inputTrimDb"},
-      {R"({"version":1,"buses":[{"id":"m","pan_mode":"stereoPan"}]})", "buses[0].pan_mode",
+      {R"({"version":2,"buses":[{"id":"m","pan_mode":"stereoPan"}]})", "buses[0].pan_mode",
        "panMode"},
-      {R"({"version":1,"buses":[{"id":"m","pan_law":"const6Db"}]})", "buses[0].pan_law", "panLaw"},
-      {R"({"version":1,"vca_groups":[]})", "vca_groups", "vcaGroups"},
-      {R"({"version":1,"vcaGroups":[{"id":"g","gain_db":-2}]})", "vcaGroups[0].gain_db", "gainDb"},
+      {R"({"version":2,"buses":[{"id":"m","pan_law":"const6Db"}]})", "buses[0].pan_law", "panLaw"},
+      {R"({"version":2,"vca_groups":[]})", "vca_groups", "vcaGroups"},
+      {R"({"version":2,"vcaGroups":[{"id":"g","gain_db":-2}]})", "vcaGroups[0].gain_db", "gainDb"},
   };
   for (const Case& c : cases) {
     CAPTURE(c.document);
@@ -1320,36 +1316,35 @@ TEST_CASE("Scene load refuses the earlier pan and send-timing values, naming the
           "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   REQUIRE_THROWS_WITH(
-      sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a","panMode":1}]})"),
+      sonare::mixing::api::scene_from_json(R"({"version":2,"strips":[{"id":"a","panMode":1}]})"),
       ContainsSubstring("strips[0].panMode") && ContainsSubstring("stereoPan"));
   REQUIRE_THROWS_WITH(
-      sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"b","panLaw":0}]})"),
+      sonare::mixing::api::scene_from_json(R"({"version":2,"buses":[{"id":"b","panLaw":0}]})"),
       ContainsSubstring("buses[0].panLaw") && ContainsSubstring("const3Db"));
   for (const char* earlier : {"pre", "post"}) {
     CAPTURE(earlier);
     const std::string document =
-        std::string(R"({"version":1,"strips":[{"id":"a","sends":[{"id":"s","timing":")") + earlier +
+        std::string(R"({"version":2,"strips":[{"id":"a","sends":[{"id":"s","timing":")") + earlier +
         R"("}]}]})";
     REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(document),
                         ContainsSubstring("preFader") && ContainsSubstring("postFader"));
   }
   REQUIRE_THROWS_WITH(
       sonare::mixing::api::scene_from_json(
-          R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","params":"{}"}]}]})"),
+          R"({"version":2,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","params":"{}"}]}]})"),
       ContainsSubstring("strips[0].inserts[0].params must be an object"));
 }
 
 TEST_CASE("Scene writer output loads without an unknown key", "[mixing][routing]") {
   // A maximal document: every field the writer can emit, at a non-default value.
   const std::string maximal = R"({
-    "version": 1,
+    "version": 2,
     "strips": [{"id": "a", "inputTrimDb": 1, "faderDb": -1, "vcaOffsetDb": 1, "pan": 0.2,
       "width": 0.8, "muted": true, "soloed": true, "soloSafe": true, "panMode": "stereoPan",
       "dualPanLeft": -0.5, "dualPanRight": 0.5, "polarityInvertLeft": true,
       "polarityInvertRight": true, "panLaw": "const4.5Db", "channelDelaySamples": 3,
       "sourceLayout": "5.1",
-      "surroundPan": {"azimuth": 30, "elevation": 10, "divergence": 0.2, "lfe": 0.1,
-                      "distance": 2},
+      "surroundPan": {"azimuth": 30, "divergence": 0.2, "lfe": 0.1},
       "metering": {"enabled": false, "lufs": false, "truePeak": false,
                    "truePeakOversample": 8},
       "inserts": [{"slot": "post", "processor": "dynamics.compressor", "params": {},
@@ -1389,7 +1384,7 @@ TEST_CASE("Built-in scene presets load without an unknown key", "[mixing][routin
 
 TEST_CASE("sonare_mixer_from_scene_json refuses an unknown scene key", "[mixing][routing]") {
   const std::string typo = R"({
-    "version": 1,
+    "version": 2,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "faderDB": -3}],
     "connections": [{"source": "vocal", "destination": "master"}]
@@ -1530,7 +1525,7 @@ TEST_CASE("Scene EQ rejects more than 24 bands", "[mixing][routing]") {
   }
   bands_json += "]";
   const std::string document =
-      R"({"version":1,"strips":[{"id":"s","eq":{"bands":)" + bands_json + "}}]}";
+      R"({"version":2,"strips":[{"id":"s","eq":{"bands":)" + bands_json + "}}]}";
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(document), ContainsSubstring("24"));
 }
 
@@ -1542,11 +1537,11 @@ TEST_CASE("Scene EQ rejects tiltShelf/flatTilt band types", "[mixing][routing]")
   using Catch::Matchers::ContainsSubstring;
   REQUIRE_THROWS_WITH(
       sonare::mixing::api::scene_from_json(
-          R"({"version":1,"strips":[{"id":"s","eq":{"bands":[{"type":"tiltShelf"}]}}]})"),
+          R"({"version":2,"strips":[{"id":"s","eq":{"bands":[{"type":"tiltShelf"}]}}]})"),
       ContainsSubstring("tiltShelf"));
   REQUIRE_THROWS_WITH(
       sonare::mixing::api::scene_from_json(
-          R"({"version":1,"buses":[{"id":"b","eq":{"bands":[{"type":"flatTilt"}]}}]})"),
+          R"({"version":2,"buses":[{"id":"b","eq":{"bands":[{"type":"flatTilt"}]}}]})"),
       ContainsSubstring("flatTilt"));
 }
 
@@ -1586,7 +1581,7 @@ TEST_CASE("Scene bus pan round-trips and omits at the default", "[mixing][routin
 TEST_CASE("Scene refuses out-of-domain bus pan and dual pan", "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   const auto load = [](const char* fields) {
-    return sonare::mixing::api::scene_from_json(std::string(R"({"version":1,"buses":[{"id":"b",)") +
+    return sonare::mixing::api::scene_from_json(std::string(R"({"version":2,"buses":[{"id":"b",)") +
                                                 fields + "}]}");
   };
   REQUIRE_THROWS_WITH(load(R"("pan":1.5)"), ContainsSubstring("buses[0].pan"));
@@ -1603,24 +1598,24 @@ TEST_CASE("Scene refuses out-of-domain bus pan and dual pan", "[mixing][routing]
 TEST_CASE("Scene rejects an out-of-range bus panMode/panLaw", "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   REQUIRE_THROWS_WITH(
-      sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"b","panMode":5}]})"),
+      sonare::mixing::api::scene_from_json(R"({"version":2,"buses":[{"id":"b","panMode":5}]})"),
       ContainsSubstring("panMode"));
   REQUIRE_THROWS_WITH(
-      sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"b","panLaw":9}]})"),
+      sonare::mixing::api::scene_from_json(R"({"version":2,"buses":[{"id":"b","panLaw":9}]})"),
       ContainsSubstring("panLaw"));
 }
 
 TEST_CASE("Scene rejects a non-default pan on a surround bus, naming the field",
           "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
-  const std::string surround_pan = R"({"version":1,"buses":[
+  const std::string surround_pan = R"({"version":2,"buses":[
       {"id":"surround-verb","layout":"5.1","pan":0.5}]})";
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(surround_pan),
                       ContainsSubstring("buses[0].pan"));
 
   // A surround bus at the default pan still loads.
   const auto ok = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"buses":[{"id":"surround-verb","layout":"5.1"}]})");
+      R"({"version":2,"buses":[{"id":"surround-verb","layout":"5.1"}]})");
   REQUIRE(ok.buses.size() == 1);
 }
 
@@ -1680,7 +1675,7 @@ TEST_CASE("Scene with a former processor id or amp preset is refused naming the 
       }) {
     INFO(c.insert);
     const std::string saved =
-        std::string(R"({"version":1,"strips":[{"id":"gtr","inserts":[)") + c.insert + "]}]}";
+        std::string(R"({"version":2,"strips":[{"id":"gtr","inserts":[)") + c.insert + "]}]}";
     // The scene document keeps the name it was given; nothing folds it onto the current one.
     const auto scene = sonare::mixing::api::scene_from_json(saved);
     REQUIRE(scene.strips.at(0).inserts.size() == 1);

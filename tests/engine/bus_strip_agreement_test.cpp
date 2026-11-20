@@ -103,18 +103,18 @@ std::string master_bus_body(bool eq_active) {
 }
 
 std::string wrap_strip_scene(const std::string& body) {
-  return std::string(R"({"version":1,"strips":[{)") + body + R"(}],"buses":[],"connections":[]})";
+  return std::string(R"({"version":2,"strips":[{)") + body + R"(}],"buses":[],"connections":[]})";
 }
 
 std::string wrap_bus_scene(const std::string& body) {
-  return std::string(R"({"version":1,"strips":[],"buses":[{)") + body + R"(}],"connections":[]})";
+  return std::string(R"({"version":2,"strips":[],"buses":[{)") + body + R"(}],"connections":[]})";
 }
 
 // Track -> fx bus -> master, matching the engine's group-routing lane
 // (output_bus_id bypasses the master mix) exactly: an explicit bus keeps its
 // authored topology only when connected, so both edges are spelled out.
 std::string project_scene_json(const BusStripCase& c) {
-  return std::string(R"({"version":1,"strips":[{)") + track_strip_body(c.strip_eq) +
+  return std::string(R"({"version":2,"strips":[{)") + track_strip_body(c.strip_eq) +
          R"(}],"buses":[{)" + bus_body(c) + R"(},{)" + master_bus_body(c.strip_eq) +
          R"(}],"connections":[)" + R"({"source":"track","destination":"fx"},)" +
          R"({"source":"fx","destination":"master"}]})";

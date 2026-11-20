@@ -185,7 +185,7 @@ TEST_CASE("project bounce rejects oversized channel-strip stem shapes", "[projec
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"},{"id":"c"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"},{"id":"c"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
   constexpr uint32_t kDestination = 19;
@@ -221,7 +221,7 @@ TEST_CASE("project bounce rejects oversized MIDI source-stem shapes", "[project]
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
   constexpr uint32_t kDestination = 29;

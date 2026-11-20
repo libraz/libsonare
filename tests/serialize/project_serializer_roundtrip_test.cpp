@@ -261,7 +261,7 @@ Fixture make_fixture() {
 
   // Mixer Scene.
   mixing::api::Scene& scene = p.scene();
-  scene.version = 1;
+  scene.version = 2;
   mixing::api::Strip s;
   s.id = "strip.audio";
   s.fader_db = -3.5f;
@@ -275,7 +275,6 @@ Fixture make_fixture() {
   s.surround_pan.azimuth = 0.5f;
   s.surround_pan.divergence = 0.3f;
   s.surround_pan.lfe = 0.2f;
-  s.surround_pan.distance = 0.8f;
   // Metering travels with the scene and is compared by eq(); drive it off the
   // full-metering default so the round-trip actually carries the object.
   s.metering.lufs = false;
@@ -528,12 +527,9 @@ bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
       a.polarity_invert_right != b.polarity_invert_right || a.pan_law != b.pan_law ||
       a.channel_delay_samples != b.channel_delay_samples || a.vca_offset_db != b.vca_offset_db ||
       a.source_layout != b.source_layout || a.surround_pan.azimuth != b.surround_pan.azimuth ||
-      a.surround_pan.elevation != b.surround_pan.elevation ||
       a.surround_pan.divergence != b.surround_pan.divergence ||
-      a.surround_pan.lfe != b.surround_pan.lfe ||
-      a.surround_pan.distance != b.surround_pan.distance ||
-      a.metering.enabled != b.metering.enabled || a.metering.lufs != b.metering.lufs ||
-      a.metering.true_peak != b.metering.true_peak ||
+      a.surround_pan.lfe != b.surround_pan.lfe || a.metering.enabled != b.metering.enabled ||
+      a.metering.lufs != b.metering.lufs || a.metering.true_peak != b.metering.true_peak ||
       a.metering.true_peak_oversample != b.metering.true_peak_oversample ||
       a.inserts.size() != b.inserts.size() || a.sends.size() != b.sends.size() ||
       a.eq.enabled != b.eq.enabled || a.eq.bands != b.eq.bands) {
@@ -833,7 +829,7 @@ TEST_CASE("project deserialize rejects an unsupported embedded scene version", "
   // understand must be rejected (surfaced as a diagnostic, project reset) rather
   // than silently mis-read, mirroring the standalone scene_from_json guard.
   Fixture f = make_fixture();
-  f.project.scene().version = 2;  // a future, unsupported scene schema version
+  f.project.scene().version = 3;  // a future, unsupported scene schema version
   const std::string s = project_to_json(f.project, f.midi);
 
   auto result = project_from_json(s);
@@ -850,8 +846,8 @@ TEST_CASE("project deserialize rejects an unsupported embedded scene version", "
   CHECK(saw_invalid_format);
   CHECK_FALSE(saw_generic_failure);
 
-  // A version-1 scene still round-trips cleanly.
-  f.project.scene().version = 1;
+  // A current-version scene still round-trips cleanly.
+  f.project.scene().version = 2;
   auto ok_result = project_from_json(project_to_json(f.project, f.midi));
   REQUIRE(ok_result.ok());
 }
@@ -1009,7 +1005,7 @@ TEST_CASE("project scene deserializer refuses earlier scene spellings", "[serial
   for (const Case& c : cases) {
     INFO(c.strip);
     const std::string document =
-        std::string(R"({"version":7,"scene":{"version":1,"strips":[)") + c.strip + "]}}";
+        std::string(R"({"version":7,"scene":{"version":2,"strips":[)") + c.strip + "]}}";
     const auto result = project_from_json(document);
     REQUIRE_FALSE(result.ok());
     REQUIRE_FALSE(result.diagnostics.empty());
@@ -1018,7 +1014,7 @@ TEST_CASE("project scene deserializer refuses earlier scene spellings", "[serial
   }
 
   const auto top_level =
-      project_from_json(R"({"version":7,"scene":{"version":1,"vca_groups":[{"id":"v"}]}})");
+      project_from_json(R"({"version":7,"scene":{"version":2,"vca_groups":[{"id":"v"}]}})");
   REQUIRE_FALSE(top_level.ok());
   CHECK(top_level.diagnostics.back().message ==
         "scene.vca_groups is an earlier spelling; write scene.vcaGroups");
@@ -1109,7 +1105,7 @@ TEST_CASE("a key no record reads is refused by its path at every level", "[seria
   }
 
   // The embedded scene refuses through its own reader, with paths from the project root.
-  const auto scene = project_from_json(doc(R"("scene":{"version":1,"strips":[{"id":"a","x":1}]})"));
+  const auto scene = project_from_json(doc(R"("scene":{"version":2,"strips":[{"id":"a","x":1}]})"));
   CHECK_FALSE(scene.ok());
   REQUIRE_FALSE(scene.diagnostics.empty());
   CHECK(scene.diagnostics.back().message == "unknown key scene.strips[0].x");
@@ -1355,7 +1351,7 @@ TEST_CASE("present invalid project integer and enum fields report invalid_format
       R"({"version":7,"timeSignatures":[{"numerator":4.5,"denominator":4}]})",
       R"({"version":7,"tracks":[{"id":1,"kind":0.5}]})",
       R"({"version":7,"tracks":[{"id":1,"kind":3}]})",
-      R"({"version":7,"scene":{"version":1,"strips":[{"id":"s","panMode":1.5}]}})",
+      R"({"version":7,"scene":{"version":2,"strips":[{"id":"s","panMode":1.5}]}})",
       R"({"version":7,"annotation":{"chords":[{"extensions":[7.5]}]}})",
       R"({"version":7,"midiContent":{"1":[{"word0":1.5}]}})",
       R"({"version":7,"overlapPolicy":2})",
@@ -1408,38 +1404,38 @@ TEST_CASE("project deserialize rejects float narrowing overflow with a field pat
        "annotation.tempoConfidence must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"annotation":{"onsets":[{"confidence":-1e39}]}})",
        "annotation.onsets[0].confidence must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"inputTrimDb":1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"inputTrimDb":1e39}]}})",
        "scene.strips[0].inputTrimDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"faderDb":-1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"faderDb":-1e39}]}})",
        "scene.strips[0].faderDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"vcaOffsetDb":1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"vcaOffsetDb":1e39}]}})",
        "scene.strips[0].vcaOffsetDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"pan":-1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"pan":-1e39}]}})",
        "scene.strips[0].pan must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"width":1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"width":1e39}]}})",
        "scene.strips[0].width must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"dualPanLeft":-1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"dualPanLeft":-1e39}]}})",
        "scene.strips[0].dualPanLeft must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"dualPanRight":1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"dualPanRight":1e39}]}})",
        "scene.strips[0].dualPanRight must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"azimuth":1e39}}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"azimuth":1e39}}]}})",
        "scene.strips[0].surroundPan.azimuth must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"elevation":-1e39}}]}})",
-       "scene.strips[0].surroundPan.elevation must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"divergence":1e39}}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"elevation":-1e39}}]}})",
+       "unknown key scene.strips[0].surroundPan.elevation"},
+      {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"divergence":1e39}}]}})",
        "scene.strips[0].surroundPan.divergence must be finite and in [-3.4028235e38, "
        "3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"lfe":-1e39}}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"lfe":-1e39}}]}})",
        "scene.strips[0].surroundPan.lfe must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"distance":1e39}}]}})",
-       "scene.strips[0].surroundPan.distance must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"sends":[{"sendDb":-1e39}]}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"distance":1e39}}]}})",
+       "unknown key scene.strips[0].surroundPan.distance"},
+      {R"({"version":7,"scene":{"version":2,"strips":[{"sends":[{"sendDb":-1e39}]}]}})",
        "scene.strips[0].sends[0].sendDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"buses":[{"inputTrimDb":1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"buses":[{"inputTrimDb":1e39}]}})",
        "scene.buses[0].inputTrimDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"buses":[{"width":-1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"buses":[{"width":-1e39}]}})",
        "scene.buses[0].width must be finite and in [-3.4028235e38, 3.4028235e38]"},
-      {R"({"version":7,"scene":{"version":1,"vcaGroups":[{"gainDb":1e39}]}})",
+      {R"({"version":7,"scene":{"version":2,"vcaGroups":[{"gainDb":1e39}]}})",
        "scene.vcaGroups[0].gainDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
   };
 
@@ -1461,7 +1457,7 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
           R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":0.75,"pan":-0.25,"automationLanes":[{"targetParamId":42,"points":[{"value":)") +
       kFloatMax + R"(}]}]}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1,"gain":-)" +
       kFloatMax +
-      R"(}],"annotation":{"tempoConfidence":0.8,"onsets":[{"confidence":0.6}]},"scene":{"version":1,"strips":[{"id":"s","inputTrimDb":-3.5,"faderDb":2.25,"vcaOffsetDb":0.5,"pan":0.1,"width":1.2,"dualPanLeft":-0.8,"dualPanRight":0.7,"surroundPan":{"azimuth":45,"elevation":-12,"divergence":0.4,"lfe":0.2,"distance":2},"sends":[{"sendDb":-6}]}],"buses":[{"id":"b","inputTrimDb":1.5,"width":0.9}],"vcaGroups":[{"id":"v","gainDb":-2}]}})";
+      R"(}],"annotation":{"tempoConfidence":0.8,"onsets":[{"confidence":0.6}]},"scene":{"version":2,"strips":[{"id":"s","inputTrimDb":-3.5,"faderDb":2.25,"vcaOffsetDb":0.5,"pan":0.1,"width":1.2,"dualPanLeft":-0.8,"dualPanRight":0.7,"surroundPan":{"azimuth":45,"divergence":0.4,"lfe":0.2},"sends":[{"sendDb":-6}]}],"buses":[{"id":"b","inputTrimDb":1.5,"width":0.9}],"vcaGroups":[{"id":"v","gainDb":-2}]}})";
 
   const auto result = project_from_json(document);
   REQUIRE(result.ok());
@@ -1482,7 +1478,7 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
   REQUIRE(result.project->scene().buses.size() == 1);
   REQUIRE(result.project->scene().vca_groups.size() == 1);
   CHECK(result.project->scene().strips[0].fader_db == 2.25f);
-  CHECK(result.project->scene().strips[0].surround_pan.distance == 2.0f);
+  CHECK(result.project->scene().strips[0].surround_pan.divergence == 0.4f);
   CHECK(result.project->scene().strips[0].sends[0].send_db == -6.0f);
   CHECK(result.project->scene().buses[0].input_trim_db == 1.5f);
   CHECK(result.project->scene().vca_groups[0].gain_db == -2.0f);
@@ -1703,9 +1699,9 @@ TEST_CASE("wrong-typed scene enum fields are refused by name", "[serialize]") {
   // A present field of the wrong type is refused like a wrong-typed container,
   // never loaded as its default.
   const std::vector<std::pair<std::string, std::string>> documents = {
-      {R"({"version":7,"scene":{"version":1,"strips":[{"id":"s","panMode":[]}]}})", "panMode"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"id":"s","panLaw":true}]}})", "panLaw"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"id":"s","channelDelaySamples":"none"}]}})",
+      {R"({"version":7,"scene":{"version":2,"strips":[{"id":"s","panMode":[]}]}})", "panMode"},
+      {R"({"version":7,"scene":{"version":2,"strips":[{"id":"s","panLaw":true}]}})", "panLaw"},
+      {R"({"version":7,"scene":{"version":2,"strips":[{"id":"s","channelDelaySamples":"none"}]}})",
        "channelDelaySamples"},
   };
   for (const auto& [document, field] : documents) {
@@ -2470,14 +2466,14 @@ TEST_CASE("a scene array with a non-object element is refused, never thinned", "
   // The scene walker is reached both standalone (scene_from_json) and embedded
   // in a project document; both must refuse the same malformed element.
   const char* const scenes[] = {
-      R"({"version":1,"strips":[null,{"id":"a"}]})",
-      R"({"version":1,"strips":[{"id":"a","inserts":[1,{"processor":"gain"}]}]})",
-      R"({"version":1,"strips":[{"id":"a","sends":[3,{"id":"s","destinationBusId":"bus"}]}],)"
+      R"({"version":2,"strips":[null,{"id":"a"}]})",
+      R"({"version":2,"strips":[{"id":"a","inserts":[1,{"processor":"gain"}]}]})",
+      R"({"version":2,"strips":[{"id":"a","sends":[3,{"id":"s","destinationBusId":"bus"}]}],)"
       R"("buses":[{"id":"bus"}]})",
-      R"({"version":1,"buses":["x",{"id":"bus"}]})",
-      R"({"version":1,"buses":[{"id":"bus","inserts":["x"]}]})",
-      R"({"version":1,"vcaGroups":[false,{"id":"v"}]})",
-      R"({"version":1,"strips":[{"id":"a"}],"buses":[{"id":"bus"}],)"
+      R"({"version":2,"buses":["x",{"id":"bus"}]})",
+      R"({"version":2,"buses":[{"id":"bus","inserts":["x"]}]})",
+      R"({"version":2,"vcaGroups":[false,{"id":"v"}]})",
+      R"({"version":2,"strips":[{"id":"a"}],"buses":[{"id":"bus"}],)"
       R"("connections":[null,{"source":"a","destination":"bus"}]})",
   };
   for (const char* scene_json : scenes) {
@@ -2492,7 +2488,7 @@ TEST_CASE("a scene array with a non-object element is refused, never thinned", "
 
   // A scene of object elements loads with every entity and survives a save/load cycle.
   const std::string clean =
-      R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"gain"}],)"
+      R"({"version":2,"strips":[{"id":"a","inserts":[{"processor":"gain"}],)"
       R"("sends":[{"id":"s","destinationBusId":"bus"}]}],"buses":[{"id":"bus"}],)"
       R"("vcaGroups":[{"id":"v"}],"connections":[{"source":"a","destination":"bus"}]})";
   const auto loaded = project_from_json(R"({"version":7,"scene":)" + clean + "}");
@@ -2849,7 +2845,7 @@ TEST_CASE("an embedded scene is walked in place rather than reparsed", "[seriali
   // scene_from_value must produce exactly what scene_from_json produces for the
   // same document, so removing the dump/reparse round trip is behaviour-neutral.
   const std::string scene_json =
-      R"({"version":1,"strips":[{"id":"a","faderDb":-3.5,"pan":0.25,)"
+      R"({"version":2,"strips":[{"id":"a","faderDb":-3.5,"pan":0.25,)"
       R"("inserts":[{"slot":"post","processor":"gain","params":{}}],)"
       R"("sends":[{"id":"s","destinationBusId":"bus","sendDb":-6.0,"timing":"preFader"}]}],)"
       R"("buses":[{"id":"bus","role":"aux","width":0.5}],)"

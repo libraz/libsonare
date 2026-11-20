@@ -233,7 +233,7 @@ TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[
   REQUIRE(json.find("\"vcaOffsetDb\":0") != std::string::npos);
   const auto parsed = sonare::mixing::api::scene_from_json(json);
 
-  REQUIRE(parsed.version == 1);
+  REQUIRE(parsed.version == 2);
   REQUIRE(parsed.strips.size() == 1);
   REQUIRE(parsed.strips[0].id == "vocal");
   REQUIRE_THAT(parsed.strips[0].input_trim_db, WithinAbs(2.0f, 0.0001f));
@@ -260,7 +260,7 @@ TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[
 
 TEST_CASE("Mixing Scene JSON parses exponent-form numbers it can emit", "[mixing]") {
   const std::string json =
-      "{\"version\":1,\"strips\":[{\"id\":\"tiny\",\"inputTrimDb\":1e-05,\"faderDb\":-3E+00,"
+      "{\"version\":2,\"strips\":[{\"id\":\"tiny\",\"inputTrimDb\":1e-05,\"faderDb\":-3E+00,"
       "\"pan\":0,\"width\":1,\"muted\":false,\"soloed\":false,\"soloSafe\":false,"
       "\"panMode\":\"balance\",\"dualPanLeft\":-1.25e-01,\"dualPanRight\":1.25E-01,"
       "\"polarityInvertLeft\":false,\"polarityInvertRight\":false,\"panLaw\":\"const3Db\","
@@ -323,18 +323,18 @@ TEST_CASE("Mixing Scene JSON refuses unknown fields and keeps annotation keys", 
     }
     return {};
   };
-  CHECK(refusal(R"({"version":1,"futureScalar":42})") == "unknown key futureScalar");
-  CHECK(refusal(R"({"version":1,"futureField":{"nested":{}}})") == "unknown key futureField");
-  CHECK(refusal(R"({"version":1,"strips":[{"id":"vox","futureStripArray":[{"x":1}]}]})") ==
+  CHECK(refusal(R"({"version":2,"futureScalar":42})") == "unknown key futureScalar");
+  CHECK(refusal(R"({"version":2,"futureField":{"nested":{}}})") == "unknown key futureField");
+  CHECK(refusal(R"({"version":2,"strips":[{"id":"vox","futureStripArray":[{"x":1}]}]})") ==
         "unknown key strips[0].futureStripArray");
 
   const std::string annotated =
-      R"({"version":1,"x-future":{"nested":[1,2]},"$comment":"c",)"
+      R"({"version":2,"x-future":{"nested":[1,2]},"$comment":"c",)"
       R"("strips":[{"id":"vox","faderDb":-4.5,"panLaw":"const6Db","channelDelaySamples":9,)"
       R"("x-strip":{"a":1}}],"buses":[],"vcaGroups":[],"connections":[]})";
   sonare::mixing::api::Scene parsed;
   REQUIRE_NOTHROW(parsed = sonare::mixing::api::scene_from_json(annotated));
-  REQUIRE(parsed.version == 1);
+  REQUIRE(parsed.version == 2);
   REQUIRE(parsed.strips.size() == 1);
   REQUIRE(parsed.strips[0].id == "vox");
   REQUIRE_THAT(parsed.strips[0].fader_db, WithinAbs(-4.5f, 0.0001f));
@@ -343,8 +343,8 @@ TEST_CASE("Mixing Scene JSON refuses unknown fields and keeps annotation keys", 
 }
 
 TEST_CASE("Mixing Scene JSON rejects unsupported version", "[mixing]") {
-  const std::string json = "{\"version\":2,\"strips\":[],\"buses\":[]}";
-  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(json), sonare::SonareException);
+  const std::string json = "{\"version\":1,\"strips\":[],\"buses\":[]}";
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(json), "version must be 2");
 }
 
 TEST_CASE("Mixing scene presets expose planned templates and JSON round-trip", "[mixing]") {

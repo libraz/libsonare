@@ -6,7 +6,7 @@
   "cases": [
     {
       "name": "a 997 Hz tone with the right channel 6 dB down, 4x",
-      "scene": "{\"version\":1,\"strips\":[{\"id\":\"a\"}],\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],\"connections\":[]}",
+      "scene": "{\"version\":2,\"strips\":[{\"id\":\"a\"}],\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],\"connections\":[]}",
       "sampleRate": 48000,
       "blockSize": 256,
       "blocks": 40,
@@ -36,7 +36,7 @@
     },
     {
       "name": "a quarter-rate tone whose true peak sits between samples, 8x",
-      "scene": "{\"version\":1,\"strips\":[{\"id\":\"a\"}],\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],\"connections\":[]}",
+      "scene": "{\"version\":2,\"strips\":[{\"id\":\"a\"}],\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],\"connections\":[]}",
       "sampleRate": 48000,
       "blockSize": 256,
       "blocks": 40,

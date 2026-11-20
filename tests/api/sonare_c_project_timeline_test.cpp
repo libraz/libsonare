@@ -301,7 +301,7 @@ TEST_CASE("applied timeline binds a 1:1 scene strip like the project bounce mixe
   const std::vector<float> tone = stereo_tone(kSampleRate);
   TestProject built = build_project(tone);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"lead",)"
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"lead",)"
       R"("faderDb":-4.0,"pan":0.4,"eq":{"enabled":true,"bands":[{"type":"peak",)"
       R"("frequencyHz":1000.0,"gainDb":6.0,"q":0.7,"enabled":true}]}}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(built.project, scene) == SONARE_OK);

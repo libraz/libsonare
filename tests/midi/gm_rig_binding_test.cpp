@@ -571,7 +571,7 @@ TEST_CASE("a host describes a rig in the mixing scene's own words", "[midi][sf2]
   // that can save a channel strip can save a guitar rig, and the synth takes the
   // decoded list rather than the JSON, which is what keeps it from linking the
   // mixing module to read one.
-  const std::string scene_json = R"({"version":1,"strips":[{"id":"gtr","inserts":[
+  const std::string scene_json = R"({"version":2,"strips":[{"id":"gtr","inserts":[
       {"processor":"dynamics.gate","params":{},"slot":"pre"},
       {"processor":"saturation.ampSim","params":{"preset":"crunchStack","drive":0.8},"slot":"pre"},
       {"processor":"effects.delay.stereo","params":{},"slot":"pre"}]}]})";

@@ -156,20 +156,20 @@ EnginePtr make_engine(Processor p, Placement placement) {
   switch (placement) {
     case Placement::kLane: {
       const std::string json =
-          R"({"version":1,"strips":[{"id":"s","inserts":[)" + insert + R"(]}]})";
+          R"({"version":2,"strips":[{"id":"s","inserts":[)" + insert + R"(]}]})";
       REQUIRE(sonare_engine_set_track_strip_json(engine.get(), kTrackId, json.c_str()) ==
               SONARE_OK);
       break;
     }
     case Placement::kBus: {
       const std::string json =
-          R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[)" + insert + R"(]}]})";
+          R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[)" + insert + R"(]}]})";
       REQUIRE(sonare_engine_set_bus_strip_json(engine.get(), kBusId, json.c_str()) == SONARE_OK);
       break;
     }
     case Placement::kMaster: {
       const std::string json =
-          R"({"version":1,"strips":[{"id":"master","inserts":[)" + insert + R"(]}]})";
+          R"({"version":2,"strips":[{"id":"master","inserts":[)" + insert + R"(]}]})";
       REQUIRE(sonare_engine_set_master_strip_json(engine.get(), json.c_str()) == SONARE_OK);
       break;
     }
@@ -414,12 +414,12 @@ TEST_CASE("processor reset: reset and play split across a block when the ring is
 TEST_CASE("processor reset: the queued reset allocates nothing on the audio thread",
           "[engine][processor_reset]") {
   EnginePtr engine = make_engine(Processor::kPlate, Placement::kBus);
-  const std::string lane_json = R"({"version":1,"strips":[{"id":"s","inserts":[)" +
+  const std::string lane_json = R"({"version":2,"strips":[{"id":"s","inserts":[)" +
                                 insert_json(Processor::kTape) + "," +
                                 insert_json(Processor::kDelay) + R"(]}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine.get(), kTrackId, lane_json.c_str()) ==
           SONARE_OK);
-  const std::string master_json = R"({"version":1,"strips":[{"id":"master","inserts":[)" +
+  const std::string master_json = R"({"version":2,"strips":[{"id":"master","inserts":[)" +
                                   insert_json(Processor::kGate) + R"(]}]})";
   REQUIRE(sonare_engine_set_master_strip_json(engine.get(), master_json.c_str()) == SONARE_OK);
   dirty(engine.get());

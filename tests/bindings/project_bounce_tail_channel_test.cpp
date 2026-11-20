@@ -49,7 +49,7 @@ TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for expli
   // fader), so a drained (zero-input) tail region collapses to exact silence and
   // a fed region carries the instrument's DC.
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"s0\"}],"
+      "{\"version\":2,\"strips\":[{\"id\":\"s0\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],"
       "\"connections\":[{\"source\":\"s0\",\"destination\":\"master\"}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
@@ -216,7 +216,7 @@ TEST_CASE("project bounce defaults its width to the master's layout and reports 
     REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
     if (c.layout != nullptr) {
       const std::string scene =
-          std::string(R"({"version":1,"buses":[{"id":"master","role":"master","layout":")") +
+          std::string(R"({"version":2,"buses":[{"id":"master","role":"master","layout":")") +
           c.layout + R"("}]})";
       REQUIRE(sonare_project_set_mixer_scene_json(project, scene.c_str()) == SONARE_OK);
     }

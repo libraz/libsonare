@@ -226,7 +226,7 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"strip-a"},{"id":"strip-b"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"strip-a"},{"id":"strip-b"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
   std::array<uint32_t, 2> tracks{};
@@ -273,7 +273,7 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
                                          {tracks[1], nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, std::size(lanes)) == SONARE_OK);
   const char* live_strip =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"live"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"live"}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, tracks[0], live_strip) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(engine, tracks[1], live_strip) == SONARE_OK);
   // Mirror project bounce's offline pre-roll, which settles static lane
@@ -325,7 +325,7 @@ TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[proj
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
   constexpr uint32_t kDestination = 37;
@@ -442,7 +442,7 @@ TEST_CASE("shared opaque automation keeps the first project-order owner", "[proj
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
   constexpr uint32_t kDestination = 41;
@@ -531,7 +531,7 @@ TEST_CASE("auto-length bounce keeps both tracks of a shared MIDI destination", "
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
   // Hard-panned strips keep each track's stem on its own plane, so a dropped
   // track shows up as a silent plane instead of a slightly quieter mix.
-  const char* scene = R"({"version":1,"buses":[{"id":"master","role":"master"}],)"
+  const char* scene = R"({"version":2,"buses":[{"id":"master","role":"master"}],)"
                       R"("strips":[{"id":"left","pan":-1.0},{"id":"right","pan":1.0}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
@@ -642,7 +642,7 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
     REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
     const char* scene =
-        R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"strip"}]})";
+        R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"strip"}]})";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
     uint32_t track = 0;
@@ -736,7 +736,7 @@ TEST_CASE("channel-strip bounce rejects a shared opaque callback destination", "
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
   constexpr uint32_t kDestination = 23;
@@ -1600,7 +1600,7 @@ TEST_CASE("channel-strip bounce preserves the longest serial send tail", "[proje
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
   const char* scene_json = R"({
-    "version":1,
+    "version":2,
     "strips":[{"id":"source","inserts":[
       {"slot":"post","processor":"effects.delay.stereo",
        "params":{"delayTimeLMs":10,"delayTimeRMs":10,"feedback":0,"dryWet":1}}],
@@ -1674,7 +1674,7 @@ TEST_CASE("channel-strip bounce preserves tail impulse through master latency in
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"track\"}],"
+      "{\"version\":2,\"strips\":[{\"id\":\"track\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
       "{\"slot\":\"post\",\"processor\":\"dynamics.brickwallLimiter\","
       "\"params\":{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}}]}],"
@@ -1742,7 +1742,7 @@ TEST_CASE("channel-strip bounce compensates mixer latency for unbound tracks", "
 
   constexpr int kLatency = 16;
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"latency\",\"inserts\":[{\"slot\":\"pre\","
+      "{\"version\":2,\"strips\":[{\"id\":\"latency\",\"inserts\":[{\"slot\":\"pre\","
       "\"processor\":\"dynamics.limiter\","
       "\"params\":{\"thresholdDb\":24,\"lookaheadMs\":0.33333333}}]}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],"
@@ -1812,7 +1812,7 @@ TEST_CASE("channel-strip bounce routes unbound tracks through master bus effects
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"bound\"}],"
+      "{\"version\":2,\"strips\":[{\"id\":\"bound\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
       "{\"slot\":\"post\",\"processor\":\"effects.reverb.plate\","
       "\"params\":{\"decaySec\":1.2,\"dryWet\":1.0}}]}],"
@@ -1878,7 +1878,7 @@ TEST_CASE("channel-strip bounce solo mutes unbound direct tracks", "[project]") 
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"solo\",\"soloed\":true}],"
+      "{\"version\":2,\"strips\":[{\"id\":\"solo\",\"soloed\":true}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],"
       "\"connections\":[{\"source\":\"solo\",\"destination\":\"master\"}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
@@ -2405,7 +2405,7 @@ TEST_CASE("channel-strip bounce opens at the static fader gain without a first-b
   // 0.25; if the fader smoother ramps in from 0 dB (unity) the first frame is
   // near the unattenuated 0.5 instead.
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"s0\",\"faderDb\":-6.0206}],"
+      "{\"version\":2,\"strips\":[{\"id\":\"s0\",\"faderDb\":-6.0206}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],"
       "\"connections\":[{\"source\":\"s0\",\"destination\":\"master\"}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
@@ -2473,17 +2473,17 @@ TEST_CASE("project bounce applies the master trim when every track is unbound",
   // input while leaving the only authored track unbound. The master trim must
   // still be in the signal path in that all-unbound case.
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"unused\"}],"
+      "{\"version\":2,\"strips\":[{\"id\":\"unused\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\","
       "\"inputTrimDb\":-12}],"
       "\"connections\":[{\"source\":\"unused\",\"destination\":\"master\"}]}";
   SECTION("the generated direct strip avoids explicit bus IDs") {
     scene_json =
-        R"({"version":1,"strips":[{"id":"unused"}],"buses":[{"id":"__sonare_direct_master__","role":"master","inputTrimDb":-12},{"id":"__sonare_direct_master___1","role":"aux"}]})";
+        R"({"version":2,"strips":[{"id":"unused"}],"buses":[{"id":"__sonare_direct_master__","role":"master","inputTrimDb":-12},{"id":"__sonare_direct_master___1","role":"aux"}]})";
   }
   SECTION("the generated direct strip avoids implicit send bus IDs") {
     scene_json =
-        R"({"version":1,"strips":[{"id":"unused","sends":[{"destinationBusId":"__sonare_direct_master__","sendDb":-6}]}],"buses":[{"id":"master","role":"master","inputTrimDb":-12}]})";
+        R"({"version":2,"strips":[{"id":"unused","sends":[{"destinationBusId":"__sonare_direct_master__","sendDb":-6}]}],"buses":[{"id":"master","role":"master","inputTrimDb":-12}]})";
   }
   SECTION("ordinary master IDs retain their existing rendering") {}
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
@@ -2541,7 +2541,7 @@ TEST_CASE("all-unbound project bounce auto-length includes the master FX tail",
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"unused\"}],"
+      "{\"version\":2,\"strips\":[{\"id\":\"unused\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
       "{\"slot\":\"post\",\"processor\":\"effects.delay.stereo\","
       "\"params\":{\"delayTimeLMs\":10,\"delayTimeRMs\":10,"
@@ -2609,7 +2609,7 @@ TEST_CASE("legacy opaque fader automation stays on musical time after channel PD
     REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
     const std::string scene_json =
-        "{\"version\":1,\"strips\":[{\"id\":\"voice\","
+        "{\"version\":2,\"strips\":[{\"id\":\"voice\","
         "\"inserts\":[{\"slot\":\"pre\",\"processor\":\"dynamics.limiter\","
         "\"params\":{\"thresholdDb\":24,\"lookaheadMs\":" +
         std::to_string(latency_samples / 48.0) +
@@ -2697,7 +2697,7 @@ TEST_CASE("legacy opaque automation follows the pre-fader insert clock",
     REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
     const std::string scene_json =
-        "{\"version\":1,\"strips\":[{\"id\":\"voice\","
+        "{\"version\":2,\"strips\":[{\"id\":\"voice\","
         "\"inserts\":[{\"slot\":\"pre\",\"processor\":\"dynamics.limiter\","
         "\"params\":{\"thresholdDb\":24,\"lookaheadMs\":" +
         std::to_string(latency_samples / 48.0) +
@@ -2782,7 +2782,7 @@ TEST_CASE("legacy opaque automation ignores master-only latency for its stage cl
   // The master look-ahead is after the strip fader. PDC must trim that latency
   // from the returned audio without moving the fader breakpoint itself.
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"voice\"}],"
+      "{\"version\":2,\"strips\":[{\"id\":\"voice\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
       "{\"slot\":\"post\",\"processor\":\"dynamics.brickwallLimiter\","
       "\"params\":{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}}]}]}";
@@ -2846,7 +2846,7 @@ TEST_CASE("typed track fader automation remains a single gain stage in bounce",
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
     REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
     const char* scene_json =
-        "{\"version\":1,\"strips\":[{\"id\":\"voice\"}],"
+        "{\"version\":2,\"strips\":[{\"id\":\"voice\"}],"
         "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
 
@@ -3101,7 +3101,7 @@ TEST_CASE(
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
     REQUIRE(sonare_project_set_sample_rate(project, static_cast<double>(sample_rate)) == SONARE_OK);
 
-    const std::string scene_json = std::string(R"({"version":1,"strips":[{"id":"voice")") +
+    const std::string scene_json = std::string(R"({"version":2,"strips":[{"id":"voice")") +
                                    scene_inserts +
                                    R"(}],"buses":[{"id":"master","role":"master"}]})";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);

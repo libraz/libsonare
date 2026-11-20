@@ -37,7 +37,7 @@ SonareProject* make_shared_strip_project(uint32_t* out_track) {
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
 
   uint32_t track = 0;
@@ -166,7 +166,7 @@ TEST_CASE("an opaque callback instrument keeps its strip's controls, not its tra
   REQUIRE(sonare_project_create(&exclusive) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(exclusive, kSampleRate) == SONARE_OK);
   const char* scene =
-      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"solo"}]})";
+      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"solo"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(exclusive, scene) == SONARE_OK);
   uint32_t exclusive_track = 0;
   uint32_t exclusive_clip = 0;
@@ -195,7 +195,7 @@ TEST_CASE("a callback destination shared by unrouted tracks bounces once",
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
     REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
     const char* scene =
-        R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"unused"}]})";
+        R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"unused"}]})";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
     const SonareMidiEventPod both[] = {{0.0, 0x20903C7Fu, 0u}, {0.0, 0x2090407Fu, 0u}};
     for (int t = 0; t < (split ? 2 : 1); ++t) {

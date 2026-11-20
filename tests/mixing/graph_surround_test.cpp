@@ -45,7 +45,7 @@ constexpr const char* kSurroundPan =
 std::string track_strip_body() { return std::string(R"("id":"track",)") + kSurroundPan; }
 
 std::string project_scene_json(const char* master_layout) {
-  return std::string(R"({"version":1,"strips":[{)") + track_strip_body() +
+  return std::string(R"({"version":2,"strips":[{)") + track_strip_body() +
          R"(}],"buses":[{"id":"master","role":"master","layout":")" + master_layout +
          R"("}],"connections":[]})";
 }
@@ -91,7 +91,7 @@ std::vector<float> render_engine_offline(int channels, int bus_layout = kNoBus) 
   }
   const SonareEngineTrackLane lane[] = {{kTrackId, nullptr, 0, output_bus, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-  const std::string strip_json = std::string(R"({"version":1,"strips":[{)") + track_strip_body() +
+  const std::string strip_json = std::string(R"({"version":2,"strips":[{)") + track_strip_body() +
                                  R"(}],"buses":[],"connections":[]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, kTrackId, strip_json.c_str()) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth = engine_synth();
@@ -286,7 +286,7 @@ PlaneDiff compare_planes(const std::vector<std::vector<float>>& actual,
 // spliced into the return strip; with an empty body the scene has no return
 // strip and "surr" feeds the master directly. @p extra_buses is appended.
 std::string return_strip_scene(const std::string& ret_body, const std::string& extra_buses = "") {
-  std::string scene = std::string(R"({"version":1,"strips":[{)") + track_strip_body() + "}";
+  std::string scene = std::string(R"({"version":2,"strips":[{)") + track_strip_body() + "}";
   if (!ret_body.empty()) scene += R"(,{"id":"ret")" + ret_body + "}";
   scene += R"(],"buses":[{"id":"surr","layout":"5.1"},)" + extra_buses +
            R"({"id":"master","role":"master","layout":"5.1"}],)" +
@@ -358,7 +358,7 @@ TEST_CASE("a surround bus folded into a stereo master equals mixing::downmix of 
           "[graph_surround]") {
   // track -> 5.1 bus -> master. At 6 channels the bus reaches the master plane
   // for plane; at 2 channels the same bus passes through a DownmixNode.
-  const std::string scene = std::string(R"({"version":1,"strips":[{)") + track_strip_body() +
+  const std::string scene = std::string(R"({"version":2,"strips":[{)") + track_strip_body() +
                             R"(}],"buses":[{"id":"surr","layout":"5.1"},)" +
                             R"({"id":"master","role":"master","layout":"5.1"}],)" +
                             R"("connections":[{"source":"track","destination":"surr"},)" +
@@ -397,7 +397,7 @@ TEST_CASE("a surround bus folded into a stereo master equals mixing::downmix of 
 
 TEST_CASE("a stereo bus into a 5.1 master lands on the front pair only", "[graph_surround]") {
   const std::string scene =
-      std::string(R"({"version":1,"strips":[{"id":"track"}],)") +
+      std::string(R"({"version":2,"strips":[{"id":"track"}],)") +
       R"("buses":[{"id":"st"},{"id":"master","role":"master","layout":"5.1"}],)" +
       R"("connections":[{"source":"track","destination":"st"},)" +
       R"({"source":"st","destination":"master"}]})";
@@ -412,19 +412,19 @@ TEST_CASE("a stereo bus into a 5.1 master lands on the front pair only", "[graph
 
 TEST_CASE("scene validation refuses a non-default width on a surround bus", "[graph_surround]") {
   const std::string surround_width =
-      R"({"version":1,"strips":[],"buses":[{"id":"master","role":"master","layout":"5.1","width":1.5}],"connections":[]})";
+      R"({"version":2,"strips":[],"buses":[{"id":"master","role":"master","layout":"5.1","width":1.5}],"connections":[]})";
   CHECK_THROWS_AS(sonare::mixing::api::scene_from_json(surround_width), sonare::SonareException);
   CHECK(sonare_mixer_from_scene_json(surround_width.c_str(), static_cast<int>(kSampleRate),
                                      kBlockSize) == nullptr);
   const std::string stereo_width =
-      R"({"version":1,"strips":[],"buses":[{"id":"master","role":"master","width":1.5}],"connections":[]})";
+      R"({"version":2,"strips":[],"buses":[{"id":"master","role":"master","width":1.5}],"connections":[]})";
   CHECK_NOTHROW(sonare::mixing::api::scene_from_json(stereo_width));
 }
 
 TEST_CASE("the public stereo mixer builds a 5.1-master scene at two channels", "[graph_surround]") {
   // A default strip into a 2-wide master is a plain stereo sum: no scatter, so
   // the output is the input to within the strip's unity gain stage.
-  const std::string scene = std::string(R"({"version":1,"strips":[{)") + track_strip_body() +
+  const std::string scene = std::string(R"({"version":2,"strips":[{)") + track_strip_body() +
                             R"(}],"buses":[{"id":"master","role":"master","layout":"5.1"}],)" +
                             R"("connections":[]})";
   MixerHandle handle;
@@ -451,7 +451,7 @@ TEST_CASE("the public stereo mixer builds a 5.1-master scene at two channels", "
 }
 
 TEST_CASE("an unpatched explicit surround bus stays silent at six channels", "[graph_surround]") {
-  const std::string scene = std::string(R"({"version":1,"strips":[{)") + track_strip_body() +
+  const std::string scene = std::string(R"({"version":2,"strips":[{)") + track_strip_body() +
                             R"(}],"buses":[{"id":"aux","layout":"5.1"},)" +
                             R"({"id":"master","role":"master","layout":"5.1"}],)" +
                             R"("connections":[{"source":"track","destination":"aux"}]})";
@@ -488,7 +488,7 @@ TEST_CASE("a 7.1 bus into a 5.1 master folds through a DownmixNode and matches t
           "[graph_surround]") {
   // Default pan and width on the surround bus, so the comparison is independent
   // of how either side treats those stages above two planes.
-  const std::string scene = std::string(R"({"version":1,"strips":[{)") + track_strip_body() +
+  const std::string scene = std::string(R"({"version":2,"strips":[{)") + track_strip_body() +
                             R"(}],"buses":[{"id":"surr","layout":"7.1"},)" +
                             R"({"id":"master","role":"master","layout":"5.1"}],)" +
                             R"("connections":[{"source":"track","destination":"surr"},)" +
@@ -508,7 +508,7 @@ TEST_CASE("a 7.1 bus into a 5.1 master folds through a DownmixNode and matches t
 
 TEST_CASE("a mixer refuses an output width wider than its master layout", "[graph_surround]") {
   const std::string scene =
-      R"({"version":1,"strips":[{"id":"track"}],"buses":[{"id":"master","role":"master"}],"connections":[]})";
+      R"({"version":2,"strips":[{"id":"track"}],"buses":[{"id":"master","role":"master"}],"connections":[]})";
   MixerHandle handle;
   handle.mixer =
       sonare_mixer_from_scene_json(scene.c_str(), static_cast<int>(kSampleRate), kBlockSize);
@@ -621,7 +621,7 @@ TEST_CASE("a key tapped from a surround return strip is its main output folded t
         R"({"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-30,"ratio":8,"attackMs":1,"releaseMs":20,"rangeDb":18})";
     if (!key.empty()) ducker += R"(,"sidechainKey":")" + key + "\"";
     ducker += "}";
-    return std::string(R"({"version":1,"strips":[{"id":"bed"},{)") + track_strip_body() +
+    return std::string(R"({"version":2,"strips":[{"id":"bed"},{)") + track_strip_body() +
            R"(},{"id":"ret"}],"buses":[{"id":"surr","layout":"5.1"},)" +
            R"({"id":"duck","inserts":[)" + ducker + "]}," +
            R"({"id":"master","role":"master","layout":"5.1"}],)" +

@@ -1372,7 +1372,7 @@ TEST_CASE("Timeline command round-trips", "[arrangement]") {
   }
   SECTION("SetScene") {
     sonare::mixing::api::Scene scene;
-    scene.version = 1;
+    scene.version = 2;
     sonare::mixing::api::Strip strip;
     strip.id = "lead";
     strip.input_trim_db = -1.0f;

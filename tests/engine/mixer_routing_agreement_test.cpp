@@ -172,11 +172,11 @@ std::string layout_field(bool surround) {
 }
 
 std::string wrap_strip_scene(const std::string& body) {
-  return std::string(R"({"version":1,"strips":[{)") + body + R"(}],"buses":[],"connections":[]})";
+  return std::string(R"({"version":2,"strips":[{)") + body + R"(}],"buses":[],"connections":[]})";
 }
 
 std::string wrap_bus_scene(const std::string& body) {
-  return std::string(R"({"version":1,"strips":[],"buses":[{)") + body + R"(}],"connections":[]})";
+  return std::string(R"({"version":2,"strips":[],"buses":[{)") + body + R"(}],"connections":[]})";
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +220,7 @@ std::string project_scene_json(const Row& row) {
   }
   connections += R"({"source":"B","destination":"master"})";
 
-  return R"({"version":1,"strips":[)" + strips + R"(],"buses":[)" + bus_a + "," + bus_b + "," +
+  return R"({"version":2,"strips":[)" + strips + R"(],"buses":[)" + bus_a + "," + bus_b + "," +
          master + R"(],"connections":[)" + connections + "]}";
 }
 

@@ -63,7 +63,7 @@ TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engin
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
   const char* scene_json =
-      R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"buses":[],"connections":[]})";
+      R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"buses":[],"connections":[]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_insert_param_by_name(
               engine, 10, 0, "band0.gainDb", std::numeric_limits<float>::quiet_NaN()) ==

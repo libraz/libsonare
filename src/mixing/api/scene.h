@@ -172,8 +172,11 @@ struct Connection {
   std::string destination;
 };
 
+/// The scene document format this build reads and writes; a document naming another is refused.
+inline constexpr int kSceneFormatVersion = 2;
+
 struct Scene {
-  int version = 1;
+  int version = kSceneFormatVersion;
   std::vector<Strip> strips;
   std::vector<Bus> buses;
   std::vector<VcaGroup> vca_groups;

@@ -430,20 +430,16 @@ Strip strip_from_value(const JsonValue& object, const std::string& path) {
     parsed.azimuth = checked_surround_azimuth(
         number_or(*sp, surround_path, "azimuth", strip.surround_pan.azimuth), surround_path,
         "azimuth");
-    parsed.elevation = number_or(*sp, surround_path, "elevation", strip.surround_pan.elevation);
     parsed.divergence = checked_surround_unit(
         number_or(*sp, surround_path, "divergence", strip.surround_pan.divergence), surround_path,
         "divergence");
     parsed.lfe = checked_surround_unit(number_or(*sp, surround_path, "lfe", strip.surround_pan.lfe),
                                        surround_path, "lfe");
-    parsed.distance = number_or(*sp, surround_path, "distance", strip.surround_pan.distance);
-    // Domains are refused above; the panner's own resolution settles the distance default.
+    // Domains are refused above; the panner's own resolution settles the rest.
     const SurroundPanParams stored = clamp_surround_pan_params(parsed);
     strip.surround_pan.azimuth = stored.azimuth;
-    strip.surround_pan.elevation = stored.elevation;
     strip.surround_pan.divergence = stored.divergence;
     strip.surround_pan.lfe = stored.lfe;
-    strip.surround_pan.distance = stored.distance;
   }
   if (const auto* metering = object.find("metering")) {
     const std::string metering_path = schema::child_path(path, "metering");
@@ -689,14 +685,11 @@ JsonValue strip_to_value(const Strip& strip) {
   // Omit at the centered point-source default so existing scenes are unchanged;
   // only a moved surround pan carries the object.
   const SurroundPan& sp = strip.surround_pan;
-  if (sp.azimuth != 0.0f || sp.elevation != 0.0f || sp.divergence != 0.0f || sp.lfe != 0.0f ||
-      sp.distance != 1.0f) {
+  if (sp.azimuth != 0.0f || sp.divergence != 0.0f || sp.lfe != 0.0f) {
     sonare::util::json::Object pan;
     util::json::put(pan, "azimuth", sp.azimuth);
-    util::json::put(pan, "elevation", sp.elevation);
     util::json::put(pan, "divergence", sp.divergence);
     util::json::put(pan, "lfe", sp.lfe);
-    util::json::put(pan, "distance", sp.distance);
     util::json::put(object, "surroundPan", std::move(pan));
   }
   // Omit at the full-metering default, for the same byte-identity reason: only
@@ -837,10 +830,8 @@ const std::vector<std::string>& scene_schema_paths() {
       "strips[].sourceLayout",
       "strips[].surroundPan",
       "strips[].surroundPan.azimuth",
-      "strips[].surroundPan.elevation",
       "strips[].surroundPan.divergence",
       "strips[].surroundPan.lfe",
-      "strips[].surroundPan.distance",
       "strips[].metering",
       "strips[].metering.enabled",
       "strips[].metering.lufs",
@@ -943,9 +934,9 @@ Scene scene_from_value(const JsonValue& root, const std::string& root_path) {
   if (!root.is_object()) refuse(schema::must_be(root_path, schema::Kind::Object));
   static const KeySet kKnownRoot = known_keys("");
   Scene scene;
-  scene.version = int_or(root, root_path, "version", 1);
-  if (scene.version != 1) {
-    refuse(schema::refusal(schema::child_path(root_path, "version"), "must be 1"));
+  scene.version = int_or(root, root_path, "version", kSceneFormatVersion);
+  if (scene.version != kSceneFormatVersion) {
+    refuse(schema::refusal(schema::child_path(root_path, "version"), "must be 2"));
   }
   if (const auto* strips = root.find("strips")) {
     scene.strips = strips_from_value(*strips, schema::child_path(root_path, "strips"));

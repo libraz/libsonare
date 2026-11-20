@@ -9,8 +9,8 @@
   "required": ["version"],
   "properties": {
     "version": {
-      "description": "Scene document version. 1 is the only accepted value; the parser refuses anything else rather than attempting a migration.",
-      "const": 1
+      "description": "Scene document version. 2 is the only accepted value; the parser refuses anything else rather than attempting a migration.",
+      "const": 2
     },
     "strips": {
       "description": "Channel strips. A strip is fed by one source and is named by its id, which is what a send's destinationBusId, a connection's source, and a vcaGroup's members refer to.",
@@ -94,10 +94,8 @@
       "patternProperties": { "^(\\$|x-)": {} },
       "properties": {
         "azimuth": { "type": "number", "default": 0 },
-        "elevation": { "type": "number", "default": 0 },
         "divergence": { "type": "number", "default": 0 },
-        "lfe": { "type": "number", "default": 0 },
-        "distance": { "type": "number", "default": 1 }
+        "lfe": { "type": "number", "default": 0 }
       }
     },
     "eqBand": {

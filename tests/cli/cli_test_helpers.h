@@ -205,7 +205,7 @@ inline unsigned int wav_header_sample_rate(const std::string& path) {
 inline void create_surround_master_project(const std::string& path, const char* layout) {
   std::ofstream file(path);
   file << R"({"version":7,"sampleRate":48000,"tracks":[],"clips":[],)"
-       << R"("scene":{"version":1,"buses":[{"id":"bus.main","role":"master","layout":")" << layout
+       << R"("scene":{"version":2,"buses":[{"id":"bus.main","role":"master","layout":")" << layout
        << R"("}]}})";
 }
 

@@ -117,7 +117,7 @@ namespace {
 
 // One load that trips each mixing scene warning once.
 constexpr const char* kSceneWithEveryMixingWarning = R"({
-  "version": 1,
+  "version": 2,
   "buses": [{"id": "master", "role": "master"}],
   "strips": [{"id": "a", "faderDb": -3,
     "inserts": [{"slot": "post", "processor": "eq.parametric",
@@ -175,7 +175,7 @@ TEST_CASE("sonare_last_diagnostic refuses a bad request and leaves the list inta
 TEST_CASE("Project scene refuses an unknown key instead of warning", "[surface][core]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  const char* typo = R"({"version":1,"strips":[{"id":"lead","faderDB":-3.0}],)"
+  const char* typo = R"({"version":2,"strips":[{"id":"lead","faderDB":-3.0}],)"
                      R"("buses":[{"id":"master","role":"master"}]})";
   CHECK(sonare_project_set_mixer_scene_json(project, typo) == SONARE_ERROR_INVALID_FORMAT);
   CHECK(std::string(sonare_last_error_message()).find("unknown key strips[0].faderDB") !=
