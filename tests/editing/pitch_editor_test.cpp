@@ -2061,13 +2061,26 @@ TEST_CASE("NoteEditor refuses a move target with no room in the buffer", "[pitch
   REQUIRE_THROWS_AS(editor.move_note(audio, region, std::numeric_limits<int>::min()),
                     sonare::SonareException);
 
-  // Region endpoints are clamped only after the int-sized Audio bound has
-  // been established; extreme caller values must not enter a subtract first.
+  CHECK_THROWS_WITH(editor.move_note(audio, region, 1000),
+                    "target_onset_sample must be an integer in [0, 999]");
+
+  // An onset outside the buffer is refused like the target, never folded into it; an offset past
+  // the end is clipped, and extreme values must not enter a subtract first.
   NoteRegion extreme_region;
   extreme_region.onset_sample = std::numeric_limits<int>::min();
   extreme_region.offset_sample = std::numeric_limits<int>::max();
+  CHECK_THROWS_WITH(editor.move_note(audio, extreme_region, 999),
+                    "onset_sample must be an integer in [0, 999]");
+  CHECK_THROWS_WITH(editor.stretch_note(audio, extreme_region, 1.5f),
+                    "onset_sample must be an integer in [0, 999]");
+  extreme_region.onset_sample = 0;
   const sonare::Audio extreme_region_move = editor.move_note(audio, extreme_region, 999);
   REQUIRE(extreme_region_move.size() == audio.size());
+  NoteRegion empty_region;
+  empty_region.onset_sample = 500;
+  empty_region.offset_sample = 500;
+  CHECK_THROWS_WITH(editor.stretch_note(audio, empty_region, 1.5f),
+                    "offset_sample must be greater than onset_sample");
 
   // A note landing near the end keeps the part that fits, which is the same
   // clipping clamp_region applies to the source span.

@@ -50,6 +50,75 @@ TEST_CASE("the vector-output pitch entries refuse a NULL output by name",
   CHECK(last_message() == "out must not be NULL");
 }
 
+TEST_CASE("the note region entries refuse each position by its parameter name",
+          "[c_api][engine_refusal]") {
+  const std::vector<float> samples = make_samples();
+  float* out = reinterpret_cast<float*>(0x1);
+  size_t out_length = 7;
+
+  CHECK(sonare_note_stretch(samples.data(), kLength, kRate, 1200, 400, 1.5f, &out, &out_length) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "offset_sample must be greater than onset_sample");
+  REQUIRE(sonare_last_refusal_subject_count() == 2);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "offset_sample");
+  CHECK(std::string(sonare_last_refusal_subject(1)) == "onset_sample");
+  CHECK(out == nullptr);
+  CHECK(out_length == 0);
+
+  CHECK(sonare_note_stretch(samples.data(), kLength, kRate, -1, 400, 1.5f, &out, &out_length) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "onset_sample must be an integer in [0, 2047]");
+  CHECK(sonare_note_stretch(samples.data(), kLength, kRate, 0, 400, 0.0f, &out, &out_length) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "stretch_ratio must be finite and greater than 0");
+
+  CHECK(sonare_note_move(samples.data(), kLength, kRate, 0, 400, 24000, &out, &out_length) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "target_onset_sample must be an integer in [0, 2047]");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "target_onset_sample");
+  CHECK(sonare_note_move(samples.data(), kLength, kRate, 2048, 4000, 0, &out, &out_length) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "onset_sample must be an integer in [0, 2047]");
+}
+
+TEST_CASE("a refused sample position renders its domain in the unit its caller gave",
+          "[c_api][engine_refusal]") {
+  const std::vector<float> samples = make_samples();
+  float* out = nullptr;
+  size_t out_length = 0;
+  char* text = nullptr;
+
+  REQUIRE(sonare_note_move(samples.data(), kLength, kRate, 0, 400, 24000, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  const char* seconds[] = {"target_onset_sec"};
+  const double rate[] = {static_cast<double>(kRate)};
+  REQUIRE(sonare_last_refusal_render(seconds, rate, 1, &text) == SONARE_OK);
+  CHECK(std::string(text) == "target_onset_sec must be finite and in [0, 0.09283]");
+  sonare_free_string(text);
+  const double exact[] = {2047.0};
+  REQUIRE(sonare_last_refusal_render(seconds, exact, 1, &text) == SONARE_OK);
+  CHECK(std::string(text) == "target_onset_sec must be finite and in [0, 1]");
+  sonare_free_string(text);
+  const double unscaled[] = {1.0};
+  REQUIRE(sonare_last_refusal_render(seconds, unscaled, 1, &text) == SONARE_OK);
+  CHECK(std::string(text) == "target_onset_sec must be an integer in [0, 2047]");
+  sonare_free_string(text);
+  for (const double bad : {0.0, -1.0, std::numeric_limits<double>::infinity()}) {
+    const double scale[] = {bad};
+    CHECK(sonare_last_refusal_render(seconds, scale, 1, &text) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(text == nullptr);
+  }
+
+  REQUIRE(sonare_note_move(samples.data(), kLength, kRate, 1200, 400, 0, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  const char* pair[] = {"offset_sec", "onset_sec"};
+  const double rates[] = {static_cast<double>(kRate), static_cast<double>(kRate)};
+  REQUIRE(sonare_last_refusal_render(pair, rates, 2, &text) == SONARE_OK);
+  CHECK(std::string(text) == "offset_sec must be greater than onset_sec");
+  sonare_free_string(text);
+}
+
 TEST_CASE("the percussive entries refuse their arguments by name", "[c_api][engine_refusal]") {
   const std::vector<float> samples = make_samples();
 

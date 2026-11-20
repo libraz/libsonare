@@ -12,6 +12,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::pitch_editor {
 
@@ -25,6 +26,16 @@ namespace {
 /// period of a 100 Hz fundamental, so any periodic tone above it can be brought
 /// into phase with its neighbour.
 constexpr double kSpliceSearchSec = 0.01;
+
+/// Refuses a region whose onset is outside @p audio or whose offset is not after its onset; an
+/// offset past the end is clipped by clamp_region.
+void check_region(const Audio& audio, const NoteRegion& region) {
+  util::check::integer_in_range(region.onset_sample, 0, static_cast<long long>(audio.size()) - 1,
+                                "onset_sample");
+  if (region.offset_sample <= region.onset_sample) {
+    util::check::refuse_relation({"offset_sample", "onset_sample"}, "{0} must be greater than {1}");
+  }
+}
 
 }  // namespace
 
@@ -40,17 +51,13 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
   // relies on that same bound. Reject an unrepresentable Audio before narrowing
   // its size or doing any region arithmetic.
   SONARE_CHECK(audio.size() <= static_cast<std::size_t>(INT_MAX), ErrorCode::InvalidParameter);
+  check_region(audio, region);
   NoteRegion clipped = clamp_region(audio, region);
   const int length = clipped.offset_sample - clipped.onset_sample;
-  SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
   // The vacated span is ramped out whatever the target is, so a target outside the
   // buffer would erase the note and paste it nowhere.
-  SONARE_CHECK_MSG(
-      target_onset_sample >= 0 && static_cast<std::size_t>(target_onset_sample) < audio.size(),
-      ErrorCode::InvalidParameter,
-      "NoteEditor::move_note: targetOnsetSample must fall inside the buffer, got " +
-          std::to_string(target_onset_sample) + " for " + std::to_string(audio.size()) +
-          " samples");
+  util::check::integer_in_range(target_onset_sample, 0, static_cast<long long>(audio.size()) - 1,
+                                "target_onset_sample");
 
   // Validate before the identity return so no-op edits also reject malformed input.
   if (target_onset_sample == clipped.onset_sample) {
@@ -84,10 +91,10 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
   // clamp_region narrows audio.size() to int below; reject an oversized buffer
   // before that conversion even when the edit would otherwise be a no-op.
   SONARE_CHECK(audio.size() <= static_cast<std::size_t>(INT_MAX), ErrorCode::InvalidParameter);
-  SONARE_CHECK(stretch_ratio > 0.0f && std::isfinite(stretch_ratio), ErrorCode::InvalidParameter);
+  check_region(audio, region);
+  util::check::greater_than(stretch_ratio, 0.0, "stretch_ratio");
   NoteRegion clipped = clamp_region(audio, region);
   const int length = clipped.offset_sample - clipped.onset_sample;
-  SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
 
   // Bypass spectral processing at ratio one to preserve the original phase and edges exactly.
   if (stretch_ratio == 1.0f) {

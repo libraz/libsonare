@@ -60,6 +60,16 @@ void clear_percussive_events_result(SonarePercussiveEventsResult& out) {
   out.count = 0;
 }
 
+/// Refuses a note region with no sample inside the buffer, by the C parameter names. An
+/// offset past the end is clamped to it, as the editor does.
+void check_note_region(int onset_sample, int offset_sample, size_t length) {
+  util::check::integer_in_range(onset_sample, 0, static_cast<long long>(length) - 1,
+                                "onset_sample");
+  if (offset_sample <= onset_sample) {
+    util::check::refuse_relation({"offset_sample", "onset_sample"}, "{0} must be greater than {1}");
+  }
+}
+
 /// Resolves a versioned percussive-event config onto the core defaults. Every
 /// field takes its default at 0, matching the note-object configs.
 SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
@@ -706,11 +716,22 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  // Refused and zeroed before the gate, so the stub below leaves them defined too.
+  // Validated before the gate, so the stub below refuses and zeroes the same way.
+  SONARE_C_ZERO_OUTS(out, out_length);
+  if (const SonareError err =
+          validate_audio_params("note_stretch", "samples", samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err = run_validation([&] {
+        check_note_region(onset_sample, offset_sample, length);
+        util::check::greater_than(stretch_ratio, 0.0, "stretch_ratio");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  *out = nullptr;
-  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline("note_stretch", "samples", samples, length, sample_rate,
@@ -1227,11 +1248,23 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
                              int offset_sample, int target_onset_sample, float** out,
                              size_t* out_length) {
   SONARE_C_API_ENTRY;
-  // Refused and zeroed before the gate, so the stub below leaves them defined too.
+  // Validated before the gate, so the stub below refuses and zeroes the same way.
+  SONARE_C_ZERO_OUTS(out, out_length);
+  if (const SonareError err =
+          validate_audio_params("note_move", "samples", samples, length, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err = run_validation([&] {
+        check_note_region(onset_sample, offset_sample, length);
+        util::check::integer_in_range(target_onset_sample, 0, static_cast<long long>(length) - 1,
+                                      "target_onset_sample");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  *out = nullptr;
-  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline("note_move", "samples", samples, length, sample_rate,
