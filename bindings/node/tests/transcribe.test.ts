@@ -375,7 +375,7 @@ describe('transcribe', () => {
     // unannotated failure run immediately after an annotated one must not carry
     // the annotated one's text.
     //
-    // A bad clip id is the unannotated failure, and it crosses entry points on
+    // A bad clip id is the other failure, with a text of its own, and it crosses entry points on
     // purpose — the slot is thread-local and shared by every C-ABI entry, which
     // is exactly where a leak would show.
     withProject((project, clipId) => {
@@ -392,15 +392,21 @@ describe('transcribe', () => {
         project.transcribeToClip({ clipId: clipId + 5000, samples: audio, sampleRate: SR });
 
       expect(detail(annotated)).toBe('transcribe: channel must be an integer in [0, 15]');
-      expect(detail(unannotated)).toBe('Project.transcribeToClip: Invalid parameter');
+      expect(detail(unannotated)).toBe(
+        'Project.transcribeToClip: clipId must be the id of a MIDI clip in this project',
+      );
       expect(detail(() => transcribe({ samples: audio, sampleRate: SR, group: 99 }))).toBe(
         'transcribe: group must be an integer in [0, 15]',
       );
-      expect(detail(unannotated)).toBe('Project.transcribeToClip: Invalid parameter');
+      expect(detail(unannotated)).toBe(
+        'Project.transcribeToClip: clipId must be the id of a MIDI clip in this project',
+      );
 
       // Reversed, so the generic answer above cannot be "it is generic whatever
       // ran before it, including nothing".
-      expect(detail(unannotated)).toBe('Project.transcribeToClip: Invalid parameter');
+      expect(detail(unannotated)).toBe(
+        'Project.transcribeToClip: clipId must be the id of a MIDI clip in this project',
+      );
       expect(detail(annotated)).toBe('transcribe: channel must be an integer in [0, 15]');
 
       // A success after a failure is still a success: the slot is not consulted

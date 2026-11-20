@@ -153,7 +153,7 @@ val js_transcribe(val samples, const val& sample_rate_val, const val& tempo_bpm_
   const SonareError err = sonare_transcribe(buffer.empty() ? nullptr : buffer.data(), buffer.size(),
                                             sample_rate, tempo_bpm, &resolved, &result);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCErrorFlattening(err, "config");
   }
   const double note_count = static_cast<double>(result.note_count);
   const float tempo = result.tempo_bpm;
@@ -184,7 +184,7 @@ uint32_t ProjectWasm::transcribeToClip(const val& clip_id_val, val samples,
       project_.get(), clip_id, buffer.empty() ? nullptr : buffer.data(), buffer.size(), sample_rate,
       &resolved, &note_count);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCErrorFlattening(err, "config");
   }
   return static_cast<uint32_t>(note_count);
 }
