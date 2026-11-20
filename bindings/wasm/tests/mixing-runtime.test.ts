@@ -508,9 +508,11 @@ describe('Mixer runtime controls (WASM)', () => {
         // The C call answers a failure with a NULL strip rather than an error
         // code, so a facade that skipped the null check would report both of
         // these as a successful add.
-        expect(() => mixer.addStrip('late-arrival')).toThrow(/duplicate strip id/);
+        expect(() => mixer.addStrip('late-arrival')).toThrow(
+          /: id must not be the id of a strip already in this mixer$/,
+        );
         expect(() => mixer.addStrip('over-sampled', { truePeakOversample: 32 })).toThrow(
-          /truePeakOversample must be in \{0, 4, 8\}/,
+          /: truePeakOversample must be one of 0, 4, 8$/,
         );
         // A wrong-typed metering field is refused by name rather than substituted.
         expect(() => mixer.addStrip('wrong-type', { lufs: 'yes' as unknown as boolean })).toThrow(
@@ -635,16 +637,17 @@ describe('Mixer runtime controls (WASM)', () => {
         mixer.addBus('sub2', 'submix');
         mixer.setOutputBus('sub', 'sub2');
         const before = mixer.toJson();
-        const cases: Array<[string, string, RegExp]> = [
-          ['nope', 'sub', /nope/],
-          ['a', 'nope', /nope/],
-          ['master', 'sub', /master/],
-          ['a', 'a', /a/],
-          ['sub2', 'sub', /sub2.*sub|sub.*sub2/],
+        const cases: Array<[string, string, string]> = [
+          ['nope', 'sub', 'sourceId must be the id of a strip or a bus in this mixer'],
+          ['a', 'nope', 'busId must be the id of a bus in this mixer'],
+          ['master', 'sub', 'sourceId must not be the id of the master bus'],
+          ['a', 'a', 'busId must be the id of a bus, not of a strip'],
+          ['sub', 'sub', 'busId must not be the same id as sourceId'],
+          ['sub2', 'sub', 'busId must not name a bus whose routing leads back to sourceId'],
         ];
-        for (const [source, bus, pattern] of cases) {
+        for (const [source, bus, text] of cases) {
           const { message } = refusal(() => mixer.setOutputBus(source, bus));
-          expect(message, `${source} -> ${bus}`).toMatch(pattern);
+          expect(message, `${source} -> ${bus}`).toBe(`Mixer.setOutputBus: ${text}`);
           expect(mixer.toJson()).toBe(before);
         }
         // No compile ran in any refused call: the buses were never compiled.

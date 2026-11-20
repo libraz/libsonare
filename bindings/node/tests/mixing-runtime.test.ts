@@ -422,9 +422,11 @@ describe('Mixer argument validation', () => {
     // The C call answers a failure with a NULL strip rather than an error code,
     // so a facade that skipped the null check would report both of these as a
     // successful add.
-    expect(() => mixer.addStrip('late-arrival')).toThrow(/duplicate strip id/);
+    expect(() => mixer.addStrip('late-arrival')).toThrow(
+      /: id must not be the id of a strip already in this mixer$/,
+    );
     expect(() => mixer.addStrip('over-sampled', { truePeakOversample: 32 })).toThrow(
-      /truePeakOversample must be in \{0, 4, 8\}/,
+      /: truePeakOversample must be one of 0, 4, 8$/,
     );
     // A wrong-typed metering field is refused by name rather than substituted.
     expect(() => mixer.addStrip('wrong-type', { lufs: 'yes' as unknown as boolean })).toThrow(
@@ -599,13 +601,19 @@ describe('Mixer.setOutputBus', () => {
     mixer.addBus('sub2', 'submix');
     mixer.setOutputBus('sub', 'sub2');
     const before = mixer.toJson();
-    expect(refusal(() => mixer.setOutputBus('ghost', 'sub')).message).toMatch(/ghost/);
-    expect(refusal(() => mixer.setOutputBus('a', 'nowhere')).message).toMatch(/nowhere/);
-    expect(refusal(() => mixer.setOutputBus('a', 'a')).message).toMatch(/a/);
-    expect(refusal(() => mixer.setOutputBus('master', 'sub')).message).toMatch(/master/);
-    const cycle = refusal(() => mixer.setOutputBus('sub2', 'sub')).message;
-    expect(cycle).toMatch(/sub2/);
-    expect(cycle).toMatch(/sub/);
+    const cases: Array<[string, string, string]> = [
+      ['ghost', 'sub', 'sourceId must be the id of a strip or a bus in this mixer'],
+      ['a', 'nowhere', 'busId must be the id of a bus in this mixer'],
+      ['a', 'a', 'busId must be the id of a bus, not of a strip'],
+      ['master', 'sub', 'sourceId must not be the id of the master bus'],
+      ['sub', 'sub', 'busId must not be the same id as sourceId'],
+      ['sub2', 'sub', 'busId must not name a bus whose routing leads back to sourceId'],
+    ];
+    for (const [source, bus, text] of cases) {
+      expect(refusal(() => mixer.setOutputBus(source, bus)).message).toBe(
+        `Mixer.setOutputBus: ${text}`,
+      );
+    }
     expect(mixer.toJson()).toBe(before);
     mixer.destroy();
   });
