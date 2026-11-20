@@ -85,7 +85,7 @@ export interface AutoTuneOptions {
    */
   key?: 'detect' | AutoTuneKey;
   /** Correction strength in `[0, 1]`; 1 = full snap to the scale, 0 = bypass. Default 1. */
-  strength?: number;
+  retuneAmount?: number;
   /** Retune IIR time constant (ms); larger = slower glide. Default 50. */
   retuneSpeedMs?: number;
   /** Corrections below this are bypassed to preserve vibrato (cents). Default 20. */

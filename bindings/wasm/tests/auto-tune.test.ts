@@ -168,12 +168,12 @@ describe('autoTune (WASM)', () => {
     ).toThrow(TypeError);
   });
 
-  it('strength 0 leaves the audio unchanged', () => {
+  it('retuneAmount 0 leaves the audio unchanged', () => {
     const { samples } = autoTune({
       samples: input,
       sampleRate: SR,
       key: { root: PitchClass.C, mode: 'major' },
-      strength: 0,
+      retuneAmount: 0,
     });
     let worst = 0;
     for (let i = 0; i < input.length; i++) {
@@ -182,7 +182,7 @@ describe('autoTune (WASM)', () => {
     expect(worst).toBeLessThan(1e-3);
   });
 
-  it('refuses a bad key and an out-of-range strength', () => {
+  it('refuses a bad key and an out-of-range retuneAmount', () => {
     expect(() => autoTune({ samples: input, sampleRate: SR, key: 'C major' as never })).toThrow();
     expect(() =>
       autoTune({
@@ -196,7 +196,7 @@ describe('autoTune (WASM)', () => {
         samples: input,
         sampleRate: SR,
         key: { root: PitchClass.C, mode: 'major' },
-        strength: 2,
+        retuneAmount: 2,
       }),
     ).toThrow();
   });

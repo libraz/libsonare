@@ -239,8 +239,8 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
  *
  * Chains key detection (when `key` is `'detect'`), {@link scaleMaskForMode}, pYIN
  * pitch tracking (2048-sample frames, 512-sample hop) and the time-varying scale
- * corrector, so the options are {@link pitchCorrectTimevarying}'s with `strength`
- * as `retuneAmount`. The output has the input's length. Unvoiced stretches and
+ * corrector, so the options are {@link pitchCorrectTimevarying}'s. The output has
+ * the input's length. Unvoiced stretches and
  * notes the corrector cannot repitch pass through unchanged.
  *
  * `key` is `'detect'` (default) or a `{ root, mode }` as {@link detectKey}'s
@@ -250,7 +250,7 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
  *
  * @example
  * ```ts
- * const { samples: tuned, key } = autoTune({ samples, sampleRate: 44100, strength: 0.8 });
+ * const { samples: tuned, key } = autoTune({ samples, sampleRate: 44100, retuneAmount: 0.8 });
  * ```
  *
  * @param samples - Audio samples (mono, float32)

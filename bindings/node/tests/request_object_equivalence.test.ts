@@ -1920,7 +1920,7 @@ const ROWS: Row[] = [
     values: {
       samples: TONE,
       sampleRate: ALT_SR,
-      options: { key: { root: 9, mode: 'minor' }, strength: 0.5 },
+      options: { key: { root: 9, mode: 'minor' }, retuneAmount: 0.5 },
     },
     invalid: { sampleRate: 0 },
   },

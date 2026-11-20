@@ -508,7 +508,7 @@ const AUTO_TUNE_REQUEST_KEYS = keySet(
   'key',
   'samples',
   'sampleRate',
-  'strength',
+  'retuneAmount',
   'retuneSpeedMs',
   'vibratoThresholdCents',
   'maxCorrectionSemitones',

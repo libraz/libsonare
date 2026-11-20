@@ -18787,6 +18787,15 @@ rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate on"
 
 [[entry]]
+kind = "field"
+old = "AutoTuneOptions.strength"
+to = "AutoTuneOptions.retuneAmount"
+changed = "strength -> retuneAmount, the name pitchCorrectTimevarying uses for the same correction strength"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
 kind = "function"
 old = "autoTune"
 changed = "one positional form (autoTune(samples, sampleRate, options?: AutoTuneOptions)); request form takes AutoTuneRequest; returns AutoTuneResult"
@@ -29455,19 +29464,19 @@ test = "bindings/wasm/tests/mixing-assistant.test.ts::takes one or two channels 
 [[entry]]
 kind = "type"
 old = "MasteringChainConfig"
-changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice as InvalidFormat naming the path (was a TypeError or RangeError from the facade); a non-object config stays a TypeError"
+changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError"
 domain = "mastering"
 rule = "config-keys"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as InvalidFormat"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as an argument"
 
 [[entry]]
 kind = "type"
 old = "MasteringChainConfig"
-changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice as InvalidFormat naming the path (was a TypeError or RangeError from the facade); a non-object config stays a TypeError"
+changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice, naming the path under the request key it came in (overrides, config): TypeError for a wrong shape, RangeError for an out-of-domain value or unknown token, as from the 1.x facade; a non-object config stays a TypeError"
 domain = "mastering"
 rule = "config-keys"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as InvalidFormat"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as an argument"
 
 [[entry]]
 kind = "field"

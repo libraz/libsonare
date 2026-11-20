@@ -449,7 +449,7 @@ export const ROWS: Row[] = [
     fn: sonare.autoTune,
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { strength: 0.5 } },
+    values: { samples: SIG, sampleRate: ALT_SR, options: { retuneAmount: 0.5 } },
     invalid: { sampleRate: 0 },
   },
   {

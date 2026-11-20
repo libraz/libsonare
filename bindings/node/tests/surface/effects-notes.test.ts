@@ -152,6 +152,7 @@ describe('effects notes surface', () => {
       () => loose(pitchCorrectTimevarying)(samples, f0Hz, sampleRate, 512),
     ],
     ['autoTune referenceMidi', () => loose(autoTune)({ samples, sampleRate, referenceMidi: 69 })],
+    ['autoTune strength', () => loose(autoTune)({ samples, sampleRate, strength: 0.5 })],
     [
       'spectralEdit positional ops list',
       () => loose(spectralEdit)(samples, sampleRate, spectralOps),
@@ -236,8 +237,8 @@ describe('effects notes surface', () => {
 
   it('positional form equals request form for autoTune', () => {
     const key = { root: 9, mode: 'minor' } as const;
-    const a = autoTune({ samples, sampleRate, key, scaleReferenceMidi: 69, strength: 0.5 });
-    const b = autoTune(samples, sampleRate, { key, scaleReferenceMidi: 69, strength: 0.5 });
+    const a = autoTune({ samples, sampleRate, key, scaleReferenceMidi: 69, retuneAmount: 0.5 });
+    const b = autoTune(samples, sampleRate, { key, scaleReferenceMidi: 69, retuneAmount: 0.5 });
     expect(maxDiff(a.samples, b.samples)).toBeLessThan(1e-6);
     expect(a.key).toEqual(b.key);
   });

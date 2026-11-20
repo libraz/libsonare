@@ -139,12 +139,12 @@ describe('autoTune', () => {
     expect(result.key).toMatchObject({ root: 2, mode: 'dorian' });
   });
 
-  it('strength 0 leaves the audio unchanged', () => {
+  it('retuneAmount 0 leaves the audio unchanged', () => {
     const { samples } = autoTune({
       samples: input,
       sampleRate: SR,
       key: { root: 0, mode: 'major' },
-      strength: 0,
+      retuneAmount: 0,
     });
     let worst = 0;
     for (let i = 0; i < input.length; i++) {
@@ -153,7 +153,7 @@ describe('autoTune', () => {
     expect(worst).toBeLessThan(1e-3);
   });
 
-  it('refuses a bad key and an out-of-range strength', () => {
+  it('refuses a bad key and an out-of-range retuneAmount', () => {
     expect(() => autoTune({ samples: input, sampleRate: SR, key: 'C major' as never })).toThrow(
       TypeError,
     );
@@ -161,7 +161,12 @@ describe('autoTune', () => {
       autoTune({ samples: input, sampleRate: SR, key: { root: 12 as never, mode: 'major' } }),
     ).toThrow(RangeError);
     expect(() =>
-      autoTune({ samples: input, sampleRate: SR, key: { root: 0, mode: 'major' }, strength: 2 }),
+      autoTune({
+        samples: input,
+        sampleRate: SR,
+        key: { root: 0, mode: 'major' },
+        retuneAmount: 2,
+      }),
     ).toThrow();
   });
 });

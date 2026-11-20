@@ -486,9 +486,9 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
   if (info.Length() > 3 && info[3].IsObject()) {
     const Napi::Object opts = info[3].As<Napi::Object>();
     sonare_node::RefuseUnknownKeys(
-        opts, {"strength", "scaleReferenceMidi", "maxCorrectionSemitones", "retuneSpeedMs",
+        opts, {"retuneAmount", "scaleReferenceMidi", "maxCorrectionSemitones", "retuneSpeedMs",
                "vibratoThresholdCents"});
-    config.retune_amount = sonare_node::FloatProperty(opts, "strength", config.retune_amount);
+    config.retune_amount = sonare_node::FloatProperty(opts, "retuneAmount", config.retune_amount);
     config.scale_reference_midi =
         sonare_node::FloatProperty(opts, "scaleReferenceMidi", config.scale_reference_midi);
     config.max_correction_semitones =

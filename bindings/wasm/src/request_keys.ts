@@ -654,7 +654,7 @@ const AutoTuneRequestKeys = keysOf<AutoTuneRequest>()([
   'samples',
   'sampleRate',
   'key',
-  'strength',
+  'retuneAmount',
   'retuneSpeedMs',
   'vibratoThresholdCents',
   'maxCorrectionSemitones',

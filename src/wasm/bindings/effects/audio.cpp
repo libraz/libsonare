@@ -311,11 +311,11 @@ val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, va
     named = Key{static_cast<PitchClass>(root), modeFromVal(key_val["mode"], "key.mode"), 1.0f};
   }
 
-  refuseUnknownKeys(options, {"strength", "scaleReferenceMidi", "maxCorrectionSemitones",
+  refuseUnknownKeys(options, {"retuneAmount", "scaleReferenceMidi", "maxCorrectionSemitones",
                               "retuneSpeedMs", "vibratoThresholdCents"});
   editing::pitch_editor::PitchCorrectionConfig config{};
   if (!options.isUndefined() && !options.isNull()) {
-    config.retune_amount = floatProperty(options, "strength", config.retune_amount);
+    config.retune_amount = floatProperty(options, "retuneAmount", config.retune_amount);
     config.scale.reference_midi =
         floatProperty(options, "scaleReferenceMidi", config.scale.reference_midi);
     config.max_correction_semitones =
