@@ -310,6 +310,7 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
             "_cli_advanced.py",
             "_cli_analysis.py",
             "_cli_common.py",
+            "_cli_dsp.py",
             "_cli_effects.py",
             "_cli_inventory.py",
             "_cli_mastering.py",
@@ -320,6 +321,7 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
             "_cli_playback.py",
             "_cli_project.py",
             "_cli_repair.py",
+            "_cli_utilities.py",
         ),
     ),
     (
