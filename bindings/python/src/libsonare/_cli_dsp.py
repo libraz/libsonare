@@ -8,11 +8,11 @@ from collections.abc import Sequence
 from typing import Any
 
 from ._cli_common import (
-    _strict_json_dumps,
-    _write_wav,
+    _load_audio_from_facade as _load_audio,
 )
 from ._cli_common import (
-    _load_audio_from_facade as _load_audio,
+    _strict_json_dumps,
+    _write_wav,
 )
 from ._cli_inventory import _cli_domain
 from ._cli_options import (
@@ -23,9 +23,10 @@ from ._cli_options import (
     _finite_float,
     _given,
 )
+from ._effects_level import BiquadFilterType
 
 # The `--type` tokens, each mapped to the library's `type` spelling.
-_FILTER_TYPES = {
+_FILTER_TYPES: dict[str, BiquadFilterType] = {
     "high-pass": "highPass",
     "low-pass": "lowPass",
     "band-pass": "bandPass",
@@ -111,18 +112,22 @@ def register_dsp_parsers(
     """Register the gain, fade and filter commands."""
     common = shared.common
 
-    sub.add_parser("gain", parents=[common], help="Apply gain in dB").add_argument(
-        "--gain-db", type=_finite_float, help="Gain in dB (negative attenuates)"
-    )
+    gain_p = sub.add_parser("gain", parents=[common], help="Apply gain in dB")
+    gain_p.add_argument("--gain-db", type=_finite_float, help="Gain in dB (negative attenuates)")
 
     fade_p = sub.add_parser("fade", parents=[common], help="Apply fade in/out")
-    for name, side in (("--fade-in-sec", "in"), ("--fade-out-sec", "out")):
-        _cli_domain(
-            fade_p.add_argument(
-                name, type=_finite_float, default=None, help=f"Fade-{side} length in seconds"
-            ),
-            minimum=0,
-        )
+    _cli_domain(
+        fade_p.add_argument(
+            "--fade-in-sec", type=_finite_float, default=None, help="Fade-in length in seconds"
+        ),
+        minimum=0,
+    )
+    _cli_domain(
+        fade_p.add_argument(
+            "--fade-out-sec", type=_finite_float, default=None, help="Fade-out length in seconds"
+        ),
+        minimum=0,
+    )
 
     filter_p = sub.add_parser(
         "filter",
@@ -142,16 +147,33 @@ def register_dsp_parsers(
         ),
         choices=(2, 4),
     )
-    for name, meaning in (
-        ("--cutoff-hz", "High-pass / low-pass corner in Hz"),
-        ("--center-hz", "Band-pass / notch center in Hz"),
-        ("--bandwidth-hz", "Band-pass / notch bandwidth in Hz"),
-    ):
-        _cli_domain(
-            filter_p.add_argument(name, type=_finite_float, default=None, help=meaning),
-            minimum=0,
-            exclusive_minimum=True,
-        )
+    _cli_domain(
+        filter_p.add_argument(
+            "--cutoff-hz",
+            type=_finite_float,
+            default=None,
+            help="High-pass / low-pass corner in Hz",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+    )
+    _cli_domain(
+        filter_p.add_argument(
+            "--center-hz", type=_finite_float, default=None, help="Band-pass / notch center in Hz"
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+    )
+    _cli_domain(
+        filter_p.add_argument(
+            "--bandwidth-hz",
+            type=_finite_float,
+            default=None,
+            help="Band-pass / notch bandwidth in Hz",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+    )
     filter_p.add_argument(
         "--zero-phase",
         action="store_true",

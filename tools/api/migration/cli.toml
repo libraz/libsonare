@@ -1129,15 +1129,6 @@ test = "tests/conformance/cli_contract_v2.json::bins_per_octave_zero_refused"
 
 [[entry]]
 kind = "flag"
-old = "filter --type"
-frontend = "native"
-changed = "takes hp, lp, bp or notch in any letter case and is required; highpass, lowpass and bandpass are refused as a usage error (exit 2) before the input is read"
-domain = "effects"
-rule = "token-case"
-test = "tests/cli/cli_effects_test.cpp::CLI filter takes hp, lp, bp or notch and refuses any other spelling"
-
-[[entry]]
-kind = "flag"
 old = "boundaries --absolute-threshold"
 frontend = "native"
 changed = "a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3)"
@@ -2003,7 +1994,7 @@ rule = "unit-in-name"
 [[entry]]
 kind = "flag"
 old = "filter --type"
-changed = "values are the library's response names in kebab-case (high-pass, low-pass, band-pass, notch); hp, lp and bp are refused as a usage error (exit 2)"
+changed = "is required and takes the library's response names in kebab-case (high-pass, low-pass, band-pass, notch); hp, lp, bp, highpass, lowpass, bandpass and any other spelling or letter case are refused as a usage error (exit 2) before the input is read"
 frontend = "native"
 domain = "effects"
 rule = "token-case"
