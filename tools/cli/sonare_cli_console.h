@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "util/system_info.h"
+
 struct Stats {
   float mean = 0.0f;
   float std = 0.0f;
@@ -31,15 +33,7 @@ extern const char* blue;
 extern const char* red;
 }  // namespace color
 
-namespace system_info {
-int logical_cores();
-int physical_cores();
-size_t total_memory_bytes();
-size_t available_memory_bytes();
-std::string parallel_strategy();
-int parallel_workers();
-bool parallel_enabled();
-}  // namespace system_info
+namespace system_info = sonare::system_info;
 
 struct StageInfo {
   int number;

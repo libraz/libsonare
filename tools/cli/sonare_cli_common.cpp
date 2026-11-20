@@ -554,44 +554,35 @@ int cmd_doctor(const CliArgs& args) {
 
 int cmd_system_info(const CliArgs& args) {
   if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object()
-        .key("cpu")
-        .begin_object()
-        .kv("logical_cores", system_info::logical_cores())
-        .kv("physical_cores", system_info::physical_cores())
-        .end_object()
-        .key("memory")
-        .begin_object()
-        .kv("total_gb",
-            static_cast<float>(system_info::total_memory_bytes()) / (1024.0f * 1024.0f * 1024.0f))
-        .kv("available_gb", static_cast<float>(system_info::available_memory_bytes()) /
-                                (1024.0f * 1024.0f * 1024.0f))
-        .end_object()
-        .key("parallel")
-        .begin_object()
-        .kv("enabled", system_info::parallel_enabled())
-        .kv("workers", system_info::parallel_workers())
-        .kv("strategy", system_info::parallel_strategy())
-        .end_object()
-        .end_object()
-        .print();
-  } else {
-    float total_gb =
-        static_cast<float>(system_info::total_memory_bytes()) / (1024.0f * 1024.0f * 1024.0f);
-    float avail_gb =
-        static_cast<float>(system_info::available_memory_bytes()) / (1024.0f * 1024.0f * 1024.0f);
-
-    std::cout << color::cyan << color::bold << "System Information" << color::reset << "\n";
-    std::cout << "  CPU Cores: " << system_info::logical_cores() << " logical, "
-              << system_info::physical_cores() << " physical\n";
-    printf("  Memory: %.1f GB total, %.1f GB available\n", total_gb, avail_gb);
-    std::cout << "\n"
-              << color::green << color::bold << "Parallel Configuration" << color::reset << "\n";
-    std::cout << "  Parallel Enabled: " << (system_info::parallel_enabled() ? "yes" : "no") << "\n";
-    std::cout << "  Workers: " << system_info::parallel_workers() << "\n";
-    std::cout << "  Strategy: " << system_info::parallel_strategy() << "\n";
+    char* json = nullptr;
+    if (sonare_system_info_json(&json) != SONARE_OK) {
+      std::cerr << color::red << "Error: " << sonare_last_error_message() << color::reset << "\n";
+      return 1;
+    }
+    std::cout << json << "\n";
+    sonare_free_string(json);
+    return 0;
   }
+  const auto count_text = [](const std::optional<int>& count) {
+    return count ? std::to_string(*count) : std::string("unknown");
+  };
+  const auto gigabytes_text = [](const std::optional<size_t>& bytes) {
+    if (!bytes) return std::string("unknown");
+    char text[32];
+    std::snprintf(text, sizeof(text), "%.1f GB",
+                  static_cast<float>(*bytes) / (1024.0f * 1024.0f * 1024.0f));
+    return std::string(text);
+  };
+  std::cout << color::cyan << color::bold << "System Information" << color::reset << "\n";
+  std::cout << "  CPU Cores: " << count_text(system_info::logical_cores()) << " logical, "
+            << count_text(system_info::physical_cores()) << " physical\n";
+  std::cout << "  Memory: " << gigabytes_text(system_info::total_memory_bytes()) << " total, "
+            << gigabytes_text(system_info::available_memory_bytes()) << " available\n";
+  std::cout << "\n"
+            << color::green << color::bold << "Parallel Configuration" << color::reset << "\n";
+  std::cout << "  Parallel Enabled: " << (system_info::parallel_enabled() ? "yes" : "no") << "\n";
+  std::cout << "  Workers: " << system_info::parallel_workers() << "\n";
+  std::cout << "  Strategy: " << system_info::parallel_strategy() << "\n";
   return 0;
 }
 
