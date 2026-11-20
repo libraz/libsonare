@@ -556,16 +556,17 @@ SonareError sonare_short_term_lufs(const float* samples, size_t length, int samp
                      });
 }
 
-SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
+SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int num_channels,
                                     int sample_rate, SonareLufsResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_TRY
-  const SonareError err =
-      validate_interleaved_lufs_input("lufs_interleaved", samples, frames, channels, sample_rate);
+  const SonareError err = validate_interleaved_lufs_input("lufs_interleaved", samples, frames,
+                                                          num_channels, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out);
-  metering::LufsResult result = metering::lufs_interleaved(samples, frames, channels, sample_rate);
+  metering::LufsResult result =
+      metering::lufs_interleaved(samples, frames, num_channels, sample_rate);
   out->integrated_lufs = result.integrated_lufs;
   out->momentary_lufs = result.momentary_lufs;
   out->short_term_lufs = result.short_term_lufs;
@@ -576,7 +577,7 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
   SONARE_C_CATCH
 }
 
-SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, int channels,
+SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, int num_channels,
                                            int sample_rate, float** out_momentary,
                                            size_t* out_momentary_length, float** out_short_term,
                                            size_t* out_short_term_length) {
@@ -584,7 +585,7 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   SONARE_C_ZERO_OUTS(out_momentary, out_momentary_length, out_short_term, out_short_term_length);
   SONARE_C_TRY
   const SonareError err = validate_interleaved_lufs_input("lufs_series_interleaved", samples,
-                                                          frames, channels, sample_rate);
+                                                          frames, num_channels, sample_rate);
   if (err != SONARE_OK) return err;
   // A pointer without its length cannot be consumed, so a half-given pair is a
   // caller error rather than a request to skip the series.
@@ -603,7 +604,7 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   }
   std::vector<float> momentary;
   std::vector<float> short_term;
-  metering::lufs_interleaved(samples, frames, channels, sample_rate, {},
+  metering::lufs_interleaved(samples, frames, num_channels, sample_rate, {},
                              out_momentary ? &momentary : nullptr,
                              out_short_term ? &short_term : nullptr);
   // Both copies are made before either pair is published, so a failed second

@@ -180,7 +180,7 @@ def _mark_derived_counts(params: list[Param]) -> list[Param]:
             cur.name in (f"n_{prev.name}", f"num_{prev.name}")
             and not nxt.name.startswith("n_")
             or cur.name == "frames"
-            and nxt.name == "channels"
+            and nxt.name in ("channels", "num_channels")
         ):
             cur.structural = True
     dims = matrix_dimensions(params)

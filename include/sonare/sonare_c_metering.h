@@ -297,16 +297,16 @@ typedef struct {
 ///        whose samples are not finite has no min/max to report, and the 0/0 it
 ///        would otherwise carry is indistinguishable from a silent bucket.
 /// @param length Number of sample frames.
-/// @param channels Channel count (must be > 0).
+/// @param num_channels Channel count (must be > 0).
 /// @param samples_per_bucket Bucket width in frames (must be > 0).
-SonareError sonare_waveform_peaks(const float* samples, size_t length, int channels,
+SonareError sonare_waveform_peaks(const float* samples, size_t length, int num_channels,
                                   size_t samples_per_bucket, SonareWaveformPeaksResult* out);
 
 /// @brief Compute multiple waveform peak levels. @p samples_per_bucket_levels
 ///        has @p level_count entries; each must be > 0.
 /// @param out Receives heap-owned level buckets; free with
 ///        sonare_free_waveform_peak_pyramid_result.
-SonareError sonare_waveform_peak_pyramid(const float* samples, size_t length, int channels,
+SonareError sonare_waveform_peak_pyramid(const float* samples, size_t length, int num_channels,
                                          const size_t* samples_per_bucket_levels,
                                          size_t level_count, SonareWaveformPeakPyramidResult* out);
 
@@ -323,15 +323,15 @@ void sonare_free_waveform_peak_pyramid_result(SonareWaveformPeakPyramidResult* r
 /// @brief ITU-R BS.1770-4 multi-channel loudness over an interleaved buffer.
 /// @details Mirrors @ref sonare_lufs but accepts an interleaved multi-channel
 ///          signal (channel-summed K-weighting per the standard). @p samples
-///          holds @p frames * @p channels values in channel-interleaved order.
+///          holds @p frames * @p num_channels values in channel-interleaved order.
 /// @param samples Interleaved input buffer (may be null only when @p frames is 0).
 /// @param frames Number of sample frames (per-channel length).
-/// @param channels Channel count (must be > 0).
+/// @param num_channels Channel count (must be > 0).
 /// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
 ///        offline-input policy), not merely positive.
 /// @param out Receives the integrated / momentary / short-term / loudness-range
 ///            fields. Must not be null. No heap pointers (no free required).
-SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
+SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int num_channels,
                                     int sample_rate, SonareLufsResult* out);
 
 /// @brief Per-block momentary and short-term LUFS time series for interleaved
@@ -341,11 +341,11 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
 ///          them, because the standard sums the K-weighted per-channel block
 ///          energies rather than mixing per-channel loudness in dB. Both series
 ///          come out of a single K-weighting pass, so asking for the pair costs
-///          one pass rather than two. For @p channels == 1 they are identical to
+///          one pass rather than two. For @p num_channels == 1 they are identical to
 ///          the mono meters element for element.
-/// @param samples Interleaved input buffer holding @p frames * @p channels values.
+/// @param samples Interleaved input buffer holding @p frames * @p num_channels values.
 /// @param frames Number of sample frames (per-channel length); must be > 0.
-/// @param channels Channel count (must be > 0).
+/// @param num_channels Channel count (must be > 0).
 /// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
 ///        offline-input policy), not merely positive.
 /// @param out_momentary Receives the 400 ms series; free with
@@ -359,7 +359,7 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
 /// @return SONARE_ERROR_INVALID_PARAMETER if either pointer/length pair has
 ///         exactly one null member. A signal shorter than a window yields an
 ///         empty series (null pointer, zero length), not an error.
-SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, int channels,
+SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, int num_channels,
                                            int sample_rate, float** out_momentary,
                                            size_t* out_momentary_length, float** out_short_term,
                                            size_t* out_short_term_length);

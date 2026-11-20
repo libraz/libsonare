@@ -700,11 +700,11 @@ struct WaveformPyramidLevels {
 
 }  // namespace
 
-SonareError sonare_waveform_peaks(const float* samples, size_t frames, int channels,
+SonareError sonare_waveform_peaks(const float* samples, size_t frames, int num_channels,
                                   size_t samples_per_bucket, SonareWaveformPeaksResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  SonareError err = validate_interleaved_audio(samples, frames, channels);
+  SonareError err = validate_interleaved_audio(samples, frames, num_channels);
   if (err != SONARE_OK) return err;
   if (const SonareError spb_err =
           run_validation([&] { metering::validate_samples_per_bucket(samples_per_bucket); });
@@ -714,17 +714,17 @@ SonareError sonare_waveform_peaks(const float* samples, size_t frames, int chann
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   return fill_waveform_peaks_result(
-      metering::waveform_peaks(samples, frames, channels, samples_per_bucket), out);
+      metering::waveform_peaks(samples, frames, num_channels, samples_per_bucket), out);
   SONARE_C_CATCH
 }
 
-SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, int channels,
+SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, int num_channels,
                                          const size_t* samples_per_bucket_levels,
                                          size_t level_count, SonareWaveformPeakPyramidResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_TRY
-  SonareError err = validate_interleaved_audio(samples, frames, channels);
+  SonareError err = validate_interleaved_audio(samples, frames, num_channels);
   if (err != SONARE_OK) return err;
   if (!samples_per_bucket_levels || level_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
   std::vector<size_t> levels(samples_per_bucket_levels, samples_per_bucket_levels + level_count);
@@ -732,7 +732,7 @@ SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, in
     metering::validate_samples_per_bucket(level);
   }
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  const auto pyramid = metering::waveform_peak_pyramid(samples, frames, channels, levels);
+  const auto pyramid = metering::waveform_peak_pyramid(samples, frames, num_channels, levels);
   WaveformPyramidLevels c_levels(pyramid.size());
   for (size_t i = 0; i < pyramid.size(); ++i) {
     err = fill_waveform_peaks_result(pyramid[i], &c_levels.get()[i]);
