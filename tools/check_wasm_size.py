@@ -65,6 +65,20 @@ def wasm_sections(data: bytes) -> dict[str, int]:
     return sizes
 
 
+# libc++ iostream and locale facets, recognised by the type names their RTTI leaves in the data
+# segment. One std::ostringstream links all of them, about 90 kB of code.
+IOSTREAM_MARKERS = (
+    b"NSt3__213basic_ostream",
+    b"NSt3__213basic_istream",
+    b"NSt3__29money_get",
+    b"NSt3__27num_get",
+)
+
+
+def iostream_markers(data: bytes) -> list[str]:
+    return [marker.decode() for marker in IOSTREAM_MARKERS if marker in data]
+
+
 def measure(path: Path) -> dict[str, int | str]:
     data = path.read_bytes()
     sections = wasm_sections(data)
@@ -147,6 +161,10 @@ def main() -> int:
 
     baseline = load_baseline(args.baseline)
     failures: list[str] = []
+    for name, path in args.artifact:
+        markers = iostream_markers(path.read_bytes())
+        if markers:
+            failures.append(f"{name}: links libc++ iostream/locale ({', '.join(markers)})")
     for name, result in current.items():
         expected = baseline["artifacts"].get(name)
         if not isinstance(expected, dict):

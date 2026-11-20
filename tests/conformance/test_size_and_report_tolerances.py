@@ -68,6 +68,29 @@ class WasmSizeToleranceTest(unittest.TestCase):
                 self.assertEqual(check_wasm_size.main(), 0)
 
 
+class WasmIostreamGuardTest(unittest.TestCase):
+    def run_check(self, payload: bytes) -> int:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            wasm = root / "tiny.wasm"
+            # The payload rides in a custom section, so the module stays well formed.
+            custom = b"\x01m" + payload
+            wasm.write_bytes(b"\0asm\1\0\0\0\x00" + bytes([len(custom)]) + custom)
+            baseline = root / "baseline.json"
+            baseline.write_text('{"format":1,"artifacts":{"tiny":{"raw":4096,"gzip":4096}}}')
+            argv = ["check_wasm_size.py", "--baseline", str(baseline), "--artifact", f"tiny={wasm}"]
+            with mock.patch.object(sys, "argv", argv):
+                return check_wasm_size.main()
+
+    def test_a_module_without_iostream_passes(self) -> None:
+        self.assertEqual(self.run_check(b""), 0)
+
+    def test_an_iostream_type_name_fails_under_the_size_limit(self) -> None:
+        for marker in check_wasm_size.IOSTREAM_MARKERS:
+            with self.subTest(marker=marker):
+                self.assertEqual(self.run_check(b"\x00" + marker + b"IcEE\x00"), 1)
+
+
 class ReportToleranceTest(unittest.TestCase):
     @staticmethod
     def report(value: float) -> dict:
