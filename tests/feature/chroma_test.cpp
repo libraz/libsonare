@@ -464,4 +464,27 @@ TEST_CASE("bass_chroma refuses a member by its name", "[chroma]") {
   config = BassChromaConfig();
   config.cqt.n_bins = 0;
   CHECK_THROWS_WITH(bass_chroma(audio, config), "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(bass_chroma(Audio(), BassChromaConfig()), "audio must not be empty");
+}
+
+TEST_CASE("chroma entry points refuse a member by its name", "[chroma]") {
+  const Audio audio = create_sine_audio(440.0f);
+  CHECK_THROWS_WITH(Chroma::compute(Audio(), ChromaConfig{}), "audio must not be empty");
+  CHECK_THROWS_WITH(Chroma::from_spectrogram(Spectrogram(), 22050, ChromaFilterConfig{}),
+                    "spec must not be empty");
+  const Spectrogram spec = Spectrogram::compute(audio, StftConfig{});
+  CHECK_THROWS_WITH(Chroma::from_spectrogram(spec, 0, ChromaFilterConfig{}),
+                    "sr must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(chroma_cqt(Audio(), ChromaCqtConfig{}), "audio must not be empty");
+  CHECK_THROWS_WITH(chroma_cens(Audio(), ChromaCensConfig{}), "audio must not be empty");
+  ChromaCqtConfig cqt;
+  cqt.n_chroma = 0;
+  CHECK_THROWS_WITH(chroma_cqt(audio, cqt), "n_chroma must be an integer in [1, 2147483647]");
+  cqt.n_chroma = 5;
+  CHECK_THROWS_WITH(chroma_cqt(audio, cqt), "cqt.bins_per_octave must be a multiple of n_chroma");
+
+  const Chroma chroma = Chroma::compute(audio, ChromaConfig{});
+  CHECK_THROWS_WITH(chroma.at(chroma.n_chroma(), 0), "chroma must be an integer in [0, 11]");
+  CHECK_THROWS_WITH(chroma.at(0, -1), "frame must be an integer in [0, " +
+                                          std::to_string(chroma.n_frames() - 1) + "]");
 }

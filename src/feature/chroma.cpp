@@ -40,7 +40,7 @@ Chroma::Chroma(std::vector<float> features, int n_chroma, int n_frames, int samp
       hop_length_(hop_length) {}
 
 Chroma Chroma::compute(const Audio& audio, const ChromaConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
 
   // Compute STFT
   Spectrogram spec = Spectrogram::compute(audio, config.to_stft_config());
@@ -50,8 +50,8 @@ Chroma Chroma::compute(const Audio& audio, const ChromaConfig& config) {
 
 Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
                                 const ChromaFilterConfig& chroma_config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
+  if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
+  util::check::integer_at_least(sr, 1, "sr");
 
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
@@ -160,8 +160,8 @@ std::vector<int> Chroma::dominant_pitch_class() const {
 }
 
 float Chroma::at(int chroma, int frame) const {
-  SONARE_CHECK(chroma >= 0 && chroma < n_chroma_, ErrorCode::InvalidParameter);
-  SONARE_CHECK(frame >= 0 && frame < n_frames_, ErrorCode::InvalidParameter);
+  util::check::integer_in_range(chroma, 0, n_chroma_ - 1, "chroma");
+  util::check::integer_in_range(frame, 0, n_frames_ - 1, "frame");
   return features_[chroma * n_frames_ + frame];
 }
 
@@ -231,9 +231,12 @@ std::vector<float> smooth_rows_hann(const std::vector<float>& m, int rows, int c
 }  // namespace
 
 Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.cqt.bins_per_octave % config.n_chroma == 0, ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
+  util::check::integer_at_least(config.n_chroma, 1, "n_chroma");
+  if (config.cqt.bins_per_octave % config.n_chroma != 0) {
+    util::check::refuse_relation({"cqt.bins_per_octave", "n_chroma"},
+                                 "{0} must be a multiple of {1}");
+  }
 
   // Apply tuning to the CQT grid itself (not just the chroma fold) so that
   // sub-semitone tuning actually shifts the analysis frequencies, matching
@@ -279,7 +282,7 @@ void validate_bass_chroma_config(const BassChromaConfig& config) {
 
 Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
   validate_bass_chroma_config(config);
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
 
   // Run a CQT over the bass frequency range (fmin / bins_per_octave / n_bins all
   // come from config.cqt, so the number of octaves covered is honored by n_bins),
@@ -307,7 +310,7 @@ Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
 }
 
 Chroma chroma_cens(const Audio& audio, const ChromaCensConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
 
   // Step 1: chroma_cqt without per-frame normalization (CENS uses L1 then quantization).
   ChromaCqtConfig base = config.base;

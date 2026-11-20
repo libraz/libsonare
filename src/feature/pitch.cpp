@@ -314,21 +314,18 @@ namespace {
 ///          raise, when fewer than two periods fit.
 void check_yin_rate_params(int sr, const PitchConfig& config) {
   const float nyquist = 0.5f * static_cast<float>(sr);
-  SONARE_CHECK_MSG(config.fmax <= nyquist, ErrorCode::InvalidParameter,
-                   "fmax=" + util::to_text(config.fmax) + " cannot exceed Nyquist frequency " +
-                       util::to_text(nyquist));
+  if (!(config.fmax <= nyquist)) {
+    util::check::refuse_relation({"fmax", "sr"}, "{0} must be at most {1} / 2");
+  }
   const double periods = static_cast<double>(sr) / static_cast<double>(config.fmin);
-  SONARE_CHECK_MSG(
-      periods < static_cast<double>(config.frame_length - 1), ErrorCode::InvalidParameter,
-      "fmin=" + util::to_text(config.fmin) +
-          " is too small for frame_length=" + std::to_string(config.frame_length) +
-          " and sr=" + std::to_string(sr) + ". Either increase to fmin=" +
-          util::to_text(static_cast<float>(sr) / static_cast<float>(config.frame_length - 1)) +
-          " or frame_length=" + std::to_string(static_cast<int>(std::ceil(periods)) + 1));
+  if (!(periods < static_cast<double>(config.frame_length - 1))) {
+    util::check::refuse_relation({"fmin", "frame_length", "sr"},
+                                 "{2} / {0} must be less than {1} - 1");
+  }
 }
 
 int validate_yin_track_input(const Audio& audio, const PitchConfig& config) {
-  SONARE_CHECK_MSG(!audio.empty(), ErrorCode::InvalidParameter, "audio must not be empty");
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   util::check::integer_at_least(config.frame_length, 1, "frame_length");
   util::check::integer_at_least(config.hop_length, 1, "hop_length");
   util::check::in_interval(config.threshold, 0.0, false, 1.0, true, "threshold");
@@ -704,7 +701,7 @@ float midi_to_freq(float midi) { return midi_to_hz(midi); }
 
 PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmin, float fmax,
                         float threshold) {
-  SONARE_CHECK_MSG(!audio.empty(), ErrorCode::InvalidParameter, "audio must not be empty");
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   util::check::integer_at_least(n_fft, 1, "n_fft");
   util::check::integer_at_least(hop_length, 1, "hop_length");
   util::check::greater_than(fmin, 0.0, "fmin");
