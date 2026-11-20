@@ -368,15 +368,11 @@ struct AudioPayloadNames {
   const char* sample_rate;
 };
 
-// Runs validate_audio_clip_payload and, on refusal, throws for the first field it rejects.
+// Throws for the first field of an inline audio payload it rejects; no buffer and
+// no frames is an empty payload, which is accepted.
 template <typename Desc>
 void check_audio_payload(const AudioPayloadNames& n, const Desc* desc) {
-  SonareProjectClipDesc payload{};
-  payload.audio_interleaved = desc->audio_interleaved;
-  payload.audio_frames = desc->audio_frames;
-  payload.audio_channels = desc->audio_channels;
-  payload.audio_sample_rate = desc->audio_sample_rate;
-  if (validate_audio_clip_payload(&payload, nullptr) == SONARE_OK) return;
+  if (desc->audio_interleaved == nullptr && desc->audio_frames == 0) return;
   util::check::non_null_when_count(desc->audio_interleaved, static_cast<size_t>(desc->audio_frames),
                                    n.interleaved, n.frames);
   util::check::integer_at_least<int64_t>(desc->audio_frames, 1, n.frames);
@@ -393,10 +389,12 @@ void check_audio_payload(const AudioPayloadNames& n, const Desc* desc) {
   }
   const auto total =
       static_cast<size_t>(desc->audio_frames) * static_cast<size_t>(desc->audio_channels);
-  size_t index = 0;
-  while (index < total && std::isfinite(desc->audio_interleaved[index])) ++index;
-  util::check::refuse(n.interleaved,
-                      "contains a non-finite sample at index " + std::to_string(index));
+  for (size_t index = 0; index < total; ++index) {
+    if (!std::isfinite(desc->audio_interleaved[index])) {
+      util::check::refuse(n.interleaved,
+                          "contains a non-finite sample at index " + std::to_string(index));
+    }
+  }
 }
 
 bool valid_next_id(uint32_t id) noexcept {

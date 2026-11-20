@@ -44,6 +44,34 @@ using namespace sonare_c_bounce_detail;
 
 namespace {
 
+// The subject naming one hosted instrument as the caller's array spells it.
+std::string instrument_subject(size_t index) {
+  return "instruments[" + std::to_string(index) + "]";
+}
+
+static_assert(sonare::engine::InstrumentRack::kMaxInstruments == 16,
+              "the instrument-count refusal below states the rack size");
+
+// Maps a probe engine's refused bind of hosted instrument @p index. The probe is
+// fresh, so a full rack is the caller's instrument count, not earlier state.
+SonareError hosted_instrument_bind_error(const sonare::engine::RealtimeEngine& probe,
+                                         size_t index) {
+  namespace check = sonare::util::check;
+  switch (probe.last_midi_instrument_bind_status()) {
+    case sonare::engine::MidiInstrumentBindStatus::kRackFull:
+      check::refuse("instruments", "must hold at most 16 instruments");
+    case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
+      check::refuse(instrument_subject(index).c_str(), "must not be bound to two destinations");
+    case sonare::engine::MidiInstrumentBindStatus::kInstrumentPrepareFailed:
+      check::refuse(instrument_subject(index).c_str(),
+                    "must be preparable at the bounce's sample rate and block size");
+    case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
+      return SONARE_ERROR_INVALID_STATE;
+    default:
+      return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+}
+
 // End of the arrangement in frames at the render sample rate: the latest sample
 // touched by any audio or MIDI clip on the compiled timeline. Used to
 // auto-derive a bounce length when the caller does not supply total_frames.
@@ -197,7 +225,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     check::integer_in_range(opts.sample_rate, sonare::kMinAudioSampleRate,
                             sonare::kMaxAudioSampleRate, "options.sample_rate");
   }
-  if (!sonare::is_supported_sample_rate(sample_rate)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!sonare::is_supported_sample_rate(sample_rate)) {
+    check::refuse("project", "must have a supported sample rate");
+  }
   if (opts.sample_rate != 0 && std::abs(sample_rate - project_sr) > 1.0e-6) {
     check::refuse("options.sample_rate", "must equal the sample rate of the project");
   }
@@ -205,10 +235,14 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   if (!checked_frame_shape(static_cast<int64_t>(block_size), 2, &block_floats)) {
     check::refuse("options.block_size", "must be small enough for its buffer to be addressed");
   }
-  for (const HostedInstrument& hosted : instruments) {
-    if (hosted.instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t i = 0; i < instruments.size(); ++i) {
+    const HostedInstrument& hosted = instruments[i];
+    if (hosted.instrument == nullptr) {
+      check::refuse(instrument_subject(i).c_str(), sonare::util::refusal::kNonNullPredicate);
+    }
     if (hosted.instrument->latency_samples() < 0 || hosted.instrument->tail_samples() < 0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      check::refuse(instrument_subject(i).c_str(),
+                    "must report a latency and a tail of at least 0 samples");
     }
   }
 
@@ -247,22 +281,29 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   {
     sonare::engine::RealtimeEngine probe;
     probe.prepare(sample_rate, block_size);
-    for (const HostedInstrument& hosted : instruments) {
+    for (size_t i = 0; i < instruments.size(); ++i) {
+      const HostedInstrument& hosted = instruments[i];
       if (!probe.set_midi_instrument(hosted.destination_id, hosted.instrument)) {
-        return SONARE_ERROR_INVALID_PARAMETER;  // more instruments than the rack holds
+        return hosted_instrument_bind_error(probe, i);
       }
       const bool replay = opts.total_frames <= 0 && hosted.instrument->tail_follows_events();
       int latency = 0;
       int tail = 0;
-      if (!probe_hosted_latency_tail(*compiled.timeline, hosted, replay, &latency, &tail) ||
-          latency < 0 || tail < 0) {
-        return SONARE_ERROR_INVALID_PARAMETER;
+      if (!probe_hosted_latency_tail(*compiled.timeline, hosted, replay, &latency, &tail)) {
+        check::refuse(instrument_subject(i).c_str(),
+                      "must accept every SysEx scheduled on its destination");
+      }
+      if (latency < 0 || tail < 0) {
+        check::refuse(instrument_subject(i).c_str(),
+                      "must report a latency and a tail of at least 0 samples");
       }
       unbounded_tail |= tail == std::numeric_limits<int>::max();
       instrument_tail = std::max<int64_t>(instrument_tail, static_cast<int64_t>(tail));
     }
     const int pdc_samples = probe.midi_instrument_latency_samples();
-    if (pdc_samples < 0) return SONARE_ERROR_INVALID_PARAMETER;
+    if (pdc_samples < 0) {
+      check::refuse("instruments", "must report a combined latency of at least 0 samples");
+    }
     pdc = static_cast<int64_t>(pdc_samples);
     for (const HostedInstrument& hosted : instruments) {
       probe.set_midi_instrument(hosted.destination_id, nullptr);
@@ -360,10 +401,12 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   const int64_t render_frames = single_render_frames;
   size_t render_floats = 0;
   if (!checked_frame_shape(render_frames, 2, &render_floats)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    check::refuse("options.total_frames", "must be small enough for the render to be addressed");
   }
   size_t pdc_count = 0;
-  if (!checked_frame_count(pdc, &pdc_count)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!checked_frame_count(pdc, &pdc_count)) {
+    check::refuse("instruments", "must report a latency small enough to be addressed");
+  }
   std::vector<std::vector<float>> channels;
   if (!render_timeline(*compiled.timeline, /*keep=*/{}, instruments, sample_rate, block_size,
                        /*num_channels=*/2, render_frames, &channels)) {

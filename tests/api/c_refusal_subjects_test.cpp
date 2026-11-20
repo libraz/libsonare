@@ -479,3 +479,34 @@ TEST_CASE("the effects and metering entries refuse their own members", "[c_api][
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples_per_bucket must be an integer of at least 1");
 }
+
+TEST_CASE("the project MIDI entries name a route field and a bank outside their domains",
+          "[c_api][project]") {
+  size_t count = 0;
+  for (const SonareMidiRouteConfig& config :
+       {SonareMidiRouteConfig{16, -1, -1, 1}, SonareMidiRouteConfig{-1, -2, -1, 1},
+        SonareMidiRouteConfig{-1, -1, 16, 1}}) {
+    CHECK(sonare_midi_route_events(nullptr, 0, &config, nullptr, 0, &count, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_message(),
+               Catch::Matchers::ContainsSubstring("must be -1 or an integer in [0, 15]"));
+  }
+  const SonareMidiRouteConfig remap{-1, -1, 16, 1};
+  CHECK(sonare_midi_route_events(nullptr, 0, &remap, nullptr, 0, &count, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring("config.remap_channel must be"));
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+  for (const int bank : {-2, 16384}) {
+    CHECK(sonare_project_set_program_on_channel(project, clip, 0, 0, 0, bank) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_message(),
+               Catch::Matchers::ContainsSubstring("bank must be -1 or an integer in [0, 16383]"));
+  }
+  CHECK(sonare_project_set_program_on_channel(project, clip, 0, 0, 0, -1) == SONARE_OK);
+  sonare_project_destroy(project);
+}

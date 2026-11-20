@@ -11,9 +11,17 @@
 #include "c_api/project_bounce_stems.h"
 #include "engine/mixing_runtime.h"
 #include "mixing/api/scene.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_c_bounce_detail {
 namespace {
+
+// Refuses a render whose length, with the latency added to it, has no buffer
+// this process can address.
+[[noreturn]] void refuse_render_length() {
+  sonare::util::check::refuse("options.total_frames",
+                              "must be small enough for the render to be addressed");
+}
 
 void add_stem(std::vector<std::vector<float>>* destination,
               const std::vector<std::vector<float>>& source) {
@@ -323,10 +331,10 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
                                  size_t* out_len, SonareMixer* prebuilt_mixer,
                                  std::vector<arr::Diagnostic>* out_diagnostics) {
   size_t total = 0;
-  if (num_channels <= 0 ||
-      !checked_frame_shape(frames, static_cast<size_t>(num_channels), &total) || pdc < 0 ||
-      mixer_input_frames < 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (num_channels <= 0) sonare::util::check::refuse("options.num_channels", "must be at least 1");
+  if (pdc < 0 || mixer_input_frames < 0) return SONARE_ERROR_INVALID_STATE;
+  if (!checked_frame_shape(frames, static_cast<size_t>(num_channels), &total)) {
+    refuse_render_length();
   }
   MixerPtr mixer_owner(prebuilt_mixer);
   MixerRouting effective_routing = routing;
@@ -375,30 +383,30 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   }
   int64_t mixer_render_frames = 0;
   if (!checked_nonnegative_add(frames, static_cast<int64_t>(mixer_latency), &mixer_render_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    refuse_render_length();
   }
 
   const size_t strip_count = effective_routing.strip_ids.size();
   // Stems are stereo (the mixer is stereo): one per strip plus one direct stem.
   size_t stem_floats = 0;
   if (!checked_frame_shape(mixer_render_frames, 2, strip_count, &stem_floats)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    refuse_render_length();
   }
 
   int64_t render_frames = 0;
   if (!checked_nonnegative_add(mixer_render_frames, pdc, &render_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    refuse_render_length();
   }
   size_t render_floats = 0;
   if (!checked_frame_shape(render_frames, 2, &render_floats)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    refuse_render_length();
   }
   size_t mixer_frame_count = 0;
   size_t master_floats = 0;
   if (!checked_frame_count(mixer_render_frames, &mixer_frame_count) ||
       !checked_frame_shape(mixer_render_frames, static_cast<size_t>(master_planes),
                            &master_floats)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    refuse_render_length();
   }
   std::unique_ptr<MidiSourceStemSink> midi_source_stems;
   if (shared_midi_destination) {
@@ -417,7 +425,7 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
     size_t render_frame_count = 0;
     if (!checked_midi_source_stem_shape(midi_tracks.size(), render_frames, &midi_source_floats) ||
         !checked_frame_count(render_frames, &render_frame_count)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      refuse_render_length();
     }
     midi_source_stems = std::make_unique<MidiSourceStemSink>(
         midi_tracks, 2, render_frames, render_frame_count, timeline, sample_rate, block_size);

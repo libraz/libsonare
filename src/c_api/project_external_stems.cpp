@@ -1,7 +1,10 @@
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <map>
 #include <memory>
+#include <set>
+#include <string>
 #include <utility>
 
 #include "c_api/project_internal.h"
@@ -23,21 +26,6 @@ size_t channel_count(uint32_t layout) noexcept {
     default:
       return 0;
   }
-}
-
-SonareError import_error_to_c(sonare::arrangement::ExternalSeparatedStemImportError error) {
-  using Error = sonare::arrangement::ExternalSeparatedStemImportError;
-  switch (error) {
-    case Error::kOk:
-      return SONARE_OK;
-    case Error::kProjectMutationFailed:
-      return SONARE_ERROR_INVALID_STATE;
-    case Error::kInvalidArgument:
-    case Error::kSampleRateMismatch:
-    case Error::kFramePositionNotRepresentable:
-      return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_ERROR_UNKNOWN;
 }
 
 // PCM lives alongside EditHistory rather than inside Project, so a regular
@@ -174,8 +162,10 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     check::refuse("request.stem_count", sonare::util::refusal::integer_range_predicate(
                                             1, static_cast<double>(kMaxSamples)));
   }
+  check::integer_at_least(request->sample_rate, 1, "request.sample_rate");
   sonare::arrangement::ExternalSeparatedStemSet input;
   input.sample_rate = request->sample_rate;
+  std::set<std::string> names;
   input.stems.reserve(request->stem_count);
   size_t total_samples = 0;
   for (size_t i = 0; i < request->stem_count; ++i) {
@@ -185,6 +175,10 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
       return check::indexed_subject("request.stems", i, field);
     };
     check::non_null(desc.name, member("name").c_str());
+    if (!names.insert(desc.name).second) {
+      check::refuse(member("name").c_str(), "must not repeat the name of another stem");
+    }
+    check::integer_at_least<int64_t>(desc.start_frame, 0, member("start_frame").c_str());
     check::integer_in_range(desc.layout, SONARE_EXTERNAL_STEM_MONO, SONARE_EXTERNAL_STEM_STEREO,
                             member("layout").c_str());
     layout =
@@ -206,6 +200,12 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     for (size_t channel = 0; channel < channels; ++channel) {
       check::non_null(desc.planar_samples[channel],
                       (member("planar_samples") + "[" + std::to_string(channel) + "]").c_str());
+      for (size_t k = 0; k < frames; ++k) {
+        if (!std::isfinite(desc.planar_samples[channel][k])) {
+          check::refuse((member("planar_samples") + "[" + std::to_string(channel) + "]").c_str(),
+                        "contains a non-finite sample at index " + std::to_string(k));
+        }
+      }
       stem.planar_samples.emplace_back(desc.planar_samples[channel],
                                        desc.planar_samples[channel] + frames);
     }
@@ -229,8 +229,11 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     check::refuse("request.stems",
                   "must start and end where the project's tempo map can place them");
   }
-  const SonareError validation_error = import_error_to_c(validation.error);
-  if (validation_error != SONARE_OK) return validation_error;
+  if (validation.error == ImportError::kInvalidArgument) {
+    check::refuse("request.stems", "must carry names and roles that are valid UTF-8");
+  }
+  // Every argument cause is refused above; what is left is a failed staging.
+  if (validation.error != ImportError::kOk) return SONARE_ERROR_INVALID_STATE;
 
   // The project allocator and the sidecar map normally advance together, but
   // callers can construct an inconsistent store through the C++ seam. Reject

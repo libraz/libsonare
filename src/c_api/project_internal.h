@@ -120,31 +120,6 @@ bool valid_u7(uint8_t value) noexcept { return value <= 127; }
 
 bool valid_nibble(uint8_t value) noexcept { return value <= 15; }
 
-SonareError validate_audio_clip_payload(const SonareProjectClipDesc* desc, size_t* out_samples) {
-  if (out_samples) *out_samples = 0;
-  if (!desc->audio_interleaved && desc->audio_frames == 0) {
-    return SONARE_OK;
-  }
-  if (!desc->audio_interleaved || desc->audio_frames <= 0 || desc->audio_channels <= 0 ||
-      desc->audio_sample_rate < kMinSampleRate || desc->audio_sample_rate > kMaxSampleRate) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  const auto frames = static_cast<uint64_t>(desc->audio_frames);
-  const auto channels = static_cast<uint64_t>(desc->audio_channels);
-  if (channels == 0 || frames > std::numeric_limits<size_t>::max() / channels) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  const size_t total = static_cast<size_t>(frames * channels);
-  if (total == 0 || total > kMaxBufferSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  for (size_t i = 0; i < total; ++i) {
-    if (!std::isfinite(desc->audio_interleaved[i])) return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (out_samples) *out_samples = total;
-  return SONARE_OK;
-}
-
 void rollback_to_depth(SonareProject* project, size_t undo_depth) {
   if (project == nullptr) return;
   while (project->history.undo_depth() > undo_depth) {
@@ -445,7 +420,6 @@ SonareError make_smf_clip_from_events(
     const arr::MidiContentStore& midi, sonare::midi::SysExStore* export_store,
     std::map<uint32_t, sonare::midi::SysExHandle>* exported_handles, size_t max_output_events,
     sonare::midi::MidiClip* out) {
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
   if (!std::isfinite(clip.start_ppq) || !std::isfinite(clip.length_ppq) ||
       !std::isfinite(clip.source_offset_ppq) || clip.start_ppq < 0.0 || clip.length_ppq <= 0.0 ||

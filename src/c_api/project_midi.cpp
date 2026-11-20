@@ -13,6 +13,13 @@ SonareError refuse_unknown_midi_clip() {
   return run_validation([] { check::refuse_unknown_id("clip_id", "a MIDI clip", "project"); });
 }
 
+// Refuses a MIDI FX chain the clip's events cannot pass through: one expanding a
+// chunk past the chain's output buffer, or an event it cannot place in time.
+[[noreturn]] void refuse_unrenderable_midi_fx() {
+  check::refuse("config_json",
+                "must describe a chain the clip's events pass through without overflowing");
+}
+
 // Refuses an event whose position is out of range or that is not a channel voice message.
 void check_midi_event_pod(const SonareMidiEventPod& event, const std::string& ppq_subject,
                           const std::string& word0_subject) {
@@ -740,12 +747,19 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
   }
   SonareMidiRouteConfig default_config{-1, -1, -1, 1};
   const SonareMidiRouteConfig& c = config != nullptr ? *config : default_config;
-  auto valid_route_field = [](int value) noexcept {
-    return value == -1 || (value >= 0 && value <= 15);
-  };
-  if (!valid_route_field(c.filter_group) || !valid_route_field(c.filter_channel) ||
-      !valid_route_field(c.remap_channel)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        // -1 leaves the field unfiltered (or the channel unmapped).
+        const auto route_field = [](int value, const char* subject) {
+          if (value != -1 && (value < 0 || value > 15)) {
+            check::refuse(subject, "must be -1 or an integer in [0, 15]");
+          }
+        };
+        route_field(c.filter_group, "config.filter_group");
+        route_field(c.filter_channel, "config.filter_channel");
+        route_field(c.remap_channel, "config.remap_channel");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out_events, out_capacity);
   SONARE_C_REQUIRE_NONNULL(out_count);
@@ -1179,7 +1193,9 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
       err != SONARE_OK) {
     return err;
   }
-  if (bank < -1 || bank > 16383) return SONARE_ERROR_INVALID_PARAMETER;
+  if (bank < -1 || bank > 16383) {
+    return run_validation([] { check::refuse("bank", "must be -1 or an integer in [0, 16383]"); });
+  }
   SONARE_C_TRY
   arr::MidiClipEventList next;
   const auto it = project->history.midi_content().events.find(clip_id);
@@ -1274,7 +1290,7 @@ SonareError sonare_project_bake_midi_fx_ex(SonareProject* project, uint32_t clip
   const bool want_map = out_source_index != nullptr || out_count != nullptr;
   std::vector<int32_t> source_index;
   if (!apply_midi_fx_to_events(current, &chain, &transformed, want_map ? &source_index : nullptr)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    refuse_unrenderable_midi_fx();
   }
   auto command = std::make_unique<arr::ReplaceMidiClipEvents>(clip_id, std::move(transformed));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -1313,7 +1329,7 @@ SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, u
   if (it != project->history.midi_content().events.end()) current = it->second;
   arr::MidiClipEventList transformed;
   if (!apply_midi_fx_to_events(current, &chain, &transformed)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    refuse_unrenderable_midi_fx();
   }
   *out_count = transformed.size();
   return SONARE_OK;

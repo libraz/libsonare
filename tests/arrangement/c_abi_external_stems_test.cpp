@@ -5,7 +5,9 @@
 
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -224,5 +226,58 @@ TEST_CASE("C ABI external stem import refuses an argument by its header name",
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "request.sample_rate must equal the sample rate of the project");
 
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("C ABI external stem import names the stem field it refuses",
+          "[arrangement][external_stems][c_api]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  StemBuffers a(8);
+  StemBuffers b(8);
+  SonareExternalStemImportResult result{};
+  const auto refused = [&](const SonareExternalStemDesc* stems, size_t count, int sample_rate) {
+    const SonareExternalStemImportRequest request{0, sample_rate, stems, count};
+    REQUIRE(sonare_project_import_external_stems(project, &request, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    const char* message = sonare_last_error_message();
+    return std::string(message != nullptr ? message : "");
+  };
+
+  const SonareExternalStemDesc twice[] = {
+      {"same", nullptr, SONARE_EXTERNAL_STEM_STEREO, a.planes.data(), 8, 0},
+      {"same", nullptr, SONARE_EXTERNAL_STEM_STEREO, b.planes.data(), 8, 0},
+  };
+  CHECK_THAT(refused(twice, 2, 48000),
+             Catch::Matchers::ContainsSubstring(
+                 "request.stems[1].name must not repeat the name of another stem"));
+
+  const SonareExternalStemDesc early = {"early",         nullptr, SONARE_EXTERNAL_STEM_STEREO,
+                                        a.planes.data(), 8,       -1};
+  CHECK_THAT(refused(&early, 1, 48000),
+             Catch::Matchers::ContainsSubstring("request.stems[0].start_frame must be"));
+
+  b.right[5] = std::numeric_limits<float>::quiet_NaN();
+  const SonareExternalStemDesc nan = {"nan",           nullptr, SONARE_EXTERNAL_STEM_STEREO,
+                                      b.planes.data(), 8,       0};
+  CHECK_THAT(refused(&nan, 1, 48000),
+             Catch::Matchers::ContainsSubstring(
+                 "request.stems[0].planar_samples[1] contains a non-finite sample at index 5"));
+
+  const SonareExternalStemDesc bad_utf8 = {"\xff",          nullptr, SONARE_EXTERNAL_STEM_STEREO,
+                                           a.planes.data(), 8,       0};
+  CHECK_THAT(refused(&bad_utf8, 1, 48000),
+             Catch::Matchers::ContainsSubstring(
+                 "request.stems must carry names and roles that are valid UTF-8"));
+
+  const SonareExternalStemDesc fine = {"fine",          nullptr, SONARE_EXTERNAL_STEM_STEREO,
+                                       a.planes.data(), 8,       0};
+  CHECK_THAT(refused(&fine, 1, 0),
+             Catch::Matchers::ContainsSubstring("request.sample_rate must be"));
+
+  size_t tracks = 0;
+  REQUIRE(sonare_project_track_count(project, &tracks) == SONARE_OK);
+  CHECK(tracks == 0);
   sonare_project_destroy(project);
 }
