@@ -236,16 +236,10 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
                                          SonareEngineBounceResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  // Zero the owned out-pointer/lengths BEFORE any validation early-return so a
-  // failed validation always leaves a NULL owned pointer (matching the analysis
-  // wrappers in sonare_c.cpp). Otherwise the standard
-  // sonare_free_engine_bounce_result(&r) idiom would delete[] an uninitialised pointer.
-  if (out) {
-    *out = {};
-  }
+  // A failed call leaves a NULL owned pointer, so sonare_free_engine_bounce_result(&r) is safe.
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(options);
-  SONARE_C_REQUIRE_NONNULL(out);
   if (const SonareError err = run_validation([&] {
         util::check::integer_at_least<int64_t>(options->total_frames, 1, "options.total_frames");
       });
@@ -262,6 +256,16 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
       err != SONARE_OK) {
     return err;
   }
+  // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
+  // 6 = 5.1, 8 = 7.1). Counts like 3/4/5/7 have no layout and would silently
+  // leave their extra planes unpanned, so reject them up front.
+  if (sonare::channel_count(sonare::layout_from_channel_count(options->num_channels)) !=
+      options->num_channels) {
+    return run_validation([&] {
+      util::check::refuse("options.num_channels",
+                          util::refusal::one_of_predicate(std::array<int, 4>{1, 2, 6, 8}));
+    });
+  }
   if (const SonareError err = run_validation([&] {
         util::check::integer_at_least(options->target_sample_rate, 0, "options.target_sample_rate");
       });
@@ -274,34 +278,6 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_at_least(options->dither_bits, 0, "options.dither_bits"); });
-      err != SONARE_OK) {
-    return err;
-  }
-  // 0 selects the prepared rate for the source and the source rate for the target.
-  // prepare admits only whole-hertz rates, so the prepared rate converts exactly.
-  const int source_sample_rate = options->source_sample_rate == 0
-                                     ? static_cast<int>(engine->engine.sample_rate())
-                                     : options->source_sample_rate;
-  const int target_sample_rate =
-      options->target_sample_rate == 0 ? source_sample_rate : options->target_sample_rate;
-  if (source_sample_rate <= 0) {
-    return run_validation([&] {
-      util::check::refuse("options.source_sample_rate",
-                          "must not be 0 when the engine has no prepared sample rate");
-    });
-  }
-  if (!resource::engine_bounce_shape_fits(options->total_frames, options->num_channels,
-                                          source_sample_rate, target_sample_rate,
-                                          options->dither != 0)) {
-    return run_validation([&] {
-      util::check::refuse_relation(
-          {"options.total_frames", "options.num_channels", "options.source_sample_rate",
-           "options.target_sample_rate"},
-          "{0}, {1}, {2} and {3} give a result larger than the supported size");
-    });
-  }
   // Reject an out-of-range dither type instead of silently mapping it to None,
   // which would return SONARE_OK with undithered audio and no way to tell that
   // the request was ignored (same policy as the analysis options' chroma_method).
@@ -310,7 +286,11 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
       util::check::one_of(options->dither, std::array<int, 4>{0, 1, 2, 3}, "options.dither");
     });
   }
-  // Every option-derived refusal precedes the render, which consumes engine state.
+  if (const SonareError err = run_validation(
+          [&] { util::check::integer_at_least(options->dither_bits, 0, "options.dither_bits"); });
+      err != SONARE_OK) {
+    return err;
+  }
   if (options->dither != 0) {
 #if defined(SONARE_WITH_MASTERING)
     if (options->dither_bits != 0 &&
@@ -330,16 +310,31 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
     return SONARE_ERROR_NOT_SUPPORTED;
 #endif
   }
-  // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
-  // 6 = 5.1, 8 = 7.1). Counts like 3/4/5/7 have no layout and would silently
-  // leave their extra planes unpanned, so reject them up front.
-  if (sonare::channel_count(sonare::layout_from_channel_count(options->num_channels)) !=
-      options->num_channels) {
+  // 0 selects the prepared rate for the source and the source rate for the target.
+  // prepare admits only whole-hertz rates, so the prepared rate converts exactly.
+  const int source_sample_rate = options->source_sample_rate == 0
+                                     ? static_cast<int>(engine->engine.sample_rate())
+                                     : options->source_sample_rate;
+  const int target_sample_rate =
+      options->target_sample_rate == 0 ? source_sample_rate : options->target_sample_rate;
+  if (source_sample_rate <= 0) {
     return run_validation([&] {
-      util::check::refuse("options.num_channels",
-                          util::refusal::one_of_predicate(std::array<int, 4>{1, 2, 6, 8}));
+      util::check::refuse("options.source_sample_rate",
+                          "must not be 0 when the engine has no prepared sample rate");
     });
   }
+  // Every option-derived refusal precedes the render, which consumes engine state.
+  if (!resource::engine_bounce_shape_fits(options->total_frames, options->num_channels,
+                                          source_sample_rate, target_sample_rate,
+                                          options->dither != 0)) {
+    return run_validation([&] {
+      util::check::refuse_relation(
+          {"options.total_frames", "options.num_channels", "options.source_sample_rate",
+           "options.target_sample_rate"},
+          "{0}, {1}, {2} and {3} give a result larger than the supported size");
+    });
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
   // A never-prepared engine renders only silence and cannot report through the
   // (unreserved) telemetry ring, so fail closed instead of returning a bounce
   // result the caller would read as a valid silent render.
@@ -435,10 +430,9 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
                                          SonareEngineFreezeResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (out) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(options);
-  SONARE_C_REQUIRE_NONNULL(out);
   if (const SonareError err = run_validation([&] {
         util::check::integer_at_least<int64_t>(options->total_frames, 1, "options.total_frames");
       });
@@ -468,6 +462,7 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
                                    "{0} times {1} exceeds the supported size");
     });
   }
+  SONARE_C_REQUIRE_NONNULL(out);
   // Freezing a never-prepared engine would capture pure silence with no error
   // channel (telemetry is unreserved before prepare()); fail closed instead.
   if (engine->engine.max_block_size() <= 0) {
@@ -508,10 +503,10 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
 SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written) {
   SONARE_C_API_ENTRY;
-  if (written) *written = 0;
+  SONARE_C_ZERO_OUTS(written);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(written);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
+  SONARE_C_REQUIRE_NONNULL(written);
 
   size_t count = 0;
   engine::Telemetry telemetry{};
@@ -533,10 +528,10 @@ SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
 #if defined(SONARE_WITH_MIXING)
   size_t count = 0;
@@ -559,10 +554,10 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
                                                      SonareMeterTelemetryRecordWide* out,
                                                      size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
 #if defined(SONARE_WITH_MIXING)
   size_t count = 0;
@@ -585,10 +580,10 @@ SonareError sonare_engine_drain_meter_telemetry_v2(SonareEngine* engine,
                                                    SonareMeterTelemetryRecordV2* out,
                                                    size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
 #if defined(SONARE_WITH_MIXING)
   size_t count = 0;
@@ -610,10 +605,10 @@ SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareEngine* engine,
                                                         SonareMeterTelemetryRecordWideV2* out,
                                                         size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
 #if defined(SONARE_WITH_MIXING)
   size_t count = 0;
@@ -636,10 +631,10 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engin
                                                              size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (out_count) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out_db, capacity);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
 #if defined(SONARE_WITH_MIXING)
   static_assert(sonare::engine::InsertGainReductionBoard::kCapacity == SONARE_METER_MAX_INSERTS,
@@ -665,7 +660,7 @@ SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int in
                                                     unsigned int band_count,
                                                     unsigned int* out_band_count) {
   SONARE_C_API_ENTRY;
-  if (out_band_count) *out_band_count = 0;
+  SONARE_C_ZERO_OUTS(out_band_count);
   SONARE_C_REQUIRE_NONNULL(engine);
 #if defined(SONARE_WITH_MIXING)
   SONARE_C_TRY
@@ -687,10 +682,10 @@ SonareError sonare_engine_drain_scope_telemetry(SonareEngine* engine,
                                                 SonareScopeTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_count) *out_count = 0;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_records);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
 #if defined(SONARE_WITH_MIXING)
   size_t count = 0;

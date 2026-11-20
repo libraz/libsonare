@@ -271,6 +271,7 @@ SonareError sonare_engine_reset_master_loudness_meter(SonareEngine* engine, int6
                                                                     : SONARE_ERROR_OUT_OF_MEMORY;
 #else
   (void)render_frame;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
@@ -816,6 +817,7 @@ SonareError sonare_engine_set_solo_mute(SonareEngine* engine, uint32_t lane_inde
   (void)solo;
   (void)mute;
   (void)render_frame;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   rt::Command command{};
@@ -846,6 +848,7 @@ SonareError sonare_engine_set_track_monitor_mode(SonareEngine* engine, uint32_t 
   (void)lane_index;
   (void)mode;
   (void)render_frame;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "mixing support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   rt::Command command{};
@@ -899,7 +902,10 @@ SonareError sonare_engine_prime_offline_parameters(SonareEngine* engine, int num
       err != SONARE_OK) {
     return err;
   }
-  if (engine->engine.max_block_size() <= 0) return SONARE_ERROR_INVALID_STATE;
+  if (engine->engine.max_block_size() <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "the engine has not been prepared");
+    return SONARE_ERROR_INVALID_STATE;
+  }
   block_size = resolve_offline_block(engine->engine, block_size);
   if (const SonareError err = run_validation([&] {
         util::check::integer_in_range(num_channels, 1, engine->engine.prepared_channels(),

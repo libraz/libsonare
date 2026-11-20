@@ -663,6 +663,38 @@ TEST_CASE("engine controller profile refusals", "[c_api][engine_refusal]") {
   CHECK(sonare_engine_controller_note_tracking(engine, 3, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_tracking must not be NULL");
+
+  // Header order: fields in member order, the whole binding before the destination lookup,
+  // dimension before the out-parameter, and every out cleared before the first refusal.
+  bad = binding;
+  bad.index = 200;
+  bad.axis = 20;
+  CHECK(sonare_engine_bind_controller(engine, 3, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == refused("binding.index", refusal::integer_range_predicate(0, 127)));
+  bad = binding;
+  bad.axis = SONARE_CONTROLLER_AXIS_NONE;
+  bad.lo = std::nanf("");
+  CHECK(sonare_engine_bind_controller(engine, 3, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "binding.axis must not be none");
+  bad = binding;
+  bad.curve = 0.0f;
+  CHECK(sonare_engine_bind_controller(engine, 9, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == refused("binding.curve", refusal::greater_than_predicate(0.0)));
+  CHECK(sonare_engine_controller_note_tracking(engine, 3, 7, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == refused("dimension", dimension));
+  tracking = 2;
+  CHECK(sonare_engine_controller_note_tracking(nullptr, 3, 0, &tracking) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(tracking == SONARE_NOTE_TRACKING_LAST);
+  int meaningful = 1;
+  CHECK(sonare_engine_controller_velocity_meaningful(nullptr, 3, &meaningful) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(meaningful == 0);
+  count = 5;
+  CHECK(sonare_engine_controller_binding_count(nullptr, 3, &count) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(count == 0);
   sonare_engine_destroy(engine);
 }
 

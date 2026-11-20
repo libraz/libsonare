@@ -131,6 +131,20 @@ TEST_CASE("engine bounce refuses each option by its member name", "[c_api][engin
         "options.block_size must be an integer in [1, 128]");
   CHECK(refused([](auto& o) { o.source_sample_rate = 44100; }) ==
         "options.source_sample_rate must equal the prepared sample rate 48000");
+  // Members are refused in declaration order, and every option before a NULL out.
+  CHECK(refused([](auto& o) {
+          o.num_channels = 3;
+          o.dither = 4;
+        }) == "options.num_channels must be one of 1, 2, 6, 8");
+  CHECK(refused([](auto& o) {
+          o.dither = 4;
+          o.dither_bits = -1;
+        }) == "options.dither must be one of 0, 1, 2, 3");
+  SonareEngineBounceOptions zero_frames = good;
+  zero_frames.total_frames = 0;
+  CHECK(sonare_engine_bounce_offline(engine, &zero_frames, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "options.total_frames must be an integer of at least 1");
 #if defined(SONARE_WITH_MASTERING)
   CHECK(refused([](auto& o) {
           o.dither = 1;
@@ -246,6 +260,13 @@ TEST_CASE("engine telemetry drains refuse a NULL buffer by name", "[c_api][engin
   CHECK(sonare_engine_drain_scope_telemetry(engine, nullptr, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_count must not be NULL");
+  // The record buffer precedes the count out-parameter in the header, so it is refused first.
+  CHECK(sonare_engine_drain_telemetry(engine, nullptr, 1, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "out must not be NULL when max_records is not 0");
+  CHECK(sonare_engine_drain_meter_telemetry(engine, nullptr, 1, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "out must not be NULL when max_records is not 0");
 
   CHECK(sonare_engine_configure_scope_telemetry(nullptr, 0, 0, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -258,6 +279,9 @@ TEST_CASE("engine telemetry drains refuse a NULL buffer by name", "[c_api][engin
   CHECK(sonare_engine_meter_target_insert_gain_reduction(engine, 1, gain_reduction, 1, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "out_count must not be NULL");
+  CHECK(sonare_engine_meter_target_insert_gain_reduction(engine, 1, nullptr, 1, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "out_db must not be NULL when capacity is not 0");
 #if defined(SONARE_WITH_MIXING)
   CHECK(sonare_engine_meter_target_insert_gain_reduction(engine, 0xDEADBEEFu, gain_reduction, 1,
                                                          &count) == SONARE_ERROR_INVALID_PARAMETER);

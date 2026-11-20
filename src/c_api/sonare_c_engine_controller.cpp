@@ -126,6 +126,7 @@ SonareError sonare_engine_set_controller_profile(SonareEngine* engine, uint32_t 
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -148,27 +149,48 @@ SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destina
   SONARE_C_REQUIRE_NONNULL(binding);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   // Ordinals out of range are refused rather than clamped: a value the caller
   // meant as "poly pressure" arriving as "control change" is a binding that
-  // works and listens to the wrong thing. Named one at a time because the field
-  // is the whole diagnosis, and because the code alone cannot carry it -- it is
-  // the same INVALID_PARAMETER an unbound destination returns.
+  // works and listens to the wrong thing. The fields are refused in member order,
+  // and the whole binding before the destination is looked up.
   sonare::midi::ControllerInput input{};
   if (!ordinal_to_enum(binding->input, 0, SONARE_CONTROLLER_INPUT_COUNT - 1, &input)) {
     return run_validation([&] {
       util::check::one_of(binding->input, std::array<int, 5>{0, 1, 2, 3, 4}, "binding.input");
     });
   }
+  if (binding->index > 127) {
+    return run_validation(
+        [&] { util::check::integer_in_range(binding->index, 0, 127, "binding.index"); });
+  }
   sonare::midi::ControllerAxis axis{};
   if (!ordinal_to_enum(binding->axis, 0, SONARE_CONTROLLER_AXIS_COUNT - 1, &axis)) {
     return run_validation(
         [&] { util::check::refuse("binding.axis", util::refusal::kDeclaredValuePredicate); });
   }
-  if (binding->index > 127) {
-    return run_validation(
-        [&] { util::check::integer_in_range(binding->index, 0, 127, "binding.index"); });
+  if (axis == sonare::midi::ControllerAxis::kNone) {
+    return run_validation([&] { util::check::refuse("binding.axis", "must not be none"); });
+  }
+  // A non-finite range or curve would reach the audio thread and stay there, so
+  // it is refused here rather than substituted: a mapping silently replaced by
+  // a default is a mapping the caller believes it installed.
+  if (const SonareError err = run_validation([&] {
+        util::check::finite_float(binding->lo, "binding.lo");
+        util::check::finite_float(binding->hi, "binding.hi");
+        util::check::greater_than(binding->curve, 0.0, "binding.curve");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  if (input == sonare::midi::ControllerInput::kPolyPressure &&
+      !sonare::midi::controller_axis_is_excitation(axis)) {
+    return run_validation([&] {
+      util::check::refuse_relation({"binding.input", "binding.axis"},
+                                   "{1} must be an excitation axis when {0} is polyPressure");
+    });
   }
   SONARE_C_TRY
   sonare::midi::ControllerProfile profile;
@@ -179,27 +201,9 @@ SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destina
   entry.input = input;
   entry.index = binding->index;
   entry.axis = axis;
-  // A non-finite range or curve would reach the audio thread and stay there, so
-  // it is refused here rather than substituted: a mapping silently replaced by
-  // a default is a mapping the caller believes it installed.
-  util::check::finite_float(binding->lo, "binding.lo");
-  util::check::finite_float(binding->hi, "binding.hi");
-  util::check::greater_than(binding->curve, 0.0, "binding.curve");
   entry.lo = binding->lo;
   entry.hi = binding->hi;
   entry.curve = binding->curve;
-
-  // The binding itself is checked before the table, so a full table never hides a bad binding.
-  if (axis == sonare::midi::ControllerAxis::kNone) {
-    return run_validation([&] { util::check::refuse("binding.axis", "must not be none"); });
-  }
-  if (input == sonare::midi::ControllerInput::kPolyPressure &&
-      !sonare::midi::controller_axis_is_excitation(axis)) {
-    return run_validation([&] {
-      util::check::refuse_relation({"binding.input", "binding.axis"},
-                                   "{1} must be an excitation axis when {0} is polyPressure");
-    });
-  }
   if (!profile.bind(entry)) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "controller binding table is full");
     return SONARE_ERROR_INVALID_STATE;
@@ -214,6 +218,7 @@ SonareError sonare_engine_clear_controller_bindings(SonareEngine* engine, uint32
   SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -229,14 +234,12 @@ SonareError sonare_engine_clear_controller_bindings(SonareEngine* engine, uint32
 SonareError sonare_engine_controller_binding_count(SonareEngine* engine, uint32_t destination_id,
                                                    size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_count);
-  // Defined on every exit path, so a feature-disabled build and an unbound
-  // destination both leave the caller a readable count rather than whatever the
-  // stack held.
-  *out_count = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -257,6 +260,7 @@ SonareError sonare_engine_set_controller_velocity_meaningful(SonareEngine* engin
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)meaningful;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -273,11 +277,12 @@ SonareError sonare_engine_controller_velocity_meaningful(SonareEngine* engine,
                                                          uint32_t destination_id,
                                                          int* out_meaningful) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_meaningful);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out_meaningful);
-  *out_meaningful = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -308,6 +313,7 @@ SonareError sonare_engine_set_controller_note_tracking(SonareEngine* engine,
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -324,16 +330,17 @@ SonareError sonare_engine_set_controller_note_tracking(SonareEngine* engine,
 SonareError sonare_engine_controller_note_tracking(SonareEngine* engine, uint32_t destination_id,
                                                    int dimension, int* out_tracking) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_tracking);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_tracking);
-  *out_tracking = SONARE_NOTE_TRACKING_LAST;
   if (const SonareError err = run_validation(
           [&] { util::check::one_of(dimension, std::array<int, 3>{0, 1, 2}, "dimension"); });
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_tracking);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "arrangement support is not compiled in");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
