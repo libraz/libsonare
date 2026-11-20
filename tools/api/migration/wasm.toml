@@ -19006,19 +19006,19 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed p
 kind = "option"
 old = "scaleCorrectionSemitones(referenceMidi)"
 to = "scaleCorrectionSemitones(scaleReferenceMidi)"
-changed = "scaleCorrectionSemitones(scaleReferenceMidi?): absent is A4 and an explicit 0 is refused until the native entry reads it as MIDI note 0"
+changed = "scaleCorrectionSemitones(scaleReferenceMidi?): absent is A4 and an explicit 0 is MIDI note 0"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/effects-notes.test.ts::scale helpers: an absent scaleReferenceMidi is A4 and an explicit 0 is refused"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::scale helpers: an absent scaleReferenceMidi is A4 and an explicit 0 is MIDI note 0"
 
 [[entry]]
 kind = "option"
 old = "scaleQuantizeMidi(referenceMidi)"
 to = "scaleQuantizeMidi(scaleReferenceMidi)"
-changed = "scaleQuantizeMidi(scaleReferenceMidi?): absent is A4 and an explicit 0 is refused until the native entry reads it as MIDI note 0"
+changed = "scaleQuantizeMidi(scaleReferenceMidi?): absent is A4 and an explicit 0 is MIDI note 0"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/effects-notes.test.ts::scale helpers: an absent scaleReferenceMidi is A4 and an explicit 0 is refused"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::scale helpers: an absent scaleReferenceMidi is A4 and an explicit 0 is MIDI note 0"
 
 [[entry]]
 kind = "type"
@@ -21204,7 +21204,7 @@ rule = "one-entry-per-operation"
 kind = "type"
 old = "BuiltinSynthBinding"
 new = "BuiltinSynthConfig"
-domain = "engine"
+domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
@@ -26391,7 +26391,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set
 kind = "type"
 old = "MidiCcLearnOptions"
 new = "MidiCcLearnRequest"
-domain = "project"
+domain = "engine"
 rule = "one-positional-form"
 
 [[entry]]
@@ -27436,7 +27436,7 @@ rule = "type-names"
 kind = "field"
 old = "SonareEngineClipPageRequestMessage.requests.clipId"
 new = "ClipPagePageRequest.clipId"
-domain = "project"
+domain = "engine"
 rule = "type-names"
 entry = "./worklet"
 
@@ -27444,7 +27444,7 @@ entry = "./worklet"
 kind = "field"
 old = "SonareEngineClipPageRequestMessage.requests.pageIndex"
 new = "ClipPagePageRequest.pageIndex"
-domain = "project"
+domain = "engine"
 rule = "type-names"
 entry = "./worklet"
 
@@ -28800,7 +28800,7 @@ test = "bindings/wasm/tests/worklet_playback.test.ts::sizes the output from the 
 kind = "type"
 old = "SonareEngineClipPageRequestMessage"
 new = "EngineClipPageRequestMessage"
-domain = "project"
+domain = "engine"
 rule = "type-names"
 entry = "./worklet"
 
