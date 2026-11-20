@@ -25,7 +25,7 @@ function seedCompressorLimiterLane(engine: EngineLike): void {
     10,
     JSON.parse(
       JSON.stringify({
-        version: 1,
+        version: 2,
         strips: [
           {
             id: 'rack',

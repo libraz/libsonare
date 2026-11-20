@@ -19,7 +19,7 @@ const masterTarget: StripJsonTarget = { kind: 'master' };
 
 function scene(inserts: unknown[], extra: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [{ id: 'track-10', inserts, ...extra }],
     buses: [],
     connections: [],
@@ -28,7 +28,7 @@ function scene(inserts: unknown[], extra: Record<string, unknown> = {}): string 
 
 function busScene(inserts: unknown[]): string {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [],
     buses: [{ id: 'bus-20', inserts }],
     connections: [],
@@ -37,7 +37,7 @@ function busScene(inserts: unknown[]): string {
 
 function masterScene(inserts: unknown[]): string {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [{ id: 'master', inserts }],
     buses: [],
     connections: [],
@@ -187,7 +187,7 @@ describe('strip state retention', () => {
 
   it('refuses non-object entries and wrong-typed containers as scene_from_json does', () => {
     const document = (strips: unknown) =>
-      JSON.stringify({ version: 1, strips, buses: [], connections: [] });
+      JSON.stringify({ version: 2, strips, buses: [], connections: [] });
     const refusals: [unknown, RegExp][] = [
       [
         [null, { id: 'track-10', inserts: [{ processor: 'delay' }] }],
@@ -219,7 +219,7 @@ describe('strip state retention', () => {
     expect(decodedInsertSignature(document([{ id: 'track-10' }]), trackTarget)).toBe('[]');
     expect(
       decodedInsertSignature(
-        JSON.stringify({ version: 1, buses: [], connections: [] }),
+        JSON.stringify({ version: 2, buses: [], connections: [] }),
         trackTarget,
       ),
     ).toBe('[]');
@@ -293,7 +293,7 @@ describe('strip state retention', () => {
     const busSync: unknown[][] = [];
     const busCtx = fakeMixerContext(fakeEngine(busCalls), busCache, undefined, busSync);
     const busNext = JSON.stringify({
-      version: 1,
+      version: 2,
       strips: [],
       buses: [
         { id: 'bus-20', width: 1.2, inserts: [{ processor: 'delay', params: { timeMs: 240 } }] },
@@ -309,7 +309,7 @@ describe('strip state retention', () => {
     const masterSync: unknown[][] = [];
     const masterCtx = fakeMixerContext(fakeEngine(masterCalls), new Map(), masterJson, masterSync);
     const masterNext = JSON.stringify({
-      version: 1,
+      version: 2,
       strips: [
         { id: 'master', faderDb: -3, inserts: [{ processor: 'delay', params: { timeMs: 240 } }] },
       ],

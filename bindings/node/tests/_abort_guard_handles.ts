@@ -497,21 +497,21 @@ const eqInsert = (gainDb: number) => ({
 
 export const trackStripJson = (gainDb = 0) =>
   JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [{ id: `track-${TRACK_ID}`, inserts: [eqInsert(gainDb)] }],
     buses: [],
     connections: [],
   });
 
 const busStripJson = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [],
   buses: [{ id: String(BUS_ID), inserts: [eqInsert(0)] }],
   connections: [],
 });
 
 const masterStripJson = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [{ id: 'master', inserts: [eqInsert(0)] }],
   buses: [],
   connections: [],

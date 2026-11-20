@@ -11,7 +11,7 @@ import {
 /** One strip feeding a master bus that carries a peaking band at `gainDb`. */
 function sceneWithBusEq(gainDb: number): string {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     buses: [
       {
         id: 'master',

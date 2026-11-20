@@ -109,7 +109,7 @@ describe('insert param validation', () => {
   it('surfaces silently-ignored insert params as scene warnings', () => {
     // eq.parametric reads only band{i}.* fields, so flat keys take no effect.
     const ignored = JSON.stringify({
-      version: 1,
+      version: 2,
       buses: [{ id: 'master', role: 'master' }],
       strips: [
         {
@@ -134,7 +134,7 @@ describe('insert param validation', () => {
 
     // A scene whose params are all consumed reports no warnings.
     const clean = JSON.stringify({
-      version: 1,
+      version: 2,
       buses: [{ id: 'master', role: 'master' }],
       strips: [
         {
@@ -158,7 +158,7 @@ describe('insert param validation', () => {
   it('refuses an unknown scene key by path and exempts $ and x- keys', () => {
     const scene = (extra: Record<string, unknown>, stripExtra: Record<string, unknown>) =>
       JSON.stringify({
-        version: 1,
+        version: 2,
         ...extra,
         buses: [{ id: 'master', role: 'master' }],
         strips: [{ id: 'vocal', ...stripExtra }],

@@ -1213,9 +1213,9 @@ describe('SonareRealtimeEngineNode', () => {
         expect(engine.setStripFaderDb(3, -6)).toBeUndefined();
         expect(engine.setStripPan(3, 0.25)).toBeUndefined();
         const trackStripJson =
-          '{"version":1,"strips":[{"id":"track-3","faderDb":-6,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}';
+          '{"version":2,"strips":[{"id":"track-3","faderDb":-6,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}';
         const masterStripJson =
-          '{"version":1,"strips":[{"id":"master","faderDb":-3,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}';
+          '{"version":2,"strips":[{"id":"master","faderDb":-3,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}';
         engine.setStrip(3, stripDocument(trackStripJson));
         engine.setStrip('master', stripDocument(masterStripJson));
         expect(engine.setStripFaderDb('master', -3)).toBeUndefined();
@@ -1240,7 +1240,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setStripDualPan(3, -1, 1);
         engine.setStripChannelDelaySamples(3, 32);
         const busStripJson =
-          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}';
+          '{"version":2,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}';
         engine.setBusStrip(100, busDocument(busStripJson));
         engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 1 });
         engine.setBuiltinInstrument(3, { gain: 0.5 });
@@ -1915,7 +1915,7 @@ describe('SonareRealtimeEngineNode', () => {
       const blockSize = 128;
       const frames = blockSize * 4;
       const scene = JSON.stringify({
-        version: 1,
+        version: 2,
         strips: [
           {
             id: 'track-7',
@@ -2010,7 +2010,7 @@ describe('SonareRealtimeEngineNode', () => {
       const blockSize = 128;
       const frames = blockSize * 4;
       const scene = JSON.stringify({
-        version: 1,
+        version: 2,
         strips: [
           {
             id: 'track-7',
@@ -2117,7 +2117,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setBusStrip(
           100,
           busDocument(
-            '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":6,"band0.enabled":1}}]}],"connections":[]}',
+            '{"version":2,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":6,"band0.enabled":1}}]}],"connections":[]}',
           ),
         );
         engine.setBusInsertBypassed(100, 0, { bypassed: true, resetOnBypass: true });
@@ -2191,14 +2191,14 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setBusStrip(
           100,
           busDocument(
-            '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
+            '{"version":2,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
           ),
         );
         engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 5 });
         engine.setStrip(
           'master',
           stripDocument(
-            '{"version":1,"strips":[{"id":"master","inputTrimDb":-30}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"master","inputTrimDb":-30}],"buses":[],"connections":[]}',
           ),
         );
         engine.setTrackOutputBus(7, 100);
@@ -2222,7 +2222,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTrackBuses([]);
         engine.setStrip(
           'master',
-          stripDocument('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
+          stripDocument('{"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
         );
 
         const syncs = posted.filter(
@@ -2291,7 +2291,7 @@ describe('SonareRealtimeEngineNode', () => {
             busId,
             busDocument(
               JSON.stringify({
-                version: 1,
+                version: 2,
                 strips: [],
                 buses: [
                   {
@@ -2385,7 +2385,7 @@ describe('SonareRealtimeEngineNode', () => {
       });
       const scene = (busId: number) =>
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [],
           buses: [
             {
@@ -2468,7 +2468,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setStrip(
           'master',
           stripDocument(
-            '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
           ),
         );
         replay(posted);
@@ -2542,7 +2542,7 @@ describe('SonareRealtimeEngineNode', () => {
       };
       const scene = (levelDb: number) =>
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [
             {
               id: 'track-7',
@@ -2650,7 +2650,7 @@ describe('SonareRealtimeEngineNode', () => {
           'band0.enabled': 1,
         });
         const busStripJson = JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [],
           buses: [
             {
@@ -2665,7 +2665,7 @@ describe('SonareRealtimeEngineNode', () => {
           'master',
           stripDocument(
             JSON.stringify({
-              version: 1,
+              version: 2,
               strips: [
                 {
                   id: 'master',
@@ -2681,7 +2681,7 @@ describe('SonareRealtimeEngineNode', () => {
           7,
           stripDocument(
             JSON.stringify({
-              version: 1,
+              version: 2,
               strips: [
                 {
                   id: 'track-7',
@@ -2902,7 +2902,7 @@ describe('SonareRealtimeEngineNode', () => {
           }),
         );
         expect(busScene(200)).toEqual({
-          version: 1,
+          version: 2,
           strips: [],
           buses: [{ id: 'bus-200', dualPanLeft: -0.7, dualPanRight: -0.2, panMode: 'dualPan' }],
           connections: [],
@@ -2959,19 +2959,19 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setStrip(
           7,
           stripDocument(
-            '{"version":1,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
           ),
         );
         engine.setStrip(
           'master',
           stripDocument(
-            '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"buses":[],"connections":[]}',
           ),
         );
         engine.setBusStrip(
           100,
           busDocument(
-            '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
+            '{"version":2,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
           ),
         );
         const clearedSync = posted.at(-1) as {
@@ -3114,11 +3114,11 @@ describe('SonareRealtimeEngineNode', () => {
         beforeChange = posted.length;
         engine.setBusStrip(
           100,
-          busDocument('{"version":1,"strips":[],"buses":[{"id":"100"}],"connections":[]}'),
+          busDocument('{"version":2,"strips":[],"buses":[{"id":"100"}],"connections":[]}'),
         );
         engine.setStrip(
           'master',
-          stripDocument('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
+          stripDocument('{"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
         );
         replay(posted.slice(beforeChange));
         const noInserts = posted.at(-1) as {
@@ -3172,15 +3172,15 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTrackLanes([{ trackId: 7 }, { trackId: 8 }]);
         engine.setStrip(
           7,
-          stripDocument('{"version":1,"strips":[{"id":"track-7"}],"buses":[],"connections":[]}'),
+          stripDocument('{"version":2,"strips":[{"id":"track-7"}],"buses":[],"connections":[]}'),
         );
         engine.setStrip(
           8,
-          stripDocument('{"version":1,"strips":[{"id":"track-8"}],"buses":[],"connections":[]}'),
+          stripDocument('{"version":2,"strips":[{"id":"track-8"}],"buses":[],"connections":[]}'),
         );
         engine.setStrip(
           'master',
-          stripDocument('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
+          stripDocument('{"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
         );
         engine.setStripPanMode(7, 'stereoPan');
         engine.setStripPan(7, -0.5);
@@ -3589,7 +3589,7 @@ describe('SonareRealtimeEngineNode', () => {
       });
       const scene = (kind: 'track' | 'bus' | 'master', withInsert: boolean) =>
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips:
             kind === 'bus'
               ? []
@@ -3684,7 +3684,7 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       const scene = JSON.stringify({
-        version: 1,
+        version: 2,
         strips: [],
         buses: [
           {

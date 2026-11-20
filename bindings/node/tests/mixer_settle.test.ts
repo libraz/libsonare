@@ -17,7 +17,7 @@ const INPUT_RIGHT = -0.25;
 // One strip straight to the master, with a non-default fader, pan and width so
 // every smoother settle() touches has somewhere to glide from.
 const SETTLE_SCENE = JSON.stringify({
-  version: 1,
+  version: 2,
   buses: [{ id: 'master', role: 'master', inserts: [] }],
   connections: [{ source: 's', destination: 'master' }],
   strips: [

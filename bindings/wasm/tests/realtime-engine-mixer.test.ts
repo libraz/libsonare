@@ -95,7 +95,7 @@ describe('Sonare WASM Module', () => {
       expect(() => engine.setBusStrip(1, '{bad json' as never)).toThrow(TypeError);
       engine.setBusStrip(
         1,
-        JSON.parse('{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}')
+        JSON.parse('{"version":2,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}')
           .buses[0],
       );
       engine.destroy();
@@ -122,7 +122,7 @@ describe('Sonare WASM Module', () => {
       ]);
       engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
       const sceneJson =
-        '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
+        '{"version":2,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
       engine.setStrip(10, JSON.parse(sceneJson).strips[0]);
       expect(() => engine.setStrip(10, '{bad json' as never)).toThrow(TypeError);
       let badProcessorError: unknown;
@@ -130,7 +130,7 @@ describe('Sonare WASM Module', () => {
         engine.setStrip(
           10,
           JSON.parse(
-            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}',
           ).strips[0],
         );
       } catch (error) {
@@ -143,7 +143,7 @@ describe('Sonare WASM Module', () => {
         engine.setStrip(
           10,
           JSON.parse(
-            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
           ).strips[0],
         );
       } catch (error) {
@@ -191,7 +191,7 @@ describe('Sonare WASM Module', () => {
       engine.setStrip(
         10,
         JSON.parse(
-          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}',
+          '{"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}',
         ).strips[0],
       );
       let badIndexError: unknown;
@@ -234,7 +234,7 @@ describe('Sonare WASM Module', () => {
       engine.setTrackLanes([{ trackId: 10 }]);
       engine.setStrip(
         10,
-        JSON.parse('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}')
+        JSON.parse('{"version":2,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}')
           .strips[0],
       );
       let badIndexError: unknown;
@@ -282,7 +282,7 @@ describe('Sonare WASM Module', () => {
         },
       ]);
       const sceneJson =
-        '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
+        '{"version":2,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
       engine.setStrip('master', JSON.parse(sceneJson).strips[0]);
       expect(() => engine.setStrip('master', '{bad json' as never)).toThrow(TypeError);
       let badParamError: unknown;
@@ -290,7 +290,7 @@ describe('Sonare WASM Module', () => {
         engine.setStrip(
           'master',
           JSON.parse(
-            '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
           ).strips[0],
         );
       } catch (error) {
@@ -331,7 +331,7 @@ describe('Sonare WASM Module', () => {
       ]);
       engine.setStrip(
         'master',
-        JSON.parse('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}')
+        JSON.parse('{"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]}')
           .strips[0],
       );
       let badIndexError: unknown;
@@ -464,7 +464,7 @@ describe('Sonare WASM Module', () => {
     const PLATE =
       '{"slot":"pre","processor":"effects.reverb.plate","params":{"decaySec":2.0,"modRateHz":1.0,"modDepthSamples":16,"dryWet":0.5}}';
     const stripJson = (id: string, insert: string): string =>
-      `{"version":1,"strips":[{"id":"${id}","inserts":[${insert}]}],"buses":[]}`;
+      `{"version":2,"strips":[{"id":"${id}","inserts":[${insert}]}],"buses":[]}`;
     const limiter = JSON.stringify({
       slot: 'pre',
       processor: 'dynamics.limiter',
@@ -605,7 +605,7 @@ describe('Sonare WASM Module', () => {
       ]);
       engine.setTrackLanes([{ trackId: 10 }, { trackId: 11 }]);
       const busStrip = (id: string): string =>
-        `{"version":1,"strips":[],"buses":[{"id":"${id}","inserts":[${limiter}]}]}`;
+        `{"version":2,"strips":[],"buses":[{"id":"${id}","inserts":[${limiter}]}]}`;
       engine.setBusStrip(1, JSON.parse(busStrip('1')).buses[0]);
       engine.setBusStrip(2, JSON.parse(busStrip('2')).buses[0]);
       engine.setStrip('master', JSON.parse(stripJson('master', limiter)).strips[0]);
@@ -768,7 +768,7 @@ describe('Sonare WASM Module', () => {
   describe('strip JSON error codes', () => {
     const scene = (kind: 'strips' | 'buses', id: string, slot: string): string =>
       JSON.stringify({
-        version: 1,
+        version: 2,
         strips: kind === 'strips' ? [{ id, inserts: [{ slot, processor: 'utility.gain' }] }] : [],
         buses: kind === 'buses' ? [{ id, inserts: [{ slot, processor: 'utility.gain' }] }] : [],
         connections: [],

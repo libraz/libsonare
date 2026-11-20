@@ -254,7 +254,7 @@ describe('RealtimeEngine.loadSoundFont failures', () => {
 describe('mixStereo and Mixer.fromJson share the supported sample-rate range', () => {
   // No inserts, so no band frequency can fall above Nyquist at the lowest rate.
   const plainScene = JSON.stringify({
-    version: 1,
+    version: 2,
     buses: [{ id: 'master', role: 'master' }],
     strips: [{ id: 'vocal' }],
     connections: [{ source: 'vocal', destination: 'master' }],

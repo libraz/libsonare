@@ -14,7 +14,7 @@ const BLOCK_SIZE = 128;
 const TRACK_ID = 10;
 
 const masterLimiterScene = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [
     {
       id: 'master',

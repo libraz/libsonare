@@ -36,7 +36,7 @@ describe('RealtimeEngine value refusals are RangeError, not SonareError', () => 
       (e) => {
         e.setStrip(
           10,
-          sceneStrip('{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
+          sceneStrip('{"version":2,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
         );
         e.setStripInsertBypassed(10, 7, { bypassed: true });
       },
@@ -90,7 +90,7 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
         engine.setStrip(
           10,
           sceneStrip(
-            '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"s","faderDB":-3}],"buses":[],"connections":[]}',
           ),
         ),
       ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
@@ -133,7 +133,7 @@ describe('RealtimeEngine strip controls refuse an omitted required argument', ()
     withEngine((engine) => {
       engine.setStrip(
         10,
-        sceneStrip('{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
+        sceneStrip('{"version":2,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
       );
       const native = (engine as unknown as { native: Record<string, (...a: unknown[]) => void> })
         .native;

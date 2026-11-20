@@ -273,7 +273,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
       rangeDb: 30,
     };
     const duckerBusJson = JSON.stringify({
-      version: 1,
+      version: 2,
       strips: [],
       buses: [
         {
@@ -284,7 +284,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
       connections: [],
     });
     const limiterBusJson = JSON.stringify({
-      version: 1,
+      version: 2,
       strips: [],
       buses: [
         {
@@ -301,7 +301,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
       connections: [],
     });
     const duckerMasterJson = JSON.stringify({
-      version: 1,
+      version: 2,
       strips: [
         {
           id: 'master',
@@ -496,7 +496,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
       // index 0 is out of range without it.
       const oneInsertJson = (id: string): string =>
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [],
           buses: [
             {
@@ -522,7 +522,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
           'master',
           JSON.parse(
             JSON.stringify({
-              version: 1,
+              version: 2,
               strips: [
                 {
                   id: 'master',

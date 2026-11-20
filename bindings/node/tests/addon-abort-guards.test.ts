@@ -417,7 +417,7 @@ describe('addon positional-argument readers bail out before touching native stat
       engine.setTrackStripJson(
         TRACK_ID,
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [{ id: `track-${TRACK_ID}` }],
           buses: [],
           connections: [],

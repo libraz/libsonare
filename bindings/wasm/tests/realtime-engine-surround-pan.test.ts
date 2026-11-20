@@ -31,7 +31,7 @@ function makeEngine(): RealtimeEngine {
   engine.setTrackLanes([{ trackId: TRACK }]);
   engine.setStrip(
     TRACK,
-    JSON.parse('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}').strips[0],
+    JSON.parse('{"version":2,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}').strips[0],
   );
   return engine;
 }

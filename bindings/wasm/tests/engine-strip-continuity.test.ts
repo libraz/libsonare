@@ -63,7 +63,7 @@ function stripScene(width: number, reordered = false, includeTail = true): strin
       ? [{ processor: 'utility.gain', params: { levelDb: 0 } }]
       : [{ slot: 'pre', processor: 'utility.gain', params: gain }];
   return JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [{ id: 'track-10', width, inserts }],
     buses: [],
     connections: [],

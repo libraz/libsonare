@@ -92,7 +92,7 @@ function withNativeEngine<T>(body: (engine: NativeJsonEngine) => T): T {
 
 const BAND_JSON = '{"type":"peak","frequencyHz":1000,"gainDb":3,"q":1}';
 const SCENE_JSON = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [],
   buses: [{ id: '1', inserts: [] }],
   connections: [],

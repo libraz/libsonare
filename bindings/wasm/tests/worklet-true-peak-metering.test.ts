@@ -53,7 +53,7 @@ function interSamplePeakSine(length: number, amplitude = 0.5): Float32Array {
  * it has to be observed on a path that changes nothing.
  */
 const UNITY_SCENE_JSON = JSON.stringify({
-  version: 1,
+  version: 2,
   vcaGroups: [],
   buses: [{ id: 'master', inserts: [], role: 'master' }],
   connections: [{ destination: 'master', source: 'a' }],

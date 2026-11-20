@@ -23,7 +23,7 @@ it.each(['lane', 'bus', 'master'] as const)(
         ],
       };
       const scene = JSON.stringify({
-        version: 1,
+        version: 2,
         strips: target === 'bus' ? [] : [strip],
         buses: target === 'bus' ? [strip] : [],
         connections: [],

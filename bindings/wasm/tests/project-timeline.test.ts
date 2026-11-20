@@ -39,7 +39,7 @@ function danglingSourceJson(): string {
 /** A strip with one ducker insert, the insert a lane sidechain binding keys. */
 function duckerStripJson(trackId: number): string {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [
       {
         id: `track-${trackId}`,

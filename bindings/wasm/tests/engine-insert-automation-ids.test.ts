@@ -30,7 +30,7 @@ function insertScene(kind: 'strips' | 'buses', id: string, processors: string[])
   }));
   const strip = { id, inserts };
   return JSON.stringify({
-    version: 1,
+    version: 2,
     strips: kind === 'strips' ? [strip] : [],
     buses: kind === 'buses' ? [strip] : [],
     connections: [],

@@ -947,7 +947,7 @@ describe('Sonare WASM Module', () => {
       engine.setTrackLanes([{ trackId: 10 }]);
       engine.setStrip(
         10,
-        JSON.parse('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}')
+        JSON.parse('{"version":2,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}')
           .strips[0],
       );
       engine.setStripPanMode(10, 'dualPan');

@@ -270,11 +270,11 @@ interface MixerRoutingDraft {
 export function emptyStripJson(target: StripJsonTarget): string {
   switch (target.kind) {
     case 'track':
-      return `{"version":1,"strips":[{"id":"track-${target.trackId}"}],"buses":[],"connections":[]}`;
+      return `{"version":2,"strips":[{"id":"track-${target.trackId}"}],"buses":[],"connections":[]}`;
     case 'bus':
-      return `{"version":1,"strips":[],"buses":[{"id":"bus-${target.busId}"}],"connections":[]}`;
+      return `{"version":2,"strips":[],"buses":[{"id":"bus-${target.busId}"}],"connections":[]}`;
     case 'master':
-      return '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}';
+      return '{"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]}';
   }
 }
 

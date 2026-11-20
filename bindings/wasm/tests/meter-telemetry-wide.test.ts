@@ -33,7 +33,7 @@ describe('wide meter telemetry (WASM)', () => {
       engine.setStrip(
         10,
         JSON.parse(
-          '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
+          '{"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
         ).strips[0],
       );
       engine.play();

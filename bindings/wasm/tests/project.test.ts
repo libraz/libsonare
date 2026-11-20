@@ -687,7 +687,7 @@ describe('Sonare WASM Project', () => {
       project.setSampleRate(48000);
       if (layout !== undefined) {
         project.setMixerSceneJson(
-          JSON.stringify({ version: 1, buses: [{ id: 'master', role: 'master', layout }] }),
+          JSON.stringify({ version: 2, buses: [{ id: 'master', role: 'master', layout }] }),
         );
       }
       project.addMidiClip(0, 1);

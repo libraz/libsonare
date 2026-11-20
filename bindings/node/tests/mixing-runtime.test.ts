@@ -29,7 +29,7 @@ function serialTailScene(): string {
     },
   });
   return JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [
       {
         id: 'source',
@@ -556,7 +556,7 @@ describe('Mixer.setOutputBus', () => {
     (JSON.parse(m.toJson()) as { connections?: unknown }).connections;
 
   function emptyMixer(): Mixer {
-    return Mixer.fromJson(JSON.stringify({ version: 1 }), {
+    return Mixer.fromJson(JSON.stringify({ version: 2 }), {
       sampleRate: SAMPLE_RATE,
       maxBlockSize: BLOCK_SIZE,
     });

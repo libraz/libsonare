@@ -305,7 +305,7 @@ describe('RealtimeEngine per-lane sends and output bus', () => {
 });
 
 const kDuckerBusJson = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [],
   buses: [
     {
@@ -328,7 +328,7 @@ const kDuckerBusJson = JSON.stringify({
   connections: [],
 });
 const kLimiterBusJson = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [],
   buses: [
     {
@@ -345,7 +345,7 @@ const kLimiterBusJson = JSON.stringify({
   connections: [],
 });
 const kDuckerMasterJson = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [
     {
       id: 'master',
@@ -368,7 +368,7 @@ const kDuckerMasterJson = JSON.stringify({
   connections: [],
 });
 const kDuckerTrackJson = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [
     {
       id: 'track-10',

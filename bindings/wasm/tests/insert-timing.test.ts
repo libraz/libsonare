@@ -127,7 +127,7 @@ describe('insert timing takes the document an insert is built from (WASM)', () =
   const sceneTiming = (processor: string, params: Record<string, unknown>) => {
     const mixer = Mixer.fromJson(
       JSON.stringify({
-        version: 1,
+        version: 2,
         strips: [{ id: 'a', inserts: [{ slot: 'pre', processor, params }] }],
         buses: [{ id: 'master', role: 'master', inserts: [] }],
         connections: [{ source: 'a', destination: 'master' }],

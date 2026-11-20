@@ -220,7 +220,7 @@ describe('RealtimeEngine native binding', () => {
     expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
     engine.setBusStrip(
       1,
-      sceneBus('{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}'),
+      sceneBus('{"version":2,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}'),
     );
     engine.destroy();
   });
@@ -243,7 +243,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setStrip(
       10,
       sceneStrip(
-        '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
+        '{"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
       ),
     );
     engine.play();
@@ -274,7 +274,7 @@ describe('RealtimeEngine native binding', () => {
       engine.setTrackLanes([{ trackId: 10 }]);
       engine.setStrip(
         10,
-        sceneStrip('{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
+        sceneStrip('{"version":2,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
       );
       expectArgumentRefusal(() => engine.setStripSurroundPan(10, { azimuth: 200 }));
       expectArgumentRefusal(() => engine.setStripSurroundPan(10, { lfe: 2 }));
@@ -300,7 +300,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
     engine.setStrip(
       10,
-      sceneStrip('{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s"}]}'),
+      sceneStrip('{"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s"}]}'),
     );
     const run = (): Float32Array[] =>
       engine.process(Array.from({ length: 6 }, () => new Float32Array(frames)));
@@ -392,7 +392,7 @@ describe('RealtimeEngine native binding', () => {
     ]);
     engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
     const sceneJson =
-      '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
+      '{"version":2,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
     engine.setStrip(10, sceneStrip(sceneJson));
     let badJsonError: unknown;
     try {
@@ -410,7 +410,7 @@ describe('RealtimeEngine native binding', () => {
       engine.setStrip(
         10,
         sceneStrip(
-          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}',
+          '{"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}',
         ),
       );
     } catch (error) {
@@ -423,7 +423,7 @@ describe('RealtimeEngine native binding', () => {
       engine.setStrip(
         10,
         sceneStrip(
-          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
+          '{"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
         ),
       );
     } catch (error) {
@@ -466,7 +466,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setStrip(
       10,
       sceneStrip(
-        '{"version":1,"strips":[{"id":"track-10","panLaw":"linear0Db"}],"buses":[],"connections":[]}',
+        '{"version":2,"strips":[{"id":"track-10","panLaw":"linear0Db"}],"buses":[],"connections":[]}',
       ),
     );
 
@@ -508,7 +508,7 @@ describe('RealtimeEngine native binding', () => {
         engine.setStrip(
           10,
           sceneStrip(
-            '{"version":1,"strips":[{"id":"track-10","panLaw":"linear0Db"}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"track-10","panLaw":"linear0Db"}],"buses":[],"connections":[]}',
           ),
         );
         engine.setStripPanMode(10, 'dualPan');
@@ -555,7 +555,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setStrip(
       10,
       sceneStrip(
-        '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}',
+        '{"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}',
       ),
     );
     let badIndexError: unknown;
@@ -598,7 +598,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setTrackLanes([{ trackId: 10 }]);
     engine.setStrip(
       10,
-      sceneStrip('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
+      sceneStrip('{"version":2,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
     );
     let badIndexError: unknown;
     try {
@@ -754,7 +754,7 @@ describe('RealtimeEngine native binding', () => {
       },
     ]);
     const sceneJson =
-      '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
+      '{"version":2,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
     engine.setStrip('master', sceneStrip(sceneJson));
     let badJsonError: unknown;
     try {
@@ -772,7 +772,7 @@ describe('RealtimeEngine native binding', () => {
       engine.setStrip(
         'master',
         sceneStrip(
-          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
+          '{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
         ),
       );
     } catch (error) {
@@ -842,7 +842,7 @@ describe('RealtimeEngine native binding', () => {
     ]);
     engine.setStrip(
       'master',
-      sceneStrip('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
+      sceneStrip('{"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
     );
     let badIndexError: unknown;
     try {
@@ -1027,7 +1027,7 @@ describe('RealtimeEngine native binding', () => {
       10,
       sceneStrip(
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [
             {
               id: 'track-10',
@@ -1081,7 +1081,7 @@ describe('RealtimeEngine native binding', () => {
       1,
       sceneBus(
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [],
           buses: [
             {
@@ -1144,7 +1144,7 @@ describe('RealtimeEngine native binding', () => {
       10,
       sceneStrip(
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [
             {
               id: 'track-10',
@@ -1160,7 +1160,7 @@ describe('RealtimeEngine native binding', () => {
       'master',
       sceneStrip(
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [
             {
               id: 'master',
@@ -1188,7 +1188,7 @@ describe('RealtimeEngine native binding', () => {
       1,
       sceneBus(
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [],
           buses: [
             {
@@ -1288,7 +1288,7 @@ describe('RealtimeEngine prime, reset, tail and latency', () => {
   const frames = block * blocks;
 
   const delayStripJson = JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [
       {
         id: 'track-10',

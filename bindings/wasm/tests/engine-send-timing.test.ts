@@ -23,7 +23,7 @@ it('lane pre-fader sends retain their level when the strip fader is lowered', ()
         10,
         JSON.parse(
           JSON.stringify({
-            version: 1,
+            version: 2,
             strips: [{ id: 'track-10', faderDb, panLaw: 'linear0Db' }],
             buses: [],
             connections: [],

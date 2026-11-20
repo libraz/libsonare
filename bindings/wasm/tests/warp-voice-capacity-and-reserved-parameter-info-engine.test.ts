@@ -79,7 +79,7 @@ describe('Sonare WASM Module', () => {
         engine.setStrip(
           10,
           JSON.parse(
-            `{"version":1,"strips":[{"id":"track-10","inserts":[${eqInsert},${compressorInsert('post')}]}],"buses":[],"connections":[]}`,
+            `{"version":2,"strips":[{"id":"track-10","inserts":[${eqInsert},${compressorInsert('post')}]}],"buses":[],"connections":[]}`,
           ).strips[0],
         );
 
@@ -87,14 +87,14 @@ describe('Sonare WASM Module', () => {
         engine.setBusStrip(
           1,
           JSON.parse(
-            `{"version":1,"strips":[],"buses":[{"id":"1","inserts":[${compressorInsert('post')}]}],"connections":[]}`,
+            `{"version":2,"strips":[],"buses":[{"id":"1","inserts":[${compressorInsert('post')}]}],"connections":[]}`,
           ).buses[0],
         );
 
         engine.setStrip(
           'master',
           JSON.parse(
-            `{"version":1,"strips":[{"id":"master","inserts":[${eqInsert},${compressorInsert('post')}]}],"buses":[],"connections":[]}`,
+            `{"version":2,"strips":[{"id":"master","inserts":[${eqInsert},${compressorInsert('post')}]}],"buses":[],"connections":[]}`,
           ).strips[0],
         );
 

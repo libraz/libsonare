@@ -865,7 +865,7 @@ describe('offline boundary validation always scans the samples', () => {
 
   it('accepts a zero-strip processStereo call and returns an empty master', () => {
     const mixer = Mixer.fromJson(
-      '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+      '{"version":2,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
       { sampleRate: 48000, maxBlockSize: 128 },
     );
     const result = mixer.processStereo([], []);

@@ -946,7 +946,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             {
               trackId: 7,
               sceneJson:
-                '{"version":1,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+                '{"version":2,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
             },
           ],
           insertBaseResets: [{ kind: 'track', trackId: 7 }],
@@ -2223,11 +2223,11 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             {
               trackId: 10,
               sceneJson:
-                '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
+                '{"version":2,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
             },
           ],
           masterStripJson:
-            '{"version":1,"strips":[{"id":"master","faderDb":-6,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
+            '{"version":2,"strips":[{"id":"master","faderDb":-6,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
         });
         processor.receiveSync({
           type: 'syncTrackStripEqBand',
@@ -2273,10 +2273,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           trackStrips: [
             {
               trackId: 10,
-              sceneJson: `{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
+              sceneJson: `{"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
             },
           ],
-          masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
+          masterStripJson: `{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
         });
         processor.receiveSync({
           type: 'syncTrackStripInsertBypassed',
@@ -2325,7 +2325,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             {
               busId: 200,
               sceneJson:
-                '{"version":1,"strips":[],"buses":[{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}',
+                '{"version":2,"strips":[],"buses":[{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}',
             },
           ],
         });
@@ -2589,7 +2589,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         processor.receiveSync({
           type: 'syncMixer',
           lanes: [],
-          masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
+          masterStripJson: `{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
           insertParamOverrides: [
             { kind: 'master', insertIndex: 0, paramName: 'band0.gainDb', value: 6 },
           ],
@@ -3208,16 +3208,16 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             trackStrips: [
               {
                 trackId: 10,
-                sceneJson: `{"version":1,"strips":[{"id":"track-10","inserts":[${insertJson}]}],"buses":[],"connections":[]}`,
+                sceneJson: `{"version":2,"strips":[{"id":"track-10","inserts":[${insertJson}]}],"buses":[],"connections":[]}`,
               },
             ],
             busStrips: [
               {
                 busId: 200,
-                sceneJson: `{"version":1,"strips":[],"buses":[{"id":"200","inserts":[${insertJson}]}],"connections":[]}`,
+                sceneJson: `{"version":2,"strips":[],"buses":[{"id":"200","inserts":[${insertJson}]}],"connections":[]}`,
               },
             ],
-            masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[${insertJson}]}],"buses":[],"connections":[]}`,
+            masterStripJson: `{"version":2,"strips":[{"id":"master","inserts":[${insertJson}]}],"buses":[],"connections":[]}`,
           },
         });
         receiveSyncSpy.mockClear();
@@ -3448,11 +3448,11 @@ describe('processor state reset through the worklet facade', () => {
   const stripJson = (placement: Placement, insert: string): string => {
     switch (placement) {
       case 'lane':
-        return `{"version":1,"strips":[{"id":"s","inserts":[${insert}]}]}`;
+        return `{"version":2,"strips":[{"id":"s","inserts":[${insert}]}]}`;
       case 'bus':
-        return `{"version":1,"strips":[],"buses":[{"id":"${BUS}","inserts":[${insert}]}]}`;
+        return `{"version":2,"strips":[],"buses":[{"id":"${BUS}","inserts":[${insert}]}]}`;
       case 'master':
-        return `{"version":1,"strips":[{"id":"master","inserts":[${insert}]}]}`;
+        return `{"version":2,"strips":[{"id":"master","inserts":[${insert}]}]}`;
     }
   };
 

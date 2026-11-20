@@ -6,7 +6,7 @@ import { RealtimeEngine } from '../src/index.js';
 const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
 
 const stripJson =
-  '{"version":1,"strips":[{"id":"track-10","inserts":[' +
+  '{"version":2,"strips":[{"id":"track-10","inserts":[' +
   '{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,' +
   '"band0.frequencyHz":1000,"band0.gainDb":-3,"band0.enabled":1}}]}],' +
   '"buses":[],"connections":[]}';
@@ -63,7 +63,7 @@ describe('engine meter input peaks and constructed insert values', () => {
       engine.setStrip(
         10,
         sceneStrip(
-          '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[' +
+          '{"version":2,"buses":[{"id":"master","role":"master"}],"strips":[' +
             '{"id":"s","surroundPan":{"azimuth":-110}}]}',
         ),
       );
@@ -112,7 +112,7 @@ describe('per-insert gain reduction query', () => {
     params,
   });
   const sceneJson = JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [
       {
         id: 'track-10',

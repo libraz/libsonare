@@ -12,7 +12,7 @@ import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js
 import { expectRefusalOf } from './_helpers';
 
 const LIMITER_MASTER = JSON.stringify({
-  version: 1,
+  version: 2,
   strips: [
     {
       id: 'master',
@@ -86,7 +86,7 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
       expect(patch).toBeInstanceOf(RangeError);
       expect(isSonareError(patch)).toBe(false);
       expect((patch as Error).message).toContain('noSuchKey');
-      const typo = '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[]}';
+      const typo = '{"version":2,"strips":[{"id":"s","faderDB":-3}],"buses":[]}';
       // A document content defect is the loader's InvalidFormat, a coded SonareError.
       const strip = thrown(() => engine.setStrip(10, JSON.parse(typo).strips[0]));
       expect(isSonareError(strip)).toBe(true);

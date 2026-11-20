@@ -27,7 +27,7 @@ const WARMUP_BLOCKS = 8;
 
 function oneStripScene(): string {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     buses: [{ id: 'master', role: 'master', inserts: [] }],
     connections: [{ source: 's', destination: 'master' }],
     strips: [

@@ -39,7 +39,7 @@ function serialTailScene(): string {
     },
   });
   return JSON.stringify({
-    version: 1,
+    version: 2,
     strips: [
       {
         id: 'source',
@@ -64,7 +64,7 @@ describe('Mixer runtime controls (WASM)', () => {
     it('forwards asymmetric dual-pan and polarity fields through scene JSON', () => {
       const mixer = Mixer.fromJson(
         JSON.stringify({
-          version: 1,
+          version: 2,
           strips: [
             {
               id: 'asymmetric',
@@ -361,7 +361,7 @@ describe('Mixer runtime controls (WASM)', () => {
     // the boost. A single-strip scene keeps stripIndex fixed at 0.
     function highGainEqScene(): string {
       return JSON.stringify({
-        version: 1,
+        version: 2,
         strips: [
           {
             id: 'src',
@@ -586,7 +586,7 @@ describe('Mixer runtime controls (WASM)', () => {
   });
 
   describe('setOutputBus', () => {
-    const emptyScene = JSON.stringify({ version: 1, strips: [], buses: [], connections: [] });
+    const emptyScene = JSON.stringify({ version: 2, strips: [], buses: [], connections: [] });
     const tone = sine(440, BLOCK / SR, { amp: 0.5, sampleRate: SR });
 
     function connections(mixer: Mixer): Array<{ source: string; destination: string }> {
@@ -805,7 +805,7 @@ describe('Mixer runtime controls (WASM)', () => {
 
   it("folds the master-output meter's pending true peak into its snapshot on flushMeters", () => {
     const block = 256;
-    const mixer = Mixer.fromJson(JSON.stringify({ version: 1, strips: [{ id: 'a' }] }), {
+    const mixer = Mixer.fromJson(JSON.stringify({ version: 2, strips: [{ id: 'a' }] }), {
       sampleRate: 48000,
       maxBlockSize: block,
     });
@@ -834,7 +834,7 @@ describe('Mixer runtime controls (WASM)', () => {
   });
 
   it('accepts exactly 4x and 8x for the master-output meter', () => {
-    const mixer = Mixer.fromJson(JSON.stringify({ version: 1, strips: [{ id: 'a' }] }), {
+    const mixer = Mixer.fromJson(JSON.stringify({ version: 2, strips: [{ id: 'a' }] }), {
       sampleRate: 48000,
       maxBlockSize: 256,
     });
