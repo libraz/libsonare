@@ -12,11 +12,13 @@
 
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <cmath>
 #include <string>
 
 #include "engine/realtime_engine.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "midi/controller_profile.h"
@@ -30,6 +32,9 @@ using namespace sonare_c_detail;
 #if defined(SONARE_WITH_ARRANGEMENT)
 static_assert(SONARE_NOTE_TRACKING_COUNT == sonare::midi::kNoteTrackingCount,
               "note tracking ordinals out of step with midi::NoteTracking");
+static_assert(SONARE_CONTROLLER_INPUT_COUNT == 5, "binding.input refusal lists five ordinals");
+static_assert(SONARE_MPE_DIMENSION_COUNT == 3, "dimension refusal lists three ordinals");
+static_assert(SONARE_NOTE_TRACKING_COUNT == 4, "tracking refusal lists four ordinals");
 static_assert(SONARE_MPE_DIMENSION_COUNT == sonare::midi::kMpeDimensionCount,
               "MPE dimension ordinals out of step with midi::MpeDimension");
 
@@ -46,7 +51,9 @@ SonareError profile_status(
     case Status::kOk:
       return SONARE_OK;
     case Status::kNoInstrument:
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return run_validation([&] {
+        util::check::refuse_unknown_id("destination_id", "an instrument destination", "engine");
+      });
     case Status::kNotSupported:
       break;
   }
@@ -110,7 +117,13 @@ const char* sonare_controller_profile_names(void) {
 SonareError sonare_engine_set_controller_profile(SonareEngine* engine, uint32_t destination_id,
                                                  const char* preset_name) {
   SONARE_C_API_ENTRY;
-  if (!engine || !preset_name || preset_name[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(preset_name);
+  if (const SonareError err =
+          run_validation([&] { util::check::non_empty(preset_name, "preset_name"); });
+      err != SONARE_OK) {
+    return err;
+  }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -120,8 +133,8 @@ SonareError sonare_engine_set_controller_profile(SonareEngine* engine, uint32_t 
   // reads as a bad argument whether or not the destination has an instrument.
   sonare::midi::ControllerProfile profile;
   if (!sonare::midi::ControllerProfile::preset(preset_name, &profile)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "unknown controller profile preset");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation(
+        [&] { util::check::refuse("preset_name", "must name a controller profile preset"); });
   }
   return install(engine, destination_id, profile);
   SONARE_C_CATCH
@@ -131,7 +144,8 @@ SonareError sonare_engine_set_controller_profile(SonareEngine* engine, uint32_t 
 SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destination_id,
                                           const SonareControllerBinding* binding) {
   SONARE_C_API_ENTRY;
-  if (!engine || !binding) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(binding);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -143,20 +157,18 @@ SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destina
   // the same INVALID_PARAMETER an unbound destination returns.
   sonare::midi::ControllerInput input{};
   if (!ordinal_to_enum(binding->input, 0, SONARE_CONTROLLER_INPUT_COUNT - 1, &input)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "controller binding: input is not one of SonareControllerInput");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([&] {
+      util::check::one_of(binding->input, std::array<int, 5>{0, 1, 2, 3, 4}, "binding.input");
+    });
   }
   sonare::midi::ControllerAxis axis{};
   if (!ordinal_to_enum(binding->axis, 0, SONARE_CONTROLLER_AXIS_COUNT - 1, &axis)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "controller binding: axis is not one of SonareControllerAxis");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation(
+        [&] { util::check::refuse("binding.axis", util::refusal::kDeclaredValuePredicate); });
   }
   if (binding->index > 127) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "controller binding: index must be a MIDI controller number in [0, 127]");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation(
+        [&] { util::check::integer_in_range(binding->index, 0, 127, "binding.index"); });
   }
   SONARE_C_TRY
   sonare::midi::ControllerProfile profile;
@@ -170,25 +182,24 @@ SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destina
   // A non-finite range or curve would reach the audio thread and stay there, so
   // it is refused here rather than substituted: a mapping silently replaced by
   // a default is a mapping the caller believes it installed.
-  SONARE_CHECK_MSG(std::isfinite(binding->lo) && std::isfinite(binding->hi),
-                   sonare::ErrorCode::InvalidParameter, "binding range must be finite");
-  SONARE_CHECK_MSG(std::isfinite(binding->curve) && binding->curve > 0.0f,
-                   sonare::ErrorCode::InvalidParameter,
-                   "binding curve must be finite and positive");
+  util::check::finite_float(binding->lo, "binding.lo");
+  util::check::finite_float(binding->hi, "binding.hi");
+  util::check::greater_than(binding->curve, 0.0, "binding.curve");
   entry.lo = binding->lo;
   entry.hi = binding->hi;
   entry.curve = binding->curve;
 
   // The binding itself is checked before the table, so a full table never hides a bad binding.
   if (axis == sonare::midi::ControllerAxis::kNone) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "controller binding: the axis is none");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation(
+        [&] { util::check::refuse("binding.axis", "must not be the none axis"); });
   }
   if (input == sonare::midi::ControllerInput::kPolyPressure &&
       !sonare::midi::controller_axis_is_excitation(axis)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "controller binding: a poly-pressure binding named a channel-level axis");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([&] {
+      util::check::refuse_relation({"binding.input", "binding.axis"},
+                                   "{1} must be an excitation axis when {0} is poly pressure");
+    });
   }
   if (!profile.bind(entry)) {
     set_last_error(SONARE_ERROR_INVALID_STATE, "controller binding table is full");
@@ -201,7 +212,7 @@ SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destina
 
 SonareError sonare_engine_clear_controller_bindings(SonareEngine* engine, uint32_t destination_id) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -219,7 +230,8 @@ SonareError sonare_engine_clear_controller_bindings(SonareEngine* engine, uint32
 SonareError sonare_engine_controller_binding_count(SonareEngine* engine, uint32_t destination_id,
                                                    size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   // Defined on every exit path, so a feature-disabled build and an unbound
   // destination both leave the caller a readable count rather than whatever the
   // stack held.
@@ -242,7 +254,7 @@ SonareError sonare_engine_set_controller_velocity_meaningful(SonareEngine* engin
                                                              uint32_t destination_id,
                                                              int meaningful) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)meaningful;
@@ -262,7 +274,8 @@ SonareError sonare_engine_controller_velocity_meaningful(SonareEngine* engine,
                                                          uint32_t destination_id,
                                                          int* out_meaningful) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_meaningful) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_meaningful);
   *out_meaningful = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -282,12 +295,18 @@ SonareError sonare_engine_set_controller_note_tracking(SonareEngine* engine,
                                                        uint32_t destination_id, int dimension,
                                                        int tracking) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
-  if (dimension < 0 || dimension >= SONARE_MPE_DIMENSION_COUNT) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  if (const SonareError err = run_validation(
+          [&] { util::check::one_of(dimension, std::array<int, 3>{0, 1, 2}, "dimension"); });
+      err != SONARE_OK) {
+    return err;
   }
   // Refused in every build, so garbage is not reported as a missing feature.
-  if (!valid_c_enum(tracking, SONARE_NOTE_TRACKING_COUNT)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation(
+          [&] { util::check::one_of(tracking, std::array<int, 4>{0, 1, 2, 3}, "tracking"); });
+      err != SONARE_OK) {
+    return err;
+  }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -306,10 +325,13 @@ SonareError sonare_engine_set_controller_note_tracking(SonareEngine* engine,
 SonareError sonare_engine_controller_note_tracking(SonareEngine* engine, uint32_t destination_id,
                                                    int dimension, int* out_tracking) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_tracking) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_tracking);
   *out_tracking = SONARE_NOTE_TRACKING_LAST;
-  if (dimension < 0 || dimension >= SONARE_MPE_DIMENSION_COUNT) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation(
+          [&] { util::check::one_of(dimension, std::array<int, 3>{0, 1, 2}, "dimension"); });
+      err != SONARE_OK) {
+    return err;
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;

@@ -1,9 +1,11 @@
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -32,6 +34,7 @@
 #include "editing/event_model/event_extractor.h"
 #include "editing/event_model/event_renderer.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -62,8 +65,14 @@ void clear_percussive_events_result(SonarePercussiveEventsResult& out) {
 SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
                                           int32_t kernel_harmonic, int32_t kernel_percussive,
                                           editing::event_model::PercussiveSeparationConfig& out) {
-  if (n_fft < 0 || hop_length < 0 || kernel_harmonic < 0 || kernel_percussive < 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_at_least(n_fft, 0, "config.n_fft");
+        util::check::integer_at_least(hop_length, 0, "config.hop_length");
+        util::check::integer_at_least(kernel_harmonic, 0, "config.hpss_kernel_harmonic");
+        util::check::integer_at_least(kernel_percussive, 0, "config.hpss_kernel_percussive");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   if (n_fft != 0) out.n_fft = n_fft;
   if (hop_length != 0) out.hop_length = hop_length;
@@ -117,36 +126,42 @@ bool is_voiced_frame(const int32_t* voiced, const float* voiced_prob, size_t i) 
 /// Pitch-track contract shared by the time-varying correction entry points: pYIN
 /// NaN unvoiced F0 only where the voiced flag is false; no infinities, negative
 /// frequencies or pitches above Nyquist; voiced_prob in [0, 1] when it is read.
-bool valid_pitch_track(const float* f0_hz, const float* voiced_prob, const int32_t* voiced,
+/// Throws the refusal for the first frame that breaks it.
+void check_pitch_track(const float* f0_hz, const float* voiced_prob, const int32_t* voiced,
                        size_t n_frames, int sample_rate) {
   for (size_t i = 0; i < n_frames; ++i) {
     const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
-    if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) return false;
-    if (!voiced && voiced_prob &&
-        (!std::isfinite(voiced_prob[i]) || voiced_prob[i] < 0.0f || voiced_prob[i] > 1.0f)) {
-      return false;
+    if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
+      util::check::refuse(
+          "f0_hz", "must be finite and in [0, sample_rate / 2], or NaN on an unvoiced frame");
     }
+    if (!voiced && voiced_prob) util::check::in_range(voiced_prob[i], 0.0, 1.0, "voiced_prob");
   }
-  return true;
+}
+
+/// Refuses the frame count and hop of a time-varying correction call.
+SonareError check_timevarying_args(const float* f0_hz, size_t n_frames, int hop_length) {
+  SONARE_C_REQUIRE_NONNULL(f0_hz);
+  return run_validation([&] {
+    util::check::integer_at_least(n_frames, 1, "n_frames");
+    util::check::integer_at_least(hop_length, 1, "hop_length");
+  });
 }
 
 /// Validates the correction knobs shared by every config-driven entry point and
-/// copies them (and the scale reference) onto the core config.
-bool apply_correction_knobs(const SonarePitchCorrectionConfig& config,
+/// copies them (and the scale reference) onto the core config. Throws the refusal.
+void apply_correction_knobs(const SonarePitchCorrectionConfig& config,
                             editing::pitch_editor::PitchCorrectionConfig& core_config) {
-  if (!std::isfinite(config.scale_reference_midi) || !std::isfinite(config.retune_amount) ||
-      config.retune_amount < 0.0f || config.retune_amount > 1.0f ||
-      !std::isfinite(config.max_correction_semitones) || config.max_correction_semitones < 0.0f ||
-      !std::isfinite(config.retune_speed_ms) || config.retune_speed_ms < 0.0f ||
-      !std::isfinite(config.vibrato_threshold_cents) || config.vibrato_threshold_cents < 0.0f) {
-    return false;
-  }
+  util::check::finite_float(config.scale_reference_midi, "config.scale_reference_midi");
+  util::check::in_range(config.retune_amount, 0.0, 1.0, "config.retune_amount");
+  util::check::at_least(config.max_correction_semitones, 0.0, "config.max_correction_semitones");
+  util::check::at_least(config.retune_speed_ms, 0.0, "config.retune_speed_ms");
+  util::check::at_least(config.vibrato_threshold_cents, 0.0, "config.vibrato_threshold_cents");
   core_config.scale.reference_midi = config.scale_reference_midi;
   core_config.retune_amount = config.retune_amount;
   core_config.max_correction_semitones = config.max_correction_semitones;
   core_config.retune_speed_ms = config.retune_speed_ms;
   core_config.vibrato_threshold_cents = config.vibrato_threshold_cents;
-  return true;
 }
 
 /// Builds the F0Track the time-varying correctors consume from the C arrays.
@@ -172,15 +187,16 @@ editing::pitch_editor::F0Track build_pitch_track(const float* f0_hz, const float
 SonareError resolve_extractor_config(const SonareNoteExtractorConfig* config,
                                      editing::note_model::NoteExtractorConfig& out) {
   if (config == nullptr) return SONARE_OK;
-  if (config->struct_version < 0 || config->struct_version > 1) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (!std::isfinite(config->segmentation_threshold_cents) || !std::isfinite(config->min_note_ms) ||
-      !std::isfinite(config->reference_hz) || !std::isfinite(config->voiced_threshold) ||
-      config->segmentation_threshold_cents < 0.0f || config->min_note_ms < 0.0f ||
-      config->reference_hz < 0.0f || config->voiced_threshold < 0.0f ||
-      config->voiced_threshold > 1.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_in_range(config->struct_version, 0, 1, "config.struct_version");
+        util::check::at_least(config->segmentation_threshold_cents, 0.0,
+                              "config.segmentation_threshold_cents");
+        util::check::at_least(config->min_note_ms, 0.0, "config.min_note_ms");
+        util::check::at_least(config->reference_hz, 0.0, "config.reference_hz");
+        util::check::in_range(config->voiced_threshold, 0.0, 1.0, "config.voiced_threshold");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   if (config->segmentation_threshold_cents > 0.0f) {
     out.segmenter.segmentation_threshold_cents = config->segmentation_threshold_cents;
@@ -197,12 +213,12 @@ SonareError resolve_extractor_config(const SonareNoteExtractorConfig* config,
 /// sonare_pitch_pyin emits for an unvoiced frame -- and every consumer reads
 /// each frame through the same usable-pitch predicate rather than assuming one.
 SonareError validate_f0_frames(const float* f0_hz, size_t n_frames, float frame_rate) {
-  if (f0_hz == nullptr || n_frames == 0 ||
-      n_frames > static_cast<size_t>(std::numeric_limits<int>::max()) ||
-      !std::isfinite(frame_rate) || !(frame_rate > 0.0f)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_OK;
+  SONARE_C_REQUIRE_NONNULL(f0_hz);
+  return run_validation([&] {
+    util::check::integer_in_range(static_cast<long long>(n_frames), 1,
+                                  std::numeric_limits<int>::max(), "n_frames");
+    util::check::greater_than(frame_rate, 0.0, "frame_rate");
+  });
 }
 
 /// Normalizes the C F0/mask pair into the core's positive-finite pitch
@@ -221,16 +237,19 @@ std::vector<float> normalize_f0_frames(const float* f0_hz, const int32_t* voiced
 /// Validates the whole F0 track the extraction-shaped entry points take.
 SonareError validate_track_args(const float* f0_hz, const float* voiced_prob, const int32_t* voiced,
                                 size_t n_frames, float frame_rate) {
-  if (voiced == nullptr && voiced_prob == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (voiced == nullptr && voiced_prob == nullptr) {
+    return run_validation([&] {
+      util::check::refuse_relation({"voiced_prob", "voiced"}, "{0} and {1} must not both be NULL");
+    });
+  }
   const SonareError error = validate_f0_frames(f0_hz, n_frames, frame_rate);
   if (error != SONARE_OK) return error;
   if (voiced != nullptr) return SONARE_OK;
-  for (size_t i = 0; i < n_frames; ++i) {
-    if (!std::isfinite(voiced_prob[i]) || voiced_prob[i] < 0.0f || voiced_prob[i] > 1.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+  return run_validation([&] {
+    for (size_t i = 0; i < n_frames; ++i) {
+      util::check::in_range(voiced_prob[i], 0.0, 1.0, "voiced_prob");
     }
-  }
-  return SONARE_OK;
+  });
 }
 
 /// Builds the core track from the caller's frame arrays.
@@ -252,23 +271,37 @@ editing::pitch_editor::F0Track make_track(const float* f0_hz, const float* voice
 }
 
 /// Copies one note's envelope slice out of the caller's pool.
-SonareError read_envelope(const SonareNoteEdit& edit, const float* envelopes, size_t envelope_count,
-                          std::vector<float>& out) {
+SonareError read_envelope(const SonareNoteEdit& edit, const std::string& edit_subject,
+                          const float* envelopes, size_t envelope_count, std::vector<float>& out) {
   out.clear();
   if (edit.envelope_count == 0) return SONARE_OK;
-  if (envelopes == nullptr || edit.envelope_offset < 0 ||
-      static_cast<uint64_t>(edit.envelope_offset) > static_cast<uint64_t>(envelope_count)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::non_null_when_count(envelopes, edit.envelope_count, "envelopes",
+                                         (edit_subject + "envelope_count").c_str());
+        util::check::integer_at_least(edit.envelope_offset, 0,
+                                      (edit_subject + "envelope_offset").c_str());
+        if (static_cast<uint64_t>(edit.envelope_offset) > static_cast<uint64_t>(envelope_count)) {
+          util::check::refuse_relation({edit_subject + "envelope_offset", "envelope_count"},
+                                       "{0} must not exceed {1}");
+        }
+        // Subtraction rather than offset + count, which would wrap.
+        if (edit.envelope_count > envelope_count - static_cast<size_t>(edit.envelope_offset)) {
+          util::check::refuse_relation(
+              {edit_subject + "envelope_offset", edit_subject + "envelope_count", "envelope_count"},
+              "{0} + {1} must not exceed {2}");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
   const size_t offset = static_cast<size_t>(edit.envelope_offset);
-  // Subtraction rather than offset + count, which would wrap.
-  if (edit.envelope_count > envelope_count - offset) return SONARE_ERROR_INVALID_PARAMETER;
   out.assign(envelopes + offset, envelopes + offset + edit.envelope_count);
   return SONARE_OK;
 }
 
 /// Marshals a C edit onto its core mirror, resolving the envelope slice.
-SonareError to_core_edit(const SonareNoteEdit& edit, const float* envelopes, size_t envelope_count,
+SonareError to_core_edit(const SonareNoteEdit& edit, const std::string& edit_subject,
+                         const float* envelopes, size_t envelope_count,
                          editing::note_model::NoteEdit& out) {
   out.time_offset_samples = edit.time_offset_samples;
   out.pitch_shift_semitones = edit.pitch_semitones;
@@ -279,7 +312,7 @@ SonareError to_core_edit(const SonareNoteEdit& edit, const float* envelopes, siz
   out.vibrato_depth_change = edit.vibrato_depth_change;
   out.drift_change = edit.drift_change;
   out.muted = edit.muted != 0;
-  return read_envelope(edit, envelopes, envelope_count, out.amplitude_envelope);
+  return read_envelope(edit, edit_subject, envelopes, envelope_count, out.amplitude_envelope);
 }
 
 /// Marshals a core edit back out, pointing it at its slice of the result's pool.
@@ -299,11 +332,17 @@ void from_core_edit(const editing::note_model::NoteEdit& edit, int64_t envelope_
 
 /// Marshals a C edit for split and merge, which never render: the envelope
 /// values the renderer would have rejected are checked here instead.
-SonareError to_core_edit_checked(const SonareNoteEdit& edit, const float* envelopes,
-                                 size_t envelope_count, editing::note_model::NoteEdit& out) {
-  const SonareError error = to_core_edit(edit, envelopes, envelope_count, out);
+SonareError to_core_edit_checked(const SonareNoteEdit& edit, const std::string& edit_subject,
+                                 const float* envelopes, size_t envelope_count,
+                                 editing::note_model::NoteEdit& out) {
+  const SonareError error = to_core_edit(edit, edit_subject, envelopes, envelope_count, out);
   if (error != SONARE_OK) return error;
-  return editing::note_model::is_valid_note_edit(out) ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
+  if (editing::note_model::is_valid_note_edit(out)) return SONARE_OK;
+  return run_validation([&] {
+    util::check::refuse(edit_subject.substr(0, edit_subject.size() - 1).c_str(),
+                        "must hold finite values, a positive time_stretch_ratio and a "
+                        "non-negative envelope whose product with the gain stays finite");
+  });
 }
 
 /// Marshals a core note list into a heap-owned C result: the notes, their
@@ -378,7 +417,7 @@ SonareError run_note_set_edit(const char* fn, const char* name, const float* sam
   const SonareError track_error =
       validate_track_args(f0_hz, voiced_prob, voiced, n_frames, frame_rate);
   if (track_error != SONARE_OK) return track_error;
-  if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(notes, note_count);
 
   editing::note_model::NoteExtractorConfig extractor_config;
   const SonareError config_error = resolve_extractor_config(config, extractor_config);
@@ -389,7 +428,8 @@ SonareError run_note_set_edit(const char* fn, const char* name, const float* sam
   std::vector<editing::note_model::NoteEdit> edits(note_count);
   for (size_t i = 0; i < note_count; ++i) {
     const SonareError edit_error =
-        to_core_edit_checked(notes[i].edit, envelopes, envelope_count, edits[i]);
+        to_core_edit_checked(notes[i].edit, "notes[" + std::to_string(i) + "].edit.", envelopes,
+                             envelope_count, edits[i]);
     if (edit_error != SONARE_OK) return edit_error;
   }
 
@@ -435,12 +475,20 @@ SonareError resolve_note_target_config(const SonareNoteTargetAssignConfig* confi
   editing::note_model::UnmatchedTargetPolicy policy{};
   if (!ordinal_to_enum(config->unmatched_policy, SONARE_NOTE_TARGET_UNMATCHED_LEAVE,
                        SONARE_NOTE_TARGET_UNMATCHED_NEAREST, &policy)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([&] {
+      util::check::refuse("config.unmatched_policy",
+                          util::refusal::one_of_predicate(std::array<int, 3>{
+                              SONARE_NOTE_TARGET_UNMATCHED_LEAVE, SONARE_NOTE_TARGET_UNMATCHED_MUTE,
+                              SONARE_NOTE_TARGET_UNMATCHED_NEAREST}));
+    });
   }
-  if (!std::isfinite(config->min_overlap_ratio) || config->min_overlap_ratio < 0.0f ||
-      config->min_overlap_ratio > 1.0f || !std::isfinite(config->max_correction_semitones) ||
-      config->max_correction_semitones < 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::in_range(config->min_overlap_ratio, 0.0, 1.0, "config.min_overlap_ratio");
+        util::check::at_least(config->max_correction_semitones, 0.0,
+                              "config.max_correction_semitones");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   out.unmatched_policy = policy;
   out.min_overlap_ratio = config->min_overlap_ratio;
@@ -457,7 +505,10 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
                                          size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline("pitch_correct_to_midi", "samples", samples, length, sample_rate,
@@ -480,19 +531,24 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!f0_hz || n_frames == 0 || hop_length <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (!std::isfinite(target_midi) || target_midi < 0.0f || target_midi > 127.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = check_timevarying_args(f0_hz, n_frames, hop_length);
+      err != SONARE_OK) {
+    return err;
   }
   // pYIN represents unvoiced F0 as NaN. Accept that canonical representation
   // only when the matching voiced flag is false; reject infinities, negative
   // frequencies, and pitches above Nyquist.
-  if (!valid_pitch_track(f0_hz, voiced_prob, voiced, n_frames, sample_rate)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::in_range(target_midi, 0.0, 127.0, "target_midi");
+        check_pitch_track(f0_hz, voiced_prob, voiced, n_frames, sample_rate);
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline("pitch_correct_to_midi_timevarying", "samples", samples, length, sample_rate,
@@ -513,7 +569,7 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
 SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* config) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
   const editing::pitch_editor::PitchCorrectionConfig defaults{};
   config->target_mode = SONARE_PITCH_TARGET_FIXED_MIDI;
   config->target_midi = constants::kMidiA4;
@@ -538,10 +594,14 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                                              size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!f0_hz || n_frames == 0 || hop_length <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = check_timevarying_args(f0_hz, n_frames, hop_length);
+      err != SONARE_OK) {
+    return err;
   }
 
   // Resolve the config (NULL = library defaults), validating every numeric knob
@@ -550,19 +610,21 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
   bool scale_mode = false;
   if (config) {
     scale_mode = config->target_mode == SONARE_PITCH_TARGET_SCALE;
-    if (config->target_mode != SONARE_PITCH_TARGET_FIXED_MIDI &&
-        config->target_mode != SONARE_PITCH_TARGET_SCALE) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (!scale_mode && (!std::isfinite(config->target_midi) || config->target_midi < 0.0f ||
-                        config->target_midi > 127.0f)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (!editing::pitch_editor::valid_scale_args(config->scale_root,
-                                                 static_cast<uint16_t>(config->scale_mode_mask)) ||
-        (config->scale_mode_mask & ~uint32_t{0x0FFF}) != 0 ||
-        !apply_correction_knobs(*config, core_config)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err = run_validation([&] {
+          util::check::one_of(
+              config->target_mode,
+              std::array<int, 2>{SONARE_PITCH_TARGET_FIXED_MIDI, SONARE_PITCH_TARGET_SCALE},
+              "config.target_mode");
+          if (!scale_mode) {
+            util::check::in_range(config->target_midi, 0.0, 127.0, "config.target_midi");
+          }
+          util::check::integer_in_range(config->scale_root, 0, 11, "config.scale_root");
+          util::check::integer_in_range(config->scale_mode_mask, 1, 0x0FFF,
+                                        "config.scale_mode_mask");
+          apply_correction_knobs(*config, core_config);
+        });
+        err != SONARE_OK) {
+      return err;
     }
     core_config.scale.root = config->scale_root;
     core_config.scale.mode_mask = static_cast<uint16_t>(config->scale_mode_mask);
@@ -570,8 +632,10 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
   const float target_midi = config ? config->target_midi : constants::kMidiA4;
 
   // Match the fixed-target entry point's pYIN/Nyquist contract.
-  if (!valid_pitch_track(f0_hz, voiced_prob, voiced, n_frames, sample_rate)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation(
+          [&] { check_pitch_track(f0_hz, voiced_prob, voiced, n_frames, sample_rate); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline("pitch_correct_timevarying", "samples", samples, length, sample_rate,
@@ -596,21 +660,32 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length, SonareKey* out_key) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!out_key) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_key = SonareKey{};
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_key != nullptr) *out_key = SonareKey{};
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_key);
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   std::optional<Key> named;
   if (key) {
     named = Key{PitchClass::C, Mode::Major, 1.0f};
-    if (!ordinal_to_enum(key->root, SONARE_PITCH_C, SONARE_PITCH_B, &named->root) ||
-        !ordinal_to_enum(key->mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, &named->mode)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (!ordinal_to_enum(key->root, SONARE_PITCH_C, SONARE_PITCH_B, &named->root)) {
+      return run_validation(
+          [&] { util::check::refuse("key.root", util::refusal::kDeclaredValuePredicate); });
+    }
+    if (!ordinal_to_enum(key->mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, &named->mode)) {
+      return run_validation(
+          [&] { util::check::refuse("key.mode", util::refusal::kDeclaredValuePredicate); });
     }
   }
   editing::pitch_editor::PitchCorrectionConfig core_config{};
-  if (config && !apply_correction_knobs(*config, core_config)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (config) {
+    if (const SonareError err =
+            run_validation([&] { apply_correction_knobs(*config, core_config); });
+        err != SONARE_OK) {
+      return err;
+    }
   }
 
   return run_offline("auto_tune", "samples", samples, length, sample_rate,
@@ -632,7 +707,10 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline("note_stretch", "samples", samples, length, sample_rate,
@@ -657,7 +735,7 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
                                  SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
   // Refused and cleared before the gate, so the stub below leaves it defined too.
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   clear_note_objects_result(*out);
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
@@ -701,17 +779,24 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
                                 size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(notes, note_count);
 
   // The track is optional; only a curve edit reads it.
-  if (voiced != nullptr && f0_hz == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (voiced != nullptr && f0_hz == nullptr) {
+    return run_validation([&] {
+      util::check::refuse_relation({"f0_hz", "voiced"},
+                                   "{0} must not be NULL when {1} is not NULL");
+    });
+  }
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(f0_hz, n_frames);
   if (f0_hz != nullptr) {
     const SonareError track_error = validate_f0_frames(f0_hz, n_frames, frame_rate);
     if (track_error != SONARE_OK) return track_error;
-  } else if (n_frames != 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
   }
 
   editing::note_model::NoteRenderConfig render_config;
@@ -726,6 +811,7 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
           // The metrics and the amplitude offset are not carried: the renderer never
           // looks at them.
           const SonareNoteObject& row = notes[i];
+          const std::string note_prefix = "notes[" + std::to_string(i) + "].";
           core_notes[i].onset_sample = row.onset_sample;
           core_notes[i].offset_sample = row.offset_sample;
           core_notes[i].frame_start = row.frame_start;
@@ -733,9 +819,21 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
           core_notes[i].median_hz = row.median_hz;
           if (f0_hz != nullptr) {
             // The note's pitch curve is the caller's track sliced by its own bounds.
-            if (row.frame_start < 0 || row.frame_end < row.frame_start ||
-                static_cast<size_t>(row.frame_end) > n_frames) {
-              return SONARE_ERROR_INVALID_PARAMETER;
+            if (const SonareError err = run_validation([&] {
+                  util::check::integer_at_least(row.frame_start, 0,
+                                                (note_prefix + "frame_start").c_str());
+                  if (row.frame_end < row.frame_start) {
+                    util::check::refuse_relation(
+                        {note_prefix + "frame_end", note_prefix + "frame_start"},
+                        "{0} must not be less than {1}");
+                  }
+                  if (static_cast<size_t>(row.frame_end) > n_frames) {
+                    util::check::refuse_relation({note_prefix + "frame_end", "n_frames"},
+                                                 "{0} must not exceed {1}");
+                  }
+                });
+                err != SONARE_OK) {
+              return err;
             }
             const size_t note_frames = static_cast<size_t>(row.frame_end - row.frame_start);
             core_notes[i].f0_hz.values = normalize_f0_frames(
@@ -744,10 +842,14 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
             core_notes[i].f0_hz.frame_offset = row.frame_start;
           } else if (row.edit.vibrato_depth_change != 0.0f || row.edit.drift_change != 0.0f) {
             // A curve edit with no track has nothing to act on.
-            return SONARE_ERROR_INVALID_PARAMETER;
+            return run_validation([&] {
+              util::check::refuse_relation({note_prefix + "edit.vibrato_depth_change",
+                                            note_prefix + "edit.drift_change", "f0_hz"},
+                                           "{0} and {1} must be 0 when {2} is NULL");
+            });
           }
-          const SonareError edit_error =
-              to_core_edit(row.edit, envelopes, envelope_count, core_notes[i].edit);
+          const SonareError edit_error = to_core_edit(row.edit, note_prefix + "edit.", envelopes,
+                                                      envelope_count, core_notes[i].edit);
           if (edit_error != SONARE_OK) return edit_error;
         }
         Audio result = editing::note_model::render_notes(audio, core_notes, render_config);
@@ -765,19 +867,27 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voice
                                         SonarePitchDecompositionResult* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   out->center_hz = 0.0f;
   out->drift_cents = nullptr;
   out->vibrato_cents = nullptr;
   out->count = 0;
 
-  if (!std::isfinite(median_hz) || median_hz < 0.0f || !std::isfinite(vibrato_cutoff_hz) ||
-      vibrato_cutoff_hz < 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (voiced != nullptr && f0_hz == nullptr) {
+    return run_validation([&] {
+      util::check::refuse_relation({"f0_hz", "voiced"},
+                                   "{0} must not be NULL when {1} is not NULL");
+    });
   }
-  if (voiced != nullptr && f0_hz == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   const SonareError track_error = validate_f0_frames(f0_hz, n_frames, frame_rate);
   if (track_error != SONARE_OK) return track_error;
+  if (const SonareError err = run_validation([&] {
+        util::check::at_least(median_hz, 0.0, "median_hz");
+        util::check::at_least(vibrato_cutoff_hz, 0.0, "vibrato_cutoff_hz");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
 
   SONARE_C_TRY
   editing::note_model::NoteObject note;
@@ -827,10 +937,14 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
   // Refused and cleared before the gate, so the stub below leaves it defined too.
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   clear_note_objects_result(*out);
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (index >= note_count) return SONARE_ERROR_INVALID_PARAMETER;
+  if (index >= note_count) {
+    return run_validation([&] {
+      util::check::refuse_relation({"index", "note_count"}, "{0} must be less than {1}");
+    });
+  }
 
   return run_note_set_edit("split_note", "samples", samples, length, sample_rate, f0_hz,
                            voiced_prob, voiced, n_frames, frame_rate, config, notes, note_count,
@@ -859,10 +973,17 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
   // Refused and cleared before the gate, so the stub below leaves it defined too.
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   clear_note_objects_result(*out);
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!(first < last) || last >= note_count) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!(first < last)) {
+    return run_validation(
+        [&] { util::check::refuse_relation({"first", "last"}, "{0} must be less than {1}"); });
+  }
+  if (last >= note_count) {
+    return run_validation(
+        [&] { util::check::refuse_relation({"last", "note_count"}, "{0} must be less than {1}"); });
+  }
 
   return run_note_set_edit("merge_notes", "samples", samples, length, sample_rate, f0_hz,
                            voiced_prob, voiced, n_frames, frame_rate, config, notes, note_count,
@@ -884,7 +1005,7 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
 SonareError sonare_note_target_assign_config_default(SonareNoteTargetAssignConfig* config) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
   const editing::note_model::NoteTargetAssignConfig defaults{};
   config->unmatched_policy = static_cast<int32_t>(defaults.unmatched_policy);
   config->min_overlap_ratio = defaults.min_overlap_ratio;
@@ -900,7 +1021,8 @@ SonareError sonare_note_targets_from_smf(const uint8_t* bytes, size_t len, int t
                                          SonareNoteTarget** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (out == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out = nullptr;
   *out_count = 0;
 
@@ -933,11 +1055,15 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
                                        size_t* out_assigned_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (out_assigned_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_assigned_count);
   *out_assigned_count = 0;
-  if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (targets == nullptr && target_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(notes, note_count);
+  if (const SonareError err =
+          run_validation([&] { util::check::integer_at_least(sample_rate, 1, "sample_rate"); });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(targets, target_count);
 
   SONARE_C_TRY
   editing::note_model::NoteTargetAssignConfig assign_config;
@@ -949,9 +1075,17 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
     // Rejected here rather than downstream: every overlap comparison is false for
     // a NaN, so a non-finite target would be selected and then written into
     // pitch_semitones with nothing left to catch it.
-    if (!std::isfinite(targets[i].start_sec) || !std::isfinite(targets[i].end_sec) ||
-        !std::isfinite(targets[i].target_midi)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err = run_validation([&] {
+          util::check::finite(targets[i].start_sec,
+                              util::check::indexed_subject("targets", i, "start_sec").c_str());
+          util::check::finite(targets[i].end_sec,
+                              util::check::indexed_subject("targets", i, "end_sec").c_str());
+          util::check::finite_float(
+              targets[i].target_midi,
+              util::check::indexed_subject("targets", i, "target_midi").c_str());
+        });
+        err != SONARE_OK) {
+      return err;
     }
     core_targets[i].start_sec = targets[i].start_sec;
     core_targets[i].end_sec = targets[i].end_sec;
@@ -989,13 +1123,16 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
                                              const SonarePercussiveEventConfig* config,
                                              SonarePercussiveEventsResult* out) {
   SONARE_C_API_ENTRY;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   clear_percussive_events_result(*out);
 
   editing::event_model::PercussiveEventExtractorConfig extractor_config;
   if (config != nullptr) {
-    if (config->struct_version < 0 || config->struct_version > 1) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err = run_validation([&] {
+          util::check::integer_in_range(config->struct_version, 0, 1, "config.struct_version");
+        });
+        err != SONARE_OK) {
+      return err;
     }
     const SonareError separation_error = resolve_percussive_separation(
         config->n_fft, config->hop_length, config->hpss_kernel_harmonic,
@@ -1038,21 +1175,29 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (events == nullptr && count != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  *out = nullptr;
+  *out_length = 0;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(events, count);
 
   editing::event_model::PercussiveEventRenderConfig render_config;
   if (config != nullptr) {
-    if (config->struct_version < 0 || config->struct_version > 1) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err = run_validation([&] {
+          util::check::integer_in_range(config->struct_version, 0, 1, "config.struct_version");
+        });
+        err != SONARE_OK) {
+      return err;
     }
     const SonareError separation_error = resolve_percussive_separation(
         config->n_fft, config->hop_length, config->hpss_kernel_harmonic,
         config->hpss_kernel_percussive, render_config.separation);
     if (separation_error != SONARE_OK) return separation_error;
 
-    if (!std::isfinite(config->fade_ms) || config->fade_ms < 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err =
+            run_validation([&] { util::check::at_least(config->fade_ms, 0.0, "config.fade_ms"); });
+        err != SONARE_OK) {
+      return err;
     }
     if (config->fade_ms != 0.0f) render_config.fade_ms = config->fade_ms;
   }
@@ -1083,7 +1228,10 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
                              size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline("note_move", "samples", samples, length, sample_rate,

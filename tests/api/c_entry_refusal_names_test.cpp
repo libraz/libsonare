@@ -141,32 +141,30 @@ TEST_CASE("a bounce with no channels or no frames is refused by name", "[c_api][
   options.num_channels = 0;
   CHECK(sonare_engine_bounce_offline(prepared.engine, &options, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "engine_bounce_offline: options->num_channels must be positive"));
+  CHECK_THAT(last_message(),
+             Catch::Matchers::Equals("options.num_channels must be an integer in [1, 2147483647]"));
 
   options.num_channels = 2;
   options.total_frames = 0;
   CHECK(sonare_engine_bounce_offline(prepared.engine, &options, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "engine_bounce_offline: options->total_frames must be positive"));
+  CHECK_THAT(last_message(),
+             Catch::Matchers::Equals("options.total_frames must be an integer of at least 1"));
   CHECK(result.interleaved == nullptr);
 }
 
 TEST_CASE("engine capture and render entries refuse a NULL engine by name", "[c_api][engine]") {
   CHECK(sonare_engine_arm_capture(nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(),
-             Catch::Matchers::ContainsSubstring("engine_arm_capture: engine must not be NULL"));
+  CHECK_THAT(last_message(), Catch::Matchers::Equals("engine must not be NULL"));
 
   CHECK(sonare_engine_finish_offline_render(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "engine_finish_offline_render: engine must not be NULL"));
+  CHECK_THAT(last_message(), Catch::Matchers::Equals("engine must not be NULL"));
 }
 
 TEST_CASE("an enabled empty capture punch window is refused by name", "[c_api][engine]") {
   PreparedEngine prepared;
   CHECK(sonare_engine_set_capture_punch(prepared.engine, 100, 100, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring("engine_set_capture_punch:"));
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring("must not be empty"));
+  CHECK_THAT(last_message(), Catch::Matchers::Equals(
+                                 "end_sample must not equal start_sample when enabled is not 0"));
 }

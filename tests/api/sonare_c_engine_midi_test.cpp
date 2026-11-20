@@ -1531,8 +1531,7 @@ TEST_CASE("sonare_engine live push family names the refused argument", "[c_api][
 #if defined(SONARE_WITH_ARRANGEMENT)
     REQUIRE(r.call.push(engine) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()) ==
-          std::string(r.call.function) + ": " + r.message);
+    CHECK(std::string(sonare_last_error_message()) == r.message);
 #else
     // A build without the engine says so before it judges an argument.
     REQUIRE(r.call.push(engine) == SONARE_ERROR_NOT_SUPPORTED);
@@ -1556,8 +1555,7 @@ TEST_CASE("sonare_engine input-source pushes refuse a disabled source as invalid
       INFO(p.function << (was_enabled ? " after clear" : " never enabled"));
       REQUIRE(p.push(engine) == SONARE_ERROR_INVALID_STATE);
       CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_STATE);
-      CHECK(std::string(sonare_last_error_message()) ==
-            std::string(p.function) + ": the MIDI input source is not enabled");
+      CHECK(std::string(sonare_last_error_message()) == "the MIDI input source is not enabled");
     }
   }
   sonare_engine_destroy(engine);

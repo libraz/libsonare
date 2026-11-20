@@ -1,6 +1,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -13,6 +14,7 @@
 #include "midi/live_push_args.h"
 #include "rt/command.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -45,8 +47,14 @@ namespace {
 SonareError midi_instrument_bind_error(const sonare::engine::RealtimeEngine& engine) noexcept {
   switch (engine.last_midi_instrument_bind_status()) {
     case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
+      return run_validation([&] {
+        util::check::refuse("instrument", "must not already be bound to another destination");
+      });
     case sonare::engine::MidiInstrumentBindStatus::kInstrumentPrepareFailed:
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return run_validation([&] {
+        util::check::refuse("instrument",
+                            "must be preparable at the engine's sample rate and block size");
+      });
     case sonare::engine::MidiInstrumentBindStatus::kRackFull:
     case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
       return SONARE_ERROR_INVALID_STATE;
@@ -90,6 +98,14 @@ SonareError bind_engine_instrument(SonareEngine* engine, uint32_t destination_id
   return SONARE_OK;
 }
 
+// Refuses a destination_id that no bound MIDI instrument answers to.
+SonareError refuse_unknown_instrument_destination() noexcept {
+  return run_validation([&] {
+    util::check::refuse_unknown_id("destination_id", "a destination with a MIDI instrument",
+                                   "engine");
+  });
+}
+
 // Maps an engine instrument-control outcome to the articulation entries' C status.
 SonareError articulation_status(
     sonare::engine::RealtimeEngine::InstrumentControlStatus status) noexcept {
@@ -98,7 +114,7 @@ SonareError articulation_status(
     case Status::kOk:
       return SONARE_OK;
     case Status::kNoInstrument:
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return refuse_unknown_instrument_destination();
     case Status::kNotSupported:
       break;
   }
@@ -112,32 +128,25 @@ uint64_t pack_midi_note(uint8_t group, uint8_t channel, uint8_t note, uint8_t ve
          (static_cast<uint64_t>(channel) << 16) | (static_cast<uint64_t>(group) << 24);
 }
 
-// Records "<function>: <detail>" as the last error and returns @p code. Formats
-// into a fixed buffer so the unguarded live push entries can never throw.
-SonareError refuse_with(SonareError code, const char* function, const char* detail) noexcept {
-  char message[256];
-  std::snprintf(message, sizeof(message), "%s: %s", function, detail);
-  set_last_error(code, message);
-  return code;
-}
-
-// Returns INVALID_PARAMETER with the reason recorded when the live push argument
+// Returns INVALID_PARAMETER with the rule's text recorded when the live push argument
 // rule refused an argument; SONARE_OK otherwise.
-SonareError refuse_live_push_arg(const char* function, const char* error) noexcept {
+SonareError refuse_live_push_arg(const char* error) noexcept {
   if (error == nullptr) return SONARE_OK;
-  return refuse_with(SONARE_ERROR_INVALID_PARAMETER, function, error);
+  set_last_error(SONARE_ERROR_INVALID_PARAMETER, error);
+  return SONARE_ERROR_INVALID_PARAMETER;
 }
 
 // The input-source family's state check, applied after its arguments.
-SonareError require_midi_input_source(const SonareEngine* engine, const char* function) noexcept {
+SonareError require_midi_input_source(const SonareEngine* engine) noexcept {
   if (engine->midi_input_source_enabled) return SONARE_OK;
-  return refuse_with(SONARE_ERROR_INVALID_STATE, function, "the MIDI input source is not enabled");
+  set_last_error(SONARE_ERROR_INVALID_STATE, "the MIDI input source is not enabled");
+  return SONARE_ERROR_INVALID_STATE;
 }
 
 // Queues @p ump on the engine-owned input source after the state check.
-SonareError push_midi_input_event(SonareEngine* engine, const char* function, const midi::Ump& ump,
+SonareError push_midi_input_event(SonareEngine* engine, const midi::Ump& ump,
                                   int64_t offset_in_block_samples) {
-  if (const SonareError state = require_midi_input_source(engine, function); state != SONARE_OK) {
+  if (const SonareError state = require_midi_input_source(engine); state != SONARE_OK) {
     return state;
   }
   return engine->midi_input_source.push_event(ump, offset_in_block_samples)
@@ -167,7 +176,8 @@ uint8_t infer_ump_word_count(const SonareEngineMidiEvent& event) noexcept {
   return 1;
 }
 
-bool midi_event_from_c(const SonareEngineMidiEvent& src, midi::MidiEvent* out) noexcept {
+void midi_event_from_c(const SonareEngineMidiEvent& src, const std::string& prefix,
+                       midi::MidiEvent* out) {
   // src.group carries no information the UMP does not already hold in word0, so
   // it is validated as struct well-formedness (like `reserved`) and not read for
   // its value: the group is taken from word0, the copy that leaves the process.
@@ -179,7 +189,8 @@ bool midi_event_from_c(const SonareEngineMidiEvent& src, midi::MidiEvent* out) n
   // assignment is kept so this boundary conversion yields a self-consistent Ump
   // on its own terms, not because anything downstream depends on it. Anyone
   // changing the sequencer's derivation must not read this line as coverage.
-  if (!out || src.group > 15 || src.reserved != 0) return false;
+  util::check::integer_in_range(src.group, 0, 15, (prefix + "group").c_str());
+  if (src.reserved != 0) util::check::refuse((prefix + "reserved").c_str(), "must be 0");
   midi::Ump ump{};
   ump.words[0] = src.word0;
   ump.words[1] = src.word1;
@@ -192,7 +203,6 @@ bool midi_event_from_c(const SonareEngineMidiEvent& src, midi::MidiEvent* out) n
   out->ump = ump;
   out->sysex_payload = nullptr;
   out->sysex_payload_size = 0;
-  return true;
 }
 
 }  // namespace
@@ -202,7 +212,8 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
                                          const SonareEngineMidiClipSchedule* clips,
                                          size_t clip_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || (clip_count > 0 && clips == nullptr)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(clips, clip_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)clips;
   (void)clip_count;
@@ -213,11 +224,25 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
   schedules.reserve(clip_count);
   for (size_t i = 0; i < clip_count; ++i) {
     const SonareEngineMidiClipSchedule& src = clips[i];
-    if (!std::isfinite(src.start_ppq) || src.loop < 0 ||
-        (src.event_count > 0 && src.events == nullptr) ||
-        !(std::isfinite(src.gain) && src.gain >= 0.0f) || src.fade_in_samples < 0 ||
-        src.fade_out_samples < 0 || (src.fade_out_samples > 0 && src.length_samples <= 0)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    const std::string subject_prefix = "clips[" + std::to_string(i) + "].";
+    const auto subject = [&](const char* member) { return subject_prefix + member; };
+    if (const SonareError err = run_validation([&] {
+          util::check::finite(src.start_ppq, subject("start_ppq").c_str());
+          util::check::integer_at_least(src.loop, 0, subject("loop").c_str());
+          util::check::non_null_when_count(src.events, src.event_count, subject("events").c_str(),
+                                           subject("event_count").c_str());
+          util::check::at_least(src.gain, 0.0, subject("gain").c_str());
+          util::check::integer_at_least<int64_t>(src.fade_in_samples, 0,
+                                                 subject("fade_in_samples").c_str());
+          util::check::integer_at_least<int64_t>(src.fade_out_samples, 0,
+                                                 subject("fade_out_samples").c_str());
+          if (src.fade_out_samples > 0 && src.length_samples <= 0) {
+            util::check::refuse_relation({subject("fade_out_samples"), subject("length_samples")},
+                                         "{0} must be 0 when {1} is not positive");
+          }
+        });
+        err != SONARE_OK) {
+      return err;
     }
     midi::MidiClipSchedule dst;
     dst.id = src.id;
@@ -234,7 +259,8 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
     dst.events.reserve(src.event_count);
     for (size_t j = 0; j < src.event_count; ++j) {
       midi::MidiEvent event;
-      if (!midi_event_from_c(src.events[j], &event)) return SONARE_ERROR_INVALID_PARAMETER;
+      midi_event_from_c(src.events[j], subject_prefix + "events[" + std::to_string(j) + "].",
+                        &event);
       dst.events.push_back(event);
     }
     // Stable sort with the off-before-on tiebreak so a same-frame re-trigger
@@ -251,12 +277,17 @@ SonareError sonare_engine_set_midi_clips(SonareEngine* engine,
 SonareError sonare_engine_set_builtin_instrument(SonareEngine* engine, uint32_t destination_id,
                                                  const SonareEngineBuiltinSynthConfig* config) {
   SONARE_C_API_ENTRY;
-  if (!engine || !config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(config);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  if (!valid_builtin_waveform(config->waveform)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_builtin_waveform(config->waveform)) {
+    return run_validation([&] {
+      util::check::one_of(config->waveform, std::array<int, 4>{0, 1, 2, 3}, "config.waveform");
+    });
+  }
   SONARE_C_TRY
   auto synth = std::make_unique<sonare::midi::BuiltinSynth>(
       sonare_c_detail::builtin_synth_config_from_c(*config));
@@ -275,9 +306,11 @@ SonareError bind_native_synth(SonareEngine* engine, uint32_t destination_id,
   sonare::midi::synth::NativeSynthConfig cfg;
   const char* error = nullptr;
   if (!sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   error != nullptr ? error : "invalid synth patch");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    if (error != nullptr) {
+      set_last_error(SONARE_ERROR_INVALID_PARAMETER, error);
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    return run_validation([&] { util::check::refuse("patch", "must be a valid synth patch"); });
   }
   cfg.use_gm_programs = use_gm_programs;
 #if defined(SONARE_WITH_MASTERING)
@@ -300,7 +333,8 @@ SonareError sonare_engine_set_synth_instrument_with_bank(SonareEngine* engine,
                                                          const SonareSynthPatch* patch,
                                                          SonareSampleBank* bank) {
   SONARE_C_API_ENTRY;
-  if (!engine || !patch) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(patch);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)bank;
@@ -321,7 +355,8 @@ SonareError sonare_engine_set_synth_instrument(SonareEngine* engine, uint32_t de
 SonareError sonare_engine_set_synth_instrument_binding(
     SonareEngine* engine, const SonareSynthInstrumentBinding* binding) {
   SONARE_C_API_ENTRY;
-  if (!engine || !binding) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(binding);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
@@ -337,9 +372,12 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
                                                            const char* param_name,
                                                            uint32_t* out_id) {
   SONARE_C_API_ENTRY;
-  if (!engine || !param_name || param_name[0] == '\0' || !out_id) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(param_name);
+  if (param_name[0] == '\0') {
+    return run_validation([&] { util::check::non_empty(param_name, "param_name"); });
   }
+  SONARE_C_REQUIRE_NONNULL(out_id);
   // Defined on every exit path, so an unresolved name and a feature-disabled
   // build both leave the caller a readable id rather than uninitialised memory.
   *out_id = 0;
@@ -349,7 +387,16 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
 #else
   SONARE_C_TRY
   const int64_t id = engine->engine.resolve_instrument_automation_id(destination_id, param_name);
-  if (id < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (id < 0) {
+    if (engine->engine.midi_instrument(destination_id) == nullptr) {
+      return refuse_unknown_instrument_destination();
+    }
+    return run_validation([&] {
+      util::check::refuse(
+          "param_name",
+          "must be the name of a parameter of the instrument bound to destination_id");
+    });
+  }
   *out_id = static_cast<uint32_t>(id);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -358,7 +405,11 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
 
 SonareError sonare_engine_load_soundfont(SonareEngine* engine, const uint8_t* data, size_t size) {
   SONARE_C_API_ENTRY;
-  if (!engine || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(data);
+  if (size == 0) {
+    return run_validation([&] { util::check::integer_at_least<size_t>(size, 1, "size"); });
+  }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
@@ -382,13 +433,18 @@ SonareError sonare_engine_load_soundfont(SonareEngine* engine, const uint8_t* da
 SonareError sonare_engine_set_sf2_instrument(SonareEngine* engine, uint32_t destination_id,
                                              const SonareEngineSf2InstrumentConfig* config) {
   SONARE_C_API_ENTRY;
-  if (!engine || !config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(config);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   if (!sonare_c_detail::sf2_config_version_supported(*config)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([&] {
+      util::check::integer_in_range(config->struct_version, 0,
+                                    sonare_c_detail::kSf2InstrumentConfigVersion,
+                                    "config.struct_version");
+    });
   }
   // A missing SoundFont is allowed: the player's NativeSynth GM fallback is
   // the data-free floor, so live MIDI stays audible with zero data.
@@ -411,7 +467,7 @@ SonareError sonare_engine_set_sf2_instrument(SonareEngine* engine, uint32_t dest
 
 SonareError sonare_engine_clear_midi_instrument(SonareEngine* engine, uint32_t destination_id) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -431,7 +487,8 @@ SonareError sonare_engine_clear_midi_instrument(SonareEngine* engine, uint32_t d
 
 SonareError sonare_engine_midi_instrument_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -449,8 +506,15 @@ SonareError sonare_engine_set_articulation(SonareEngine* engine, uint32_t destin
   // absent. An out-of-range mode is not clamped: kPoly substituted for a
   // misspelled kMonoLegato plays every note and slurs none of them, which the
   // caller cannot tell from a request that took.
-  if (!engine || channel > 15 || !valid_c_enum(articulation, SONARE_ARTICULATION_COUNT)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  if (channel > 15) {
+    return run_validation([&] { util::check::integer_in_range(channel, 0, 15, "channel"); });
+  }
+  if (!valid_c_enum(articulation, SONARE_ARTICULATION_COUNT)) {
+    return run_validation([&] {
+      util::check::one_of(articulation, std::array<int, SONARE_ARTICULATION_COUNT>{0, 1, 2},
+                          "articulation");
+    });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -465,7 +529,11 @@ SonareError sonare_engine_set_articulation(SonareEngine* engine, uint32_t destin
 SonareError sonare_engine_articulation(SonareEngine* engine, uint32_t destination_id,
                                        uint8_t channel, int* out_articulation) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_articulation || channel > 15) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  if (channel > 15) {
+    return run_validation([&] { util::check::integer_in_range(channel, 0, 15, "channel"); });
+  }
+  SONARE_C_REQUIRE_NONNULL(out_articulation);
   // Defined on every exit path, so a feature-disabled build and an instrument
   // without articulation both leave the caller a readable ordinal.
   *out_articulation = SONARE_ARTICULATION_POLY;
@@ -484,7 +552,8 @@ SonareError sonare_engine_articulation(SonareEngine* engine, uint32_t destinatio
 SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t destination_id,
                                                 uint32_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -492,7 +561,7 @@ SonareError sonare_engine_legato_fallback_count(SonareEngine* engine, uint32_t d
 #else
   SONARE_C_TRY
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
-  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (instrument == nullptr) return refuse_unknown_instrument_destination();
   uint64_t counted = 0;
   if (!instrument->legato_fallback_count(&counted)) {
     set_last_error(SONARE_ERROR_NOT_SUPPORTED,
@@ -511,9 +580,24 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
   // Shape is checked against the C surface alone, so garbage is refused in every
   // build rather than being told the feature is absent. 2 is the chain mode.
   constexpr int kChainMode = 2;
-  if (!engine || !valid_c_enum(mode, 0, kChainMode) || (part >= 16 && part != 0xFF) ||
-      (mode == kChainMode) != (inserts_json != nullptr)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  if (part >= 16 && part != 0xFF) {
+    return run_validation(
+        [&] { util::check::refuse("part", "must be an integer in [0, 15] or 255"); });
+  }
+  if (!valid_c_enum(mode, 0, kChainMode)) {
+    return run_validation(
+        [&] { util::check::one_of(mode, std::array<int, 3>{0, 1, kChainMode}, "mode"); });
+  }
+  if (mode == kChainMode && inserts_json == nullptr) {
+    return run_validation([&] {
+      util::check::refuse_relation({"inserts_json", "mode"}, "{0} must not be NULL when {1} is 2");
+    });
+  }
+  if (mode != kChainMode && inserts_json != nullptr) {
+    return run_validation([&] {
+      util::check::refuse_relation({"inserts_json", "mode"}, "{0} must be NULL unless {1} is 2");
+    });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -538,7 +622,7 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
   }
 #endif
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
-  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (instrument == nullptr) return refuse_unknown_instrument_destination();
   if (instrument->set_part_rig(part, rig)) return SONARE_OK;
   set_last_error(SONARE_ERROR_NOT_SUPPORTED, "destination instrument does not support part rigs");
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -549,12 +633,22 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
 SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, uint8_t channel, uint8_t controller,
                                        uint32_t param_id, float min_value, float max_value) {
   SONARE_C_API_ENTRY;
-  if (!engine || channel > 15 || controller > 127 || param_id == 0 || !std::isfinite(min_value) ||
-      !std::isfinite(max_value) || max_value < min_value) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (sonare::engine::RealtimeEngine::parameter_target_reserved(param_id)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_in_range(channel, 0, 15, "channel");
+        util::check::integer_in_range(controller, 0, 127, "controller");
+        util::check::integer_at_least(param_id, 1, "param_id");
+        util::check::finite_float(min_value, "min_value");
+        util::check::finite_float(max_value, "max_value");
+        if (max_value < min_value) {
+          util::check::refuse_relation({"max_value", "min_value"}, "{0} must be at least {1}");
+        }
+        if (sonare::engine::RealtimeEngine::parameter_target_reserved(param_id)) {
+          util::check::refuse("param_id", "must not be a reserved engine parameter id");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -575,17 +669,34 @@ SonareError sonare_engine_bind_midi_cc_binding(SonareEngine* engine,
   // native types below live in the arrangement library, so touching them here
   // would make this whole function unbuildable without it and would turn a
   // rejected argument into NOT_SUPPORTED.
-  if (!engine || !binding || binding->cc_number > 127 || binding->param_id == 0 ||
-      !valid_c_enum(binding->kind, 0, SONARE_MIDI_CC_NRPN) ||
-      (binding->channel != SONARE_MIDI_CC_ANY_CHANNEL && binding->channel > 15) ||
-      !std::isfinite(binding->min_value) || !std::isfinite(binding->max_value) ||
-      binding->max_value < binding->min_value ||
-      sonare::engine::RealtimeEngine::parameter_target_reserved(binding->param_id)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (binding->kind == SONARE_MIDI_CC_CONTROL_CHANGE_14 &&
-      (binding->cc_number > 31 || binding->cc_lsb_number != binding->cc_number + 32u)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(binding);
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_in_range(binding->cc_number, 0, 127, "binding.cc_number");
+        if (binding->channel != SONARE_MIDI_CC_ANY_CHANNEL && binding->channel > 15) {
+          util::check::refuse("binding.channel", "must be an integer in [0, 15] or 255");
+        }
+        util::check::one_of(binding->kind, std::array<int, 4>{0, 1, 2, 3}, "binding.kind");
+        util::check::integer_at_least(binding->param_id, 1, "binding.param_id");
+        util::check::finite_float(binding->min_value, "binding.min_value");
+        util::check::finite_float(binding->max_value, "binding.max_value");
+        if (binding->max_value < binding->min_value) {
+          util::check::refuse_relation({"binding.max_value", "binding.min_value"},
+                                       "{0} must be at least {1}");
+        }
+        if (sonare::engine::RealtimeEngine::parameter_target_reserved(binding->param_id)) {
+          util::check::refuse("binding.param_id", "must not be a reserved engine parameter id");
+        }
+        if (binding->kind == SONARE_MIDI_CC_CONTROL_CHANGE_14) {
+          util::check::integer_in_range(binding->cc_number, 0, 31, "binding.cc_number");
+          if (binding->cc_lsb_number != binding->cc_number + 32u) {
+            util::check::refuse_relation({"binding.cc_lsb_number", "binding.cc_number"},
+                                         "{0} must be {1} + 32");
+          }
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -609,7 +720,7 @@ SonareError sonare_engine_bind_midi_cc_binding(SonareEngine* engine,
 
 SonareError sonare_engine_clear_midi_cc_bindings(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
@@ -620,7 +731,8 @@ SonareError sonare_engine_clear_midi_cc_bindings(SonareEngine* engine) {
 
 SonareError sonare_engine_midi_cc_binding_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -633,7 +745,8 @@ SonareError sonare_engine_midi_cc_binding_count(SonareEngine* engine, size_t* ou
 SonareError sonare_engine_set_midi_fx(SonareEngine* engine, uint32_t destination_id,
                                       const char* config_json) {
   SONARE_C_API_ENTRY;
-  if (!engine || !config_json) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(config_json);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -649,7 +762,7 @@ SonareError sonare_engine_set_midi_fx(SonareEngine* engine, uint32_t destination
 
 SonareError sonare_engine_clear_midi_fx(SonareEngine* engine, uint32_t destination_id) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -661,7 +774,7 @@ SonareError sonare_engine_clear_midi_fx(SonareEngine* engine, uint32_t destinati
 
 SonareError sonare_engine_set_midi_input_source(SonareEngine* engine, uint32_t destination_id) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -674,7 +787,7 @@ SonareError sonare_engine_set_midi_input_source(SonareEngine* engine, uint32_t d
 
 SonareError sonare_engine_clear_midi_input_source(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
@@ -686,7 +799,8 @@ SonareError sonare_engine_clear_midi_input_source(SonareEngine* engine) {
 
 SonareError sonare_engine_midi_input_pending_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -700,7 +814,7 @@ SonareError sonare_engine_push_midi_input_note_on(SonareEngine* engine, uint8_t 
                                                   uint8_t channel, uint8_t note, uint8_t velocity,
                                                   int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
@@ -709,14 +823,12 @@ SonareError sonare_engine_push_midi_input_note_on(SonareEngine* engine, uint8_t 
   (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_input_note_on";
-  if (const SonareError refused = refuse_live_push_arg(
-          kFunction, midi::live_push_note_error(group, channel, note, velocity));
+  if (const SonareError refused =
+          refuse_live_push_arg(midi::live_push_note_error(group, channel, note, velocity));
       refused != SONARE_OK) {
     return refused;
   }
-  return push_midi_input_event(engine, kFunction,
-                               midi::make_midi1_note_on(group, channel, note, velocity),
+  return push_midi_input_event(engine, midi::make_midi1_note_on(group, channel, note, velocity),
                                offset_in_block_samples);
 #endif
 }
@@ -725,7 +837,7 @@ SonareError sonare_engine_push_midi_input_note_off(SonareEngine* engine, uint8_t
                                                    uint8_t channel, uint8_t note, uint8_t velocity,
                                                    int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
@@ -734,14 +846,12 @@ SonareError sonare_engine_push_midi_input_note_off(SonareEngine* engine, uint8_t
   (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_input_note_off";
-  if (const SonareError refused = refuse_live_push_arg(
-          kFunction, midi::live_push_note_error(group, channel, note, velocity));
+  if (const SonareError refused =
+          refuse_live_push_arg(midi::live_push_note_error(group, channel, note, velocity));
       refused != SONARE_OK) {
     return refused;
   }
-  return push_midi_input_event(engine, kFunction,
-                               midi::make_midi1_note_off(group, channel, note, velocity),
+  return push_midi_input_event(engine, midi::make_midi1_note_off(group, channel, note, velocity),
                                offset_in_block_samples);
 #endif
 }
@@ -750,7 +860,7 @@ SonareError sonare_engine_push_midi_input_cc(SonareEngine* engine, uint8_t group
                                              uint8_t controller, uint8_t value,
                                              int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
@@ -759,13 +869,12 @@ SonareError sonare_engine_push_midi_input_cc(SonareEngine* engine, uint8_t group
   (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_input_cc";
-  if (const SonareError refused = refuse_live_push_arg(
-          kFunction, midi::live_push_cc_error(group, channel, controller, value));
+  if (const SonareError refused =
+          refuse_live_push_arg(midi::live_push_cc_error(group, channel, controller, value));
       refused != SONARE_OK) {
     return refused;
   }
-  return push_midi_input_event(engine, kFunction,
+  return push_midi_input_event(engine,
                                midi::make_midi1_control_change(group, channel, controller, value),
                                offset_in_block_samples);
 #endif
@@ -775,7 +884,7 @@ SonareError sonare_engine_push_midi_input_pitch_bend(SonareEngine* engine, uint8
                                                      uint8_t channel, uint16_t bend14,
                                                      int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
@@ -783,14 +892,12 @@ SonareError sonare_engine_push_midi_input_pitch_bend(SonareEngine* engine, uint8
   (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_input_pitch_bend";
   if (const SonareError refused =
-          refuse_live_push_arg(kFunction, midi::live_push_pitch_bend_error(group, channel, bend14));
+          refuse_live_push_arg(midi::live_push_pitch_bend_error(group, channel, bend14));
       refused != SONARE_OK) {
     return refused;
   }
-  return push_midi_input_event(engine, kFunction,
-                               midi::make_midi1_pitch_bend(group, channel, bend14),
+  return push_midi_input_event(engine, midi::make_midi1_pitch_bend(group, channel, bend14),
                                offset_in_block_samples);
 #endif
 }
@@ -799,7 +906,7 @@ SonareError sonare_engine_push_midi_input_channel_pressure(SonareEngine* engine,
                                                            uint8_t channel, uint8_t pressure,
                                                            int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
@@ -807,14 +914,12 @@ SonareError sonare_engine_push_midi_input_channel_pressure(SonareEngine* engine,
   (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_input_channel_pressure";
-  if (const SonareError refused = refuse_live_push_arg(
-          kFunction, midi::live_push_channel_pressure_error(group, channel, pressure));
+  if (const SonareError refused =
+          refuse_live_push_arg(midi::live_push_channel_pressure_error(group, channel, pressure));
       refused != SONARE_OK) {
     return refused;
   }
-  return push_midi_input_event(engine, kFunction,
-                               midi::make_midi1_channel_pressure(group, channel, pressure),
+  return push_midi_input_event(engine, midi::make_midi1_channel_pressure(group, channel, pressure),
                                offset_in_block_samples);
 #endif
 }
@@ -824,7 +929,7 @@ SonareError sonare_engine_push_midi_input_poly_pressure(SonareEngine* engine, ui
                                                         uint8_t pressure,
                                                         int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
@@ -833,13 +938,12 @@ SonareError sonare_engine_push_midi_input_poly_pressure(SonareEngine* engine, ui
   (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_input_poly_pressure";
-  if (const SonareError refused = refuse_live_push_arg(
-          kFunction, midi::live_push_poly_pressure_error(group, channel, note, pressure));
+  if (const SonareError refused =
+          refuse_live_push_arg(midi::live_push_poly_pressure_error(group, channel, note, pressure));
       refused != SONARE_OK) {
     return refused;
   }
-  return push_midi_input_event(engine, kFunction,
+  return push_midi_input_event(engine,
                                midi::make_midi1_poly_pressure(group, channel, note, pressure),
                                offset_in_block_samples);
 #endif
@@ -849,7 +953,7 @@ SonareError sonare_engine_push_midi_note_on(SonareEngine* engine, uint32_t desti
                                             uint8_t group, uint8_t channel, uint8_t note,
                                             uint8_t velocity, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)group;
@@ -860,8 +964,7 @@ SonareError sonare_engine_push_midi_note_on(SonareEngine* engine, uint32_t desti
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   if (const SonareError refused =
-          refuse_live_push_arg("sonare_engine_push_midi_note_on",
-                               midi::live_push_note_error(group, channel, note, velocity));
+          refuse_live_push_arg(midi::live_push_note_error(group, channel, note, velocity));
       refused != SONARE_OK) {
     return refused;
   }
@@ -878,7 +981,7 @@ SonareError sonare_engine_push_midi_note_off(SonareEngine* engine, uint32_t dest
                                              uint8_t group, uint8_t channel, uint8_t note,
                                              uint8_t velocity, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)group;
@@ -889,8 +992,7 @@ SonareError sonare_engine_push_midi_note_off(SonareEngine* engine, uint32_t dest
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   if (const SonareError refused =
-          refuse_live_push_arg("sonare_engine_push_midi_note_off",
-                               midi::live_push_note_error(group, channel, note, velocity));
+          refuse_live_push_arg(midi::live_push_note_error(group, channel, note, velocity));
       refused != SONARE_OK) {
     return refused;
   }
@@ -907,7 +1009,7 @@ SonareError sonare_engine_push_midi_cc(SonareEngine* engine, uint32_t destinatio
                                        uint8_t channel, uint8_t controller, uint8_t value,
                                        int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)group;
@@ -918,8 +1020,7 @@ SonareError sonare_engine_push_midi_cc(SonareEngine* engine, uint32_t destinatio
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   if (const SonareError refused =
-          refuse_live_push_arg("sonare_engine_push_midi_cc",
-                               midi::live_push_cc_error(group, channel, controller, value));
+          refuse_live_push_arg(midi::live_push_cc_error(group, channel, controller, value));
       refused != SONARE_OK) {
     return refused;
   }
@@ -941,7 +1042,7 @@ SonareError sonare_engine_push_midi_pitch_bend(SonareEngine* engine, uint32_t de
                                                uint8_t group, uint8_t channel, uint16_t bend14,
                                                int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)group;
@@ -951,8 +1052,7 @@ SonareError sonare_engine_push_midi_pitch_bend(SonareEngine* engine, uint32_t de
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   if (const SonareError refused =
-          refuse_live_push_arg("sonare_engine_push_midi_pitch_bend",
-                               midi::live_push_pitch_bend_error(group, channel, bend14));
+          refuse_live_push_arg(midi::live_push_pitch_bend_error(group, channel, bend14));
       refused != SONARE_OK) {
     return refused;
   }
@@ -965,7 +1065,7 @@ SonareError sonare_engine_push_midi_channel_pressure(SonareEngine* engine, uint3
                                                      uint8_t group, uint8_t channel,
                                                      uint8_t pressure, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)group;
@@ -975,8 +1075,7 @@ SonareError sonare_engine_push_midi_channel_pressure(SonareEngine* engine, uint3
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   if (const SonareError refused =
-          refuse_live_push_arg("sonare_engine_push_midi_channel_pressure",
-                               midi::live_push_channel_pressure_error(group, channel, pressure));
+          refuse_live_push_arg(midi::live_push_channel_pressure_error(group, channel, pressure));
       refused != SONARE_OK) {
     return refused;
   }
@@ -990,7 +1089,7 @@ SonareError sonare_engine_push_midi_poly_pressure(SonareEngine* engine, uint32_t
                                                   uint8_t group, uint8_t channel, uint8_t note,
                                                   uint8_t pressure, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)group;
@@ -1001,8 +1100,7 @@ SonareError sonare_engine_push_midi_poly_pressure(SonareEngine* engine, uint32_t
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   if (const SonareError refused =
-          refuse_live_push_arg("sonare_engine_push_midi_poly_pressure",
-                               midi::live_push_poly_pressure_error(group, channel, note, pressure));
+          refuse_live_push_arg(midi::live_push_poly_pressure_error(group, channel, note, pressure));
       refused != SONARE_OK) {
     return refused;
   }
@@ -1014,7 +1112,7 @@ SonareError sonare_engine_push_midi_poly_pressure(SonareEngine* engine, uint32_t
 
 SonareError sonare_engine_push_midi_panic(SonareEngine* engine, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)render_frame;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -1030,9 +1128,14 @@ SonareError sonare_engine_push_midi_panic(SonareEngine* engine, int64_t render_f
 SonareError sonare_engine_push_midi_sysex(SonareEngine* engine, uint32_t destination_id,
                                           const uint8_t* data, size_t size, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine || !data || size == 0 ||
-      size > sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(data);
+  if (size == 0 || size > sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes) {
+    return run_validation([&] {
+      util::check::integer_in_range(
+          static_cast<long long>(size), 1,
+          static_cast<long long>(sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes), "size");
+    });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -1043,8 +1146,16 @@ SonareError sonare_engine_push_midi_sysex(SonareEngine* engine, uint32_t destina
   if (!engine->engine.push_midi_sysex(destination_id, data, size, render_frame)) {
     switch (engine->engine.last_midi_sysex_push_status()) {
       case sonare::engine::MidiSysExPushStatus::kInvalidPayload:
+        return run_validation([&] {
+          util::check::integer_in_range(
+              static_cast<long long>(size), 1,
+              static_cast<long long>(sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes),
+              "size");
+        });
       case sonare::engine::MidiSysExPushStatus::kPreparationFailed:
-        return SONARE_ERROR_INVALID_PARAMETER;
+        return run_validation([&] {
+          util::check::refuse("data", "must be a SysEx payload the destination accepts");
+        });
       default:
         return SONARE_ERROR_OUT_OF_MEMORY;
     }
@@ -1058,7 +1169,7 @@ SonareError sonare_engine_push_midi_ump(SonareEngine* engine, uint32_t destinati
                                         int64_t render_frame) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)words;
@@ -1066,12 +1177,11 @@ SonareError sonare_engine_push_midi_ump(SonareEngine* engine, uint32_t destinati
   (void)render_frame;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_ump";
   switch (engine->engine.push_midi_ump(destination_id, words, word_count, render_frame)) {
     case sonare::engine::MidiUmpPushResult::kQueued:
       return SONARE_OK;
     case sonare::engine::MidiUmpPushResult::kInvalidMessage:
-      return refuse_live_push_arg(kFunction, midi::kLivePushUmpShapeError);
+      return refuse_live_push_arg(midi::kLivePushUmpShapeError);
     case sonare::engine::MidiUmpPushResult::kSlotsFull:
     case sonare::engine::MidiUmpPushResult::kQueueFull:
       return SONARE_ERROR_OUT_OF_MEMORY;
@@ -1085,22 +1195,21 @@ SonareError sonare_engine_push_midi_input_ump(SonareEngine* engine, const uint32
                                               size_t word_count, int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)words;
   (void)word_count;
   (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_input_ump";
   if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, word_count)) {
-    return refuse_live_push_arg(kFunction, midi::kLivePushUmpShapeError);
+    return refuse_live_push_arg(midi::kLivePushUmpShapeError);
   }
   midi::Ump ump{};
   for (size_t i = 0; i < word_count; ++i) ump.words[i] = words[i];
   ump.word_count = static_cast<uint8_t>(word_count);
   ump.group = midi::ump_group_from_word0(words[0]);
-  return push_midi_input_event(engine, kFunction, ump, offset_in_block_samples);
+  return push_midi_input_event(engine, ump, offset_in_block_samples);
 #endif
   SONARE_C_CATCH
 }
@@ -1110,7 +1219,7 @@ SonareError sonare_engine_push_midi_program(SonareEngine* engine, uint32_t desti
                                             int bank_valid, uint8_t bank_msb, uint8_t bank_lsb,
                                             int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)group;
@@ -1122,10 +1231,8 @@ SonareError sonare_engine_push_midi_program(SonareEngine* engine, uint32_t desti
   (void)render_frame;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  if (const SonareError refused =
-          refuse_live_push_arg("sonare_engine_push_midi_program",
-                               midi::live_push_program_error(group, channel, program,
-                                                             bank_valid != 0, bank_msb, bank_lsb));
+  if (const SonareError refused = refuse_live_push_arg(midi::live_push_program_error(
+          group, channel, program, bank_valid != 0, bank_msb, bank_lsb));
       refused != SONARE_OK) {
     return refused;
   }
@@ -1141,7 +1248,7 @@ SonareError sonare_engine_push_midi_input_program(SonareEngine* engine, uint8_t 
                                                   uint8_t bank_msb, uint8_t bank_lsb,
                                                   int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
@@ -1152,15 +1259,13 @@ SonareError sonare_engine_push_midi_input_program(SonareEngine* engine, uint8_t 
   (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  constexpr const char* kFunction = "sonare_engine_push_midi_input_program";
-  if (const SonareError refused = refuse_live_push_arg(
-          kFunction, midi::live_push_program_error(group, channel, program, bank_valid != 0,
-                                                   bank_msb, bank_lsb));
+  if (const SonareError refused = refuse_live_push_arg(midi::live_push_program_error(
+          group, channel, program, bank_valid != 0, bank_msb, bank_lsb));
       refused != SONARE_OK) {
     return refused;
   }
   return push_midi_input_event(
-      engine, kFunction,
+      engine,
       midi::make_midi2_program_change(group, channel, program, bank_msb, bank_lsb, bank_valid != 0),
       offset_in_block_samples);
 #endif
@@ -1169,7 +1274,7 @@ SonareError sonare_engine_push_midi_input_program(SonareEngine* engine, uint8_t 
 SonareError sonare_engine_set_midi_destination_external(SonareEngine* engine,
                                                         uint32_t destination_id, int external) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)external;
@@ -1187,7 +1292,7 @@ SonareError sonare_engine_set_midi_destination_external(SonareEngine* engine,
 
 SonareError sonare_engine_set_external_midi_clock_enabled(SonareEngine* engine, int enabled) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)enabled;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -1201,7 +1306,8 @@ SonareError sonare_engine_set_external_midi_clock_enabled(SonareEngine* engine, 
 
 SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, uint32_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -1216,7 +1322,9 @@ SonareError sonare_engine_external_midi_dropped_count(SonareEngine* engine, uint
 SonareError sonare_engine_drain_external_midi(SonareEngine* engine, SonareExternalMidiEvent* out,
                                               size_t max_events, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_count || (max_events > 0 && !out)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_events);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   // Initialise the count before any early error return so a defensive consumer
   // never reads an uninitialised value on the rejected-buffer path.
   *out_count = 0;
@@ -1226,7 +1334,12 @@ SonareError sonare_engine_drain_external_midi(SonareEngine* engine, SonareExtern
   // record. Read from the shared lowering type so it cannot drift from it.
   constexpr size_t kMaxLoweredMessages =
       std::extent<decltype(sonare::host::ExternalMidi1Lowered::messages)>::value;
-  if (max_events < kMaxLoweredMessages) return SONARE_ERROR_INVALID_PARAMETER;
+  if (max_events < kMaxLoweredMessages) {
+    return run_validation([&] {
+      util::check::refuse("max_events", "must be 0 or an integer of at least " +
+                                            std::to_string(kMaxLoweredMessages));
+    });
+  }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)max_events;
   return SONARE_ERROR_NOT_SUPPORTED;

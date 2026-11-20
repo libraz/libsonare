@@ -513,11 +513,11 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
 
     record_detailed_error();
     REQUIRE(sonare_audio_from_memory(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(std::string(sonare_last_error_message()).empty());
+    REQUIRE(std::string(sonare_last_error_message()) == "data must not be NULL");
 
     record_detailed_error();
     REQUIRE(sonare_engine_prepare(nullptr, 48000.0, 128, 16, 16) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(std::string(sonare_last_error_message()).empty());
+    REQUIRE(std::string(sonare_last_error_message()) == "engine must not be NULL");
 
 #if defined(SONARE_WITH_ARRANGEMENT)
     record_detailed_error();
@@ -551,7 +551,8 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
 
 TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_api]") {
   SECTION("is SONARE_OK when nothing is recorded") {
-    REQUIRE(sonare_audio_from_memory(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareStreamConfig config{};
+    REQUIRE(sonare_stream_analyzer_config_default(&config) == SONARE_OK);
     REQUIRE(std::string(sonare_last_error_message()).empty());
     REQUIRE(sonare_last_error_code() == SONARE_OK);
   }

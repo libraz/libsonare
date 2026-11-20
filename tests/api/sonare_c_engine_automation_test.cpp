@@ -277,6 +277,52 @@ TEST_CASE("sonare_engine tempo and time-signature segments validate their input"
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("of two tempo segments at one start_ppq the later-supplied one takes effect",
+          "[c_api][engine]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  // 120 BPM up to ppq 4 is 96000 samples; four more quarters take 48000 at 240 BPM, 192000 at 60.
+  const SonareProjectTempoSegment slow_then_fast[] = {
+      {0.0, 120.0, 0.0, 0.0}, {4.0, 60.0, 0.0, 0.0}, {4.0, 240.0, 0.0, 0.0}};
+  const SonareProjectTempoSegment fast_then_slow[] = {
+      {0.0, 120.0, 0.0, 0.0}, {4.0, 240.0, 0.0, 0.0}, {4.0, 60.0, 0.0, 0.0}};
+  int64_t at_four = -1;
+  int64_t at_eight = -1;
+  REQUIRE(sonare_engine_set_tempo_segments(engine, slow_then_fast, 3) == SONARE_OK);
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 4.0, &at_four) == SONARE_OK);
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 8.0, &at_eight) == SONARE_OK);
+  CHECK(at_four == 96000);
+  CHECK(at_eight == 144000);
+  REQUIRE(sonare_engine_set_tempo_segments(engine, fast_then_slow, 3) == SONARE_OK);
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 4.0, &at_four) == SONARE_OK);
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 8.0, &at_eight) == SONARE_OK);
+  CHECK(at_four == 96000);
+  CHECK(at_eight == 288000);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("of two time-signature segments at one start_ppq the later-supplied one takes effect",
+          "[c_api][engine]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
+  // ppq 8 is sample 192000 at 120 BPM; one bar from there is 72000 samples in 3/4, 120000 in 5/4.
+  const SonareProjectTimeSignatureSegment three_then_five[] = {
+      {0.0, 4, 4}, {8.0, 3, 4}, {8.0, 5, 4}};
+  const SonareProjectTimeSignatureSegment five_then_three[] = {
+      {0.0, 4, 4}, {8.0, 5, 4}, {8.0, 3, 4}};
+  int64_t bar_end = -1;
+  REQUIRE(sonare_engine_set_time_signature_segments(engine, three_then_five, 3) == SONARE_OK);
+  REQUIRE(sonare_engine_count_in_end_sample(engine, 192000, 1, &bar_end) == SONARE_OK);
+  CHECK(bar_end == 312000);
+  REQUIRE(sonare_engine_set_time_signature_segments(engine, five_then_three, 3) == SONARE_OK);
+  REQUIRE(sonare_engine_count_in_end_sample(engine, 192000, 1, &bar_end) == SONARE_OK);
+  CHECK(bar_end == 264000);
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("tempo and time-signature segment setters keep exceptions inside the C ABI",
           "[c_api][engine]") {
   SonareEngine* engine = nullptr;

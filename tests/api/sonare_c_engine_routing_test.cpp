@@ -165,10 +165,16 @@ TEST_CASE("sonare_engine_set_track_lanes accepts only a stereo source layout",
                                static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_7_1)}) {
     // Unrouted would render at the direct level if the refused lanes were applied.
     const SonareEngineTrackLane refused[] = {{10, nullptr, 0, 0, layout}};
-    CHECK(sonare_engine_set_track_lanes(engine, refused, 1) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()).find("must be stereo") != std::string::npos);
+    CHECK(sonare_engine_set_track_lanes(engine, refused, 1) == SONARE_ERROR_NOT_SUPPORTED);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "lanes[0].source_channel_layout other than stereo is not supported");
     CHECK(settled(engine) == Catch::Approx(routed_level).margin(1e-6));
   }
+
+  const SonareEngineTrackLane undeclared[] = {{10, nullptr, 0, 0, 200}};
+  CHECK(sonare_engine_set_track_lanes(engine, undeclared, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "lanes[0].source_channel_layout must name a declared value");
 
   const SonareEngineTrackLane stereo[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
   CHECK(sonare_engine_set_track_lanes(engine, stereo, 1) == SONARE_OK);
@@ -187,8 +193,7 @@ TEST_CASE("sonare_engine_set_track_lanes refuses more lanes than the cap by name
         SONARE_OK);
   CHECK(sonare_engine_set_track_lanes(engine, lanes.data(), lanes.size()) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()).find("at most 32 track lanes") !=
-        std::string::npos);
+  CHECK(std::string(sonare_last_error_message()) == "lane_count must be an integer in [0, 32]");
   sonare_engine_destroy(engine);
 }
 
@@ -981,9 +986,11 @@ TEST_CASE("sonare_engine per-lane routing edits refuse and leave the render unch
   constexpr SonareError kInvalid = SONARE_ERROR_INVALID_PARAMETER;
 
   CHECK(sonare_engine_set_track_sends(engine, 99, kSendBus2, 1) == kInvalid);
-  CHECK(std::string(sonare_last_error_message()) == "unknown track id 99");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "track_id must be the id of a track in this engine");
   CHECK(sonare_engine_set_track_output_bus(engine, 98, 0) == kInvalid);
-  CHECK(std::string(sonare_last_error_message()) == "unknown track id 98");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "track_id must be the id of a track in this engine");
 
   const SonareEngineTrackSend undeclared[] = {{9, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
   const SonareEngineTrackSend duplicate[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER},
@@ -1010,9 +1017,11 @@ TEST_CASE("sonare_engine per-lane routing edits refuse every track before the fi
           "[c_engine_routing]") {
   SonareEngine* engine = make_routing_engine({{10, 1.0f}});
   CHECK(sonare_engine_set_track_sends(engine, 10, nullptr, 0) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()) == "unknown track id 10");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "track_id must be the id of a track in this engine");
   CHECK(sonare_engine_set_track_output_bus(engine, 10, 0) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()) == "unknown track id 10");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "track_id must be the id of a track in this engine");
   sonare_engine_destroy(engine);
 }
 

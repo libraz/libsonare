@@ -669,13 +669,13 @@ TEST_CASE("sonare_engine_bounce_offline refuses a source rate other than the pre
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(result.interleaved == nullptr);
   REQUIRE(std::string(sonare_last_error_message()) ==
-          std::string("source_sample_rate must equal the prepared sample rate 44100"));
+          std::string("options.source_sample_rate must equal the prepared sample rate 44100"));
 
   options.source_sample_rate = -1;
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()) ==
-          std::string("source_sample_rate must be an integer in [0, 2147483647]"));
+          std::string("options.source_sample_rate must be an integer in [0, 2147483647]"));
 
   sonare_engine_destroy(engine);
 }
