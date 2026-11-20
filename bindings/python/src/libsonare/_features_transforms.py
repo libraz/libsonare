@@ -19,6 +19,7 @@ from ._runtime import (
     _from_c_float_matrix,
     _get_lib,
     _guard_buffer,
+    _narrow_int,
     _out_float_array,
     _resolve_optional_non_negative,
     _resolve_zero_default,
@@ -34,6 +35,16 @@ from .types import CqtResult
 # ============================================================================
 # Features - Constant-Q / Variable-Q transforms
 # ============================================================================
+
+
+# The core's constant-Q hop bound (kMaxCqtHopLength in feature/cqt.h). Narrowing to
+# it rather than to a C int lets a hop no C int holds read in the core's own words.
+_CQT_HOP_LENGTH_MAX = 65536
+
+
+def _to_cqt_hop(value: object) -> ctypes.c_int:
+    """Narrow a constant-Q ``hop_length`` onto the range the core accepts."""
+    return ctypes.c_int(_narrow_int(value, "hop_length", 1, _CQT_HOP_LENGTH_MAX))
 
 
 def _cqt_result_from_c(out: SonareCqtResult) -> CqtResult:
@@ -76,7 +87,7 @@ def cqt(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sr, "sr"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_cqt_hop(hop_length),
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
@@ -105,7 +116,7 @@ def _cqt_variant(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_cqt_hop(hop_length),
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
@@ -170,7 +181,7 @@ def cqt_to_audio(
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(n_frames, "n_frames"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_cqt_hop(hop_length),
         _to_c_float(fmin_hz, "fmin_hz"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
         _to_c_int(n_iter, "n_iter"),
@@ -514,7 +525,7 @@ def vqt(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sr, "sr"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_cqt_hop(hop_length),
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
@@ -553,7 +564,7 @@ def vqt_to_audio(
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(n_frames, "n_frames"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_cqt_hop(hop_length),
         _to_c_float(fmin_hz, "fmin_hz"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
         _to_c_float(_resolve_optional_non_negative(gamma, "gamma"), "gamma"),

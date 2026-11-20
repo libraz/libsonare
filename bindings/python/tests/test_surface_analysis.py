@@ -1046,3 +1046,30 @@ def test_target_size_is_refused_by_cause(name: str) -> None:
     for bad in ("8", True):
         with pytest.raises(TypeError, match=f"^{name}: target_size must be an integer"):
             fn(values, bad)
+
+
+_CQT_HOP_ENTRIES = (
+    "cqt",
+    "vqt",
+    "pseudo_cqt",
+    "hybrid_cqt",
+    "chroma_cqt",
+    "chroma_cens",
+    "bass_chroma",
+    "cqt_to_audio",
+    "vqt_to_audio",
+)
+
+
+@pytest.mark.parametrize("name", _CQT_HOP_ENTRIES)
+@pytest.mark.parametrize("hop", [0, 1.5, 65537, 2**31])
+def test_constant_q_hop_is_refused_by_the_core_bound(name: str, hop: object) -> None:
+    first = np.ones((12, 4), dtype=np.float32) if name.endswith("_to_audio") else _tone()
+    with pytest.raises(
+        SonareValueError, match=rf"^{name}: hop_length must be an integer in \[1, 65536\]$"
+    ):
+        getattr(libsonare, name)(first, SR, hop_length=hop)
+
+
+def test_constant_q_hop_takes_the_bound_itself() -> None:
+    libsonare.cqt(_tone(), SR, hop_length=65536)

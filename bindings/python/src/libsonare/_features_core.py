@@ -9,6 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 from ._errors import _entry, _refuse
+from ._features_transforms import _to_cqt_hop
 from ._ffi import (
     SonareChromaResult,
     SonareMelResult,
@@ -445,7 +446,7 @@ def _chroma_variant(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(hop_length, "hop_length"),
+        _to_cqt_hop(hop_length),
         _to_c_int(n_chroma, "n_chroma"),
     ]
     if bins_per_octave is not None:
