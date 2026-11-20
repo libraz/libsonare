@@ -20,6 +20,11 @@ The counts in ``c_abi_bare_refusals.json`` are a line: a count above it fails. W
 ``CEILING_ONLY`` holds, a count below it passes and is reported, so parallel fixes do not each
 rewrite the line; otherwise it fails until ``--write`` lowers it in the same change. ``--table <path>`` writes the per-file work
 order. A scan that reads no return fails, so a moved tree cannot pass as clean.
+
+``interim_no_cause`` counts the sites that state no cause because the engine does not report one
+yet: a literal carrying one of ``INTERIM_MARKERS``, and each call of a helper whose body holds such a
+literal (what the helper's own body holds is not counted again). Its ceiling keeps them from being
+forgotten until the engine carries the cause out.
 """
 
 from __future__ import annotations
@@ -40,7 +45,16 @@ CLASSES = ("null", "count", "relation", "value", "helper", "unclassified")
 TEXT_STATES = ("conforming", "text", "helper", "none")
 # The ratcheted lines: refusals with no message, null refusals in a non-ruled form, guards the
 # heuristics cannot place.
-RATCHET_KEYS = ("no_text", "null_nonconforming", "unclassified")
+RATCHET_KEYS = ("no_text", "null_nonconforming", "unclassified", "interim_no_cause")
+# Wording that stands in for a cause the engine does not report yet.
+INTERIM_MARKERS = (
+    "without reporting a cause",
+    "must describe a configuration the mixer accepts",
+    "must describe sends the mixer accepts",
+    "must be a value the parameter accepts",
+)
+STRING_LITERAL = re.compile(r'"(?:[^"\\\n]|\\.)*"')
+FUNCTION_HEAD = re.compile(r"\b([A-Za-z_]\w*)\s*\([^;{}()]*\)\s*(?:const\s*)?(?:noexcept\s*)?\{")
 # Ceiling-only while several changes lower the counts at once; the line is rewritten per batch.
 CEILING_ONLY = True
 
@@ -276,6 +290,41 @@ class Refusal:
 @dataclass
 class Scan:
     refusals: list[Refusal] = field(default_factory=list)
+    interim: list[tuple[str, int, str]] = field(default_factory=list)
+
+
+def interim_helpers(texts: dict[str, str]) -> set[str]:
+    """Internal helpers whose body holds an interim literal; their call sites are the interim sites."""
+    names: set[str] = set()
+    for raw in texts.values():
+        code = blank_comments_and_strings(raw)
+        for m in FUNCTION_HEAD.finditer(code):
+            if m.group(1).startswith("sonare_"):
+                continue
+            open_ = m.end() - 1
+            body = raw[open_ : match_forward(code, open_)]
+            if any(marker in body for marker in INTERIM_MARKERS):
+                names.add(m.group(1))
+    return names
+
+
+def scan_interim(path: str, raw: str, helpers: set[str], scan: Scan) -> None:
+    code = blank_comments_and_strings(raw)
+    heads = [m for m in FUNCTION_HEAD.finditer(code) if m.group(1) in helpers]
+    inside = [(m.end() - 1, match_forward(code, m.end() - 1)) for m in heads]
+    head_starts = {m.start() for m in heads}
+    for m in STRING_LITERAL.finditer(raw):
+        in_code = code[m.start()] == '"'
+        if not in_code or not any(marker in m.group(0) for marker in INTERIM_MARKERS):
+            continue
+        if any(a <= m.start() < b for a, b in inside):
+            continue
+        scan.interim.append((path, raw.count("\n", 0, m.start()) + 1, m.group(0)[:80]))
+    for name in sorted(helpers):
+        for m in re.finditer(rf"\b{re.escape(name)}\s*\(", code):
+            if m.start() in head_starts or any(a <= m.start() < b for a, b in inside):
+                continue
+            scan.interim.append((path, code.count("\n", 0, m.start()) + 1, f"{name}()"))
 
 
 def refusing_helpers(texts: dict[str, str]) -> set[str]:
@@ -343,9 +392,11 @@ def scan(root: Path) -> Scan:
     files = sorted(p for p in (root / SOURCE_DIR).rglob("*") if p.suffix in (".cpp", ".h"))
     texts = {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8") for p in files}
     refusing = refusing_helpers(texts)
+    interim = interim_helpers(texts)
     result = Scan()
     for path, raw in texts.items():
         scan_text(path, raw, refusing, result)
+        scan_interim(path, raw, interim, result)
     return result
 
 
@@ -356,6 +407,7 @@ def counts(result: Scan) -> dict[str, int]:
             r.classes == {"null"} and r.state != "conforming" for r in result.refusals
         ),
         "unclassified": sum("unclassified" in r.classes for r in result.refusals),
+        "interim_no_cause": len(result.interim),
     }
 
 
@@ -418,6 +470,9 @@ def table(result: Scan) -> str:
     for r in rows:
         if "unclassified" in r.classes:
             lines.append(f"- `{r.file}:{r.line}` ({r.state}): `{r.guard[:160]}`")
+    lines += ["", "## Interim sites stating no cause", ""]
+    for path, line, what in result.interim:
+        lines.append(f"- `{path}:{line}` `{what}`")
     lines += ["", "## Mixed guards", ""]
     for r in rows:
         if r.label == "mixed":

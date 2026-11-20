@@ -96,16 +96,56 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(read(source), [])
 
 
+def interim(source: str) -> list:
+    result = scanner.Scan()
+    helpers = scanner.interim_helpers({"t.cpp": source})
+    scanner.scan_interim("t.cpp", source, helpers, result)
+    return [(line, text) for _, line, text in result.interim]
+
+
+class InterimTest(unittest.TestCase):
+    def test_an_entry_literal_is_one_site_and_a_comment_is_none(self) -> None:
+        source = (
+            "SonareError sonare_x(void* e) {\n"
+            "  // refused without reporting a cause\n"
+            '  return refuse("the mixer refused without reporting a cause");\n'
+            "}\n"
+        )
+        self.assertEqual([line for line, _ in interim(source)], [3])
+
+    def test_a_helper_counts_once_per_call_and_not_for_its_own_body(self) -> None:
+        source = (
+            "SonareError refuse_edit() {\n"
+            '  return refuse("x must describe sends the mixer accepts");\n'
+            "}\n"
+            "SonareError sonare_a() { return refuse_edit(); }\n"
+            "SonareError sonare_b() { return refuse_edit(); }\n"
+        )
+        self.assertEqual(interim(source), [(4, "refuse_edit()"), (5, "refuse_edit()")])
+
+    def test_an_entry_function_is_never_a_helper(self) -> None:
+        source = (
+            "SonareError sonare_a() {\n"
+            '  return refuse("v must be a value the parameter accepts");\n'
+            "}\n"
+            "SonareError sonare_b() { return sonare_a(); }\n"
+        )
+        self.assertEqual([line for line, _ in interim(source)], [2])
+
+    def test_a_ruled_text_is_not_interim(self) -> None:
+        self.assertEqual(interim('SonareError sonare_a() { return refuse("x must be finite"); }\n'), [])
+
+
 class RatchetTest(unittest.TestCase):
     def test_both_ways_above_and_below_the_line_fail_and_equal_passes(self) -> None:
-        line = {"no_text": 5, "null_nonconforming": 3, "unclassified": 1}
+        line = {"no_text": 5, "null_nonconforming": 3, "unclassified": 1, "interim_no_cause": 2}
         self.assertEqual(scanner.evaluate(dict(line), line), [])
         self.assertTrue(scanner.evaluate({**line, "no_text": 6}, line))
         self.assertTrue(scanner.evaluate({**line, "no_text": 4}, line, ceiling_only=False))
         self.assertTrue(scanner.evaluate(line, {}))
 
     def test_ceiling_only_passes_a_count_below_the_line_and_still_fails_above(self) -> None:
-        line = {"no_text": 5, "null_nonconforming": 3, "unclassified": 1}
+        line = {"no_text": 5, "null_nonconforming": 3, "unclassified": 1, "interim_no_cause": 2}
         self.assertEqual(scanner.evaluate({**line, "no_text": 4}, line, ceiling_only=True), [])
         self.assertTrue(scanner.evaluate({**line, "no_text": 6}, line, ceiling_only=True))
 
