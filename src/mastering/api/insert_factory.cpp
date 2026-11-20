@@ -1172,8 +1172,10 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
   }
   const int msb = detail::i(params, "typeMsb", 0, kNone);
   const int lsb = detail::i(params, "typeLsb", 0, kNone);
-  if (msb < 0 || msb > 127) refuse_param("typeMsb", "must be in [0, 127]");
-  if (lsb < 0 || lsb > 127) refuse_param("typeLsb", "must be in [0, 127]");
+  if (msb < 0 || msb > 127)
+    refuse_param("typeMsb", sonare::util::refusal::integer_range_predicate(0, 127));
+  if (lsb < 0 || lsb > 127)
+    refuse_param("typeLsb", sonare::util::refusal::integer_range_predicate(0, 127));
   const int realization_value = detail::i(params, "realization", 0);
   if (params.records_declarations()) {
     params.note_choices("realization", {{"modern", 0}, {"classic", 1}});
@@ -1199,7 +1201,7 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
     const std::string key = "byte" + std::to_string(slot);
     const int value = detail::i(params, key.c_str(), state.params[slot], kNone);
     if (value < 0 || value > 127) {
-      refuse_param(key, "must be in [0, 127]");
+      refuse_param(key, sonare::util::refusal::integer_range_predicate(0, 127));
     }
     state.params[slot] = static_cast<uint8_t>(value);
     if (state.type != 0 && !sonare::midi::synth::gs_efx_parameter_takes(

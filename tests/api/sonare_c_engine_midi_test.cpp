@@ -1451,36 +1451,36 @@ TEST_CASE("sonare_engine live push family names the refused argument", "[c_api][
   const Refusal refusals[] = {
       {{"sonare_engine_push_midi_note_on",
         [](SonareEngine* e) { return sonare_engine_push_midi_note_on(e, 3, 0, 16, 60, 100, -1); }},
-       "channel must be in [0, 15]"},
+       "channel must be an integer in [0, 15]"},
       {{"sonare_engine_push_midi_note_off",
         [](SonareEngine* e) { return sonare_engine_push_midi_note_off(e, 3, 0, 0, 60, 128, -1); }},
-       "velocity must be in [0, 127]"},
+       "velocity must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_cc",
         [](SonareEngine* e) { return sonare_engine_push_midi_cc(e, 3, 0, 0, 7, 128, -1); }},
-       "value must be in [0, 127]"},
+       "value must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_pitch_bend",
         [](SonareEngine* e) { return sonare_engine_push_midi_pitch_bend(e, 3, 0, 0, 16384, -1); }},
-       "bend14 must be in [0, 16383]"},
+       "bend14 must be an integer in [0, 16383]"},
       {{"sonare_engine_push_midi_channel_pressure",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_channel_pressure(e, 3, 0, 0, 128, -1);
         }},
-       "pressure must be in [0, 127]"},
+       "pressure must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_poly_pressure",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_poly_pressure(e, 3, 0, 0, 128, 64, -1);
         }},
-       "note must be in [0, 127]"},
+       "note must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_program",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_program(e, 3, 0, 0, 0, 1, 128, 0, -1);
         }},
-       "bank_msb must be in [0, 127]"},
+       "bank_msb must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_program",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_program(e, 3, 0, 0, 0, 0, 0, 1, -1);
         }},
-       "bank MSB and LSB must be 0 when bank-valid is false"},
+       "bank_msb and bank_lsb must be 0 when bank_valid is false"},
       {{"sonare_engine_push_midi_ump",
         [&sysex7](SonareEngine* e) { return sonare_engine_push_midi_ump(e, 3, sysex7, 2, -1); }},
        "words do not form a pushable UMP message"},
@@ -1488,38 +1488,38 @@ TEST_CASE("sonare_engine live push family names the refused argument", "[c_api][
         [](SonareEngine* e) {
           return sonare_engine_push_midi_input_note_on(e, 16, 0, 60, 100, 0);
         }},
-       "group must be in [0, 15]"},
+       "group must be an integer in [0, 15]"},
       {{"sonare_engine_push_midi_input_note_off",
         [](SonareEngine* e) { return sonare_engine_push_midi_input_note_off(e, 0, 0, 128, 0, 0); }},
-       "note must be in [0, 127]"},
+       "note must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_input_cc",
         [](SonareEngine* e) { return sonare_engine_push_midi_input_cc(e, 0, 0, 128, 0, 0); }},
-       "controller must be in [0, 127]"},
+       "controller must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_input_pitch_bend",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_input_pitch_bend(e, 0, 0, 16384, 0);
         }},
-       "bend14 must be in [0, 16383]"},
+       "bend14 must be an integer in [0, 16383]"},
       {{"sonare_engine_push_midi_input_channel_pressure",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_input_channel_pressure(e, 0, 16, 64, 0);
         }},
-       "channel must be in [0, 15]"},
+       "channel must be an integer in [0, 15]"},
       {{"sonare_engine_push_midi_input_poly_pressure",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_input_poly_pressure(e, 0, 0, 60, 128, 0);
         }},
-       "pressure must be in [0, 127]"},
+       "pressure must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_input_program",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_input_program(e, 0, 0, 128, 0, 0, 0, 0);
         }},
-       "program must be in [0, 127]"},
+       "program must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_input_program",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_input_program(e, 0, 0, 0, 1, 0, 128, 0);
         }},
-       "bank_lsb must be in [0, 127]"},
+       "bank_lsb must be an integer in [0, 127]"},
       {{"sonare_engine_push_midi_input_ump",
         [](SonareEngine* e) {
           return sonare_engine_push_midi_input_ump(e, kLiveNote2.words, 1, 0);

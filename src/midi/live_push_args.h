@@ -30,8 +30,8 @@ constexpr bool in_range(int64_t value, int64_t max_value) noexcept {
 }
 
 constexpr const char* address_error(int64_t group, int64_t channel) noexcept {
-  if (!in_range(group, kMaxNibble)) return "group must be in [0, 15]";
-  if (!in_range(channel, kMaxNibble)) return "channel must be in [0, 15]";
+  if (!in_range(group, kMaxNibble)) return "group must be an integer in [0, 15]";
+  if (!in_range(channel, kMaxNibble)) return "channel must be an integer in [0, 15]";
   return nullptr;
 }
 
@@ -42,8 +42,8 @@ constexpr const char* live_push_note_error(int64_t group, int64_t channel, int64
                                            int64_t velocity) noexcept {
   using namespace live_push_detail;
   if (const char* error = address_error(group, channel)) return error;
-  if (!in_range(note, kMax7)) return "note must be in [0, 127]";
-  if (!in_range(velocity, kMax7)) return "velocity must be in [0, 127]";
+  if (!in_range(note, kMax7)) return "note must be an integer in [0, 127]";
+  if (!in_range(velocity, kMax7)) return "velocity must be an integer in [0, 127]";
   return nullptr;
 }
 
@@ -52,8 +52,8 @@ constexpr const char* live_push_cc_error(int64_t group, int64_t channel, int64_t
                                          int64_t value) noexcept {
   using namespace live_push_detail;
   if (const char* error = address_error(group, channel)) return error;
-  if (!in_range(controller, kMax7)) return "controller must be in [0, 127]";
-  if (!in_range(value, kMax7)) return "value must be in [0, 127]";
+  if (!in_range(controller, kMax7)) return "controller must be an integer in [0, 127]";
+  if (!in_range(value, kMax7)) return "value must be an integer in [0, 127]";
   return nullptr;
 }
 
@@ -62,7 +62,7 @@ constexpr const char* live_push_pitch_bend_error(int64_t group, int64_t channel,
                                                  int64_t bend14) noexcept {
   using namespace live_push_detail;
   if (const char* error = address_error(group, channel)) return error;
-  if (!in_range(bend14, kMax14)) return "bend14 must be in [0, 16383]";
+  if (!in_range(bend14, kMax14)) return "bend14 must be an integer in [0, 16383]";
   return nullptr;
 }
 
@@ -71,7 +71,7 @@ constexpr const char* live_push_channel_pressure_error(int64_t group, int64_t ch
                                                        int64_t pressure) noexcept {
   using namespace live_push_detail;
   if (const char* error = address_error(group, channel)) return error;
-  if (!in_range(pressure, kMax7)) return "pressure must be in [0, 127]";
+  if (!in_range(pressure, kMax7)) return "pressure must be an integer in [0, 127]";
   return nullptr;
 }
 
@@ -80,8 +80,8 @@ constexpr const char* live_push_poly_pressure_error(int64_t group, int64_t chann
                                                     int64_t pressure) noexcept {
   using namespace live_push_detail;
   if (const char* error = address_error(group, channel)) return error;
-  if (!in_range(note, kMax7)) return "note must be in [0, 127]";
-  if (!in_range(pressure, kMax7)) return "pressure must be in [0, 127]";
+  if (!in_range(note, kMax7)) return "note must be an integer in [0, 127]";
+  if (!in_range(pressure, kMax7)) return "pressure must be an integer in [0, 127]";
   return nullptr;
 }
 
@@ -91,11 +91,11 @@ constexpr const char* live_push_program_error(int64_t group, int64_t channel, in
                                               int64_t bank_lsb) noexcept {
   using namespace live_push_detail;
   if (const char* error = address_error(group, channel)) return error;
-  if (!in_range(program, kMax7)) return "program must be in [0, 127]";
-  if (!in_range(bank_msb, kMax7)) return "bank_msb must be in [0, 127]";
-  if (!in_range(bank_lsb, kMax7)) return "bank_lsb must be in [0, 127]";
+  if (!in_range(program, kMax7)) return "program must be an integer in [0, 127]";
+  if (!in_range(bank_msb, kMax7)) return "bank_msb must be an integer in [0, 127]";
+  if (!in_range(bank_lsb, kMax7)) return "bank_lsb must be an integer in [0, 127]";
   if (!bank_valid && (bank_msb != 0 || bank_lsb != 0)) {
-    return "bank MSB and LSB must be 0 when bank-valid is false";
+    return "bank_msb and bank_lsb must be 0 when bank_valid is false";
   }
   return nullptr;
 }
