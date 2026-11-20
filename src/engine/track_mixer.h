@@ -97,7 +97,10 @@ enum class SidechainSourceKind : uint8_t {
 
 /// Why a sidechain setter would refuse a binding. Values mirror
 /// SonareSidechainRefusal. kPlanRefused covers every way the delay plan can
-/// fail: an alignment past the ceiling or an overflow.
+/// fail: an alignment past the ceiling or an overflow of it. A setter that
+/// returned false while its can_set_* query answers kNone failed after the query,
+/// re-planning the delays: TrackMixerRuntime::last_fault() then holds the cause,
+/// an allocation failure or a latency past the alignment ceiling.
 enum class SidechainRefusal : uint8_t {
   kNone = 0,
   kInvalidTarget = 1,
@@ -110,11 +113,104 @@ enum class SidechainRefusal : uint8_t {
   kPlanRefused = 8,
 };
 
-/// Cause of a refused track-mixer configuration call; see TrackMixerRuntime::last_refusal().
-enum class MixerRefusal : uint8_t {
-  kArgument,
-  kState,
+/// Why a track-mixer configuration or edit call refused; see TrackMixerRuntime::last_fault().
+///
+/// The causes before kInsertAutomationTableFull are the call's own arguments; from there to
+/// kStagingFailed they are configuration earlier calls left; kOutOfMemory is a failed allocation
+/// with nothing applied. kNone is the value while nothing refused.
+enum class MixerEditCause : uint8_t {
+  kNone = 0,
+  /// More lanes than TrackMixerRuntime::kMaxTrackLanes.
+  kTooManyLanes,
+  /// A lane with track id 0 (fault index: the lane).
+  kLaneTrackIdZero,
+  /// A lane whose source layout is not stereo (index: the lane).
+  kLaneLayoutNotStereo,
+  /// A lane output bus no declared bus carries (index: the lane).
+  kLaneOutputBusUnknown,
+  /// A lane repeating the track id of an earlier lane (index: the later lane).
+  kLaneTrackIdDuplicate,
+  /// More sends than ChannelStrip::kMaxSends (index: the lane or bus).
+  kTooManySends,
+  /// A send to bus id 0 (index: the lane or bus; send index: the send).
+  kSendBusIdZero,
+  /// A send level that is not finite or outside [kFloorDb, kMaxGainDb] (index, send index).
+  kSendLevelOutOfRange,
+  /// A lane send to a bus no declared bus carries (index, send index).
+  kSendBusUnknown,
+  /// A send repeating the target of an earlier send of the same lane or bus (index, send index).
+  kSendBusDuplicate,
+  /// More buses than TrackMixerRuntime::kMaxBusLanes.
+  kTooManyBuses,
+  /// A bus with id 0 (index: the bus).
+  kBusIdZero,
+  /// A bus gain that is not finite or outside [kFloorDb, kMaxGainDb] (index: the bus).
+  kBusGainOutOfRange,
+  /// A bus repeating the id of an earlier bus (index: the later bus).
+  kBusIdDuplicate,
+  /// A bus output or send aimed at a bus the list does not declare (index: the bus; send index:
+  /// the send, or kNoFaultIndex for the output).
+  kBusRouteUnknown,
+  /// A bus output or send aimed at the bus itself (index, send index as kBusRouteUnknown).
+  kBusRouteToSelf,
+  /// Bus outputs, sends and sidechain keys that form a cycle.
+  kBusRouteCycle,
+  /// A track id of 0 given to a strip or EQ edit.
+  kTrackIdZero,
+  /// An EQ edit addressed a track with no bound channel strip.
+  kTrackHasNoStrip,
+  /// A bus id no configured bus carries.
+  kBusUnknown,
+  /// A strip EQ whose bands are invalid, or not carriable at the engine's sample rate.
+  kStripEqInvalid,
+  /// A strip whose inserts could not be created (unknown processor, refused parameters, or past
+  /// the insert cap).
+  kStripInsertsRefused,
+  /// A bus pan or dual-pan position that is not finite.
+  kBusPanNotFinite,
+  /// A pan or width set on a bus wider than stereo.
+  kBusImageOnWideLayout,
+  /// An EQ band index past ParametricEq::kMaxBands.
+  kEqBandIndexInvalid,
+  /// An EQ band the EQ stage refused.
+  kEqBandRefused,
+
+  /// The shared insert-automation table has no room for the entries the change mints.
+  kInsertAutomationTableFull,
+  /// The owned-strip table holds TrackMixerRuntime::kMaxTrackLanes strips.
+  kOwnedStripTableFull,
+  /// Every lane slot is taken by another track.
+  kLaneTableFull,
+  /// The retained raw-clip delay exceeds the lane alignment bank, which forbids any lane.
+  kRetainedDelayPastCeiling,
+  /// The latency to align, an arithmetic overflow of it included, is past
+  /// mixing::kMaxAlignmentDelaySamples.
+  kLatencyPastAlignmentCeiling,
+  /// A bus keeps a pan or width that a wider-than-stereo layout cannot carry (index: the bus).
+  kBusImageBlocksWiderLayout,
+  /// A lane output or send retains a bus the new list drops.
+  kLaneRoutingBlocksBusRemoval,
+  /// The engine has no master strip, which the master edit addresses.
+  kNoMasterStrip,
+  /// An unexpected exception, or an impossible binding, while staging; nothing was applied.
+  kStagingFailed,
+
+  /// An allocation failed while the call staged its change; nothing was applied.
   kOutOfMemory,
+};
+
+/// "No index" in MixerEditFault.
+inline constexpr uint8_t kNoFaultIndex = 0xFF;
+
+/// The cause of a refused call and the entries it names. Trivially copyable so an engine can
+/// retain it atomically.
+// Four-byte aligned so std::atomic<MixerEditFault> stays lock-free without libatomic.
+struct alignas(4) MixerEditFault {
+  MixerEditCause cause = MixerEditCause::kNone;
+  /// The lane or bus the cause names, or kNoFaultIndex.
+  uint8_t index = kNoFaultIndex;
+  /// The send of that lane or bus the cause names, or kNoFaultIndex.
+  uint8_t send_index = kNoFaultIndex;
 };
 
 class TrackMixerRuntime final : public rt::ProcessorBase {
@@ -173,20 +269,23 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
-  /// Why the most recent refusal by set_track_lanes, set_buses, set_track_strip
-  /// or set_bus_strip happened: its own arguments, configuration earlier calls
-  /// left (a full strip table or admission pool, retained delay, pan or routing,
-  /// or a combined latency past the alignment ceiling), or a failed allocation.
-  /// Meaningful only right after one of them returned false.
-  MixerRefusal last_refusal() const noexcept { return last_refusal_; }
-  /// Pure: true exactly when set_track_lanes would accept @p lanes on validation grounds.
-  bool validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const noexcept {
-    return lane_config_valid(lanes);
+  /// Why the most recent refusal by set_track_lanes, set_buses, set_track_strip, set_bus_strip,
+  /// set_track_eq_band or set_bus_eq_band happened. Meaningful only right after one of them
+  /// returned false; the cause is never kNone then. The sidechain setters reset it and set it
+  /// only when re-planning the delays fails.
+  const MixerEditFault& last_fault() const noexcept { return last_fault_; }
+  /// Pure: true exactly when set_track_lanes would accept @p lanes on validation grounds;
+  /// @p fault, when given, receives the first cause it would refuse them for.
+  bool validate_track_lanes(const std::vector<TrackLaneConfig>& lanes,
+                            MixerEditFault* fault = nullptr) const noexcept {
+    return lane_config_valid(lanes, fault);
   }
   bool set_buses(std::vector<TrackBusConfig> buses);
-  /// Pure: true when set_buses would not refuse @p buses on their own content.
-  bool validate_buses(const std::vector<TrackBusConfig>& buses) const noexcept {
-    return bus_config_valid(buses);
+  /// Pure: true when set_buses would not refuse @p buses on their own content; @p fault, when
+  /// given, receives the first cause it would refuse them for.
+  bool validate_buses(const std::vector<TrackBusConfig>& buses,
+                      MixerEditFault* fault = nullptr) const noexcept {
+    return bus_config_valid(buses, fault);
   }
   /// AUDIO thread: acquires this block's lane config and sidechain binding table.
   void acquire_lanes() noexcept {
@@ -663,19 +762,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// Ceiling of the retained clip delay in Q8 samples (the lane alignment bank length).
   static constexpr int kMaxClipDelayQ8 = mixing::kMaxAlignmentDelaySamples << 8;
 
-  // An allocation failure recorded deeper in the same call outranks the state verdict.
-  bool refuse_from_state() noexcept {
-    if (last_refusal_ != MixerRefusal::kOutOfMemory) last_refusal_ = MixerRefusal::kState;
+  // Records the cause of a refusal; always false.
+  bool refuse(MixerEditCause cause, uint8_t index = kNoFaultIndex,
+              uint8_t send_index = kNoFaultIndex) noexcept {
+    last_fault_ = MixerEditFault{cause, index, send_index};
     return false;
   }
-  bool refuse_out_of_memory() noexcept {
-    last_refusal_ = MixerRefusal::kOutOfMemory;
-    return false;
-  }
-  // A failed PDC preparation: an allocation failure or the state verdict.
-  bool refuse_pdc(const PreparedPdc& prepared) noexcept {
-    return prepared.out_of_memory ? refuse_out_of_memory() : refuse_from_state();
-  }
+  bool refuse_out_of_memory() noexcept { return refuse(MixerEditCause::kOutOfMemory); }
+  // prepare_pdc_updates clamps its delays, so it fails only when a delay bank cannot allocate.
+  bool refuse_pdc_preparation() noexcept { return refuse_out_of_memory(); }
   struct LaneState {
     uint32_t track_id = 0;
     // Linear gain, even though the public parameter is dB. Converting once at
@@ -825,11 +920,14 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void clear_lane_insert_automations() noexcept;
   void clear_bus_insert_automations() noexcept;
 
-  bool lane_config_valid(const std::vector<TrackLaneConfig>& lanes) const noexcept;
+  // @p fault, when given, receives the first cause the list is refused for.
+  bool lane_config_valid(const std::vector<TrackLaneConfig>& lanes,
+                         MixerEditFault* fault = nullptr) const noexcept;
   // Value rules of one send list: size cap, bus id, level range, no repeated target. A lane's
   // list also has to name declared buses (@p require_declared); a bus's targets are graph-checked.
-  bool sends_valid(const std::vector<TrackLaneConfig::Send>& sends,
-                   bool require_declared) const noexcept;
+  // @p owner_index is the lane or bus the list belongs to, for @p fault.
+  bool sends_valid(const std::vector<TrackLaneConfig::Send>& sends, bool require_declared,
+                   uint8_t owner_index, MixerEditFault* fault = nullptr) const noexcept;
   static mixing::SendConfig send_config_for(const TrackLaneConfig::Send& send) noexcept;
   // Appends the staged seed strips to the owned table, then commits the prepared send tables.
   void commit_staged_lane_strips(
@@ -840,14 +938,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
       std::array<mixing::ChannelStrip::PreparedSends, kMaxTrackLanes>& staged_sends);
   // Restores a lane's fader, pan, gate and solo/mute to their rest state.
   static void reset_lane_controls(LaneState& lane) noexcept;
-  bool bus_config_valid(const std::vector<TrackBusConfig>& buses) const noexcept;
+  bool bus_config_valid(const std::vector<TrackBusConfig>& buses,
+                        MixerEditFault* fault = nullptr) const noexcept;
   // Topologically orders @p buses over their output, send and bus-to-bus key
   // edges (Kahn, lowest declared index first, so an edge-free list keeps its
   // declaration order). False on an undeclared or self-referencing target or a
-  // cycle.
+  // cycle; @p fault, when given, receives which.
   static bool validate_bus_graph(const std::vector<TrackBusConfig>& buses, const KeyEdge* key_edges,
-                                 size_t key_edge_count,
-                                 std::array<size_t, kMaxBusLanes>* order) noexcept;
+                                 size_t key_edge_count, std::array<size_t, kMaxBusLanes>* order,
+                                 MixerEditFault* fault = nullptr) noexcept;
   // Bus-sourced edges between two buses in the current binding table, skipping
   // entry @p skip.
   size_t collect_key_edges(std::array<KeyEdge, kMaxSidechainBindings>& out,
@@ -1182,8 +1281,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Last committed raw-clip PDC target. The engine owns the common direct-clip
   // bank; this target is carried by each lane's staged bank.
   int clip_pdc_delay_q8_ = 0;
-  // See last_refusal(); reset on entry to each setter it covers.
-  MixerRefusal last_refusal_ = MixerRefusal::kArgument;
+  // See last_fault(); reset on entry to each setter it covers.
+  MixerEditFault last_fault_{};
   // Control-thread binding table; the audio thread never reads it.
   SidechainTable sidechains_{};
   rt::SeqlockCell<SidechainTable> sidechains_published_{};

@@ -37,8 +37,8 @@ bool layout_wider_than_stereo(ChannelLayout layout) noexcept {
 }  // namespace
 
 bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
-  last_refusal_ = MixerRefusal::kArgument;
-  if (!bus_config_valid(buses)) return false;
+  last_fault_ = MixerEditFault{};
+  if (!bus_config_valid(buses, &last_fault_)) return false;
   // Bus state follows the bus id, not the slot: source[i] is the slot new bus i
   // held before, or -1 for a bus declared now.
   std::array<int, kMaxBusLanes> source{};
@@ -58,7 +58,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     // Pan and width are refused on a wider bus rather than silently reset.
     if (layout_wider_than_stereo(buses[index].layout) &&
         !bus_stereo_image_is_default(bus_states_[static_cast<size_t>(previous)].spec)) {
-      return refuse_from_state();
+      return refuse(MixerEditCause::kBusImageBlocksWiderLayout, static_cast<uint8_t>(index));
     }
     source[index] = previous;
     if (previous == static_cast<int>(index)) {
@@ -98,15 +98,19 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     }
   }
   std::array<size_t, kMaxBusLanes> order{};
-  if (!validate_bus_graph(buses, key_edges.data(), key_edge_count, &order)) return false;
+  if (!validate_bus_graph(buses, key_edges.data(), key_edge_count, &order, &last_fault_)) {
+    return false;
+  }
   // Every lane output and lane send has to land on a bus the new list keeps.
   static const std::vector<TrackLaneConfig> kNoLanes;
   const std::vector<TrackLaneConfig>* current_lanes = lanes_.control_current().get();
   const std::vector<TrackLaneConfig>& lanes = current_lanes ? *current_lanes : kNoLanes;
   for (const TrackLaneConfig& lane : lanes) {
-    if (lane.output_bus_id != 0 && !declared(lane.output_bus_id)) return refuse_from_state();
+    if (lane.output_bus_id != 0 && !declared(lane.output_bus_id)) {
+      return refuse(MixerEditCause::kLaneRoutingBlocksBusRemoval);
+    }
     for (const TrackLaneConfig::Send& send : lane.sends) {
-      if (!declared(send.bus_id)) return refuse_from_state();
+      if (!declared(send.bus_id)) return refuse(MixerEditCause::kLaneRoutingBlocksBusRemoval);
     }
   }
   // The alignment the new graph needs has to fit the delay lines.
@@ -122,7 +126,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     view.latency_q8[index] = fx != nullptr ? fx->latency_samples_q8() : 0;
   }
   PdcPlan plan;
-  if (!plan_pdc(lanes, view, &plan)) return refuse_from_state();
+  if (!plan_pdc(lanes, view, &plan)) return refuse(MixerEditCause::kLatencyPastAlignmentCeiling);
   std::array<int, kMaxBusLanes> bank_sources{};
   bank_sources.fill(-1);
   std::array<bool, kMaxBusLanes> bank_used{};
@@ -164,7 +168,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       }
       if (strip == nullptr && !config.sends.empty()) {
         if (owned_strips_.size() + staged_lane_owned_count >= kMaxTrackLanes) {
-          return refuse_from_state();
+          return refuse(MixerEditCause::kOwnedStripTableFull);
         }
         auto owned = make_seed_strip();
         strip = owned.get();
@@ -198,7 +202,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
 
   // Prepare new FxBus objects up front so the commit only moves pointers and sets scalars.
@@ -217,7 +221,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
 
   // Stage PDC replacement storage now; commit_pdc_updates() applies scalar plans after the remap.
@@ -229,7 +233,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   }
   PreparedPdc prepared_pdc;
   if (!prepare_pdc_updates(plan, pdc_sources, pdc_reset, &prepared_pdc, &bank_sources)) {
-    return refuse_pdc(prepared_pdc);
+    return refuse_pdc_preparation();
   }
 
   decltype(bus_sends_) sends{};
@@ -245,7 +249,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
   std::unique_ptr<std::array<BusState, kMaxBusLanes>> staging;
   try {
@@ -260,7 +264,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
   // Every throwing step is behind us; live ownership moves only from here on.
   for (size_t index = 0; index < bus_states_.size(); ++index) {
@@ -445,20 +449,22 @@ void TrackMixerRuntime::refresh_bus_eq_active(BusState& state) noexcept {
 
 bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus,
                                       BusAdmission admit, void* admit_context) {
-  last_refusal_ = MixerRefusal::kArgument;
+  last_fault_ = MixerEditFault{};
   const int found = configured_bus_index(bus_id);
-  if (found < 0) return false;
+  if (found < 0) return refuse(MixerEditCause::kBusUnknown);
   const size_t bus_index = static_cast<size_t>(found);
   BusState* state = &bus_states_[bus_index];
   // Validate everything before applying anything. The width check reads the
   // engine's own layout, not the spec's, which may be omitted.
   if (!std::isfinite(bus.pan) || !std::isfinite(bus.dual_pan_left) ||
-      !std::isfinite(bus.dual_pan_right) ||
-      (layout_wider_than_stereo(bus_configs_[bus_index].layout) &&
-       !bus_stereo_image_is_default(bus)) ||
-      !strip_eq_acceptable(bus.eq, sample_rate_)) {
-    return false;
+      !std::isfinite(bus.dual_pan_right)) {
+    return refuse(MixerEditCause::kBusPanNotFinite);
   }
+  if (layout_wider_than_stereo(bus_configs_[bus_index].layout) &&
+      !bus_stereo_image_is_default(bus)) {
+    return refuse(MixerEditCause::kBusImageOnWideLayout);
+  }
+  if (!strip_eq_acceptable(bus.eq, sample_rate_)) return refuse(MixerEditCause::kStripEqInvalid);
   std::unique_ptr<mixing::FxBus> fx;
   const bool rebuild = !strip_inserts_equal(state->spec.inserts, bus.inserts,
                                             /*canonical_track_order=*/false);
@@ -469,18 +475,20 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
       for (const auto& insert : bus.inserts) {
         bool spo = false;
         auto processor = make_insert_processor(insert, sample_rate_, &spo);
-        if (!processor) return false;
+        if (!processor) return refuse(MixerEditCause::kStripInsertsRefused);
         fx->add_insert(std::move(processor), spo);
       }
     } catch (const std::bad_alloc&) {
       return refuse_out_of_memory();
     } catch (...) {
-      return false;
+      return refuse(MixerEditCause::kStripInsertsRefused);
     }
     if (max_block_size_ > 0) {
       fx->prepare(sample_rate_, max_block_size_);
     }
-    if (admit != nullptr && !admit(admit_context, bus_id, *fx)) return refuse_from_state();
+    if (admit != nullptr && !admit(admit_context, bus_id, *fx)) {
+      return refuse(MixerEditCause::kInsertAutomationTableFull);
+    }
   }
   mixing::api::Bus next_spec;
   try {
@@ -488,7 +496,7 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
   // A new chain's latency and its surviving keys are planned before anything is applied.
   SidechainTable next_sidechains{};
@@ -504,9 +512,9 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
       build_routes(*view.buses, view.skip_binding, &view.routes, &next_sidechains);
       PdcPlan plan;
       if (!plan_pdc(*lanes, view, &plan, nullptr, nullptr, false, &next_sidechains)) {
-        return refuse_from_state();
+        return refuse(MixerEditCause::kLatencyPastAlignmentCeiling);
       }
-      if (!prepare_identity_pdc(plan, &prepared)) return refuse_pdc(prepared);
+      if (!prepare_identity_pdc(plan, &prepared)) return refuse_pdc_preparation();
       has_pdc = true;
     }
   }
@@ -535,17 +543,22 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   return true;
 }
 
-bool TrackMixerRuntime::bus_config_valid(const std::vector<TrackBusConfig>& buses) const noexcept {
-  if (buses.size() > kMaxBusLanes) return false;
+bool TrackMixerRuntime::bus_config_valid(const std::vector<TrackBusConfig>& buses,
+                                         MixerEditFault* fault) const noexcept {
+  const auto refuse_bus = [&](MixerEditCause cause, size_t bus_index) noexcept {
+    if (fault != nullptr) *fault = MixerEditFault{cause, static_cast<uint8_t>(bus_index)};
+    return false;
+  };
+  if (buses.size() > kMaxBusLanes) return refuse_bus(MixerEditCause::kTooManyBuses, kNoFaultIndex);
   for (size_t i = 0; i < buses.size(); ++i) {
-    if (buses[i].bus_id == 0 || !gain_db_in_range(buses[i].gain_db)) {
-      return false;
-    }
+    if (buses[i].bus_id == 0) return refuse_bus(MixerEditCause::kBusIdZero, i);
+    if (!gain_db_in_range(buses[i].gain_db))
+      return refuse_bus(MixerEditCause::kBusGainOutOfRange, i);
     for (size_t j = i + 1; j < buses.size(); ++j) {
-      if (buses[i].bus_id == buses[j].bus_id) return false;
+      if (buses[i].bus_id == buses[j].bus_id) return refuse_bus(MixerEditCause::kBusIdDuplicate, j);
     }
     // Same value rules as a lane send; targets are checked by validate_bus_graph.
-    if (!sends_valid(buses[i].sends, false)) return false;
+    if (!sends_valid(buses[i].sends, false, static_cast<uint8_t>(i), fault)) return false;
   }
   return true;
 }

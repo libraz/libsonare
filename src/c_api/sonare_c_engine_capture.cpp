@@ -13,7 +13,6 @@
 #include <limits>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "engine/graph_runtime.h"
@@ -47,52 +46,70 @@ std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphN
   }
 }
 
-// Names the first cause GraphRuntime::swap would refuse a compiled graph for, in its own order.
-SonareError diagnose_graph_swap(
-    graph::Graph& candidate, const std::string& input_node, const std::string& output_node,
-    const SonareEngineGraphSpec& spec,
-    const std::vector<engine::GraphRuntime::ParameterBinding>& bindings) {
-  return run_validation([&] {
-    for (size_t i = 0; i < bindings.size(); ++i) {
-      if (engine::RealtimeEngine::parameter_target_reserved(bindings[i].param_id)) {
-        util::check::refuse(indexed_subject("spec.parameter_bindings", i, "param_id").c_str(),
-                            "must not be a reserved engine parameter id");
-      }
-    }
-    const graph::Node* input = candidate.node(input_node);
-    if (input == nullptr) {
-      util::check::refuse("spec.input_node", "must be the id of a node in spec.nodes");
-    }
-    const graph::Node* output = candidate.node(output_node);
-    if (output == nullptr) {
-      util::check::refuse("spec.output_node", "must be the id of a node in spec.nodes");
-    }
-    if (input->num_ports() < spec.num_channels) {
-      util::check::refuse_relation({"spec.num_channels", "spec.input_node"},
-                                   "{0} must not exceed the port count of {1}");
-    }
-    if (output->num_ports() < spec.num_channels) {
-      util::check::refuse_relation({"spec.num_channels", "spec.output_node"},
-                                   "{0} must not exceed the port count of {1}");
-    }
-    util::check::integer_in_range(
-        static_cast<long long>(bindings.size()), 0,
-        static_cast<long long>(engine::GraphRuntime::kMaxParameterBindings),
-        "spec.parameter_binding_count");
-    std::unordered_set<uint32_t> seen;
-    for (size_t i = 0; i < bindings.size(); ++i) {
-      const std::string id_subject = indexed_subject("spec.parameter_bindings", i, "param_id");
-      util::check::integer_in_range(bindings[i].param_id, 1, std::numeric_limits<uint32_t>::max(),
-                                    id_subject.c_str());
-      if (!seen.insert(bindings[i].param_id).second) {
+// Maps the cause the engine retained for a refused swap to the argument it names.
+SonareError graph_swap_error(const engine::GraphSwapFault& fault) {
+  using Cause = engine::GraphSwapRefusal;
+  const std::string id_subject =
+      indexed_subject("spec.parameter_bindings", fault.index, "param_id");
+  switch (fault.cause) {
+    case Cause::kIncompleteArguments:
+      set_last_error(SONARE_ERROR_INVALID_STATE,
+                     "the engine was given no graph or no node id to swap in");
+      return SONARE_ERROR_INVALID_STATE;
+    case Cause::kNoChannels:
+      return run_validation([&] { util::check::integer_at_least(0, 1, "spec.num_channels"); });
+    case Cause::kReservedParameterId:
+      return run_validation([&] {
+        util::check::refuse(id_subject.c_str(), "must not be a reserved engine parameter id");
+      });
+    case Cause::kNotCompiled:
+      set_last_error(SONARE_ERROR_INVALID_STATE, "the graph has not been compiled");
+      return SONARE_ERROR_INVALID_STATE;
+    case Cause::kUnknownInputNode:
+      return run_validation([&] {
+        util::check::refuse("spec.input_node", "must be the id of a node in spec.nodes");
+      });
+    case Cause::kUnknownOutputNode:
+      return run_validation([&] {
+        util::check::refuse("spec.output_node", "must be the id of a node in spec.nodes");
+      });
+    case Cause::kInputPortsShort:
+      return run_validation([&] {
+        util::check::refuse_relation({"spec.num_channels", "spec.input_node"},
+                                     "{0} must not exceed the port count of {1}");
+      });
+    case Cause::kOutputPortsShort:
+      return run_validation([&] {
+        util::check::refuse_relation({"spec.num_channels", "spec.output_node"},
+                                     "{0} must not exceed the port count of {1}");
+      });
+    case Cause::kTooManyBindings:
+      return run_validation([&] {
+        util::check::refuse(
+            "spec.parameter_binding_count",
+            util::refusal::integer_range_predicate(
+                0, static_cast<double>(engine::GraphRuntime::kMaxParameterBindings)));
+      });
+    case Cause::kBindingIdZero:
+      return run_validation([&] {
+        util::check::integer_in_range(0, 1, std::numeric_limits<uint32_t>::max(),
+                                      id_subject.c_str());
+      });
+    case Cause::kBindingIdRepeated:
+      return run_validation([&] {
         util::check::refuse(id_subject.c_str(), "must be unique among spec.parameter_bindings");
-      }
-      if (candidate.node(bindings[i].node_id) == nullptr) {
-        util::check::refuse(indexed_subject("spec.parameter_bindings", i, "node_id").c_str(),
-                            "must be the id of a node in spec.nodes");
-      }
-    }
-  });
+      });
+    case Cause::kBindingNodeUnknown:
+      return run_validation([&] {
+        util::check::refuse(
+            indexed_subject("spec.parameter_bindings", fault.index, "node_id").c_str(),
+            "must be the id of a node in spec.nodes");
+      });
+    case Cause::kNone:
+      break;
+  }
+  set_last_error(SONARE_ERROR_INVALID_STATE, "the engine refused the graph and retained no cause");
+  return SONARE_ERROR_INVALID_STATE;
 }
 
 }  // namespace
@@ -297,16 +314,9 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
     parameter_bindings.push_back(
         {binding.param_id, fixed_text(binding.node_id, sizeof(binding.node_id))});
   }
-  if (const SonareError err =
-          diagnose_graph_swap(*graph, input_node, output_node, *spec, parameter_bindings);
-      err != SONARE_OK) {
-    return err;
-  }
   if (!engine->engine.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(),
                                  spec->num_channels, std::move(parameter_bindings))) {
-    set_last_error(SONARE_ERROR_INVALID_STATE,
-                   "the engine refused the graph without reporting a cause");
-    return SONARE_ERROR_INVALID_STATE;
+    return graph_swap_error(engine->engine.last_graph_swap_fault());
   }
   return SONARE_OK;
   SONARE_C_CATCH

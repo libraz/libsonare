@@ -504,7 +504,7 @@ TEST_CASE("mixing setters name the cause of a refused engine edit", "[c_api][eng
 
   SonareEngineTrackSend send{99, 0.0f, 1, 0};
   CHECK(sonare_engine_set_track_sends(engine, 10, &send, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "sends must describe sends the mixer accepts");
+  CHECK(last_message() == "sends[0].bus_id must be the id of a bus in this engine");
   CHECK(sonare_engine_set_track_output_bus(engine, 10, 99) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "output_bus_id must be the id of a bus in this engine");
 
@@ -515,6 +515,165 @@ TEST_CASE("mixing setters name the cause of a refused engine edit", "[c_api][eng
   CHECK(sonare_engine_set_bus_sidechain(engine, 7, 0, SONARE_SIDECHAIN_SOURCE_TRACK, 10) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == kNoBus);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("track sends name the send the mixer refused", "[c_api][engine_refusal]") {
+  SonareEngine* engine = make_engine();
+  SonareEngineBus bus{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+  REQUIRE(sonare_engine_set_track_buses(engine, &bus, 1) == SONARE_OK);
+  SonareEngineTrackLane lane{};
+  lane.track_id = 10;
+  lane.source_channel_layout = SONARE_CHANNEL_LAYOUT_STEREO;
+  REQUIRE(sonare_engine_set_track_lanes(engine, &lane, 1) == SONARE_OK);
+
+  SonareEngineTrackSend zero_id{0, 0.0f, 1, 0};
+  CHECK(sonare_engine_set_track_sends(engine, 10, &zero_id, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "sends[0].bus_id must be an integer in [1, 4294967295]");
+
+  SonareEngineTrackSend loud{1, 100.0f, 1, 0};
+  CHECK(sonare_engine_set_track_sends(engine, 10, &loud, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "sends[0].level_db must be finite and in [-120, 24]");
+
+  SonareEngineTrackSend repeated[2] = {{1, 0.0f, 1, 0}, {1, -6.0f, 1, 0}};
+  CHECK(sonare_engine_set_track_sends(engine, 10, repeated, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "sends[1].bus_id must not repeat the bus_id of an earlier send");
+
+  SonareEngineTrackSend many[9] = {};
+  for (SonareEngineTrackSend& send : many) send = SonareEngineTrackSend{1, 0.0f, 1, 0};
+  CHECK(sonare_engine_set_track_sends(engine, 10, many, 9) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "send_count must be an integer in [0, 8]");
+
+  CHECK(sonare_engine_set_track_output_bus(engine, 10, 99) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "output_bus_id must be the id of a bus in this engine");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("track lanes name the lane and send the mixer refused", "[c_api][engine_refusal]") {
+  SonareEngine* engine = make_engine();
+  SonareEngineBus bus{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+  REQUIRE(sonare_engine_set_track_buses(engine, &bus, 1) == SONARE_OK);
+
+  SonareEngineTrackLane lanes[2] = {};
+  for (SonareEngineTrackLane& lane : lanes) {
+    lane.track_id = 10;
+    lane.source_channel_layout = SONARE_CHANNEL_LAYOUT_STEREO;
+  }
+  lanes[0].track_id = 0;
+  CHECK(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "lanes[0].track_id must be an integer in [1, 4294967295]");
+
+  lanes[0].track_id = 10;
+  CHECK(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "lanes[1].track_id must be unique among the lanes");
+
+  lanes[1].track_id = 11;
+  lanes[1].output_bus_id = 99;
+  CHECK(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "lanes[1].output_bus_id must be the id of a bus in this engine");
+
+  lanes[1].output_bus_id = 0;
+  SonareEngineTrackSend undeclared{99, 0.0f, 1, 0};
+  lanes[1].sends = &undeclared;
+  lanes[1].send_count = 1;
+  CHECK(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "lanes[1].sends[0].bus_id must be the id of a bus in this engine");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("track buses name the bus and route the mixer refused", "[c_api][engine_refusal]") {
+  SonareEngine* engine = make_engine();
+  SonareEngineBus buses[2] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
+                              {2, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+
+  buses[0].bus_id = 0;
+  CHECK(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "buses[0].bus_id must be an integer in [1, 4294967295]");
+
+  buses[0].bus_id = 1;
+  buses[1].gain_db = 100.0f;
+  CHECK(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "buses[1].gain_db must be finite and in [-120, 24]");
+
+  buses[1].gain_db = 0.0f;
+  buses[1].bus_id = 1;
+  CHECK(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "buses[1].bus_id must be unique among the buses");
+
+  SonareEngineBus nine[9] = {};
+  for (uint32_t i = 0; i < 9; ++i) {
+    nine[i] = SonareEngineBus{i + 1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+  }
+  CHECK(sonare_engine_set_track_buses(engine, nine, 9) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "bus_count must be an integer in [0, 8]");
+
+  buses[1].bus_id = 2;
+  buses[0].output_bus_id = 99;
+  CHECK(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "buses[0].output_bus_id must be the id of a bus in buses");
+
+  buses[0].output_bus_id = 1;
+  CHECK(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "buses[0].output_bus_id must not equal buses[0].bus_id");
+
+  buses[0].output_bus_id = 2;
+  buses[1].output_bus_id = 1;
+  CHECK(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "buses must not route a bus back into itself through outputs, sends or sidechain keys");
+
+  SonareEngineTrackSend to_self{1, 0.0f, 1, 0};
+  buses[0].output_bus_id = 0;
+  buses[1].output_bus_id = 0;
+  buses[0].sends = &to_self;
+  buses[0].send_count = 1;
+  CHECK(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "buses[0].sends[0].bus_id must not equal buses[0].bus_id");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("track buses name the state that forbids dropping a routed bus",
+          "[c_api][engine_refusal]") {
+  SonareEngine* engine = make_engine();
+  SonareEngineBus bus{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+  REQUIRE(sonare_engine_set_track_buses(engine, &bus, 1) == SONARE_OK);
+  SonareEngineTrackLane lane{};
+  lane.track_id = 10;
+  lane.output_bus_id = 1;
+  lane.source_channel_layout = SONARE_CHANNEL_LAYOUT_STEREO;
+  REQUIRE(sonare_engine_set_track_lanes(engine, &lane, 1) == SONARE_OK);
+
+  CHECK(sonare_engine_set_track_buses(engine, nullptr, 0) == SONARE_ERROR_INVALID_STATE);
+  CHECK(last_message() == "a lane output or send still routes to a bus the new bus list drops");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("master strip inserts name the index or parameter the mixer refused",
+          "[c_api][engine_refusal]") {
+  constexpr const char* kMasterWithInsert =
+      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
+  constexpr const char* kPastInserts =
+      "insert_index must be less than the number of inserts on the master strip";
+  SonareEngine* engine = make_engine();
+  REQUIRE(sonare_engine_set_master_strip_json(engine, kMasterWithInsert) == SONARE_OK);
+
+  CHECK(sonare_engine_set_master_strip_insert_bypassed(engine, 5, 1, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kPastInserts);
+  CHECK(sonare_engine_set_master_strip_insert_param_by_name(engine, 5, "ratio", 4.0f) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kPastInserts);
+  CHECK(sonare_engine_set_master_strip_insert_param_by_name(engine, 0, "nope", 4.0f) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "param_name must be the name of a parameter of the insert that can be set while running");
+  CHECK(sonare_engine_restore_master_strip_insert_param_by_name(engine, 5, "ratio", 4.0f) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kPastInserts);
+  uint32_t id = 7;
+  CHECK(sonare_engine_resolve_master_insert_automation_id(engine, 5, "ratio", &id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kPastInserts);
   sonare_engine_destroy(engine);
 }
 

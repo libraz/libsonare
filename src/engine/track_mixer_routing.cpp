@@ -105,9 +105,18 @@ uint64_t TrackMixerRuntime::pdc_storage_generation() const noexcept {
 
 bool TrackMixerRuntime::validate_bus_graph(const std::vector<TrackBusConfig>& buses,
                                            const KeyEdge* key_edges, size_t key_edge_count,
-                                           std::array<size_t, kMaxBusLanes>* order) noexcept {
+                                           std::array<size_t, kMaxBusLanes>* order,
+                                           MixerEditFault* fault) noexcept {
   const size_t count = buses.size();
   if (count > kMaxBusLanes || order == nullptr) return false;
+  const auto refuse_route = [fault](MixerEditCause cause, size_t bus_index,
+                                    size_t send_index) noexcept {
+    if (fault != nullptr) {
+      *fault =
+          MixerEditFault{cause, static_cast<uint8_t>(bus_index), static_cast<uint8_t>(send_index)};
+    }
+    return false;
+  };
   const auto index_of = [&buses](uint32_t bus_id) -> int {
     for (size_t i = 0; i < buses.size(); ++i) {
       if (buses[i].bus_id == bus_id) return static_cast<int>(i);
@@ -117,24 +126,35 @@ bool TrackMixerRuntime::validate_bus_graph(const std::vector<TrackBusConfig>& bu
   std::array<std::array<int, kMaxBusLanes>, kMaxBusLanes> edges{};
   std::array<int, kMaxBusLanes> indegree{};
   const auto add_edge = [&](int from, int to) {
-    if (from < 0 || to < 0 || from == to) return false;
     ++edges[static_cast<size_t>(from)][static_cast<size_t>(to)];
     ++indegree[static_cast<size_t>(to)];
+  };
+  // A target the list does not declare, or the bus itself, is refused at its output or send.
+  const auto add_route = [&](size_t bus_index, int to, size_t send_index) {
+    if (to < 0) return refuse_route(MixerEditCause::kBusRouteUnknown, bus_index, send_index);
+    if (to == static_cast<int>(bus_index)) {
+      return refuse_route(MixerEditCause::kBusRouteToSelf, bus_index, send_index);
+    }
+    add_edge(static_cast<int>(bus_index), to);
     return true;
   };
   for (size_t i = 0; i < count; ++i) {
-    const int from = static_cast<int>(i);
-    if (buses[i].output_bus_id != 0 && !add_edge(from, index_of(buses[i].output_bus_id))) {
+    if (buses[i].output_bus_id != 0 &&
+        !add_route(i, index_of(buses[i].output_bus_id), kNoFaultIndex)) {
       return false;
     }
-    for (const TrackLaneConfig::Send& send : buses[i].sends) {
-      if (!add_edge(from, index_of(send.bus_id))) return false;
+    for (size_t send_index = 0; send_index < buses[i].sends.size(); ++send_index) {
+      if (!add_route(i, index_of(buses[i].sends[send_index].bus_id), send_index)) return false;
     }
   }
+  // Key edges join declared, distinct buses: a key never names its own bus.
   for (size_t i = 0; i < key_edge_count; ++i) {
-    if (!add_edge(index_of(key_edges[i].source_bus), index_of(key_edges[i].target_bus))) {
-      return false;
+    const int from = index_of(key_edges[i].source_bus);
+    const int to = index_of(key_edges[i].target_bus);
+    if (from < 0 || to < 0 || from == to) {
+      return refuse_route(MixerEditCause::kBusRouteCycle, kNoFaultIndex, kNoFaultIndex);
     }
+    add_edge(from, to);
   }
   std::array<bool, kMaxBusLanes> placed{};
   for (size_t position = 0; position < count; ++position) {
@@ -142,7 +162,8 @@ bool TrackMixerRuntime::validate_bus_graph(const std::vector<TrackBusConfig>& bu
     for (size_t i = 0; i < count && next == count; ++i) {
       if (!placed[i] && indegree[i] == 0) next = i;
     }
-    if (next == count) return false;
+    if (next == count)
+      return refuse_route(MixerEditCause::kBusRouteCycle, kNoFaultIndex, kNoFaultIndex);
     placed[next] = true;
     (*order)[position] = next;
     for (size_t j = 0; j < count; ++j) indegree[j] -= edges[next][j];
@@ -221,7 +242,9 @@ void TrackMixerRuntime::resolve_lane_routes() noexcept {
 
 bool TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept {
   PdcPlan plan;
-  if (!plan_pdc(lanes, current_bus_graph_view(), &plan)) return false;
+  if (!plan_pdc(lanes, current_bus_graph_view(), &plan)) {
+    return refuse(MixerEditCause::kLatencyPastAlignmentCeiling);
+  }
   return apply_pdc(plan);
 }
 
@@ -636,7 +659,7 @@ bool TrackMixerRuntime::prepare_identity_pdc(const PdcPlan& plan,
 
 bool TrackMixerRuntime::apply_pdc(const PdcPlan& plan) noexcept {
   PreparedPdc prepared;
-  if (!prepare_identity_pdc(plan, &prepared)) return false;
+  if (!prepare_identity_pdc(plan, &prepared)) return refuse_pdc_preparation();
   commit_pdc_updates(prepared);
   return true;
 }

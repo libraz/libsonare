@@ -26,37 +26,43 @@ bool GraphRuntime::bind(graph::Graph* graph, const char* input_node_id, const ch
 
 bool GraphRuntime::swap(std::shared_ptr<graph::Graph> graph, const char* input_node_id,
                         const char* output_node_id, int num_channels,
-                        std::vector<ParameterBinding> parameter_bindings) {
+                        std::vector<ParameterBinding> parameter_bindings, GraphSwapFault* fault) {
+  const auto refuse = [fault](GraphSwapRefusal cause, size_t index = 0) {
+    if (fault != nullptr) *fault = GraphSwapFault{cause, index};
+    return false;
+  };
   // Refuse a non-compiled graph here so an uncompiled topology can never be
   // published to the audio thread. Graph::process_block() is a no-op on an
   // uncompiled graph (it is noexcept and cannot throw), but rejecting at the
   // swap boundary keeps the audio thread from ever rendering silence from a
   // half-built graph.
-  if (!graph || !graph->compiled() || !input_node_id || !output_node_id || num_channels <= 0) {
-    return false;
+  if (!graph || !input_node_id || !output_node_id) {
+    return refuse(GraphSwapRefusal::kIncompleteArguments);
   }
+  if (num_channels <= 0) return refuse(GraphSwapRefusal::kNoChannels);
+  if (!graph->compiled()) return refuse(GraphSwapRefusal::kNotCompiled);
   graph::Node* input = graph->node(input_node_id);
+  if (!input) return refuse(GraphSwapRefusal::kUnknownInputNode);
   graph::Node* output = graph->node(output_node_id);
-  if (!input || !output || input->num_ports() < num_channels ||
-      output->num_ports() < num_channels) {
-    return false;
-  }
+  if (!output) return refuse(GraphSwapRefusal::kUnknownOutputNode);
+  if (input->num_ports() < num_channels) return refuse(GraphSwapRefusal::kInputPortsShort);
+  if (output->num_ports() < num_channels) return refuse(GraphSwapRefusal::kOutputPortsShort);
   if (parameter_bindings.size() > kMaxParameterBindings) {
-    return false;
+    return refuse(GraphSwapRefusal::kTooManyBindings);
   }
 
   std::vector<Binding::Target> targets;
   targets.reserve(parameter_bindings.size());
   std::unordered_set<uint32_t> seen_ids;
   seen_ids.reserve(parameter_bindings.size());
-  for (const ParameterBinding& parameter_binding : parameter_bindings) {
-    if (parameter_binding.param_id == 0 || !seen_ids.insert(parameter_binding.param_id).second) {
-      return false;
+  for (size_t i = 0; i < parameter_bindings.size(); ++i) {
+    const ParameterBinding& parameter_binding = parameter_bindings[i];
+    if (parameter_binding.param_id == 0) return refuse(GraphSwapRefusal::kBindingIdZero, i);
+    if (!seen_ids.insert(parameter_binding.param_id).second) {
+      return refuse(GraphSwapRefusal::kBindingIdRepeated, i);
     }
     graph::Node* node = graph->node(parameter_binding.node_id);
-    if (!node) {
-      return false;
-    }
+    if (!node) return refuse(GraphSwapRefusal::kBindingNodeUnknown, i);
     targets.push_back({parameter_binding.param_id, &node->processor()});
   }
   // Control thread: the allocation may throw bad_alloc and that propagates

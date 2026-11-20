@@ -83,13 +83,15 @@ enum class TrackLaneEditResult : uint8_t {
 
 /// Diagnostic retained by the most recent mixer configuration call
 /// (@ref RealtimeEngine::set_track_lanes, set_track_buses, set_track_strip,
-/// set_bus_strip, set_master_strip), read on the control thread immediately
-/// after it. kInvalidArgument: the call's own arguments were refused.
-/// kInvalidState: the arguments are acceptable, but configuration earlier calls
-/// left refuses them -- the shared insert-automation table or the owned-strip
-/// table is full, a retained delay, pan or lane routing forbids the change, or
-/// the combined latency passes the alignment ceiling. kOutOfMemory: an
-/// allocation failed while the call staged its change; nothing was applied.
+/// set_bus_strip, set_master_strip, and the three EQ band setters), read on the
+/// control thread immediately after it. kInvalidArgument: the call's own
+/// arguments were refused. kInvalidState: the arguments are acceptable, but
+/// configuration earlier calls left refuses them -- the shared
+/// insert-automation table or the owned-strip table is full, a retained delay,
+/// pan or lane routing forbids the change, or the combined latency passes the
+/// alignment ceiling. kOutOfMemory: an allocation failed while the call staged
+/// its change; nothing was applied. The exact cause is
+/// @ref RealtimeEngine::last_mixer_edit_fault.
 enum class MixerEditStatus : uint8_t {
   kNotAttempted,
   kApplied,
@@ -97,6 +99,15 @@ enum class MixerEditStatus : uint8_t {
   kInvalidState,
   kOutOfMemory,
 };
+
+#if defined(SONARE_WITH_MIXING)
+/// The coarse status a refusal for @p cause falls under.
+constexpr MixerEditStatus mixer_edit_status_of(MixerEditCause cause) noexcept {
+  if (cause == MixerEditCause::kOutOfMemory) return MixerEditStatus::kOutOfMemory;
+  return cause >= MixerEditCause::kInsertAutomationTableFull ? MixerEditStatus::kInvalidState
+                                                             : MixerEditStatus::kInvalidArgument;
+}
+#endif
 
 /// Result of @ref RealtimeEngine::push_midi_ump.
 ///
@@ -851,6 +862,20 @@ class RealtimeEngine : private ClipPageRequestSink {
   MixerEditStatus last_mixer_edit_status() const noexcept {
     return last_mixer_edit_status_.load(std::memory_order_relaxed);
   }
+  /// The cause, and the lane, bus or send it names, of the most recent refusal by the calls
+  /// MixerEditStatus covers. Read on the control thread right after the call; kNone while the
+  /// last call applied.
+  MixerEditFault last_mixer_edit_fault() const noexcept {
+    return last_mixer_edit_fault_.load(std::memory_order_relaxed);
+  }
+  /// CONTROL thread, const: insert count of the master strip (0 with none configured).
+  size_t master_insert_count() const noexcept;
+  /// CONTROL thread, const: the processor at @p insert_index of the master strip, or nullptr
+  /// when the strip is missing or the index is past its inserts.
+  const rt::ProcessorBase* master_insert_processor(unsigned int insert_index) const noexcept;
+  /// CONTROL thread, const: the processor parameter id @p key names on master insert
+  /// @p insert_index, or -1 when the strip, the insert or the key is unknown.
+  int master_insert_parameter_id(unsigned int insert_index, const std::string& key) const noexcept;
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
   /// Replaces @p track_id's lane sends (empty clears them) and republishes the
   /// rest of the lane list unchanged through set_track_lanes, so an unchanged
@@ -1095,6 +1120,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool swap_graph(std::unique_ptr<graph::Graph> graph, const char* input_node_id,
                   const char* output_node_id, int num_channels,
                   std::vector<GraphRuntime::ParameterBinding> parameter_bindings = {});
+  /// Why the most recent swap_graph refused, and the parameter binding the cause names when it
+  /// names one. Read on the control thread right after the call; kNone while it swapped.
+  const GraphSwapFault& last_graph_swap_fault() const noexcept { return last_graph_swap_fault_; }
   bool has_graph() const noexcept { return graph_runtime_.active_graph() != nullptr; }
   size_t graph_node_count() const noexcept;
   size_t graph_connection_count() const noexcept;
@@ -1237,25 +1265,27 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool insert_automation_room(size_t needed) const noexcept {
     return needed <= insert_automation_targets_.remaining();
   }
-  // Control thread: retains @p status for last_mixer_edit_status(); true for kApplied.
-  bool report_mixer_edit(MixerEditStatus status) noexcept {
-    last_mixer_edit_status_.store(status, std::memory_order_relaxed);
-    return status == MixerEditStatus::kApplied;
+  // Control thread: retains an applied edit for last_mixer_edit_status(); always true.
+  bool report_mixer_applied() noexcept {
+    last_mixer_edit_status_.store(MixerEditStatus::kApplied, std::memory_order_relaxed);
+    last_mixer_edit_fault_.store(MixerEditFault{}, std::memory_order_relaxed);
+    return true;
+  }
+  // Control thread: retains a refusal and its cause; always false.
+  bool report_mixer_fault(MixerEditFault fault) noexcept {
+    last_mixer_edit_status_.store(mixer_edit_status_of(fault.cause), std::memory_order_relaxed);
+    last_mixer_edit_fault_.store(fault, std::memory_order_relaxed);
+    return false;
+  }
+  bool report_mixer_fault(MixerEditCause cause) noexcept {
+    return report_mixer_fault(MixerEditFault{cause});
   }
   // Control thread: maps set_track_lanes' outcome for the single-track lane edits.
   TrackLaneEditResult track_lane_edit_result(bool applied) const noexcept;
   // Control thread: reports a track-mixer setter's outcome, classifying a refusal by its cause.
   bool report_track_mixer_edit(bool applied) noexcept {
-    if (applied) return report_mixer_edit(MixerEditStatus::kApplied);
-    switch (track_mixer_runtime_.last_refusal()) {
-      case MixerRefusal::kState:
-        return report_mixer_edit(MixerEditStatus::kInvalidState);
-      case MixerRefusal::kOutOfMemory:
-        return report_mixer_edit(MixerEditStatus::kOutOfMemory);
-      case MixerRefusal::kArgument:
-        break;
-    }
-    return report_mixer_edit(MixerEditStatus::kInvalidArgument);
+    if (applied) return report_mixer_applied();
+    return report_mixer_fault(track_mixer_runtime_.last_fault());
   }
   // Control thread: the processor a target's slot holds now, or nullptr.
   const rt::ProcessorBase* current_insert_processor(
@@ -1760,6 +1790,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   MixingRuntime mixing_runtime_{};
   std::unique_ptr<mixing::ChannelStrip> owned_master_strip_{};
   std::atomic<MixerEditStatus> last_mixer_edit_status_{MixerEditStatus::kNotAttempted};
+  std::atomic<MixerEditFault> last_mixer_edit_fault_{MixerEditFault{}};
+  static_assert(std::atomic<MixerEditFault>::is_always_lock_free);
   // Last spec passed to set_master_strip(), read by describe_reserved_parameter
   // while owned_master_strip_ is still the bound strip.
   mixing::api::Strip master_strip_spec_{};
@@ -1801,6 +1833,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   rt::BoundedStaging<rt::Command, kMaxPendingCommands> pending_{};
 #if defined(SONARE_WITH_GRAPH)
   GraphRuntime graph_runtime_{};
+  GraphSwapFault last_graph_swap_fault_{};
 #endif
 
   // Engine-level parameter smoothing for kSetParamSmoothed. Each active slot

@@ -13,6 +13,42 @@
 
 namespace sonare::engine {
 
+/// Why GraphRuntime::swap, or RealtimeEngine::swap_graph, refused a graph. The checks run in
+/// this order and the first that fails is reported.
+enum class GraphSwapRefusal : uint8_t {
+  kNone = 0,
+  /// The graph, the input node id or the output node id was null.
+  kIncompleteArguments,
+  /// The channel count was not positive.
+  kNoChannels,
+  /// A parameter binding names an id the engine reserves (fault index: the binding).
+  kReservedParameterId,
+  /// The graph was not compiled.
+  kNotCompiled,
+  /// No node of the graph carries the input node id.
+  kUnknownInputNode,
+  /// No node of the graph carries the output node id.
+  kUnknownOutputNode,
+  /// The input node has fewer ports than the channel count.
+  kInputPortsShort,
+  /// The output node has fewer ports than the channel count.
+  kOutputPortsShort,
+  /// More bindings than GraphRuntime::kMaxParameterBindings.
+  kTooManyBindings,
+  /// A binding with parameter id 0 (index: the binding).
+  kBindingIdZero,
+  /// A binding repeating the id of an earlier binding (index: the later binding).
+  kBindingIdRepeated,
+  /// A binding whose node id no node of the graph carries (index: the binding).
+  kBindingNodeUnknown,
+};
+
+/// The refusal of a swap and the binding it names, when it names one.
+struct GraphSwapFault {
+  GraphSwapRefusal cause = GraphSwapRefusal::kNone;
+  size_t index = 0;
+};
+
 class GraphRuntime {
  public:
   struct ParameterBinding {
@@ -29,9 +65,10 @@ class GraphRuntime {
             int num_channels);
   graph::Graph* swap(graph::Graph* graph, const char* input_node_id, const char* output_node_id,
                      int num_channels);
+  /// @p fault, when given, receives why a refused swap was refused.
   bool swap(std::shared_ptr<graph::Graph> graph, const char* input_node_id,
             const char* output_node_id, int num_channels,
-            std::vector<ParameterBinding> parameter_bindings = {});
+            std::vector<ParameterBinding> parameter_bindings = {}, GraphSwapFault* fault = nullptr);
 
   /// Publish a single parameter binding as a new immutable graph snapshot.
   /// Existing bindings and graph ownership are preserved transactionally.

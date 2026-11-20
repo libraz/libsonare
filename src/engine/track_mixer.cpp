@@ -37,10 +37,12 @@ bool lane_sends_equal(const TrackLaneConfig& left, const TrackLaneConfig& right)
 }  // namespace
 
 bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
-  last_refusal_ = MixerRefusal::kArgument;
-  if (!lane_config_valid(lanes)) return false;
+  last_fault_ = MixerEditFault{};
+  if (!lane_config_valid(lanes, &last_fault_)) return false;
   // Refuse a non-empty lane snapshot when the retained direct delay exceeds the lane bank ceiling.
-  if (!lanes.empty() && clip_pdc_delay_q8_ > kMaxClipDelayQ8) return refuse_from_state();
+  if (!lanes.empty() && clip_pdc_delay_q8_ > kMaxClipDelayQ8) {
+    return refuse(MixerEditCause::kRetainedDelayPastCeiling);
+  }
   std::shared_ptr<const std::vector<TrackLaneConfig>> snapshot;
   try {
     snapshot = std::make_shared<const std::vector<TrackLaneConfig>>(std::move(lanes));
@@ -51,7 +53,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
 
   std::array<mixing::ChannelStrip*, kMaxTrackLanes> candidate_strips{};
@@ -79,7 +81,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
       }
       if (candidate_strips[lane_index] == nullptr && !config.sends.empty()) {
         if (retained_owned_count + staged_owned_count >= kMaxTrackLanes) {
-          return refuse_from_state();
+          return refuse(MixerEditCause::kOwnedStripTableFull);
         }
         auto strip = make_seed_strip();
         candidate_strips[lane_index] = strip.get();
@@ -121,18 +123,20 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
 
   PdcPlan plan;
   const BusGraphView view = current_bus_graph_view();
-  if (!plan_pdc(*snapshot, view, &plan, &candidate_strips)) return refuse_from_state();
+  if (!plan_pdc(*snapshot, view, &plan, &candidate_strips)) {
+    return refuse(MixerEditCause::kLatencyPastAlignmentCeiling);
+  }
   std::array<int, kMaxTrackLanes> lane_sources{};
   std::array<bool, kMaxTrackLanes> lane_reset{};
   make_lane_pdc_sources(*snapshot, &lane_sources, &lane_reset);
   PreparedPdc prepared_pdc;
   if (!prepare_pdc_updates(plan, lane_sources, lane_reset, &prepared_pdc)) {
-    return refuse_pdc(prepared_pdc);
+    return refuse_pdc_preparation();
   }
 
   // From here on every vector has capacity and every processor is prepared, so nothing can fail.
@@ -240,7 +244,7 @@ bool TrackMixerRuntime::stage_track_strip(uint32_t track_id, mixing::ChannelStri
   const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
   if (lanes != nullptr) prepare_lanes_from_snapshot(*lanes);
   const int lane_index = lane_slot_for(track_id);
-  if (lane_index < 0) return false;
+  if (lane_index < 0) return refuse(MixerEditCause::kLaneTableFull);
   out->lane_index = static_cast<size_t>(lane_index);
   try {
     track_strip_bindings_.reserve(track_strip_bindings_.size() + 1);
@@ -252,7 +256,7 @@ bool TrackMixerRuntime::stage_track_strip(uint32_t track_id, mixing::ChannelStri
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
   out->has_pdc = false;
   if (lanes != nullptr) {
@@ -260,10 +264,10 @@ bool TrackMixerRuntime::stage_track_strip(uint32_t track_id, mixing::ChannelStri
     for (size_t i = 0; i < kMaxTrackLanes; ++i) candidate[i] = lane_states_[i].strip;
     candidate[out->lane_index] = &strip;
     PdcPlan plan;
-    if (!plan_pdc(*lanes, current_bus_graph_view(), &plan, &candidate)) return false;
-    if (!prepare_identity_pdc(plan, &out->pdc)) {
-      return out->pdc.out_of_memory ? refuse_out_of_memory() : false;
+    if (!plan_pdc(*lanes, current_bus_graph_view(), &plan, &candidate)) {
+      return refuse(MixerEditCause::kLatencyPastAlignmentCeiling);
     }
+    if (!prepare_identity_pdc(plan, &out->pdc)) return refuse_pdc_preparation();
     out->has_pdc = true;
   }
   return true;
@@ -363,8 +367,9 @@ void TrackMixerRuntime::erase_owned_strip(size_t index) noexcept {
 
 bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::Strip& spec,
                                         StripAdmission admit, void* admit_context) {
-  last_refusal_ = MixerRefusal::kArgument;
-  if (track_id == 0 || !strip_eq_acceptable(spec.eq, sample_rate_)) return false;
+  last_fault_ = MixerEditFault{};
+  if (track_id == 0) return refuse(MixerEditCause::kTrackIdZero);
+  if (!strip_eq_acceptable(spec.eq, sample_rate_)) return refuse(MixerEditCause::kStripEqInvalid);
 
   // In-place fast path: when a strip already exists for this track and only its
   // smoothable scalars changed (identical insert topology), retarget the existing
@@ -382,14 +387,15 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
       } catch (const std::bad_alloc&) {
         return refuse_out_of_memory();
       } catch (...) {
-        return false;
+        return refuse(MixerEditCause::kStagingFailed);
       }
       apply_strip_scalars(*owned.strip, spec, owned.spec);
       if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
         if (!recompute_lane_pdc(*lanes)) {
-          // Refused: the previous scalars return, and the live PDC still fits them.
+          // Refused, with the cause recorded: the previous scalars return, and the live PDC still
+          // fits them.
           apply_strip_scalars(*owned.strip, owned.spec, spec);
-          return refuse_from_state();
+          return false;
         }
       }
       if (spec.soloed != owned.spec.soloed) apply_spec_solo(track_id, spec.soloed);
@@ -405,19 +411,23 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStripInsertsRefused);
   }
-  if (!strip) return false;
+  if (!strip) return refuse(MixerEditCause::kStripInsertsRefused);
   if (max_block_size_ > 0) {
     strip->prepare(sample_rate_, max_block_size_);
   }
-  if (admit != nullptr && !admit(admit_context, track_id, *strip)) return refuse_from_state();
+  if (admit != nullptr && !admit(admit_context, track_id, *strip)) {
+    return refuse(MixerEditCause::kInsertAutomationTableFull);
+  }
 
   OwnedStrip* existing = nullptr;
   for (OwnedStrip& owned : owned_strips_) {
     if (owned.track_id == track_id) existing = &owned;
   }
-  if (existing == nullptr && owned_strips_.size() >= kMaxTrackLanes) return refuse_from_state();
+  if (existing == nullptr && owned_strips_.size() >= kMaxTrackLanes) {
+    return refuse(MixerEditCause::kOwnedStripTableFull);
+  }
   mixing::ChannelStrip* raw = strip.get();
   mixing::api::Strip next_spec;
   try {
@@ -426,11 +436,12 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   } catch (const std::bad_alloc&) {
     return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kStagingFailed);
   }
-  // Staging refuses only for a full lane table or a latency the other lanes cannot align to.
+  // Staging records its own cause: a full lane table, a latency the other lanes cannot align to,
+  // or a failed allocation.
   StagedTrackStrip staged;
-  if (!stage_track_strip(track_id, *raw, &staged)) return refuse_from_state();
+  if (!stage_track_strip(track_id, *raw, &staged)) return false;
 
   // Control thread, not concurrent with process(): the previous strip is
   // destroyed here, after the lane points away from it.
@@ -707,16 +718,29 @@ void TrackMixerRuntime::settle_insert_automations(const std::vector<TrackLaneCon
 }
 
 bool TrackMixerRuntime::sends_valid(const std::vector<TrackLaneConfig::Send>& sends,
-                                    bool require_declared) const noexcept {
-  if (sends.size() > mixing::ChannelStrip::kMaxSends) return false;
+                                    bool require_declared, uint8_t owner_index,
+                                    MixerEditFault* fault) const noexcept {
+  const auto refuse_send = [&](MixerEditCause cause, size_t send_index) noexcept {
+    if (fault != nullptr)
+      *fault = MixerEditFault{cause, owner_index, static_cast<uint8_t>(send_index)};
+    return false;
+  };
+  if (sends.size() > mixing::ChannelStrip::kMaxSends) {
+    return refuse_send(MixerEditCause::kTooManySends, kNoFaultIndex);
+  }
   for (size_t send_index = 0; send_index < sends.size(); ++send_index) {
     const TrackLaneConfig::Send& send = sends[send_index];
-    if (send.bus_id == 0 || !gain_db_in_range(send.level_db) ||
-        (require_declared && bus_state_for(send.bus_id) == nullptr)) {
-      return false;
+    if (send.bus_id == 0) return refuse_send(MixerEditCause::kSendBusIdZero, send_index);
+    if (!gain_db_in_range(send.level_db)) {
+      return refuse_send(MixerEditCause::kSendLevelOutOfRange, send_index);
+    }
+    if (require_declared && bus_state_for(send.bus_id) == nullptr) {
+      return refuse_send(MixerEditCause::kSendBusUnknown, send_index);
     }
     for (size_t other = send_index + 1; other < sends.size(); ++other) {
-      if (send.bus_id == sends[other].bus_id) return false;
+      if (send.bus_id == sends[other].bus_id) {
+        return refuse_send(MixerEditCause::kSendBusDuplicate, other);
+      }
     }
   }
   return true;
@@ -755,18 +779,27 @@ void TrackMixerRuntime::reset_lane_controls(LaneState& lane) noexcept {
   lane.mute = false;
 }
 
-bool TrackMixerRuntime::lane_config_valid(
-    const std::vector<TrackLaneConfig>& lanes) const noexcept {
-  if (lanes.size() > kMaxTrackLanes) return false;
+bool TrackMixerRuntime::lane_config_valid(const std::vector<TrackLaneConfig>& lanes,
+                                          MixerEditFault* fault) const noexcept {
+  const auto refuse_lane = [&](MixerEditCause cause, size_t lane_index) noexcept {
+    if (fault != nullptr) *fault = MixerEditFault{cause, static_cast<uint8_t>(lane_index)};
+    return false;
+  };
+  if (lanes.size() > kMaxTrackLanes)
+    return refuse_lane(MixerEditCause::kTooManyLanes, kNoFaultIndex);
   for (size_t i = 0; i < lanes.size(); ++i) {
-    if (lanes[i].track_id == 0) return false;
-    if (lanes[i].source_layout != ChannelLayout::Stereo) return false;
-    if (lanes[i].output_bus_id != 0 && bus_state_for(lanes[i].output_bus_id) == nullptr) {
-      return false;
+    if (lanes[i].track_id == 0) return refuse_lane(MixerEditCause::kLaneTrackIdZero, i);
+    if (lanes[i].source_layout != ChannelLayout::Stereo) {
+      return refuse_lane(MixerEditCause::kLaneLayoutNotStereo, i);
     }
-    if (!sends_valid(lanes[i].sends, true)) return false;
+    if (lanes[i].output_bus_id != 0 && bus_state_for(lanes[i].output_bus_id) == nullptr) {
+      return refuse_lane(MixerEditCause::kLaneOutputBusUnknown, i);
+    }
+    if (!sends_valid(lanes[i].sends, true, static_cast<uint8_t>(i), fault)) return false;
     for (size_t j = i + 1; j < lanes.size(); ++j) {
-      if (lanes[i].track_id == lanes[j].track_id) return false;
+      if (lanes[i].track_id == lanes[j].track_id) {
+        return refuse_lane(MixerEditCause::kLaneTrackIdDuplicate, j);
+      }
     }
   }
   return true;

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <iterator>
+#include <new>
 
 #include "engine/realtime_engine_internal.h"
 #include "engine/track_mixer.h"
@@ -495,9 +496,13 @@ void TrackMixerRuntime::clear_insert_automations() noexcept {
 
 bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
                                           const sonare::mastering::eq::EqBand& band) noexcept {
-  if (track_id == 0) return false;
+  last_fault_ = MixerEditFault{};
+  if (track_id == 0) return refuse(MixerEditCause::kTrackIdZero);
   mixing::ChannelStrip* strip = bound_strip_for(track_id);
-  if (strip == nullptr) return false;
+  if (strip == nullptr) return refuse(MixerEditCause::kTrackHasNoStrip);
+  if (band_index >= mastering::eq::ParametricEq::kMaxBands) {
+    return refuse(MixerEditCause::kEqBandIndexInvalid);
+  }
   // An externally bound strip has no retained spec; only an owned one records the band.
   mixing::api::StripEq* spec_eq = nullptr;
   for (OwnedStrip& owned : owned_strips_) {
@@ -513,8 +518,10 @@ bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
   try {
     previous_band = strip->eq().band(band_index);
     if (had_spec_band) previous_spec_band = spec_eq->bands[band_index];
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kEqBandRefused);
   }
   // Puts the stage and the retained spec back exactly as they were before the call.
   const auto restore = [&]() noexcept {
@@ -532,9 +539,12 @@ bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
   try {
     strip->set_eq_band(band_index, band);
     if (spec_eq != nullptr) store_eq_band(*spec_eq, band_index, band);
+  } catch (const std::bad_alloc&) {
+    restore();
+    return refuse_out_of_memory();
   } catch (...) {
     restore();
-    return false;
+    return refuse(MixerEditCause::kEqBandRefused);
   }
   // An EQ band change can shift the strip's latency, so refresh the PDC
   // alignment. recompute_lane_pdc reads the lane strips' latency through
@@ -544,8 +554,10 @@ bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
   // which case the band is taken back so a false return means nothing changed.
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
     if (!recompute_lane_pdc(*lanes)) {
+      const MixerEditFault fault = last_fault_;
       restore();
       recompute_lane_pdc(*lanes);
+      last_fault_ = fault;
       return false;
     }
   }
@@ -666,20 +678,26 @@ bool TrackMixerRuntime::set_bus_dual_pan(uint32_t bus_id, float left_pan,
 
 bool TrackMixerRuntime::set_bus_eq_band(uint32_t bus_id, size_t band_index,
                                         const sonare::mastering::eq::EqBand& band) noexcept {
+  last_fault_ = MixerEditFault{};
   const int index = configured_bus_index(bus_id);
-  if (index < 0 || band_index >= mastering::eq::ParametricEq::kMaxBands) return false;
+  if (index < 0) return refuse(MixerEditCause::kBusUnknown);
+  if (band_index >= mastering::eq::ParametricEq::kMaxBands) {
+    return refuse(MixerEditCause::kEqBandIndexInvalid);
+  }
   BusState& state = bus_states_[static_cast<size_t>(index)];
   try {
     // Checked first so a refused band leaves both the stage and the spec untouched.
     if (!strip_eq_acceptable(mixing::api::StripEq{true, {band}}, state.eq.sample_rate())) {
-      return false;
+      return refuse(MixerEditCause::kEqBandRefused);
     }
     // The spec grows first: it is the only step that allocates, and the stage cannot refuse a
     // band the check above accepted.
     store_eq_band(state.spec.eq, band_index, band);
     state.eq.set_band(band_index, band);
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
-    return false;
+    return refuse(MixerEditCause::kEqBandRefused);
   }
   refresh_bus_eq_active(state);
   return true;
@@ -695,6 +713,7 @@ bool TrackMixerRuntime::set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept
 
 bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
                                            uint32_t source_track_id) noexcept {
+  last_fault_ = MixerEditFault{};
   if (can_set_lane_sidechain(track_id, insert_index, source_track_id) != SidechainRefusal::kNone) {
     return false;
   }
@@ -846,6 +865,7 @@ bool TrackMixerRuntime::store_keyed_binding(SidechainTargetKind target_kind, uin
 
 bool TrackMixerRuntime::set_bus_sidechain(uint32_t bus_id, unsigned int insert_index,
                                           SidechainSourceKind kind, uint32_t source_id) noexcept {
+  last_fault_ = MixerEditFault{};
   if (can_set_bus_sidechain(bus_id, insert_index, kind, source_id) != SidechainRefusal::kNone) {
     return false;
   }
@@ -854,6 +874,7 @@ bool TrackMixerRuntime::set_bus_sidechain(uint32_t bus_id, unsigned int insert_i
 
 bool TrackMixerRuntime::set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
                                              uint32_t source_id) noexcept {
+  last_fault_ = MixerEditFault{};
   if (can_set_master_sidechain(insert_index, kind, source_id) != SidechainRefusal::kNone) {
     return false;
   }

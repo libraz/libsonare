@@ -4528,6 +4528,32 @@ TEST_CASE("Re-enabled bus EQ does not replay filter history from before it was d
 #endif  // defined(SONARE_WITH_MIXING)
 
 #if defined(SONARE_WITH_MIXING)
+TEST_CASE("RealtimeEngine retains the cause and entry of a refused mixer edit",
+          "[engine][mixing]") {
+  using sonare::engine::MixerEditCause;
+  using sonare::engine::MixerEditStatus;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+
+  CHECK_FALSE(engine.set_track_lanes(
+      {sonare::engine::TrackLaneConfig{10}, sonare::engine::TrackLaneConfig{10}}));
+  CHECK(engine.last_mixer_edit_status() == MixerEditStatus::kInvalidArgument);
+  CHECK(engine.last_mixer_edit_fault().cause == MixerEditCause::kLaneTrackIdDuplicate);
+  CHECK(engine.last_mixer_edit_fault().index == 1);
+
+  REQUIRE(engine.set_track_buses({sonare::engine::TrackBusConfig{1, 0.0f}}));
+  CHECK(engine.last_mixer_edit_fault().cause == MixerEditCause::kNone);
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 1;
+  REQUIRE(engine.set_track_lanes({lane}));
+
+  CHECK_FALSE(engine.set_track_buses({}));
+  CHECK(engine.last_mixer_edit_status() == MixerEditStatus::kInvalidState);
+  CHECK(engine.last_mixer_edit_fault().cause == MixerEditCause::kLaneRoutingBlocksBusRemoval);
+}
+#endif  // defined(SONARE_WITH_MIXING)
+
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("RealtimeEngine reports an allocation failure in a mixer setter as out of memory",
           "[engine][mixing][allocation]") {
   using sonare::engine::MixerEditStatus;

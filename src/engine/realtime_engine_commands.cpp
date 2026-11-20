@@ -171,15 +171,24 @@ void RealtimeEngine::purge_insert_edits(const InsertPurge& purge) noexcept {
 bool RealtimeEngine::swap_graph(std::unique_ptr<graph::Graph> graph, const char* input_node_id,
                                 const char* output_node_id, int num_channels,
                                 std::vector<GraphRuntime::ParameterBinding> parameter_bindings) {
-  if (!graph || !input_node_id || !output_node_id || num_channels <= 0) {
+  last_graph_swap_fault_ = GraphSwapFault{};
+  if (!graph || !input_node_id || !output_node_id) {
+    last_graph_swap_fault_.cause = GraphSwapRefusal::kIncompleteArguments;
     return false;
   }
-  for (const GraphRuntime::ParameterBinding& binding : parameter_bindings) {
-    if (parameter_target_reserved(binding.param_id)) return false;
+  if (num_channels <= 0) {
+    last_graph_swap_fault_.cause = GraphSwapRefusal::kNoChannels;
+    return false;
   }
-  const bool swapped =
-      graph_runtime_.swap(std::shared_ptr<graph::Graph>(std::move(graph)), input_node_id,
-                          output_node_id, num_channels, std::move(parameter_bindings));
+  for (size_t i = 0; i < parameter_bindings.size(); ++i) {
+    if (parameter_target_reserved(parameter_bindings[i].param_id)) {
+      last_graph_swap_fault_ = GraphSwapFault{GraphSwapRefusal::kReservedParameterId, i};
+      return false;
+    }
+  }
+  const bool swapped = graph_runtime_.swap(std::shared_ptr<graph::Graph>(std::move(graph)),
+                                           input_node_id, output_node_id, num_channels,
+                                           std::move(parameter_bindings), &last_graph_swap_fault_);
   if (swapped) {
     update_reported_graph_latency();
   }
