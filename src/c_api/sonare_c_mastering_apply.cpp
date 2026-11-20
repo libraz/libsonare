@@ -19,6 +19,7 @@
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 #include "util/json.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -121,7 +122,11 @@ SonareError sonare_mastering_apply_processor(const char* processor, const float*
   if (out != nullptr) out->sample_rate = sample_rate;
 
   SONARE_C_REQUIRE_NONNULL(processor);
-  if (processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError empty_err =
+          run_validation([&] { util::check::non_empty(processor, "processor"); });
+      empty_err != SONARE_OK) {
+    return empty_err;
+  }
   SonareError err =
       validate_audio_params("mastering_apply_processor", "samples", samples, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -146,7 +151,11 @@ SonareError sonare_mastering_apply_processor_stereo(
   if (out != nullptr) out->sample_rate = sample_rate;
 
   SONARE_C_REQUIRE_NONNULL(processor);
-  if (processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError empty_err =
+          run_validation([&] { util::check::non_empty(processor, "processor"); });
+      empty_err != SONARE_OK) {
+    return empty_err;
+  }
   SonareError err = validate_stereo_audio_params("mastering_apply_processor_stereo", "left",
                                                  "right", left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -505,7 +514,11 @@ SonareError sonare_mastering_apply_pair_processor_ex(
   if (out != nullptr) out->sample_rate = sample_rate;
 
   SONARE_C_REQUIRE_NONNULL(processor);
-  if (processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError empty_err =
+          run_validation([&] { util::check::non_empty(processor, "processor"); });
+      empty_err != SONARE_OK) {
+    return empty_err;
+  }
   SonareError err = validate_audio_params("mastering_apply_pair_processor_ex", "source", source,
                                           source_length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -544,7 +557,11 @@ SonareError sonare_mastering_apply_pair_processor_stereo_ex(
   SONARE_C_ZERO_OUTS(out);
   if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(processor);
-  if (processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError empty_err =
+          run_validation([&] { util::check::non_empty(processor, "processor"); });
+      empty_err != SONARE_OK) {
+    return empty_err;
+  }
 
   SonareError err = validate_stereo_audio_params("mastering_apply_pair_processor_stereo_ex",
                                                  "source_left", "source_right", source_left,

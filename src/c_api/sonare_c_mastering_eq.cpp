@@ -9,6 +9,7 @@
 #include "mastering/match/reference_spectrum.h"
 #include "sonare_c_internal.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -62,8 +63,12 @@ void sonare_eq_destroy(SonareEq* eq) { delete eq; }
 SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
-  if (index < 0 || index >= static_cast<int>(SONARE_EQ_MAX_BANDS)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_in_range(index, 0, static_cast<long long>(SONARE_EQ_MAX_BANDS) - 1,
+                                      "index");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(band_json);
   SONARE_C_TRY
@@ -108,9 +113,11 @@ SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_
   err = validate_audio_params("eq_match_ex", "reference", reference, reference_length,
                               reference_sample_rate);
   if (err != SONARE_OK) return err;
-  if (max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  err = run_validation([&] {
+    util::check::integer_in_range(max_bands, 1, static_cast<long long>(SONARE_EQ_MAX_BANDS),
+                                  "max_bands");
+  });
+  if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
   sonare::mastering::match::MatchEqConfig config;

@@ -69,7 +69,7 @@ SonareError fill_cqt_result(const CqtResult& result, SonareCqtResult* out);
 // to the C struct. This keeps a later allocation failure from leaking an array
 // already allocated for an earlier field.
 inline SonareError fill_analysis_result(const AnalysisResult& result, SonareAnalysisResult* out) {
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   SonareAnalysisResult staged{};
   staged.bpm = result.bpm;
   staged.bpm_confidence = result.bpm_confidence;

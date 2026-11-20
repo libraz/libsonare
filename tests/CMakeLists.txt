@@ -218,6 +218,10 @@ add_executable(sonare_tests
   api/sonare_c_features_extra_test.cpp
   api/sonare_c_effects_extra_test.cpp
   api/c_refusal_subjects_test.cpp
+  api/c_bare_refusal_compat_test.cpp
+  api/c_bare_refusal_mastering_repair_test.cpp
+  api/c_bare_refusal_mastering_streaming_test.cpp
+  api/c_bare_refusal_retune_test.cpp
   api/c_entry_refusal_names_test.cpp
   api/c_header_order_editing_test.cpp
   api/c_header_order_effects_test.cpp

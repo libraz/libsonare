@@ -418,9 +418,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     // the buffer. The buffers here are sized to exactly the prepared block, so
     // an unbounded scan reads out of bounds (ASan-visible). The observable
     // signal that the rejection happened at the boundary rather than inside the
-    // core is the detailed-error channel: a pre-scan validation early return
-    // records no message, while the core's own rejection throws and leaves its
-    // what() text behind.
+    // core is the detailed-error channel: the boundary records its own
+    // num_samples refusal, which the core's what() text would not match.
     constexpr int kSampleRate = 48000;
     constexpr int kBlockSize = 128;
 
@@ -435,7 +434,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
             SONARE_OK);
     REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, mono.data(), mono.size() + 1) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(std::string(sonare_last_error_message()).empty());
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "num_samples must be an integer in [0, 128]");
     sonare_streaming_mastering_chain_destroy(chain);
 
     // Never prepared: rejected as a state error, again without reading input.
@@ -445,7 +445,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(unprepared != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_process_mono(unprepared, mono.data(), mono.size()) ==
             SONARE_ERROR_INVALID_STATE);
-    REQUIRE(std::string(sonare_last_error_message()).empty());
+    REQUIRE(std::string(sonare_last_error_message()) == "the chain has not been prepared");
     sonare_streaming_mastering_chain_destroy(unprepared);
 
     SonareStreamingMasteringChain* stereo_chain = nullptr;

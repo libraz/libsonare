@@ -1,6 +1,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -21,6 +22,7 @@
 #include "sonare_c_internal.h"
 #include "util/frame.h"
 #include "util/padding.h"
+#include "util/parameter_checks.h"
 #include "util/peak.h"
 #include "util/vector_normalize.h"
 
@@ -47,40 +49,34 @@ namespace {
 // bindings, which call the core directly and do not go through this layer, share
 // one policy instead of a hand-mirrored copy. They arrive here as a
 // SonareException and map to SONARE_ERROR_INVALID_PARAMETER via SONARE_C_CATCH.
-SonareError validate_buffer(const char* fn, const char* name, const float* values, size_t length) {
-  const auto refuse = [&](const std::string& predicate) {
-    // set_last_error copies, so a temporary's buffer is safe to hand it.
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   (std::string(fn) + ": " + name + " " + predicate).c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
-  };
-  if (length > 0 && values == nullptr) return refuse("must not be NULL with a non-zero length");
+void check_buffer(const char* name, const char* length_name, const float* values, size_t length,
+                  bool scan_finite) {
+  util::check::non_null_when_count(values, length, name, length_name);
+  if (!scan_finite) return;
   for (size_t i = 0; i < length; ++i) {
     if (!std::isfinite(values[i])) {
-      return refuse("contains a non-finite sample at index " + std::to_string(i));
+      util::check::refuse(name, "contains a non-finite sample at index " + std::to_string(i));
     }
   }
-  return SONARE_OK;
 }
 
-// Refuses a NULL buffer with a non-zero length, for an entry whose core function
-// refuses a non-finite value itself.
-bool buffer_present(const float* values, size_t length) {
-  if (length > 0 && values == nullptr) {
-    set_last_error_static(SONARE_ERROR_INVALID_PARAMETER,
-                          "the input pointer must not be NULL with a non-zero length");
-    return false;
-  }
-  return true;
+// Refuses a NULL buffer with a non-zero length, and (for an entry whose core function does not
+// refuse a non-finite value itself) a non-finite sample.
+SonareError validate_buffer(const char* name, const float* values, size_t length,
+                            bool scan_finite = true) {
+  return run_validation([&] { check_buffer(name, "length", values, length, scan_finite); });
 }
 
 // The array -> array transform for a core function that refuses its own non-finite input.
 template <typename T, typename Compute>
-SonareError transform_core_buffer(const float* values, size_t length, T** out, size_t* out_length,
-                                  Compute&& compute) {
+SonareError transform_core_buffer(const char* name, const float* values, size_t length, T** out,
+                                  size_t* out_length, Compute&& compute) {
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (!buffer_present(values, length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_buffer(name, values, length, false); err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
   return copy_vector(compute(), out, out_length);
   SONARE_C_CATCH
@@ -89,33 +85,44 @@ SonareError transform_core_buffer(const float* values, size_t length, T** out, s
 // Shared body of the array -> array transforms: zero the outputs, validate the
 // input buffer, then marshal the vector produced by @p compute.
 template <typename T, typename Compute>
-SonareError transform_buffer(const char* fn, const char* name, const float* values, size_t length,
-                             T** out, size_t* out_length, Compute&& compute) {
+SonareError transform_buffer(const char* name, const float* values, size_t length, T** out,
+                             size_t* out_length, Compute&& compute) {
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (validate_buffer(fn, name, values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_buffer(name, values, length); err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
   return copy_vector(compute(), out, out_length);
   SONARE_C_CATCH
 }
 
-// Shared by both interleaved LUFS entry points; @p fn is the entry's name without `sonare_`.
+// Refuses a row-major matrix whose element count would pass the buffer size limit.
+void check_matrix_size(int rows, int columns, const char* rows_name, const char* columns_name) {
+  util::check::integer_at_least(rows, 0, rows_name);
+  util::check::integer_at_least(columns, 0, columns_name);
+  if (columns != 0 && static_cast<size_t>(rows) > kMaxBufferSize / static_cast<size_t>(columns)) {
+    util::check::refuse_relation({rows_name, columns_name},
+                                 "{0} times {1} must be at most " + std::to_string(kMaxBufferSize));
+  }
+}
+
+// Shared by both interleaved LUFS entry points.
 // The interleaved buffer goes through the same audio input policy as the mono sonare_lufs.
-SonareError validate_interleaved_lufs_input(const char* fn, const float* samples, size_t frames,
-                                            int channels, int sample_rate) {
-  if (channels <= 0) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   (std::string(fn) + ": channels must be positive").c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
+SonareError validate_interleaved_lufs_input(const float* samples, size_t frames, int num_channels,
+                                            int sample_rate) {
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_at_least(num_channels, 1, "num_channels");
+        if (frames != 0 && static_cast<size_t>(num_channels) > kMaxBufferSize / frames) {
+          util::check::refuse_relation(
+              {"frames", "num_channels"},
+              "{0} times {1} must be at most " + std::to_string(kMaxBufferSize));
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  if (frames != 0 && static_cast<size_t>(channels) > kMaxBufferSize / frames) {
-    set_last_error(
-        SONARE_ERROR_INVALID_PARAMETER,
-        (std::string(fn) + ": frames times channels exceeds the buffer size limit").c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return validate_audio_params(fn, "samples", samples, frames * static_cast<size_t>(channels),
-                               sample_rate);
+  return validate_audio_params("lufs", "samples", samples,
+                               frames * static_cast<size_t>(num_channels), sample_rate);
 }
 
 // SonareNormType carries the NormType ordinal itself.
@@ -136,35 +143,35 @@ int sonare_samples_to_frames(int samples, int hop_length, int n_fft) {
 SonareError sonare_power_to_db(const float* values, size_t length, float ref, float amin,
                                float top_db, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_buffer("power_to_db", "values", values, length, out, out_length,
+  return transform_buffer("values", values, length, out, out_length,
                           [&] { return power_to_db(values, length, ref, amin, top_db); });
 }
 
 SonareError sonare_amplitude_to_db(const float* values, size_t length, float ref, float amin,
                                    float top_db, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_buffer("amplitude_to_db", "values", values, length, out, out_length,
+  return transform_buffer("values", values, length, out, out_length,
                           [&] { return amplitude_to_db(values, length, ref, amin, top_db); });
 }
 
 SonareError sonare_db_to_power(const float* values, size_t length, float ref, float** out,
                                size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_buffer("db_to_power", "values", values, length, out, out_length,
+  return transform_buffer("values", values, length, out, out_length,
                           [&] { return db_to_power(values, length, ref); });
 }
 
 SonareError sonare_db_to_amplitude(const float* values, size_t length, float ref, float** out,
                                    size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_buffer("db_to_amplitude", "values", values, length, out, out_length,
+  return transform_buffer("values", values, length, out, out_length,
                           [&] { return db_to_amplitude(values, length, ref); });
 }
 
 SonareError sonare_preemphasis(const float* samples, size_t length, float coef, float zi,
                                int use_zi, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_core_buffer(samples, length, out, out_length, [&] {
+  return transform_core_buffer("samples", samples, length, out, out_length, [&] {
     const std::optional<float> state = use_zi ? std::optional<float>(zi) : std::nullopt;
     return preemphasis(samples, length, coef, state);
   });
@@ -173,7 +180,7 @@ SonareError sonare_preemphasis(const float* samples, size_t length, float coef, 
 SonareError sonare_deemphasis(const float* samples, size_t length, float coef, float zi, int use_zi,
                               float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_core_buffer(samples, length, out, out_length, [&] {
+  return transform_core_buffer("samples", samples, length, out, out_length, [&] {
     const std::optional<float> state = use_zi ? std::optional<float>(zi) : std::nullopt;
     return deemphasis(samples, length, coef, state);
   });
@@ -200,7 +207,7 @@ SonareError sonare_split_silence(const float* samples, size_t length, float top_
                                  int frame_length, int hop_length, int** out_intervals,
                                  size_t* out_interval_count) {
   SONARE_C_API_ENTRY;
-  return transform_core_buffer(samples, length, out_intervals, out_interval_count, [&] {
+  return transform_core_buffer("samples", samples, length, out_intervals, out_interval_count, [&] {
     auto ranges = split(samples, length, top_db, frame_length, hop_length);
     std::vector<int> flat;
     flat.reserve(ranges.size() * 2);
@@ -229,29 +236,22 @@ SonareError sonare_split_silence_common_ex(const float* const* signals, size_t s
                                            SonareSilenceCommonReport* out_report) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_intervals, out_interval_count, out_report);
+  SONARE_C_REQUIRE_NONNULL(signals);
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_at_least(signal_count, 1, "signal_count");
+        util::check::non_null(lengths, "lengths");
+        for (size_t index = 0; index < signal_count; ++index) {
+          const std::string name = "signals[" + std::to_string(index) + "]";
+          const std::string length_name = "lengths[" + std::to_string(index) + "]";
+          check_buffer(name.c_str(), length_name.c_str(), signals[index], lengths[index], true);
+        }
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out_intervals);
+  SONARE_C_REQUIRE_NONNULL(out_interval_count);
   SONARE_C_TRY
-  // Named because the code cannot distinguish them and the message is the only
-  // diagnosis: the core's own refusals arrive with one through SONARE_C_CATCH, so
-  // a silent return here is the one refusal a caller cannot act on -- which is the
-  // same gap the report above exists to close, one layer up.
-  if (signal_count == 0) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "split_silence_common: at least one signal is required");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (signals == nullptr || lengths == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "split_silence_common: signals and lengths must not be null");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  for (size_t index = 0; index < signal_count; ++index) {
-    const std::string name = "signals[" + std::to_string(index) + "]";
-    if (validate_buffer("split_common_with_report", name.c_str(), signals[index], lengths[index]) !=
-        SONARE_OK) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-  }
-  if (!out_intervals || !out_interval_count) return SONARE_ERROR_INVALID_PARAMETER;
   // The union rule and its report live in the core because the WebAssembly
   // binding needs them too and calls the core directly, never this layer.
   const CommonSplitReport report =
@@ -288,14 +288,14 @@ SonareError sonare_frame_signal(const float* samples, size_t length, int frame_l
 SonareError sonare_pad_center(const float* values, size_t length, size_t target_size,
                               float pad_value, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_buffer("pad_center", "values", values, length, out, out_length,
+  return transform_buffer("values", values, length, out, out_length,
                           [&] { return pad_center(values, length, target_size, pad_value); });
 }
 
 SonareError sonare_fix_length(const float* values, size_t length, size_t target_size,
                               float pad_value, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_buffer("fix_length", "values", values, length, out, out_length,
+  return transform_buffer("values", values, length, out, out_length,
                           [&] { return fix_length(values, length, target_size, pad_value); });
 }
 
@@ -303,8 +303,9 @@ SonareError sonare_fix_frames(const int* frames, size_t length, int x_min, int x
                               int** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (length > 0 && frames == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(frames, length);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
   std::vector<int> input(frames, frames + length);
   return copy_vector(fix_frames(input, x_min, x_max, pad != 0), out, out_length);
@@ -315,7 +316,7 @@ SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, in
                              int pre_avg, int post_avg, float delta, int wait, int** out,
                              size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_buffer("peak_pick", "values", values, length, out, out_length, [&] {
+  return transform_buffer("values", values, length, out, out_length, [&] {
     return peak_pick(values, length, pre_max, post_max, pre_avg, post_avg, delta, wait);
   });
 }
@@ -324,14 +325,20 @@ SonareError sonare_vector_normalize(const float* values, size_t length, SonareNo
                                     float threshold, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (validate_buffer("vector_normalize", "values", values, length) != SONARE_OK) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check_buffer("values", "length", values, length, true);
+        util::check::one_of(
+            static_cast<int>(norm),
+            std::array<int, 4>{static_cast<int>(NormType::Inf), static_cast<int>(NormType::L1),
+                               static_cast<int>(NormType::L2), static_cast<int>(NormType::Power)},
+            "norm");
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  NormType norm_kind = NormType::Inf;
-  if (!ordinal_to_enum(static_cast<int>(norm), 0, static_cast<int>(NormType::Power), &norm_kind)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  const NormType norm_kind = admitted_ordinal_to_enum<NormType>(static_cast<int>(norm));
   SONARE_C_TRY
   return copy_vector(normalize(values, length, norm_kind, threshold), out, out_length);
   SONARE_C_CATCH
@@ -342,18 +349,19 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
                         float eps, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (n_bins < 0 || n_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
-  // Guard against size_t overflow (32-bit on WASM) and bound the product against
-  // kMaxBufferSize before using it as the claimed buffer length.
-  if (n_frames != 0 &&
-      static_cast<size_t>(n_bins) > kMaxBufferSize / static_cast<size_t>(n_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check_matrix_size(n_bins, n_frames, "n_bins", "n_frames");
+        if (n_bins != 0 && n_frames != 0 && values == nullptr) {
+          util::check::refuse("values", "must not be NULL when n_bins and n_frames are not 0");
+        }
+        check_buffer("values", "length", values,
+                     static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), true);
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  if (validate_buffer("pcen", "values", values,
-                      static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames)) != SONARE_OK) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
   PcenConfig config;
   config.sr = sample_rate;
@@ -371,18 +379,20 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
                            size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (n_chroma < 0 || n_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
-  // Guard against size_t overflow (32-bit on WASM) and bound the product against
-  // kMaxBufferSize before using it as the claimed buffer length.
-  if (n_frames != 0 &&
-      static_cast<size_t>(n_chroma) > kMaxBufferSize / static_cast<size_t>(n_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check_matrix_size(n_chroma, n_frames, "n_chroma", "n_frames");
+        if (n_chroma != 0 && n_frames != 0 && chromagram == nullptr) {
+          util::check::refuse("chromagram",
+                              "must not be NULL when n_chroma and n_frames are not 0");
+        }
+        check_buffer("chromagram", "length", chromagram,
+                     static_cast<size_t>(n_chroma) * static_cast<size_t>(n_frames), true);
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  if (validate_buffer("tonnetz", "chromagram", chromagram,
-                      static_cast<size_t>(n_chroma) * static_cast<size_t>(n_frames)) != SONARE_OK) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
   return copy_vector(tonnetz(chromagram, n_chroma, n_frames), out, out_length);
   SONARE_C_CATCH
@@ -394,10 +404,14 @@ SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t lengt
                                        int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
-  if (validate_buffer("tempogram_with_mode", "onset_envelope", onset_envelope, length) != SONARE_OK)
-    return SONARE_ERROR_INVALID_PARAMETER;
-  if (mode != SONARE_TEMPOGRAM_AUTOCORRELATION && mode != SONARE_TEMPOGRAM_COSINE) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check_buffer("onset_envelope", "length", onset_envelope, length, true);
+        util::check::one_of(
+            mode, std::array<int, 2>{SONARE_TEMPOGRAM_AUTOCORRELATION, SONARE_TEMPOGRAM_COSINE},
+            "mode");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
@@ -433,8 +447,10 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
                                     float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
-  if (validate_buffer("cyclic_tempogram", "onset_envelope", onset_envelope, length) != SONARE_OK)
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_buffer("onset_envelope", onset_envelope, length);
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
@@ -456,9 +472,12 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
                        size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (validate_buffer("plp", "onset_envelope", onset_envelope, length) != SONARE_OK)
-    return SONARE_ERROR_INVALID_PARAMETER;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_buffer("onset_envelope", onset_envelope, length);
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
   PlpConfig config;
   config.sr = sample_rate;
@@ -476,7 +495,10 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
                                      float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
-  if (!buffer_present(onset_envelope, length)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_buffer("onset_envelope", onset_envelope, length, false);
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
@@ -498,9 +520,13 @@ SonareError sonare_tempogram_ratio(const float* tempogram, size_t length, int wi
                                    size_t n_factors, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
-  if (!buffer_present(tempogram, length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_factors > 0 && factors == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_buffer("tempogram", tempogram, length, false);
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(factors, n_factors);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   SONARE_C_TRY
   std::vector<float> input(tempogram, tempogram + length);
   std::vector<float> result;
@@ -560,11 +586,13 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int num
                                     int sample_rate, SonareLufsResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
-  SONARE_C_TRY
-  const SonareError err = validate_interleaved_lufs_input("lufs_interleaved", samples, frames,
-                                                          num_channels, sample_rate);
-  if (err != SONARE_OK) return err;
+  if (const SonareError err =
+          validate_interleaved_lufs_input(samples, frames, num_channels, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
   metering::LufsResult result =
       metering::lufs_interleaved(samples, frames, num_channels, sample_rate);
   out->integrated_lufs = result.integrated_lufs;
@@ -583,25 +611,27 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
                                            size_t* out_short_term_length) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_momentary, out_momentary_length, out_short_term, out_short_term_length);
-  SONARE_C_TRY
-  const SonareError err = validate_interleaved_lufs_input("lufs_series_interleaved", samples,
-                                                          frames, num_channels, sample_rate);
-  if (err != SONARE_OK) return err;
+  if (const SonareError err =
+          validate_interleaved_lufs_input(samples, frames, num_channels, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
   // A pointer without its length cannot be consumed, so a half-given pair is a
   // caller error rather than a request to skip the series.
-  if ((out_momentary == nullptr) != (out_momentary_length == nullptr)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "lufs_series_interleaved: out_momentary and out_momentary_length must be given "
-                   "together");
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        if ((out_momentary == nullptr) != (out_momentary_length == nullptr)) {
+          util::check::refuse_relation({"out_momentary", "out_momentary_length"},
+                                       "{0} and {1} must be given together");
+        }
+        if ((out_short_term == nullptr) != (out_short_term_length == nullptr)) {
+          util::check::refuse_relation({"out_short_term", "out_short_term_length"},
+                                       "{0} and {1} must be given together");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  if ((out_short_term == nullptr) != (out_short_term_length == nullptr)) {
-    set_last_error(
-        SONARE_ERROR_INVALID_PARAMETER,
-        "lufs_series_interleaved: out_short_term and out_short_term_length must be given "
-        "together");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_TRY
   std::vector<float> momentary;
   std::vector<float> short_term;
   metering::lufs_interleaved(samples, frames, num_channels, sample_rate, {},

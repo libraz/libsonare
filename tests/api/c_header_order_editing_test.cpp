@@ -46,40 +46,38 @@ TEST_CASE("compat entries refuse the input before the outputs", "[c_api][header_
   size_t out_length = 77;
   REQUIRE(sonare_power_to_db(nullptr, 4, 1.0f, 1e-10f, 80.0f, &out, &out_length) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "power_to_db: values must not be NULL with a non-zero length");
+  CHECK(last_message() == "values must not be NULL when length is not 0");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
 
   REQUIRE(sonare_power_to_db(nullptr, 4, 1.0f, 1e-10f, 80.0f, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "power_to_db: values must not be NULL with a non-zero length");
+  CHECK(last_message() == "values must not be NULL when length is not 0");
 
   out = garbage_pointer<float>();
   out_length = 77;
   int n_frames = 55;
   REQUIRE(sonare_cyclic_tempogram(nullptr, 4, kRate, 512, 384, 30.0f, 12, &out, &out_length,
                                   &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() ==
-        "cyclic_tempogram: onset_envelope must not be NULL with a non-zero length");
+  CHECK(last_message() == "onset_envelope must not be NULL when length is not 0");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
   CHECK(n_frames == 0);
 
   REQUIRE(sonare_cyclic_tempogram(nullptr, 4, kRate, 512, 384, 30.0f, 12, nullptr, nullptr,
                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() ==
-        "cyclic_tempogram: onset_envelope must not be NULL with a non-zero length");
+  CHECK(last_message() == "onset_envelope must not be NULL when length is not 0");
 
   SonareLufsResult lufs;
   lufs.integrated_lufs = 5.0f;
   REQUIRE(sonare_lufs_interleaved(samples.data(), kLength, 0, kRate, &lufs) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "lufs_interleaved: channels must be positive");
+  CHECK(last_message() == "num_channels must be an integer in [1, 2147483647]");
   CHECK(lufs.integrated_lufs == 0.0f);
 
   REQUIRE(sonare_lufs_interleaved(samples.data(), kLength, 0, kRate, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "lufs_interleaved: channels must be positive");
+  CHECK(last_message() == "num_channels must be an integer in [1, 2147483647]");
 }
 
 TEST_CASE("metering entries refuse the channels before the output", "[c_api][header_order]") {

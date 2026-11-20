@@ -11,6 +11,7 @@
 #include "sonare_c_internal.h"
 #if defined(SONARE_WITH_VOICE_CHANGER)
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 using sonare::editing::voice_changer::StreamingRetune;
 using sonare::editing::voice_changer::StreamingRetuneConfig;
@@ -38,6 +39,7 @@ namespace {
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
 using sonare_c_detail::set_last_error;
+namespace check = sonare::util::check;
 
 // Refuses a config outside the retune domain with the entry's own argument names; 0 grain is the
 // C spelling of the automatic grain.
@@ -47,6 +49,18 @@ bool config_accepted(const char* fn, const StreamingRetuneConfig& config) {
   if (problem.empty()) return true;
   set_last_error(SONARE_ERROR_INVALID_PARAMETER, problem.c_str());
   return false;
+}
+
+// A block longer than the prepared maximum, or one before any prepare().
+SonareError refuse_block_length(size_t num_samples, int max_block_size) {
+  if (max_block_size <= 0) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "the retune stage has not been prepared");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  if (num_samples <= static_cast<size_t>(max_block_size)) return SONARE_OK;
+  return sonare_c_detail::run_validation([&] {
+    check::refuse("num_samples", sonare::util::refusal::integer_range_predicate(0, max_block_size));
+  });
 }
 
 #endif
@@ -94,7 +108,7 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, doubl
                                             int max_block_size) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(retune);
   SONARE_C_TRY
   retune->retune->prepare(sample_rate, max_block_size);
   // Size the block scratch here, where allocation is allowed, so process_mono
@@ -115,7 +129,7 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, doubl
 SonareError sonare_streaming_retune_reset(SonareStreamingRetune* retune) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(retune);
   SONARE_C_TRY
   retune->retune->reset();
   return SONARE_OK;
@@ -129,11 +143,7 @@ SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, fl
                                                float mix, int grain_size_samples) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "streaming_retune_set_config: retune must not be NULL");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(retune);
   StreamingRetuneConfig config;
   config.semitones = pitch_semitones;
   config.mix = mix;
@@ -157,7 +167,7 @@ SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune,
   SONARE_C_ZERO_OUTS(out_pitch_semitones, out_mix, out_grain_size_samples);
   SONARE_C_TRY
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(retune);
   const StreamingRetuneConfig& config = retune->retune->config();
   if (out_pitch_semitones) *out_pitch_semitones = config.semitones;
   if (out_mix) *out_mix = config.mix;
@@ -174,17 +184,16 @@ SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, 
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune || (!samples && num_samples > 0)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(retune);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(samples, num_samples);
   if (num_samples == 0) return SONARE_OK;
-  if (const SonareError bounds =
-          sonare_c_detail::check_streaming_block_bounds(retune->max_block_size, num_samples);
+  if (const SonareError bounds = refuse_block_length(num_samples, retune->max_block_size);
       bounds != SONARE_OK) {
     return bounds;
   }
   if (!sonare::numeric::all_finite(samples, num_samples)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return sonare_c_detail::run_validation(
+        [] { check::refuse("samples", "must contain only finite samples"); });
   }
   // The bounds check above already refused anything longer than the prepared
   // maximum, which is exactly what the scratch was sized for, so this copy
@@ -204,7 +213,8 @@ SonareError sonare_streaming_retune_grain_size_samples(SonareStreamingRetune* re
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_grain_size_samples);
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune || !out_grain_size_samples) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(retune);
+  SONARE_C_REQUIRE_NONNULL(out_grain_size_samples);
   *out_grain_size_samples = retune->retune->grain_size();
   return SONARE_OK;
 #else
@@ -218,7 +228,8 @@ SonareError sonare_streaming_retune_latency_samples(SonareStreamingRetune* retun
   SONARE_C_ZERO_OUTS(out_latency_samples);
   SONARE_C_TRY
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune || !out_latency_samples) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(retune);
+  SONARE_C_REQUIRE_NONNULL(out_latency_samples);
   *out_latency_samples = retune->retune->latency_samples();
   return SONARE_OK;
 #else

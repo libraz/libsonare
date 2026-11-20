@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -24,6 +25,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -413,6 +415,28 @@ SonareError run_detection(const char* fn, const char* name, const float* samples
   SONARE_C_CATCH
 }
 
+/// Refuses a zero channel count, named as the header spells it.
+SonareError require_channel_count(size_t channel_count) {
+  return run_validation(
+      [&] { util::check::integer_at_least<size_t>(channel_count, 1, "num_channels"); });
+}
+
+/// Refuses a channel count the containers cannot represent.
+SonareError refuse_channel_count_too_large(size_t max_count) {
+  return run_validation(
+      [&] { util::check::refuse("num_channels", "must be at most " + std::to_string(max_count)); });
+}
+
+/// Refuses the first NULL plane among the first @p channel_count entries of @p out_channels.
+SonareError require_output_planes(float* const* out_channels, size_t channel_count) {
+  return run_validation([&] {
+    for (size_t c = 0; c < channel_count; ++c) {
+      const std::string subject = "out_channels[" + std::to_string(c) + "]";
+      util::check::non_null(out_channels[c], subject.c_str());
+    }
+  });
+}
+
 /// Shared body of the channel-linked entry points, which differ only in their
 /// report type and the core call they wrap.
 template <typename CReport, typename Check, typename Fn>
@@ -424,14 +448,14 @@ SonareError run_linked(const char* fn, const char* name, const float* const* cha
   // are the caller's and stay untouched until the core has produced samples.
   SONARE_C_ZERO_OUTS(out_report);
   SONARE_C_REQUIRE_NONNULL(channels);
-  if (channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = require_channel_count(channel_count); err != SONARE_OK) return err;
 
   SONARE_C_TRY
   std::vector<Audio> inputs;
   // The API accepts arbitrary positive counts; reject only counts the containers
   // cannot represent before indexing caller pointers, preserving the C error
   // contract instead of exposing vector::length_error.
-  if (channel_count > inputs.max_size()) return SONARE_ERROR_INVALID_PARAMETER;
+  if (channel_count > inputs.max_size()) return refuse_channel_count_too_large(inputs.max_size());
   for (size_t c = 0; c < channel_count; ++c) {
     const std::string channel_name = std::string(name) + "[" + std::to_string(c) + "]";
     const SonareError err =
@@ -441,8 +465,9 @@ SonareError run_linked(const char* fn, const char* name, const float* const* cha
   const SonareError config_err = check_config(config_ok);
   if (config_err != SONARE_OK) return config_err;
   SONARE_C_REQUIRE_NONNULL(out_channels);
-  for (size_t c = 0; c < channel_count; ++c) {
-    if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = require_output_planes(out_channels, channel_count);
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(out_report);
   inputs.reserve(channel_count);
@@ -450,7 +475,8 @@ SonareError run_linked(const char* fn, const char* name, const float* const* cha
     inputs.push_back(Audio::from_buffer(channels[c], length, sample_rate));
   }
   std::vector<const Audio*> pointers;
-  if (channel_count > pointers.max_size()) return SONARE_ERROR_INVALID_PARAMETER;
+  if (channel_count > pointers.max_size())
+    return refuse_channel_count_too_large(pointers.max_size());
   pointers.reserve(channel_count);
   for (const Audio& channel : inputs) pointers.push_back(&channel);
 
@@ -761,7 +787,13 @@ SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, 
   }
   // The same power-of-two rule the denoise config validator applies, so a grid
   // this hands back is always one the detector can report on.
-  if (!is_power_of_two(n_fft) || sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::power_of_two_in_range(n_fft, 1, std::numeric_limits<int>::max(), "n_fft");
+        util::check::integer_at_least(sample_rate, 1, "sample_rate");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out_bins);
 
   SONARE_C_TRY
@@ -1083,7 +1115,7 @@ SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(json_out);
   SONARE_C_REQUIRE_NONNULL(channels);
-  if (num_channels == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = require_channel_count(num_channels); err != SONARE_OK) return err;
   for (size_t c = 0; c < num_channels; ++c) {
     const SonareError err = validate_audio_params("mastering_repair_analyze", "channels",
                                                   channels[c], length, sample_rate);
@@ -1106,15 +1138,15 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t n
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(reports_json_out);
   SONARE_C_REQUIRE_NONNULL(channels);
-  if (num_channels == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = require_channel_count(num_channels); err != SONARE_OK) return err;
   for (size_t c = 0; c < num_channels; ++c) {
     const SonareError err = validate_audio_params("mastering_repair_apply", "channels", channels[c],
                                                   length, sample_rate);
     if (err != SONARE_OK) return err;
   }
   SONARE_C_REQUIRE_NONNULL(out_channels);
-  for (size_t c = 0; c < num_channels; ++c) {
-    if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = require_output_planes(out_channels, num_channels); err != SONARE_OK) {
+    return err;
   }
   SONARE_C_REQUIRE_NONNULL(reports_json_out);
 
