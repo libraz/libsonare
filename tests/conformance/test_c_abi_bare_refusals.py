@@ -136,6 +136,54 @@ class InterimTest(unittest.TestCase):
         self.assertEqual(interim('SonareError sonare_a() { return refuse("x must be finite"); }\n'), [])
 
 
+_HEADER = """
+/// @brief Reads the channel.
+/// @details Like every sonare_last_* accessor, it records no error.
+SonareError sonare_last_thing(int* out);
+/// @brief States nothing.
+SonareError sonare_last_other(int* out);
+"""
+
+_ACCESSOR_SOURCE = """
+SonareError render_thing(int* out) {
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+}
+SonareError sonare_last_thing(int* out) { return render_thing(out); }
+SonareError sonare_last_other(int* out) {
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+}
+SonareError sonare_entry(int* out) {
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+}
+"""
+
+
+class AccessorTest(unittest.TestCase):
+    def scan(self) -> object:
+        stated = scanner.stated_accessors({"h.h": _HEADER})
+        accessors = frozenset(scanner.accessor_functions({"t.cpp": _ACCESSOR_SOURCE}, stated))
+        result = scanner.Scan()
+        scanner.scan_text("t.cpp", _ACCESSOR_SOURCE, set(), result, accessors)
+        return stated, accessors, result
+
+    def test_only_a_declaration_stating_the_contract_is_an_accessor(self) -> None:
+        stated, accessors, _ = self.scan()
+        self.assertEqual(stated, {"sonare_last_thing"})
+        self.assertEqual(accessors, {"sonare_last_thing", "render_thing"})
+
+    def test_an_accessor_return_is_counted_apart_and_a_non_accessor_is_still_caught(self) -> None:
+        _, _, result = self.scan()
+        self.assertEqual(result.accessor_returns, 1)
+        self.assertEqual([(r.line, r.state) for r in result.refusals], [(8, "none"), (12, "none")])
+        self.assertEqual(scanner.counts(result)["no_text"], 2)
+
+    def test_the_tree_has_stated_accessors(self) -> None:
+        self.assertGreater(scanner.scan(scanner.ROOT).accessor_returns, 0)
+
+
 class RatchetTest(unittest.TestCase):
     def test_both_ways_above_and_below_the_line_fail_and_equal_passes(self) -> None:
         line = {"no_text": 5, "null_nonconforming": 3, "unclassified": 1, "interim_no_cause": 2}

@@ -21,6 +21,12 @@ The counts in ``c_abi_bare_refusals.json`` are a line: a count above it fails. W
 rewrite the line; otherwise it fails until ``--write`` lowers it in the same change. ``--table <path>`` writes the per-file work
 order. A scan that reads no return fails, so a moved tree cannot pass as clean.
 
+Accessors of the error channel (``sonare_last_*``, and an internal function such an accessor
+forwards to with ``return f(...)``) never write the channel, so a refusal they return stays bare by
+contract: recording it would overwrite the error being read. An accessor is exempt only while its
+public declaration's ``///`` block states ``ACCESSOR_CONTRACT``; its returns are then counted on
+their own line, not filed by class and not ratcheted. Without the statement they are filed as usual.
+
 ``interim_no_cause`` counts the sites that state no cause because the engine does not report one
 yet: a literal carrying one of ``INTERIM_MARKERS``, and each call of a helper whose body holds such a
 literal (what the helper's own body holds is not counted again). Its ceiling keeps them from being
@@ -57,6 +63,11 @@ STRING_LITERAL = re.compile(r'"(?:[^"\\\n]|\\.)*"')
 FUNCTION_HEAD = re.compile(r"\b([A-Za-z_]\w*)\s*\([^;{}()]*\)\s*(?:const\s*)?(?:noexcept\s*)?\{")
 # Ceiling-only while several changes lower the counts at once; the line is rewritten per batch.
 CEILING_ONLY = True
+
+ACCESSOR_PREFIX = "sonare_last_"
+ACCESSOR_CONTRACT = "Like every sonare_last_* accessor, it records no error"
+HEADER_DIR = "include/sonare"
+NOT_FUNCTIONS = frozenset({"if", "for", "while", "switch", "catch", "return", "sizeof"})
 
 MESSAGE_CALL = re.compile(r"\b(set_last_error(?:_static)?|refuse\w*|\w+_or_refuse)\s*\(")
 CONFORMING_NULL = re.compile(
@@ -291,6 +302,53 @@ class Refusal:
 class Scan:
     refusals: list[Refusal] = field(default_factory=list)
     interim: list[tuple[str, int, str]] = field(default_factory=list)
+    # Bare returns inside error-channel accessors, which never text a refusal by contract.
+    accessor_returns: int = 0
+
+
+def enclosing_function(code: str, pos: int) -> str | None:
+    """Name of the outermost function definition whose body holds ``pos``."""
+    for m in FUNCTION_HEAD.finditer(code, 0, pos):
+        if m.group(1) in NOT_FUNCTIONS:
+            continue
+        open_ = m.end() - 1
+        close = match_forward(code, open_)
+        if open_ < pos < close:
+            return m.group(1)
+    return None
+
+
+def stated_accessors(headers: dict[str, str]) -> set[str]:
+    """``sonare_last_*`` declarations whose preceding ``///`` block states ``ACCESSOR_CONTRACT``."""
+    names: set[str] = set()
+    for raw in headers.values():
+        block: list[str] = []
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("///"):
+                block.append(stripped.removeprefix("///").strip())
+                continue
+            m = re.match(rf"[^/]*\b({ACCESSOR_PREFIX}\w*)\s*\(", stripped)
+            if m and ACCESSOR_CONTRACT in " ".join(block):
+                names.add(m.group(1))
+            block = []
+    return names
+
+
+def accessor_functions(texts: dict[str, str], stated: set[str]) -> set[str]:
+    """Stated ``sonare_last_*`` definitions plus the internal functions one forwards to by ``return f(...)``."""
+    names: set[str] = set()
+    for raw in texts.values():
+        code = blank_comments_and_strings(raw)
+        for m in FUNCTION_HEAD.finditer(code):
+            if m.group(1) not in stated:
+                continue
+            names.add(m.group(1))
+            body = code[m.end() : match_forward(code, m.end() - 1)]
+            forward = re.fullmatch(r"\s*return\s+([A-Za-z_]\w*)\s*\([^;]*\)\s*;\s*", body)
+            if forward:
+                names.add(forward.group(1))
+    return names
 
 
 def interim_helpers(texts: dict[str, str]) -> set[str]:
@@ -344,7 +402,9 @@ def refusing_helpers(texts: dict[str, str]) -> set[str]:
     return names
 
 
-def scan_text(path: str, raw: str, refusing: set[str], scan: Scan) -> None:
+def scan_text(
+    path: str, raw: str, refusing: set[str], scan: Scan, accessors: frozenset[str] = frozenset()
+) -> None:
     code = blank_comments_and_strings(raw)
     start = 0
     while True:
@@ -352,6 +412,10 @@ def scan_text(path: str, raw: str, refusing: set[str], scan: Scan) -> None:
         if pos < 0:
             break
         start = pos + len(RETURN)
+        owner = enclosing_function(code, pos)
+        if owner is not None and owner in accessors:
+            scan.accessor_returns += 1
+            continue
         line = code.count("\n", 0, pos) + 1
         braceless = if_condition_before(code, pos)
         region_raw: str | None = None
@@ -393,9 +457,14 @@ def scan(root: Path) -> Scan:
     texts = {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8") for p in files}
     refusing = refusing_helpers(texts)
     interim = interim_helpers(texts)
+    headers = {
+        p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
+        for p in sorted((root / HEADER_DIR).glob("*.h"))
+    }
+    accessors = frozenset(accessor_functions(texts, stated_accessors(headers)))
     result = Scan()
     for path, raw in texts.items():
-        scan_text(path, raw, refusing, result)
+        scan_text(path, raw, refusing, result, accessors)
         scan_interim(path, raw, interim, result)
     return result
 
@@ -515,6 +584,10 @@ def main(argv: list[str]) -> int:
     print(f"bare INVALID_PARAMETER returns: {len(result.refusals)}")
     print("by class: " + ", ".join(f"{c} {by_label.get(c, 0)}" for c in (*CLASSES, "mixed")))
     print("ratchet: " + ", ".join(f"{k} {found[k]}" for k in RATCHET_KEYS))
+    print(
+        f"error-channel accessors ({ACCESSOR_PREFIX}*): {result.accessor_returns} bare returns, "
+        "untexted by contract, not ratcheted"
+    )
     if args.table:
         args.table.write_text(table(result), encoding="utf-8")
         print(f"wrote {args.table}")
