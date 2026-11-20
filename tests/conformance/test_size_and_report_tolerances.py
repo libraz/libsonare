@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 import sys
 import tempfile
@@ -89,6 +90,38 @@ class WasmIostreamGuardTest(unittest.TestCase):
         for marker in check_wasm_size.IOSTREAM_MARKERS:
             with self.subTest(marker=marker):
                 self.assertEqual(self.run_check(b"\x00" + marker + b"IcEE\x00"), 1)
+
+
+class WasmForbiddenBindingGuardTest(unittest.TestCase):
+    def run_check(self, name: str, payload: bytes) -> int:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            wasm = root / "tiny.wasm"
+            custom = b"\x01m" + payload
+            wasm.write_bytes(b"\0asm\1\0\0\0\x00" + bytes([len(custom)]) + custom)
+            baseline = root / "baseline.json"
+            artifact = {name: {"raw": 4096, "gzip": 4096}}
+            baseline.write_text(json.dumps({"format": 1, "artifacts": artifact}))
+            argv = [
+                "check_wasm_size.py",
+                "--baseline",
+                str(baseline),
+                "--artifact",
+                f"{name}={wasm}",
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                return check_wasm_size.main()
+
+    def test_the_analysis_module_fails_on_a_forbidden_binding(self) -> None:
+        for binding in check_wasm_size.FORBIDDEN_BINDINGS["sonare-analysis.wasm"]:
+            with self.subTest(binding=binding):
+                self.assertEqual(self.run_check("sonare-analysis.wasm", b"\0" + binding + b"\0"), 1)
+
+    def test_the_full_module_may_carry_the_same_binding(self) -> None:
+        self.assertEqual(self.run_check("sonare.wasm", b"\0systemInfo\0"), 0)
+
+    def test_a_longer_name_containing_the_binding_passes(self) -> None:
+        self.assertEqual(self.run_check("sonare-analysis.wasm", b"\0systemInfoJson\0"), 0)
 
 
 class ReportToleranceTest(unittest.TestCase):

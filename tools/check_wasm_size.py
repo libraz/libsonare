@@ -79,6 +79,22 @@ def iostream_markers(data: bytes) -> list[str]:
     return [marker.decode() for marker in IOSTREAM_MARKERS if marker in data]
 
 
+# Embind names a module must not register, keyed by artifact name. The analysis module exposes no
+# system information or filter entry, so either name in its data means its gate leaked. A name is
+# matched between NUL terminators; a name the linker tail-merges into a longer string is not seen.
+FORBIDDEN_BINDINGS = {
+    "sonare-analysis.wasm": (b"systemInfo", b"biquadFilter"),
+}
+
+
+def forbidden_bindings(name: str, data: bytes) -> list[str]:
+    return [
+        binding.decode()
+        for binding in FORBIDDEN_BINDINGS.get(name, ())
+        if b"\0" + binding + b"\0" in data
+    ]
+
+
 def measure(path: Path) -> dict[str, int | str]:
     data = path.read_bytes()
     sections = wasm_sections(data)
@@ -162,9 +178,13 @@ def main() -> int:
     baseline = load_baseline(args.baseline)
     failures: list[str] = []
     for name, path in args.artifact:
-        markers = iostream_markers(path.read_bytes())
+        data = path.read_bytes()
+        markers = iostream_markers(data)
         if markers:
             failures.append(f"{name}: links libc++ iostream/locale ({', '.join(markers)})")
+        leaked = forbidden_bindings(name, data)
+        if leaked:
+            failures.append(f"{name}: registers bindings it must not carry ({', '.join(leaked)})")
     for name, result in current.items():
         expected = baseline["artifacts"].get(name)
         if not isinstance(expected, dict):
