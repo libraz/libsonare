@@ -8,7 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from ._errors import _entry, _refuse
+from ._errors import _entry
 from ._ffi import (
     SonareCqtResult,
     SonareInverseResult,
@@ -341,18 +341,15 @@ def griffin_lim(
 ) -> np.ndarray:
     """Reconstruct audio from an STFT magnitude of shape ``(n_bins, n_frames)``.
 
-    ``n_fft`` is implied by the bin count, ``(n_bins - 1) * 2``; omitted, it is
-    inferred, and an explicit value that disagrees raises ``SonareValueError``.
+    ``n_fft`` is even and ``n_bins`` equals ``n_fft / 2 + 1``; an omitted
+    ``n_fft`` is ``(n_bins - 1) * 2``.
     An omitted ``hop_length`` is ``n_fft / 4``, derived by the library.
     Returns a float32 array.
     """
     lib = _get_lib()
     data, n_bins, n_frames = _to_c_float_matrix(magnitude, arg_name="magnitude")
-    implied = (n_bins - 1) * 2
     if n_fft is None:
-        n_fft = implied
-    elif n_fft != implied:
-        raise _refuse("n_fft must equal (n_bins - 1) * 2")
+        n_fft = (n_bins - 1) * 2
     hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
     length = n_bins * n_frames
     with _out_float_array(lib) as (out, out_length):

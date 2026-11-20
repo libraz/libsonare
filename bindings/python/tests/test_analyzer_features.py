@@ -540,7 +540,7 @@ def test_griffin_lim() -> None:
 
 
 def test_griffin_lim_infers_n_fft_from_the_bin_count() -> None:
-    """An omitted n_fft is (n_bins - 1) * 2; a disagreeing explicit one is refused."""
+    """An omitted n_fft is (n_bins - 1) * 2; one whose bin count disagrees is refused."""
     import numpy as np
     import pytest
 
@@ -554,9 +554,14 @@ def test_griffin_lim_infers_n_fft_from_the_bin_count() -> None:
     np.testing.assert_array_equal(inferred, given)
     with pytest.raises(
         SonareValueError,
-        match=r"^griffin_lim: n_fft must equal \(n_bins - 1\) \* 2$",
+        match=r"^griffin_lim: n_bins must equal n_fft / 2 \+ 1$",
     ):
         griffin_lim(magnitude, 22050, n_fft=2048, hop_length=256, n_iter=1)
+    with pytest.raises(
+        SonareValueError,
+        match=r"^griffin_lim: n_fft must be an even integer in \[4, 2147483647\]$",
+    ):
+        griffin_lim(magnitude, 22050, n_fft=1025, hop_length=256, n_iter=1)
 
 
 def test_an_omitted_inverse_hop_is_a_quarter_of_n_fft() -> None:
