@@ -115,12 +115,12 @@ TEST_CASE("acoustic entries refuse the config before the output", "[c_api][heade
 
   SonareRoomEstimate estimate;
   estimate.band_count = 9;
-  estimate.absorption_bands = garbage_pointer<float>();
+  estimate.band_absorption = garbage_pointer<float>();
   REQUIRE(sonare_estimate_room(samples.data(), kLength, kRate, nullptr, &estimate) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config must not be NULL");
   CHECK(estimate.band_count == 0);
-  CHECK(estimate.absorption_bands == nullptr);
+  CHECK(estimate.band_absorption == nullptr);
 
   REQUIRE(sonare_estimate_room(samples.data(), kLength, kRate, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);

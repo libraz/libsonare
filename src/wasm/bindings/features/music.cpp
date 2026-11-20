@@ -157,7 +157,10 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
     item.set("group", section.group);
     sections.call<void>("push", item);
   }
-  return sections;
+  val out = val::object();
+  out.set("sections", sections);
+  out.set("form", analyzer.form());
+  return out;
 }
 
 // Mirrors sonare_detect_boundaries / SonareBoundaryResult and the Python

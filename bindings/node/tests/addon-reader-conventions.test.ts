@@ -824,11 +824,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'masteringDynamicsGate',
     invoke: (o) => {
-      const { keyHpfHz, ...rest } = o;
-      const result = masteringDynamicsGate(sine(2048), SR, {
-        ...rest,
-        keyHighPassHz: keyHpfHz as number | undefined,
-      });
+      const result = masteringDynamicsGate(sine(2048), SR, o);
       return [Array.from(result.samples).slice(0, 32), result.latencySamples];
     },
   },

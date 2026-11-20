@@ -661,6 +661,7 @@ TEST_CASE(
     sonare_free_section_result(&result);
     REQUIRE(result.sections == nullptr);
     REQUIRE(result.section_count == 0);
+    REQUIRE(result.form == nullptr);
   }
 
   SECTION("sonare_analyze_melody_ex") {
@@ -760,7 +761,11 @@ TEST_CASE("sonare_analyze_sections reports each section's material group", "[c_a
     CHECK(result.sections[i].group == expected[i].group);
     CHECK(result.sections[i].type == static_cast<SonareSectionType>(expected[i].type));
   }
+  REQUIRE(result.form != nullptr);
+  CHECK(std::string(result.form) == analyzer.form());
+  CHECK(std::string(result.form).size() == result.section_count);
   sonare_free_section_result(&result);
+  CHECK(result.form == nullptr);
 }
 
 namespace {

@@ -298,7 +298,7 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   c_estimate.length_m = FloatProperty(estimate, "lengthM", c_estimate.length_m);
   c_estimate.width_m = FloatProperty(estimate, "widthM", c_estimate.width_m);
   c_estimate.height_m = FloatProperty(estimate, "heightM", c_estimate.height_m);
-  c_estimate.absorption_bands = bands.empty() ? nullptr : bands.data();
+  c_estimate.band_absorption = bands.empty() ? nullptr : bands.data();
   c_estimate.band_count = bands.size();
 
   SonareRirSynthConfig geometry{};
@@ -312,23 +312,23 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   out.Set("widthM", Napi::Number::New(env, geometry.width_m));
   out.Set("heightM", Napi::Number::New(env, geometry.height_m));
   Napi::Object source = Napi::Object::New(env);
-  source.Set("x", Napi::Number::New(env, geometry.source_x));
-  source.Set("y", Napi::Number::New(env, geometry.source_y));
-  source.Set("z", Napi::Number::New(env, geometry.source_z));
+  source.Set("x", Napi::Number::New(env, geometry.source.x));
+  source.Set("y", Napi::Number::New(env, geometry.source.y));
+  source.Set("z", Napi::Number::New(env, geometry.source.z));
   out.Set("source", source);
   Napi::Object listener = Napi::Object::New(env);
-  listener.Set("x", Napi::Number::New(env, geometry.listener_x));
-  listener.Set("y", Napi::Number::New(env, geometry.listener_y));
-  listener.Set("z", Napi::Number::New(env, geometry.listener_z));
+  listener.Set("x", Napi::Number::New(env, geometry.listener.x));
+  listener.Set("y", Napi::Number::New(env, geometry.listener.y));
+  listener.Set("z", Napi::Number::New(env, geometry.listener.z));
   out.Set("listener", listener);
   if (std::any_of(bands.begin(), bands.end(), [](float b) { return std::isfinite(b); })) {
     out.Set("absorption", Napi::Number::New(env, geometry.absorption));
   }
-  if (geometry.absorption_band_count > 0) {
+  if (geometry.band_absorption_count > 0) {
     out.Set("bandAbsorption",
             VecToFloat32(env, std::vector<float>(
-                                  geometry.absorption_bands,
-                                  geometry.absorption_bands + geometry.absorption_band_count)));
+                                  geometry.band_absorption,
+                                  geometry.band_absorption + geometry.band_absorption_count)));
   }
   return out;
   SONARE_NODE_CATCH(env)

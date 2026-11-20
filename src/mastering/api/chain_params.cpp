@@ -268,8 +268,8 @@ std::optional<double> multiband_parameter_value(const MultibandCompStage& stage,
   const auto& band = config.bands[index];
   // Absent while the high-pass is off, so a read-back never reports a frequency that is not in use.
   if (field == "sidechainHighPassHz") {
-    if (!band.sidechain_hpf_enabled) return std::nullopt;
-    return detail::field_as_double(band.sidechain_hpf_hz);
+    if (!band.sidechain_high_pass_enabled) return std::nullopt;
+    return detail::field_as_double(band.sidechain_high_pass_hz);
   }
 #define X(jkey, member, meta) \
   if (field == jkey) return detail::field_as_double(band.member);
@@ -296,8 +296,8 @@ void set_sidechain_high_pass(dynamics::CompressorConfig& config, double v, const
         "must be finite and > 0; leave it out to keep the sidechain high-pass off")
         .as_caller_spelled();
   }
-  config.sidechain_hpf_enabled = true;
-  config.sidechain_hpf_hz = hz;
+  config.sidechain_high_pass_enabled = true;
+  config.sidechain_high_pass_hz = hz;
 }
 
 // ---- repair.* (declick, declip, decrackle, dehum, dereverb, denoise) ----

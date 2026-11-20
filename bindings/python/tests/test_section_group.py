@@ -38,7 +38,7 @@ def _assert_first_appearance_numbering(groups: list[int]) -> None:
 
 
 def test_analyze_sections_exposes_group_as_int(abab) -> None:
-    sections = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0)
+    sections = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0).sections
 
     assert sections
     assert all(type(s.group) is int for s in sections)
@@ -54,7 +54,7 @@ def test_analyze_exposes_group_as_int(abab) -> None:
 
 
 def test_alternating_material_yields_distinct_groups(abab) -> None:
-    sections = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0)
+    sections = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0).sections
     groups = [s.group for s in sections]
 
     assert len(set(groups)) >= 2
@@ -82,10 +82,17 @@ def test_analyze_sections_threshold_none_is_the_library_default(abab) -> None:
 def test_analyze_sections_threshold_moves_the_boundaries(abab) -> None:
     loose = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0, threshold=0.0)
     strict = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0, threshold=1e6)
-    assert len(strict) < len(loose)
+    assert len(strict.sections) < len(loose.sections)
 
 
 @pytest.mark.parametrize("bad", [-0.1, float("nan"), float("inf")])
 def test_analyze_sections_refuses_a_negative_or_non_finite_threshold(abab, bad: float) -> None:
     with pytest.raises(libsonare.SonareValueError, match="threshold"):
         libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0, threshold=bad)
+
+
+def test_analyze_sections_spells_one_form_letter_per_section(abab) -> None:
+    result = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0)
+
+    assert isinstance(result, libsonare.SectionAnalysis)
+    assert result.form == "" or len(result.form) == len(result.sections)

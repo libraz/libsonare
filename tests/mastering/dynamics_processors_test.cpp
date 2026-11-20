@@ -458,9 +458,9 @@ TEST_CASE("SidechainRouter rejects non-finite configuration without changing a l
       GENERATE(&SidechainRouterConfig::threshold_db, &SidechainRouterConfig::ratio,
                &SidechainRouterConfig::attack_ms, &SidechainRouterConfig::release_ms,
                &SidechainRouterConfig::range_db, &SidechainRouterConfig::lookahead_ms,
-               &SidechainRouterConfig::sidechain_hpf_hz);
+               &SidechainRouterConfig::sidechain_high_pass_hz);
   SidechainRouterConfig config;
-  config.sidechain_hpf_enabled = true;
+  config.sidechain_high_pass_enabled = true;
   SidechainRouter router(config);
   router.prepare(48000.0, 64);
   auto invalid = config;
@@ -468,7 +468,7 @@ TEST_CASE("SidechainRouter rejects non-finite configuration without changing a l
   CHECK_THROWS_AS(SidechainRouter(invalid), sonare::SonareException);
   CHECK_THROWS_AS(router.set_config(invalid), sonare::SonareException);
   CHECK(router.config().threshold_db == config.threshold_db);
-  CHECK(router.config().sidechain_hpf_hz == config.sidechain_hpf_hz);
+  CHECK(router.config().sidechain_high_pass_hz == config.sidechain_high_pass_hz);
   std::array<float, 64> block{};
   block.fill(0.2f);
   float* channels[] = {block.data()};
@@ -607,8 +607,8 @@ TEST_CASE("Compressor sidechain HPF attenuates lows in the detector", "[masterin
   config.attack_ms = 5.0f;
   config.release_ms = 50.0f;
   config.detector = DetectorMode::Peak;
-  config.sidechain_hpf_enabled = true;
-  config.sidechain_hpf_hz = 1000.0f;
+  config.sidechain_high_pass_enabled = true;
+  config.sidechain_high_pass_hz = 1000.0f;
 
   Compressor low_comp(config);
   Compressor high_comp(config);
@@ -982,7 +982,7 @@ TEST_CASE("SidechainRouter recovers poisoned HPF state in ducking and key listen
                               << ", listen " << scenario.key_listen) {
       CAPTURE(scenario.poison, scenario.mono_summing, scenario.key_listen);
       SidechainRouterConfig config;
-      config.sidechain_hpf_enabled = true;
+      config.sidechain_high_pass_enabled = true;
       config.attack_ms = 0.0f;
       config.release_ms = 0.0f;
       config.threshold_db = -30.0f;
@@ -1231,7 +1231,7 @@ TEST_CASE("Dynamics live parameters refuse exactly what the validator refuses",
                                       {2, &C::attack_ms, -1.0f, 0.0f},
                                       {3, &C::release_ms, -1.0f, 0.0f},
                                       {5, &C::knee_db, -1.0f, 0.0f},
-                                      {9, &C::sidechain_hpf_hz, 0.0f, 0.5f},
+                                      {9, &C::sidechain_high_pass_hz, 0.0f, 0.5f},
                                       {10, &C::pdr_time_ms, -1.0f, 0.0f},
                                       {11, &C::pdr_release_scale, 0.5f, 1.0f}});
   }

@@ -215,6 +215,7 @@ class SonareSectionResult(CStruct):
     _fields_ = [
         ("sections", ctypes.POINTER(SonareSection)),
         ("section_count", ctypes.c_size_t),
+        ("form", ctypes.c_char_p),
     ]
 
 
@@ -502,8 +503,8 @@ class SonareMelResult(CStruct):
         ("sample_rate", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("n_fft", ctypes.c_int32),
-        ("fmin", ctypes.c_float),
-        ("fmax", ctypes.c_float),
+        ("fmin_hz", ctypes.c_float),
+        ("fmax_hz", ctypes.c_float),
         ("htk", ctypes.c_int32),
         ("is_db", ctypes.c_int32),
         ("power", ctypes.POINTER(ctypes.c_float)),

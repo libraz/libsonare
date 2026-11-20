@@ -271,8 +271,8 @@ def mel_spectrogram(
             power=_from_c_float_matrix(out.power, out.n_mels, out.n_frames),
             db=_from_c_float_matrix(out.db, out.n_mels, out.n_frames),
             n_fft=out.n_fft,
-            fmin_hz=float(out.fmin),
-            fmax_hz=float(out.fmax),
+            fmin_hz=float(out.fmin_hz),
+            fmax_hz=float(out.fmax_hz),
             htk=bool(out.htk),
         )
     finally:

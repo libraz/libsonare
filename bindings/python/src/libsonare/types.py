@@ -407,6 +407,9 @@ from ._types_engine import (
     Section as Section,
 )
 from ._types_engine import (
+    SectionAnalysis as SectionAnalysis,
+)
+from ._types_engine import (
     SidechainCheck as SidechainCheck,
 )
 from ._types_engine import (

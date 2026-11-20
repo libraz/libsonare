@@ -939,6 +939,16 @@ class Section:
     """Display name of the section type."""
 
 
+@dataclass(frozen=True, slots=True)
+class SectionAnalysis:
+    """What :func:`analyze_sections` returns: the sections and the form they spell."""
+
+    sections: list[Section]
+    """Detected song-structure sections, in time order."""
+    form: str
+    """Musical form label, one letter per section (e.g. ``"AABA"``); empty when none."""
+
+
 _SECTION_NAMES: dict[SectionType, str] = {
     "intro": "Intro",
     "verse": "Verse",

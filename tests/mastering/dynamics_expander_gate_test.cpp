@@ -149,7 +149,7 @@ TEST_CASE("Gate rejects non-finite configuration fields but preserves negative i
   Gate gate(baseline);
   const std::array<float GateConfig::*, 6> finite_fields = {
       &GateConfig::threshold_db, &GateConfig::attack_ms,          &GateConfig::release_ms,
-      &GateConfig::hold_ms,      &GateConfig::close_threshold_db, &GateConfig::key_hpf_hz};
+      &GateConfig::hold_ms,      &GateConfig::close_threshold_db, &GateConfig::key_high_pass_hz};
   const std::array<float, 3> non_finite_values = {std::numeric_limits<float>::quiet_NaN(),
                                                   std::numeric_limits<float>::infinity(),
                                                   -std::numeric_limits<float>::infinity()};
@@ -165,7 +165,7 @@ TEST_CASE("Gate rejects non-finite configuration fields but preserves negative i
       CHECK(gate.config().range_db == baseline.range_db);
       CHECK(gate.config().hold_ms == baseline.hold_ms);
       CHECK(gate.config().close_threshold_db == baseline.close_threshold_db);
-      CHECK(gate.config().key_hpf_hz == baseline.key_hpf_hz);
+      CHECK(gate.config().key_high_pass_hz == baseline.key_high_pass_hz);
     }
   }
 

@@ -17,24 +17,6 @@
 /// ABI version of the flat acoustic POD structs below. Bump on any layout change.
 #define SONARE_ACOUSTIC_ABI_VERSION 6u
 
-/// Statistical late-reverberation RT60 model for RIR synthesis / room morph
-/// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model). The
-/// `_init` functions set EYRING. Mirrors sonare::acoustic::ReverbModel, one above
-/// its ordinal. Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
-/// Sabine late-reverberation RT60 model.
-#define SONARE_REVERB_MODEL_SABINE 1
-/// Eyring late-reverberation RT60 model.
-#define SONARE_REVERB_MODEL_EYRING 2
-
-/// Atmospheric-absorption selector for the late tail
-/// (SonareRirSynthConfig::air_absorption, SonareRoomMorphConfig::air_absorption).
-/// The `_init` functions set ON. Any other value is refused with
-/// SONARE_ERROR_INVALID_PARAMETER.
-/// Atmospheric absorption applied to the late tail.
-#define SONARE_AIR_ABSORPTION_ON 1
-/// Atmospheric absorption not applied.
-#define SONARE_AIR_ABSORPTION_OFF 2
-
 /// Building-material preset selector for the uniform-room wall material
 /// (SonareRirSynthConfig::material_preset / SonareRoomMorphConfig::material_preset).
 /// Mirrors sonare::acoustic::MaterialPreset. SONARE_MATERIAL_PRESET_NONE leaves the
@@ -67,6 +49,13 @@
 extern "C" {
 #endif
 
+/// @brief A point in the room, in metres along the room's x, y and z axes.
+typedef struct {
+  float x;  ///< Position along the room length, in metres.
+  float y;  ///< Position along the room width, in metres.
+  float z;  ///< Position along the room height, in metres.
+} SonareRoomPlacement;
+
 /// @brief Shoebox geometry + placement + synthesis controls for RIR synthesis.
 ///
 /// Prepare one with sonare_rir_synth_config_init, which sets struct_size and every
@@ -75,7 +64,7 @@ extern "C" {
 /// The room is an axis-aligned box [0,length] x [0,width] x [0,height] with a
 /// uniform wall material applied to all six walls. The wall material is chosen by
 /// this precedence: a named `material_preset` (non-zero) wins; otherwise a
-/// non-NULL `absorption_bands` per-octave-band array; otherwise the scalar
+/// non-NULL `band_absorption` per-octave-band array; otherwise the scalar
 /// `absorption`. The band arrays stay the caller's and are read during the call
 /// only; the library never frees them.
 ///
@@ -90,15 +79,11 @@ typedef struct {
   /// sizeof(SonareRirSynthConfig), set by sonare_rir_synth_config_init. A smaller value is
   /// refused with SONARE_ERROR_INVALID_PARAMETER.
   uint32_t struct_size;
-  float length_m;    ///< Room extent along x in metres.
-  float width_m;     ///< Room extent along y in metres.
-  float height_m;    ///< Room extent along z in metres.
-  float source_x;    ///< Source x position in metres; must lie inside the room.
-  float source_y;    ///< Source y position in metres; must lie inside the room.
-  float source_z;    ///< Source z position in metres; must lie inside the room.
-  float listener_x;  ///< Listener x position in metres; must lie inside the room.
-  float listener_y;  ///< Listener y position in metres; must lie inside the room.
-  float listener_z;  ///< Listener z position in metres; must lie inside the room.
+  float length_m;                ///< Room extent along x in metres.
+  float width_m;                 ///< Room extent along y in metres.
+  float height_m;                ///< Room extent along z in metres.
+  SonareRoomPlacement source;    ///< Source position; must lie inside the room.
+  SonareRoomPlacement listener;  ///< Listener position; must lie inside the room.
   /// Uniform wall absorption coefficient, clamped to [0, 0.999].
   float absorption;
   /// Hard RIR length cap in seconds; 0 = natural length.
@@ -109,36 +94,35 @@ typedef struct {
   float crossfade_ms;
   /// Image-source reflection order (>= 0).
   int ism_order;
-  /// A @ref SONARE_REVERB_MODEL_SABINE or @ref SONARE_REVERB_MODEL_EYRING value selecting the
-  /// late-tail RT60 model.
-  int late_model;
+  /// Non-zero selects the Eyring late-tail RT60 model, 0 the Sabine one; _init sets 1.
+  int prefer_eyring;
   /// Seed of the deterministic late tail.
   unsigned int seed;
   /// Optional per-octave-band wall absorption (125, 250, 500, 1k, 2k, 4k.. Hz). When non-NULL
-  /// with absorption_band_count > 0 it overrides the scalar absorption unless material_preset
+  /// with band_absorption_count > 0 it overrides the scalar absorption unless material_preset
   /// selects a preset. The late tail's decay time runs continuously between octave centres,
   /// so where absorption changes steeply between octaves the octave-band RT60 measured back
   /// leans toward the slower neighbour, as in a real room; the design value holds at the
   /// octave centre.
-  const float* absorption_bands;
-  /// Number of entries in absorption_bands.
-  size_t absorption_band_count;
+  const float* band_absorption;
+  /// Number of entries in band_absorption.
+  size_t band_absorption_count;
   /// Optional per-octave-band wall scattering, applied band-wise; missing bands default to 0.
-  /// Independent of absorption_bands and material_preset: it is applied to whichever material
+  /// Independent of band_absorption and material_preset: it is applied to whichever material
   /// the absorption precedence selected, so a preset or scalar-absorption room can still be
   /// given rough walls.
-  const float* scattering_bands;
-  /// Number of entries in scattering_bands.
-  size_t scattering_band_count;
+  const float* band_scattering;
+  /// Number of entries in band_scattering.
+  size_t band_scattering_count;
   /// A @ref SONARE_MATERIAL_PRESET_NONE or other SONARE_MATERIAL_PRESET_* value; non-zero wins
   /// over the band arrays and the scalar absorption.
   int material_preset;
-  /// A @ref SONARE_AIR_ABSORPTION_ON or @ref SONARE_AIR_ABSORPTION_OFF value switching the
-  /// ISO 9613-1 atmospheric absorption of the late tail. While on, the per-band late RT60
-  /// gains the 4 m V air term, which mainly shortens the high bands of a large room.
-  /// Out-of-range climate values are refused with SONARE_ERROR_INVALID_PARAMETER and
-  /// acoustic.invalid_air_absorption in sonare_last_error_message().
-  int air_absorption;
+  /// Non-zero applies the ISO 9613-1 atmospheric absorption to the late tail; _init sets 1.
+  /// While on, the per-band late RT60 gains the 4 m V air term, which mainly shortens the
+  /// high bands of a large room. Out-of-range climate values are refused with
+  /// SONARE_ERROR_INVALID_PARAMETER and acoustic.invalid_air_absorption in
+  /// sonare_last_error_message().
+  int air_absorption_enabled;
   /// Air temperature in degrees Celsius for the air absorption (default 20, the ISO reference).
   float air_temperature_c;
   /// Relative humidity in percent for the air absorption (default 50, the ISO reference).
@@ -192,9 +176,9 @@ typedef struct {
   /// estimates and either can fail to converge without the other: both arrays always have
   /// band_count entries, and a failed side is NaN-filled rather than truncated. NULL only
   /// when neither estimate produced any bands.
-  float* absorption_bands;
+  float* band_absorption;
   /// Per-octave-band RT60 in seconds; heap-owned, same length and NaN rule as
-  /// absorption_bands.
+  /// band_absorption.
   float* rt60_bands;
   size_t band_count;  ///< Length of both band arrays.
 } SonareRoomEstimate;
@@ -202,7 +186,7 @@ typedef struct {
 /// @brief Target room + placement + morph controls for the offline morph.
 ///
 /// The target wall material follows the same precedence as SonareRirSynthConfig
-/// (material_preset > absorption_bands > scalar absorption); only uniform
+/// (material_preset > band_absorption > scalar absorption); only uniform
 /// (single-material) target rooms are reachable through this ABI. Prepare one with
 /// sonare_room_morph_config_init; every field is then read literally. The band
 /// arrays stay the caller's and are read during the call only; the library
@@ -211,16 +195,12 @@ typedef struct {
   /// sizeof(SonareRoomMorphConfig), set by sonare_room_morph_config_init. A smaller value is
   /// refused with SONARE_ERROR_INVALID_PARAMETER.
   uint32_t struct_size;
-  float length_m;    ///< Target room extent along x in metres.
-  float width_m;     ///< Target room extent along y in metres.
-  float height_m;    ///< Target room extent along z in metres.
-  float source_x;    ///< Source x position in metres; must lie inside the target room.
-  float source_y;    ///< Source y position in metres; must lie inside the target room.
-  float source_z;    ///< Source z position in metres; must lie inside the target room.
-  float listener_x;  ///< Listener x position in metres; must lie inside the target room.
-  float listener_y;  ///< Listener y position in metres; must lie inside the target room.
-  float listener_z;  ///< Listener z position in metres; must lie inside the target room.
-  float absorption;  ///< Target uniform wall absorption coefficient.
+  float length_m;                ///< Target room extent along x in metres.
+  float width_m;                 ///< Target room extent along y in metres.
+  float height_m;                ///< Target room extent along z in metres.
+  SonareRoomPlacement source;    ///< Source position; must lie inside the target room.
+  SonareRoomPlacement listener;  ///< Listener position; must lie inside the target room.
+  float absorption;              ///< Target uniform wall absorption coefficient.
   /// Gentle reduction of the source's own reverb, in [0, 1].
   float source_tail_suppression;
   float wet;  ///< Target-room mix, in [0, 1].
@@ -231,22 +211,21 @@ typedef struct {
   /// Equal-power crossfade width around the mixing time, in milliseconds.
   float crossfade_ms;
   int ism_order;  ///< Image-source reflection order of the target room (>= 0).
-  /// A @ref SONARE_REVERB_MODEL_SABINE or @ref SONARE_REVERB_MODEL_EYRING value selecting the
-  /// target late-tail RT60 model.
-  int late_model;
+  /// Non-zero selects the Eyring target late-tail RT60 model, 0 the Sabine one; _init sets 1.
+  int prefer_eyring;
   unsigned int seed;  ///< Seed of the deterministic late tail.
   /// Optional per-octave-band target-wall absorption; see SonareRirSynthConfig.
-  const float* absorption_bands;
-  size_t absorption_band_count;  ///< Number of entries in absorption_bands.
+  const float* band_absorption;
+  size_t band_absorption_count;  ///< Number of entries in band_absorption.
   /// Optional per-octave-band target-wall scattering; see SonareRirSynthConfig.
-  const float* scattering_bands;
-  size_t scattering_band_count;  ///< Number of entries in scattering_bands.
+  const float* band_scattering;
+  size_t band_scattering_count;  ///< Number of entries in band_scattering.
   /// A SONARE_MATERIAL_PRESET_* value; non-zero wins over the band arrays and the scalar
   /// absorption.
   int material_preset;
-  /// A @ref SONARE_AIR_ABSORPTION_ON or @ref SONARE_AIR_ABSORPTION_OFF value for the target
-  /// room's late tail; see SonareRirSynthConfig.
-  int air_absorption;
+  /// Non-zero applies atmospheric absorption to the target room's late tail; see
+  /// SonareRirSynthConfig.
+  int air_absorption_enabled;
   float air_temperature_c;     ///< Air temperature in degrees Celsius.
   float air_humidity_percent;  ///< Relative humidity in percent.
   /// Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]. Ignored and not
@@ -271,20 +250,20 @@ typedef struct {
 //
 // SonareRirSynthConfig prefix: struct_size + 13 floats + 3 ints/unsigned = 17 four-byte
 // members, padded to the pointer's alignment.
-static_assert(offsetof(SonareRirSynthConfig, absorption_bands) ==
+static_assert(offsetof(SonareRirSynthConfig, band_absorption) ==
                   (17u * sizeof(float) + alignof(const float*) - 1) / alignof(const float*) *
                       alignof(const float*),
               "SonareRirSynthConfig scalar prefix layout changed");
-static_assert(offsetof(SonareRirSynthConfig, scattering_bands) ==
-                  offsetof(SonareRirSynthConfig, absorption_band_count) + sizeof(size_t),
+static_assert(offsetof(SonareRirSynthConfig, band_scattering) ==
+                  offsetof(SonareRirSynthConfig, band_absorption_count) + sizeof(size_t),
               "SonareRirSynthConfig scattering tail layout changed");
 static_assert(offsetof(SonareRirSynthConfig, material_preset) ==
-                  offsetof(SonareRirSynthConfig, scattering_band_count) + sizeof(size_t),
+                  offsetof(SonareRirSynthConfig, band_scattering_count) + sizeof(size_t),
               "SonareRirSynthConfig optional tail layout changed");
 // The air-absorption group follows material_preset as a packed 4-byte run, on
 // every target: pinning it member-relative keeps the check pointer-width
 // agnostic (a size_t/pointer is 8 bytes natively and 4 on wasm32).
-static_assert(offsetof(SonareRirSynthConfig, air_absorption) ==
+static_assert(offsetof(SonareRirSynthConfig, air_absorption_enabled) ==
                   offsetof(SonareRirSynthConfig, material_preset) + sizeof(int),
               "SonareRirSynthConfig air-absorption layout changed");
 static_assert(offsetof(SonareRirSynthConfig, air_humidity_percent) ==
@@ -294,17 +273,17 @@ static_assert(sizeof(SonareRoomEstimateConfig) == 8u * sizeof(float),
               "SonareRoomEstimateConfig unexpected size");
 // SonareRoomMorphConfig prefix: struct_size + 15 floats + 3 ints/unsigned = 19 four-byte
 // members, padded to the pointer's alignment.
-static_assert(offsetof(SonareRoomMorphConfig, absorption_bands) ==
+static_assert(offsetof(SonareRoomMorphConfig, band_absorption) ==
                   (19u * sizeof(float) + alignof(const float*) - 1) / alignof(const float*) *
                       alignof(const float*),
               "SonareRoomMorphConfig scalar prefix layout changed");
-static_assert(offsetof(SonareRoomMorphConfig, scattering_bands) ==
-                  offsetof(SonareRoomMorphConfig, absorption_band_count) + sizeof(size_t),
+static_assert(offsetof(SonareRoomMorphConfig, band_scattering) ==
+                  offsetof(SonareRoomMorphConfig, band_absorption_count) + sizeof(size_t),
               "SonareRoomMorphConfig scattering tail layout changed");
 static_assert(offsetof(SonareRoomMorphConfig, material_preset) ==
-                  offsetof(SonareRoomMorphConfig, scattering_band_count) + sizeof(size_t),
+                  offsetof(SonareRoomMorphConfig, band_scattering_count) + sizeof(size_t),
               "SonareRoomMorphConfig optional tail layout changed");
-static_assert(offsetof(SonareRoomMorphConfig, air_absorption) ==
+static_assert(offsetof(SonareRoomMorphConfig, air_absorption_enabled) ==
                   offsetof(SonareRoomMorphConfig, material_preset) + sizeof(int),
               "SonareRoomMorphConfig air-absorption layout changed");
 static_assert(offsetof(SonareRoomMorphConfig, air_humidity_percent) ==
@@ -377,7 +356,7 @@ const char* sonare_acoustic_mode_name(int mode);
 /// @brief Room geometry for sonare_synthesize_rir taken from a room estimate.
 /// @details Initializes @p out with sonare_rir_synth_config_init, then sets the three dimensions
 /// and borrows the estimate's per-band
-///   absorption as @c absorption_bands (so @p estimate must outlive any use of @p out).
+///   absorption as @c band_absorption (so @p estimate must outlive any use of @p out).
 ///   Source and listener are the library's default positions (source (1, 1, 1.2), listener
 ///   (5, 4, 1.7) in the default 7 x 5 x 3 room) scaled per axis by the estimated dimension over
 ///   the default one, so they lie inside any estimated room and the default room maps to the

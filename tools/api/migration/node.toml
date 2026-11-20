@@ -4995,7 +4995,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "function"
 old = "analyzeSections"
-changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest"
+changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[]"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"

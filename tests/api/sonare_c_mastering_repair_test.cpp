@@ -2443,7 +2443,7 @@ TEST_CASE("sonare_mastering_dynamics_compressor", "[c_api][mastering]") {
     config.makeup_gain_db = 0.0f;
     config.auto_makeup = 0;
     config.detector = SONARE_COMPRESSOR_DETECTOR_PEAK;
-    config.sidechain_hpf_hz = 100.0f;
+    config.sidechain_high_pass_hz = 100.0f;
     config.pdr_release_scale = 1.0f;
     float* out = nullptr;
     size_t out_length = 0;

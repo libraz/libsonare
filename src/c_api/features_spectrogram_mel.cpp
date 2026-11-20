@@ -110,8 +110,8 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
                        out->sample_rate = mel.sample_rate();
                        out->hop_length = mel.hop_length();
                        out->n_fft = config.n_fft;
-                       out->fmin = config.fmin;
-                       out->fmax = config.resolved_fmax(mel.sample_rate());
+                       out->fmin_hz = config.fmin;
+                       out->fmax_hz = config.resolved_fmax(mel.sample_rate());
                        out->htk = config.htk ? 1 : 0;
                        out->is_db = 0;
 

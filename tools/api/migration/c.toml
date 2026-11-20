@@ -1708,3 +1708,236 @@ old = "SonareSurroundPan.distance"
 removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
 domain = "mastering"
 rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.absorption_bands"
+new = "SonareRirSynthConfig.band_absorption"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.absorption_band_count"
+new = "SonareRirSynthConfig.band_absorption_count"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.scattering_bands"
+new = "SonareRirSynthConfig.band_scattering"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.scattering_band_count"
+new = "SonareRirSynthConfig.band_scattering_count"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.late_model"
+new = "SonareRirSynthConfig.prefer_eyring"
+changed = "an int read as a boolean: non-zero selects Eyring, 0 Sabine; the SONARE_REVERB_MODEL_* selector values are gone"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.air_absorption"
+new = "SonareRirSynthConfig.air_absorption_enabled"
+changed = "an int read as a boolean: non-zero applies the atmospheric absorption; the SONARE_AIR_ABSORPTION_* selector values are gone"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.source_x"
+new = "SonareRirSynthConfig.source.x"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.listener_x"
+new = "SonareRirSynthConfig.listener.x"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.source_y"
+new = "SonareRirSynthConfig.source.y"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.listener_y"
+new = "SonareRirSynthConfig.listener.y"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.source_z"
+new = "SonareRirSynthConfig.source.z"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.listener_z"
+new = "SonareRirSynthConfig.listener.z"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.absorption_bands"
+new = "SonareRoomMorphConfig.band_absorption"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.absorption_band_count"
+new = "SonareRoomMorphConfig.band_absorption_count"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.scattering_bands"
+new = "SonareRoomMorphConfig.band_scattering"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.scattering_band_count"
+new = "SonareRoomMorphConfig.band_scattering_count"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.late_model"
+new = "SonareRoomMorphConfig.prefer_eyring"
+changed = "an int read as a boolean: non-zero selects Eyring, 0 Sabine; the SONARE_REVERB_MODEL_* selector values are gone"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.air_absorption"
+new = "SonareRoomMorphConfig.air_absorption_enabled"
+changed = "an int read as a boolean: non-zero applies the atmospheric absorption; the SONARE_AIR_ABSORPTION_* selector values are gone"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.source_x"
+new = "SonareRoomMorphConfig.source.x"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.listener_x"
+new = "SonareRoomMorphConfig.listener.x"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.source_y"
+new = "SonareRoomMorphConfig.source.y"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.listener_y"
+new = "SonareRoomMorphConfig.listener.y"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.source_z"
+new = "SonareRoomMorphConfig.source.z"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.listener_z"
+new = "SonareRoomMorphConfig.listener.z"
+changed = "source and listener are SonareRoomPlacement members {x, y, z}"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomEstimate.absorption_bands"
+new = "SonareRoomEstimate.band_absorption"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareCompressorConfig.sidechain_hpf_enabled"
+new = "SonareCompressorConfig.sidechain_high_pass_enabled"
+domain = "mastering"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "SonareCompressorConfig.sidechain_hpf_hz"
+new = "SonareCompressorConfig.sidechain_high_pass_hz"
+domain = "mastering"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "SonareGateConfig.key_hpf_hz"
+new = "SonareGateConfig.key_high_pass_hz"
+domain = "mastering"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "SonareMelResult.fmin"
+new = "SonareMelResult.fmin_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "SonareMelResult.fmax"
+new = "SonareMelResult.fmax_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "type"
+old = "SonareSectionResult"
+changed = "gains an owned char* form, one letter per section in time order, freed by sonare_free_section_result"
+domain = "analysis"
+rule = "individual"

@@ -361,6 +361,7 @@ inline std::string renamed_param_successor(const std::string& owner, const std::
       {"", "sidechainHpfHz", "sidechainHighPassHz"},
       {"", "ceilingDb", "ceilingDbtp"},
       {"dynamics.deesser", "bandpassQ", "bandPassQ"},
+      {"dynamics.gate", "keyHpfHz", "keyHighPassHz"},
       {"effects.acoustic.roomMorph", "maxSeconds", "maxSec"},
       {"effects.reverb.room", "maxSeconds", "maxSec"},
       {"effects.modulation.pitchShifter", "semitones", "pitchSemitones"},

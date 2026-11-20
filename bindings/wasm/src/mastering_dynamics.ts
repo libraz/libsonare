@@ -189,14 +189,10 @@ export function masteringDynamicsGate(...args: unknown[]): DynamicsProcessorResu
   return withEntry('masteringDynamicsGate', () => {
     const r = sampleOneShot<MasteringDynamicsGateRequest>('masteringDynamicsGate', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    const opts = nativeOptions(r);
-    // Native still spells the key high-pass `keyHpfHz`.
-    delete opts.keyHighPassHz;
     if (r.keyHighPassHz !== undefined && r.keyHighPassHz !== null) {
       assertNonNegativeFloatValue(r.keyHighPassHz, 'keyHighPassHz');
-      opts.keyHpfHz = r.keyHighPassHz;
     }
-    return requireModule().masteringDynamicsGate(r.samples, r.sampleRate, opts);
+    return requireModule().masteringDynamicsGate(r.samples, r.sampleRate, nativeOptions(r));
   });
 }
 

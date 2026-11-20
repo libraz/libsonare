@@ -35,31 +35,6 @@ using sonare_c_detail::struct_size_accepted;
 namespace {
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-static_assert(static_cast<int>(sonare::acoustic::ReverbModel::Sabine) + 1 ==
-                      SONARE_REVERB_MODEL_SABINE &&
-                  SONARE_REVERB_MODEL_EYRING == SONARE_REVERB_MODEL_SABINE + 1,
-              "SONARE_REVERB_MODEL_* must sit one above sonare::acoustic::ReverbModel");
-
-// False for a selector other than SABINE / EYRING, which the caller refuses.
-bool late_model_from_c(int selector, sonare::acoustic::ReverbModel* model) {
-  return sonare_c_detail::ordinal_to_enum(selector, SONARE_REVERB_MODEL_SABINE,
-                                          SONARE_REVERB_MODEL_EYRING, model, 1);
-}
-
-// False for a selector other than ON / OFF, which the caller refuses.
-bool air_absorption_from_c(int selector, bool* enabled) {
-  switch (selector) {
-    case SONARE_AIR_ABSORPTION_ON:
-      *enabled = true;
-      return true;
-    case SONARE_AIR_ABSORPTION_OFF:
-      *enabled = false;
-      return true;
-    default:
-      return false;
-  }
-}
-
 // The material selector set make_room maps; anything else is refused.
 bool valid_material_preset(int selector) {
   return sonare_c_detail::valid_c_enum(selector, SONARE_MATERIAL_PRESET_NONE,
@@ -118,12 +93,10 @@ void init_room_fields(Config* config) {
   config->length_m = kDefaultRoomDims.length;
   config->width_m = kDefaultRoomDims.width;
   config->height_m = kDefaultRoomDims.height;
-  config->source_x = kDefaultPlacement.source.x;
-  config->source_y = kDefaultPlacement.source.y;
-  config->source_z = kDefaultPlacement.source.z;
-  config->listener_x = kDefaultPlacement.listener.x;
-  config->listener_y = kDefaultPlacement.listener.y;
-  config->listener_z = kDefaultPlacement.listener.z;
+  config->source = {kDefaultPlacement.source.x, kDefaultPlacement.source.y,
+                    kDefaultPlacement.source.z};
+  config->listener = {kDefaultPlacement.listener.x, kDefaultPlacement.listener.y,
+                      kDefaultPlacement.listener.z};
   config->absorption = kDefaultWallAbsorption;
   config->material_preset = SONARE_MATERIAL_PRESET_NONE;
   const AirAbsorption air{};
@@ -149,9 +122,8 @@ void sonare_rir_synth_config_init(SonareRirSynthConfig* config) {
   config->crossfade_ms = defaults.crossfade_ms;
   config->ism_order = defaults.ism_order;
   config->seed = defaults.seed;
-  config->late_model = static_cast<int>(defaults.late_model) + SONARE_REVERB_MODEL_SABINE;
-  config->air_absorption =
-      defaults.air_absorption_enabled ? SONARE_AIR_ABSORPTION_ON : SONARE_AIR_ABSORPTION_OFF;
+  config->prefer_eyring = defaults.late_model == sonare::acoustic::ReverbModel::Eyring ? 1 : 0;
+  config->air_absorption_enabled = defaults.air_absorption_enabled ? 1 : 0;
 }
 
 void sonare_room_morph_config_init(SonareRoomMorphConfig* config) {
@@ -168,9 +140,8 @@ void sonare_room_morph_config_init(SonareRoomMorphConfig* config) {
   config->ism_order = defaults.ism_order;
   config->seed = defaults.seed;
   config->receiver_spacing_m = defaults.receiver_spacing_m;
-  config->late_model = static_cast<int>(defaults.late_model) + SONARE_REVERB_MODEL_SABINE;
-  config->air_absorption =
-      defaults.air_absorption_enabled ? SONARE_AIR_ABSORPTION_ON : SONARE_AIR_ABSORPTION_OFF;
+  config->prefer_eyring = defaults.late_model == sonare::acoustic::ReverbModel::Eyring ? 1 : 0;
+  config->air_absorption_enabled = defaults.air_absorption_enabled ? 1 : 0;
 }
 
 const char* sonare_material_preset_name(int preset) {
@@ -194,25 +165,21 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
                                     "room estimate has no measurable dimensions");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (sonare::acoustic::estimated_absorption_measured(estimate->absorption_bands,
+  if (sonare::acoustic::estimated_absorption_measured(estimate->band_absorption,
                                                       estimate->band_count)) {
-    out->absorption_bands = estimate->absorption_bands;
-    out->absorption_band_count = estimate->band_count;
+    out->band_absorption = estimate->band_absorption;
+    out->band_absorption_count = estimate->band_count;
   }
   const float mean =
-      sonare::acoustic::mean_finite_absorption(estimate->absorption_bands, estimate->band_count);
+      sonare::acoustic::mean_finite_absorption(estimate->band_absorption, estimate->band_count);
   if (std::isfinite(mean)) out->absorption = mean;
   out->length_m = estimate->length_m;
   out->width_m = estimate->width_m;
   out->height_m = estimate->height_m;
   const sonare::acoustic::SourceListener placement = sonare::acoustic::scaled_default_placement(
       estimate->length_m, estimate->width_m, estimate->height_m);
-  out->source_x = placement.source.x;
-  out->source_y = placement.source.y;
-  out->source_z = placement.source.z;
-  out->listener_x = placement.listener.x;
-  out->listener_y = placement.listener.y;
-  out->listener_z = placement.listener.z;
+  out->source = {placement.source.x, placement.source.y, placement.source.z};
+  out->listener = {placement.listener.x, placement.listener.y, placement.listener.z};
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -235,41 +202,40 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   const auto finite = [](float value) { return std::isfinite(value); };
   const auto unit = [&](float value) { return finite(value) && value >= 0.0f && value <= 1.0f; };
   if (!finite(config->length_m) || !finite(config->width_m) || !finite(config->height_m) ||
-      !finite(config->source_x) || !finite(config->source_y) || !finite(config->source_z) ||
-      !finite(config->listener_x) || !finite(config->listener_y) || !finite(config->listener_z) ||
+      !finite(config->source.x) || !finite(config->source.y) || !finite(config->source.z) ||
+      !finite(config->listener.x) || !finite(config->listener.y) || !finite(config->listener.z) ||
       !unit(config->absorption) || config->ism_order < 0 || !std::isfinite(config->max_sec) ||
       config->max_sec < 0.0f || config->max_sec > sonare::acoustic::kMaxRirSeconds ||
       !std::isfinite(config->mixing_time_ms) || config->mixing_time_ms < 0.0f ||
       config->mixing_time_ms > sonare::acoustic::kMaxRirMixingTimeMs ||
       !std::isfinite(config->crossfade_ms) || config->crossfade_ms < 0.0f ||
       config->crossfade_ms > sonare::acoustic::kMaxRirCrossfadeMs ||
-      config->absorption_band_count > sonare::acoustic::kMaxMaterialBands ||
-      config->scattering_band_count > sonare::acoustic::kMaxMaterialBands ||
-      (config->absorption_band_count > 0 && config->absorption_bands == nullptr) ||
-      (config->scattering_band_count > 0 && config->scattering_bands == nullptr) ||
+      config->band_absorption_count > sonare::acoustic::kMaxMaterialBands ||
+      config->band_scattering_count > sonare::acoustic::kMaxMaterialBands ||
+      (config->band_absorption_count > 0 && config->band_absorption == nullptr) ||
+      (config->band_scattering_count > 0 && config->band_scattering == nullptr) ||
       !valid_material_preset(config->material_preset)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   sonare::acoustic::RirSynthConfig rc;
-  if (!late_model_from_c(config->late_model, &rc.late_model) ||
-      !air_absorption_from_c(config->air_absorption, &rc.air_absorption_enabled)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  rc.late_model = config->prefer_eyring != 0 ? sonare::acoustic::ReverbModel::Eyring
+                                             : sonare::acoustic::ReverbModel::Sabine;
+  rc.air_absorption_enabled = config->air_absorption_enabled != 0;
+  for (size_t i = 0; i < config->band_absorption_count; ++i) {
+    if (!unit(config->band_absorption[i])) return SONARE_ERROR_INVALID_PARAMETER;
   }
-  for (size_t i = 0; i < config->absorption_band_count; ++i) {
-    if (!unit(config->absorption_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  for (size_t i = 0; i < config->scattering_band_count; ++i) {
-    if (!unit(config->scattering_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t i = 0; i < config->band_scattering_count; ++i) {
+    if (!unit(config->band_scattering[i])) return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   using namespace sonare::acoustic;
   const ShoeboxRoom room =
       make_room(config->length_m, config->width_m, config->height_m, config->absorption,
-                config->absorption_bands, config->absorption_band_count, config->scattering_bands,
-                config->scattering_band_count, config->material_preset);
-  const SourceListener placement{{config->source_x, config->source_y, config->source_z},
-                                 {config->listener_x, config->listener_y, config->listener_z}};
+                config->band_absorption, config->band_absorption_count, config->band_scattering,
+                config->band_scattering_count, config->material_preset);
+  const SourceListener placement{{config->source.x, config->source.y, config->source.z},
+                                 {config->listener.x, config->listener.y, config->listener.z}};
   rc.ism_order = config->ism_order;
   rc.seed = config->seed;
   rc.max_seconds = config->max_sec;
@@ -362,7 +328,7 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
             sonare_c_detail::copy_float_vector_padded(est.absorption_bands, max_count));
         std::unique_ptr<float[]> staged_rt60(
             sonare_c_detail::copy_float_vector_padded(est.rt60_bands, max_count));
-        staged.absorption_bands = staged_absorption.release();
+        staged.band_absorption = staged_absorption.release();
         staged.rt60_bands = staged_rt60.release();
         staged.band_count = max_count;
         *out = staged;
@@ -375,7 +341,7 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
 
 void sonare_free_room_estimate(SonareRoomEstimate* result) {
   if (!result) return;
-  delete[] result->absorption_bands;
+  delete[] result->band_absorption;
   delete[] result->rt60_bands;
   *result = {};
 }
@@ -393,22 +359,18 @@ bool room_morph_config_is_valid(const SonareRoomMorphConfig& config) {
     return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
   };
   if (!unit(config.absorption) || !unit(config.source_tail_suppression) || !unit(config.wet) ||
-      config.absorption_band_count > sonare::acoustic::kMaxMaterialBands ||
-      config.scattering_band_count > sonare::acoustic::kMaxMaterialBands ||
-      (config.absorption_band_count > 0 && config.absorption_bands == nullptr) ||
-      (config.scattering_band_count > 0 && config.scattering_bands == nullptr) ||
+      config.band_absorption_count > sonare::acoustic::kMaxMaterialBands ||
+      config.band_scattering_count > sonare::acoustic::kMaxMaterialBands ||
+      (config.band_absorption_count > 0 && config.band_absorption == nullptr) ||
+      (config.band_scattering_count > 0 && config.band_scattering == nullptr) ||
       !valid_material_preset(config.material_preset)) {
     return false;
   }
-  sonare::acoustic::ReverbModel late_model{};
-  if (!late_model_from_c(config.late_model, &late_model)) return false;
-  bool air_absorption = false;
-  if (!air_absorption_from_c(config.air_absorption, &air_absorption)) return false;
-  for (size_t i = 0; i < config.absorption_band_count; ++i) {
-    if (!unit(config.absorption_bands[i])) return false;
+  for (size_t i = 0; i < config.band_absorption_count; ++i) {
+    if (!unit(config.band_absorption[i])) return false;
   }
-  for (size_t i = 0; i < config.scattering_band_count; ++i) {
-    if (!unit(config.scattering_bands[i])) return false;
+  for (size_t i = 0; i < config.band_scattering_count; ++i) {
+    if (!unit(config.band_scattering[i])) return false;
   }
   return true;
 }
@@ -418,10 +380,10 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   sonare::effects::acoustic::RoomMorphConfig cfg;
   cfg.target =
       make_room(config.length_m, config.width_m, config.height_m, config.absorption,
-                config.absorption_bands, config.absorption_band_count, config.scattering_bands,
-                config.scattering_band_count, config.material_preset);
-  cfg.placement = {{config.source_x, config.source_y, config.source_z},
-                   {config.listener_x, config.listener_y, config.listener_z}};
+                config.band_absorption, config.band_absorption_count, config.band_scattering,
+                config.band_scattering_count, config.material_preset);
+  cfg.placement = {{config.source.x, config.source.y, config.source.z},
+                   {config.listener.x, config.listener.y, config.listener.z}};
   cfg.source_tail_suppression = config.source_tail_suppression;
   cfg.wet = config.wet;
   cfg.ism_order = config.ism_order;
@@ -429,9 +391,9 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   cfg.max_seconds = config.max_sec;
   cfg.mixing_time_ms = config.mixing_time_ms;
   cfg.crossfade_ms = config.crossfade_ms;
-  // room_morph_config_is_valid admitted both selectors.
-  (void)late_model_from_c(config.late_model, &cfg.late_model);
-  (void)air_absorption_from_c(config.air_absorption, &cfg.air_absorption_enabled);
+  cfg.late_model = config.prefer_eyring != 0 ? sonare::acoustic::ReverbModel::Eyring
+                                             : sonare::acoustic::ReverbModel::Sabine;
+  cfg.air_absorption_enabled = config.air_absorption_enabled != 0;
   // The core rejects an implausible climate by throwing, mapped to INVALID_PARAMETER.
   cfg.air.temperature_c = config.air_temperature_c;
   cfg.air.humidity_percent = config.air_humidity_percent;

@@ -9247,7 +9247,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::types"
 [[entry]]
 kind = "function"
 old = "analyzeSections"
-changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest"
+changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[]"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
@@ -9255,7 +9255,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "analyzeSections"
-changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest"
+changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest; returns SectionAnalysis { sections, form } in place of Section[]"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"

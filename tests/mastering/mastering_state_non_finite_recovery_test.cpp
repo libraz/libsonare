@@ -401,7 +401,7 @@ TEST_CASE("the gate bounds a non-finite sample to its own block", "[mastering][d
   config.threshold_db = -20.0f;
   config.close_threshold_db = -26.0f;
   config.range_db = -40.0f;
-  config.key_hpf_hz = 120.0f;
+  config.key_high_pass_hz = 120.0f;
 
   const auto make = [config]() {
     auto processor = std::make_shared<Gate>(config);

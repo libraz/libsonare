@@ -50,7 +50,7 @@ describe('analyzeSections threshold', () => {
     const permissive = analyzeSections(SIGNAL, SR, { ...OPTIONS, threshold: 0 });
     const strict = analyzeSections(SIGNAL, SR, { ...OPTIONS, threshold: 5 });
     expect(strict).not.toEqual(permissive);
-    expect(strict.length).toBeLessThan(permissive.length);
+    expect(strict.sections.length).toBeLessThan(permissive.sections.length);
   });
 
   it('refuses a negative threshold as a RangeError from the library', () => {

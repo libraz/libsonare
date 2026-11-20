@@ -49,6 +49,7 @@ import type {
   RoomMorphStereoResult,
   RoomPlacement,
   Section,
+  SectionAnalysis,
   SectionType,
   SynthesizeRirRequest,
   TimbreResult,
@@ -1036,17 +1037,17 @@ export function analyzeAsync(...args: unknown[]): Promise<AnalysisResult> {
 }
 
 /** Detect song-structure sections (intro/verse/chorus/...). */
-export function analyzeSections(request: AnalyzeSectionsRequest): Section[];
+export function analyzeSections(request: AnalyzeSectionsRequest): SectionAnalysis;
 export function analyzeSections(
   samples: Float32Array,
   sampleRate: number,
   options?: OptionsOf<AnalyzeSectionsRequest>,
-): Section[];
-export function analyzeSections(...args: unknown[]): Section[] {
+): SectionAnalysis;
+export function analyzeSections(...args: unknown[]): SectionAnalysis {
   return withEntry('analyzeSections', () => {
     const request = audioCall<AnalyzeSectionsRequest>('analyzeSections', args);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    const sections: Native[] = addon.analyzeSections(
+    const native: { sections: Native[]; form: string } = addon.analyzeSections(
       request.samples,
       request.sampleRate,
       fft.nFft,
@@ -1054,7 +1055,7 @@ export function analyzeSections(...args: unknown[]): Section[] {
       request.minSectionSec ?? 4.0,
       request.threshold,
     );
-    return sections.map(sectionFromNative);
+    return { sections: native.sections.map(sectionFromNative), form: native.form };
   });
 }
 

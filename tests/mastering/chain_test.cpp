@@ -674,22 +674,22 @@ TEST_CASE("The declip threshold is a dBFS key", "[mastering][chain]") {
 
 TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering][chain]") {
   const MasteringChainConfig defaults;
-  REQUIRE_FALSE(defaults.dynamics.compressor.config.sidechain_hpf_enabled);
+  REQUIRE_FALSE(defaults.dynamics.compressor.config.sidechain_high_pass_enabled);
   REQUIRE_THAT(chain_config_to_json(defaults), !ContainsSubstring("sidechainH"));
   REQUIRE_FALSE(chain_config_parameter_value(defaults, "dynamics.compressor.sidechainHighPassHz"));
 
   Param params[] = {{"dynamics.compressor.sidechainHighPassHz", 180.0}};
   const MasteringChainConfig config = parse_chain_config_params(params, 1);
-  REQUIRE(config.dynamics.compressor.config.sidechain_hpf_enabled);
-  REQUIRE(config.dynamics.compressor.config.sidechain_hpf_hz == 180.0f);
+  REQUIRE(config.dynamics.compressor.config.sidechain_high_pass_enabled);
+  REQUIRE(config.dynamics.compressor.config.sidechain_high_pass_hz == 180.0f);
   REQUIRE(*chain_config_parameter_value(config, "dynamics.compressor.sidechainHighPassHz") ==
           180.0);
   const std::string document = chain_config_to_json(config);
   REQUIRE_THAT(document, ContainsSubstring("dynamics.compressor.sidechainHighPassHz"));
   REQUIRE_THAT(document, !ContainsSubstring("sidechainHpf"));
   const MasteringChainConfig reloaded = chain_config_from_json(document);
-  REQUIRE(reloaded.dynamics.compressor.config.sidechain_hpf_enabled);
-  REQUIRE(reloaded.dynamics.compressor.config.sidechain_hpf_hz == 180.0f);
+  REQUIRE(reloaded.dynamics.compressor.config.sidechain_high_pass_enabled);
+  REQUIRE(reloaded.dynamics.compressor.config.sidechain_high_pass_hz == 180.0f);
 
   // Presence needs a finite positive frequency; zero is a refusal, not "off".
   for (const double bad : {0.0, -5.0, std::numeric_limits<double>::infinity(),
@@ -723,9 +723,9 @@ TEST_CASE("A multiband band's sidechain high-pass is one optional key", "[master
   Param params[] = {{high_pass_key.c_str(), 140.0}};
   const MasteringChainConfig config = parse_chain_config_params(params, 1);
   const auto& bands = config.dynamics.multiband_comp.config.bands;
-  REQUIRE_FALSE(bands[0].sidechain_hpf_enabled);
-  REQUIRE(bands[1].sidechain_hpf_enabled);
-  REQUIRE(bands[1].sidechain_hpf_hz == 140.0f);
+  REQUIRE_FALSE(bands[0].sidechain_high_pass_enabled);
+  REQUIRE(bands[1].sidechain_high_pass_enabled);
+  REQUIRE(bands[1].sidechain_high_pass_hz == 140.0f);
   REQUIRE(*chain_config_parameter_value(config, high_pass_key) == 140.0);
   REQUIRE_FALSE(
       chain_config_parameter_value(config, "dynamics.multibandComp.bands.0.sidechainHighPassHz"));
@@ -736,9 +736,9 @@ TEST_CASE("A multiband band's sidechain high-pass is one optional key", "[master
   REQUIRE_THAT(document, !ContainsSubstring("sidechainHpf"));
   const MasteringChainConfig reloaded = chain_config_from_json(document);
   const auto& reloaded_bands = reloaded.dynamics.multiband_comp.config.bands;
-  REQUIRE_FALSE(reloaded_bands[0].sidechain_hpf_enabled);
-  REQUIRE(reloaded_bands[1].sidechain_hpf_enabled);
-  REQUIRE(reloaded_bands[1].sidechain_hpf_hz == 140.0f);
+  REQUIRE_FALSE(reloaded_bands[0].sidechain_high_pass_enabled);
+  REQUIRE(reloaded_bands[1].sidechain_high_pass_enabled);
+  REQUIRE(reloaded_bands[1].sidechain_high_pass_hz == 140.0f);
 
   REQUIRE(dot_key_refusal(high_pass_key.c_str(), 0.0).first == ErrorCode::InvalidParameter);
   REQUIRE(dot_key_refusal(high_pass_key.c_str(), -1.0).first == ErrorCode::InvalidParameter);
@@ -1913,12 +1913,12 @@ TEST_CASE("chain parameter lookup preserves non-default boolean fields",
   MasteringChainConfig config;
   config.dynamics.compressor.enabled = true;
   config.dynamics.compressor.config.auto_makeup = true;
-  config.dynamics.compressor.config.sidechain_hpf_enabled = true;
+  config.dynamics.compressor.config.sidechain_high_pass_enabled = true;
   REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.autoMakeup") ==
           std::optional<double>{1.0});
   REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.sidechainHighPassHz") ==
           std::optional<double>{
-              static_cast<double>(config.dynamics.compressor.config.sidechain_hpf_hz)});
+              static_cast<double>(config.dynamics.compressor.config.sidechain_high_pass_hz)});
 }
 
 TEST_CASE("StreamingMasteringChain preserves typed double parameter semantics",
@@ -3150,9 +3150,10 @@ void require_same_band(const CompressorConfig& actual, const CompressorConfig& e
   CHECK(actual.makeup_gain_db == expected.makeup_gain_db);
   CHECK(actual.auto_makeup == expected.auto_makeup);
   CHECK(actual.detector == expected.detector);
-  CHECK(actual.sidechain_hpf_enabled == expected.sidechain_hpf_enabled);
+  CHECK(actual.sidechain_high_pass_enabled == expected.sidechain_high_pass_enabled);
   // A record carries the corner only while the high-pass is on, so an off band's corner is unused.
-  if (expected.sidechain_hpf_enabled) CHECK(actual.sidechain_hpf_hz == expected.sidechain_hpf_hz);
+  if (expected.sidechain_high_pass_enabled)
+    CHECK(actual.sidechain_high_pass_hz == expected.sidechain_high_pass_hz);
   CHECK(actual.pdr_time_ms == expected.pdr_time_ms);
   CHECK(actual.pdr_release_scale == expected.pdr_release_scale);
 }
@@ -3190,8 +3191,8 @@ MultibandCompStage four_band_stage() {
     band.makeup_gain_db = 0.5f * step;
     band.auto_makeup = index % 2 == 1;
     band.detector = static_cast<DetectorMode>(index % 3);
-    band.sidechain_hpf_enabled = index % 2 == 0;
-    band.sidechain_hpf_hz = 70.0f + 5.0f * step;
+    band.sidechain_high_pass_enabled = index % 2 == 0;
+    band.sidechain_high_pass_hz = 70.0f + 5.0f * step;
     band.pdr_time_ms = 2.0f * step;
     band.pdr_release_scale = 1.0f + 0.25f * step;
   }
@@ -3222,8 +3223,8 @@ std::vector<Param> array_spelling(const MultibandCompStage& stage) {
     params.push_back({mb_key(prefix + "makeupGainDb"), band.makeup_gain_db});
     params.push_back({mb_key(prefix + "autoMakeup"), band.auto_makeup ? 1.0 : 0.0});
     params.push_back({mb_key(prefix + "detector"), static_cast<double>(band.detector)});
-    if (band.sidechain_hpf_enabled) {
-      params.push_back({mb_key(prefix + "sidechainHighPassHz"), band.sidechain_hpf_hz});
+    if (band.sidechain_high_pass_enabled) {
+      params.push_back({mb_key(prefix + "sidechainHighPassHz"), band.sidechain_high_pass_hz});
     }
     params.push_back({mb_key(prefix + "pdrTimeMs"), band.pdr_time_ms});
     params.push_back({mb_key(prefix + "pdrReleaseScale"), band.pdr_release_scale});

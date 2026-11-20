@@ -79,8 +79,8 @@ MasteringChainConfig make_full_multiband_config(std::size_t band_count) {
     band.makeup_gain_db = -1.0f + static_cast<float>(index) * 0.25f;
     band.auto_makeup = index % 2 == 0;
     band.detector = static_cast<DetectorMode>(index % 3);
-    band.sidechain_hpf_enabled = index % 2 != 0;
-    band.sidechain_hpf_hz = 80.0f + static_cast<float>(index) * 10.0f;
+    band.sidechain_high_pass_enabled = index % 2 != 0;
+    band.sidechain_high_pass_hz = 80.0f + static_cast<float>(index) * 10.0f;
     band.pdr_time_ms = static_cast<float>(index) * 3.0f;
     band.pdr_release_scale = 1.0f + static_cast<float>(index) * 0.1f;
     multiband.config.bands[index] = band;
@@ -123,8 +123,8 @@ void require_same_multiband(const MultibandCompStage& actual, const MultibandCom
     REQUIRE(actual_band.makeup_gain_db == expected_band.makeup_gain_db);
     REQUIRE(actual_band.auto_makeup == expected_band.auto_makeup);
     REQUIRE(actual_band.detector == expected_band.detector);
-    REQUIRE(actual_band.sidechain_hpf_enabled == expected_band.sidechain_hpf_enabled);
-    REQUIRE(actual_band.sidechain_hpf_hz == expected_band.sidechain_hpf_hz);
+    REQUIRE(actual_band.sidechain_high_pass_enabled == expected_band.sidechain_high_pass_enabled);
+    REQUIRE(actual_band.sidechain_high_pass_hz == expected_band.sidechain_high_pass_hz);
     REQUIRE(actual_band.pdr_time_ms == expected_band.pdr_time_ms);
     REQUIRE(actual_band.pdr_release_scale == expected_band.pdr_release_scale);
   }
@@ -287,10 +287,10 @@ TEST_CASE("v2 multiband JSON preserves four and five full compressor bands",
       REQUIRE(actual_band.makeup_gain_db == expected_band.makeup_gain_db);
       REQUIRE(actual_band.auto_makeup == expected_band.auto_makeup);
       REQUIRE(actual_band.detector == expected_band.detector);
-      REQUIRE(actual_band.sidechain_hpf_enabled == expected_band.sidechain_hpf_enabled);
+      REQUIRE(actual_band.sidechain_high_pass_enabled == expected_band.sidechain_high_pass_enabled);
       // A record carries the corner only while the high-pass is on.
-      if (expected_band.sidechain_hpf_enabled) {
-        REQUIRE(actual_band.sidechain_hpf_hz == expected_band.sidechain_hpf_hz);
+      if (expected_band.sidechain_high_pass_enabled) {
+        REQUIRE(actual_band.sidechain_high_pass_hz == expected_band.sidechain_high_pass_hz);
       }
       REQUIRE(actual_band.pdr_time_ms == expected_band.pdr_time_ms);
       REQUIRE(actual_band.pdr_release_scale == expected_band.pdr_release_scale);
@@ -1020,8 +1020,8 @@ TEST_CASE("a cutoff list override resizes a preset's multiband bands by index",
     CHECK(actual.makeup_gain_db == expected.makeup_gain_db);
     CHECK(actual.auto_makeup == expected.auto_makeup);
     CHECK(actual.detector == expected.detector);
-    CHECK(actual.sidechain_hpf_enabled == expected.sidechain_hpf_enabled);
-    CHECK(actual.sidechain_hpf_hz == expected.sidechain_hpf_hz);
+    CHECK(actual.sidechain_high_pass_enabled == expected.sidechain_high_pass_enabled);
+    CHECK(actual.sidechain_high_pass_hz == expected.sidechain_high_pass_hz);
     CHECK(actual.pdr_time_ms == expected.pdr_time_ms);
     CHECK(actual.pdr_release_scale == expected.pdr_release_scale);
   };

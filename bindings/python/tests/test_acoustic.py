@@ -26,6 +26,7 @@ def _acoustic_available() -> bool:
         SONARE_ERROR_NOT_SUPPORTED,
         SonareRirSynthConfig,
         SonareRirSynthResult,
+        SonareRoomPlacement,
         _get_lib,
     )
 
@@ -34,12 +35,8 @@ def _acoustic_available() -> bool:
         length_m=7.0,
         width_m=5.0,
         height_m=3.0,
-        source_x=1.0,
-        source_y=1.0,
-        source_z=1.2,
-        listener_x=5.0,
-        listener_y=4.0,
-        listener_z=1.7,
+        source=SonareRoomPlacement(1.0, 1.0, 1.2),
+        listener=SonareRoomPlacement(5.0, 4.0, 1.7),
         absorption=0.2,
         max_sec=0.05,
         ism_order=1,
@@ -262,14 +259,14 @@ def test_estimate_room_frees_a_partial_foreign_result_before_check(
         def sonare_estimate_room(self, *_args: object) -> int:
             self.estimate_calls += 1
             out = _args[-1]._obj  # type: ignore[attr-defined]
-            out.absorption_bands = ctypes.cast(self.absorption, ctypes.POINTER(ctypes.c_float))
+            out.band_absorption = ctypes.cast(self.absorption, ctypes.POINTER(ctypes.c_float))
             out.rt60_bands = ctypes.cast(self.rt60, ctypes.POINTER(ctypes.c_float))
             out.band_count = 1
             return int(libsonare.ErrorCode.INVALID_PARAMETER)
 
         def sonare_free_room_estimate(self, out_arg: object) -> None:
             out = out_arg._obj  # type: ignore[attr-defined]
-            assert bool(out.absorption_bands)
+            assert bool(out.band_absorption)
             assert bool(out.rt60_bands)
             self.free_calls += 1
 

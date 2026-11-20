@@ -69,7 +69,7 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   // pointer is stable for the entire per-sample loop — RtPublisher only
   // changes its current() value inside acquire(), and we already called it.
   const GateConfig& cfg = *adopt_snapshot_for_block();
-  const bool key_hpf_enabled = key_hpf_gate_.admit(cfg.key_hpf_hz > 0.0f, [this] {
+  const bool key_high_pass_enabled = key_high_pass_gate_.admit(cfg.key_high_pass_hz > 0.0f, [this] {
     std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
     std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   });
@@ -81,7 +81,7 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   const int excluded_channel = detector_excluded_channel(num_channels);
   std::array<bool, kRealtimePreparedChannels> hpf_admitted{};
   for (size_t ch = 0; ch < hpf_channel_gates_.size(); ++ch) {
-    const bool active = key_hpf_enabled && ch < static_cast<size_t>(num_channels) &&
+    const bool active = key_high_pass_enabled && ch < static_cast<size_t>(num_channels) &&
                         static_cast<int>(ch) != excluded_channel;
     hpf_admitted[ch] = hpf_channel_gates_[ch].admit(active, [this, ch] {
       hpf_x1_[ch] = 0.0f;
@@ -167,7 +167,7 @@ void Gate::reset() {
   last_gain_reduction_db_ = 0.0f;
   hold_samples_remaining_ = 0;
   gate_open_ = false;
-  key_hpf_gate_.close();
+  key_high_pass_gate_.close();
   for (auto& gate : hpf_channel_gates_) gate.close();
   std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
@@ -209,7 +209,7 @@ void Gate::validate_config(const GateConfig& config) {
   check::at_least(config.release_ms, 0.0, "release_ms");
   check::at_least(config.hold_ms, 0.0, "hold_ms");
   check::finite_float(config.close_threshold_db, "close_threshold_db");
-  check::at_least(config.key_hpf_hz, 0.0, "key_hpf_hz");
+  check::at_least(config.key_high_pass_hz, 0.0, "key_high_pass_hz");
   // A range of -inf is a full mute.
   if (config.range_db != -std::numeric_limits<float>::infinity()) {
     check::at_most(config.range_db, 0.0, "range_db");
@@ -223,9 +223,9 @@ void Gate::update_coefficients(const GateConfig& config) {
   // Bilinear-transformed 1st-order highpass with frequency prewarping. Only
   // recompute when the key HPF is enabled; the bypass path keeps b0=1, a1=0
   // which is a passthrough so leaving them at the default is safe.
-  if (config.key_hpf_hz > 0.0f) {
-    const auto hpf =
-        sonare::rt::onepole_highpass_coeffs(static_cast<double>(config.key_hpf_hz), sample_rate_);
+  if (config.key_high_pass_hz > 0.0f) {
+    const auto hpf = sonare::rt::onepole_highpass_coeffs(
+        static_cast<double>(config.key_high_pass_hz), sample_rate_);
     hpf_b0_ = hpf.b0;
     hpf_a1_ = hpf.a1;
   } else {

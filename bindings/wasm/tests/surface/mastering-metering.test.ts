@@ -598,7 +598,6 @@ describe('mastering metering surface', () => {
     });
 
     it.each([
-      ['the gate key high-pass', 'effects/offline_dynamics_editing.cpp', 'keyHpfHz'],
       ['the vectorscope decimation entry', 'metering/metering.cpp', 'meteringVectorscopeDecimated'],
     ])('%s is still spelled the old way in the embind source', (_label, path, spelling) => {
       expect(wasmSource(path)).toContain(spelling);

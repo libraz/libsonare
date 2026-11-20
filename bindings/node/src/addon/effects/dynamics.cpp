@@ -93,11 +93,11 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
     // A given sidechain high-pass corner switches the filter on; absent leaves it off.
     const Napi::Value high_pass = options.Get("sidechainHighPassHz");
     if (!high_pass.IsUndefined() && !high_pass.IsNull()) {
-      config.sidechain_hpf_hz = FiniteFloatProperty(options, "sidechainHighPassHz", 0.0f);
-      if (!(config.sidechain_hpf_hz > 0.0f)) {
+      config.sidechain_high_pass_hz = FiniteFloatProperty(options, "sidechainHighPassHz", 0.0f);
+      if (!(config.sidechain_high_pass_hz > 0.0f)) {
         throw Napi::RangeError::New(env, "sidechainHighPassHz must be finite and greater than 0");
       }
-      config.sidechain_hpf_enabled = true;
+      config.sidechain_high_pass_enabled = true;
     }
     config.pdr_time_ms = FloatProperty(options, "pdrTimeMs", config.pdr_time_ms);
     config.pdr_release_scale = FloatProperty(options, "pdrReleaseScale", config.pdr_release_scale);
@@ -129,7 +129,7 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
     config.hold_ms = FloatProperty(options, "holdMs", config.hold_ms);
     config.close_threshold_db =
         FloatProperty(options, "closeThresholdDb", config.close_threshold_db);
-    config.key_hpf_hz = FloatProperty(options, "keyHpfHz", config.key_hpf_hz);
+    config.key_high_pass_hz = FloatProperty(options, "keyHighPassHz", config.key_high_pass_hz);
   }
   sonare::mastering::dynamics::Gate processor(config);
   int latency = 0;

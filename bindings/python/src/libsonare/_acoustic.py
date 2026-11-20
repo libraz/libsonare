@@ -49,14 +49,6 @@ from .types import (
     RoomMorphStereoResult,
 )
 
-# SONARE_REVERB_MODEL_* selectors (sonare_c_acoustic.h); 0 is refused.
-_REVERB_MODEL_SABINE = 1
-_REVERB_MODEL_EYRING = 2
-
-# SonareRirSynthConfig / SonareRoomMorphConfig.air_absorption selector; 0 is refused.
-_AIR_ABSORPTION_ON = 1
-_AIR_ABSORPTION_OFF = 2
-
 # SonareDiagnosticSeverity ordinals (sonare_c_types_enums.h), mapped to the
 # strings Node and WASM put on RirDiagnostic.severity.
 _DIAGNOSTIC_SEVERITIES = ("info", "warning", "error")
@@ -103,10 +95,6 @@ def _material_preset(value: MaterialPresetName) -> int:
 
 def _acoustic_mode(value: AcousticModeName) -> int:
     return _named_selector(value, "mode", "acoustic_mode")
-
-
-def _late_model(prefer_eyring: bool) -> int:
-    return _REVERB_MODEL_EYRING if prefer_eyring else _REVERB_MODEL_SABINE
 
 
 def _band_array_args(
@@ -163,15 +151,15 @@ def _fill_room_config(
     A ``None`` keyword leaves the ``_init`` value; every other value is written
     literally, so a 0 seed, a 0 ms crossfade and a 0 degC climate are honoured.
     """
-    config.source_x, config.source_y, config.source_z = source
-    config.listener_x, config.listener_y, config.listener_z = listener
-    config.absorption_bands = band_ptr
-    config.absorption_band_count = band_count
-    config.scattering_bands = scatter_ptr
-    config.scattering_band_count = scatter_count
+    config.source.x, config.source.y, config.source.z = source
+    config.listener.x, config.listener.y, config.listener.z = listener
+    config.band_absorption = band_ptr
+    config.band_absorption_count = band_count
+    config.band_scattering = scatter_ptr
+    config.band_scattering_count = scatter_count
     config.material_preset = _material_preset(material_preset)
-    config.late_model = _late_model(prefer_eyring)
-    config.air_absorption = _AIR_ABSORPTION_ON if air_absorption_enabled else _AIR_ABSORPTION_OFF
+    config.prefer_eyring = int(prefer_eyring)
+    config.air_absorption_enabled = int(air_absorption_enabled)
     config.ism_order = _narrow_int(ism_order, "ism_order", 0, _C_INT_MAX)
     if seed is not None:
         config.seed = _to_c_uint(seed, "seed").value
@@ -385,7 +373,7 @@ def estimate_room(
             height_m=float(out.height_m),
             drr_db=float(out.drr_db),
             confidence=float(out.confidence),
-            band_absorption=_optional_from_c_float_array(out.absorption_bands, count),
+            band_absorption=_optional_from_c_float_array(out.band_absorption, count),
             rt60_bands=_optional_from_c_float_array(out.rt60_bands, count),
         )
     finally:
@@ -437,7 +425,7 @@ def room_geometry_from_estimate(
         height_m=estimate.height_m,
         drr_db=estimate.drr_db,
         confidence=estimate.confidence,
-        absorption_bands=bands_ptr,
+        band_absorption=bands_ptr,
         rt60_bands=None,
         band_count=bands_count,
     )
@@ -449,21 +437,21 @@ def room_geometry_from_estimate(
         "width_m": _narrow_double(config.width_m, "config.width_m"),
         "height_m": _narrow_double(config.height_m, "config.height_m"),
         "source": (
-            _narrow_double(config.source_x, "config.source_x"),
-            _narrow_double(config.source_y, "config.source_y"),
-            _narrow_double(config.source_z, "config.source_z"),
+            _narrow_double(config.source.x, "config.source.x"),
+            _narrow_double(config.source.y, "config.source.y"),
+            _narrow_double(config.source.z, "config.source.z"),
         ),
         "listener": (
-            _narrow_double(config.listener_x, "config.listener_x"),
-            _narrow_double(config.listener_y, "config.listener_y"),
-            _narrow_double(config.listener_z, "config.listener_z"),
+            _narrow_double(config.listener.x, "config.listener.x"),
+            _narrow_double(config.listener.y, "config.listener.y"),
+            _narrow_double(config.listener.z, "config.listener.z"),
         ),
     }
     if any(math.isfinite(band) for band in estimate.band_absorption):
         geometry["absorption"] = _narrow_double(config.absorption, "config.absorption")
-    if config.absorption_band_count > 0:
+    if config.band_absorption_count > 0:
         geometry["band_absorption"] = _optional_from_c_float_array(
-            config.absorption_bands, config.absorption_band_count
+            config.band_absorption, config.band_absorption_count
         )
     if source is not None:
         geometry["source"] = _placement(source, "source")

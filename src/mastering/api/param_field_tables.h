@@ -1018,10 +1018,10 @@ inline double field_as_double(Enum value) {
   X("pdrTimeMs", pdr_time_ms, kMs)                  \
   X("pdrReleaseScale", pdr_release_scale, kNone)
 
-#define SONARE_FIELDS_COMPRESSOR(X)                           \
-  SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)                \
-  X("sidechainHighPassEnabled", sidechain_hpf_enabled, kNone) \
-  X("sidechainHighPassHz", sidechain_hpf_hz, kHzLog)          \
+#define SONARE_FIELDS_COMPRESSOR(X)                                 \
+  SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)                      \
+  X("sidechainHighPassEnabled", sidechain_high_pass_enabled, kNone) \
+  X("sidechainHighPassHz", sidechain_high_pass_hz, kHzLog)          \
   SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 
 #define SONARE_FIELDS_LIMITER(X)                               \
@@ -1059,7 +1059,7 @@ inline double field_as_double(Enum value) {
   X("rangeDb", range_db, display_range(kDb, -80, 0))           \
   X("holdMs", hold_ms, display_range(kMs, 0, 1000))            \
   X("closeThresholdDb", close_threshold_db, kDb)               \
-  X("keyHpfHz", key_hpf_hz, kHz)
+  X("keyHighPassHz", key_high_pass_hz, kHz)
 
 #define SONARE_FIELDS_PARALLEL_COMP(X)          \
   X("thresholdDb", threshold_db, kDb)           \
@@ -1072,16 +1072,16 @@ inline double field_as_double(Enum value) {
   X("outputLimiter", output_limiter, kNone)     \
   X("outputCeilingDb", output_ceiling_db, kDbfs)
 
-#define SONARE_FIELDS_SIDECHAIN_ROUTER(X)                     \
-  X("thresholdDb", threshold_db, kDb)                         \
-  X("ratio", ratio, kRatio)                                   \
-  X("attackMs", attack_ms, kMsLog)                            \
-  X("releaseMs", release_ms, kMsLog)                          \
-  X("rangeDb", range_db, kDb)                                 \
-  X("sidechainHighPassEnabled", sidechain_hpf_enabled, kNone) \
-  X("sidechainHighPassHz", sidechain_hpf_hz, kHzLog)          \
-  X("monoSumming", mono_summing, kNone)                       \
-  X("keyListen", key_listen, kNone)                           \
+#define SONARE_FIELDS_SIDECHAIN_ROUTER(X)                           \
+  X("thresholdDb", threshold_db, kDb)                               \
+  X("ratio", ratio, kRatio)                                         \
+  X("attackMs", attack_ms, kMsLog)                                  \
+  X("releaseMs", release_ms, kMsLog)                                \
+  X("rangeDb", range_db, kDb)                                       \
+  X("sidechainHighPassEnabled", sidechain_high_pass_enabled, kNone) \
+  X("sidechainHighPassHz", sidechain_high_pass_hz, kHzLog)          \
+  X("monoSumming", mono_summing, kNone)                             \
+  X("keyListen", key_listen, kNone)                                 \
   X("lookaheadMs", lookahead_ms, kMs)
 
 #define SONARE_FIELDS_DUCKING(X)      \

@@ -22,7 +22,7 @@ struct GateConfig {
   float range_db = -80.0f;
   float hold_ms = 0.0f;
   float close_threshold_db = -50.0f;
-  float key_hpf_hz = 0.0f;
+  float key_high_pass_hz = 0.0f;
 };
 
 class Gate : public rt::RtConfigLifecycle<Gate, GateConfig> {
@@ -78,7 +78,7 @@ class Gate : public rt::RtConfigLifecycle<Gate, GateConfig> {
   float hpf_a1_ = 0.0f;
   float attack_coeff_ = 0.0f;
   float release_coeff_ = 0.0f;
-  rt::StageGate key_hpf_gate_;
+  rt::StageGate key_high_pass_gate_;
   std::vector<rt::StageGate> hpf_channel_gates_;
   std::vector<float> hpf_x1_;
   std::vector<float> hpf_y1_;

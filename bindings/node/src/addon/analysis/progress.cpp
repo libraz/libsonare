@@ -189,8 +189,11 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
     obj.Set("group", Napi::Number::New(env, section.group));
     sections.Set(static_cast<uint32_t>(i), obj);
   }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("sections", sections);
+  out.Set("form", Napi::String::New(env, result.form != nullptr ? result.form : ""));
   sonare_free_section_result(&result);
-  return sections;
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

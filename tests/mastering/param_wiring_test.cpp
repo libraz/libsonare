@@ -247,8 +247,8 @@ TEST_CASE("chain compressor advanced fields survive flat-param apply",
 
   REQUIRE(cfg.dynamics.compressor.enabled);
   REQUIRE(c.detector == sonare::mastering::dynamics::DetectorMode::LogRms);
-  REQUIRE(c.sidechain_hpf_enabled);
-  REQUIRE(c.sidechain_hpf_hz == 250.0f);
+  REQUIRE(c.sidechain_high_pass_enabled);
+  REQUIRE(c.sidechain_high_pass_hz == 250.0f);
   REQUIRE(c.pdr_time_ms == 30.0f);
   REQUIRE(c.pdr_release_scale == 1.5f);
 }
@@ -258,8 +258,8 @@ TEST_CASE("chain compressor advanced fields round-trip through JSON",
   MasteringChainConfig cfg;
   cfg.dynamics.compressor.enabled = true;
   cfg.dynamics.compressor.config.detector = sonare::mastering::dynamics::DetectorMode::Peak;
-  cfg.dynamics.compressor.config.sidechain_hpf_enabled = true;
-  cfg.dynamics.compressor.config.sidechain_hpf_hz = 180.0f;
+  cfg.dynamics.compressor.config.sidechain_high_pass_enabled = true;
+  cfg.dynamics.compressor.config.sidechain_high_pass_hz = 180.0f;
   cfg.dynamics.compressor.config.pdr_time_ms = 22.0f;
   cfg.dynamics.compressor.config.pdr_release_scale = 2.25f;
 
@@ -268,8 +268,8 @@ TEST_CASE("chain compressor advanced fields round-trip through JSON",
 
   REQUIRE(restored.dynamics.compressor.enabled);
   REQUIRE(c.detector == sonare::mastering::dynamics::DetectorMode::Peak);
-  REQUIRE(c.sidechain_hpf_enabled);
-  REQUIRE(c.sidechain_hpf_hz == 180.0f);
+  REQUIRE(c.sidechain_high_pass_enabled);
+  REQUIRE(c.sidechain_high_pass_hz == 180.0f);
   REQUIRE(c.pdr_time_ms == 22.0f);
   REQUIRE(c.pdr_release_scale == 2.25f);
 }

@@ -45,7 +45,7 @@ describe('section group', () => {
   const samples = abab();
 
   it('analyzeSections gives every section an integer group numbered by first appearance', () => {
-    const sections = analyzeSections(samples, SR, { minSectionSec: 4 });
+    const { sections } = analyzeSections(samples, SR, { minSectionSec: 4 });
     expect(sections.length).toBeGreaterThan(0);
     expectFirstAppearanceNumbering(sections.map((s) => s.group));
   });
@@ -57,7 +57,7 @@ describe('section group', () => {
   });
 
   it('an A-B-A-B fixture yields at least two distinct groups', () => {
-    const sections = analyzeSections(samples, SR, { minSectionSec: 4 });
+    const { sections } = analyzeSections(samples, SR, { minSectionSec: 4 });
     expect(new Set(sections.map((s) => s.group)).size).toBeGreaterThanOrEqual(2);
   });
 });

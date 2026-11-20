@@ -1161,8 +1161,8 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
     CHECK(mel.sample_rate == 22050);
     CHECK(mel.hop_length == 512);
     CHECK(mel.n_fft == 2048);
-    CHECK(mel.fmin == 100.0f);
-    CHECK(mel.fmax == 11025.0f);
+    CHECK(mel.fmin_hz == 100.0f);
+    CHECK(mel.fmax_hz == 11025.0f);
     CHECK(mel.htk == 1);
     CHECK(mel.is_db == 0);
 
@@ -1172,8 +1172,8 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
     SonareInverseResult from_result{};
     SonareInverseResult from_request{};
     REQUIRE(sonare_mel_to_stft_checked_ex(mel.power, total, mel.n_mels, mel.n_frames,
-                                          mel.sample_rate, mel.n_fft, mel.fmin, mel.fmax, mel.htk,
-                                          &from_result) == SONARE_OK);
+                                          mel.sample_rate, mel.n_fft, mel.fmin_hz, mel.fmax_hz,
+                                          mel.htk, &from_result) == SONARE_OK);
     REQUIRE(sonare_mel_to_stft_checked_ex(mel.power, total, 40, mel.n_frames, 22050, 2048, 100.0f,
                                           0.0f, 1, &from_request) == SONARE_OK);
     REQUIRE(from_result.rows == from_request.rows);

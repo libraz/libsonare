@@ -133,6 +133,16 @@ class SonareAcousticResult(CStruct):
     ]
 
 
+class SonareRoomPlacement(CStruct):
+    """Maps to SonareRoomPlacement in sonare_c_acoustic.h."""
+
+    _fields_ = [
+        ("x", ctypes.c_float),
+        ("y", ctypes.c_float),
+        ("z", ctypes.c_float),
+    ]
+
+
 class SonareRirSynthConfig(CStruct):
     """Maps to SonareRirSynthConfig; fill with sonare_rir_synth_config_init."""
 
@@ -141,27 +151,23 @@ class SonareRirSynthConfig(CStruct):
         ("length_m", ctypes.c_float),
         ("width_m", ctypes.c_float),
         ("height_m", ctypes.c_float),
-        ("source_x", ctypes.c_float),
-        ("source_y", ctypes.c_float),
-        ("source_z", ctypes.c_float),
-        ("listener_x", ctypes.c_float),
-        ("listener_y", ctypes.c_float),
-        ("listener_z", ctypes.c_float),
+        ("source", SonareRoomPlacement),
+        ("listener", SonareRoomPlacement),
         ("absorption", ctypes.c_float),
         ("max_sec", ctypes.c_float),
         ("mixing_time_ms", ctypes.c_float),
         ("crossfade_ms", ctypes.c_float),
         ("ism_order", ctypes.c_int),
-        ("late_model", ctypes.c_int),
+        ("prefer_eyring", ctypes.c_int),
         ("seed", ctypes.c_uint),
         # Optional per-octave-band absorption tail (NULL/0 keeps the scalar path).
-        ("absorption_bands", ctypes.POINTER(ctypes.c_float)),
-        ("absorption_band_count", ctypes.c_size_t),
-        ("scattering_bands", ctypes.POINTER(ctypes.c_float)),
-        ("scattering_band_count", ctypes.c_size_t),
+        ("band_absorption", ctypes.POINTER(ctypes.c_float)),
+        ("band_absorption_count", ctypes.c_size_t),
+        ("band_scattering", ctypes.POINTER(ctypes.c_float)),
+        ("band_scattering_count", ctypes.c_size_t),
         ("material_preset", ctypes.c_int),
         # ISO 9613-1 air absorption on the late tail.
-        ("air_absorption", ctypes.c_int),
+        ("air_absorption_enabled", ctypes.c_int),
         ("air_temperature_c", ctypes.c_float),
         ("air_humidity_percent", ctypes.c_float),
     ]
@@ -202,7 +208,7 @@ class SonareRoomEstimate(CStruct):
         ("height_m", ctypes.c_float),
         ("drr_db", ctypes.c_float),
         ("confidence", ctypes.c_float),
-        ("absorption_bands", ctypes.POINTER(ctypes.c_float)),
+        ("band_absorption", ctypes.POINTER(ctypes.c_float)),
         ("rt60_bands", ctypes.POINTER(ctypes.c_float)),
         ("band_count", ctypes.c_size_t),
     ]
@@ -216,12 +222,8 @@ class SonareRoomMorphConfig(CStruct):
         ("length_m", ctypes.c_float),
         ("width_m", ctypes.c_float),
         ("height_m", ctypes.c_float),
-        ("source_x", ctypes.c_float),
-        ("source_y", ctypes.c_float),
-        ("source_z", ctypes.c_float),
-        ("listener_x", ctypes.c_float),
-        ("listener_y", ctypes.c_float),
-        ("listener_z", ctypes.c_float),
+        ("source", SonareRoomPlacement),
+        ("listener", SonareRoomPlacement),
         ("absorption", ctypes.c_float),
         ("source_tail_suppression", ctypes.c_float),
         ("wet", ctypes.c_float),
@@ -229,16 +231,16 @@ class SonareRoomMorphConfig(CStruct):
         ("mixing_time_ms", ctypes.c_float),
         ("crossfade_ms", ctypes.c_float),
         ("ism_order", ctypes.c_int),
-        ("late_model", ctypes.c_int),
+        ("prefer_eyring", ctypes.c_int),
         ("seed", ctypes.c_uint),
         # Optional per-octave-band absorption tail (NULL/0 keeps the scalar path).
-        ("absorption_bands", ctypes.POINTER(ctypes.c_float)),
-        ("absorption_band_count", ctypes.c_size_t),
-        ("scattering_bands", ctypes.POINTER(ctypes.c_float)),
-        ("scattering_band_count", ctypes.c_size_t),
+        ("band_absorption", ctypes.POINTER(ctypes.c_float)),
+        ("band_absorption_count", ctypes.c_size_t),
+        ("band_scattering", ctypes.POINTER(ctypes.c_float)),
+        ("band_scattering_count", ctypes.c_size_t),
         ("material_preset", ctypes.c_int),
         # Air absorption on the target room; see SonareRirSynthConfig.
-        ("air_absorption", ctypes.c_int),
+        ("air_absorption_enabled", ctypes.c_int),
         ("air_temperature_c", ctypes.c_float),
         ("air_humidity_percent", ctypes.c_float),
         # Read by sonare_room_morph_stereo only.

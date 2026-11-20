@@ -55,6 +55,7 @@ from .types import (
     MelodyResult,
     PitchClass,
     Section,
+    SectionAnalysis,
 )
 
 _CHORD_QUALITY_ORDINALS = {name: ordinal for ordinal, name in enumerate(CHORD_QUALITIES)}
@@ -344,8 +345,8 @@ def analyze_sections(
     hop_length: int = 512,
     min_section_sec: float = 4.0,
     threshold: float | None = None,
-) -> list[Section]:
-    """Detect song-structure sections (intro/verse/chorus/...).
+) -> SectionAnalysis:
+    """Detect song-structure sections (intro/verse/chorus/...) and the form they spell.
 
     Args:
         samples: Mono audio samples (1D float).
@@ -359,7 +360,8 @@ def analyze_sections(
             layer's because sections snap to downbeats and keep a minimum length.
 
     Returns:
-        The detected :class:`Section` list, in time order.
+        A :class:`SectionAnalysis`: the sections in time order and the form label,
+        one letter per section (``""`` when none).
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -379,7 +381,7 @@ def analyze_sections(
     )
     _check(rc, flattened="options")
     try:
-        return [
+        sections = [
             Section(
                 type=_section_type_token(int(out.sections[i].type)),
                 start_sec=float(out.sections[i].start_sec),
@@ -391,6 +393,8 @@ def analyze_sections(
             )
             for i in range(out.section_count)
         ]
+        form = out.form.decode("utf-8") if out.form else ""
+        return SectionAnalysis(sections=sections, form=form)
     finally:
         lib.sonare_free_section_result(ctypes.byref(out))
 

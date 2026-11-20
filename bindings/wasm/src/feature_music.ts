@@ -11,7 +11,7 @@ import type {
   LufsResult,
   Matrix2D,
   MelodyResult,
-  Section,
+  SectionAnalysis,
 } from './public_types.js';
 import type { WasmCqtResult } from './sonare.js';
 import type { OptionsOf } from './validation.js';
@@ -393,15 +393,15 @@ export function vqtToAudio(request: VqtToAudioRequest): Float32Array {
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
  * @param options - `nFft` (2048), `hopLength` (512), `minSectionSec` (4.0)
- * @returns Array of detected sections
+ * @returns The detected sections and the form they spell
  */
-export function analyzeSections(request: AnalyzeSectionsRequest): Section[];
+export function analyzeSections(request: AnalyzeSectionsRequest): SectionAnalysis;
 export function analyzeSections(
   samples: Float32Array,
   sampleRate: number,
   options?: OptionsOf<AnalyzeSectionsRequest>,
-): Section[];
-export function analyzeSections(...args: unknown[]): Section[] {
+): SectionAnalysis;
+export function analyzeSections(...args: unknown[]): SectionAnalysis {
   return withEntry('analyzeSections', () => {
     const request = sampleOneShot<AnalyzeSectionsRequest>('analyzeSections', args);
     assertAudioInput(request.samples, request.sampleRate, request);
@@ -415,7 +415,7 @@ export function analyzeSections(...args: unknown[]): Section[] {
     // Symbol.species, leaving a result that structuredClone (and so postMessage to
     // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
     // plain Array before mapping.
-    const sections = requireModule().analyzeSections(
+    const native = requireModule().analyzeSections(
       request.samples,
       request.sampleRate,
       request.nFft ?? 2048,
@@ -423,7 +423,7 @@ export function analyzeSections(...args: unknown[]): Section[] {
       request.minSectionSec ?? 4.0,
       request.threshold,
     );
-    return Array.from(sections, convertSection);
+    return { sections: Array.from(native.sections, convertSection), form: native.form };
   });
 }
 

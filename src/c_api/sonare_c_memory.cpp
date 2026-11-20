@@ -513,8 +513,8 @@ void sonare_free_engine_bounce_result(SonareEngineBounceResult* result) {
 void sonare_free_section_result(SonareSectionResult* result) {
   if (result) {
     delete[] result->sections;
-    result->sections = nullptr;
-    result->section_count = 0;
+    delete[] result->form;
+    *result = {};
   }
 }
 

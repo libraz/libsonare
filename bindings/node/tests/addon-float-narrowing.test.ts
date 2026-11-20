@@ -221,7 +221,7 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     name: 'analyzeSections minSectionSec',
     site: 'analysis/progress.cpp minSectionSec',
     control: [0.5, 4],
-    call: (v) => native.analyzeSections(BLOCKED, SAMPLE_RATE, 2048, 512, v).length,
+    call: (v) => native.analyzeSections(BLOCKED, SAMPLE_RATE, 2048, 512, v).sections.length,
   },
   {
     name: 'analyzeSections threshold',

@@ -40,8 +40,8 @@ sonare::mastering::dynamics::CompressorConfig to_cpp_compressor_config(
   cpp.makeup_gain_db = config->makeup_gain_db;
   cpp.auto_makeup = config->auto_makeup != 0;
   cpp.detector = to_cpp_detector_mode(config->detector);
-  cpp.sidechain_hpf_enabled = config->sidechain_hpf_enabled != 0;
-  cpp.sidechain_hpf_hz = config->sidechain_hpf_hz;
+  cpp.sidechain_high_pass_enabled = config->sidechain_high_pass_enabled != 0;
+  cpp.sidechain_high_pass_hz = config->sidechain_high_pass_hz;
   cpp.pdr_time_ms = config->pdr_time_ms;
   cpp.pdr_release_scale = config->pdr_release_scale;
   return cpp;
@@ -56,7 +56,7 @@ sonare::mastering::dynamics::GateConfig to_cpp_gate_config(const SonareGateConfi
   cpp.range_db = config->range_db;
   cpp.hold_ms = config->hold_ms;
   cpp.close_threshold_db = config->close_threshold_db;
-  cpp.key_hpf_hz = config->key_hpf_hz;
+  cpp.key_high_pass_hz = config->key_high_pass_hz;
   return cpp;
 }
 

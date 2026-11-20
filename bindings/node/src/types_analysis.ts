@@ -558,6 +558,14 @@ export interface Section {
   group: number;
 }
 
+/** The sections {@link analyzeSections} detected, with the form they spell. */
+export interface SectionAnalysis {
+  /** Detected sections, in time order. */
+  sections: Section[];
+  /** One letter per section in time order (e.g. `'IABABCBO'`); `''` when there are no sections. */
+  form: string;
+}
+
 /** One frame of a melody contour. */
 export interface MelodyPoint {
   /** Frame time in seconds. */

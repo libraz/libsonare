@@ -259,12 +259,12 @@ void validate_chain_multiband_config(const multiband::MultibandCompressorConfig&
     if (!std::isfinite(band.threshold_db) || !std::isfinite(band.ratio) ||
         !std::isfinite(band.attack_ms) || !std::isfinite(band.release_ms) ||
         !std::isfinite(band.knee_db) || !std::isfinite(band.makeup_gain_db) ||
-        !std::isfinite(band.sidechain_hpf_hz) || !std::isfinite(band.pdr_time_ms) ||
+        !std::isfinite(band.sidechain_high_pass_hz) || !std::isfinite(band.pdr_time_ms) ||
         !std::isfinite(band.pdr_release_scale)) {
       throw_invalid_multiband("multiband compressor fields must be finite");
     }
     if (!(band.ratio >= 1.0f) || band.attack_ms < 0.0f || band.release_ms < 0.0f ||
-        band.knee_db < 0.0f || !(band.sidechain_hpf_hz > 0.0f) || band.pdr_time_ms < 0.0f ||
+        band.knee_db < 0.0f || !(band.sidechain_high_pass_hz > 0.0f) || band.pdr_time_ms < 0.0f ||
         band.pdr_release_scale < 1.0f) {
       throw_invalid_multiband("multiband compressor field is out of range");
     }

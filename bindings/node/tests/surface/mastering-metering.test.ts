@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   ClipDetection,
@@ -526,8 +525,6 @@ describe('mastering metering surface', () => {
   describe('native still uses the old spelling', () => {
     // biome-ignore lint/suspicious/noExplicitAny: raw addon results are read by their old key names
     const module = () => addon as unknown as Record<string, (...args: unknown[]) => any>;
-    const addonSource = (path: string) =>
-      readFileSync(new URL(`../../src/addon/${path}`, import.meta.url), 'utf8');
 
     const rawCases: Array<[string, () => Record<string, unknown>, string, string | null]> = [
       [
@@ -590,13 +587,6 @@ describe('mastering metering surface', () => {
       expect(energy(early)).toBe(0);
       expect(energy(late)).toBeGreaterThan(0);
     });
-
-    it.each([['the gate key high-pass', 'effects/dynamics.cpp', 'keyHpfHz']])(
-      '%s is still spelled the old way in the addon source',
-      (_label, path, spelling) => {
-        expect(addonSource(path)).toContain(spelling);
-      },
-    );
   });
 });
 

@@ -219,10 +219,11 @@ describe('standalone functions', () => {
     ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
   });
 
-  it('analyzeSections returns an array of sections', () => {
+  it('analyzeSections returns the sections and the form they spell', () => {
     const samples = generateSine(220, SR, 4);
-    const sections = analyzeSections(samples, SR);
+    const { sections, form } = analyzeSections(samples, SR);
     expect(Array.isArray(sections)).toBe(true);
+    expect(form).toHaveLength(sections.length);
     for (const section of sections) {
       expect(typeof section.type).toBe('string');
       expect(typeof section.name).toBe('string');

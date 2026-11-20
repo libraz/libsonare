@@ -82,8 +82,8 @@ class SonareCompressorConfig(CStruct):
         ("makeup_gain_db", ctypes.c_float),
         ("auto_makeup", ctypes.c_int),
         ("detector", ctypes.c_int),
-        ("sidechain_hpf_enabled", ctypes.c_int),
-        ("sidechain_hpf_hz", ctypes.c_float),
+        ("sidechain_high_pass_enabled", ctypes.c_int),
+        ("sidechain_high_pass_hz", ctypes.c_float),
         ("pdr_time_ms", ctypes.c_float),
         ("pdr_release_scale", ctypes.c_float),
     ]
@@ -99,7 +99,7 @@ class SonareGateConfig(CStruct):
         ("range_db", ctypes.c_float),
         ("hold_ms", ctypes.c_float),
         ("close_threshold_db", ctypes.c_float),
-        ("key_hpf_hz", ctypes.c_float),
+        ("key_high_pass_hz", ctypes.c_float),
     ]
 
 

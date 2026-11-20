@@ -98,7 +98,7 @@ TEST_CASE("Gate key HPF re-entry clears history in both detector branches",
       }
 
       GateConfig disabled = enabled;
-      disabled.key_hpf_hz = 0.0f;
+      disabled.key_high_pass_hz = 0.0f;
       subject.set_config(disabled);
       std::vector<float> gap(static_cast<size_t>(sample_rate), 0.0f);
       if (exclude_first_channel) {

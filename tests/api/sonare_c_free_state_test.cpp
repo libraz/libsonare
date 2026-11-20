@@ -904,8 +904,8 @@ TEST_CASE("sonare_free_mel_result leaves the result zeroed", "[c_api][c_free]") 
   r.sample_rate = static_cast<decltype(r.sample_rate)>(1);
   r.hop_length = static_cast<decltype(r.hop_length)>(1);
   r.n_fft = static_cast<decltype(r.n_fft)>(1);
-  r.fmin = static_cast<decltype(r.fmin)>(1);
-  r.fmax = static_cast<decltype(r.fmax)>(1);
+  r.fmin_hz = static_cast<decltype(r.fmin_hz)>(1);
+  r.fmax_hz = static_cast<decltype(r.fmax_hz)>(1);
   r.htk = static_cast<decltype(r.htk)>(1);
   r.is_db = static_cast<decltype(r.is_db)>(1);
   sonare_free_mel_result(&r);
@@ -915,8 +915,8 @@ TEST_CASE("sonare_free_mel_result leaves the result zeroed", "[c_api][c_free]") 
   CHECK(r.sample_rate == static_cast<decltype(r.sample_rate)>(0));
   CHECK(r.hop_length == static_cast<decltype(r.hop_length)>(0));
   CHECK(r.n_fft == static_cast<decltype(r.n_fft)>(0));
-  CHECK(r.fmin == static_cast<decltype(r.fmin)>(0));
-  CHECK(r.fmax == static_cast<decltype(r.fmax)>(0));
+  CHECK(r.fmin_hz == static_cast<decltype(r.fmin_hz)>(0));
+  CHECK(r.fmax_hz == static_cast<decltype(r.fmax_hz)>(0));
   CHECK(r.htk == static_cast<decltype(r.htk)>(0));
   CHECK(r.is_db == static_cast<decltype(r.is_db)>(0));
   CHECK(r.power == nullptr);
@@ -1142,6 +1142,7 @@ TEST_CASE("sonare_free_section_result leaves the result zeroed", "[c_api][c_free
   sonare_free_section_result(&r);
   CHECK(r.sections == nullptr);
   CHECK(r.section_count == static_cast<decltype(r.section_count)>(0));
+  CHECK(r.form == nullptr);
 }
 
 TEST_CASE("sonare_free_segment_indices leaves the result zeroed", "[c_api][c_free]") {

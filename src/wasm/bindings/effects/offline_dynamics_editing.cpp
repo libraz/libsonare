@@ -98,12 +98,12 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
     }
     // A given sidechain high-pass corner switches the filter on; absent leaves it off.
     if (hasProperty(options, "sidechainHighPassHz")) {
-      cfg.sidechain_hpf_hz =
+      cfg.sidechain_high_pass_hz =
           checkedFloatFromVal(options["sidechainHighPassHz"], "sidechainHighPassHz");
-      if (!std::isfinite(cfg.sidechain_hpf_hz) || !(cfg.sidechain_hpf_hz > 0.0f)) {
+      if (!std::isfinite(cfg.sidechain_high_pass_hz) || !(cfg.sidechain_high_pass_hz > 0.0f)) {
         throw WasmRangeError("sidechainHighPassHz must be finite and greater than 0");
       }
-      cfg.sidechain_hpf_enabled = true;
+      cfg.sidechain_high_pass_enabled = true;
     }
     if (hasProperty(options, "pdrTimeMs")) {
       cfg.pdr_time_ms = checkedFloatFromVal(options["pdrTimeMs"], "pdrTimeMs");
@@ -142,8 +142,8 @@ val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val opti
     if (hasProperty(options, "closeThresholdDb")) {
       cfg.close_threshold_db = checkedFloatFromVal(options["closeThresholdDb"], "closeThresholdDb");
     }
-    if (hasProperty(options, "keyHpfHz")) {
-      cfg.key_hpf_hz = checkedFloatFromVal(options["keyHpfHz"], "keyHpfHz");
+    if (hasProperty(options, "keyHighPassHz")) {
+      cfg.key_high_pass_hz = checkedFloatFromVal(options["keyHighPassHz"], "keyHighPassHz");
     }
   }
   mastering::dynamics::Gate processor(cfg);

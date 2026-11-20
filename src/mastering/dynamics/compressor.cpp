@@ -106,10 +106,11 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   const CompressorConfig& cfg = *adopt_snapshot_for_block();
   const float makeup_db = compute_makeup_db(cfg);
 
-  const bool sidechain_hpf_enabled = sidechain_hpf_gate_.admit(cfg.sidechain_hpf_enabled, [this] {
-    std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
-    std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
-  });
+  const bool sidechain_high_pass_enabled =
+      sidechain_high_pass_gate_.admit(cfg.sidechain_high_pass_enabled, [this] {
+        std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
+        std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
+      });
 
   require_prepared_channels(num_channels,
                             std::min({hpf_x1_.size(), hpf_y1_.size(), hpf_channel_gates_.size()}),
@@ -128,7 +129,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   const int excluded_channel = detector_excluded_channel(num_channels);
   std::array<bool, kRealtimePreparedChannels> hpf_admitted{};
   for (size_t ch = 0; ch < hpf_channel_gates_.size(); ++ch) {
-    const bool active = sidechain_hpf_enabled && ch < static_cast<size_t>(num_channels) &&
+    const bool active = sidechain_high_pass_enabled && ch < static_cast<size_t>(num_channels) &&
                         static_cast<int>(ch) != excluded_channel;
     hpf_admitted[ch] = hpf_channel_gates_[ch].admit(active, [this, ch] {
       hpf_x1_[ch] = 0.0f;
@@ -236,7 +237,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 void Compressor::reset() {
   rms_state_ = 0.0f;
   detector_mode_initialized_ = false;
-  sidechain_hpf_gate_.close();
+  sidechain_high_pass_gate_.close();
   for (auto& gate : hpf_channel_gates_) gate.close();
   std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
@@ -278,11 +279,11 @@ bool Compressor::apply_parameter(CompressorConfig& config, unsigned int param_id
       next.detector = detector_mode_from_param(value);
       break;
     case 8:
-      next.sidechain_hpf_enabled = value != 0.0f;
+      next.sidechain_high_pass_enabled = value != 0.0f;
       break;
     case 9:
       if (!valid_positive(value)) return false;
-      next.sidechain_hpf_hz = value;
+      next.sidechain_high_pass_hz = value;
       break;
     case 10:
       if (!valid_non_negative(value)) return false;
@@ -314,7 +315,7 @@ void Compressor::validate_config(const CompressorConfig& config) {
   check::at_least(config.attack_ms, 0.0, "attack_ms");
   check::at_least(config.release_ms, 0.0, "release_ms");
   check::at_least(config.knee_db, 0.0, "knee_db");
-  check::greater_than(config.sidechain_hpf_hz, 0.0, "sidechain_hpf_hz");
+  check::greater_than(config.sidechain_high_pass_hz, 0.0, "sidechain_high_pass_hz");
   check::at_least(config.pdr_time_ms, 0.0, "pdr_time_ms");
   check::at_least(config.pdr_release_scale, 1.0, "pdr_release_scale");
   // The makeup gain in force is the manual one, or the auto one derived from threshold and ratio.
@@ -360,8 +361,8 @@ void Compressor::update_coefficients(const CompressorConfig& config) {
   update_release_table(config);
   // Bilinear-transformed 1st-order highpass with frequency prewarping. Same
   // 6 dB/oct slope as a 1-pole RC, but the cutoff is frequency-accurate.
-  const auto hpf = sonare::rt::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz),
-                                                       sample_rate_);
+  const auto hpf = sonare::rt::onepole_highpass_coeffs(
+      static_cast<double>(config.sidechain_high_pass_hz), sample_rate_);
   hpf_b0_ = hpf.b0;
   hpf_a1_ = hpf.a1;
 }

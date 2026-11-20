@@ -443,6 +443,14 @@ export interface Section {
   name: string;
 }
 
+/** The sections `analyzeSections` detected, with the form they spell. */
+export interface SectionAnalysis {
+  /** Detected sections, in time order. */
+  sections: Section[];
+  /** One letter per section in time order (e.g. `'IABABCBO'`); `''` when there are no sections. */
+  form: string;
+}
+
 /** Options for `detectBoundaries`. All fields are optional. */
 export interface BoundaryOptions {
   /** Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048. */

@@ -1008,6 +1008,7 @@ export type {
   RoomPlacement,
   ScaleKind,
   Section,
+  SectionAnalysis,
   SectionType,
   SendTiming,
   SidechainCheck,

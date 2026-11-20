@@ -1388,6 +1388,9 @@ from .types import (
     Section as Section,
 )
 from .types import (
+    SectionAnalysis as SectionAnalysis,
+)
+from .types import (
     SectionType as SectionType,
 )
 from .types import (

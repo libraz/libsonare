@@ -384,7 +384,7 @@ export interface MasteringProcessorParamMap {
     /** Unit: ms. Range: [0, inf). Default: 0. */
     holdMs?: number;
     /** Unit: Hz. Range: [0, inf). Default: 0. */
-    keyHpfHz?: number;
+    keyHighPassHz?: number;
   };
   /** Parameters of the `dynamics.limiter` processor. */
   'dynamics.limiter': {

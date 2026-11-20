@@ -1970,7 +1970,7 @@
           "maxRelativeTo": null,
           "min": 0,
           "minExclusive": false,
-          "name": "keyHpfHz",
+          "name": "keyHighPassHz",
           "rtSafe": false,
           "scale": "linear",
           "slot": null,

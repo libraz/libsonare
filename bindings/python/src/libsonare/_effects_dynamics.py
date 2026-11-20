@@ -129,8 +129,8 @@ def mastering_dynamics_compressor(
         makeup_gain_db=_narrow_double(makeup_gain_db, "makeup_gain_db"),
         auto_makeup=1 if auto_makeup else 0,
         detector=_coerce_compressor_detector(detector, "detector"),
-        sidechain_hpf_enabled=0 if sidechain_high_pass_hz is None else 1,
-        sidechain_hpf_hz=_SIDECHAIN_HIGH_PASS_UNUSED_HZ
+        sidechain_high_pass_enabled=0 if sidechain_high_pass_hz is None else 1,
+        sidechain_high_pass_hz=_SIDECHAIN_HIGH_PASS_UNUSED_HZ
         if sidechain_high_pass_hz is None
         else _high_pass_corner(sidechain_high_pass_hz, "sidechain_high_pass_hz", positive=True),
         pdr_time_ms=_narrow_double(pdr_time_ms, "pdr_time_ms"),
@@ -183,7 +183,7 @@ def mastering_dynamics_gate(
         range_db=_narrow_double(range_db, "range_db"),
         hold_ms=_narrow_double(hold_ms, "hold_ms"),
         close_threshold_db=_narrow_double(close_threshold_db, "close_threshold_db"),
-        key_hpf_hz=0.0
+        key_high_pass_hz=0.0
         if key_high_pass_hz is None
         else _high_pass_corner(key_high_pass_hz, "key_high_pass_hz", positive=False),
     )

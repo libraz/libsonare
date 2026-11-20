@@ -138,7 +138,7 @@ from .types import (
     RoomGeometry,
     RoomMorphResult,
     RoomMorphStereoResult,
-    Section,
+    SectionAnalysis,
     SpectrumReport,
     StereoMonoCompatCheckLogBandsResult,
     StereoMonoCompatCheckResult,
@@ -631,7 +631,7 @@ def analyze_sections(
     hop_length: int = 512,
     min_section_sec: float = 4.0,
     threshold: float | None = None,
-) -> list[Section]:
+) -> SectionAnalysis:
     """``hop_length`` is the hop in samples of the analysed signal: the input resampled to
     22050 Hz when its rate is above 22050 Hz, the input itself otherwise."""
 

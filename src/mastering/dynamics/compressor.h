@@ -32,8 +32,8 @@ struct CompressorConfig {
   float makeup_gain_db = 0.0f;
   bool auto_makeup = false;
   DetectorMode detector = DetectorMode::Rms;
-  bool sidechain_hpf_enabled = false;
-  float sidechain_hpf_hz = 100.0f;
+  bool sidechain_high_pass_enabled = false;
+  float sidechain_high_pass_hz = 100.0f;
   float pdr_time_ms = 0.0f;
   float pdr_release_scale = 1.0f;
 };
@@ -71,8 +71,8 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   //   5 = knee_db (refused unless >= 0)
   //   6 = auto_makeup (value != 0)
   //   7 = detector (0=Peak, 1=Rms, 2=LogRms)
-  //   8 = sidechain_hpf_enabled (value != 0)
-  //   9 = sidechain_hpf_hz (refused unless > 0)
+  //   8 = sidechain_high_pass_enabled (value != 0)
+  //   9 = sidechain_high_pass_hz (refused unless > 0)
   //  10 = pdr_time_ms (refused unless >= 0)
   //  11 = pdr_release_scale (refused unless >= 1)
   //
@@ -118,7 +118,7 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   bool detector_mode_initialized_ = false;
   float hpf_b0_ = 1.0f;
   float hpf_a1_ = 0.0f;
-  rt::StageGate sidechain_hpf_gate_;
+  rt::StageGate sidechain_high_pass_gate_;
   std::vector<rt::StageGate> hpf_channel_gates_;
   // Per-channel sidechain HPF state, sized to the channel count on first
   // process() so stereo channels do not share (and corrupt) filter memory.

@@ -109,13 +109,14 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
   };
   key_source_gate_.admit(use_external, restart_hpf);
   internal_source_gate_.admit(!use_external, restart_hpf);
-  const bool sidechain_hpf_enabled = sidechain_hpf_gate_.admit(cfg.sidechain_hpf_enabled, [this] {
-    std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
-    std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
-  });
+  const bool sidechain_high_pass_enabled =
+      sidechain_high_pass_gate_.admit(cfg.sidechain_high_pass_enabled, [this] {
+        std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
+        std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
+      });
   std::array<bool, kRealtimePreparedChannels> hpf_admitted{};
   for (size_t ch = 0; ch < hpf_channel_gates_.size(); ++ch) {
-    const bool active = sidechain_hpf_enabled && ch < static_cast<size_t>(source_channels) &&
+    const bool active = sidechain_high_pass_enabled && ch < static_cast<size_t>(source_channels) &&
                         static_cast<int>(ch) != excluded_channel;
     hpf_admitted[ch] = hpf_channel_gates_[ch].admit(active, [this, ch] {
       hpf_x1_[ch] = 0.0f;
@@ -168,7 +169,7 @@ void SidechainRouter::reset() {
   for (auto& lookahead : lookahead_) {
     lookahead.reset();
   }
-  sidechain_hpf_gate_.close();
+  sidechain_high_pass_gate_.close();
   for (auto& gate : hpf_channel_gates_) gate.close();
   key_source_gate_.close();
   internal_source_gate_.close();
@@ -254,10 +255,10 @@ void SidechainRouter::validate_config(const SidechainRouterConfig& config) {
   check::at_least(config.range_db, 0.0, "range_db");
   check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
   // The high-pass corner is only held positive while the filter is enabled.
-  if (config.sidechain_hpf_enabled) {
-    check::greater_than(config.sidechain_hpf_hz, 0.0, "sidechain_hpf_hz");
+  if (config.sidechain_high_pass_enabled) {
+    check::greater_than(config.sidechain_high_pass_hz, 0.0, "sidechain_high_pass_hz");
   } else {
-    check::finite_float(config.sidechain_hpf_hz, "sidechain_hpf_hz");
+    check::finite_float(config.sidechain_high_pass_hz, "sidechain_high_pass_hz");
   }
 }
 
@@ -273,8 +274,8 @@ float SidechainRouter::gain_reduction_db(float input_db, const SidechainRouterCo
 
 void SidechainRouter::update_coefficients(const SidechainRouterConfig& config) {
   follower_.prepare(sample_rate_, config.attack_ms, config.release_ms);
-  const auto hpf = sonare::rt::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz),
-                                                       sample_rate_);
+  const auto hpf = sonare::rt::onepole_highpass_coeffs(
+      static_cast<double>(config.sidechain_high_pass_hz), sample_rate_);
   hpf_b0_ = hpf.b0;
   hpf_a1_ = hpf.a1;
 }

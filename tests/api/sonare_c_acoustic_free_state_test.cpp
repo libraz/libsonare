@@ -36,7 +36,7 @@ TEST_CASE("sonare_free_room_estimate leaves the result zeroed", "[c_api][c_free]
   CHECK(r.height_m == static_cast<decltype(r.height_m)>(0));
   CHECK(r.drr_db == static_cast<decltype(r.drr_db)>(0));
   CHECK(r.confidence == static_cast<decltype(r.confidence)>(0));
-  CHECK(r.absorption_bands == nullptr);
+  CHECK(r.band_absorption == nullptr);
   CHECK(r.rt60_bands == nullptr);
   CHECK(r.band_count == static_cast<decltype(r.band_count)>(0));
 }

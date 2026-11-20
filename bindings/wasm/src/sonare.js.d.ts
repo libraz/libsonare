@@ -3619,7 +3619,7 @@ export interface SonareModule {
     hopLength: number,
     minSectionSec: number,
     threshold: number | undefined,
-  ) => WasmSectionResult[];
+  ) => { sections: WasmSectionResult[]; form: string };
   detectBoundaries: (
     samples: Float32Array,
     sampleRate: number,

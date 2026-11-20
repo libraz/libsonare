@@ -160,13 +160,10 @@ export function masteringDynamicsGate(...args: unknown[]): DynamicsProcessorResu
   return withEntry('masteringDynamicsGate', () => {
     const r = sampleOneShot<MasteringDynamicsGateRequest>('masteringDynamicsGate', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    const { keyHighPassHz, ...opts } = r as MasteringDynamicsGateRequest & Record<string, unknown>;
-    // The addon still spells the key high-pass `keyHpfHz`.
-    if (keyHighPassHz !== undefined && keyHighPassHz !== null) {
-      assertNonNegativeFloatValue(keyHighPassHz, 'keyHighPassHz');
-      opts.keyHpfHz = keyHighPassHz;
+    if (r.keyHighPassHz !== undefined && r.keyHighPassHz !== null) {
+      assertNonNegativeFloatValue(r.keyHighPassHz, 'keyHighPassHz');
     }
-    return addon.masteringDynamicsGate(r.samples, r.sampleRate, opts);
+    return addon.masteringDynamicsGate(r.samples, r.sampleRate, r);
   });
 }
 

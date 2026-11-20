@@ -78,9 +78,9 @@ typedef struct {
   int hop_length;   ///< Hop between frames in samples.
   /** FFT size of the source STFT. */
   int n_fft;
-  /** Mel range in Hz as applied: fmax is sr/2 when the request left it at 0. */
-  float fmin;
-  float fmax;  ///< Upper edge of the Mel range in Hz.
+  /** Mel range in Hz as applied: fmax_hz is sr/2 when the request left it at 0. */
+  float fmin_hz;
+  float fmax_hz;  ///< Upper edge of the Mel range in Hz.
   /** Non-zero for the HTK Mel formula, 0 for Slaney. */
   int htk;
   /** Non-zero when the matrix being described is in dB. Always 0 here: @c power
@@ -328,6 +328,9 @@ typedef struct {
 typedef struct {
   SonareSection* sections;  ///< free with sonare_free_section_result
   size_t section_count;     ///< Entries in sections.
+  /// Form string, one letter per section in time order (e.g. "IABABCBO"); empty when there are
+  /// no sections. Heap-owned, freed by sonare_free_section_result.
+  char* form;
 } SonareSectionResult;
 
 /** Zeroing this struct is NOT equivalent to the defaults: `n_fft` and `hop_length`

@@ -1036,13 +1036,13 @@
       },
       {
         "kind": "signed",
-        "name": "sidechain_hpf_enabled",
+        "name": "sidechain_high_pass_enabled",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "sidechain_hpf_hz",
+        "name": "sidechain_high_pass_hz",
         "offset": 36,
         "size": 4
       },
@@ -3436,7 +3436,7 @@
       },
       {
         "kind": "float",
-        "name": "key_hpf_hz",
+        "name": "key_high_pass_hz",
         "offset": 24,
         "size": 4
       }
@@ -4210,13 +4210,13 @@
       },
       {
         "kind": "float",
-        "name": "fmin",
+        "name": "fmin_hz",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "fmax",
+        "name": "fmax_hz",
         "offset": 28,
         "size": 4
       },
@@ -8349,40 +8349,16 @@
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "source_x",
+        "kind": "aggregate",
+        "name": "source",
         "offset": 16,
-        "size": 4
+        "size": 12
       },
       {
-        "kind": "float",
-        "name": "source_y",
-        "offset": 20,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "source_z",
-        "offset": 24,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "listener_x",
+        "kind": "aggregate",
+        "name": "listener",
         "offset": 28,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "listener_y",
-        "offset": 32,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "listener_z",
-        "offset": 36,
-        "size": 4
+        "size": 12
       },
       {
         "kind": "float",
@@ -8416,7 +8392,7 @@
       },
       {
         "kind": "signed",
-        "name": "late_model",
+        "name": "prefer_eyring",
         "offset": 60,
         "size": 4
       },
@@ -8428,25 +8404,25 @@
       },
       {
         "kind": "pointer",
-        "name": "absorption_bands",
+        "name": "band_absorption",
         "offset": 72,
         "size": 8
       },
       {
         "kind": "unsigned",
-        "name": "absorption_band_count",
+        "name": "band_absorption_count",
         "offset": 80,
         "size": 8
       },
       {
         "kind": "pointer",
-        "name": "scattering_bands",
+        "name": "band_scattering",
         "offset": 88,
         "size": 8
       },
       {
         "kind": "unsigned",
-        "name": "scattering_band_count",
+        "name": "band_scattering_count",
         "offset": 96,
         "size": 8
       },
@@ -8458,7 +8434,7 @@
       },
       {
         "kind": "signed",
-        "name": "air_absorption",
+        "name": "air_absorption_enabled",
         "offset": 108,
         "size": 4
       },
@@ -8542,7 +8518,7 @@
       },
       {
         "kind": "pointer",
-        "name": "absorption_bands",
+        "name": "band_absorption",
         "offset": 24,
         "size": 8
       },
@@ -8643,40 +8619,16 @@
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "source_x",
+        "kind": "aggregate",
+        "name": "source",
         "offset": 16,
-        "size": 4
+        "size": 12
       },
       {
-        "kind": "float",
-        "name": "source_y",
-        "offset": 20,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "source_z",
-        "offset": 24,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "listener_x",
+        "kind": "aggregate",
+        "name": "listener",
         "offset": 28,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "listener_y",
-        "offset": 32,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "listener_z",
-        "offset": 36,
-        "size": 4
+        "size": 12
       },
       {
         "kind": "float",
@@ -8722,7 +8674,7 @@
       },
       {
         "kind": "signed",
-        "name": "late_model",
+        "name": "prefer_eyring",
         "offset": 68,
         "size": 4
       },
@@ -8734,25 +8686,25 @@
       },
       {
         "kind": "pointer",
-        "name": "absorption_bands",
+        "name": "band_absorption",
         "offset": 80,
         "size": 8
       },
       {
         "kind": "unsigned",
-        "name": "absorption_band_count",
+        "name": "band_absorption_count",
         "offset": 88,
         "size": 8
       },
       {
         "kind": "pointer",
-        "name": "scattering_bands",
+        "name": "band_scattering",
         "offset": 96,
         "size": 8
       },
       {
         "kind": "unsigned",
-        "name": "scattering_band_count",
+        "name": "band_scattering_count",
         "offset": 104,
         "size": 8
       },
@@ -8764,7 +8716,7 @@
       },
       {
         "kind": "signed",
-        "name": "air_absorption",
+        "name": "air_absorption_enabled",
         "offset": 116,
         "size": 4
       },
@@ -8818,6 +8770,30 @@
       }
     ],
     "size": 32
+  },
+  "SonareRoomPlacement": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "x",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "y",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "z",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
   },
   "SonareSampleDesc": {
     "align": 8,
@@ -9055,9 +9031,15 @@
         "name": "section_count",
         "offset": 8,
         "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "form",
+        "offset": 16,
+        "size": 8
       }
     ],
-    "size": 16
+    "size": 24
   },
   "SonareSegmentIndices": {
     "align": 8,

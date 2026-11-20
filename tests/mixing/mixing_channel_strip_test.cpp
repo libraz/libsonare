@@ -2425,8 +2425,8 @@ std::vector<float> run_strip_short_key(bool post_fader, bool key_listen, int sup
   config.attack_ms = 0.0f;
   config.release_ms = 0.0f;
   config.range_db = 60.0f;
-  config.sidechain_hpf_enabled = true;
-  config.sidechain_hpf_hz = 80.0f;
+  config.sidechain_high_pass_enabled = true;
+  config.sidechain_high_pass_hz = 80.0f;
   config.key_listen = key_listen;
 
   sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});

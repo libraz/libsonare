@@ -578,6 +578,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
                      [&](const Audio& audio) -> SonareError {
                        SectionAnalyzer analyzer(audio, config);
                        const std::vector<Section>& sections = analyzer.sections();
+                       std::unique_ptr<char[]> form(copy_string(analyzer.form()));
                        if (!sections.empty()) {
                          auto data = std::make_unique<SonareSection[]>(sections.size());
                          for (size_t i = 0; i < sections.size(); ++i) {
@@ -591,6 +592,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
                          out->sections = release_array(data);
                          out->section_count = sections.size();
                        }
+                       out->form = form.release();
                        return SONARE_OK;
                      });
 }

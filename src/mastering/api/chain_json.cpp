@@ -80,8 +80,8 @@ sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cf
     sonare::util::json::Object band;
 #define X(key, member, meta) add_field(band, key, band_config.member);
     SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)
-    if (band_config.sidechain_hpf_enabled) {
-      add_field(band, "sidechainHighPassHz", band_config.sidechain_hpf_hz);
+    if (band_config.sidechain_high_pass_enabled) {
+      add_field(band, "sidechainHighPassHz", band_config.sidechain_high_pass_hz);
     }
     SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 #undef X
@@ -174,9 +174,9 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg) {
 #define X(key, member, meta) \
   add_field(params, "dynamics.compressor." key, cfg.dynamics.compressor.config.member);
   SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)
-  if (cfg.dynamics.compressor.config.sidechain_hpf_enabled) {
+  if (cfg.dynamics.compressor.config.sidechain_high_pass_enabled) {
     add_field(params, "dynamics.compressor.sidechainHighPassHz",
-              cfg.dynamics.compressor.config.sidechain_hpf_hz);
+              cfg.dynamics.compressor.config.sidechain_high_pass_hz);
   }
   SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 #undef X

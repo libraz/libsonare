@@ -2035,7 +2035,7 @@ SonareError sonare_mastering_repair_dereverb_classical_linked(
 ///   and @c spectral_floor are left as the caller set them.
 ///
 ///   Only three fields of @p estimate are read: @c volume, @c rt60_bands and
-///   @c band_count. @c confidence, @c drr_db, @c absorption_bands and the
+///   @c band_count. @c confidence, @c drr_db, @c band_absorption and the
 ///   three dimensions are ignored, so a caller assembling an estimate by hand
 ///   rather than passing one @ref sonare_estimate_room produced may leave them
 ///   zero.
@@ -2287,10 +2287,10 @@ typedef struct {
   float makeup_gain_db;  ///< Fixed gain added after compression, dB; default 0.
   int auto_makeup;  ///< Non-zero compensates the average gain reduction automatically; default 0.
   int detector;     ///< Level detector, SONARE_COMPRESSOR_DETECTOR_*; default RMS.
-  int sidechain_hpf_enabled;  ///< Non-zero high-passes the detector input; default 0.
-  float sidechain_hpf_hz;     ///< Detector high-pass corner, Hz; default 100.
-  float pdr_time_ms;          ///< Program-dependent release time, ms; default 0.
-  float pdr_release_scale;    ///< Program-dependent release multiplier; default 1.0.
+  int sidechain_high_pass_enabled;  ///< Non-zero high-passes the detector input; default 0.
+  float sidechain_high_pass_hz;     ///< Detector high-pass corner, Hz; default 100.
+  float pdr_time_ms;                ///< Program-dependent release time, ms; default 0.
+  float pdr_release_scale;          ///< Program-dependent release multiplier; default 1.0.
 } SonareCompressorConfig;
 
 /// @brief Offline feed-forward compressor. Processes the buffer in place
@@ -2312,7 +2312,7 @@ typedef struct {
   float hold_ms;       ///< Minimum time the gate stays open, ms; default 0.
   /// Level below which the gate closes, dB; clamped to at most threshold_db; default -50.
   float close_threshold_db;
-  float key_hpf_hz;  ///< Detector high-pass corner, Hz; 0 disables it (default).
+  float key_high_pass_hz;  ///< Detector high-pass corner, Hz; 0 disables it (default).
 } SonareGateConfig;
 
 /// @brief Offline noise gate. Output buffer is heap-allocated; release with

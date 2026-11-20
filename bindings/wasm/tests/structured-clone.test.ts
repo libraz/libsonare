@@ -57,8 +57,10 @@ describe('structured-clone safety of embind-marshalled returns', () => {
   });
 
   describe('analysis array returns', () => {
-    it('analyzeSections is a plain, cloneable Array (and survives slice/map)', () => {
-      const sections = analyzeSections(makeTone(8), SR);
+    it('analyzeSections returns a cloneable result whose sections are a plain Array', () => {
+      const result = analyzeSections(makeTone(8), SR);
+      expectCloneable(result);
+      const { sections } = result;
       expectCloneable(sections);
       expect(() => structuredClone(sections.slice(0, 4).map((s) => ({ ...s })))).not.toThrow();
     });

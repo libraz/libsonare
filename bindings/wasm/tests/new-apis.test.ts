@@ -1751,8 +1751,9 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('analyzes song-structure sections', () => {
-      const sections = analyzeSections(signal, SR);
+      const { sections, form } = analyzeSections(signal, SR);
       expect(Array.isArray(sections)).toBe(true);
+      expect(form).toHaveLength(sections.length);
       for (const section of sections) {
         expect(typeof section.type).toBe('string');
         expect(Number.isFinite(section.startSec)).toBe(true);

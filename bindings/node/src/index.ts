@@ -454,6 +454,7 @@ export type {
   SampleZoneDesc,
   ScaleKind,
   Section,
+  SectionAnalysis,
   SectionType,
   SendTiming,
   Sf2InstrumentConfig,

@@ -121,8 +121,8 @@ TEST_CASE("Compressor set_config is safe to call concurrently with process",
     cfg.attack_ms = 5.0f + static_cast<float>(i % 20);
     cfg.release_ms = 50.0f + static_cast<float>(i % 100);
     cfg.detector = (i & 1) ? DetectorMode::Rms : DetectorMode::Peak;
-    cfg.sidechain_hpf_enabled = (i % 3) == 0;
-    cfg.sidechain_hpf_hz = 80.0f + static_cast<float>(i % 200);
+    cfg.sidechain_high_pass_enabled = (i % 3) == 0;
+    cfg.sidechain_high_pass_hz = 80.0f + static_cast<float>(i % 200);
     compressor.set_config(cfg);
   }
   // On a heavily loaded CI runner the control loop above can finish before the
@@ -187,8 +187,8 @@ TEST_CASE("Compressor set_parameter exposes full insert parameter surface",
   REQUIRE(cfg.knee_db == 6.0f);
   REQUIRE(cfg.auto_makeup);
   REQUIRE(cfg.detector == DetectorMode::LogRms);
-  REQUIRE(cfg.sidechain_hpf_enabled);
-  REQUIRE(cfg.sidechain_hpf_hz == 250.0f);
+  REQUIRE(cfg.sidechain_high_pass_enabled);
+  REQUIRE(cfg.sidechain_high_pass_hz == 250.0f);
   REQUIRE(cfg.pdr_time_ms == 30.0f);
   REQUIRE(cfg.pdr_release_scale == 1.75f);
   REQUIRE(compressor.last_gain_reduction_db() < 0.0f);

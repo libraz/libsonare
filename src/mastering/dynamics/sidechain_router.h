@@ -22,8 +22,8 @@ struct SidechainRouterConfig {
   float attack_ms = 5.0f;
   float release_ms = 100.0f;
   float range_db = 18.0f;
-  bool sidechain_hpf_enabled = false;
-  float sidechain_hpf_hz = 90.0f;
+  bool sidechain_high_pass_enabled = false;
+  float sidechain_high_pass_hz = 90.0f;
   bool mono_summing = false;
   bool key_listen = false;
   float lookahead_ms = 0.0f;
@@ -121,7 +121,7 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   std::vector<float> hpf_y1_;
   float hpf_b0_ = 1.0f;
   float hpf_a1_ = 0.0f;
-  rt::StageGate sidechain_hpf_gate_;
+  rt::StageGate sidechain_high_pass_gate_;
   std::vector<rt::StageGate> hpf_channel_gates_;
   // The key and the bus share the HPF state, so a change of detector source restarts it.
   rt::StageGate key_source_gate_;
