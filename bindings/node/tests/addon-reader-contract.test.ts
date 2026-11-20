@@ -9,7 +9,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { createVocalEditSession, ErrorCode } from '../src/index.js';
+import { createVocalEditSession } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { withConfiguredProject, withEngine } from './_abort_guard_handles.js';
 
@@ -337,12 +337,9 @@ describe('the streaming chain constructor refuses a config leaf it cannot read',
       params: { maximizer: { truePeakLimiter: { ceilingDbtp: '-1' } } },
     });
     expect(() => new addon.StreamingMasteringChain(document)).toThrow(
-      expect.objectContaining({
-        code: ErrorCode.InvalidFormat,
-        message: expect.stringContaining(
-          'maximizer.truePeakLimiter.ceilingDbtp is a string, but takes no token',
-        ),
-      }),
+      new TypeError(
+        'StreamingMasteringChain: maximizer.truePeakLimiter.ceilingDbtp must be a number or a boolean',
+      ),
     );
     expect(() => new addon.StreamingMasteringChain({ maximizer: {} })).toThrow(TypeError);
     expect(() => new addon.StreamingMasteringChain(null, { loudnessStaticGainDb: 'x' })).toThrow(

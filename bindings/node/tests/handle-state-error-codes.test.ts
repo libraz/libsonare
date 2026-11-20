@@ -232,8 +232,8 @@ describe('streaming constructors refuse a refused argument as a RangeError', () 
     }
   });
 
-  it('StreamingMasteringChain refuses document content as InvalidFormat', () => {
-    // The chain's own constraint wording, refused by the core's document reader.
+  it('StreamingMasteringChain refuses an out-of-domain config leaf as a RangeError', () => {
+    // The chain config is a per-call argument, so the core's refusal is an argument refusal.
     const configs: Array<[Record<string, unknown>, RegExp]> = [
       [
         { loudness: { truePeakOversample: 3 } },
@@ -248,7 +248,8 @@ describe('streaming constructors refuse a refused argument as a RangeError', () 
       const error = capture(
         () => new addon.StreamingMasteringChain(JSON.stringify({ params: config })),
       );
-      expect(codeOf(error), JSON.stringify(config)).toBe(ErrorCode.InvalidFormat);
+      expect(error, JSON.stringify(config)).toBeInstanceOf(RangeError);
+      expect(codeOf(error), JSON.stringify(config)).toBeUndefined();
       expect((error as Error).message, JSON.stringify(config)).toMatch(wording);
     }
   });
