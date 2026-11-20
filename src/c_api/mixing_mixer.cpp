@@ -9,6 +9,7 @@
 #include "mixing/channel_strip_eq.h"
 #include "util/json.h"
 #include "util/json_schema.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare_c_mixing_detail;
 
@@ -139,6 +140,50 @@ std::string live_insert_params(const sonare::mixing::api::Insert& insert,
   return json::dump(bag);
 }
 
+namespace check = sonare::util::check;
+
+SonareError refuse_unknown_bus() {
+  return sonare_c_detail::run_validation([] { check::refuse_unknown_id("id", "a bus", "mixer"); });
+}
+
+SonareError refuse_unknown_vca_group() {
+  return sonare_c_detail::run_validation(
+      [] { check::refuse_unknown_id("id", "a VCA group", "mixer"); });
+}
+
+SonareError refuse_duplicate_id(const char* thing) {
+  return sonare_c_detail::run_validation([&] {
+    check::refuse("id", std::string("must not be the id of ") + thing + " already in this mixer");
+  });
+}
+
+// Names the member list element that is NULL; the text is built on the refusal path only.
+SonareError refuse_null_member(size_t index) {
+  return sonare_c_detail::refuse_null(("members[" + std::to_string(index) + "]").c_str());
+}
+
+// Names the per-strip channel pointer that is NULL; built on the refusal path only.
+SonareError refuse_null_channel(const char* array, size_t index) {
+  return sonare_c_detail::refuse_null(
+      (std::string(array) + "[" + std::to_string(index) + "]").c_str());
+}
+
+// Names the per-strip channel whose block carries a NaN or infinity.
+SonareError refuse_non_finite_block(const char* array, size_t index) {
+  return sonare_c_detail::run_validation([&] {
+    check::refuse((std::string(array) + "[" + std::to_string(index) + "]").c_str(),
+                  "must contain only finite samples");
+  });
+}
+
+// A block longer than the mixer was prepared for.
+SonareError refuse_block_length(size_t num_samples, int max_block_size) {
+  if (num_samples <= static_cast<size_t>(max_block_size)) return SONARE_OK;
+  return sonare_c_detail::run_validation([&] {
+    check::refuse("num_samples", sonare::util::refusal::integer_range_predicate(0, max_block_size));
+  });
+}
+
 bool block_finite(const float* samples, size_t num_samples) noexcept {
   for (size_t index = 0; index < num_samples; ++index) {
     if (!finite(samples[index])) {
@@ -159,24 +204,21 @@ size_t sonare_mixer_strip_count(const SonareMixer* mixer) {
 
 SonareError sonare_mixer_get_strip_count(const SonareMixer* mixer, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !out_count) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = mixer->strips.size();
   return SONARE_OK;
 }
 
 SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char* role) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(id);
   SONARE_C_TRY
   const std::string bus_id = id;
   for (const auto& bus : mixer->buses) {
-    if (bus.id == bus_id) {
-      return SONARE_ERROR_INVALID_PARAMETER;  // duplicate bus id
-    }
+    if (bus.id == bus_id) return refuse_duplicate_id("a bus");
   }
   mixer->buses.emplace_back(bus_id, role != nullptr ? std::string(role) : std::string("aux"));
   mixer->compiled_dirty = true;
@@ -187,9 +229,9 @@ SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char*
 SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_id,
                                         const char* bus_id) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !source_id || !bus_id) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(source_id);
+  SONARE_C_REQUIRE_NONNULL(bus_id);
   SONARE_C_TRY
   const std::string source = source_id;
   const std::string destination = bus_id;
@@ -276,9 +318,8 @@ SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_i
 
 SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(id);
   SONARE_C_TRY
   const std::string bus_id = id;
   const auto before = mixer->buses.size();
@@ -286,9 +327,7 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
       std::remove_if(mixer->buses.begin(), mixer->buses.end(),
                      [&](const sonare::mixing::api::Bus& bus) { return bus.id == bus_id; }),
       mixer->buses.end());
-  if (mixer->buses.size() == before) {
-    return SONARE_ERROR_INVALID_PARAMETER;  // no such bus
-  }
+  if (mixer->buses.size() == before) return refuse_unknown_bus();
   // The declaration and its DSP are one unit, so the record goes with it rather
   // than lingering to be re-adopted by a later bus that reuses the id.
   mixer->bus_dsp.erase(
@@ -334,9 +373,9 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
 
 SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !out_count) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = mixer->buses.size();
   return SONARE_OK;
 }
@@ -344,24 +383,25 @@ SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count) 
 SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float gain_db,
                                        const char* const* members, size_t member_count) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id || !finite(gain_db) || (member_count > 0 && !members)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(id);
+  if (const SonareError err =
+          sonare_c_detail::run_validation([&] { check::finite_float(gain_db, "gain_db"); });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(members, member_count);
   SONARE_C_TRY
   const std::string group_id = id;
   for (const auto& group : mixer->vca_groups) {
-    if (group.id == group_id) {
-      return SONARE_ERROR_INVALID_PARAMETER;  // duplicate group id
-    }
+    if (group.id == group_id) return refuse_duplicate_id("a VCA group");
   }
   sonare::mixing::api::VcaGroup group;
   group.id = group_id;
   group.gain_db = gain_db;
   group.members.reserve(member_count);
   for (size_t i = 0; i < member_count; ++i) {
-    if (!members[i]) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    if (!members[i]) return refuse_null_member(i);
     const std::string member = members[i];
     if (std::find(group.members.begin(), group.members.end(), member) == group.members.end()) {
       group.members.push_back(member);
@@ -387,17 +427,19 @@ SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float
 
 SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* id, float gain_db) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id || !finite(gain_db)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(id);
+  if (const SonareError err =
+          sonare_c_detail::run_validation([&] { check::finite_float(gain_db, "gain_db"); });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_TRY
   const std::string group_id = id;
   const auto it =
       std::find_if(mixer->vca_groups.begin(), mixer->vca_groups.end(),
                    [&](const sonare::mixing::api::VcaGroup& g) { return g.id == group_id; });
-  if (it == mixer->vca_groups.end()) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (it == mixer->vca_groups.end()) return refuse_unknown_vca_group();
   const float delta_db = gain_db - it->gain_db;
   if (delta_db != 0.0f) {
     for (const auto& member : it->members) {
@@ -417,24 +459,20 @@ SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* i
 SonareError sonare_mixer_set_vca_group_members(SonareMixer* mixer, const char* id,
                                                const char* const* members, size_t member_count) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id || (member_count > 0 && !members)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(id);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(members, member_count);
   SONARE_C_TRY
   const std::string group_id = id;
   const auto group =
       std::find_if(mixer->vca_groups.begin(), mixer->vca_groups.end(),
                    [&](const sonare::mixing::api::VcaGroup& g) { return g.id == group_id; });
-  if (group == mixer->vca_groups.end()) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (group == mixer->vca_groups.end()) return refuse_unknown_vca_group();
 
   std::vector<std::string> next_members;
   next_members.reserve(member_count);
   for (size_t i = 0; i < member_count; ++i) {
-    if (!members[i]) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    if (!members[i]) return refuse_null_member(i);
     const std::string member = members[i];
     if (std::find(next_members.begin(), next_members.end(), member) == next_members.end()) {
       next_members.push_back(member);
@@ -457,17 +495,14 @@ SonareError sonare_mixer_set_vca_group_members(SonareMixer* mixer, const char* i
 
 SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(id);
   SONARE_C_TRY
   const std::string group_id = id;
   const auto it =
       std::find_if(mixer->vca_groups.begin(), mixer->vca_groups.end(),
                    [&](const sonare::mixing::api::VcaGroup& g) { return g.id == group_id; });
-  if (it == mixer->vca_groups.end()) {
-    return SONARE_ERROR_INVALID_PARAMETER;  // no such group
-  }
+  if (it == mixer->vca_groups.end()) return refuse_unknown_vca_group();
   // Subtract only this group's contribution from each member's offset,
   // preserving any offset still owed by other VCA groups the strip belongs to
   // (mirrors the runtime VcaGroup::remove_member delta semantics).
@@ -486,18 +521,24 @@ SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
 
 SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !out_count) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = mixer->vca_groups.size();
   return SONARE_OK;
 }
 
 SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index) {
   SONARE_C_API_ENTRY;
-  if (!mixer || index >= mixer->strips.size()) {
-    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                                    "mixer: handle is required and index must be in range");
+  if (!mixer) {
+    sonare_c_detail::refuse_null("mixer");
+    return nullptr;
+  }
+  if (index >= mixer->strips.size()) {
+    sonare_c_detail::run_validation([&] {
+      check::integer_in_range(static_cast<long long>(index), 0,
+                              static_cast<long long>(mixer->strips.size()) - 1, "index");
+    });
     return nullptr;
   }
   return mixer->strips[index].get();
@@ -505,14 +546,17 @@ SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index) {
 
 SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id) {
-    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                                    "mixer: handle and strip id are required");
+  if (!mixer) {
+    sonare_c_detail::refuse_null("mixer");
+    return nullptr;
+  }
+  if (!id) {
+    sonare_c_detail::refuse_null("id");
     return nullptr;
   }
   SonareStrip* strip = find_strip(mixer, id);
   if (strip == nullptr) {
-    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER, "mixer: unknown strip id");
+    sonare_c_detail::run_validation([] { check::refuse_unknown_id("id", "a strip", "mixer"); });
   }
   return strip;
 }
@@ -520,8 +564,7 @@ SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id) {
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
   if (!json) {
-    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                                    "mixer: scene JSON is required");
+    sonare_c_detail::refuse_null("json");
     return nullptr;
   }
   // A scene can load fine while still carrying unknown keys or insert params no
@@ -698,9 +741,9 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !json_out) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (json_out != nullptr) *json_out = nullptr;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(json_out);
   SONARE_C_TRY
   sonare::mixing::api::Scene scene;
   scene.buses = mixer->buses;
@@ -769,9 +812,7 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
 
 SonareError sonare_mixer_compile(SonareMixer* mixer) {
   SONARE_C_API_ENTRY;
-  if (!mixer) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_TRY
   build_and_compile(mixer);
   return SONARE_OK;
@@ -780,9 +821,9 @@ SonareError sonare_mixer_compile(SonareMixer* mixer) {
 
 SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_samples) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !out_latency_samples) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (out_latency_samples != nullptr) *out_latency_samples = 0;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(out_latency_samples);
   SONARE_C_TRY
   if (mixer->compiled_dirty) {
     build_and_compile(mixer);
@@ -795,16 +836,17 @@ SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_sa
 SonareError sonare_mixer_max_block_size(const SonareMixer* mixer, int* out_max_block_size) {
   SONARE_C_API_ENTRY;
   if (out_max_block_size) *out_max_block_size = 0;
-  if (!mixer || !out_max_block_size) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(out_max_block_size);
   *out_max_block_size = mixer->max_block_size;
   return SONARE_OK;
 }
 
 SonareError sonare_mixer_tail_samples(SonareMixer* mixer, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !out_tail_samples) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (out_tail_samples != nullptr) *out_tail_samples = 0;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(out_tail_samples);
   SONARE_C_TRY
   *out_tail_samples = tail_samples(mixer);
   return SONARE_OK;
@@ -816,9 +858,15 @@ SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* 
                                         float* output_left, float* output_right,
                                         size_t num_samples) {
   SONARE_C_API_ENTRY;
-  if (!output_left || !output_right) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(input_left, input_count);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(input_right, input_count);
+  if (input_count > mixer->strips.size()) {
+    return sonare_c_detail::run_validation(
+        [] { check::refuse("input_count", "must not exceed the number of strips in this mixer"); });
   }
+  SONARE_C_REQUIRE_NONNULL(output_left);
+  SONARE_C_REQUIRE_NONNULL(output_right);
   float* output[] = {output_left, output_right};
   return process_planar(mixer, input_left, input_right, input_count, output, 2, num_samples);
 }
@@ -832,9 +880,7 @@ SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_lef
 
 SonareError sonare_mixer_flush_meters(SonareMixer* mixer) {
   SONARE_C_API_ENTRY;
-  if (!mixer) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(mixer);
   for (auto& strip : mixer->strips) strip->strip.flush_meters();
   for (auto& bus : mixer->bus_dsp) bus->fx.flush_meters();
   if (mixer->master_meter.has_value()) mixer->master_meter->flush_true_peak();
@@ -854,13 +900,12 @@ void sonare_mixer_master_meter_config_init(SonareMixerMasterMeterConfig* config)
 SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
                                                 const SonareMixerMasterMeterConfig* config) {
   SONARE_C_API_ENTRY;
-  if (!mixer) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(mixer);
   SonareMixerMasterMeterConfig resolved{};
   if (config == nullptr) {
     sonare_mixer_master_meter_config_init(&resolved);
   } else {
-    if (!sonare_c_detail::struct_size_accepted(config->struct_size, sizeof(*config),
-                                               "SonareMixerMasterMeterConfig")) {
+    if (!sonare_c_detail::struct_size_accepted(config->struct_size, sizeof(*config), "config")) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     resolved = *config;
@@ -921,11 +966,10 @@ const char* sonare_mixing_scene_preset_names(void) {
 
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!preset_name || !json_out) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (json_out != nullptr) *json_out = nullptr;
+  SONARE_C_REQUIRE_NONNULL(preset_name);
+  SONARE_C_REQUIRE_NONNULL(json_out);
   SONARE_C_TRY
-  *json_out = nullptr;
   const auto preset = sonare::mixing::api::scene_preset_from_string(preset_name);
   const auto scene = sonare::mixing::api::scene_preset(preset);
   *json_out = sonare_c_detail::copy_string(sonare::mixing::api::scene_to_json(scene));
@@ -960,13 +1004,11 @@ void set_output_channels(SonareMixer* mixer, int channels) {
 SonareError process_planar(SonareMixer* mixer, const float* const* input_left,
                            const float* const* input_right, size_t input_count,
                            float* const* output, int out_channels, size_t num_samples) {
-  if (!mixer || !output || out_channels <= 0 || (!input_left && input_count > 0) ||
-      (!input_right && input_count > 0) || input_count > mixer->strips.size() ||
-      num_samples > static_cast<size_t>(mixer->max_block_size)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  for (int ch = 0; ch < out_channels; ++ch) {
-    if (!output[ch]) return SONARE_ERROR_INVALID_PARAMETER;
+  // The stereo entry has refused a NULL handle, input array, output plane or oversized input
+  // count; the block length is the one rejection a prebuilt mixer's own bounce can reach.
+  if (const SonareError err = refuse_block_length(num_samples, mixer->max_block_size);
+      err != SONARE_OK) {
+    return err;
   }
   // EMPTY-BLOCK POLICY: a zero-frame block is a no-op, not an error. This is a
   // block-processing entry, not an offline analysis (validate_audio_params
@@ -981,10 +1023,10 @@ SonareError process_planar(SonareMixer* mixer, const float* const* input_left,
   // neither reach the mix nor advance the meters / timeline position.
   for (size_t index = 0; index < input_count; ++index) {
     if (input_left[index] && !block_finite(input_left[index], num_samples)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return refuse_non_finite_block("input_left", index);
     }
     if (input_right[index] && !block_finite(input_right[index], num_samples)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return refuse_non_finite_block("input_right", index);
     }
   }
 
@@ -996,9 +1038,8 @@ SonareError process_planar(SonareMixer* mixer, const float* const* input_left,
   // rejected, reuse the previous one" into a hard dropout.
   const size_t count = std::min(input_count, mixer->strips.size());
   for (size_t index = 0; index < count; ++index) {
-    if (!input_left[index] || !input_right[index]) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    if (!input_left[index]) return refuse_null_channel("input_left", index);
+    if (!input_right[index]) return refuse_null_channel("input_right", index);
   }
 
   SONARE_C_TRY

@@ -19,6 +19,7 @@
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
 #include "sonare_c_mastering_helpers.h"
+#include "util/parameter_checks.h"
 #endif
 
 using namespace sonare_c_detail;
@@ -35,21 +36,31 @@ SonareError check_track_arrays(const float* const* input_left, const char* const
                                const size_t* track_lengths, const int* track_sample_rates,
                                size_t input_count, int sample_rate,
                                const SonareMasteringParam* params, size_t param_count) {
-  if (params == nullptr && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (input_count == 0) return SONARE_OK;
-  if (input_left == nullptr || track_ids == nullptr || track_lengths == nullptr) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  for (size_t index = 0; index < input_count; ++index) {
-    if (track_ids[index] == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-    if (track_lengths[index] > 0 && input_left[index] == nullptr) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+  if (input_count != 0) {
+    SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(input_left, input_count);
+    SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(track_ids, input_count);
+    SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(track_lengths, input_count);
+    for (size_t index = 0; index < input_count; ++index) {
+      const auto at = [index] { return "[" + std::to_string(index) + "]"; };
+      if (input_left[index] == nullptr && track_lengths[index] > 0) {
+        return refuse_null_when_count(("input_left" + at()).c_str(),
+                                      ("track_lengths" + at()).c_str());
+      }
+      if (track_ids[index] == nullptr) return refuse_null(("track_ids" + at()).c_str());
+      if (track_sample_rates != nullptr && track_sample_rates[index] <= 0) {
+        const std::string name = "track_sample_rates" + at();
+        return run_validation([&] {
+          sonare::util::check::integer_at_least(track_sample_rates[index], 1, name.c_str());
+        });
+      }
     }
-    if (track_sample_rates != nullptr && track_sample_rates[index] <= 0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err = run_validation(
+            [&] { sonare::util::check::integer_at_least(sample_rate, 1, "sample_rate"); });
+        err != SONARE_OK) {
+      return err;
     }
   }
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
   return SONARE_OK;
 }
 
@@ -84,13 +95,15 @@ SonareError sonare_mixing_assistant_suggest(
     size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
     char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
+  if (json_out != nullptr) *json_out = nullptr;
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-  const SonareError err =
-      check_track_arrays(input_left, track_ids, track_lengths, track_sample_rates, input_count,
-                         sample_rate, params, param_count);
-  if (err != SONARE_OK) return err;
+  if (const SonareError err =
+          check_track_arrays(input_left, track_ids, track_lengths, track_sample_rates, input_count,
+                             sample_rate, params, param_count);
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(json_out);
 
   SONARE_C_TRY
   const auto parsed = sonare_c_mastering_detail::to_params(params, param_count);
@@ -103,6 +116,7 @@ SonareError sonare_mixing_assistant_suggest(
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  SONARE_C_REQUIRE_NONNULL(json_out);
   (void)input_left;
   (void)input_right;
   (void)track_ids;
@@ -136,7 +150,10 @@ int sonare_mixing_assistant_source_class_from_name(const char* name) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-  if (name == nullptr) return -1;
+  if (name == nullptr) {
+    sonare_c_detail::refuse_null("name");
+    return -1;
+  }
   const std::string key(name);
   const auto names = assistant::source_class_names();
   for (size_t index = 0; index < names.size(); ++index) {

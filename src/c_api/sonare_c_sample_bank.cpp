@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <string>
 
 #include "midi/synth/sample_bank.h"
 #include "sample_bank_internal.h"
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
@@ -24,8 +26,8 @@ extern "C" {
 
 SonareError sonare_sample_bank_create(SonareSampleBank** out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
+  SONARE_C_REQUIRE_NONNULL(out);
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   *out = new SonareSampleBank();
@@ -44,16 +46,39 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
                                           size_t n_frames, const SonareSampleDesc* desc,
                                           uint32_t* out_index) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_index);
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(bank);
+  SONARE_C_REQUIRE_NONNULL(data);
+  if (const SonareError err = sonare_c_detail::run_validation(
+          [&] { sonare::util::check::integer_at_least(n_frames, 1, "n_frames"); });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(desc);
   // loop_mode is a SoundFont sampleModes value, 0..3; 2 is the spec's "unused, no loop".
-  if (bank == nullptr || data == nullptr || n_frames == 0 || desc == nullptr ||
-      !sonare_c_detail::valid_c_enum(desc->loop_mode, 0, 3)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = sonare_c_detail::run_validation(
+          [&] { sonare::util::check::integer_in_range(desc->loop_mode, 0, 3, "desc.loop_mode"); });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_TRY
   if (n_frames > kMaxBankSamplePoints ||
       bank->bank->pool_size() + n_frames > kMaxBankSamplePoints) {
     return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        for (size_t frame = 0; frame < n_frames; ++frame) {
+          if (!std::isfinite(data[frame])) {
+            const std::string subject = "data[" + std::to_string(frame) + "]";
+            sonare::util::check::finite_float(data[frame], subject.c_str());
+          }
+        }
+        sonare::util::check::finite_float(desc->fine_tune_cents, "desc.fine_tune_cents");
+        sonare::util::check::finite(desc->source_rate, "desc.source_rate");
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
   sonare::midi::synth::SampleDesc cpp;
@@ -66,9 +91,8 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
   cpp.loop_end = desc->loop_end;
   cpp.loop_mode = desc->loop_mode;
 
-  if (!bank->bank->add_sample(data, n_frames, cpp, out_index)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  // Every refusal the bank can state was made above.
+  (void)bank->bank->add_sample(data, n_frames, cpp, out_index);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -80,14 +104,15 @@ SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_ind
                                         const SonareSampleZoneDesc* zone) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank == nullptr || zone == nullptr || set_index >= kMaxKeymapSets) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(bank);
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        sonare::util::check::integer_in_range(set_index, 0, kMaxKeymapSets - 1, "set_index");
+      });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(zone);
   SONARE_C_TRY
-  if (!std::isfinite(zone->tune_cents) || !std::isfinite(zone->gain) ||
-      !std::isfinite(zone->pan_units)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   sonare::midi::synth::SampleZoneDesc cpp;
   // Every bound defaults on its own, so narrowing one edge never collapses
   // another into an empty range. An upper bound of zero is the unset one --
@@ -104,7 +129,31 @@ SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_ind
   cpp.gain = zone->gain != 0.0f ? zone->gain : 1.0f;
   cpp.pan_units = std::clamp(zone->pan_units, -500.0f, 500.0f);
 
-  if (!bank->bank->add_zone(set_index, cpp)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        namespace check = sonare::util::check;
+        if (cpp.key_lo > cpp.key_hi) {
+          check::refuse_relation({"zone.key_lo", "zone.key_hi"}, "{0} must not exceed {1}");
+        }
+        if (cpp.vel_lo > cpp.vel_hi) {
+          check::refuse_relation({"zone.vel_lo", "zone.vel_hi"}, "{0} must not exceed {1}");
+        }
+        if (cpp.sample_index >= bank->bank->sample_count()) {
+          check::refuse_unknown_id("zone.sample_index", "a sample", "bank");
+        }
+        check::finite_float(zone->tune_cents, "zone.tune_cents");
+        check::finite_float(zone->gain, "zone.gain");
+        check::finite_float(zone->pan_units, "zone.pan_units");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  if (!bank->bank->add_zone(set_index, cpp)) {
+    return sonare_c_detail::run_validation([&] {
+      sonare::util::check::refuse_relation(
+          {"zone.tune_cents", "zone.sample_index"},
+          "{0} plus the fine tuning of the sample {1} names must be finite");
+    });
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -114,24 +163,26 @@ SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_ind
 
 SonareError sonare_sample_bank_sample_count(const SonareSampleBank* bank, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(bank);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = bank->bank->sample_count();
   return SONARE_OK;
 #else
-  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(bank, out_count);
 #endif
 }
 
 SonareError sonare_sample_bank_set_count(const SonareSampleBank* bank, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(bank);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = bank->bank->set_count();
   return SONARE_OK;
 #else
-  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(bank, out_count);
 #endif
 }

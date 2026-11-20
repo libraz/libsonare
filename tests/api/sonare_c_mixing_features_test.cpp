@@ -577,3 +577,242 @@ TEST_CASE("synthetic audio generators are available from the C API", "[c_api][fe
   REQUIRE(out_length == 32);
   sonare_free_floats(out);
 }
+
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+std::string mixer_refusal_message() { return std::string(sonare_last_error_message()); }
+
+}  // namespace
+
+TEST_CASE("mixer count entries name the NULL argument and zero the out count",
+          "[c_api][mixing][refusal]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+  size_t count = 99;
+
+  CHECK(sonare_mixer_get_strip_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(count == 0);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_get_strip_count(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "out_count must not be NULL");
+  CHECK(sonare_mixer_get_strip_count(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+
+  count = 99;
+  CHECK(sonare_mixer_bus_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(count == 0);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_bus_count(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "out_count must not be NULL");
+
+  count = 99;
+  CHECK(sonare_mixer_vca_group_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(count == 0);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_vca_group_count(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "out_count must not be NULL");
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("mixer bus entries name the refused argument", "[c_api][mixing][refusal]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+
+  CHECK(sonare_mixer_add_bus(nullptr, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_add_bus(mixer, nullptr, "aux") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must not be NULL");
+  REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
+  CHECK(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must not be the id of a bus already in this mixer");
+
+  CHECK(sonare_mixer_remove_bus(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_remove_bus(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must not be NULL");
+  CHECK(sonare_mixer_remove_bus(mixer, "ghost") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must be the id of a bus in this mixer");
+
+  CHECK(sonare_mixer_set_output_bus(nullptr, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_set_output_bus(mixer, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "source_id must not be NULL");
+  CHECK(sonare_mixer_set_output_bus(mixer, "sub", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "bus_id must not be NULL");
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("mixer VCA group entries name the refused argument", "[c_api][mixing][refusal]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const char* const members[] = {"a", nullptr};
+
+  CHECK(sonare_mixer_add_vca_group(nullptr, nullptr, 0.0f, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_add_vca_group(mixer, nullptr, 0.0f, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must not be NULL");
+  CHECK(sonare_mixer_add_vca_group(mixer, "g", nan, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "gain_db must be finite and in [-3.4028235e38, 3.4028235e38]");
+  CHECK(sonare_mixer_add_vca_group(mixer, "g", 0.0f, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "members must not be NULL when member_count is not 0");
+  CHECK(sonare_mixer_add_vca_group(mixer, "g", 0.0f, members, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "members[1] must not be NULL");
+  REQUIRE(sonare_mixer_add_vca_group(mixer, "g", 0.0f, nullptr, 0) == SONARE_OK);
+  CHECK(sonare_mixer_add_vca_group(mixer, "g", 0.0f, nullptr, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must not be the id of a VCA group already in this mixer");
+
+  CHECK(sonare_mixer_set_vca_group_gain_db(nullptr, nullptr, 0.0f) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_set_vca_group_gain_db(mixer, nullptr, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must not be NULL");
+  CHECK(sonare_mixer_set_vca_group_gain_db(mixer, "g", nan) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "gain_db must be finite and in [-3.4028235e38, 3.4028235e38]");
+  CHECK(sonare_mixer_set_vca_group_gain_db(mixer, "ghost", 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must be the id of a VCA group in this mixer");
+
+  CHECK(sonare_mixer_set_vca_group_members(nullptr, nullptr, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_set_vca_group_members(mixer, nullptr, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must not be NULL");
+  CHECK(sonare_mixer_set_vca_group_members(mixer, "g", nullptr, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "members must not be NULL when member_count is not 0");
+  CHECK(sonare_mixer_set_vca_group_members(mixer, "ghost", nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must be the id of a VCA group in this mixer");
+  CHECK(sonare_mixer_set_vca_group_members(mixer, "g", members, 2) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "members[1] must not be NULL");
+
+  CHECK(sonare_mixer_remove_vca_group(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_remove_vca_group(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must not be NULL");
+  CHECK(sonare_mixer_remove_vca_group(mixer, "ghost") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "id must be the id of a VCA group in this mixer");
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("mixer strip lookup, scene and query entries name the refused argument",
+          "[c_api][mixing][refusal]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
+  REQUIRE(sonare_mixer_add_strip(mixer, "src") != nullptr);
+
+  CHECK(sonare_mixer_strip_at(nullptr, 0) == nullptr);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_strip_at(mixer, 1) == nullptr);
+  CHECK(mixer_refusal_message() == "index must be an integer in [0, 0]");
+  CHECK(sonare_mixer_strip_by_id(nullptr, nullptr) == nullptr);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_strip_by_id(mixer, nullptr) == nullptr);
+  CHECK(mixer_refusal_message() == "id must not be NULL");
+  CHECK(sonare_mixer_strip_by_id(mixer, "ghost") == nullptr);
+  CHECK(mixer_refusal_message() == "id must be the id of a strip in this mixer");
+
+  CHECK(sonare_mixer_from_scene_json(nullptr, 48000, 512) == nullptr);
+  CHECK(mixer_refusal_message() == "json must not be NULL");
+
+  char* json = reinterpret_cast<char*>(0x1);
+  CHECK(sonare_mixer_to_scene_json(nullptr, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(json == nullptr);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_to_scene_json(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "json_out must not be NULL");
+
+  CHECK(sonare_mixer_compile(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_flush_meters(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+
+  int value = 99;
+  CHECK(sonare_mixer_latency_samples(nullptr, &value) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(value == 0);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_latency_samples(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "out_latency_samples must not be NULL");
+  value = 99;
+  CHECK(sonare_mixer_tail_samples(nullptr, &value) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(value == 0);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_tail_samples(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "out_tail_samples must not be NULL");
+  value = 99;
+  CHECK(sonare_mixer_max_block_size(nullptr, &value) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(value == 0);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_max_block_size(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "out_max_block_size must not be NULL");
+
+  json = reinterpret_cast<char*>(0x1);
+  CHECK(sonare_mixing_scene_preset_json(nullptr, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(json == nullptr);
+  CHECK(mixer_refusal_message() == "preset_name must not be NULL");
+  CHECK(sonare_mixing_scene_preset_json("x", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "json_out must not be NULL");
+
+  SonareMixerMasterMeterConfig config{};
+  CHECK(sonare_mixer_configure_master_meter(nullptr, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_configure_master_meter(mixer, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "config.struct_size is below sizeof");
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("mixer process_stereo refuses in header order and names the channel",
+          "[c_api][mixing][refusal]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
+  REQUIRE(sonare_mixer_add_strip(mixer, "src") != nullptr);
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  const float* in_l[] = {left.data()};
+  const float* in_r[] = {right.data()};
+
+  CHECK(sonare_mixer_process_stereo(nullptr, nullptr, nullptr, 0, nullptr, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "mixer must not be NULL");
+  CHECK(sonare_mixer_process_stereo(mixer, nullptr, nullptr, 1, nullptr, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "input_left must not be NULL when input_count is not 0");
+  CHECK(sonare_mixer_process_stereo(mixer, in_l, nullptr, 1, nullptr, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "input_right must not be NULL when input_count is not 0");
+  CHECK(sonare_mixer_process_stereo(mixer, in_l, in_r, 2, nullptr, nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() ==
+        "input_count must not exceed the number of strips in this mixer");
+  CHECK(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, nullptr, right.data(), 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "output_left must not be NULL");
+  CHECK(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, left.data(), nullptr, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "output_right must not be NULL");
+  CHECK(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, left.data(), right.data(), 65) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "num_samples must be an integer in [0, 64]");
+
+  const float* null_r[] = {nullptr};
+  CHECK(sonare_mixer_process_stereo(mixer, in_l, null_r, 1, left.data(), right.data(), 64) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "input_right[0] must not be NULL");
+
+  std::vector<float> poisoned(64, 0.0f);
+  poisoned[3] = std::numeric_limits<float>::quiet_NaN();
+  const float* bad_l[] = {poisoned.data()};
+  CHECK(sonare_mixer_process_stereo(mixer, bad_l, in_r, 1, left.data(), right.data(), 64) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "input_left[0] must contain only finite samples");
+  CHECK(sonare_mixer_drain_tail_stereo(mixer, nullptr, right.data(), 64) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "output_left must not be NULL");
+  sonare_mixer_destroy(mixer);
+}
+#endif  // defined(SONARE_WITH_MIXING)

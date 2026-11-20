@@ -6,6 +6,7 @@
 #include "mixing/solo_mute.h"
 #include "mixing/stereo_width.h"
 #include "mixing/tail_planner.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_c_mixing_detail {
 
@@ -299,13 +300,16 @@ class BusNode final : public sonare::rt::ProcessorBase {
 SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
                                    SonareMixMeterSnapshot* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_REQUIRE_NONNULL(bus_id);
   SONARE_C_TRY
-  if (!mixer || !bus_id || bus_id[0] == '\0' || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  sonare::util::check::non_empty(bus_id, "bus_id");
+  SONARE_C_REQUIRE_NONNULL(out);
   if (mixer->compiled_dirty) return SONARE_ERROR_INVALID_STATE;
   sonare::graph::Node* node = mixer->graph.node(bus_id);
-  if (!node) return SONARE_ERROR_INVALID_PARAMETER;
-  auto* bus = dynamic_cast<sonare_c_mixing_detail::BusNode*>(&node->processor());
-  if (!bus) return SONARE_ERROR_INVALID_PARAMETER;
+  // A strip id names a node that is not a bus, so it is unknown here too.
+  auto* bus = node ? dynamic_cast<sonare_c_mixing_detail::BusNode*>(&node->processor()) : nullptr;
+  if (!bus) sonare::util::check::refuse_unknown_id("bus_id", "a bus", "mixer");
   sonare_c_mixing_detail::copy_meter_snapshot(bus->meter_snapshot(), out);
   return SONARE_OK;
   SONARE_C_CATCH

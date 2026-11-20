@@ -227,4 +227,70 @@ TEST_CASE("C-API insert-automation separates out-of-order time from a full lane"
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("Mixer and strip entries name the refused argument", "[mixing][capi][refusal]") {
+  const auto last = [] { return std::string(sonare_last_error_message()); };
+
+  SonareMixer* created = reinterpret_cast<SonareMixer*>(&created);
+  CHECK(sonare_mixer_create(0, 64, &created) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(created == nullptr);
+  CHECK(last() == "sample_rate must be an integer in [8000, 384000]");
+  CHECK(sonare_mixer_create(48000, -1, &created) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "max_block_size must be an integer in [1, 1048576]");
+  CHECK(sonare_mixer_create(48000, 64, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "out must not be NULL");
+  // A bad scalar before a NULL out names the scalar: header order.
+  CHECK(sonare_mixer_create(0, 64, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "sample_rate must be an integer in [8000, 384000]");
+
+  const std::string scene_json = make_compressor_scene();
+  SonareMixer* mixer = sonare_mixer_from_scene_json(scene_json.c_str(), 48000, 256);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_strip_at(mixer, 0);
+  REQUIRE(strip != nullptr);
+
+  CHECK(sonare_mixer_add_strip(mixer, "comp") == nullptr);
+  CHECK(last() == "id must not be the id of a strip already in this mixer");
+  CHECK(sonare_mixer_add_strip_ex(mixer, "other", 1, 1, 1, 3) == nullptr);
+  CHECK(last() == "true_peak_oversample must be one of 0, 4, 8");
+
+  CHECK(sonare_strip_set_fader_db(nullptr, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "strip must not be NULL");
+  CHECK(sonare_strip_set_send_db(strip, 0, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "index must be the index of a send in this strip, which has none");
+
+  SonareMixMeterSnapshot snapshot{};
+  CHECK(sonare_strip_meter_tap(strip, 5, &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "tap must be an integer in [0, 1]");
+  CHECK(sonare_strip_meter_tap(strip, 5, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "tap must be an integer in [0, 1]");
+
+  CHECK(sonare_strip_schedule_insert_automation(strip, 5, 0, 0, -24.0f, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "insert_index must be an integer in [0, 0]");
+  CHECK(sonare_strip_schedule_insert_automation(strip, 0, 1000000u, 0, -24.0f, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "param_id must be an integer in [0, 65535]");
+  CHECK(sonare_strip_schedule_insert_automation(strip, 0, 12u, 0, -24.0f, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "param_id must be the id of a parameter in this insert");
+  CHECK(sonare_strip_schedule_insert_automation(strip, 0, 0, 0, -24.0f, 99) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "curve must be an integer in [0, 3]");
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 100, -24.0f, 0) == SONARE_OK);
+  CHECK(sonare_strip_schedule_insert_automation(strip, 0, 0, 50, -24.0f, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "sample_pos must not be earlier than the last event scheduled for this target");
+
+  CHECK(sonare_strip_schedule_width_automation(strip, 0, 3.0f, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "width must be finite and in [0, 2]");
+  CHECK(sonare_strip_schedule_pan_automation(strip, 0, 2.0f, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "pan must be finite and in [-1, 1]");
+  CHECK(sonare_strip_schedule_send_automation(strip, 0, 0, 0.0f, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last() == "send_index must be the index of a send in this strip, which has none");
+
+  sonare_mixer_destroy(mixer);
+}
+
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <limits>
 #include <set>
+#include <string>
 #include <vector>
 
 #include "analysis/section_analyzer.h"
@@ -905,4 +906,169 @@ TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {
     REQUIRE(err_b == SONARE_OK);
     REQUIRE(with_window != without);
   }
+}
+
+TEST_CASE("quick detection entries name the refused argument", "[c_api][quick][refusal]") {
+  const std::vector<float> samples(22050, 0.0f);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+  float bpm = 1.0f;
+  float* times = nullptr;
+  size_t count = 0;
+
+  CHECK(sonare_detect_bpm(samples.data(), samples.size(), 22050, 60.0f, 200.0f, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_bpm must not be NULL");
+
+  // A refused call leaves a non-NULL out zeroed, and the first NULL in header order is named.
+  float* stale = reinterpret_cast<float*>(&bpm);
+  CHECK(sonare_detect_beats(samples.data(), samples.size(), 22050, 60.0f, 200.0f, &stale,
+                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_count must not be NULL");
+  CHECK(stale == nullptr);
+  CHECK(sonare_detect_beats(samples.data(), samples.size(), 22050, 60.0f, 200.0f, nullptr,
+                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_times must not be NULL");
+
+  CHECK(sonare_detect_downbeats(samples.data(), samples.size(), 22050, nullptr, &count) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_times must not be NULL");
+  CHECK(sonare_detect_onsets(samples.data(), samples.size(), 22050, &times, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_count must not be NULL");
+
+  SonareKey key = {};
+  CHECK(sonare_detect_key(samples.data(), samples.size(), 22050, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_key must not be NULL");
+
+  SonareAnalysisResult analysis = {};
+  CHECK(sonare_analyze(samples.data(), samples.size(), 22050, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out must not be NULL");
+  (void)key;
+  (void)analysis;
+}
+
+TEST_CASE("key detection entries name the refused mode list and profile",
+          "[c_api][quick][refusal]") {
+  const std::vector<float> samples(22050, 0.0f);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+  SonareKey key = {};
+  const SonareMode good[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR};
+  const SonareMode bad[] = {SONARE_MODE_MAJOR, static_cast<SonareMode>(7)};
+  const auto detect = [&](const SonareMode* modes, size_t mode_count, SonareKeyProfileType profile,
+                          SonareKey* out_key) {
+    return sonare_detect_key_with_tuning(samples.data(), samples.size(), 22050, 2048, 512, 0, 0,
+                                         0.0f, modes, mode_count, profile, nullptr, 0.0f, 1,
+                                         out_key, nullptr);
+  };
+
+  CHECK(detect(nullptr, 2, SONARE_KEY_PROFILE_AUTO, &key) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "modes must not be NULL when mode_count is not 0");
+  CHECK(detect(bad, 2, SONARE_KEY_PROFILE_AUTO, &key) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "modes[1] must be an integer in [0, 6]");
+  CHECK(detect(good, 2, static_cast<SonareKeyProfileType>(7), &key) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "profile_type must be an integer in [-1, 6]");
+  CHECK(detect(good, 2, static_cast<SonareKeyProfileType>(-2), &key) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "profile_type must be an integer in [-1, 6]");
+  CHECK(detect(good, 2, SONARE_KEY_PROFILE_AUTO, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_key must not be NULL");
+  // The mode list is refused before the output, so two bad arguments name the earlier one.
+  CHECK(detect(bad, 2, SONARE_KEY_PROFILE_AUTO, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "modes[1] must be an integer in [0, 6]");
+
+  SonareKeyCandidate* candidates = nullptr;
+  size_t count = 0;
+  CHECK(sonare_detect_key_candidates_with_tuning(samples.data(), samples.size(), 22050, 2048, 512,
+                                                 0, 0, 0.0f, bad, 2, SONARE_KEY_PROFILE_AUTO,
+                                                 nullptr, 0.0f, 1, &candidates, &count,
+                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "modes[1] must be an integer in [0, 6]");
+  CHECK(sonare_detect_key_candidates_with_tuning(samples.data(), samples.size(), 22050, 2048, 512,
+                                                 0, 0, 0.0f, good, 2, SONARE_KEY_PROFILE_AUTO,
+                                                 nullptr, 0.0f, 1, nullptr, nullptr,
+                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_candidates must not be NULL");
+  CHECK(sonare_detect_key_candidates_with_tuning(samples.data(), samples.size(), 22050, 2048, 512,
+                                                 0, 0, 0.0f, good, 2, SONARE_KEY_PROFILE_AUTO,
+                                                 nullptr, 0.0f, 1, &candidates, nullptr,
+                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_count must not be NULL");
+}
+
+TEST_CASE("onset, analysis JSON and meter entries name the refused argument",
+          "[c_api][quick][refusal]") {
+  const std::vector<float> samples(22050, 0.0f);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+  float* times = nullptr;
+  size_t count = 0;
+
+  CHECK(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, nullptr, &times, &count) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "config must not be NULL");
+  SonareOnsetDetectConfig config = {};
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.pre_max = 1;
+  config.post_max = 1;
+  config.pre_avg = 3;
+  config.post_avg = 4;
+  config.delta = 0.06f;
+  config.wait = 1;
+  config.backtrack_range = 10;
+  config.backtrack = 2;
+  CHECK(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "config.backtrack must be an integer in [0, 1]");
+  config.backtrack = 0;
+  CHECK(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_times must not be NULL");
+
+  char* json = nullptr;
+  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, nullptr, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options must not be NULL");
+  SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+  options.struct_version = 99;
+  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.struct_version must be one of 2");
+  options = sonare_music_analyze_options_default();
+  options.meter_candidate_numerator_count = SONARE_MAX_METER_CANDIDATE_NUMERATORS + 1;
+  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.meter_candidate_numerator_count must be an integer in [0, " +
+                         std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) + "]");
+  options = sonare_music_analyze_options_default();
+  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_json must not be NULL");
+
+  const float beats[] = {0.5f, 1.0f};
+  SonareMeterOptions meter = sonare_meter_options_default();
+  CHECK(sonare_estimate_meter_json(nullptr, beats, 2, &meter, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "beat_times must not be NULL when beat_count is not 0");
+  CHECK(sonare_estimate_meter_json(beats, nullptr, 2, &meter, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "beat_strengths must not be NULL when beat_count is not 0");
+  CHECK(sonare_estimate_meter_json(beats, beats, 2, nullptr, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options must not be NULL");
+  meter.candidate_numerator_count = -1;
+  CHECK(sonare_estimate_meter_json(beats, beats, 2, &meter, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.candidate_numerator_count must be an integer in [0, " +
+                         std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) + "]");
+  meter = sonare_meter_options_default();
+  CHECK(sonare_estimate_meter_json(beats, beats, 2, &meter, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_json must not be NULL");
+  // Two NULLs name the earlier one in header order.
+  CHECK(sonare_estimate_meter_json(nullptr, beats, 2, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "beat_times must not be NULL when beat_count is not 0");
 }

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "c_api/project_internal.h"
+#include "util/parameter_checks.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/synth_enum_names.h"
@@ -84,13 +85,20 @@ int sonare_synth_builtin_waveform_from_name(const char* name) {
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  SONARE_C_TRY
-  if (!name || !out) return SONARE_ERROR_INVALID_PARAMETER;
-  const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::find_synth_preset(name);
-  if (preset == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "unknown synth preset name");
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(name);
+  const sonare::midi::synth::SynthPreset* preset = nullptr;
+  if (const SonareError err = run_validation([&] {
+        preset = sonare::midi::synth::find_synth_preset(name);
+        if (preset == nullptr) {
+          sonare::util::check::refuse("name", "must be the name of a synth preset");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
   sonare_c_detail::synth_patch_to_c(*preset, out);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -302,14 +310,17 @@ std::string synth_patch_param_info_json() {
 
 SonareError sonare_synth_engine_param_info(int engine_mode, char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!sonare_c_detail::begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_json != nullptr) *out_json = nullptr;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  SONARE_C_TRY
-  if (!sonare_c_detail::valid_c_enum(engine_mode, SONARE_SYNTH_ENGINE_MODE_COUNT)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   ("engine_mode " + std::to_string(engine_mode) + " is out of range").c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        sonare::util::check::integer_in_range(engine_mode, 0, SONARE_SYNTH_ENGINE_MODE_COUNT - 1,
+                                              "engine_mode");
+      });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_json);
+  SONARE_C_TRY
   if (engine_mode == SONARE_SYNTH_ENGINE_DEFAULT) {
     *out_json = sonare_c_detail::copy_string("[]");
     return SONARE_OK;
@@ -338,6 +349,7 @@ SonareError sonare_synth_engine_param_info(int engine_mode, char** out_json) {
   SONARE_C_CATCH
 #else
   (void)engine_mode;
+  SONARE_C_REQUIRE_NONNULL(out_json);
   sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED, "built without arrangement support");
   return SONARE_ERROR_NOT_SUPPORTED;
 #endif
@@ -345,7 +357,8 @@ SonareError sonare_synth_engine_param_info(int engine_mode, char** out_json) {
 
 SonareError sonare_synth_patch_param_info(char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!sonare_c_detail::begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_json != nullptr) *out_json = nullptr;
+  SONARE_C_REQUIRE_NONNULL(out_json);
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   static const std::string kInfo = synth_patch_param_info_json();

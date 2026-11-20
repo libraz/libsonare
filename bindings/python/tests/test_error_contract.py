@@ -84,7 +84,7 @@ def test_a_null_handle_refusal_is_the_library_detail_under_the_entry_prefix() ->
     with pytest.raises(SonareError) as strip:
         mixer.add_strip("a")
     assert str(strip.value).startswith("Mixer.add_strip: ")
-    assert str(strip.value).endswith("duplicate strip id")
+    assert str(strip.value).endswith("id must not be the id of a strip already in this mixer")
     assert "failed to add strip" not in str(strip.value)
 
 

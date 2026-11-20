@@ -585,8 +585,8 @@ TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi
   for (int factor : {1, 2, 3, 5, 16}) {
     INFO("factor " << factor);
     REQUIRE(sonare_mixer_add_strip_ex(mixer, "bad", 1, 1, 1, factor) == nullptr);
-    REQUIRE_THAT(std::string(sonare_last_error_message()),
-                 Catch::Matchers::ContainsSubstring("{0, 4, 8}"));
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "true_peak_oversample must be one of 0, 4, 8");
   }
 
   std::array<float, 512> block{};
@@ -701,8 +701,7 @@ TEST_CASE("The master meter is read only once enabled and refuses a config it ca
   SonareMixerMasterMeterConfig config{};
   CHECK(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(std::string(sonare_last_error_message()),
-             Catch::Matchers::ContainsSubstring(
-                 "SonareMixerMasterMeterConfig.struct_size is below sizeof"));
+             Catch::Matchers::ContainsSubstring("config.struct_size is below sizeof"));
   sonare_mixer_master_meter_config_init(&config);
   config.struct_size = sizeof(config) - 1;
   CHECK(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1226,4 +1225,84 @@ TEST_CASE("Mixing C API bus meters read an inter-sample over above the sample pe
     REQUIRE(master.true_peak_dbtp_l > master.peak_db_l + 2.0f);
     sonare_mixer_destroy(mixer);
   }
+}
+
+TEST_CASE("Bus meter refusals name the refused argument", "[mixing][capi]") {
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  SonareMixMeterSnapshot snapshot{};
+
+  CHECK(sonare_mixer_bus_meter(nullptr, "master", &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "mixer must not be NULL");
+  CHECK(sonare_mixer_bus_meter(mixer, nullptr, &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "bus_id must not be NULL");
+  CHECK(sonare_mixer_bus_meter(mixer, "", &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "bus_id must not be empty");
+  CHECK(sonare_mixer_bus_meter(mixer, "master", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out must not be NULL");
+  // Two NULL arguments name the first one in the signature.
+  CHECK(sonare_mixer_bus_meter(nullptr, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "mixer must not be NULL");
+
+  std::array<float, 64> silence{};
+  std::array<float, 64> out_l{};
+  std::array<float, 64> out_r{};
+  const float* inputs_l[] = {silence.data()};
+  const float* inputs_r[] = {silence.data()};
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                      silence.size()) == SONARE_OK);
+  CHECK(sonare_mixer_bus_meter(mixer, "missing", &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "bus_id must be the id of a bus in this mixer");
+  // A strip id names a node that is not a bus.
+  CHECK(sonare_mixer_bus_meter(mixer, "a", &snapshot) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "bus_id must be the id of a bus in this mixer");
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Mixing assistant suggest refusals name the refused argument", "[mixing][capi]") {
+  const std::array<float, 8> samples{};
+  const float* left[] = {samples.data()};
+  const char* ids[] = {"t"};
+  const size_t lengths[] = {samples.size()};
+  char* json = nullptr;
+  const auto refusal = [] { return std::string(sonare_last_error_message()); };
+
+  CHECK(sonare_mixing_assistant_suggest(nullptr, nullptr, ids, nullptr, lengths, nullptr, 1, 48000,
+                                        nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "input_left must not be NULL when input_count is not 0");
+  CHECK(sonare_mixing_assistant_suggest(left, nullptr, nullptr, nullptr, lengths, nullptr, 1, 48000,
+                                        nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "track_ids must not be NULL when input_count is not 0");
+  CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, nullptr, nullptr, 1, 48000,
+                                        nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "track_lengths must not be NULL when input_count is not 0");
+
+  const float* null_left[] = {nullptr};
+  CHECK(sonare_mixing_assistant_suggest(null_left, nullptr, ids, nullptr, lengths, nullptr, 1,
+                                        48000, nullptr, 0,
+                                        &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "input_left[0] must not be NULL when track_lengths[0] is not 0");
+  const char* null_ids[] = {nullptr};
+  CHECK(sonare_mixing_assistant_suggest(left, nullptr, null_ids, nullptr, lengths, nullptr, 1,
+                                        48000, nullptr, 0,
+                                        &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "track_ids[0] must not be NULL");
+  const int bad_rates[] = {0};
+  CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, bad_rates, 1, 48000,
+                                        nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "track_sample_rates[0] must be an integer in [1, 2147483647]");
+  CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 0,
+                                        nullptr, 0, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "sample_rate must be an integer in [1, 2147483647]");
+  CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 48000,
+                                        nullptr, 1, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "params must not be NULL when param_count is not 0");
+  CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 48000,
+                                        nullptr, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "json_out must not be NULL");
+  // A bad argument is named before the NULL out.
+  CHECK(sonare_mixing_assistant_suggest(left, nullptr, ids, nullptr, lengths, nullptr, 1, 0,
+                                        nullptr, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refusal() == "sample_rate must be an integer in [1, 2147483647]");
 }

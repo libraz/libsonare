@@ -14,7 +14,9 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -888,4 +890,149 @@ TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][as
   CHECK(bare_root["status"].as_string() == "empty");
   CHECK(bare_root["reason"].as_string() ==
         "the project annotates no chords, and this module does not guess harmony");
+}
+
+TEST_CASE("the assist entries name the first refused argument in header order", "[c_api][assist]") {
+  ProjectFixture fixture;
+  make_project(&fixture);
+  const std::string request = request_for(fixture.clip_id);
+  char* out = nullptr;
+
+  CHECK(sonare_project_assist_preview_json(nullptr, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "project must not be NULL");
+  CHECK(sonare_project_assist_apply_json(nullptr, request.c_str(), &out) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "project must not be NULL");
+  CHECK(sonare_project_assist_preview_json(fixture.project, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "request_json must not be NULL");
+  CHECK(sonare_project_assist_apply_json(fixture.project, nullptr, &out) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "request_json must not be NULL");
+  CHECK(sonare_project_assist_preview_json(fixture.project, request.c_str(), nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out_json must not be NULL");
+  CHECK(sonare_project_assist_apply_json(fixture.project, request.c_str(), nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out_json must not be NULL");
+  CHECK(out == nullptr);
+}
+
+TEST_CASE("the synth catalogue entries name the refused argument", "[c_api][assist]") {
+  SonareSynthPatch patch{};
+  CHECK(sonare_synth_preset_patch(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "name must not be NULL");
+  CHECK(sonare_synth_preset_patch("noSuchPreset", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "name must be the name of a synth preset");
+  CHECK(sonare_synth_preset_patch("sine", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out must not be NULL");
+  CHECK(sonare_synth_preset_patch("sine", &patch) == SONARE_OK);
+
+  char* json = nullptr;
+  CHECK(sonare_synth_engine_param_info(-1, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "engine_mode must be an integer in [0, 18]");
+  CHECK(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_MODE_COUNT, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "engine_mode must be an integer in [0, 18]");
+  CHECK(sonare_synth_engine_param_info(0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out_json must not be NULL");
+  CHECK(sonare_synth_patch_param_info(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out_json must not be NULL");
+  CHECK(json == nullptr);
+}
+
+TEST_CASE("the sample bank entries name the refused argument", "[c_api][assist]") {
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  CHECK(sonare_sample_bank_create(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out must not be NULL");
+
+  SonareSampleBank* bank = nullptr;
+  REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
+  const float frames[4] = {0.0f, 0.25f, -0.25f, 0.0f};
+  SonareSampleDesc desc{};
+  uint32_t index = 7;
+
+  CHECK(sonare_sample_bank_add_sample(nullptr, nullptr, 0, nullptr, &index) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bank must not be NULL");
+  CHECK(sonare_sample_bank_add_sample(bank, nullptr, 0, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "data must not be NULL");
+  CHECK(sonare_sample_bank_add_sample(bank, frames, 0, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "n_frames must be an integer of at least 1");
+  CHECK(sonare_sample_bank_add_sample(bank, frames, 4, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc must not be NULL");
+  desc.loop_mode = 4;
+  CHECK(sonare_sample_bank_add_sample(bank, frames, 4, &desc, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.loop_mode must be an integer in [0, 3]");
+  desc.loop_mode = 0;
+  const float bad_frames[3] = {0.0f, 0.0f, std::numeric_limits<float>::quiet_NaN()};
+  CHECK(sonare_sample_bank_add_sample(bank, bad_frames, 3, &desc, &index) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "data[2] must be finite and in [-3.4028235e38, 3.4028235e38]");
+  desc.fine_tune_cents = std::numeric_limits<float>::infinity();
+  CHECK(sonare_sample_bank_add_sample(bank, frames, 4, &desc, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.fine_tune_cents must be finite and in [-3.4028235e38, 3.4028235e38]");
+  desc.fine_tune_cents = 0.0f;
+  desc.source_rate = std::numeric_limits<double>::quiet_NaN();
+  CHECK(sonare_sample_bank_add_sample(bank, frames, 4, &desc, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.source_rate must be finite");
+  desc.source_rate = 0.0;
+  REQUIRE(sonare_sample_bank_add_sample(bank, frames, 4, &desc, &index) == SONARE_OK);
+
+  SonareSampleZoneDesc zone{};
+  CHECK(sonare_sample_bank_add_zone(nullptr, 4096, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bank must not be NULL");
+  CHECK(sonare_sample_bank_add_zone(bank, 4096, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "set_index must be an integer in [0, 4095]");
+  CHECK(sonare_sample_bank_add_zone(bank, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "zone must not be NULL");
+  zone.key_lo = 100;
+  zone.key_hi = 50;
+  CHECK(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "zone.key_lo must not exceed zone.key_hi");
+  zone.key_lo = 0;
+  zone.key_hi = 0;
+  zone.vel_lo = 100;
+  zone.vel_hi = 50;
+  CHECK(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "zone.vel_lo must not exceed zone.vel_hi");
+  zone.vel_lo = 0;
+  zone.vel_hi = 0;
+  zone.sample_index = 1;
+  CHECK(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "zone.sample_index must be the id of a sample in this bank");
+  zone.sample_index = index;
+  zone.tune_cents = std::numeric_limits<float>::quiet_NaN();
+  CHECK(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "zone.tune_cents must be finite and in [-3.4028235e38, 3.4028235e38]");
+  zone.tune_cents = 0.0f;
+  zone.gain = std::numeric_limits<float>::infinity();
+  CHECK(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "zone.gain must be finite and in [-3.4028235e38, 3.4028235e38]");
+  zone.gain = 1.0f;
+  zone.pan_units = std::numeric_limits<float>::quiet_NaN();
+  CHECK(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "zone.pan_units must be finite and in [-3.4028235e38, 3.4028235e38]");
+  zone.pan_units = 0.0f;
+  REQUIRE(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_OK);
+
+  size_t count = 5;
+  CHECK(sonare_sample_bank_sample_count(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bank must not be NULL");
+  CHECK(sonare_sample_bank_sample_count(bank, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_count must not be NULL");
+  CHECK(sonare_sample_bank_set_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bank must not be NULL");
+  CHECK(count == 0);
+  CHECK(sonare_sample_bank_set_count(bank, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_count must not be NULL");
+  sonare_sample_bank_destroy(bank);
 }
