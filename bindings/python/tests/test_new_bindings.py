@@ -190,18 +190,10 @@ def _stems_fingerprint(**kwargs: float) -> tuple[int, int, tuple[float, ...]]:
     return len(components), int(first.size), tuple(float(v) for v in first[:8])
 
 
-def test_an_explicit_zero_beta_currently_reads_as_the_default_on_decompose_stems() -> None:
-    """An explicit beta of 0 reaches the C config, which currently reads it as "use the default".
-
-    The C ABI documents 0 on every numeric field of SonareDecomposeStemsConfig
-    as that sentinel, which is what makes a zero-initialised config mean the
-    documented defaults. ``beta`` is the field this facade forwards untouched,
-    so the sentinel is observable here.
-    """
-    assert _stems_fingerprint(beta=0.0) == _stems_fingerprint(beta=2.0)
-    # Without this the assertion above would also hold on a facade that dropped
-    # beta on the floor.
-    assert _stems_fingerprint(beta=0.5) != _stems_fingerprint(beta=0.0)
+def test_an_explicit_zero_beta_is_itakura_saito_on_decompose_stems() -> None:
+    """An explicit beta of 0 is read literally, so it separates apart from the default."""
+    assert _stems_fingerprint(beta=0.0) != _stems_fingerprint(beta=2.0)
+    assert _stems_fingerprint() == _stems_fingerprint(beta=2.0)
 
 
 def test_decompose_stems_validates_ahead_of_the_c_abi() -> None:

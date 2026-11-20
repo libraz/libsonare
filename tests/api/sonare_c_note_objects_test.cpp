@@ -119,6 +119,7 @@ SonareError render_with_voiced(const std::vector<float>& samples, const SonareNo
 SonareNoteObject hand_note(int64_t onset_sample, int64_t offset_sample,
                            float median_hz = sonare::constants::kA4Hz) {
   SonareNoteObject note{};
+  sonare_note_edit_init(&note.edit);
   note.onset_sample = onset_sample;
   note.offset_sample = offset_sample;
   note.frame_start = static_cast<int32_t>(onset_sample / kSamplesPerFrame);
@@ -454,33 +455,28 @@ TEST_CASE("sonare_extract_notes reads voiced_prob only when voiced is NULL",
   }
 }
 
-TEST_CASE("a NULL SonareNoteExtractorConfig and a zeroed one select the same defaults",
+TEST_CASE("a NULL SonareNoteExtractorConfig and an initialised one select the same defaults",
           "[c_api][note_objects]") {
   const std::vector<float> samples = sine(440.0f, 0.5f, 6400);
   const std::vector<float> f0(40, 440.0f);
   const std::vector<int32_t> voiced(40, 1);
 
   SonareNoteObjectsResult from_null{};
-  SonareNoteObjectsResult from_zeroed{};
-  SonareNoteExtractorConfig zeroed{};
+  SonareNoteObjectsResult from_init{};
+  SonareNoteExtractorConfig initialised;
+  sonare_note_extractor_config_init(&initialised);
+  CHECK(initialised.struct_size == sizeof(SonareNoteExtractorConfig));
   REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), nullptr, &from_null) == SONARE_OK);
-  REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &zeroed, &from_zeroed) == SONARE_OK);
+  REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &initialised, &from_init) == SONARE_OK);
   REQUIRE(from_null.count == 1);
-  REQUIRE(same_result(from_null, from_zeroed));
-
-  // struct_version 0 and 1 both select the version-1 layout.
-  SonareNoteObjectsResult from_v1{};
-  SonareNoteExtractorConfig version_one{};
-  version_one.struct_version = 1;
-  REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &version_one, &from_v1) == SONARE_OK);
-  REQUIRE(same_result(from_null, from_v1));
+  REQUIRE(same_result(from_null, from_init));
 
   sonare_free_note_objects_result(&from_null);
-  sonare_free_note_objects_result(&from_zeroed);
-  sonare_free_note_objects_result(&from_v1);
+  sonare_free_note_objects_result(&from_init);
 }
 
-TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_api][note_objects]") {
+TEST_CASE("every SonareNoteExtractorConfig field carries its default from init",
+          "[c_api][note_objects]") {
   const std::vector<float> samples = sine(440.0f, 0.5f, 6400);
   const std::vector<int32_t> voiced(40, 1);
 
@@ -491,7 +487,8 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
     for (size_t i = 20; i < 40; ++i) f0[i] = hz_at_cents(100.0f);
 
     SonareNoteObjectsResult zeroed{};
-    SonareNoteExtractorConfig config{};
+    SonareNoteExtractorConfig config;
+    sonare_note_extractor_config_init(&config);
     REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &config, &zeroed) == SONARE_OK);
     REQUIRE(zeroed.count == 2);
     REQUIRE(zeroed.notes[1].frame_start == 20);
@@ -523,7 +520,8 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
     }
 
     SonareNoteObjectsResult zeroed{};
-    SonareNoteExtractorConfig config{};
+    SonareNoteExtractorConfig config;
+    sonare_note_extractor_config_init(&config);
     REQUIRE(extract_at(samples, f0, nullptr, gated.data(), &config, &zeroed) == SONARE_OK);
     REQUIRE(zeroed.count == 1);
     REQUIRE(zeroed.notes[0].frame_start == 10);
@@ -548,7 +546,8 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
     const std::vector<float> f0(40, sonare::constants::kA4Hz);
 
     SonareNoteObjectsResult zeroed{};
-    SonareNoteExtractorConfig config{};
+    SonareNoteExtractorConfig config;
+    sonare_note_extractor_config_init(&config);
     REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &config, &zeroed) == SONARE_OK);
     REQUIRE(zeroed.count == 1);
     REQUIRE_THAT(zeroed.notes[0].median_cents, WithinAbs(0.0f, 1.0f));
@@ -577,7 +576,8 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
     const std::vector<float> prob(40, 0.6f);
 
     SonareNoteObjectsResult zeroed{};
-    SonareNoteExtractorConfig config{};
+    SonareNoteExtractorConfig config;
+    sonare_note_extractor_config_init(&config);
     REQUIRE(extract_at(samples, f0, prob.data(), nullptr, &config, &zeroed) == SONARE_OK);
     REQUIRE(zeroed.count == 1);
 
@@ -593,6 +593,36 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
 
     sonare_free_note_objects_result(&zeroed);
     sonare_free_note_objects_result(&explicit_default);
+  }
+
+  SECTION("0 is refused where it is not a value and ordinary where it is") {
+    const std::vector<float> f0(40, sonare::constants::kA4Hz);
+    SonareNoteObjectsResult out{};
+
+    SonareNoteExtractorConfig zeroed{};
+    REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &zeroed, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.struct_size must be set by sonare_note_extractor_config_init");
+
+    SonareNoteExtractorConfig config;
+    sonare_note_extractor_config_init(&config);
+    config.segmentation_threshold_cents = 0.0f;
+    REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &config, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("config.segmentation_threshold_cents") ==
+          0);
+    sonare_note_extractor_config_init(&config);
+    config.reference_hz = 0.0f;
+    REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &config, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("config.reference_hz") == 0);
+
+    sonare_note_extractor_config_init(&config);
+    config.min_note_ms = 0.0f;
+    config.voiced_threshold = 0.0f;
+    REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &config, &out) == SONARE_OK);
+    sonare_free_note_objects_result(&out);
   }
 }
 
@@ -621,10 +651,10 @@ TEST_CASE("sonare_render_notes reproduces the input bit for bit for identity edi
     sonare_free_floats(out);
   }
 
-  SECTION("a zeroed edit is the identity, so time_stretch_ratio 0 reads as 1") {
+  SECTION("an initialised edit is the identity") {
     for (size_t i = 0; i < extracted.count; ++i) {
-      extracted.notes[i].edit = SonareNoteEdit{};
-      REQUIRE(extracted.notes[i].edit.time_stretch_ratio == 0.0f);
+      sonare_note_edit_init(&extracted.notes[i].edit);
+      REQUIRE(extracted.notes[i].edit.time_stretch_ratio == 1.0f);
     }
     REQUIRE(render_at(samples, extracted.notes, extracted.count, nullptr, &out, &out_length) ==
             SONARE_OK);
@@ -784,16 +814,17 @@ TEST_CASE("sonare_render_notes refuses a note render config field by its member 
   };
 
   SonareNoteRenderConfig config{};
-  config.struct_version = 2;
-  CHECK(refusal(config) == "config.struct_version must be an integer in [0, 1]");
-  config.struct_version = 1;
-  config.fade_ms = -1.0f;
-  CHECK(refusal(config) == "config.fade_ms must be finite and at least 0");
-  config.fade_ms = std::numeric_limits<float>::quiet_NaN();
-  CHECK(refusal(config) == "config.fade_ms must be finite and at least 0");
-  config.fade_ms = 0.0f;
-  config.vibrato_cutoff_hz = std::numeric_limits<float>::infinity();
-  CHECK(refusal(config) == "config.vibrato_cutoff_hz must be finite and at least 0");
+  CHECK(refusal(config) == "config.struct_size must be set by sonare_note_render_config_init");
+  sonare_note_render_config_init(&config);
+  for (const float bad : {-1.0f, 0.0f, std::numeric_limits<float>::quiet_NaN()}) {
+    config.fade_ms = bad;
+    CHECK(refusal(config) == "config.fade_ms must be finite and greater than 0");
+  }
+  config.fade_ms = 5.0f;
+  for (const float bad : {0.0f, std::numeric_limits<float>::infinity()}) {
+    config.vibrato_cutoff_hz = bad;
+    CHECK(refusal(config) == "config.vibrato_cutoff_hz must be finite and greater than 0");
+  }
 }
 
 TEST_CASE("sonare_render_notes silences a muted note", "[c_api][note_objects]") {
@@ -816,7 +847,7 @@ TEST_CASE("sonare_render_notes silences a muted note", "[c_api][note_objects]") 
   sonare_free_floats(out);
 }
 
-TEST_CASE("the SonareNoteRenderConfig fade takes its default at 0", "[c_api][note_objects]") {
+TEST_CASE("the SonareNoteRenderConfig fade default comes from init", "[c_api][note_objects]") {
   const std::vector<float> samples = sine(440.0f, 0.5f, 8000);
   constexpr size_t kOnset = 1920;
   constexpr size_t kOffset = 6080;
@@ -835,11 +866,12 @@ TEST_CASE("the SonareNoteRenderConfig fade takes its default at 0", "[c_api][not
   };
 
   const std::vector<float> from_null = rendered_with(nullptr);
-  SonareNoteRenderConfig config{};
-  const std::vector<float> from_zeroed = rendered_with(&config);
-  REQUIRE(first_mismatch(from_null.data(), from_zeroed.data(), 0, from_null.size()) == kNoMismatch);
+  SonareNoteRenderConfig config;
+  sonare_note_render_config_init(&config);
+  CHECK(config.fade_ms == 5.0f);
+  const std::vector<float> from_init = rendered_with(&config);
+  REQUIRE(first_mismatch(from_null.data(), from_init.data(), 0, from_null.size()) == kNoMismatch);
 
-  config.struct_version = 1;
   config.fade_ms = 5.0f;
   const std::vector<float> from_explicit_default = rendered_with(&config);
   REQUIRE(first_mismatch(from_null.data(), from_explicit_default.data(), 0, from_null.size()) ==
@@ -853,9 +885,8 @@ TEST_CASE("the SonareNoteRenderConfig fade takes its default at 0", "[c_api][not
   REQUIRE(std::abs(from_long_fade[kOnset + 90]) > 1e-3f);
 }
 
-TEST_CASE(
-    "a zeroed SonareNoteEdit is still the identity once it carries the envelope and curve fields",
-    "[c_api][note_objects]") {
+TEST_CASE("an initialised SonareNoteEdit is the identity with the envelope and curve fields",
+          "[c_api][note_objects]") {
   constexpr size_t kFrames = 40;
   constexpr int kSamples = static_cast<int>(kFrames) * static_cast<int>(kSamplesPerFrame);
   const std::vector<float> samples = fm_tone(220.0, 30.0, 5.5, 0.4, kSamples);
@@ -866,7 +897,7 @@ TEST_CASE(
   REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), nullptr, &extracted) == SONARE_OK);
   REQUIRE(extracted.count >= 1);
   for (size_t i = 0; i < extracted.count; ++i) {
-    extracted.notes[i].edit = SonareNoteEdit{};
+    sonare_note_edit_init(&extracted.notes[i].edit);
     REQUIRE(extracted.notes[i].edit.envelope_offset == 0);
     REQUIRE(extracted.notes[i].edit.envelope_count == 0);
     REQUIRE(extracted.notes[i].edit.formant_semitones == 0.0f);
@@ -894,7 +925,7 @@ TEST_CASE(
                         f0.data(), f0.size(), nullptr, &edited, &edited_length) == SONARE_OK);
     const bool moved = first_mismatch(samples.data(), edited, 0, edited_length) != kNoMismatch;
     sonare_free_floats(edited);
-    extracted.notes[0].edit = SonareNoteEdit{};
+    sonare_note_edit_init(&extracted.notes[0].edit);
     return moved;
   };
 
@@ -1184,11 +1215,13 @@ TEST_CASE("the SonareNoteRenderConfig vibrato cutoff decides which curve an edit
 
   const std::vector<float> from_null = rendered_with(nullptr);
 
-  // 0 keeps the default 3 Hz, so a zeroed config and an explicit 3 both land on
+  // The init value is the default 3 Hz, so an initialised config and an explicit 3 both land on
   // what a NULL config renders.
-  SonareNoteRenderConfig config{};
-  const std::vector<float> from_zeroed = rendered_with(&config);
-  REQUIRE(first_mismatch(from_null.data(), from_zeroed.data(), 0, from_null.size()) == kNoMismatch);
+  SonareNoteRenderConfig config;
+  sonare_note_render_config_init(&config);
+  CHECK(config.vibrato_cutoff_hz == 3.0f);
+  const std::vector<float> from_init = rendered_with(&config);
+  REQUIRE(first_mismatch(from_null.data(), from_init.data(), 0, from_null.size()) == kNoMismatch);
 
   config.vibrato_cutoff_hz = 3.0f;
   const std::vector<float> from_explicit_default = rendered_with(&config);
@@ -1212,7 +1245,8 @@ TEST_CASE("the SonareNoteRenderConfig vibrato cutoff decides which curve an edit
   float* out = nullptr;
   size_t out_length = 0;
   for (const float bad : {kNaN, kInf, -kInf, -1.0f}) {
-    SonareNoteRenderConfig rejected{};
+    SonareNoteRenderConfig rejected;
+    sonare_note_render_config_init(&rejected);
     rejected.vibrato_cutoff_hz = bad;
     REQUIRE(render_with(samples, &note, 1, nullptr, 0, f0.data(), f0.size(), &rejected, &out,
                         &out_length) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1292,9 +1326,8 @@ TEST_CASE("sonare_extract_notes rejects malformed arguments and clears its outpu
     });
   }
 
-  for (const int32_t bad_version : {-1, 2, 99}) {
+  {
     SonareNoteExtractorConfig config{};
-    config.struct_version = bad_version;
     rejects([&](SonareNoteObjectsResult* out) {
       return sonare_extract_notes(samples.data(), samples.size(), kSampleRate, f0.data(), nullptr,
                                   voiced.data(), f0.size(), kFrameRate, &config, out);
@@ -1302,13 +1335,17 @@ TEST_CASE("sonare_extract_notes rejects malformed arguments and clears its outpu
   }
 
   for (const float bad : {kNaN, kInf, -1.0f}) {
-    SonareNoteExtractorConfig threshold{};
+    SonareNoteExtractorConfig threshold;
+    sonare_note_extractor_config_init(&threshold);
     threshold.segmentation_threshold_cents = bad;
-    SonareNoteExtractorConfig min_note{};
+    SonareNoteExtractorConfig min_note;
+    sonare_note_extractor_config_init(&min_note);
     min_note.min_note_ms = bad;
-    SonareNoteExtractorConfig reference{};
+    SonareNoteExtractorConfig reference;
+    sonare_note_extractor_config_init(&reference);
     reference.reference_hz = bad;
-    SonareNoteExtractorConfig voiced_threshold{};
+    SonareNoteExtractorConfig voiced_threshold;
+    sonare_note_extractor_config_init(&voiced_threshold);
     voiced_threshold.voiced_threshold = bad;
     for (const SonareNoteExtractorConfig* config :
          {&threshold, &min_note, &reference, &voiced_threshold}) {
@@ -1321,7 +1358,8 @@ TEST_CASE("sonare_extract_notes rejects malformed arguments and clears its outpu
 
   // A voiced threshold above 1 can never be met, so it is a malformed value
   // rather than a strict one.
-  SonareNoteExtractorConfig unreachable{};
+  SonareNoteExtractorConfig unreachable;
+  sonare_note_extractor_config_init(&unreachable);
   unreachable.voiced_threshold = 1.5f;
   rejects([&](SonareNoteObjectsResult* out) {
     return sonare_extract_notes(samples.data(), samples.size(), kSampleRate, f0.data(), nullptr,
@@ -1396,30 +1434,40 @@ TEST_CASE("sonare_render_notes rejects malformed spans, edits and config",
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
-  // 0 is the identity spelling, so only a genuinely negative ratio is rejected.
-  SonareNoteObject negative_ratio = edited(1920, 6080);
-  negative_ratio.edit.time_stretch_ratio = -1.0f;
-  REQUIRE(render_at(samples, &negative_ratio, 1, nullptr, &out, &out_length) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  // 0 is not a ratio, so zero and negative ones are refused by name.
+  for (const float bad_ratio : {0.0f, -1.0f}) {
+    SonareNoteObject ratio = edited(1920, 6080);
+    ratio.edit.time_stretch_ratio = bad_ratio;
+    REQUIRE(render_at(samples, &ratio, 1, nullptr, &out, &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("notes[0].edit.time_stretch_ratio") == 0);
+  }
 
-  for (const int32_t bad_version : {-1, 2, 99}) {
+  // An edit not started from its init function is refused by its struct_size.
+  SonareNoteObject uninitialised = edited(1920, 6080);
+  uninitialised.edit.struct_size = 0;
+  REQUIRE(render_at(samples, &uninitialised, 1, nullptr, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "notes[0].edit.struct_size must be set by sonare_note_edit_init");
+
+  {
     SonareNoteRenderConfig config{};
-    config.struct_version = bad_version;
     REQUIRE(render_at(samples, &note, 1, &config, &out, &out_length) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
-  for (const float bad_fade : {kNaN, kInf, -kInf, -1.0f}) {
-    SonareNoteRenderConfig config{};
+  for (const float bad_fade : {kNaN, kInf, -kInf, -1.0f, 0.0f}) {
+    SonareNoteRenderConfig config;
+    sonare_note_render_config_init(&config);
     config.fade_ms = bad_fade;
     REQUIRE(render_at(samples, &note, 1, &config, &out, &out_length) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
   // Positive control: the same note under a valid config renders.
-  SonareNoteRenderConfig valid{};
-  valid.struct_version = 1;
-  valid.fade_ms = 5.0f;
+  SonareNoteRenderConfig valid;
+  sonare_note_render_config_init(&valid);
   REQUIRE(render_at(samples, &note, 1, &valid, &out, &out_length) == SONARE_OK);
   REQUIRE(out_length == samples.size());
   sonare_free_floats(out);
@@ -1577,7 +1625,7 @@ TEST_CASE("low-F0 C pitch correction keeps a short block unchanged", "[c_api][pi
   check_identity(output, output_length);
 
   SonarePitchCorrectionConfig config{};
-  REQUIRE(sonare_pitch_correction_config_default(&config) == SONARE_OK);
+  sonare_pitch_correction_config_init(&config);
   config.target_midi = target_midi;
   output = nullptr;
   output_length = 0;

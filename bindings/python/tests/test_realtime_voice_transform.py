@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import dataclasses
 import math
 from typing import get_args
@@ -111,7 +112,7 @@ def test_new_fields_round_trip_through_the_pod() -> None:
         midi_release="input",
     )
     pod = cfg._to_pod()
-    assert pod.struct_version == 2
+    assert pod.struct_size == ctypes.sizeof(SonareRealtimeVoiceChangerConfig)
     assert list(pod.harmony_steps) == [5, -2, -7]
     assert pod.pitch_correction_scale == 1
     assert pod.reverb_variation_division == 2

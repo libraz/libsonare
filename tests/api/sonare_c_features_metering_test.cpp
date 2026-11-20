@@ -64,8 +64,8 @@ TEST_CASE("sonare pseudo/hybrid CQT C API", "[c_api]") {
   auto samples = generate_sine(440.0f, 22050, 1.0f);
   SonareCqtResult result{};
 
-  REQUIRE(sonare_pseudo_cqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, &result) ==
-          SONARE_OK);
+  REQUIRE(sonare_pseudo_cqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, 1.0f,
+                            &result) == SONARE_OK);
   REQUIRE(result.n_bins == 36);
   REQUIRE(result.n_frames > 0);
   REQUIRE(result.magnitude != nullptr);
@@ -73,15 +73,15 @@ TEST_CASE("sonare pseudo/hybrid CQT C API", "[c_api]") {
   sonare_free_cqt_result(&result);
   REQUIRE(result.magnitude == nullptr);
 
-  REQUIRE(sonare_hybrid_cqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, &result) ==
-          SONARE_OK);
+  REQUIRE(sonare_hybrid_cqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, 1.0f,
+                            &result) == SONARE_OK);
   REQUIRE(result.n_bins == 36);
   REQUIRE(result.n_frames > 0);
   REQUIRE(result.magnitude != nullptr);
   sonare_free_cqt_result(&result);
 
-  REQUIRE(sonare_pseudo_cqt(samples.data(), samples.size(), 22050, 0, 55.0f, 36, 12, &result) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_pseudo_cqt(samples.data(), samples.size(), 22050, 0, 55.0f, 36, 12, 1.0f,
+                            &result) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
@@ -1039,26 +1039,28 @@ TEST_CASE("sonare_metering_spectrum", "[c_api]") {
 TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
   // C major scale mask: C D E F G A B (bits 0,2,4,5,7,9,11).
   static constexpr uint16_t kCMajorMask = 0b101010110101;
+  // An optional reference_midi that is not given.
+  const float kNotGiven = std::numeric_limits<float>::quiet_NaN();
 
   SECTION("snaps an off-scale note to the nearest in-scale neighbour") {
     // C#4 (61) -> nearest in C major is C4 (60) or D4 (62); either is acceptable.
     float out = 0.0f;
-    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 61.0f, &out) == SONARE_OK);
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, kNotGiven, 61.0f, &out) == SONARE_OK);
     REQUIRE(
         (out == Catch::Approx(60.0f).margin(0.01f) || out == Catch::Approx(62.0f).margin(0.01f)));
   }
 
   SECTION("in-scale notes pass through") {
     float out = 0.0f;
-    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 60.0f, &out) == SONARE_OK);
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, kNotGiven, 60.0f, &out) == SONARE_OK);
     REQUIRE(out == Catch::Approx(60.0f).margin(0.01f));
   }
 
   SECTION("correction_semitones agrees with quantize_midi") {
     float q = 0.0f;
     float c = 0.0f;
-    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 61.4f, &q) == SONARE_OK);
-    REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, 0.0f, 61.4f, &c) == SONARE_OK);
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, kNotGiven, 61.4f, &q) == SONARE_OK);
+    REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, kNotGiven, 61.4f, &c) == SONARE_OK);
     REQUIRE(c == Catch::Approx(q - 61.4f).margin(0.01f));
   }
 
@@ -1072,10 +1074,11 @@ TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
 
   SECTION("rejects bad roots / pitch classes / empty mask") {
     float out = 0.0f;
-    REQUIRE(sonare_scale_quantize_midi(-1, kCMajorMask, 0.0f, 60.0f, &out) ==
+    REQUIRE(sonare_scale_quantize_midi(-1, kCMajorMask, kNotGiven, 60.0f, &out) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_scale_quantize_midi(0, 0, 0.0f, 60.0f, &out) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_scale_quantize_midi(0, 0x1000u, 0.0f, 60.0f, &out) ==
+    REQUIRE(sonare_scale_quantize_midi(0, 0, kNotGiven, 60.0f, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_scale_quantize_midi(0, 0x1000u, kNotGiven, 60.0f, &out) ==
             SONARE_ERROR_INVALID_PARAMETER);
     int enabled = -1;
     REQUIRE(sonare_scale_pitch_class_enabled(0, kCMajorMask, 12, &enabled) ==
@@ -1089,9 +1092,9 @@ TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
     for (float bad :
          {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
           -std::numeric_limits<float>::infinity()}) {
-      REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, bad, &out) ==
+      REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, kNotGiven, bad, &out) ==
               SONARE_ERROR_INVALID_PARAMETER);
-      REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, 0.0f, bad, &out) ==
+      REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, kNotGiven, bad, &out) ==
               SONARE_ERROR_INVALID_PARAMETER);
     }
   }
@@ -1099,18 +1102,21 @@ TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
   SECTION("reference_midi is applied or refused rather than replaced by the default") {
     float out = 0.0f;
 
-    // The documented sentinel, and a legal origin that moves the grid off it.
+    // NaN (not given) keeps the default origin, and a legal origin moves the grid off it.
     // Anchoring at 60.5 shifts the whole 12-TET grid up a half semitone, which
     // puts C# at 60.5 and C at 59.5, so quantizing 60.0 lands on 59.5 instead
     // of the default grid's 60.0 -- the request is consumed, not just accepted.
-    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 60.0f, &out) == SONARE_OK);
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, kNotGiven, 60.0f, &out) == SONARE_OK);
     REQUIRE(out == Catch::Approx(60.0f).margin(0.01f));
     REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 60.5f, 60.0f, &out) == SONARE_OK);
     REQUIRE(out == Catch::Approx(59.5f).margin(0.01f));
 
-    // A negative or out-of-range origin used to be discarded for the library
-    // default. The quantizer is noexcept and rounds the origin to an int, so
-    // there is nothing downstream to refuse it.
+    // 0 is MIDI note 0, an ordinary origin rather than a request for the default.
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 60.0f, &out) == SONARE_OK);
+    REQUIRE(std::isfinite(out));
+
+    // A negative or out-of-range origin is refused. The quantizer is noexcept and rounds the
+    // origin to an int, so there is nothing downstream to refuse it.
     for (float bad : {-1.0f, -69.0f, 128.0f, 1.0e30f}) {
       REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, bad, 60.0f, &out) ==
               SONARE_ERROR_INVALID_PARAMETER);
@@ -1118,8 +1124,7 @@ TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
               SONARE_ERROR_INVALID_PARAMETER);
     }
     for (float bad :
-         {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
-          -std::numeric_limits<float>::infinity()}) {
+         {std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()}) {
       REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, bad, 60.0f, &out) ==
               SONARE_ERROR_INVALID_PARAMETER);
       REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, bad, 60.0f, &out) ==

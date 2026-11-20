@@ -386,13 +386,16 @@ describe('absent is omission and -1 is refused', () => {
     expect(() => fixFrames({ frames, xMax: -1 })).toThrow(RangeError);
   });
 
-  it('vqt gamma: omitted is automatic, 0 is constant-Q, negative or NaN is refused', () => {
+  it('vqt gamma: omitted or NaN is automatic, 0 is constant-Q, negative is refused', () => {
     const samples = tone(SR / 2);
     const automatic = vqt({ samples, sampleRate: SR, nBins: 24 });
-    expect(vqt({ samples, sampleRate: SR, nBins: 24, gamma: 0 })).not.toEqual(automatic);
-    expect(() => vqt({ samples, sampleRate: SR, nBins: 24, gamma: -1 })).toThrow(RangeError);
-    expect(() => vqt({ samples, sampleRate: SR, nBins: 24, gamma: Number.NaN })).toThrow(
-      RangeError,
+    expect(automatic.gamma).toBeGreaterThan(0);
+    expect(vqt({ samples, sampleRate: SR, nBins: 24, gamma: Number.NaN })).toEqual(automatic);
+    const constantQ = vqt({ samples, sampleRate: SR, nBins: 24, gamma: 0 });
+    expect(constantQ.gamma).toBe(0);
+    expect(constantQ).not.toEqual(automatic);
+    expect(() => vqt({ samples, sampleRate: SR, nBins: 24, gamma: -1 })).toThrow(
+      new RangeError('vqt: gamma must be finite and at least 0'),
     );
   });
 

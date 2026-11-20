@@ -77,10 +77,10 @@ class SpectralRegionOp:
     ``end_sample``."""
 
 
-def _spectral_high_hz(value: float | None, name: str) -> float:
-    """Map a region's high edge onto the C field, where ``<= 0`` reads as Nyquist."""
+def _spectral_high_hz(value: float | None, name: str) -> float | None:
+    """Narrow a given high edge; ``None`` leaves the init's NaN, which reads as Nyquist."""
     if value is None:
-        return 0.0
+        return None
     try:
         high_hz = _narrow_double(value, name)
     except SonareValueError:
@@ -126,9 +126,8 @@ def spectral_edit(
         ``float32`` edited samples.
 
     Note:
-        Leaving a value out is spelled ``None``; an explicit 0 is refused, since
-        0 is the C ABI's spelling of "the default". The shape rules of a given
-        value -- ``n_fft`` a power of two, ``hop_length`` within
+        Leaving a value out is spelled ``None``; an explicit 0 is refused. The shape
+        rules of a given value -- ``n_fft`` a power of two, ``hop_length`` within
         ``(0, n_fft / 2]`` when ``n_fft`` is given too, ``heal_radius_frames``
         positive -- are validated eagerly here and raise :class:`SonareValueError`, which is both a
         ``ValueError`` (the idiomatic Python contract) and a ``SonareError``. The
@@ -138,9 +137,8 @@ def spectral_edit(
         apart. The Node and WASM facades refuse the same given values before the
         core is reached, so the accepted input range is identical across surfaces.
     """
-    # An omitted value reaches the C config as 0, its "keep the default". A given
-    # one is narrowed first: int(0.5) is that 0, so a fraction would run at the default.
-    c_n_fft = c_hop = c_heal = 0
+    # An omitted value keeps the init's default; a given one is narrowed first.
+    c_n_fft = c_hop = c_heal = None
     if n_fft is not None:
         c_n_fft = _validate_c_int_field(n_fft, "n_fft")
         # spectral_edit.cpp requires a power of two, stricter than the shared even-size rule.
@@ -157,7 +155,7 @@ def spectral_edit(
 
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    config = SonareSpectralEditConfig(
+    config = SonareSpectralEditConfig._given(
         n_fft=c_n_fft,
         hop_length=c_hop,
         window=window_value,
@@ -187,7 +185,7 @@ def spectral_edit(
                 f"ops[{i}].end_sec",
             )
             respelled.update(_respellings(start_sample, end_sample))
-            c_ops[i] = SonareSpectralRegionOp(
+            c_ops[i] = SonareSpectralRegionOp._given(
                 start_sample=0 if start_sample.value is None else start_sample.value,
                 end_sample=length if end_sample.value is None else end_sample.value,
                 low_hz=_narrow_double(op.low_hz, f"ops[{i}].low_hz"),

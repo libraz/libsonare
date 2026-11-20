@@ -23,14 +23,20 @@ describe('insert catalog carries construction-only params, and timing answers pe
   });
 
   it('flags a bound the processor itself rejects as exclusive', () => {
+    const q = masteringInsertParamInfo({ insert: 'eq.parametric' }).find(
+      (param) => param.name === 'band0.q',
+    );
+    expect(q?.min).toBe(0);
+    expect(typeof q?.minExclusive).toBe('boolean');
+    expect(q?.minExclusive).toBe(true);
+    expect(q?.maxExclusive).toBe(false);
+    expect(q).not.toHaveProperty('maxRelativeTo');
+    // The control: a high-pass corner of 0 is the filter switched off, so its 0 is inclusive.
     const hpf = masteringInsertParamInfo({ insert: 'dynamics.compressor' }).find(
       (param) => param.name === 'sidechainHighPassHz',
     );
     expect(hpf?.min).toBe(0);
-    expect(typeof hpf?.minExclusive).toBe('boolean');
-    expect(hpf?.minExclusive).toBe(true);
-    expect(hpf?.maxExclusive).toBe(false);
-    expect(hpf).not.toHaveProperty('maxRelativeTo');
+    expect(hpf?.minExclusive).toBe(false);
     const frequency = masteringInsertParamInfo({ insert: 'eq.parametric' }).find(
       (param) => param.name === 'band0.frequencyHz',
     );

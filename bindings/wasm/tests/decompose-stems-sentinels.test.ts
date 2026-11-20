@@ -1,10 +1,11 @@
 /**
- * Sentinel-value handling for `decomposeStems`.
+ * Literal-value handling for `decomposeStems`.
  *
- * The C ABI documents 0 on `SonareDecomposeStemsConfig` as "use the built-in
- * default", which is what makes a zero-initialised config mean the documented
- * defaults. Every surface exposing the same option names has to land on the
- * same effective value for the same literal input, or reject it the same way;
+ * The C config is seeded by `sonare_decompose_stems_config_init`, so an omitted
+ * key keeps the documented default and a given value is read literally: a 0
+ * outside a field's domain is refused rather than read as "use the default".
+ * Every surface exposing the same option names has to land on the same
+ * effective value for the same literal input, or reject it the same way;
  * silently computing a numerically different answer is the one outcome that
  * cannot be told apart from working.
  *
@@ -49,7 +50,7 @@ describe('decomposeStems sentinel values', () => {
   };
 
   // Each field paired with the default the C ABI documents for it.
-  const sentinelDefaults: Array<[string, number]> = [
+  const documentedDefaults: Array<[string, number]> = [
     ['nComponents', 4],
     ['nFft', 2048],
     ['hopLength', 512],
@@ -58,22 +59,29 @@ describe('decomposeStems sentinel values', () => {
     ['maskPower', 1],
   ];
 
-  it('treats an explicit zero as the documented default', () => {
-    for (const [field, documentedDefault] of sentinelDefaults) {
-      expect(fingerprint({ [field]: 0 })).toBe(fingerprint({ [field]: documentedDefault }));
+  it('treats an omitted field as the documented default', () => {
+    for (const [field, documentedDefault] of documentedDefaults) {
+      expect(fingerprint({ [field]: documentedDefault })).toBe(fingerprint({}));
     }
   });
 
-  it('still applies a real value in every sentinel field', () => {
-    // Without this the previous case would also pass on a surface that ignored
-    // the field outright.
-    expect(fingerprint({ nComponents: 3 })).not.toBe(fingerprint({ nComponents: 0 }));
-    expect(fingerprint({ nFft: 1024 })).not.toBe(fingerprint({ nFft: 0 }));
-    expect(fingerprint({ beta: 0.5 })).not.toBe(fingerprint({ beta: 0 }));
-    expect(fingerprint({ maskPower: 2 })).not.toBe(fingerprint({ maskPower: 0 }));
+  it('refuses an explicit zero in every count and in the mask power', () => {
+    for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter', 'maskPower']) {
+      expect(() => run({ [field]: 0 }), field).toThrow(RangeError);
+    }
   });
 
-  it('rejects a negative value rather than folding it into the default', () => {
+  it('applies a real value in every field, 0 included where it is in the domain', () => {
+    // Without this the default case would also pass on a surface that ignored
+    // the field outright. A beta of 0 is the Itakura-Saito divergence, a value.
+    expect(fingerprint({ nComponents: 3 })).not.toBe(fingerprint({}));
+    expect(fingerprint({ nFft: 1024 })).not.toBe(fingerprint({}));
+    expect(fingerprint({ beta: 0.5 })).not.toBe(fingerprint({}));
+    expect(fingerprint({ beta: 0 })).not.toBe(fingerprint({}));
+    expect(fingerprint({ maskPower: 2 })).not.toBe(fingerprint({}));
+  });
+
+  it('rejects a negative value', () => {
     for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter', 'maskPower']) {
       expect(() => run({ [field]: -1 })).toThrow();
     }

@@ -13,7 +13,6 @@
 #include "acoustic/selector_names.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
-#include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
 
 val acousticParametersToVal(const AcousticParameters& params) {
@@ -236,29 +235,35 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
   Audio audio = loadAcousticAudio("samples", samples, sample_rate);
+  // As the C ABI reads its struct: an omitted key keeps the library default and a given
+  // value is read literally, so a 0 outside a field's domain is refused by name.
   sonare::RoomEstimateConfig config;
-  // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
-  // the same input is accepted identically on every surface (raw 0 would be
-  // rejected by the core's finite-positive check).
-  config.aspect_hint_lw = sonare::ZeroIsDefault(floatProperty(opts, "aspectHintLw", 0.0f))
-                              .or_default(config.aspect_hint_lw);
-  config.aspect_hint_lh = sonare::ZeroIsDefault(floatProperty(opts, "aspectHintLh", 0.0f))
-                              .or_default(config.aspect_hint_lh);
+  config.aspect_hint_lw = floatProperty(opts, "aspectHintLw", config.aspect_hint_lw);
+  config.aspect_hint_lh = floatProperty(opts, "aspectHintLh", config.aspect_hint_lh);
   config.reference_absorption =
-      sonare::ZeroIsDefault(floatProperty(opts, "referenceAbsorption", 0.0f))
-          .or_default(config.reference_absorption);
-  config.prefer_eyring = boolProperty(opts, "preferEyring", true);
-  const int n_bands = intProperty(opts, "nOctaveBands", 0);
-  if (n_bands != 0) config.acoustic.n_octave_bands = n_bands;
-  config.acoustic.min_decay_db = sonare::ZeroIsDefault(floatProperty(opts, "minDecayDb", 0.0f))
-                                     .or_default(config.acoustic.min_decay_db);
+      floatProperty(opts, "referenceAbsorption", config.reference_absorption);
+  config.prefer_eyring = boolProperty(opts, "preferEyring", config.prefer_eyring);
+  config.acoustic.n_octave_bands =
+      intProperty(opts, "nOctaveBands", config.acoustic.n_octave_bands);
+  config.acoustic.min_decay_db = floatProperty(opts, "minDecayDb", config.acoustic.min_decay_db);
   config.acoustic.noise_floor_margin_db =
-      sonare::ZeroIsDefault(floatProperty(opts, "noiseFloorMarginDb", 0.0f))
-          .or_default(config.acoustic.noise_floor_margin_db);
+      floatProperty(opts, "noiseFloorMarginDb", config.acoustic.noise_floor_margin_db);
   const int mode = intProperty(opts, "mode", 0);
   requireOrdinalInRange(
       mode, 0, static_cast<int>(sonare::acoustic::kAcousticModeSelectorNames.size()) - 1, "mode");
   config.acoustic.mode = static_cast<sonare::AcousticConfig::Mode>(mode);
+
+  // The C ABI's checks, which the core does not make itself (it clamps the absorption).
+  {
+    namespace check = sonare::util::check;
+    check::greater_than(config.aspect_hint_lw, 0.0, "aspectHintLw");
+    check::greater_than(config.aspect_hint_lh, 0.0, "aspectHintLh");
+    check::in_range(config.reference_absorption, sonare::kRoomReferenceAbsorptionMin,
+                    sonare::kRoomReferenceAbsorptionMax, "referenceAbsorption");
+    check::greater_than(config.acoustic.min_decay_db, 0.0, "minDecayDb");
+    check::at_least(config.acoustic.noise_floor_margin_db, 0.0, "noiseFloorMarginDb");
+    check::integer_at_least(config.acoustic.n_octave_bands, 1, "nOctaveBands");
+  }
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, config);
   // Absorption (from the inverse problem) and RT60 (from the decay fit) are

@@ -1031,7 +1031,7 @@ def _scale_scalar(
     rc = getattr(lib, name)(
         _to_c_int(root, "root"),
         _to_c_uint16(mode_mask, "mode_mask"),
-        _to_c_float(scale_reference_midi, "scale_reference_midi"),
+        _domain_float(scale_reference_midi, "scale_reference_midi"),
         _to_c_float(midi, "midi"),
         ctypes.byref(out),
     )
@@ -1065,19 +1065,10 @@ def scale_mask_for_mode(root: int, mode: KeyMode) -> int:
 
 
 def _scale_reference(value: float | None) -> float:
-    """Map an absent reference onto the core's 0 (A4).
-
-    MIDI note 0 is a real anchor the core still reads as A4, so an explicit 0 is
-    refused until the core takes it literally.
-    """
+    """Map an absent reference onto the core's NaN (A4); a given one, 0 included, is literal."""
     if value is None:
-        return 0.0
-    reference = _validate_scalar(value, "scale_reference_midi")
-    if reference == 0.0:
-        raise _refuse(
-            "scale_reference_midi 0 is temporarily unsupported (use None for the A4 default)"
-        )
-    return reference
+        return math.nan
+    return _validate_scalar(value, "scale_reference_midi")
 
 
 @_entry("scale_quantize_midi")

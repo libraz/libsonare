@@ -562,7 +562,7 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
   // The transformer fields keep their defaults here; their round trip is in
   // sonare_c_voice_transform_test.cpp.
   SonareRealtimeVoiceChangerConfig pod_in{};
-  REQUIRE(sonare_realtime_voice_changer_config_default(&pod_in) == SONARE_OK);
+  sonare_realtime_voice_changer_config_init(&pod_in);
   pod_in.input_gain_db = 1.5f;
   pod_in.output_gain_db = -2.25f;
   pod_in.wet_mix = 0.875f;
@@ -642,7 +642,7 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
   REQUIRE(pod_out.reverb_seed == pod_in.reverb_seed);
   REQUIRE(pod_out.limiter_ceiling_db == pod_in.limiter_ceiling_db);
   REQUIRE(pod_out.limiter_release_ms == pod_in.limiter_release_ms);
-  REQUIRE(pod_out.struct_version == 2);
+  REQUIRE(pod_out.struct_size == sizeof(SonareRealtimeVoiceChangerConfig));
 
   sonare_realtime_voice_changer_destroy(handle);
 }
@@ -1082,8 +1082,8 @@ TEST_CASE("sonare_streaming_retune shifts pitch in place", "[voice_changer][capi
 TEST_CASE("The POD config carries the formant mode, fixed at creation",
           "[voice_changer][c-api][formant_mode]") {
   SonareRealtimeVoiceChangerConfig config{};
-  REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
-  CHECK(config.struct_version == 2);
+  sonare_realtime_voice_changer_config_init(&config);
+  CHECK(config.struct_size == sizeof(SonareRealtimeVoiceChangerConfig));
   CHECK(config.formant_mode == SONARE_FORMANT_MODE_RELATIVE);
   // The formant warp ahead of the retune belongs to the grain engine.
   config.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
@@ -1121,10 +1121,10 @@ TEST_CASE("The POD config carries the formant mode, fixed at creation",
   sonare_realtime_voice_changer_destroy(absolute);
 }
 
-TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layout version",
+TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad struct_size",
           "[voice_changer][c-api][formant_mode]") {
   SonareRealtimeVoiceChangerConfig config{};
-  REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
+  sonare_realtime_voice_changer_config_init(&config);
   config.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
   config.formant_mode = SONARE_FORMANT_MODE_ABSOLUTE;
   config.retune_pitch_semitones = -9.0f;
@@ -1143,12 +1143,13 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
   CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
         SONARE_ERROR_INVALID_PARAMETER);
   config.formant_mode = SONARE_FORMANT_MODE_RELATIVE;
-  for (const int32_t version : {0, 1, 3}) {
-    config.struct_version = version;
+  const uint32_t struct_size = config.struct_size;
+  for (const uint32_t size : {0u, 1u, struct_size - 1}) {
+    config.struct_size = size;
     CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
           SONARE_ERROR_INVALID_PARAMETER);
   }
-  config.struct_version = 2;
+  config.struct_size = struct_size;
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) == SONARE_OK);
   sonare_realtime_voice_changer_destroy(handle);
 }
@@ -1156,7 +1157,7 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
 TEST_CASE("The POD config refuses an out-of-range field and keeps the previous config",
           "[voice_changer][c-api]") {
   SonareRealtimeVoiceChangerConfig config{};
-  REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
+  sonare_realtime_voice_changer_config_init(&config);
   SonareRealtimeVoiceChanger* handle = nullptr;
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) == SONARE_OK);
 
@@ -1276,7 +1277,7 @@ TEST_CASE("C ABI voice changer reset acts on the latest published configuration"
       for (const float gain_db : {12.0f, -12.0f}) {
         INFO("rate=" << rate << " block=" << block << " gain_db=" << gain_db);
         SonareRealtimeVoiceChangerConfig old_config;
-        REQUIRE(sonare_realtime_voice_changer_config_default(&old_config) == SONARE_OK);
+        sonare_realtime_voice_changer_config_init(&old_config);
         old_config.input_gain_db = -gain_db;
         SonareRealtimeVoiceChangerConfig new_config = old_config;
         new_config.input_gain_db = gain_db;
@@ -1459,7 +1460,7 @@ TEST_CASE(
   sonare_realtime_voice_changer_destroy(handle);
 
   SonareRealtimeVoiceChangerConfig config{};
-  REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
+  sonare_realtime_voice_changer_config_init(&config);
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 0, &handle) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 0, 1, &handle) == SONARE_OK);

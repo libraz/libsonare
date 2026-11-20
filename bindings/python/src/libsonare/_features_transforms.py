@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import math
 from collections.abc import Sequence
 
 import numpy as np
@@ -14,6 +15,7 @@ from ._ffi import (
     SonareInverseResult,
 )
 from ._field_spelling import surface_spelling
+from ._narrowing import _domain_float, _narrow_float
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -49,6 +51,7 @@ def _cqt_result_from_c(out: SonareCqtResult) -> CqtResult:
         sample_rate=int(out.sample_rate),
         magnitude=_from_c_float_matrix(out.magnitude, out.n_bins, out.n_frames),
         frequencies=_from_c_float_array(out.frequencies, out.n_bins),
+        gamma=float(out.gamma),
     )
 
 
@@ -61,6 +64,7 @@ def cqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
+    filter_scale: float = 1.0,
 ) -> CqtResult:
     """Compute the Constant-Q Transform magnitude.
 
@@ -71,6 +75,7 @@ def cqt(
         fmin: Lowest center frequency in Hz (default C1).
         n_bins: Total number of frequency bins (default 84).
         bins_per_octave: Bins per octave (default 12).
+        filter_scale: Filter length scale factor, finite and above 0 (default 1).
 
     Returns:
         A :class:`CqtResult` with the magnitude of shape ``(n_bins, n_frames)`` and
@@ -87,6 +92,7 @@ def cqt(
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
+        _to_c_float(filter_scale, "filter_scale"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -104,6 +110,7 @@ def _cqt_variant(
     fmin: float,
     n_bins: int,
     bins_per_octave: int,
+    filter_scale: float,
 ) -> CqtResult:
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -116,6 +123,7 @@ def _cqt_variant(
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
+        _to_c_float(filter_scale, "filter_scale"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -134,9 +142,19 @@ def pseudo_cqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
+    filter_scale: float = 1.0,
 ) -> CqtResult:
-    """Compute the pseudo-CQT magnitude approximation."""
-    return _cqt_variant("sonare_pseudo_cqt", samples, sr, hop_length, fmin, n_bins, bins_per_octave)
+    """Compute the pseudo-CQT magnitude approximation; arguments as :func:`cqt`."""
+    return _cqt_variant(
+        "sonare_pseudo_cqt",
+        samples,
+        sr,
+        hop_length,
+        fmin,
+        n_bins,
+        bins_per_octave,
+        filter_scale,
+    )
 
 
 @_entry("hybrid_cqt")
@@ -148,9 +166,19 @@ def hybrid_cqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
+    filter_scale: float = 1.0,
 ) -> CqtResult:
-    """Compute the hybrid CQT magnitude."""
-    return _cqt_variant("sonare_hybrid_cqt", samples, sr, hop_length, fmin, n_bins, bins_per_octave)
+    """Compute the hybrid CQT magnitude; arguments as :func:`cqt`."""
+    return _cqt_variant(
+        "sonare_hybrid_cqt",
+        samples,
+        sr,
+        hop_length,
+        fmin,
+        n_bins,
+        bins_per_octave,
+        filter_scale,
+    )
 
 
 @_entry("cqt_to_audio")
@@ -493,6 +521,7 @@ def vqt(
     n_bins: int = 84,
     bins_per_octave: int = 12,
     gamma: float | None = None,
+    filter_scale: float = 1.0,
 ) -> CqtResult:
     """Compute the Variable-Q Transform magnitude (``gamma`` controls Q).
 
@@ -503,13 +532,14 @@ def vqt(
         fmin: Lowest center frequency in Hz (default C1).
         n_bins: Total number of frequency bins (default 84).
         bins_per_octave: Bins per octave (default 12).
-        gamma: Bandwidth offset. ``None`` (the default) selects the automatic
-            ERB-derived value; zero is equivalent to CQT. A negative or
+        gamma: Bandwidth offset in Hz. ``None`` (the default) selects the
+            automatic ERB-derived value; zero is equivalent to CQT. A negative or
             non-finite value is refused.
+        filter_scale: Filter length scale factor, finite and above 0 (default 1).
 
     Returns:
-        A :class:`CqtResult` with the magnitude of shape ``(n_bins, n_frames)`` and
-        the bin frequencies.
+        A :class:`CqtResult` with the magnitude of shape ``(n_bins, n_frames)``,
+        the bin frequencies and the ``gamma`` the transform ran with.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -522,7 +552,9 @@ def vqt(
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
-        _to_c_float(_resolve_optional_non_negative(gamma, "gamma"), "gamma"),
+        _to_c_float(filter_scale, "filter_scale"),
+        # NaN is the C ABI's "not given"; a given value is narrowed so NaN cannot be spelled.
+        _domain_float(math.nan if gamma is None else _narrow_float(gamma, "gamma"), "gamma"),
         ctypes.byref(out),
     )
     _check(rc)

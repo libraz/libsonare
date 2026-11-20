@@ -98,8 +98,7 @@ export function spectralEdit(...args: unknown[]): Float32Array {
     if (requestOptions.window !== undefined) {
       assertClosedToken(requestOptions.window, WINDOW_TYPES, 'window');
     }
-    // Each of the three is its own "0 => the documented default" on the C side, so a given 0
-    // is refused, and the addon's narrowing would truncate a fraction onto that 0.
+    // A given 0 is refused in the words both surfaces share, ahead of the native range check.
     refuseZeroSentinel(requestOptions, ['nFft', 'hopLength', 'healRadiusFrames']);
     for (const field of ['nFft', 'hopLength', 'healRadiusFrames'] as const) {
       const value = requestOptions[field];

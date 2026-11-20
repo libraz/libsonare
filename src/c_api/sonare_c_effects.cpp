@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -33,24 +34,33 @@ using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
 
-bool fill_decompose_stems_config(const SonareDecomposeStemsConfig* config,
-                                 DecomposeStemsConfig* core_config) {
-  if (config != nullptr) {
-    if (config->n_components < 0 || config->n_fft < 0 || config->hop_length < 0 ||
-        config->n_iter < 0 || !std::isfinite(config->beta) || !std::isfinite(config->mask_power) ||
-        config->mask_power < 0.0f) {
-      return false;
-    }
-    if (config->n_components > 0) core_config->n_components = config->n_components;
-    if (config->n_fft > 0) core_config->n_fft = config->n_fft;
-    if (config->hop_length > 0) core_config->hop_length = config->hop_length;
-    if (config->n_iter > 0) core_config->n_iter = config->n_iter;
-    if (config->beta != 0.0f) core_config->beta = config->beta;
-    if (config->init != nullptr && config->init[0] != '\0') core_config->init = config->init;
-    if (config->mask_power > 0.0f) core_config->mask_power = config->mask_power;
+/// Refuses a hop that is neither positive nor SONARE_STFT_HOP_AUTO, by @p subject.
+void check_stft_hop(int hop_length, const char* subject) {
+  if (hop_length != SONARE_STFT_HOP_AUTO) {
+    sonare::util::check::integer_at_least(hop_length, 1, subject);
   }
-  if (core_config->mask_power < 1.0f) return false;
-  return true;
+}
+
+/// Checks a decompose-stems config and copies it onto the core one. Throws the refusal.
+void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
+                                 DecomposeStemsConfig* core_config) {
+  namespace check = sonare::util::check;
+  require_struct_size(config.struct_size, sizeof(config), "config",
+                      "sonare_decompose_stems_config_init");
+  check::integer_at_least(config.n_components, 1, "config.n_components");
+  check::integer_at_least(config.n_fft, 1, "config.n_fft");
+  check_stft_hop(config.hop_length, "config.hop_length");
+  check::integer_at_least(config.n_iter, 1, "config.n_iter");
+  check::finite_float(config.beta, "config.beta");
+  check::non_null(config.init, "config.init");
+  check::at_least(config.mask_power, 1.0, "config.mask_power");
+  core_config->n_components = config.n_components;
+  core_config->n_fft = config.n_fft;
+  core_config->hop_length = config.hop_length == SONARE_STFT_HOP_AUTO ? 0 : config.hop_length;
+  core_config->n_iter = config.n_iter;
+  core_config->beta = config.beta;
+  core_config->init = config.init;
+  core_config->mask_power = config.mask_power;
 }
 
 template <typename DecomposeResult>
@@ -327,6 +337,9 @@ void sonare_biquad_filter_config_init(SonareBiquadFilterConfig* config) {
   config->struct_size = sizeof(*config);
   config->type = SONARE_BIQUAD_FILTER_HIGH_PASS;
   config->order = 2;
+  config->cutoff_hz = std::numeric_limits<float>::quiet_NaN();
+  config->center_hz = std::numeric_limits<float>::quiet_NaN();
+  config->bandwidth_hz = std::numeric_limits<float>::quiet_NaN();
 }
 
 namespace {
@@ -334,8 +347,8 @@ namespace {
 /// @brief Refuses the biquad filter configuration in member order.
 void check_biquad_filter_config(const SonareBiquadFilterConfig& config, int sample_rate) {
   namespace check = sonare::util::check;
-  check::integer_at_least(config.struct_size, static_cast<long long>(sizeof(config)),
-                          "config.struct_size");
+  sonare_c_detail::require_struct_size(config.struct_size, sizeof(config), "config",
+                                       "sonare_biquad_filter_config_init");
   check::integer_in_range(config.type, SONARE_BIQUAD_FILTER_HIGH_PASS, SONARE_BIQUAD_FILTER_NOTCH,
                           "config.type");
   check::one_of(config.order, std::array<int, 2>{2, 4}, "config.order");
@@ -346,12 +359,20 @@ void check_biquad_filter_config(const SonareBiquadFilterConfig& config, int samp
     throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter, {subject, "config.type"},
                                            std::string("{0} does not apply when {1} is ") + types);
   };
+  const auto required = [](float value, const char* subject, const char* types) {
+    if (!std::isnan(value)) return;
+    throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter, {subject, "config.type"},
+                                           std::string("{0} must be given when {1} is ") + types);
+  };
   if (corner) {
+    required(config.cutoff_hz, "config.cutoff_hz", "highPass or lowPass");
     check::in_interval(config.cutoff_hz, 0.0, false, nyquist, false, "config.cutoff_hz");
-    if (config.center_hz != 0.0f) unread("config.center_hz", "highPass or lowPass");
-    if (config.bandwidth_hz != 0.0f) unread("config.bandwidth_hz", "highPass or lowPass");
+    if (!std::isnan(config.center_hz)) unread("config.center_hz", "highPass or lowPass");
+    if (!std::isnan(config.bandwidth_hz)) unread("config.bandwidth_hz", "highPass or lowPass");
   } else {
-    if (config.cutoff_hz != 0.0f) unread("config.cutoff_hz", "bandPass or notch");
+    if (!std::isnan(config.cutoff_hz)) unread("config.cutoff_hz", "bandPass or notch");
+    required(config.center_hz, "config.center_hz", "bandPass or notch");
+    required(config.bandwidth_hz, "config.bandwidth_hz", "bandPass or notch");
     check::in_interval(config.center_hz, 0.0, false, nyquist, false, "config.center_hz");
     check::greater_than(config.bandwidth_hz, 0.0, "config.bandwidth_hz");
     if (config.order != 2) {
@@ -587,6 +608,20 @@ SonareError sonare_remix(const float* samples, size_t length, int sample_rate, c
       });
 }
 
+void sonare_decompose_stems_config_init(SonareDecomposeStemsConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  const DecomposeStemsConfig defaults;
+  config->n_components = defaults.n_components;
+  config->n_fft = defaults.n_fft;
+  config->hop_length = SONARE_STFT_HOP_AUTO;
+  config->n_iter = defaults.n_iter;
+  config->beta = defaults.beta;
+  config->init = "random";
+  config->mask_power = defaults.mask_power;
+}
+
 SonareError sonare_decompose_stems(const float* samples, size_t length, int sample_rate,
                                    const SonareDecomposeStemsConfig* config, float** out,
                                    size_t* out_component_count, size_t* out_component_length,
@@ -600,12 +635,13 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
       err != SONARE_OK) {
     return err;
   }
-  if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   DecomposeStemsConfig core_config;
-  if (!fill_decompose_stems_config(config, &core_config)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (config != nullptr) {
+    if (const SonareError err =
+            run_validation([&] { fill_decompose_stems_config(*config, &core_config); });
+        err != SONARE_OK) {
+      return err;
+    }
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_component_count);
@@ -661,13 +697,8 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
   }
 
   SONARE_C_TRY
-  if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   DecomposeStemsConfig core_config;
-  if (!fill_decompose_stems_config(config, &core_config)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (config != nullptr) fill_decompose_stems_config(*config, &core_config);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_component_count);
   SONARE_C_REQUIRE_NONNULL(out_num_channels);
@@ -824,6 +855,25 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
       });
 }
 
+void sonare_spectral_edit_config_init(SonareSpectralEditConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  const SpectralEditConfig defaults;
+  config->n_fft = defaults.n_fft;
+  config->hop_length = SONARE_STFT_HOP_AUTO;
+  config->window = SONARE_WINDOW_HANN;
+  config->heal_radius_frames = defaults.heal_radius_frames;
+}
+
+void sonare_spectral_region_op_init(SonareSpectralRegionOp* op) {
+  if (op == nullptr) return;
+  *op = {};
+  op->struct_size = sizeof(*op);
+  op->high_hz = std::numeric_limits<float>::quiet_NaN();
+  op->mode = SONARE_SPECTRAL_EDIT_MODE_GAIN;
+}
+
 SonareError sonare_spectral_edit(const float* samples, size_t length, int sample_rate,
                                  const SonareSpectralEditConfig* config,
                                  const SonareSpectralRegionOp* ops, size_t n_ops, float** out,
@@ -839,12 +889,22 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
 
   SpectralEditConfig core_config;  // n_fft=2048, hop a quarter of n_fft, Hann, heal_radius=2
   if (config != nullptr) {
-    if (config->n_fft != 0) core_config.n_fft = config->n_fft;
-    if (config->hop_length != 0) core_config.hop_length = config->hop_length;
+    if (const SonareError err = run_validation([&] {
+          namespace check = sonare::util::check;
+          require_struct_size(config->struct_size, sizeof(*config), "config",
+                              "sonare_spectral_edit_config_init");
+          check::integer_at_least(config->n_fft, 1, "config.n_fft");
+          check_stft_hop(config->hop_length, "config.hop_length");
+          check::integer_at_least(config->heal_radius_frames, 1, "config.heal_radius_frames");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
+    core_config.n_fft = config->n_fft;
+    core_config.hop_length = config->hop_length == SONARE_STFT_HOP_AUTO ? 0 : config->hop_length;
     if (!valid_window(config->window)) return SONARE_ERROR_INVALID_PARAMETER;
     core_config.window = to_window_type(config->window);
-    if (config->heal_radius_frames != 0)
-      core_config.heal_radius_frames = config->heal_radius_frames;
+    core_config.heal_radius_frames = config->heal_radius_frames;
   }
 
   // ops may be NULL iff there are no ops (identity transform).
@@ -852,6 +912,17 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
 
   std::vector<SpectralRegionOp> core_ops(n_ops);
   for (size_t i = 0; i < n_ops; ++i) {
+    if (const SonareError err = run_validation([&] {
+          const std::string subject = "ops[" + std::to_string(i) + "]";
+          require_struct_size(ops[i].struct_size, sizeof(SonareSpectralRegionOp), subject,
+                              "sonare_spectral_region_op_init");
+          if (!std::isnan(ops[i].high_hz)) {
+            sonare::util::check::greater_than(ops[i].high_hz, 0.0, (subject + ".high_hz").c_str());
+          }
+        });
+        err != SONARE_OK) {
+      return err;
+    }
     if (!ordinal_to_enum(ops[i].mode, SONARE_SPECTRAL_EDIT_MODE_GAIN,
                          SONARE_SPECTRAL_EDIT_MODE_HEAL, &core_ops[i].mode)) {
       return SONARE_ERROR_INVALID_PARAMETER;
@@ -859,7 +930,8 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
     core_ops[i].start_sample = ops[i].start_sample;
     core_ops[i].end_sample = ops[i].end_sample;
     core_ops[i].low_hz = ops[i].low_hz;
-    core_ops[i].high_hz = ops[i].high_hz;
+    // The core reads a high edge of 0 or less as nyquist.
+    core_ops[i].high_hz = std::isnan(ops[i].high_hz) ? 0.0f : ops[i].high_hz;
     core_ops[i].gain_db = ops[i].gain_db;
   }
 

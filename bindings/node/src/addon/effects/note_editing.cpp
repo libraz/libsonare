@@ -71,19 +71,20 @@ bool ReadOptionalVoicedFlags(Napi::Env env, const Napi::Value& value, size_t n_f
 /// on a false return before its C-ABI call.
 bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_frames,
                           NoteTrackOptions* out) {
-  out->config.struct_version = 1;
+  sonare_note_extractor_config_init(&out->config);
   if (!value.IsObject()) {
     return true;
   }
   Napi::Object opts = value.As<Napi::Object>();
   // Effects options bag: the presence-checked reader family, so an explicit
   // `undefined` reads as the documented default and a wrong-typed value is
-  // refused by name rather than silently taking it.
-  out->config.segmentation_threshold_cents =
-      FloatProperty(opts, "segmentationThresholdCents", 0.0f);
-  out->config.min_note_ms = FloatProperty(opts, "minNoteMs", 0.0f);
-  out->config.reference_hz = FloatProperty(opts, "referenceHz", 0.0f);
-  out->config.voiced_threshold = FloatProperty(opts, "voicedThreshold", 0.0f);
+  // refused by name rather than silently taking it. A given value is read literally.
+  SonareNoteExtractorConfig& config = out->config;
+  config.segmentation_threshold_cents =
+      FloatProperty(opts, "segmentationThresholdCents", config.segmentation_threshold_cents);
+  config.min_note_ms = FloatProperty(opts, "minNoteMs", config.min_note_ms);
+  config.reference_hz = FloatProperty(opts, "referenceHz", config.reference_hz);
+  config.voiced_threshold = FloatProperty(opts, "voicedThreshold", config.voiced_threshold);
 
   const Napi::Value voiced_value = opts.Get("voiced");
   if (IsInt32Array(voiced_value)) {
@@ -140,6 +141,7 @@ void ReadNotes(const Napi::Array& js_notes, std::vector<SonareNoteObject>* notes
   const uint32_t count = js_notes.Length();
   notes->assign(count, SonareNoteObject{});
   for (uint32_t i = 0; i < count; ++i) {
+    sonare_note_edit_init(&(*notes)[i].edit);
     Napi::Value item = js_notes.Get(i);
     if (!item.IsObject() || item.IsArray()) {
       throw Napi::TypeError::New(js_notes.Env(), "each note must be a plain object");
@@ -252,16 +254,17 @@ bool ReadUnmatchedTargetPolicy(Napi::Env env, const Napi::Object& opts, int32_t*
 /// signal out on a framing the other did not measure on.
 void ReadPercussiveSeparation(const Napi::Object& opts, int32_t* n_fft, int32_t* hop_length,
                               int32_t* kernel_harmonic, int32_t* kernel_percussive) {
-  *n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
-  *hop_length = IntProperty(opts, "hopLength", kZeroIsSentinel);
-  *kernel_harmonic = IntProperty(opts, "hpssKernelHarmonic", kZeroIsSentinel);
-  *kernel_percussive = IntProperty(opts, "hpssKernelPercussive", kZeroIsSentinel);
+  *n_fft = IntProperty(opts, "nFft", *n_fft);
+  *hop_length = IntInRangeOrAbsentProperty(opts, "hopLength", 1, std::numeric_limits<int>::max(),
+                                           *hop_length);
+  *kernel_harmonic = IntProperty(opts, "hpssKernelHarmonic", *kernel_harmonic);
+  *kernel_percussive = IntProperty(opts, "hpssKernelPercussive", *kernel_percussive);
 }
 
-/// Reads the extraction options bag, which may be absent. Every field takes its
-/// default at 0 on the C side, so an omitted bag and an all-zero one agree.
+/// Reads the extraction options bag, which may be absent. An omitted key keeps the
+/// init function's default and a given one is read literally.
 void ReadPercussiveEventConfig(const Napi::Value& value, SonarePercussiveEventConfig* out) {
-  out->struct_version = 1;
+  sonare_percussive_event_config_init(out);
   if (!value.IsObject()) {
     return;
   }
@@ -271,24 +274,22 @@ void ReadPercussiveEventConfig(const Napi::Value& value, SonarePercussiveEventCo
   // refused by name rather than silently taking it.
   ReadPercussiveSeparation(opts, &out->n_fft, &out->hop_length, &out->hpss_kernel_harmonic,
                            &out->hpss_kernel_percussive);
-  out->onset_wait = IntProperty(opts, "onsetWait", kZeroIsSentinel);
-  out->onset_delta = FloatProperty(opts, "onsetDelta", 0.0f);
-  out->max_event_ms = FloatProperty(opts, "maxEventMs", 0.0f);
-  // 0 is this field's own meaning as well as its default, and the C ABI assigns
-  // it as-is, so "keep everything" stays reachable from here.
-  out->min_percussive_ratio = FloatProperty(opts, "minPercussiveRatio", 0.0f);
+  out->onset_wait = IntProperty(opts, "onsetWait", out->onset_wait);
+  out->onset_delta = FloatProperty(opts, "onsetDelta", out->onset_delta);
+  out->max_event_ms = FloatProperty(opts, "maxEventMs", out->max_event_ms);
+  out->min_percussive_ratio = FloatProperty(opts, "minPercussiveRatio", out->min_percussive_ratio);
 }
 
 /// Reads the render options bag, under the same rule.
 void ReadPercussiveRenderConfig(const Napi::Value& value, SonarePercussiveRenderConfig* out) {
-  out->struct_version = 1;
+  sonare_percussive_render_config_init(out);
   if (!value.IsObject()) {
     return;
   }
   Napi::Object opts = value.As<Napi::Object>();
   ReadPercussiveSeparation(opts, &out->n_fft, &out->hop_length, &out->hpss_kernel_harmonic,
                            &out->hpss_kernel_percussive);
-  out->fade_ms = FloatProperty(opts, "fadeMs", 0.0f);
+  out->fade_ms = FloatProperty(opts, "fadeMs", out->fade_ms);
 }
 
 /// Reads an event's optional `edit`. A zeroed SonarePercussiveEventEdit is the
@@ -431,8 +432,8 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
 
-  SonareNoteRenderConfig config{};
-  config.struct_version = 1;
+  SonareNoteRenderConfig config;
+  sonare_note_render_config_init(&config);
   // The track a curve edit acts on rides in the same bag; the C ABI's frame
   // count is derived from its length rather than taken separately.
   Napi::Float32Array f0;
@@ -477,7 +478,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
                           envelopes.empty() ? nullptr : envelopes.data(), envelopes.size(), f0_data,
                           voiced_data, n_frames, frame_rate, &config, &out, &out_length);
   if (err != SONARE_OK) {
-    ThrowIfError(env, err);
+    ThrowSonareErrorFlattening(env, err, "config");
     return env.Undefined();
   }
   auto result = CopyToFloat32(env, out, out_length);
@@ -744,12 +745,8 @@ Napi::Value SonareWrap::AssignNoteTargets(const Napi::CallbackInfo& info) {
   // Seeded from the library rather than from literals here: 0 is a legal value on
   // both floats, so it cannot spell "unset" and an omitted key has to keep
   // whatever the C ABI reports as its own default.
-  SonareNoteTargetAssignConfig config{};
-  const SonareError seeded = sonare_note_target_assign_config_default(&config);
-  if (seeded != SONARE_OK) {
-    ThrowIfError(env, seeded);
-    return env.Undefined();
-  }
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
   if (info.Length() > 3 && info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
     if (!ReadUnmatchedTargetPolicy(env, opts, &config.unmatched_policy)) {

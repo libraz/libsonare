@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -33,15 +35,28 @@ using sonare::editing::polyphony::PolyphonicEditConfig;
 ///          stage reads it, so one stage's bounds are stated in one place.
 SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfig& out) {
   if (in == nullptr) return SONARE_OK;
-  if (!struct_size_accepted(in->struct_size, sizeof(SonarePolyphonicConfig),
-                            "SonarePolyphonicConfig")) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        require_struct_size(in->struct_size, sizeof(SonarePolyphonicConfig), "config",
+                            "sonare_polyphonic_config_init");
+        if (in->win_length != SONARE_POLYPHONIC_WIN_LENGTH_FFT) {
+          sonare::util::check::integer_at_least(in->win_length, 1, "config.win_length");
+        }
+        if (!std::isnan(in->max_refine_hz)) {
+          sonare::util::check::greater_than(in->max_refine_hz, 0.0, "config.max_refine_hz");
+        }
+        if (!std::isnan(in->reattack_ratio)) {
+          sonare::util::check::greater_than(in->reattack_ratio, 1.0, "config.reattack_ratio");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
+  // The core spells these three absences as 0.
   auto& stft = out.extraction.stft;
   stft.n_fft = in->n_fft;
   stft.hop_length = in->hop_length;
-  stft.win_length = in->win_length;
+  stft.win_length = in->win_length == SONARE_POLYPHONIC_WIN_LENGTH_FFT ? 0 : in->win_length;
 
   auto& spectrum = out.extraction.spectrum;
   spectrum.ref_hz = in->cent_ref_hz;
@@ -67,7 +82,7 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
   ridges.max_jump_cents = in->max_jump_cents;
   ridges.min_ridge_peak_ratio = in->min_ridge_peak_ratio;
   ridges.min_duration_ms = in->min_ridge_duration_ms;
-  ridges.reattack_ratio = in->reattack_ratio;
+  ridges.reattack_ratio = std::isnan(in->reattack_ratio) ? 0.0f : in->reattack_ratio;
 
   out.masks.n_harmonics = in->mask_harmonics;
   out.masks.claim_lobes = in->claim_lobes;
@@ -82,7 +97,7 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
   out.shared_bins.min_partial_separation = in->min_partial_separation;
   out.shared_bins.max_fit_residual = in->max_fit_residual;
   out.shared_bins.max_weight_modulus = in->max_weight_modulus;
-  out.shared_bins.max_refine_hz = in->max_refine_hz;
+  out.shared_bins.max_refine_hz = std::isnan(in->max_refine_hz) ? 0.0f : in->max_refine_hz;
   out.shared_bins.f0_tolerance_cents = in->f0_tolerance_cents;
 
   out.notes.segmenter.segmentation_threshold_cents = in->segmentation_threshold_cents;
@@ -102,6 +117,7 @@ void fill_note(const sonare::editing::note_model::NoteObject& from, SonareNoteOb
   to.median_hz = from.median_hz;
   to.median_cents = from.median_cents;
   to.f0_stability = from.f0_stability;
+  sonare_note_edit_init(&to.edit);
   to.edit.time_offset_samples = from.edit.time_offset_samples;
   to.edit.envelope_offset = 0;
   to.edit.envelope_count = from.edit.amplitude_envelope.size();
@@ -151,7 +167,7 @@ void sonare_polyphonic_config_init(SonarePolyphonicConfig* config) {
   const auto& stft = defaults.extraction.stft;
   config->n_fft = stft.n_fft;
   config->hop_length = stft.hop_length;
-  config->win_length = stft.win_length;
+  config->win_length = SONARE_POLYPHONIC_WIN_LENGTH_FFT;
 
   const auto& spectrum = defaults.extraction.spectrum;
   config->cent_ref_hz = spectrum.ref_hz;
@@ -177,7 +193,7 @@ void sonare_polyphonic_config_init(SonarePolyphonicConfig* config) {
   config->max_jump_cents = ridges.max_jump_cents;
   config->min_ridge_peak_ratio = ridges.min_ridge_peak_ratio;
   config->min_ridge_duration_ms = ridges.min_duration_ms;
-  config->reattack_ratio = ridges.reattack_ratio;
+  config->reattack_ratio = std::numeric_limits<float>::quiet_NaN();
 
   config->mask_harmonics = defaults.masks.n_harmonics;
   config->claim_lobes = defaults.masks.claim_lobes;
@@ -192,7 +208,7 @@ void sonare_polyphonic_config_init(SonarePolyphonicConfig* config) {
   config->min_partial_separation = defaults.shared_bins.min_partial_separation;
   config->max_fit_residual = defaults.shared_bins.max_fit_residual;
   config->max_weight_modulus = defaults.shared_bins.max_weight_modulus;
-  config->max_refine_hz = defaults.shared_bins.max_refine_hz;
+  config->max_refine_hz = std::numeric_limits<float>::quiet_NaN();
   config->f0_tolerance_cents = defaults.shared_bins.f0_tolerance_cents;
 
   config->segmentation_threshold_cents = defaults.notes.segmenter.segmentation_threshold_cents;
@@ -294,12 +310,19 @@ SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, 
   SONARE_C_TRY
   sonare::editing::note_model::NoteEdit replacement;
   if (edit != nullptr) {
+    if (const SonareError err = run_validation([&] {
+          require_struct_size(edit->struct_size, sizeof(SonareNoteEdit), "edit",
+                              "sonare_note_edit_init");
+          sonare::util::check::greater_than(edit->time_stretch_ratio, 0.0,
+                                            "edit.time_stretch_ratio");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
     replacement.pitch_shift_semitones = edit->pitch_semitones;
     replacement.gain_db = edit->gain_db;
     replacement.time_offset_samples = edit->time_offset_samples;
-    // The by-value door's 0-reads-as-1 rule, kept so one struct means one thing.
-    replacement.time_stretch_ratio =
-        edit->time_stretch_ratio == 0.0f ? 1.0f : edit->time_stretch_ratio;
+    replacement.time_stretch_ratio = edit->time_stretch_ratio;
     replacement.muted = edit->muted != 0;
     replacement.formant_shift_semitones = edit->formant_semitones;
     replacement.vibrato_depth_change = edit->vibrato_depth_change;

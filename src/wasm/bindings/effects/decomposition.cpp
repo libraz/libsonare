@@ -3,48 +3,33 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include <cmath>
 #include <limits>
 
 #include "effects/decompose.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
 
-// Shared option reader for decomposeStems / decomposeStemsLinked: 0 is the
-// "use the built-in default" sentinel the C ABI documents on
-// SonareDecomposeStemsConfig, so an explicit 0 must land on the same
-// effective value here as it does through the C ABI. Reading each field with
-// 0 as its fallback lets an absent key and an explicit 0 take that one path.
-// Everything else is left to validate_config, which decompose_stems /
-// decompose_stems_linked applies to the config it is handed, so a negative
-// count or a sub-unit mask power is rejected with the same error the C ABI
-// returns.
+// Shared option reader for decomposeStems / decomposeStemsLinked. An absent key
+// keeps the core default (an absent hop derives it from nFft); a given value is
+// read literally and checked as the C ABI checks SonareDecomposeStemsConfig.
 DecomposeStemsConfig readDecomposeStemsConfig(val options) {
+  namespace check = sonare::util::check;
   DecomposeStemsConfig config;
-  const int n_components = intProperty(options, "nComponents", 0);
-  const int n_fft = intProperty(options, "nFft", 0);
-  const int hop_length = intProperty(options, "hopLength", 0);
-  const int n_iter = intProperty(options, "nIter", 0);
-  const float beta = floatProperty(options, "beta", 0.0f);
-  const float mask_power = floatProperty(options, "maskPower", 0.0f);
-  const std::string init = stringProperty(options, "init", config.init);
-  // Rejected before the sentinel promotion, exactly as the C ABI does: a
-  // negative value must not be quietly swallowed by the "0 or less keeps the
-  // default" rule that follows.
-  if (n_components < 0 || n_fft < 0 || hop_length < 0 || n_iter < 0 || !std::isfinite(beta) ||
-      !std::isfinite(mask_power) || mask_power < 0.0f) {
-    throw WasmRangeError(
-        "counts must be integers in [0, 2147483647], beta and maskPower must be finite, and "
-        "maskPower must be at least 0");
-  }
-  if (n_components > 0) config.n_components = n_components;
-  if (n_fft > 0) config.n_fft = n_fft;
-  if (hop_length > 0) config.hop_length = hop_length;
-  if (n_iter > 0) config.n_iter = n_iter;
-  if (beta != 0.0f) config.beta = beta;
-  if (mask_power > 0.0f) config.mask_power = mask_power;
-  config.init = init.empty() ? std::string("random") : init;
+  config.n_components = intProperty(options, "nComponents", config.n_components);
+  config.n_fft = intProperty(options, "nFft", config.n_fft);
+  config.hop_length = intProperty(options, "hopLength", config.hop_length);
+  config.n_iter = intProperty(options, "nIter", config.n_iter);
+  config.beta = floatProperty(options, "beta", config.beta);
+  config.init = stringProperty(options, "init", config.init);
+  config.mask_power = floatProperty(options, "maskPower", config.mask_power);
+  check::integer_at_least(config.n_components, 1, "nComponents");
+  check::integer_at_least(config.n_fft, 1, "nFft");
+  if (hasProperty(options, "hopLength")) check::integer_at_least(config.hop_length, 1, "hopLength");
+  check::integer_at_least(config.n_iter, 1, "nIter");
+  check::finite_float(config.beta, "beta");
+  check::at_least(config.mask_power, 1.0, "maskPower");
   return config;
 }
 

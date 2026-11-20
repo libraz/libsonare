@@ -598,6 +598,22 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
       [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
+namespace {
+/// Voicing probability at or above which a frame counts as voiced when no config is given.
+constexpr float kDefaultVoicedThreshold = 0.5f;
+}  // namespace
+
+void sonare_note_segmenter_config_init(SonareNoteSegmenterConfig* config) {
+  if (config == nullptr) return;
+  const sonare::editing::pitch_editor::NoteSegmenterConfig native;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->segmentation_threshold_cents = native.segmentation_threshold_cents;
+  config->min_note_ms = native.min_note_ms;
+  config->reference_hz = native.reference_hz;
+  config->voiced_threshold = kDefaultVoicedThreshold;
+}
+
 SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
                                  const int32_t* voiced, size_t n_frames, float frame_rate,
                                  const SonareNoteSegmenterConfig* config,
@@ -627,31 +643,31 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
   }
 
   sonare::editing::pitch_editor::NoteSegmenterConfig segmenter_config;
-  float voiced_threshold = 0.5f;
+  float voiced_threshold = kDefaultVoicedThreshold;
   if (config != nullptr) {
+    if (const SonareError err = run_validation([&] {
+          require_struct_size(config->struct_size, sizeof(SonareNoteSegmenterConfig), "config",
+                              "sonare_note_segmenter_config_init");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
     if (const SonareError err = run_validation_under(
             "config",
             [&] {
-              check::integer_in_range(config->struct_version, 0, 2, "struct_version");
-              check::at_least(config->segmentation_threshold_cents, 0.0,
-                              "segmentation_threshold_cents");
+              check::greater_than(config->segmentation_threshold_cents, 0.0,
+                                  "segmentation_threshold_cents");
               check::at_least(config->min_note_ms, 0.0, "min_note_ms");
-              check::at_least(config->reference_hz, 0.0, "reference_hz");
-              if (config->struct_version == 2) {
-                check::in_range(config->voiced_threshold, 0.0, 1.0, "voiced_threshold");
-              }
+              check::greater_than(config->reference_hz, 0.0, "reference_hz");
+              check::in_range(config->voiced_threshold, 0.0, 1.0, "voiced_threshold");
             });
         err != SONARE_OK) {
       return err;
     }
-    if (config->segmentation_threshold_cents > 0.0f) {
-      segmenter_config.segmentation_threshold_cents = config->segmentation_threshold_cents;
-    }
-    if (config->min_note_ms > 0.0f) segmenter_config.min_note_ms = config->min_note_ms;
-    if (config->reference_hz > 0.0f) segmenter_config.reference_hz = config->reference_hz;
-    if (config->struct_version == 2 && config->voiced_threshold > 0.0f) {
-      voiced_threshold = config->voiced_threshold;
-    }
+    segmenter_config.segmentation_threshold_cents = config->segmentation_threshold_cents;
+    segmenter_config.min_note_ms = config->min_note_ms;
+    segmenter_config.reference_hz = config->reference_hz;
+    voiced_threshold = config->voiced_threshold;
   }
   SONARE_C_REQUIRE_NONNULL(out);
 

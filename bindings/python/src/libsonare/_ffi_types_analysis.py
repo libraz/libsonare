@@ -190,7 +190,10 @@ class SonareRirSynthResult(CStruct):
 class SonareRoomEstimateConfig(CStruct):
     """Maps to SonareRoomEstimateConfig in sonare_c_acoustic.h."""
 
+    _c_init_ = "sonare_room_estimate_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("aspect_hint_lw", ctypes.c_float),
         ("aspect_hint_lh", ctypes.c_float),
         ("reference_absorption", ctypes.c_float),

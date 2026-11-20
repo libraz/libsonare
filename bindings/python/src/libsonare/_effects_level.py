@@ -369,7 +369,7 @@ def biquad_filter(
     config.type = _BIQUAD_FILTER_TYPES[type]
     config.order = _to_c_int32(order, "order").value
     config.zero_phase = 1 if zero_phase else 0
-    # None is written as 0, which the C entry reads as "not given".
+    # None leaves the init's NaN, which the C entry reads as "not given".
     for name, value in (
         ("cutoff_hz", cutoff_hz),
         ("center_hz", center_hz),

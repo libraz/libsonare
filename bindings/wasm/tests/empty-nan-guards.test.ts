@@ -322,7 +322,7 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
     {
       entry: 'vqt',
       key: 'fmin',
-      run: (v) => m().vqt(cqtTone, SR, 512, v, 12, 12, 0),
+      run: (v) => m().vqt(cqtTone, SR, 512, v, 12, 12, undefined, 0),
     },
   ];
 
@@ -337,20 +337,28 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
   });
 
   it('vqt refuses an infinite gamma', () => {
-    expect(() => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, Number.POSITIVE_INFINITY)).toThrow();
-    expect(() => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, Number.NEGATIVE_INFINITY)).toThrow();
-    expect(() => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, SATURATES_ONTO_AN_INFINITY)).toThrow();
+    expect(() =>
+      m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, Number.POSITIVE_INFINITY),
+    ).toThrow();
+    expect(() =>
+      m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, Number.NEGATIVE_INFINITY),
+    ).toThrow();
+    expect(() =>
+      m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, SATURATES_ONTO_AN_INFINITY),
+    ).toThrow();
   });
 
-  it('vqt reads a NaN gamma as the automatic-bandwidth sentinel', () => {
-    // resolve_vqt_gamma (src/feature/vqt.cpp) resolves NaN and any negative
-    // gamma to the same ERB-derived value, so the two must agree exactly while
-    // gamma = 0 (the CQT-equivalent bandwidth) must not.
-    const auto = Array.from(m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, Number.NaN).magnitude);
-    const negative = Array.from(m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, -1).magnitude);
-    const cqtEquivalent = Array.from(m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, 0).magnitude);
-    expect(auto).toEqual(negative);
+  it('vqt reads a NaN gamma as not given, the automatic bandwidth', () => {
+    // NaN is the C ABI's "not given" for gamma, so it must agree exactly with an
+    // omitted gamma, while gamma = 0 (the CQT-equivalent bandwidth) must not and
+    // a negative offset is refused.
+    const vqt = (gamma?: number) => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, gamma);
+    const auto = Array.from(vqt(Number.NaN).magnitude);
+    const omitted = Array.from(vqt(undefined).magnitude);
+    const cqtEquivalent = Array.from(vqt(0).magnitude);
+    expect(auto).toEqual(omitted);
     expect(auto).not.toEqual(cqtEquivalent);
+    expect(() => vqt(-1)).toThrow('vqt: gamma must be finite and at least 0');
   });
 
   it('refuses an inverted but finite ordering pair', () => {
@@ -377,7 +385,7 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
     expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
   });
   it('vqt accepts a finite fmin and gamma', () => {
-    const result = m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, 0);
+    const result = m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, 0);
     expect(result.nBins).toBe(12);
     expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
   });

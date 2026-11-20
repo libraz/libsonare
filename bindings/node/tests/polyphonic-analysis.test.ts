@@ -344,11 +344,18 @@ describe('a polyphonic note edit', () => {
     });
   });
 
-  it('reads a zero stretch ratio as one, the way the by-value door reads it', () => {
+  it('refuses a zero stretch ratio rather than reading it as one', () => {
     withAnalysis((analysis) => {
+      for (const timeStretchRatio of [0, -1]) {
+        expect(() => analysis.setNoteEdit(0, { timeStretchRatio })).toThrow(
+          new RangeError(
+            'PolyphonicAnalysis.setNoteEdit: edit.timeStretchRatio must be finite and greater than 0',
+          ),
+        );
+      }
+      // Control: the unit ratio is the omitted value.
       const unedited = analysis.render();
-      analysis.setNoteEdit(0, { timeStretchRatio: 0 });
-      expect(analysis.notes()[0].edit.timeStretchRatio).toBe(1);
+      analysis.setNoteEdit(0, { timeStretchRatio: 1 });
       expect([...analysis.render()]).toEqual([...unedited]);
     });
   });
@@ -433,14 +440,20 @@ describe('the polyphonic surface refuses what it cannot do', () => {
     });
   });
 
-  it('rejects a negative fade or vibrato cutoff as out of range', () => {
+  it('rejects a non-positive fade or vibrato cutoff as out of range', () => {
     withAnalysis((analysis) => {
-      for (const bad of [-1, Number.NaN]) {
-        expect(() => analysis.render({ fadeMs: bad })).toThrow(RangeError);
-        expect(() => analysis.render({ vibratoCutoffHz: bad })).toThrow(RangeError);
+      for (const bad of [0, -1, Number.NaN]) {
+        expect(() => analysis.render({ fadeMs: bad })).toThrow(
+          new RangeError('PolyphonicAnalysis.render: fadeMs must be finite and greater than 0'),
+        );
+        expect(() => analysis.render({ vibratoCutoffHz: bad })).toThrow(
+          new RangeError(
+            'PolyphonicAnalysis.render: vibratoCutoffHz must be finite and greater than 0',
+          ),
+        );
       }
-      // Positive control: 0 is the default on both.
-      expect(analysis.render({ fadeMs: 0, vibratoCutoffHz: 0 })).toHaveLength(LENGTH);
+      // Positive control: small positive values on both are accepted.
+      expect(analysis.render({ fadeMs: 5, vibratoCutoffHz: 3 })).toHaveLength(LENGTH);
     });
   });
 

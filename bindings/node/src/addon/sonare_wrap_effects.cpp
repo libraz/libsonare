@@ -372,8 +372,8 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
   const size_t n_frames = f0.ElementLength();
   int hop_length = node_narrow_int(env, info[3], "hopLength");
 
-  SonarePitchCorrectionConfig config{};
-  sonare_pitch_correction_config_default(&config);
+  SonarePitchCorrectionConfig config;
+  sonare_pitch_correction_config_init(&config);
   std::vector<int32_t> voiced;
   std::vector<float> voiced_prob;
   const int32_t* voiced_ptr = nullptr;
@@ -477,8 +477,8 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
     key_ptr = &key;
   }
 
-  SonarePitchCorrectionConfig config{};
-  sonare_pitch_correction_config_default(&config);
+  SonarePitchCorrectionConfig config;
+  sonare_pitch_correction_config_init(&config);
   if (info.Length() > 3 && info[3].IsObject()) {
     const Napi::Object opts = info[3].As<Napi::Object>();
     config.retune_amount = sonare_node::FloatProperty(opts, "retuneAmount", config.retune_amount);
@@ -781,31 +781,22 @@ Napi::Value SonareWrap::BiquadFilter(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   Napi::Float32Array samples;
   if (!RequiredFloat32ArrayValue(env, info[0], "samples", &samples)) return env.Undefined();
-  int sample_rate = 0;
-  int type = 0;
-  int order = 2;
-  bool zero_phase = false;
-  float cutoff_hz = 0.0f;
-  float center_hz = 0.0f;
-  float bandwidth_hz = 0.0f;
-  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate) ||
-      !RequiredIntArg(env, info, 2, "type", &type) ||
-      !OptionalIntArg(env, info, 3, "order", 2, &order) ||
-      !OptionalBoolArg(env, info, 4, "zeroPhase", false, &zero_phase) ||
-      !OptionalFloatArg(env, info, 5, "cutoffHz", 0.0f, &cutoff_hz) ||
-      !OptionalFloatArg(env, info, 6, "centerHz", 0.0f, &center_hz) ||
-      !OptionalFloatArg(env, info, 7, "bandwidthHz", 0.0f, &bandwidth_hz)) {
-    return env.Undefined();
-  }
-
+  // Seeded first: a frequency field the type does not read stays NaN (not given).
   SonareBiquadFilterConfig config;
   sonare_biquad_filter_config_init(&config);
-  config.type = type;
-  config.order = order;
+  int sample_rate = 0;
+  bool zero_phase = config.zero_phase != 0;
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate) ||
+      !RequiredIntArg(env, info, 2, "type", &config.type) ||
+      !OptionalIntArg(env, info, 3, "order", config.order, &config.order) ||
+      !OptionalBoolArg(env, info, 4, "zeroPhase", zero_phase, &zero_phase) ||
+      !OptionalFiniteFloatArg(env, info, 5, "cutoffHz", config.cutoff_hz, &config.cutoff_hz) ||
+      !OptionalFiniteFloatArg(env, info, 6, "centerHz", config.center_hz, &config.center_hz) ||
+      !OptionalFiniteFloatArg(env, info, 7, "bandwidthHz", config.bandwidth_hz,
+                              &config.bandwidth_hz)) {
+    return env.Undefined();
+  }
   config.zero_phase = zero_phase ? 1 : 0;
-  config.cutoff_hz = cutoff_hz;
-  config.center_hz = center_hz;
-  config.bandwidth_hz = bandwidth_hz;
 
   float* output = nullptr;
   size_t output_length = 0;

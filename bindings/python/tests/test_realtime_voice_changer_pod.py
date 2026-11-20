@@ -29,14 +29,14 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 
 
 def test_pod_struct_size_matches_c_abi() -> None:
-    """sonare_c.h pins sizeof == 72 * sizeof(float) (struct_version 2)."""
+    """sonare_c.h pins sizeof == 72 * sizeof(float)."""
     assert ctypes.sizeof(SonareRealtimeVoiceChangerConfig) == 72 * ctypes.sizeof(ctypes.c_float)
 
 
 def test_pod_dataclass_has_one_field_per_pod_field() -> None:
-    # struct_version is the layout tag, not a setting.
+    # struct_size is the layout tag, not a setting.
     pod_field_names = {
-        name for name, _ in SonareRealtimeVoiceChangerConfig._fields_ if name != "struct_version"
+        name for name, _ in SonareRealtimeVoiceChangerConfig._fields_ if name != "struct_size"
     }
     dc_field_names = {f.name for f in dataclasses.fields(libsonare.RealtimeVoiceChangerConfig)}
     assert pod_field_names == dc_field_names
@@ -214,7 +214,7 @@ def test_formant_mode_is_a_string_field_defaulting_to_relative() -> None:
     cfg = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     assert cfg.formant_mode == "relative"
     pod = dataclasses.replace(cfg, formant_mode="absolute")._to_pod()
-    assert pod.struct_version == 2
+    assert pod.struct_size == ctypes.sizeof(SonareRealtimeVoiceChangerConfig)
     assert pod.formant_mode == 1
     assert libsonare.RealtimeVoiceChangerConfig._from_pod(pod).formant_mode == "absolute"
     with pytest.raises(ValueError, match="formant_mode"):
@@ -365,7 +365,7 @@ def _snake(key: str) -> str:
 def test_record_fields_are_the_shared_config_keys() -> None:
     # The facade copies the record to and from the struct mirror by its field names.
     struct_fields = {
-        name for name, *_ in SonareRealtimeVoiceChangerConfig._fields_ if name != "struct_version"
+        name for name, *_ in SonareRealtimeVoiceChangerConfig._fields_ if name != "struct_size"
     }
     shared = _SHARED_KEYS["keys"] + _SHARED_KEYS["optional_keys"]
     assert len(shared) == len(set(shared))

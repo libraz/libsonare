@@ -25,11 +25,13 @@ class SonareRealtimeVoiceChangerConfig(CStruct):
 
     Layout matches sonare_c.h exactly: 4-byte scalar fields plus the 3-element
     ``harmony_steps`` array, no padding. ``sizeof`` must equal
-    ``72 * sizeof(c_float)`` (struct_version 2).
+    ``72 * sizeof(c_float)``.
     """
 
+    _c_init_ = "sonare_realtime_voice_changer_config_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
+        ("struct_size", ctypes.c_uint32),
         ("input_gain_db", ctypes.c_float),
         ("output_gain_db", ctypes.c_float),
         ("wet_mix", ctypes.c_float),
@@ -310,6 +312,7 @@ class SonareCqtResult(CStruct):
         ("sample_rate", ctypes.c_int32),
         ("magnitude", ctypes.POINTER(ctypes.c_float)),
         ("frequencies", ctypes.POINTER(ctypes.c_float)),
+        ("gamma", ctypes.c_float),
     ]
 
 
@@ -599,12 +602,14 @@ class SonareSegmentIndices(CStruct):
 class SonareDecomposeStemsConfig(CStruct):
     """Maps to SonareDecomposeStemsConfig in sonare_c_effects.h.
 
-    Zero-initialize for the defaults (4 components, 2048/512 STFT, 100
-    iterations, Frobenius beta, random init, magnitude mask).
+    Construction seeds the defaults through the init (4 components, 2048/512
+    STFT, 100 iterations, Frobenius beta, random init, magnitude mask).
     """
 
+    _c_init_ = "sonare_decompose_stems_config_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int),
+        ("struct_size", ctypes.c_uint32),
         ("n_components", ctypes.c_int),
         ("n_fft", ctypes.c_int),
         ("hop_length", ctypes.c_int),
@@ -618,12 +623,13 @@ class SonareDecomposeStemsConfig(CStruct):
 class SonareNoteSegmenterConfig(CStruct):
     """Maps to SonareNoteSegmenterConfig in sonare_c_features.h."""
 
+    _c_init_ = "sonare_note_segmenter_config_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int),
+        ("struct_size", ctypes.c_uint32),
         ("segmentation_threshold_cents", ctypes.c_float),
         ("min_note_ms", ctypes.c_float),
         ("reference_hz", ctypes.c_float),
-        # struct_version 2
         ("voiced_threshold", ctypes.c_float),
     ]
 

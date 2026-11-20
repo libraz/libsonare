@@ -3,7 +3,12 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+#include <limits>
+#include <optional>
+
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -267,8 +272,8 @@ val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, 
 
 // Shared serializer for CQT/VQT magnitude results, mirroring SonareCqtResult:
 // { nBins, nFrames, hopLength, sampleRate, magnitude (nBins*nFrames row-major),
-// frequencies (nBins) }.
-val cqtResultToVal(const CqtResult& result) {
+// frequencies (nBins), gamma (the VQT bandwidth offset it ran with; 0 for a CQT) }.
+val cqtResultToVal(const CqtResult& result, float gamma = 0.0f) {
   val out = val::object();
   out.set("nBins", result.n_bins());
   out.set("nFrames", result.n_frames());
@@ -276,11 +281,12 @@ val cqtResultToVal(const CqtResult& result) {
   out.set("sampleRate", result.sample_rate());
   out.set("magnitude", vectorToFloat32Array(result.magnitude()));
   out.set("frequencies", vectorToFloat32Array(result.frequencies()));
+  out.set("gamma", gamma);
   return out;
 }
 
 val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
-           const val& n_bins, const val& bins_per_octave) {
+           const val& n_bins, const val& bins_per_octave, const val& filter_scale_val) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -290,12 +296,14 @@ val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val
   config.fmin = fmin;
   config.n_bins = checkedIntFromVal(n_bins, "nBins");
   config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
+  config.filter_scale =
+      optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
   return cqtResultToVal(cqt(audio, config));
 }
 
 val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
-                  const val& n_bins, const val& bins_per_octave) {
+                  const val& n_bins, const val& bins_per_octave, const val& filter_scale_val) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -305,12 +313,14 @@ val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, co
   config.fmin = fmin;
   config.n_bins = checkedIntFromVal(n_bins, "nBins");
   config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
+  config.filter_scale =
+      optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
   return cqtResultToVal(pseudo_cqt(audio, config));
 }
 
 val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
-                  const val& n_bins, const val& bins_per_octave) {
+                  const val& n_bins, const val& bins_per_octave, const val& filter_scale_val) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -320,12 +330,15 @@ val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, co
   config.fmin = fmin;
   config.n_bins = checkedIntFromVal(n_bins, "nBins");
   config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
+  config.filter_scale =
+      optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
   return cqtResultToVal(hybrid_cqt(audio, config));
 }
 
 val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
-           const val& n_bins, const val& bins_per_octave, float gamma) {
+           const val& n_bins, const val& bins_per_octave, const val& filter_scale_val,
+           const val& gamma_val) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -335,10 +348,15 @@ val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val
   config.fmin = fmin;
   config.n_bins = checkedIntFromVal(n_bins, "nBins");
   config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
-  config.gamma = gamma;
-  validate_vqt_gamma(config.gamma);
+  config.filter_scale =
+      optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
+  // Absent or NaN is the automatic ERB-derived bandwidth, as on the C ABI; a given value is an
+  // offset in Hz.
+  const std::optional<float> gamma = optionalDomainNumber(gamma_val, "gamma");
+  if (gamma.has_value() && !std::isnan(*gamma)) util::check::at_least(*gamma, 0.0, "gamma");
+  config.gamma = gamma.value_or(std::numeric_limits<float>::quiet_NaN());
 
-  return cqtResultToVal(vqt(audio, config));
+  return cqtResultToVal(vqt(audio, config), resolve_vqt_gamma(config));
 }
 
 void registerFeatureMusicBindings() {

@@ -76,16 +76,17 @@ Napi::Value EffectsCheckCResult(Napi::Env env, SonareError err) {
 // Shared by decomposeStems and decomposeStemsLinked. @p init receives the
 // "init" string so its storage outlives the C call that reads config.init.
 SonareDecomposeStemsConfig ReadDecomposeStemsConfig(const Napi::Value& value, std::string* init) {
-  SonareDecomposeStemsConfig config{};
-  config.struct_version = 1;
+  SonareDecomposeStemsConfig config;
+  sonare_decompose_stems_config_init(&config);
   if (!value.IsObject()) return config;
   Napi::Object options = value.As<Napi::Object>();
-  config.n_components = IntProperty(options, "nComponents", kZeroIsSentinel);
-  config.n_fft = IntProperty(options, "nFft", kZeroIsSentinel);
-  config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
-  config.n_iter = IntProperty(options, "nIter", kZeroIsSentinel);
-  config.beta = FloatProperty(options, "beta", 0.0f);
-  config.mask_power = FloatProperty(options, "maskPower", 0.0f);
+  config.n_components = IntProperty(options, "nComponents", config.n_components);
+  config.n_fft = IntProperty(options, "nFft", config.n_fft);
+  config.hop_length = IntInRangeOrAbsentProperty(
+      options, "hopLength", 1, std::numeric_limits<int>::max(), config.hop_length);
+  config.n_iter = IntProperty(options, "nIter", config.n_iter);
+  config.beta = FloatProperty(options, "beta", config.beta);
+  config.mask_power = FloatProperty(options, "maskPower", config.mask_power);
   if (!options.Get("init").IsUndefined() && !options.Get("init").IsNull()) {
     *init = StringProperty(options, "init", "");
     config.init = init->c_str();
@@ -231,7 +232,10 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_decompose_stems(arr.Data(), arr.ElementLength(), sr, &config, &out, &component_count,
                              &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
-  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareErrorFlattening(env, err, "config");
+    return env.Undefined();
+  }
   Napi::Array components = Napi::Array::New(env, component_count);
   for (size_t c = 0; c < component_count; ++c) {
     auto component = Napi::Float32Array::New(env, component_length);
@@ -274,7 +278,10 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
   SonareError err = sonare_decompose_stems_linked(
       inputs.ptrs.data(), inputs.ptrs.size(), inputs.length, sr, &config, &out, &component_count,
       &channel_count, &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
-  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareErrorFlattening(env, err, "config");
+    return env.Undefined();
+  }
   // Layout: component c, channel ch starts at (c * channel_count + ch) * component_length.
   Napi::Array components = Napi::Array::New(env, component_count);
   for (size_t c = 0; c < component_count; ++c) {

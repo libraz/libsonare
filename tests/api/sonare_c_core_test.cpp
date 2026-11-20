@@ -569,19 +569,32 @@ TEST_CASE("C pitch shift rejects an unsupported shifted rate before allocating",
   }
 }
 
-TEST_CASE("C VQT accepts NaN auto gamma and rejects infinity", "[c_api][vqt]") {
+TEST_CASE("C VQT reads NaN as automatic gamma and rejects a negative or infinite one",
+          "[c_api][vqt]") {
   std::vector<float> samples(2048, 0.0f);
   SonareCqtResult result{};
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();
 
-  REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, nan, &result) ==
-          SONARE_OK);
+  REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, 1.0f, nan,
+                     &result) == SONARE_OK);
+  // The automatic gamma is resolved and reported; gamma 0 is the constant-Q bandwidth.
+  CHECK(result.gamma > 0.0f);
   sonare_free_cqt_result(&result);
-  REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, inf, &result) ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(result.magnitude == nullptr);
-  REQUIRE(result.frequencies == nullptr);
+  REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, 1.0f, 0.0f,
+                     &result) == SONARE_OK);
+  CHECK(result.gamma == 0.0f);
+  sonare_free_cqt_result(&result);
+  for (const float bad : {inf, -inf, -1.0f}) {
+    REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, 1.0f, bad,
+                       &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.magnitude == nullptr);
+    REQUIRE(result.frequencies == nullptr);
+  }
+  REQUIRE(sonare_cqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, 1.0f, &result) ==
+          SONARE_OK);
+  CHECK(result.gamma == 0.0f);
+  sonare_free_cqt_result(&result);
 }
 
 TEST_CASE("C API reconstructs CQT and VQT magnitude with checked ownership",
@@ -599,7 +612,7 @@ TEST_CASE("C API reconstructs CQT and VQT magnitude with checked ownership",
 
   SonareCqtResult cqt_result{};
   REQUIRE(sonare_cqt(input.data(), input.size(), sample_rate, hop_length, fmin, n_bins,
-                     bins_per_octave, &cqt_result) == SONARE_OK);
+                     bins_per_octave, 1.0f, &cqt_result) == SONARE_OK);
   REQUIRE(cqt_result.n_frames > 0);
   const size_t matrix_length =
       static_cast<size_t>(cqt_result.n_bins) * static_cast<size_t>(cqt_result.n_frames);
@@ -2373,22 +2386,23 @@ TEST_CASE("C CQT and key entry points reject a non-finite frequency", "[c_api][v
 
   SECTION("the CQT family rejects a non-finite fmin") {
     SonareCqtResult result{};
-    REQUIRE(sonare_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, &result) == SONARE_OK);
-    sonare_free_cqt_result(&result);
-    REQUIRE(sonare_pseudo_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, &result) ==
+    REQUIRE(sonare_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, 1.0f, &result) ==
             SONARE_OK);
     sonare_free_cqt_result(&result);
-    REQUIRE(sonare_hybrid_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, &result) ==
+    REQUIRE(sonare_pseudo_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, 1.0f, &result) ==
+            SONARE_OK);
+    sonare_free_cqt_result(&result);
+    REQUIRE(sonare_hybrid_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, 1.0f, &result) ==
             SONARE_OK);
     sonare_free_cqt_result(&result);
 
     for (float fmin : {nan, inf, -inf}) {
-      REQUIRE(sonare_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, &result) ==
+      REQUIRE(sonare_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, 1.0f, &result) ==
               SONARE_ERROR_INVALID_PARAMETER);
-      REQUIRE(sonare_pseudo_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, &result) ==
-              SONARE_ERROR_INVALID_PARAMETER);
-      REQUIRE(sonare_hybrid_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, &result) ==
-              SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_pseudo_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, 1.0f,
+                                &result) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_hybrid_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, 1.0f,
+                                &result) == SONARE_ERROR_INVALID_PARAMETER);
       REQUIRE(result.magnitude == nullptr);
       REQUIRE(result.frequencies == nullptr);
     }

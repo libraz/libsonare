@@ -1062,8 +1062,8 @@ describe('renderPercussiveEvents', () => {
       );
     }
 
-    // A negative or non-finite fade is rejected, and an explicit 0 is refused by
-    // name rather than read as the default.
+    // A non-positive or non-finite fade is rejected, and an explicit 0 is refused
+    // by name rather than read as the default.
     for (const fadeMs of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
       expectInvalidParameter(() =>
         renderPercussiveEvents({ samples: three, sampleRate: SR, events: edited, fadeMs }),
@@ -1072,7 +1072,7 @@ describe('renderPercussiveEvents', () => {
     // The request flattens the C config, so its root is not part of the name.
     expect(() =>
       renderPercussiveEvents({ samples: three, sampleRate: SR, events: edited, fadeMs: -1 }),
-    ).toThrow(new RangeError('renderPercussiveEvents: fadeMs must be finite and at least 0'));
+    ).toThrow(new RangeError('renderPercussiveEvents: fadeMs must be finite and greater than 0'));
     for (const field of [
       'nFft',
       'hopLength',

@@ -697,6 +697,11 @@ export interface CqtResult {
   magnitude: Matrix2D;
   /** Center frequency (Hz) of each of the `nBins` bins. */
   frequencies: Float32Array;
+  /**
+   * Bandwidth offset in Hz the transform ran with: for `vqt`, the resolved value (the
+   * ERB-derived one when `gamma` was omitted); 0 for the three constant-Q transforms.
+   */
+  gamma: number;
 }
 
 /**

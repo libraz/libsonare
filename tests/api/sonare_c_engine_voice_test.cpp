@@ -132,7 +132,7 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
 
   // Scale-correction mode snaps the contour to the configured key (C major).
   SonarePitchCorrectionConfig config{};
-  REQUIRE(sonare_pitch_correction_config_default(&config) == SONARE_OK);
+  sonare_pitch_correction_config_init(&config);
   REQUIRE(config.retune_amount == 1.0f);
   config.target_mode = SONARE_PITCH_TARGET_SCALE;
   config.scale_root = 0;
@@ -150,7 +150,7 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
 
   // A lower retune_amount produces a different (gentler) correction than a full snap.
   SonarePitchCorrectionConfig fixed_full{};
-  REQUIRE(sonare_pitch_correction_config_default(&fixed_full) == SONARE_OK);
+  sonare_pitch_correction_config_init(&fixed_full);
   fixed_full.target_midi = 71.0f;
   float* full_out = nullptr;
   size_t full_len = 0;
@@ -178,14 +178,14 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
 
   // Out-of-range config knobs are rejected.
   SonarePitchCorrectionConfig bad{};
-  REQUIRE(sonare_pitch_correction_config_default(&bad) == SONARE_OK);
+  sonare_pitch_correction_config_init(&bad);
   bad.retune_amount = 2.0f;
   out = nullptr;
   out_length = 0;
   REQUIRE(sonare_pitch_correct_timevarying(samples.data(), samples.size(), 22050, f0.data(),
                                            nullptr, nullptr, n_frames, hop, &bad, &out,
                                            &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_pitch_correction_config_default(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_pitch_correction_config_init(nullptr);
 }
 
 TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo buffers",

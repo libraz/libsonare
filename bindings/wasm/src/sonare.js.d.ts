@@ -828,6 +828,7 @@ export interface WasmCqtResult {
   sampleRate: number;
   magnitude: Float32Array;
   frequencies: Float32Array;
+  gamma: number;
 }
 
 export interface WasmLufsResult {
@@ -2331,13 +2332,13 @@ export interface SonareModule {
     root: number,
     modeMask: number,
     midi: number,
-    scaleReferenceMidi: number,
+    scaleReferenceMidi: number | undefined,
   ) => number;
   scaleCorrectionSemitones: (
     root: number,
     modeMask: number,
     midi: number,
-    scaleReferenceMidi: number,
+    scaleReferenceMidi: number | undefined,
   ) => number;
   scalePitchClassEnabled: (root: number, modeMask: number, pitchClass: number) => boolean;
 
@@ -3069,9 +3070,9 @@ export interface SonareModule {
     type: number,
     order: number,
     zeroPhase: boolean,
-    cutoffHz: number,
-    centerHz: number,
-    bandwidthHz: number,
+    cutoffHz: number | undefined,
+    centerHz: number | undefined,
+    bandwidthHz: number | undefined,
   ) => Float32Array;
   trimEx: (
     samples: Float32Array,
@@ -3542,6 +3543,7 @@ export interface SonareModule {
     fmin: number,
     nBins: number,
     binsPerOctave: number,
+    filterScale: number | undefined,
   ) => WasmCqtResult;
   pseudoCqt: (
     samples: Float32Array,
@@ -3550,6 +3552,7 @@ export interface SonareModule {
     fmin: number,
     nBins: number,
     binsPerOctave: number,
+    filterScale: number | undefined,
   ) => WasmCqtResult;
   hybridCqt: (
     samples: Float32Array,
@@ -3558,6 +3561,7 @@ export interface SonareModule {
     fmin: number,
     nBins: number,
     binsPerOctave: number,
+    filterScale: number | undefined,
   ) => WasmCqtResult;
   vqt: (
     samples: Float32Array,
@@ -3566,7 +3570,8 @@ export interface SonareModule {
     fmin: number,
     nBins: number,
     binsPerOctave: number,
-    gamma: number,
+    filterScale: number | undefined,
+    gamma: number | undefined,
   ) => WasmCqtResult;
   cqtToAudio: (
     magnitude: Float32Array,

@@ -396,13 +396,14 @@ describe('renderNotes', () => {
       }),
     ).toThrow(TypeError);
     expect(() => renderNotes({ samples: tone.samples, sampleRate: 0, notes })).toThrow(RangeError);
-    // 0 is the default fade, so only a negative or non-finite one is refused.
-    for (const fadeMs of [-1, Number.NaN]) {
+    // A given fade is read literally, so 0 is refused beside a negative or
+    // non-finite one; the request flattens the C config, so no root is named.
+    for (const fadeMs of [0, -1, Number.NaN]) {
       expect(() => renderNotes({ samples: tone.samples, sampleRate: SR, notes, fadeMs })).toThrow(
-        RangeError,
+        new RangeError('renderNotes: fadeMs must be finite and greater than 0'),
       );
     }
-    expect(renderNotes({ samples: tone.samples, sampleRate: SR, notes, fadeMs: 0 })).toHaveLength(
+    expect(renderNotes({ samples: tone.samples, sampleRate: SR, notes, fadeMs: 5 })).toHaveLength(
       tone.samples.length,
     );
     expect(() =>

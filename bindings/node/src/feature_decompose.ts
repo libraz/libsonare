@@ -402,8 +402,7 @@ export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
   return withEntry('decomposeStems', () => {
     const request = sampleOneShot<DecomposeStemsRequest>('decomposeStems', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    // Each of the four is its own "0 => the documented default" on the C side, and
-    // the addon's narrowing truncates onto that 0.
+    // The addon's narrowing would wrap or truncate a value no C int holds.
     for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
       const value = request[field];
       if (value !== undefined) {

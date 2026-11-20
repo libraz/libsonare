@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import TypeVar
 
 from ._errors import _entry, _refuse, _refuse_type
-from ._narrowing import _domain_float, _narrow_double, _resolve_zero_default
+from ._narrowing import _domain_float, _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     SonareRirSynthConfig,
@@ -37,6 +37,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_size_t,
     _to_c_uint,
+    _validate_c_int_field,
 )
 from .types import (
     AcousticModeName,
@@ -322,36 +323,39 @@ def estimate_room(
 
     Args:
         reference_absorption: Mean-absorption prior anchoring the volume scale;
-            ``None`` keeps the library default (0.15). Clamped into ``[0.01, 0.99]`` rather
-            than refused: a value outside that range still returns a successful
-            estimate, computed from the clamped prior. The reported volume
-            scales with the cube of the prior, so the substitution is worth
-            three orders of magnitude at the low end.
+            ``None`` keeps the library default (0.15); a given value must lie in
+            ``[0.01, 0.99]``. The reported volume scales with the cube of the
+            prior.
         mode: Analyzer routing, by name -- ``"auto"`` (impulse-like inputs route
             to IR analysis), ``"blind"`` or ``"impulseResponse"``. An unknown
             name raises ``SonareValueError`` and a number ``TypeError``.
-        n_octave_bands: Analyzer octave-band count; ``None`` keeps the library
-            default.
-        min_decay_db: Analyzer decay-fit span in dB; ``None`` keeps the library
-            default.
-        noise_floor_margin_db: Analyzer noise-floor margin in dB; ``None`` keeps
-            the library default.
+        n_octave_bands: Analyzer octave-band count, at least 1; ``None`` keeps
+            the library default (6).
+        min_decay_db: Analyzer decay-fit span in dB, above 0; ``None`` keeps the
+            library default (30).
+        noise_floor_margin_db: Analyzer noise-floor margin in dB, at least 0;
+            ``None`` keeps the library default (10).
 
     Raises:
-        SonareValueError: If ``reference_absorption``, ``n_octave_bands``,
-            ``min_decay_db`` or ``noise_floor_margin_db`` is given as zero or a
-            negative value; omit it for the default.
+        SonareValueError: If a given value is outside its domain: an aspect hint
+            or ``min_decay_db`` not above 0, ``reference_absorption`` outside
+            ``[0.01, 0.99]``, ``n_octave_bands`` below 1, or a negative
+            ``noise_floor_margin_db``.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    config = SonareRoomEstimateConfig(
+    config = SonareRoomEstimateConfig._given(
         aspect_hint_lw=aspect_hint_lw,
         aspect_hint_lh=aspect_hint_lh,
-        reference_absorption=_resolve_zero_default(reference_absorption, "reference_absorption"),
-        min_decay_db=_resolve_zero_default(min_decay_db, "min_decay_db"),
-        noise_floor_margin_db=_resolve_zero_default(noise_floor_margin_db, "noise_floor_margin_db"),
+        reference_absorption=reference_absorption,
+        min_decay_db=min_decay_db,
+        noise_floor_margin_db=noise_floor_margin_db,
         prefer_eyring=1 if prefer_eyring else 0,
-        n_octave_bands=_resolve_zero_default(n_octave_bands, "n_octave_bands"),
+        n_octave_bands=(
+            None
+            if n_octave_bands is None
+            else _validate_c_int_field(n_octave_bands, "n_octave_bands")
+        ),
         mode=_acoustic_mode(mode),
     )
     out = SonareRoomEstimate()

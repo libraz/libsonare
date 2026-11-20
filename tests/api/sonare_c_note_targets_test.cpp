@@ -39,10 +39,10 @@ constexpr float kA4Hz = 440.0f;
 
 SonareNoteObject note_at(int64_t onset_sample, int64_t offset_sample, float median_hz) {
   SonareNoteObject note{};
+  sonare_note_edit_init(&note.edit);
   note.onset_sample = onset_sample;
   note.offset_sample = offset_sample;
   note.median_hz = median_hz;
-  note.edit.time_stretch_ratio = 1.0f;
   return note;
 }
 
@@ -87,15 +87,15 @@ std::vector<uint8_t> two_quarter_notes_smf() {
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
-TEST_CASE("the note-target config seeder reports the core's own defaults",
-          "[c_api][note_targets]") {
-  SonareNoteTargetAssignConfig config{};
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_OK);
+TEST_CASE("the note-target config init reports the core's own defaults", "[c_api][note_targets]") {
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
   REQUIRE(config.unmatched_policy == SONARE_NOTE_TARGET_UNMATCHED_LEAVE);
   REQUIRE(config.min_overlap_ratio == 0.5f);
   REQUIRE(config.max_correction_semitones == 12.0f);
 
-  REQUIRE(sonare_note_target_assign_config_default(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(config.struct_size == sizeof(SonareNoteTargetAssignConfig));
+  sonare_note_target_assign_config_init(nullptr);
 }
 
 TEST_CASE("assignment writes the shift its target asks for", "[c_api][note_targets]") {
@@ -118,8 +118,8 @@ TEST_CASE("the overlap ratio decides whether a target counts", "[c_api][note_tar
   std::vector<SonareNoteObject> notes{note_at(0, kHalfSecond, kA4Hz)};
   const std::vector<SonareNoteTarget> targets{target_at(0.3, 0.7, 72.0f)};
 
-  SonareNoteTargetAssignConfig config{};
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_OK);
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
 
   size_t assigned = 0;
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
@@ -139,8 +139,8 @@ TEST_CASE("the overlap ratio decides whether a target counts", "[c_api][note_tar
 TEST_CASE("each unmatched policy does what it says", "[c_api][note_targets]") {
   // One note over the target, one note a second later with nothing near it.
   const std::vector<SonareNoteTarget> targets{target_at(0.0, 0.5, 72.0f)};
-  SonareNoteTargetAssignConfig config{};
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_OK);
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
 
   SECTION("leave") {
     std::vector<SonareNoteObject> notes{note_at(0, kHalfSecond, kA4Hz),
@@ -183,8 +183,8 @@ TEST_CASE("each unmatched policy does what it says", "[c_api][note_targets]") {
 TEST_CASE("a note with no measured pitch is never edited, whatever the policy",
           "[c_api][note_targets]") {
   const std::vector<SonareNoteTarget> targets{target_at(0.0, 0.5, 72.0f)};
-  SonareNoteTargetAssignConfig config{};
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_OK);
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
 
   // Both spellings of "no pitch": the extractor's zero and a track's NaN. Each
   // note lies over the target, so an assignment is available to every one of them
@@ -212,8 +212,8 @@ TEST_CASE("a correction past the bound saturates rather than being refused",
   const std::vector<SonareNoteTarget> targets{target_at(0.0, 0.5, 93.0f),
                                               target_at(0.5, 1.0, 45.0f)};
 
-  SonareNoteTargetAssignConfig config{};
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_OK);
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
   config.max_correction_semitones = 12.0f;
 
   size_t assigned = 0;
@@ -366,14 +366,29 @@ TEST_CASE("assignment refuses arguments it cannot act on", "[c_api][note_targets
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), 0, targets.data(), targets.size(),
                                      nullptr, &assigned) == SONARE_ERROR_INVALID_PARAMETER);
 
-  SonareNoteTargetAssignConfig config{};
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_OK);
+  SonareNoteTargetAssignConfig zeroed{};
+  REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
+                                     targets.size(), &zeroed,
+                                     &assigned) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "config.struct_size must be set by sonare_note_target_assign_config_init");
+
+  std::vector<SonareNoteObject> uninitialised_edit{note_at(0, kHalfSecond, kA4Hz)};
+  uninitialised_edit[0].edit.struct_size = 0;
+  REQUIRE(sonare_assign_note_targets(uninitialised_edit.data(), 1, kSampleRate, targets.data(),
+                                     targets.size(), nullptr,
+                                     &assigned) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "notes[0].edit.struct_size must be set by sonare_note_edit_init");
+
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
   config.unmatched_policy = 7;
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), &config,
                                      &assigned) == SONARE_ERROR_INVALID_PARAMETER);
 
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_OK);
+  sonare_note_target_assign_config_init(&config);
   config.min_overlap_ratio = 1.5f;
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), &config,
@@ -400,8 +415,8 @@ TEST_CASE("assignment refuses arguments it cannot act on", "[c_api][note_targets
 
 TEST_CASE("the note-target assignment C API reports NOT_SUPPORTED without the pitch editor",
           "[c_api][note_targets]") {
-  SonareNoteTargetAssignConfig config{};
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_ERROR_NOT_SUPPORTED);
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
 
   size_t assigned = 0;
   REQUIRE(sonare_assign_note_targets(nullptr, 0, 48000, nullptr, 0, nullptr, &assigned) ==

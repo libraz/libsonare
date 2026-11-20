@@ -349,7 +349,7 @@ TEST_CASE("RealtimeVoiceChanger C API default POD preserves the ISP limiter",
           "[voice_changer][c-api]") {
   SonareRealtimeVoiceChangerConfig defaults{};
   SonareRealtimeVoiceChangerConfig neutral{};
-  REQUIRE(sonare_realtime_voice_changer_config_default(&defaults) == SONARE_OK);
+  sonare_realtime_voice_changer_config_init(&defaults);
   REQUIRE(sonare_realtime_voice_changer_preset_config(SONARE_VC_PRESET_NEUTRAL_MONITOR, &neutral) ==
           SONARE_OK);
   REQUIRE(defaults.limiter_enable_isp_limiter == 1);
@@ -357,7 +357,8 @@ TEST_CASE("RealtimeVoiceChanger C API default POD preserves the ISP limiter",
   REQUIRE(defaults.wet_mix == neutral.wet_mix);
   REQUIRE(defaults.reverb_time_ms == neutral.reverb_time_ms);
   REQUIRE(defaults.limiter_enable_isp_limiter == neutral.limiter_enable_isp_limiter);
-  REQUIRE(sonare_realtime_voice_changer_config_default(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(defaults.struct_size == sizeof(SonareRealtimeVoiceChangerConfig));
+  sonare_realtime_voice_changer_config_init(nullptr);
 }
 
 TEST_CASE("RealtimeVoiceChanger set_config does not reallocate after prepare", "[voice_changer]") {

@@ -3,35 +3,35 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include <cmath>
-
 #include "editing/event_model/event_extractor.h"
 #include "editing/event_model/event_renderer.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
 
 using editing::event_model::PercussiveEvent;
 
-// The separation both percussive-event calls take, with every field defaulting
-// at 0 or absent (SonarePercussiveEventConfig / SonarePercussiveRenderConfig).
-// Whether the framing overlap-adds is left to the core, which rejects it on
-// both calls.
+// The separation both percussive-event calls take. An absent key keeps the core
+// default (an absent hop derives it from nFft); a given value is read literally
+// and checked as the C ABI checks it. Whether the framing overlap-adds is left to
+// the core, which rejects it on both calls.
 editing::event_model::PercussiveSeparationConfig percussiveSeparationFromVal(val options) {
   editing::event_model::PercussiveSeparationConfig separation;
-  const int n_fft = intProperty(options, "nFft", 0);
-  const int hop_length = intProperty(options, "hopLength", 0);
-  const int kernel_harmonic = intProperty(options, "hpssKernelHarmonic", 0);
-  const int kernel_percussive = intProperty(options, "hpssKernelPercussive", 0);
-  // Rejected before the sentinel promotion: a negative value must not be
-  // swallowed by the "0 keeps the default" rule that follows.
-  if (n_fft < 0 || hop_length < 0 || kernel_harmonic < 0 || kernel_percussive < 0) {
-    throw WasmRangeError("the framing and kernel sizes must be integers in [0, 2147483647]");
+  separation.n_fft = intProperty(options, "nFft", separation.n_fft);
+  separation.hop_length = intProperty(options, "hopLength", separation.hop_length);
+  separation.hpss.kernel_size_harmonic =
+      intProperty(options, "hpssKernelHarmonic", separation.hpss.kernel_size_harmonic);
+  separation.hpss.kernel_size_percussive =
+      intProperty(options, "hpssKernelPercussive", separation.hpss.kernel_size_percussive);
+  sonare::util::check::integer_at_least(separation.n_fft, 1, "nFft");
+  if (hasProperty(options, "hopLength")) {
+    sonare::util::check::integer_at_least(separation.hop_length, 1, "hopLength");
   }
-  if (n_fft != 0) separation.n_fft = n_fft;
-  if (hop_length != 0) separation.hop_length = hop_length;
-  if (kernel_harmonic != 0) separation.hpss.kernel_size_harmonic = kernel_harmonic;
-  if (kernel_percussive != 0) separation.hpss.kernel_size_percussive = kernel_percussive;
+  sonare::util::check::integer_at_least(separation.hpss.kernel_size_harmonic, 1,
+                                        "hpssKernelHarmonic");
+  sonare::util::check::integer_at_least(separation.hpss.kernel_size_percussive, 1,
+                                        "hpssKernelPercussive");
   return separation;
 }
 
@@ -82,22 +82,18 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
   editing::event_model::PercussiveEventExtractorConfig config;
   config.separation = percussiveSeparationFromVal(options);
 
-  const int onset_wait = intProperty(options, "onsetWait", 0);
-  const float onset_delta = floatProperty(options, "onsetDelta", 0.0f);
-  const float max_event_ms = floatProperty(options, "maxEventMs", 0.0f);
-  const float min_percussive_ratio = floatProperty(options, "minPercussiveRatio", 0.0f);
-  editing::event_model::check_percussive_extract_controls(onset_wait, onset_delta, max_event_ms,
-                                                          min_percussive_ratio);
   // config.onset keeps percussive_onset_defaults(), so backtracking stays on:
   // a span that opened after its own transient would report the next hit's peak
   // and leave its attack behind when muted. Only the two peak-picking knobs the
-  // C ABI exposes are overwritten.
-  if (onset_wait != 0) config.onset.wait = onset_wait;
-  if (onset_delta != 0.0f) config.onset.delta = onset_delta;
-  if (max_event_ms != 0.0f) config.max_event_ms = max_event_ms;
-  // Unlike the rest, 0 is this field's own meaning as well as its default, so
-  // it is assigned unconditionally rather than read as "leave the default".
-  config.min_percussive_ratio = min_percussive_ratio;
+  // C ABI exposes are read.
+  config.onset.wait = intProperty(options, "onsetWait", config.onset.wait);
+  config.onset.delta = floatProperty(options, "onsetDelta", config.onset.delta);
+  config.max_event_ms = floatProperty(options, "maxEventMs", config.max_event_ms);
+  config.min_percussive_ratio =
+      floatProperty(options, "minPercussiveRatio", config.min_percussive_ratio);
+  sonare::util::check::greater_than(config.max_event_ms, 0.0, "maxEventMs");
+  editing::event_model::check_percussive_extract_controls(
+      config.onset.wait, config.onset.delta, config.max_event_ms, config.min_percussive_ratio);
 
   Audio audio = loadValidatedAudio("samples", samples, rate);
   val out = val::array();
@@ -112,11 +108,8 @@ val js_render_percussive_events(val samples, const val& sample_rate, val events,
   const int rate = checkedIntFromVal(sample_rate, "sampleRate");
   editing::event_model::PercussiveEventRenderConfig config;
   config.separation = percussiveSeparationFromVal(options);
-  const float fade_ms = floatProperty(options, "fadeMs", 0.0f);
-  if (!std::isfinite(fade_ms) || fade_ms < 0.0f) {
-    throw WasmRangeError("fadeMs must be finite and at least 0");
-  }
-  if (fade_ms != 0.0f) config.fade_ms = fade_ms;
+  config.fade_ms = floatProperty(options, "fadeMs", config.fade_ms);
+  sonare::util::check::greater_than(config.fade_ms, 0.0, "fadeMs");
 
   const std::size_t count = wasmArrayLikeLength(events, "events");
   std::vector<PercussiveEvent> core_events;

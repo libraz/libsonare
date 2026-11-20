@@ -166,8 +166,9 @@ def test_the_scale_helpers_take_scale_reference_midi(fn: Callable[..., float]) -
     assert fn(0, mask, 60.4, scale_reference_midi=None) == absent
     assert fn(0, mask, 60.4, scale_reference_midi=69.0) == absent
     assert fn(0, mask, 60.4, scale_reference_midi=69.5) != absent
+    assert fn(0, mask, 60.4, scale_reference_midi=0.0) == absent
     with pytest.raises(SonareValueError, match="scale_reference_midi"):
-        fn(0, mask, 60.4, scale_reference_midi=0.0)
+        fn(0, mask, 60.4, scale_reference_midi=-1.0)
     with pytest.raises(TypeError):
         fn(0, mask, 60.4, reference_midi=69.5)
     assert math.isfinite(absent)

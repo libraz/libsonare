@@ -81,13 +81,15 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sampleRate");
 
   // Build config (optional fourth argument).
-  SonareSpectralEditConfig config{};  // zero-init = all defaults
+  SonareSpectralEditConfig config;
+  sonare_spectral_edit_config_init(&config);
   const SonareSpectralEditConfig* config_ptr = nullptr;
   if (info.Length() >= 4 && info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
-    config.n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
-    config.hop_length = IntProperty(opts, "hopLength", kZeroIsSentinel);
-    config.heal_radius_frames = IntProperty(opts, "healRadiusFrames", kZeroIsSentinel);
+    config.n_fft = IntProperty(opts, "nFft", config.n_fft);
+    config.hop_length = IntInRangeOrAbsentProperty(
+        opts, "hopLength", 1, std::numeric_limits<int>::max(), config.hop_length);
+    config.heal_radius_frames = IntProperty(opts, "healRadiusFrames", config.heal_radius_frames);
 
     // Optional window, by name or by ordinal.
     Napi::Value win_val = opts.Get("window");
@@ -107,6 +109,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
       throw Napi::TypeError::New(env, "each op must be a plain object");
     }
     Napi::Object op = item.As<Napi::Object>();
+    sonare_spectral_region_op_init(&ops[i]);
     // Every field in this bag now refuses a wrong-typed value by name, matching
     // nFft/hopLength/healRadiusFrames in the config object above. The WASM
     // binding reads every one of them through int64Property/floatProperty,
@@ -115,8 +118,8 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
     ops[i].start_sample = Int64Property(op, "startSample", 0);
     ops[i].end_sample = Int64Property(op, "endSample", static_cast<int64_t>(length));
     ops[i].low_hz = FloatProperty(op, "lowHz", 0.0f);
-    ops[i].high_hz = FloatProperty(op, "highHz", 0.0f);
-    ops[i].gain_db = FloatProperty(op, "gainDb", 0.0f);
+    ops[i].high_hz = FiniteFloatProperty(op, "highHz", ops[i].high_hz);
+    ops[i].gain_db = FloatProperty(op, "gainDb", ops[i].gain_db);
 
     // Resolve mode: required string field.
     Napi::Value mode_val = op.Get("mode");
@@ -132,7 +135,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   SonareError err = sonare_spectral_edit(
       data, length, sr, config_ptr, n_ops > 0 ? ops.data() : nullptr, n_ops, &out, &out_length);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err);
+    sonare_node::ThrowSonareErrorFlattening(env, err, "config");
     return env.Undefined();
   }
 

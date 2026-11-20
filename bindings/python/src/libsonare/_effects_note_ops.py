@@ -10,7 +10,6 @@ from typing import Literal, cast
 import numpy as np
 
 from ._effects_note_model import (
-    _NOTE_STRUCT_VERSION,
     NoteObject,
     PitchDecompositionResult,
     TranscribeResult,
@@ -392,11 +391,7 @@ def render_notes(
     elif voiced is not None:
         _optional_note_voiced(voiced, f0_supplied=False, n_frames=0)
 
-    config = SonareNoteRenderConfig(
-        _NOTE_STRUCT_VERSION,
-        0.0 if fade_ms is None else fade_ms,
-        0.0 if vibrato_cutoff_hz is None else vibrato_cutoff_hz,
-    )
+    config = SonareNoteRenderConfig._given(fade_ms=fade_ms, vibrato_cutoff_hz=vibrato_cutoff_hz)
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_render_notes(
@@ -929,10 +924,7 @@ def assign_note_targets(
     lib = _get_lib()
 
     policy = _unmatched_policy_value(unmatched_policy)
-    # Seeded from the C ABI rather than from literals here, because 0 is a legal
-    # value for both floats and so cannot double as the unset sentinel.
     config = SonareNoteTargetAssignConfig()
-    _check(lib.sonare_note_target_assign_config_default(ctypes.byref(config)))
     config.unmatched_policy = policy
     if min_overlap_ratio is not None:
         config.min_overlap_ratio = _validate_scalar(min_overlap_ratio, "min_overlap_ratio")

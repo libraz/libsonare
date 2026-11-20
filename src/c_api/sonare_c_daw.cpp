@@ -70,24 +70,25 @@ void check_note_region(int onset_sample, int offset_sample, size_t length) {
   }
 }
 
-/// Resolves a versioned percussive-event config onto the core defaults. Every
-/// field takes its default at 0, matching the note-object configs.
+/// Checks the separation framing of a percussive config and copies it onto the core one.
 SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
                                           int32_t kernel_harmonic, int32_t kernel_percussive,
                                           editing::event_model::PercussiveSeparationConfig& out) {
   if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(n_fft, 0, "config.n_fft");
-        util::check::integer_at_least(hop_length, 0, "config.hop_length");
-        util::check::integer_at_least(kernel_harmonic, 0, "config.hpss_kernel_harmonic");
-        util::check::integer_at_least(kernel_percussive, 0, "config.hpss_kernel_percussive");
+        util::check::integer_at_least(n_fft, 1, "config.n_fft");
+        if (hop_length != SONARE_STFT_HOP_AUTO) {
+          util::check::integer_at_least(hop_length, 1, "config.hop_length");
+        }
+        util::check::integer_at_least(kernel_harmonic, 1, "config.hpss_kernel_harmonic");
+        util::check::integer_at_least(kernel_percussive, 1, "config.hpss_kernel_percussive");
       });
       err != SONARE_OK) {
     return err;
   }
-  if (n_fft != 0) out.n_fft = n_fft;
-  if (hop_length != 0) out.hop_length = hop_length;
-  if (kernel_harmonic != 0) out.hpss.kernel_size_harmonic = kernel_harmonic;
-  if (kernel_percussive != 0) out.hpss.kernel_size_percussive = kernel_percussive;
+  out.n_fft = n_fft;
+  out.hop_length = hop_length == SONARE_STFT_HOP_AUTO ? 0 : hop_length;
+  out.hpss.kernel_size_harmonic = kernel_harmonic;
+  out.hpss.kernel_size_percussive = kernel_percussive;
   return SONARE_OK;
 }
 
@@ -162,6 +163,8 @@ SonareError check_timevarying_args(const float* f0_hz, size_t n_frames, int hop_
 /// copies them (and the scale reference) onto the core config. Throws the refusal.
 void apply_correction_knobs(const SonarePitchCorrectionConfig& config,
                             editing::pitch_editor::PitchCorrectionConfig& core_config) {
+  require_struct_size(config.struct_size, sizeof(SonarePitchCorrectionConfig), "config",
+                      "sonare_pitch_correction_config_init");
   util::check::finite_float(config.scale_reference_midi, "config.scale_reference_midi");
   util::check::in_range(config.retune_amount, 0.0, 1.0, "config.retune_amount");
   util::check::at_least(config.max_correction_semitones, 0.0, "config.max_correction_semitones");
@@ -192,28 +195,26 @@ editing::pitch_editor::F0Track build_pitch_track(const float* f0_hz, const float
   return track;
 }
 
-/// Resolves a versioned note-extractor config onto the core defaults. Every
-/// float takes its default at 0, matching sonare_note_segments.
+/// Checks a note-extractor config and copies it onto the core one; NULL keeps the core defaults.
 SonareError resolve_extractor_config(const SonareNoteExtractorConfig* config,
                                      editing::note_model::NoteExtractorConfig& out) {
   if (config == nullptr) return SONARE_OK;
   if (const SonareError err = run_validation([&] {
-        util::check::integer_in_range(config->struct_version, 0, 1, "config.struct_version");
-        util::check::at_least(config->segmentation_threshold_cents, 0.0,
-                              "config.segmentation_threshold_cents");
+        require_struct_size(config->struct_size, sizeof(SonareNoteExtractorConfig), "config",
+                            "sonare_note_extractor_config_init");
+        util::check::greater_than(config->segmentation_threshold_cents, 0.0,
+                                  "config.segmentation_threshold_cents");
         util::check::at_least(config->min_note_ms, 0.0, "config.min_note_ms");
-        util::check::at_least(config->reference_hz, 0.0, "config.reference_hz");
+        util::check::greater_than(config->reference_hz, 0.0, "config.reference_hz");
         util::check::in_range(config->voiced_threshold, 0.0, 1.0, "config.voiced_threshold");
       });
       err != SONARE_OK) {
     return err;
   }
-  if (config->segmentation_threshold_cents > 0.0f) {
-    out.segmenter.segmentation_threshold_cents = config->segmentation_threshold_cents;
-  }
-  if (config->min_note_ms > 0.0f) out.segmenter.min_note_ms = config->min_note_ms;
-  if (config->reference_hz > 0.0f) out.segmenter.reference_hz = config->reference_hz;
-  if (config->voiced_threshold > 0.0f) out.voiced_threshold = config->voiced_threshold;
+  out.segmenter.segmentation_threshold_cents = config->segmentation_threshold_cents;
+  out.segmenter.min_note_ms = config->min_note_ms;
+  out.segmenter.reference_hz = config->reference_hz;
+  out.voiced_threshold = config->voiced_threshold;
   return SONARE_OK;
 }
 
@@ -313,11 +314,20 @@ SonareError read_envelope(const SonareNoteEdit& edit, const std::string& edit_su
 SonareError to_core_edit(const SonareNoteEdit& edit, const std::string& edit_subject,
                          const float* envelopes, size_t envelope_count,
                          editing::note_model::NoteEdit& out) {
+  if (const SonareError err = run_validation([&] {
+        require_struct_size(edit.struct_size, sizeof(SonareNoteEdit),
+                            edit_subject.substr(0, edit_subject.size() - 1),
+                            "sonare_note_edit_init");
+        util::check::greater_than(edit.time_stretch_ratio, 0.0,
+                                  (edit_subject + "time_stretch_ratio").c_str());
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   out.time_offset_samples = edit.time_offset_samples;
   out.pitch_shift_semitones = edit.pitch_semitones;
   out.gain_db = edit.gain_db;
-  // A zeroed SonareNoteEdit must be the identity, so 0 reads as 1 here.
-  out.time_stretch_ratio = edit.time_stretch_ratio == 0.0f ? 1.0f : edit.time_stretch_ratio;
+  out.time_stretch_ratio = edit.time_stretch_ratio;
   out.formant_shift_semitones = edit.formant_semitones;
   out.vibrato_depth_change = edit.vibrato_depth_change;
   out.drift_change = edit.drift_change;
@@ -328,6 +338,7 @@ SonareError to_core_edit(const SonareNoteEdit& edit, const std::string& edit_sub
 /// Marshals a core edit back out, pointing it at its slice of the result's pool.
 void from_core_edit(const editing::note_model::NoteEdit& edit, int64_t envelope_offset,
                     SonareNoteEdit& out) {
+  sonare_note_edit_init(&out);
   out.time_offset_samples = edit.time_offset_samples;
   out.envelope_offset = envelope_offset;
   out.envelope_count = edit.amplitude_envelope.size();
@@ -476,12 +487,18 @@ static_assert(static_cast<int>(editing::note_model::UnmatchedTargetPolicy::Neare
                   SONARE_NOTE_TARGET_UNMATCHED_NEAREST,
               "UnmatchedTargetPolicy::Nearest must match its C ordinal");
 
-/// Resolves a note-target assign config onto the core defaults. Unlike the
-/// note-extractor configs, 0 is a legal value for both floats, so a non-NULL
-/// config is taken field by field rather than read as "0 means default".
+/// Checks a note-target assign config and copies it onto the core one; NULL keeps the core
+/// defaults. Both floats are taken literally: 0 is a legal value for each.
 SonareError resolve_note_target_config(const SonareNoteTargetAssignConfig* config,
                                        editing::note_model::NoteTargetAssignConfig& out) {
   if (config == nullptr) return SONARE_OK;
+  if (const SonareError err = run_validation([&] {
+        require_struct_size(config->struct_size, sizeof(SonareNoteTargetAssignConfig), "config",
+                            "sonare_note_target_assign_config_init");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   editing::note_model::UnmatchedTargetPolicy policy{};
   if (!ordinal_to_enum(config->unmatched_policy, SONARE_NOTE_TARGET_UNMATCHED_LEAVE,
                        SONARE_NOTE_TARGET_UNMATCHED_NEAREST, &policy)) {
@@ -576,10 +593,11 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
 #endif
 }
 
-SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* config) {
-  SONARE_C_API_ENTRY;
+void sonare_pitch_correction_config_init(SonarePitchCorrectionConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  SONARE_C_REQUIRE_NONNULL(config);
   const editing::pitch_editor::PitchCorrectionConfig defaults{};
   config->target_mode = SONARE_PITCH_TARGET_FIXED_MIDI;
   config->target_midi = constants::kMidiA4;
@@ -590,10 +608,6 @@ SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* 
   config->max_correction_semitones = defaults.max_correction_semitones;
   config->retune_speed_ms = defaults.retune_speed_ms;
   config->vibrato_threshold_cents = defaults.vibrato_threshold_cents;
-  return SONARE_OK;
-#else
-  if (config) *config = {};
-  SONARE_C_STUB_NOT_SUPPORTED(config);
 #endif
 }
 
@@ -621,6 +635,8 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
   if (config) {
     scale_mode = config->target_mode == SONARE_PITCH_TARGET_SCALE;
     if (const SonareError err = run_validation([&] {
+          require_struct_size(config->struct_size, sizeof(SonarePitchCorrectionConfig), "config",
+                              "sonare_pitch_correction_config_init");
           util::check::one_of(
               config->target_mode,
               std::array<int, 2>{SONARE_PITCH_TARGET_FIXED_MIDI, SONARE_PITCH_TARGET_SCALE},
@@ -1023,18 +1039,15 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
   SONARE_C_CATCH
 }
 
-SonareError sonare_note_target_assign_config_default(SonareNoteTargetAssignConfig* config) {
-  SONARE_C_API_ENTRY;
+void sonare_note_target_assign_config_init(SonareNoteTargetAssignConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  SONARE_C_REQUIRE_NONNULL(config);
   const editing::note_model::NoteTargetAssignConfig defaults{};
   config->unmatched_policy = static_cast<int32_t>(defaults.unmatched_policy);
   config->min_overlap_ratio = defaults.min_overlap_ratio;
   config->max_correction_semitones = defaults.max_correction_semitones;
-  return SONARE_OK;
-#else
-  if (config) *config = {};
-  SONARE_C_STUB_NOT_SUPPORTED(config);
 #endif
 }
 
@@ -1118,6 +1131,13 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
   // untouched -- which is what editing in place has to mean here.
   std::vector<editing::note_model::NoteObject> core_notes(note_count);
   for (size_t i = 0; i < note_count; ++i) {
+    if (const SonareError err = run_validation([&] {
+          require_struct_size(notes[i].edit.struct_size, sizeof(SonareNoteEdit),
+                              "notes[" + std::to_string(i) + "].edit", "sonare_note_edit_init");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
     core_notes[i].onset_sample = notes[i].onset_sample;
     core_notes[i].offset_sample = notes[i].offset_sample;
     core_notes[i].median_hz = notes[i].median_hz;
@@ -1140,6 +1160,64 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
 #endif
 }
 
+void sonare_percussive_event_config_init(SonarePercussiveEventConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  const editing::event_model::PercussiveEventExtractorConfig defaults;
+  config->n_fft = defaults.separation.n_fft;
+  config->hop_length = SONARE_STFT_HOP_AUTO;
+  config->hpss_kernel_harmonic = defaults.separation.hpss.kernel_size_harmonic;
+  config->hpss_kernel_percussive = defaults.separation.hpss.kernel_size_percussive;
+  config->onset_wait = defaults.onset.wait;
+  config->onset_delta = defaults.onset.delta;
+  config->max_event_ms = defaults.max_event_ms;
+  config->min_percussive_ratio = defaults.min_percussive_ratio;
+}
+
+void sonare_percussive_render_config_init(SonarePercussiveRenderConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  const editing::event_model::PercussiveEventRenderConfig defaults;
+  config->n_fft = defaults.separation.n_fft;
+  config->hop_length = SONARE_STFT_HOP_AUTO;
+  config->hpss_kernel_harmonic = defaults.separation.hpss.kernel_size_harmonic;
+  config->hpss_kernel_percussive = defaults.separation.hpss.kernel_size_percussive;
+  config->fade_ms = defaults.fade_ms;
+}
+
+void sonare_note_edit_init(SonareNoteEdit* edit) {
+  if (edit == nullptr) return;
+  *edit = {};
+  edit->struct_size = sizeof(*edit);
+  edit->time_stretch_ratio = 1.0f;
+}
+
+void sonare_note_extractor_config_init(SonareNoteExtractorConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  const editing::note_model::NoteExtractorConfig defaults;
+  config->segmentation_threshold_cents = defaults.segmenter.segmentation_threshold_cents;
+  config->min_note_ms = defaults.segmenter.min_note_ms;
+  config->reference_hz = defaults.segmenter.reference_hz;
+  config->voiced_threshold = defaults.voiced_threshold;
+#endif
+}
+
+void sonare_note_render_config_init(SonareNoteRenderConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  const editing::note_model::NoteRenderConfig defaults;
+  config->fade_ms = defaults.fade_ms;
+  config->vibrato_cutoff_hz = defaults.decomposition.vibrato_cutoff_hz;
+#endif
+}
+
 SonareError sonare_extract_percussive_events(const float* samples, size_t length, int sample_rate,
                                              const SonarePercussiveEventConfig* config,
                                              SonarePercussiveEventsResult* out) {
@@ -1150,7 +1228,8 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
   editing::event_model::PercussiveEventExtractorConfig extractor_config;
   if (config != nullptr) {
     if (const SonareError err = run_validation([&] {
-          util::check::integer_in_range(config->struct_version, 0, 1, "config.struct_version");
+          require_struct_size(config->struct_size, sizeof(SonarePercussiveEventConfig), "config",
+                              "sonare_percussive_event_config_init");
         });
         err != SONARE_OK) {
       return err;
@@ -1161,6 +1240,7 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
     if (separation_error != SONARE_OK) return separation_error;
 
     if (const SonareError err = run_validation([&] {
+          util::check::greater_than(config->max_event_ms, 0.0, "config.max_event_ms");
           editing::event_model::check_percussive_extract_controls(
               config->onset_wait, config->onset_delta, config->max_event_ms,
               config->min_percussive_ratio);
@@ -1168,11 +1248,9 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
         err != SONARE_OK) {
       return err;
     }
-    if (config->onset_wait != 0) extractor_config.onset.wait = config->onset_wait;
-    if (config->onset_delta != 0.0f) extractor_config.onset.delta = config->onset_delta;
-    if (config->max_event_ms != 0.0f) extractor_config.max_event_ms = config->max_event_ms;
-    // Unlike the rest, 0 is this field's own meaning as well as its default, so
-    // it is assigned unconditionally rather than read as "leave the default".
+    extractor_config.onset.wait = config->onset_wait;
+    extractor_config.onset.delta = config->onset_delta;
+    extractor_config.max_event_ms = config->max_event_ms;
     extractor_config.min_percussive_ratio = config->min_percussive_ratio;
   }
 
@@ -1205,7 +1283,8 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
   editing::event_model::PercussiveEventRenderConfig render_config;
   if (config != nullptr) {
     if (const SonareError err = run_validation([&] {
-          util::check::integer_in_range(config->struct_version, 0, 1, "config.struct_version");
+          require_struct_size(config->struct_size, sizeof(SonarePercussiveRenderConfig), "config",
+                              "sonare_percussive_render_config_init");
         });
         err != SONARE_OK) {
       return err;
@@ -1215,12 +1294,12 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
         config->hpss_kernel_percussive, render_config.separation);
     if (separation_error != SONARE_OK) return separation_error;
 
-    if (const SonareError err =
-            run_validation([&] { util::check::at_least(config->fade_ms, 0.0, "config.fade_ms"); });
+    if (const SonareError err = run_validation(
+            [&] { util::check::greater_than(config->fade_ms, 0.0, "config.fade_ms"); });
         err != SONARE_OK) {
       return err;
     }
-    if (config->fade_ms != 0.0f) render_config.fade_ms = config->fade_ms;
+    render_config.fade_ms = config->fade_ms;
   }
 
   std::vector<editing::event_model::PercussiveEvent> core_events(count);

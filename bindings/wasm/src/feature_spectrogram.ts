@@ -318,9 +318,9 @@ export function biquadFilter(request: BiquadFilterRequest): Float32Array {
       BIQUAD_FILTER_TYPES.indexOf(r.type),
       r.order ?? 2,
       optionalBoolean(r.zeroPhase, 'zeroPhase', false),
-      r.cutoffHz ?? 0,
-      r.centerHz ?? 0,
-      r.bandwidthHz ?? 0,
+      r.cutoffHz,
+      r.centerHz,
+      r.bandwidthHz,
     );
   });
 }

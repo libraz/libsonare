@@ -37,8 +37,8 @@ TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
   const std::vector<float> voiced = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
                                      1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f};
   SonareNoteSegmentsResult out{};
-  SonareNoteSegmenterConfig config{};
-  config.struct_version = 1;
+  SonareNoteSegmenterConfig config;
+  sonare_note_segmenter_config_init(&config);
 
   REQUIRE(sonare_note_segments(f0.data(), voiced.data(), nullptr, f0.size(), 100.0f, &config,
                                &out) == SONARE_OK);
@@ -96,8 +96,8 @@ TEST_CASE("sonare_note_segments reads voiced flags as 0/1 probabilities", "[c_ap
                                  660.0f, 666.0f, 654.0f, 665.0f, 655.0f, 0.0f};
   const std::vector<int32_t> flags = {1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0};
   const std::vector<float> probabilities(flags.begin(), flags.end());
-  SonareNoteSegmenterConfig config{};
-  config.struct_version = 1;
+  SonareNoteSegmenterConfig config;
+  sonare_note_segmenter_config_init(&config);
 
   SonareNoteSegmentsResult from_flags{};
   SonareNoteSegmentsResult from_probabilities{};
@@ -122,8 +122,8 @@ TEST_CASE("sonare_note_segments treats an oversized finite duration as empty",
           "[c_api][features]") {
   const std::vector<float> f0 = {440.0f, 440.0f, 440.0f};
   const std::vector<float> voiced = {1.0f, 1.0f, 1.0f};
-  SonareNoteSegmenterConfig config{};
-  config.struct_version = 1;
+  SonareNoteSegmenterConfig config;
+  sonare_note_segmenter_config_init(&config);
   config.min_note_ms = std::numeric_limits<float>::max();
 
   SonareNoteSegmentsResult out;
@@ -139,8 +139,8 @@ TEST_CASE("sonare_note_segments rejects invalid timing controls and clears outpu
           "[c_api][features]") {
   const std::vector<float> f0 = {440.0f, 440.0f};
   const std::vector<float> voiced = {1.0f, 1.0f};
-  SonareNoteSegmenterConfig config{};
-  config.struct_version = 1;
+  SonareNoteSegmenterConfig config;
+  sonare_note_segmenter_config_init(&config);
   SonareNoteSegmentsResult out{};
 
   const float negative_neighbor = std::nextafter(0.0f, -1.0f);
@@ -156,7 +156,7 @@ TEST_CASE("sonare_note_segments rejects invalid timing controls and clears outpu
     REQUIRE(out.count == 0);
   }
   for (const float bad_min_note_ms : {negative_neighbor, nan}) {
-    config.segmentation_threshold_cents = 0.0f;
+    config.segmentation_threshold_cents = 50.0f;
     config.min_note_ms = bad_min_note_ms;
     out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
     out.count = 7;
@@ -165,6 +165,23 @@ TEST_CASE("sonare_note_segments rejects invalid timing controls and clears outpu
     REQUIRE(out.segments == nullptr);
     REQUIRE(out.count == 0);
   }
+
+  // 0 is not a segmentation threshold or a reference pitch, and a zeroed struct was never
+  // started from its init function.
+  for (const int field : {0, 1}) {
+    sonare_note_segmenter_config_init(&config);
+    (field == 0 ? config.segmentation_threshold_cents : config.reference_hz) = 0.0f;
+    REQUIRE(sonare_note_segments(f0.data(), voiced.data(), nullptr, f0.size(), 100.0f, &config,
+                                 &out) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message())
+              .find(field == 0 ? "config.segmentation_threshold_cents" : "config.reference_hz") ==
+          0);
+  }
+  SonareNoteSegmenterConfig zeroed{};
+  REQUIRE(sonare_note_segments(f0.data(), voiced.data(), nullptr, f0.size(), 100.0f, &zeroed,
+                               &out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "config.struct_size must be set by sonare_note_segmenter_config_init");
 }
 
 TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {

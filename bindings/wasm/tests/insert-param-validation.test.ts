@@ -34,13 +34,20 @@ describe('insert param validation (WASM)', () => {
   });
 
   it('flags a bound the processor itself rejects as exclusive', () => {
+    const q = masteringInsertParamInfo({ insert: 'eq.parametric' }).find(
+      (d) => d.name === 'band0.q',
+    );
+    expect(q?.min).toBe(0);
+    expect(typeof q?.minExclusive).toBe('boolean');
+    expect(q?.minExclusive).toBe(true);
+    expect(q?.maxExclusive).toBe(false);
+    expect(q).not.toHaveProperty('maxRelativeTo');
+    // Control: a corner whose 0 means off keeps an inclusive floor.
     const hpf = masteringInsertParamInfo({ insert: 'dynamics.compressor' }).find(
       (d) => d.name === 'sidechainHighPassHz',
     );
     expect(hpf?.min).toBe(0);
-    expect(typeof hpf?.minExclusive).toBe('boolean');
-    expect(hpf?.minExclusive).toBe(true);
-    expect(hpf).not.toHaveProperty('maxRelativeTo');
+    expect(hpf?.minExclusive).toBe(false);
     const frequency = masteringInsertParamInfo({ insert: 'eq.parametric' }).find(
       (d) => d.name === 'band0.frequencyHz',
     );

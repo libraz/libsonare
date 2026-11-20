@@ -901,16 +901,15 @@ SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
                                                 const SonareMixerMasterMeterConfig* config) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(mixer);
+  SONARE_C_TRY
   SonareMixerMasterMeterConfig resolved{};
   if (config == nullptr) {
     sonare_mixer_master_meter_config_init(&resolved);
   } else {
-    if (!sonare_c_detail::struct_size_accepted(config->struct_size, sizeof(*config), "config")) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    sonare_c_detail::require_struct_size(config->struct_size, sizeof(*config), "config",
+                                         "sonare_mixer_master_meter_config_init");
     resolved = *config;
   }
-  SONARE_C_TRY
   if (resolved.enabled == 0) {
     mixer->master_meter_active = false;
     return SONARE_OK;

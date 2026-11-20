@@ -128,20 +128,19 @@ TEST_CASE("the percussive entries refuse their arguments by name", "[c_api][engi
 
   SonarePercussiveEventsResult result{};
   SonarePercussiveEventConfig config{};
-  config.struct_version = 2;
   CHECK(sonare_extract_percussive_events(samples.data(), kLength, kRate, &config, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.struct_version must be an integer in [0, 1]");
-  config.struct_version = 0;
-  config.n_fft = -1;
-  CHECK(sonare_extract_percussive_events(samples.data(), kLength, kRate, &config, &result) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.n_fft must be an integer in [0, 2147483647]");
+  CHECK(last_message() == "config.struct_size must be set by sonare_percussive_event_config_init");
+  sonare_percussive_event_config_init(&config);
   config.n_fft = 0;
-  config.hpss_kernel_harmonic = -1;
   CHECK(sonare_extract_percussive_events(samples.data(), kLength, kRate, &config, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.hpss_kernel_harmonic must be an integer in [0, 2147483647]");
+  CHECK(last_message() == "config.n_fft must be an integer in [1, 2147483647]");
+  sonare_percussive_event_config_init(&config);
+  config.hpss_kernel_harmonic = 0;
+  CHECK(sonare_extract_percussive_events(samples.data(), kLength, kRate, &config, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.hpss_kernel_harmonic must be an integer in [1, 2147483647]");
 
   float* out = nullptr;
   size_t out_length = 0;
@@ -153,15 +152,19 @@ TEST_CASE("the percussive entries refuse their arguments by name", "[c_api][engi
   CHECK(last_message() == "out must not be NULL");
 
   SonarePercussiveRenderConfig render_config{};
-  render_config.fade_ms = -1.0f;
   CHECK(sonare_render_percussive_events(samples.data(), kLength, kRate, nullptr, 0, &render_config,
                                         &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.fade_ms must be finite and at least 0");
+  CHECK(last_message() == "config.struct_size must be set by sonare_percussive_render_config_init");
+  sonare_percussive_render_config_init(&render_config);
   render_config.fade_ms = 0.0f;
-  render_config.hpss_kernel_percussive = -1;
   CHECK(sonare_render_percussive_events(samples.data(), kLength, kRate, nullptr, 0, &render_config,
                                         &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.hpss_kernel_percussive must be an integer in [0, 2147483647]");
+  CHECK(last_message() == "config.fade_ms must be finite and greater than 0");
+  render_config.fade_ms = 5.0f;
+  render_config.hpss_kernel_percussive = 0;
+  CHECK(sonare_render_percussive_events(samples.data(), kLength, kRate, nullptr, 0, &render_config,
+                                        &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.hpss_kernel_percussive must be an integer in [1, 2147483647]");
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -219,16 +222,17 @@ TEST_CASE("the time-varying correction entries refuse the track arguments by nam
 }
 
 TEST_CASE("the correction config is refused member by member", "[c_api][engine_refusal]") {
-  CHECK(sonare_pitch_correction_config_default(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config must not be NULL");
+  sonare_pitch_correction_config_init(nullptr);
 
   const std::vector<float> samples = make_samples();
   std::vector<float> f0(kFrames, 220.0f);
   std::vector<float> prob(kFrames, 0.9f);
   float* out = nullptr;
   size_t out_length = 0;
-  SonarePitchCorrectionConfig config{};
-  REQUIRE(sonare_pitch_correction_config_default(&config) == SONARE_OK);
+  SonarePitchCorrectionConfig config;
+  sonare_pitch_correction_config_init(&config);
+  CHECK(config.struct_size == sizeof(SonarePitchCorrectionConfig));
+  CHECK(config.scale_reference_midi == 69.0f);
 
   auto run = [&](const SonarePitchCorrectionConfig& c) {
     return sonare_pitch_correct_timevarying(samples.data(), kLength, kRate, f0.data(), prob.data(),
@@ -240,7 +244,16 @@ TEST_CASE("the correction config is refused member by member", "[c_api][engine_r
                                          &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "f0_hz must not be NULL");
 
-  SonarePitchCorrectionConfig bad = config;
+  SonarePitchCorrectionConfig bad{};
+  CHECK(run(bad) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.struct_size must be set by sonare_pitch_correction_config_init");
+
+  bad = config;
+  bad.scale_reference_midi = 0.0f;
+  bad.target_mode = SONARE_PITCH_TARGET_SCALE;
+  CHECK(run(bad) == SONARE_OK);
+
+  bad = config;
   bad.target_mode = 5;
   CHECK(run(bad) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.target_mode must be one of 0, 1");
@@ -315,8 +328,8 @@ TEST_CASE("sonare_auto_tune refuses its key, config and outputs by name",
                          &out_key) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "key.mode must name a declared value");
 
-  SonarePitchCorrectionConfig config{};
-  REQUIRE(sonare_pitch_correction_config_default(&config) == SONARE_OK);
+  SonarePitchCorrectionConfig config;
+  sonare_pitch_correction_config_init(&config);
   config.retune_speed_ms = -1.0f;
   CHECK(sonare_auto_tune(samples.data(), kLength, kRate, nullptr, &config, &out, &out_length,
                          &out_key) == SONARE_ERROR_INVALID_PARAMETER);
@@ -352,26 +365,25 @@ TEST_CASE("the note extraction entries refuse the track and config by name",
   CHECK(last_message() == "voiced_prob must be finite and in [0, 1]");
 
   SonareNoteExtractorConfig config{};
-  config.struct_version = 2;
   CHECK(sonare_extract_notes(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
                              kFrames, 100.0f, &config, &result) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.struct_version must be an integer in [0, 1]");
-  config.struct_version = 0;
-  config.segmentation_threshold_cents = -1.0f;
-  CHECK(sonare_extract_notes(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
-                             kFrames, 100.0f, &config, &result) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.segmentation_threshold_cents must be finite and at least 0");
+  CHECK(last_message() == "config.struct_size must be set by sonare_note_extractor_config_init");
+  sonare_note_extractor_config_init(&config);
   config.segmentation_threshold_cents = 0.0f;
+  CHECK(sonare_extract_notes(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
+                             kFrames, 100.0f, &config, &result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.segmentation_threshold_cents must be finite and greater than 0");
+  config.segmentation_threshold_cents = 50.0f;
   config.min_note_ms = -1.0f;
   CHECK(sonare_extract_notes(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
                              kFrames, 100.0f, &config, &result) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.min_note_ms must be finite and at least 0");
-  config.min_note_ms = 0.0f;
-  config.reference_hz = -1.0f;
+  config.min_note_ms = 30.0f;
+  config.reference_hz = 0.0f;
   CHECK(sonare_extract_notes(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
                              kFrames, 100.0f, &config, &result) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.reference_hz must be finite and at least 0");
-  config.reference_hz = 0.0f;
+  CHECK(last_message() == "config.reference_hz must be finite and greater than 0");
+  config.reference_hz = 440.0f;
   config.voiced_threshold = 2.0f;
   CHECK(sonare_extract_notes(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
                              kFrames, 100.0f, &config, &result) == SONARE_ERROR_INVALID_PARAMETER);
@@ -385,6 +397,7 @@ TEST_CASE("split and merge refuse their indices, notes and edits by name",
   std::vector<int32_t> voiced(kFrames, 1);
   SonareNoteObjectsResult result{};
   SonareNoteObject note{};
+  sonare_note_edit_init(&note.edit);
   note.frame_start = 0;
   note.frame_end = 8;
 
@@ -446,6 +459,7 @@ TEST_CASE("sonare_render_notes refuses its notes and track by name", "[c_api][en
   float* out = nullptr;
   size_t out_length = 0;
   SonareNoteObject note{};
+  sonare_note_edit_init(&note.edit);
   note.onset_sample = 0;
   note.offset_sample = 1000;
 
@@ -503,12 +517,12 @@ TEST_CASE("sonare_decompose_note_pitch refuses its arguments by name", "[c_api][
 }
 
 TEST_CASE("the note-target entries refuse their arguments by name", "[c_api][engine_refusal]") {
-  CHECK(sonare_note_target_assign_config_default(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config must not be NULL");
+  sonare_note_target_assign_config_init(nullptr);
 
-  SonareNoteTargetAssignConfig config{};
-  REQUIRE(sonare_note_target_assign_config_default(&config) == SONARE_OK);
+  SonareNoteTargetAssignConfig config;
+  sonare_note_target_assign_config_init(&config);
   SonareNoteObject note{};
+  sonare_note_edit_init(&note.edit);
   SonareNoteTarget target{0.0, 1.0, 60.0f};
   size_t assigned = 0;
 
@@ -525,7 +539,12 @@ TEST_CASE("the note-target entries refuse their arguments by name", "[c_api][eng
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "targets must not be NULL when target_count is not 0");
 
-  SonareNoteTargetAssignConfig bad = config;
+  SonareNoteTargetAssignConfig bad{};
+  CHECK(sonare_assign_note_targets(&note, 1, kRate, &target, 1, &bad, &assigned) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "config.struct_size must be set by sonare_note_target_assign_config_init");
+  bad = config;
   bad.unmatched_policy = 7;
   CHECK(sonare_assign_note_targets(&note, 1, kRate, &target, 1, &bad, &assigned) ==
         SONARE_ERROR_INVALID_PARAMETER);

@@ -17,7 +17,7 @@ namespace {
 /// Reads the analysis configuration, which may be absent.
 ///
 /// The engine/project-struct reader family rather than the options-bag one: every
-/// field here is range-checked downstream -- by the C ABI for the struct version
+/// field here is range-checked downstream -- by the C ABI for the struct size
 /// and by the core for each value -- so a wrong-typed value is refused instead of
 /// falling back to the default, which would otherwise analyse at a framing the
 /// caller never asked for and report success.
@@ -37,7 +37,8 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
 
   out->n_fft = IntProperty(opts, "nFft", out->n_fft);
   out->hop_length = IntProperty(opts, "hopLength", out->hop_length);
-  out->win_length = IntProperty(opts, "winLength", out->win_length);
+  out->win_length = IntInRangeOrAbsentProperty(opts, "winLength", 1,
+                                               std::numeric_limits<int>::max(), out->win_length);
 
   out->cent_ref_hz = FloatProperty(opts, "centRefHz", out->cent_ref_hz);
   out->cents_per_bin = FloatProperty(opts, "centsPerBin", out->cents_per_bin);
@@ -79,14 +80,14 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
       FloatProperty(opts, "minPartialSeparation", out->min_partial_separation);
   out->max_fit_residual = FloatProperty(opts, "maxFitResidual", out->max_fit_residual);
   out->max_weight_modulus = FloatProperty(opts, "maxWeightModulus", out->max_weight_modulus);
-  out->max_refine_hz = FloatProperty(opts, "maxRefineHz", out->max_refine_hz);
+  out->max_refine_hz = FiniteFloatProperty(opts, "maxRefineHz", out->max_refine_hz);
   out->f0_tolerance_cents = FloatProperty(opts, "f0ToleranceCents", out->f0_tolerance_cents);
 
   out->segmentation_threshold_cents =
       FloatProperty(opts, "segmentationThresholdCents", out->segmentation_threshold_cents);
   out->min_note_ms = FloatProperty(opts, "minNoteMs", out->min_note_ms);
   out->reference_hz = FloatProperty(opts, "referenceHz", out->reference_hz);
-  out->reattack_ratio = FloatProperty(opts, "reattackRatio", out->reattack_ratio);
+  out->reattack_ratio = FiniteFloatProperty(opts, "reattackRatio", out->reattack_ratio);
   return !env.IsExceptionPending();
 }
 
@@ -276,7 +277,8 @@ Napi::Value PolyphonicAnalysisWrap::SetNoteEdit(const Napi::CallbackInfo& info) 
   size_t note = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "note", &note)) return env.Undefined();
 
-  SonareNoteEdit edit{};
+  SonareNoteEdit edit;
+  sonare_note_edit_init(&edit);
   std::vector<float> envelope;
   const Napi::Value edit_value = info[1];
   if (!edit_value.IsUndefined() && !edit_value.IsNull()) {
@@ -424,8 +426,8 @@ Napi::Value PolyphonicAnalysisWrap::Render(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
 
-  SonareNoteRenderConfig config{};
-  config.struct_version = 1;
+  SonareNoteRenderConfig config;
+  sonare_note_render_config_init(&config);
   const Napi::Value options = info[0];
   if (!options.IsUndefined() && !options.IsNull()) {
     if (!options.IsObject() || options.IsArray()) {
@@ -442,7 +444,7 @@ Napi::Value PolyphonicAnalysisWrap::Render(const Napi::CallbackInfo& info) {
   size_t out_length = 0;
   const SonareError err = sonare_polyphonic_render(analysis_, &config, &out, &out_length);
   if (err != SONARE_OK) {
-    ThrowIfError(env, err);
+    ThrowSonareErrorFlattening(env, err, "config");
     return env.Undefined();
   }
   auto result = CopyToFloat32(env, out, out_length);

@@ -43,12 +43,6 @@ from ._runtime import (
     _validate_scalar,
 )
 
-# Both note-object configs are at layout version 1; 0 selects the same layout.
-_NOTE_STRUCT_VERSION = 1
-
-# The transcription config's own layout version. Unlike the note-object configs
-# above, 0 is rejected rather than read as version 1.
-
 # Monophonic note models, by C ABI value (0 is the default, segments).
 _MONOPHONIC_MODELS = {"segments": 0, "singing": 1}
 
@@ -263,13 +257,12 @@ def _note_extractor_config(
     reference_hz: float | None,
     voiced_threshold: float | None,
 ) -> SonareNoteExtractorConfig:
-    """Build the extractor config; every field takes its library default at 0."""
-    return SonareNoteExtractorConfig(
-        _NOTE_STRUCT_VERSION,
-        0.0 if segmentation_threshold_cents is None else segmentation_threshold_cents,
-        0.0 if min_note_ms is None else min_note_ms,
-        0.0 if reference_hz is None else reference_hz,
-        0.0 if voiced_threshold is None else voiced_threshold,
+    """Build the extractor config; a field left as None keeps its library default."""
+    return SonareNoteExtractorConfig._given(
+        segmentation_threshold_cents=segmentation_threshold_cents,
+        min_note_ms=min_note_ms,
+        reference_hz=reference_hz,
+        voiced_threshold=voiced_threshold,
     )
 
 

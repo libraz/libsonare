@@ -66,17 +66,17 @@ uint32_t sonare_abi_version(void);
 /// @param root Root pitch class in [0, 11] (0 = C, ... 11 = B).
 /// @param mode_mask 12-bit mask. Bit i (LSB = 0) is the i-th pitch class
 ///                  relative to @p root. E.g. 0b101010110101 = natural major.
-/// @param scale_reference_midi MIDI number used as the chromatic origin (e.g. 69 for
-///                  A4 = 440 Hz). Pass 0.0f for the library default. Anything
-///                  outside [0, 127], and anything non-finite, is rejected with
-///                  @c SONARE_ERROR_INVALID_PARAMETER rather than resolving to
-///                  the default.
+/// @param scale_reference_midi Optional MIDI number used as the chromatic origin, in
+///                  [0, 127]. NaN (not given) selects the default, 69 (A4 = 440 Hz); 0 is
+///                  MIDI note 0. Anything else outside [0, 127], and an infinity, is rejected
+///                  with @c SONARE_ERROR_INVALID_PARAMETER.
 /// @param midi Input MIDI value (may be fractional).
 /// @param out_quantized_midi Receives the quantized MIDI value.
 SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float scale_reference_midi,
                                        float midi, float* out_quantized_midi);
 
 /// @brief Returns the quantization correction in semitones (quantized - input).
+/// @details @p scale_reference_midi is read as in @ref sonare_scale_quantize_midi.
 SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask,
                                               float scale_reference_midi, float midi,
                                               float* out_semitones);

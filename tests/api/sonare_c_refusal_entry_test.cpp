@@ -89,7 +89,7 @@ TEST_CASE("sonare_last_refusal_entry names the called entry, not the helper it r
           "[c_api][refusal_entry]") {
   const std::vector<float> samples = tone();
   SonareCqtResult cqt{};
-  REQUIRE(sonare_cqt(samples.data(), samples.size(), 0, 512, 32.7f, 84, 12, &cqt) ==
+  REQUIRE(sonare_cqt(samples.data(), samples.size(), 0, 512, 32.7f, 84, 12, 1.0f, &cqt) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_refusal_entry()) == "cqt");
 }

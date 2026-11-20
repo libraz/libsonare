@@ -587,7 +587,10 @@ SONARE_SPECTRAL_EDIT_MODE_HEAL = 3
 class SonareSpectralEditConfig(CStruct):
     """Maps to SonareSpectralEditConfig in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_spectral_edit_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int),
         ("hop_length", ctypes.c_int),
         ("window", ctypes.c_int),
@@ -598,7 +601,10 @@ class SonareSpectralEditConfig(CStruct):
 class SonareSpectralRegionOp(CStruct):
     """Maps to SonareSpectralRegionOp in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_spectral_region_op_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("start_sample", ctypes.c_int64),
         ("end_sample", ctypes.c_int64),
         ("low_hz", ctypes.c_float),
@@ -611,8 +617,10 @@ class SonareSpectralRegionOp(CStruct):
 class SonareNoteExtractorConfig(CStruct):
     """Maps to SonareNoteExtractorConfig in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_note_extractor_config_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
+        ("struct_size", ctypes.c_uint32),
         ("segmentation_threshold_cents", ctypes.c_float),
         ("min_note_ms", ctypes.c_float),
         ("reference_hz", ctypes.c_float),
@@ -623,8 +631,10 @@ class SonareNoteExtractorConfig(CStruct):
 class SonareNoteRenderConfig(CStruct):
     """Maps to SonareNoteRenderConfig in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_note_render_config_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
+        ("struct_size", ctypes.c_uint32),
         ("fade_ms", ctypes.c_float),
         ("vibrato_cutoff_hz", ctypes.c_float),
     ]
@@ -633,7 +643,10 @@ class SonareNoteRenderConfig(CStruct):
 class SonareNoteEdit(CStruct):
     """Maps to SonareNoteEdit in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_note_edit_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("time_offset_samples", ctypes.c_int64),
         ("envelope_offset", ctypes.c_int64),
         ("envelope_count", ctypes.c_size_t),
@@ -696,11 +709,13 @@ class SonareNoteTargetAssignConfig(CStruct):
     """Maps to SonareNoteTargetAssignConfig in sonare_c_effects.h.
 
     Zeroing this is not the default: a zeroed ``max_correction_semitones``
-    saturates every correction to nothing. Seed it through
-    ``sonare_note_target_assign_config_default``.
+    saturates every correction to nothing, so construction seeds it through the init.
     """
 
+    _c_init_ = "sonare_note_target_assign_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("unmatched_policy", ctypes.c_int32),
         ("min_overlap_ratio", ctypes.c_float),
         ("max_correction_semitones", ctypes.c_float),
@@ -710,8 +725,10 @@ class SonareNoteTargetAssignConfig(CStruct):
 class SonarePercussiveEventConfig(CStruct):
     """Maps to SonarePercussiveEventConfig in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_percussive_event_config_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
+        ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("hpss_kernel_harmonic", ctypes.c_int32),
@@ -726,8 +743,10 @@ class SonarePercussiveEventConfig(CStruct):
 class SonarePercussiveRenderConfig(CStruct):
     """Maps to SonarePercussiveRenderConfig in sonare_c_effects.h."""
 
+    _c_init_ = "sonare_percussive_render_config_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
+        ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("hpss_kernel_harmonic", ctypes.c_int32),
@@ -740,7 +759,6 @@ class SonareVoiceChangeConfig(CStruct):
     """Maps to SonareVoiceChangeConfig in sonare_c_effects.h."""
 
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
         ("pitch_semitones", ctypes.c_float),
         ("formant_factor", ctypes.c_float),
         ("formant_mode", ctypes.c_int32),

@@ -262,11 +262,9 @@ describe('newly exposed Node functions', () => {
     expect(Math.sqrt(err / ref)).toBeLessThan(0.05);
   });
 
-  it('decomposeStems reads 0 as the documented default in every sentinel field', () => {
-    // The C ABI documents 0 on SonareDecomposeStemsConfig as "use the built-in
-    // default", which is what lets a zero-initialised config mean the
-    // documented defaults. The same literal input must land on the same
-    // effective value on every surface that exposes these option names.
+  it('decomposeStems reads every config field literally, so 0 is a value', () => {
+    // Omitted keeps the library default; a given value is read as itself, so a 0
+    // outside a count's domain is refused and beta 0 is the Itakura-Saito divergence.
     const n = 8192;
     const samples = new Float32Array(n);
     for (let i = 0; i < n; i++) {
@@ -294,22 +292,24 @@ describe('newly exposed Node functions', () => {
       ['beta', 2],
       ['maskPower', 1],
     ] as Array<[string, number]>) {
-      expect(fingerprint({ [field]: 0 })).toBe(fingerprint({ [field]: documentedDefault }));
+      expect(fingerprint({ [field]: documentedDefault })).toBe(fingerprint({}));
     }
 
     // Without these the case above would also pass on a surface that ignored
     // the option outright.
-    expect(fingerprint({ nComponents: 3 })).not.toBe(fingerprint({ nComponents: 0 }));
-    expect(fingerprint({ beta: 0.5 })).not.toBe(fingerprint({ beta: 0 }));
-    expect(fingerprint({ maskPower: 2 })).not.toBe(fingerprint({ maskPower: 0 }));
+    expect(fingerprint({ nComponents: 3 })).not.toBe(fingerprint({}));
+    expect(fingerprint({ beta: 0 })).not.toBe(fingerprint({}));
+    expect(fingerprint({ maskPower: 2 })).not.toBe(fingerprint({}));
 
-    // A negative value is rejected rather than folded into the default.
-    for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter', 'maskPower']) {
-      expect(() => run({ [field]: -1 })).toThrow();
+    // A count of 0 or below and a sub-unit mask power are refused rather than defaulted.
+    for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter']) {
+      expect(() => run({ [field]: 0 })).toThrow(RangeError);
+      expect(() => run({ [field]: -1 })).toThrow(RangeError);
     }
-    expect(() => run({ maskPower: 0.5 })).toThrow();
-    expect(() => run({ maskPower: Number.NaN })).toThrow();
-    expect(() => run({ beta: Number.NaN })).toThrow();
+    for (const maskPower of [0, 0.5, -1, Number.NaN]) {
+      expect(() => run({ maskPower })).toThrow(RangeError);
+    }
+    expect(() => run({ beta: Number.NaN })).toThrow(RangeError);
   });
 
   it('phaseVocoder time-scales the signal', () => {

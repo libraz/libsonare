@@ -1,4 +1,5 @@
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
@@ -42,10 +43,12 @@ Napi::Value CqtResultToObject(Napi::Env env, const SonareCqtResult& result) {
                 static_cast<size_t>(result.n_bins) * sizeof(float));
   }
   out.Set("frequencies", frequencies);
+  out.Set("gamma", Napi::Number::New(env, result.gamma));
   return out;
 }
 
-using CqtFn = SonareError (*)(const float*, size_t, int, int, float, int, int, SonareCqtResult*);
+using CqtFn = SonareError (*)(const float*, size_t, int, int, float, int, int, float,
+                              SonareCqtResult*);
 
 Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   Napi::Env env = info.Env();
@@ -66,10 +69,13 @@ Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   if (!RequiredIntArg(env, info, 4, "nBins", &n_bins)) return env.Undefined();
   int bins_per_octave{};
   if (!RequiredIntArg(env, info, 5, "binsPerOctave", &bins_per_octave)) return env.Undefined();
+  float filter_scale{};
+  if (!OptionalFiniteFloatArg(env, info, 6, "filterScale", 1.0f, &filter_scale))
+    return env.Undefined();
 
   SonareCqtResult result{};
   SonareError err = fn(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
-                       bins_per_octave, &result);
+                       bins_per_octave, filter_scale, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -122,12 +128,17 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 4, "nBins", 84, &n_bins)) return env.Undefined();
   int bins_per_octave{};
   if (!OptionalIntArg(env, info, 5, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();
+  float filter_scale{};
+  if (!OptionalFiniteFloatArg(env, info, 6, "filterScale", 1.0f, &filter_scale))
+    return env.Undefined();
+  // NaN (not given) selects the ERB-derived automatic bandwidth.
   float gamma{};
-  if (!OptionalFloatArg(env, info, 6, "gamma", -1.0f, &gamma)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 7, "gamma", std::numeric_limits<float>::quiet_NaN(), &gamma))
+    return env.Undefined();
 
   SonareCqtResult result{};
   SonareError err = sonare_vqt(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
-                               bins_per_octave, gamma, &result);
+                               bins_per_octave, filter_scale, gamma, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

@@ -681,6 +681,7 @@ def cqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
+    filter_scale: float = 1.0,
 ) -> CqtResult: ...
 def pseudo_cqt(
     samples: FloatSamples,
@@ -689,6 +690,7 @@ def pseudo_cqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
+    filter_scale: float = 1.0,
 ) -> CqtResult: ...
 def hybrid_cqt(
     samples: FloatSamples,
@@ -697,6 +699,7 @@ def hybrid_cqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
+    filter_scale: float = 1.0,
 ) -> CqtResult: ...
 def vqt(
     samples: FloatSamples,
@@ -706,6 +709,7 @@ def vqt(
     n_bins: int = 84,
     bins_per_octave: int = 12,
     gamma: float | None = None,
+    filter_scale: float = 1.0,
 ) -> CqtResult: ...
 def version() -> str: ...
 def capabilities() -> Capabilities: ...

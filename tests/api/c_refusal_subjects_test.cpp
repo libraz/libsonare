@@ -33,7 +33,7 @@ TEST_CASE("the interleaved LUFS entries name themselves and the refused argument
   CHECK(sonare_lufs_interleaved(stereo.data(), 4800, 0, 48000, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(last_message(),
-             Catch::Matchers::ContainsSubstring("lufs_interleaved: channels must be positive"));
+             Catch::Matchers::Equals("num_channels must be an integer in [1, 2147483647]"));
 
   stereo[7] = std::numeric_limits<float>::quiet_NaN();
   CHECK(sonare_lufs_interleaved(stereo.data(), 4800, 2, 48000, &result) ==
@@ -44,9 +44,7 @@ TEST_CASE("the interleaved LUFS entries name themselves and the refused argument
   float* momentary = nullptr;
   CHECK(sonare_lufs_series_interleaved(stereo.data(), 4800, 2, 48000, &momentary, nullptr, nullptr,
                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(),
-             Catch::Matchers::ContainsSubstring(
-                 "lufs_series_interleaved: out_momentary and out_momentary_length"));
+  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("out_momentary and out_momentary_length"));
   float* short_term = nullptr;
   size_t momentary_length = 0;
   size_t short_term_length = 0;
@@ -130,25 +128,28 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
 TEST_CASE("the CQT-family entries refuse each member by its core name", "[c_api][feature]") {
   const std::vector<float> samples(22050, 0.1f);
   SonareCqtResult out{};
-  const auto refused = [&](int hop, float fmin, int n_bins, int bpo) {
-    CHECK(sonare_cqt(samples.data(), samples.size(), 22050, hop, fmin, n_bins, bpo, &out) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  const auto refused = [&](int hop, float fmin, int n_bins, int bpo, float filter_scale = 1.0f) {
+    CHECK(sonare_cqt(samples.data(), samples.size(), 22050, hop, fmin, n_bins, bpo, filter_scale,
+                     &out) == SONARE_ERROR_INVALID_PARAMETER);
     return last_message();
   };
   CHECK(refused(0, 32.7f, 24, 12) == "hop_length must be an integer in [1, 65536]");
   CHECK(refused(512, 0.0f, 24, 12) == "fmin must be finite and greater than 0");
   CHECK(refused(512, 32.7f, 0, 12) == "n_bins must be an integer in [1, 2147483647]");
   CHECK(refused(512, 32.7f, 24, 0) == "bins_per_octave must be an integer in [1, 2147483647]");
+  CHECK(refused(512, 32.7f, 24, 12, 0.0f) == "filter_scale must be finite and greater than 0");
 
-  CHECK(sonare_pseudo_cqt(samples.data(), samples.size(), 22050, 512, 32.7f, 0, 12, &out) ==
+  CHECK(sonare_pseudo_cqt(samples.data(), samples.size(), 22050, 512, 32.7f, 0, 12, 1.0f, &out) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "n_bins must be an integer in [1, 2147483647]");
-  CHECK(sonare_vqt(samples.data(), samples.size(), 22050, 0, 32.7f, 24, 12, 0.0f, &out) ==
+  CHECK(sonare_vqt(samples.data(), samples.size(), 22050, 0, 32.7f, 24, 12, 1.0f, 0.0f, &out) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "hop_length must be an integer in [1, 65536]");
-  CHECK(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 24, 12,
-                   std::numeric_limits<float>::infinity(), &out) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring("gamma must not be infinite"));
+  for (const float bad_gamma : {std::numeric_limits<float>::infinity(), -1.0f}) {
+    CHECK(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 24, 12, 1.0f, bad_gamma,
+                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "gamma must be finite and at least 0");
+  }
 }
 
 TEST_CASE("the CQT inverse refuses each member by its core name", "[c_api][feature]") {

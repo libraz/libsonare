@@ -90,7 +90,7 @@ export function spectralEdit(...args: unknown[]): Float32Array {
     if (request.window !== undefined) {
       windowOrdinal(request.window);
     }
-    // Each of the three is its own "0 => the documented default" on the C side.
+    // A given 0 is refused in the words both surfaces share, ahead of the native range check.
     refuseZeroSentinel(request, ['nFft', 'hopLength', 'healRadiusFrames']);
     // A non-Array array-like goes to the native reader, which bounds its length.
     const respellings: Respelled[] = [];

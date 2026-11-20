@@ -35,7 +35,6 @@
 #include "sonare_c_mastering_helpers.h"
 #include "util/math_utils.h"
 #include "util/parameter_checks.h"
-#include "util/zero_is_default.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -772,9 +771,12 @@ editing::pitch_editor::ScaleQuantizerConfig make_scale_config(int root, uint16_t
   editing::pitch_editor::ScaleQuantizerConfig cfg;
   cfg.root = root;
   cfg.mode_mask = mode_mask;
-  cfg.reference_midi = ZeroIsDefault(reference_midi)
-                           .checked(cfg.reference_midi, 0.0f,
-                                    editing::pitch_editor::kMaxReferenceMidi, "reference_midi");
+  // NaN is "not given": the quantizer's own reference stands.
+  if (!std::isnan(reference_midi)) {
+    util::check::in_range(reference_midi, 0.0, editing::pitch_editor::kMaxReferenceMidi,
+                          "scale_reference_midi");
+    cfg.reference_midi = reference_midi;
+  }
   return cfg;
 }
 #endif

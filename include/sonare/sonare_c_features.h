@@ -234,23 +234,34 @@ typedef struct {
   int sample_rate;     ///< Sample rate of the analysed audio (Hz).
   float* magnitude;    ///< Magnitude matrix, n_bins * n_frames, row-major.
   float* frequencies;  ///< Bin center frequencies in Hz, n_bins entries.
+  /// Bandwidth offset in Hz the transform ran with: the resolved value for @ref sonare_vqt
+  /// (the ERB-derived one when the call gave NaN), 0 for the three constant-Q transforms.
+  float gamma;
 } SonareCqtResult;
 
 /// @brief Computes the Constant-Q Transform magnitude.
+/// @param filter_scale Filter length scale factor, finite and > 0 (librosa default 1).
 SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                       float fmin_hz, int n_bins, int bins_per_octave, SonareCqtResult* out);
-/// @brief Computes a faster pseudo-CQT magnitude approximation.
-SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                              float fmin_hz, int n_bins, int bins_per_octave, SonareCqtResult* out);
-/// @brief Computes a hybrid CQT magnitude.
-SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                              float fmin_hz, int n_bins, int bins_per_octave, SonareCqtResult* out);
-/// @brief Computes the Variable-Q Transform magnitude (gamma controls Q).
-/// @param gamma Bandwidth offset in Hz. Negative or NaN selects the
-/// librosa-compatible ERB-derived automatic value; zero selects standard CQT.
-SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                       float fmin_hz, int n_bins, int bins_per_octave, float gamma,
+                       float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
                        SonareCqtResult* out);
+/// @brief Computes a faster pseudo-CQT magnitude approximation.
+/// @param filter_scale As @ref sonare_cqt.
+SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                              float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
+                              SonareCqtResult* out);
+/// @brief Computes a hybrid CQT magnitude.
+/// @param filter_scale As @ref sonare_cqt.
+SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                              float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
+                              SonareCqtResult* out);
+/// @brief Computes the Variable-Q Transform magnitude (gamma controls Q).
+/// @param filter_scale As @ref sonare_cqt.
+/// @param gamma Optional bandwidth offset in Hz, finite and >= 0. NaN (not given) selects the
+/// librosa-compatible ERB-derived automatic value; 0 is the constant-Q bandwidth; a negative
+/// or infinite value is refused. The value the transform ran with is @c out->gamma.
+SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                       float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
+                       float gamma, SonareCqtResult* out);
 /// @brief Releases the magnitude and frequency arrays of a CQT/VQT result and sets them to NULL.
 /// @details NULL is a no-op.
 void sonare_free_cqt_result(SonareCqtResult* result);
@@ -867,19 +878,16 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
                               int frame_length, int hop_length, float f0_min_hz, float f0_max_hz,
                               float threshold, int fill_na, SonarePitchResult* out);
 
-/// @brief Versioned configuration for @ref sonare_note_segments.
-/// @details Zero-initialize for the defaults (50 cents, 30 ms, A4 = 440 Hz,
-///          voiced threshold 0.5). @c struct_version 0 and 1 select the
-///          version-1 layout; 2 additionally honours @c voiced_threshold.
+/// @brief Configuration for @ref sonare_note_segments.
+/// @details Prepare one with @ref sonare_note_segmenter_config_init (50 cents, 30 ms,
+///          A4 = 440 Hz, voiced threshold 0.5); every field is then read literally.
 typedef struct {
-  int struct_version;  ///< 0 and 1 select the version-1 layout; 2 adds voiced_threshold.
-  float segmentation_threshold_cents;  ///< Pitch change in cents that starts a new note (0: 50).
-  float min_note_ms;                   ///< Shortest note in milliseconds (0: 30).
-  float reference_hz;                  ///< Reference pitch in Hz for median_cents (0: 440).
-  /* --- struct_version 2 --- */
-  /// Value of voiced_prob at or above which a frame counts as voiced. 0 keeps
-  /// the default 0.5. Ignored unless struct_version is 2, so a caller passing a
-  /// version-1 struct is unaffected.
+  uint32_t struct_size;  ///< sizeof(SonareNoteSegmenterConfig); set by the init function.
+  /// Pitch change in cents that starts a new note; finite and > 0, default 50.
+  float segmentation_threshold_cents;
+  float min_note_ms;   ///< Shortest note in milliseconds, finite and >= 0; default 30.
+  float reference_hz;  ///< Reference pitch in Hz for median_cents, finite and > 0; default 440.
+  /// Value of voiced_prob at or above which a frame counts as voiced, in [0, 1]; default 0.5.
   ///
   /// Raise or lower this when the caller's probability track is not a 0/1 flag.
   /// In particular, pYIN's voiced_prob is a frame's voiced observation mass and
@@ -889,6 +897,9 @@ typedef struct {
   /// threshold change.
   float voiced_threshold;
 } SonareNoteSegmenterConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_note_segmenter_config_init(SonareNoteSegmenterConfig* config);
 
 /// One monophonic note region detected from an F0 track. Frame bounds are
 /// half-open (@c [frame_start, frame_end)); seconds use the supplied frame rate.
@@ -926,7 +937,8 @@ typedef struct {
 ///        INVALID_PARAMETER.
 /// @param n_frames Number of F0 frames; must be non-zero.
 /// @param frame_rate Number of F0 frames per second; must be finite and > 0.
-/// @param config Optional versioned configuration; NULL selects defaults.
+/// @param config Optional configuration started from @ref sonare_note_segmenter_config_init;
+///        NULL selects the same defaults.
 /// @param out Receives a heap-owned result, cleared before validation. Empty
 ///        segmentation is returned as (@c NULL, 0).
 SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,

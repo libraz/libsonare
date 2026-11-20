@@ -509,6 +509,7 @@ const PseudoCqtRequestKeys = keysOf<PseudoCqtRequest>()([
   'binsPerOctave',
   'samples',
   'sampleRate',
+  'filterScale',
 ]);
 const HybridCqtRequestKeys = keysOf<HybridCqtRequest>()([
   'hopLength',
@@ -517,6 +518,7 @@ const HybridCqtRequestKeys = keysOf<HybridCqtRequest>()([
   'binsPerOctave',
   'samples',
   'sampleRate',
+  'filterScale',
 ]);
 const AnalyzeRequestKeys = keysOf<AnalyzeRequest>()([
   'samples',
@@ -708,6 +710,7 @@ const CqtRequestKeys = keysOf<CqtRequest>()([
   'fminHz',
   'nBins',
   'binsPerOctave',
+  'filterScale',
 ]);
 const CqtToAudioRequestKeys = keysOf<CqtToAudioRequest>()([
   'magnitude',
@@ -2191,6 +2194,7 @@ const VqtRequestKeys = keysOf<VqtRequest>()([
   'fminHz',
   'nBins',
   'binsPerOctave',
+  'filterScale',
 ]);
 const VqtToAudioRequestKeys = keysOf<VqtToAudioRequest>()([
   'gamma',

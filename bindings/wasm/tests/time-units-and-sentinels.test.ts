@@ -428,14 +428,12 @@ describe('absent is omission and -1 is refused', () => {
     expect(() => fixFrames({ frames, xMax: -1 })).toThrow(RangeError);
   });
 
-  it('vqt gamma: omitted is automatic, 0 is constant-Q, negative or NaN is refused', () => {
+  it('vqt gamma: omitted or NaN is automatic, 0 is constant-Q, negative is refused', () => {
     const samples = tone(SR / 2);
     const automatic = vqt({ samples, sampleRate: SR, nBins: 24 });
+    expect(vqt({ samples, sampleRate: SR, nBins: 24, gamma: Number.NaN })).toEqual(automatic);
     expect(vqt({ samples, sampleRate: SR, nBins: 24, gamma: 0 })).not.toEqual(automatic);
     expect(() => vqt({ samples, sampleRate: SR, nBins: 24, gamma: -1 })).toThrow(RangeError);
-    expect(() => vqt({ samples, sampleRate: SR, nBins: 24, gamma: Number.NaN })).toThrow(
-      RangeError,
-    );
   });
 
   it('metering percentiles: omitted is the default, 0 is real, negative is refused', () => {

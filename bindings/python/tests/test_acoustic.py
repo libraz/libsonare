@@ -160,15 +160,16 @@ def test_room_estimate_and_morph_reject_invalid_configuration() -> None:
         libsonare.estimate_room(samples, sample_rate=48000, reference_absorption=float("nan"))
     with pytest.raises(libsonare.SonareError):
         libsonare.estimate_room(samples, sample_rate=48000, aspect_hint_lw=float("inf"))
-    # An omitted analyzer knob is the library default; an explicit 0 is refused.
-    for keyword in (
-        "reference_absorption",
-        "n_octave_bands",
-        "min_decay_db",
-        "noise_floor_margin_db",
+    # A given value is read literally: 0 is outside these domains, and a negative margin too.
+    for keyword, outside in (
+        ("reference_absorption", 0),
+        ("n_octave_bands", 0),
+        ("min_decay_db", 0),
+        ("noise_floor_margin_db", -1),
     ):
         with pytest.raises(libsonare.SonareValueError, match=keyword):
-            libsonare.estimate_room(samples, sample_rate=48000, **{keyword: 0})
+            libsonare.estimate_room(samples, sample_rate=48000, **{keyword: outside})
+    libsonare.estimate_room(samples, sample_rate=48000, noise_floor_margin_db=0)
     with pytest.raises(libsonare.SonareError):
         libsonare.room_morph(samples, 48000, -1.0, 4.0, 3.0)
     with pytest.raises(libsonare.SonareError):

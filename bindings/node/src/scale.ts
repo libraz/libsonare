@@ -1,6 +1,5 @@
 import { withEntry } from './internal/entry.js';
 import { KEY_MODES } from './internal/key_modes.js';
-import { scaleReferenceMidiArg } from './internal/scale_reference.js';
 import { addon } from './native.js';
 import type { KeyMode, PitchClass } from './types_analysis.js';
 import { assertClosedToken, assertFiniteScalar } from './validation.js';
@@ -31,8 +30,8 @@ export function scaleMaskForMode(root: PitchClass, mode: KeyMode): number {
  * Snap a MIDI value to the nearest pitch class enabled by `modeMask`.
  *
  * `modeMask` is a 12-bit mask. For natural C major use `0b101010110101`.
- * `scaleReferenceMidi` anchors the grid; omit it for A4 (69). An explicit 0 is
- * refused (`RangeError`) until the native layer reads it as MIDI note 0.
+ * `scaleReferenceMidi` anchors the grid, in [0, 127]; omit it for A4 (69). 0 is
+ * MIDI note 0.
  */
 export function scaleQuantizeMidi(
   root: number,
@@ -42,8 +41,7 @@ export function scaleQuantizeMidi(
 ): number {
   return withEntry('scaleQuantizeMidi', () => {
     assertFiniteScalar(midi, 'midi');
-    const reference = scaleReferenceMidiArg(scaleReferenceMidi);
-    return addon.scaleQuantizeMidi(root, modeMask, midi, reference);
+    return addon.scaleQuantizeMidi(root, modeMask, midi, scaleReferenceMidi);
   });
 }
 
@@ -56,8 +54,7 @@ export function scaleCorrectionSemitones(
 ): number {
   return withEntry('scaleCorrectionSemitones', () => {
     assertFiniteScalar(midi, 'midi');
-    const reference = scaleReferenceMidiArg(scaleReferenceMidi);
-    return addon.scaleCorrectionSemitones(root, modeMask, midi, reference);
+    return addon.scaleCorrectionSemitones(root, modeMask, midi, scaleReferenceMidi);
   });
 }
 

@@ -550,9 +550,11 @@ val js_biquad_filter(val samples, const val& sample_rate, const val& type, const
   config.type = checkedIntFromVal(type, "type");
   config.order = checkedIntFromVal(order, "order");
   config.zero_phase = zero_phase ? 1 : 0;
-  config.cutoff_hz = checkedFloatFromVal(cutoff_hz, "cutoffHz");
-  config.center_hz = checkedFloatFromVal(center_hz, "centerHz");
-  config.bandwidth_hz = checkedFloatFromVal(bandwidth_hz, "bandwidthHz");
+  // A frequency the type does not read stays NaN (not given), as the init function left it.
+  config.cutoff_hz = optionalDomainNumber(cutoff_hz, "cutoffHz").value_or(config.cutoff_hz);
+  config.center_hz = optionalDomainNumber(center_hz, "centerHz").value_or(config.center_hz);
+  config.bandwidth_hz =
+      optionalDomainNumber(bandwidth_hz, "bandwidthHz").value_or(config.bandwidth_hz);
   std::vector<float> input = float32ArrayToVector(samples);
   float* output = nullptr;
   size_t output_length = 0;

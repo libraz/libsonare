@@ -486,7 +486,9 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
   }
   *mode_mask = static_cast<uint16_t>(mask_int);
   *midi = node_narrow_finite_float(info.Env(), info[2], "midi");
-  return OptionalFiniteFloatArg(info.Env(), info, 3, "scaleReferenceMidi", 0.0f, reference_midi);
+  // NaN (not given) selects A4 (69); a given 0 is MIDI note 0.
+  return OptionalFiniteFloatArg(info.Env(), info, 3, "scaleReferenceMidi",
+                                std::numeric_limits<float>::quiet_NaN(), reference_midi);
 }
 
 }  // namespace

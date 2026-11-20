@@ -404,7 +404,6 @@ TEST_CASE("sonare_voice_change_ex selects the formant mode",
   };
 
   SonareVoiceChangeConfig config{};
-  config.struct_version = 1;
   config.pitch_semitones = 3.0f;
   config.formant_factor = 1.1f;
   config.formant_mode = SONARE_FORMANT_MODE_RELATIVE;
@@ -436,9 +435,6 @@ TEST_CASE("sonare_voice_change_ex selects the formant mode",
 
   config.formant_factor = 1.1f;
   config.formant_mode = 2;
-  REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
-  config.formant_mode = SONARE_FORMANT_MODE_ABSOLUTE;
-  config.struct_version = 2;
   REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(run(nullptr, &none) == SONARE_ERROR_INVALID_PARAMETER);
 }

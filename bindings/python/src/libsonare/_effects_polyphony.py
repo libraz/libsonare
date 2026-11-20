@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Self
 import numpy as np
 
 from ._effects_note_model import (
-    _NOTE_STRUCT_VERSION,
     _note_set_index,
     _pitch_hz_from_c,
     _transcribe_reattack,
@@ -254,10 +253,6 @@ class PolyphonicAnalysis:
 
         lib = _get_lib()
 
-        # The core reads 0 as "n_fft" / "derived"; here that is None, so a given 0 is refused.
-        for name, named_zero in (("win_length", win_length), ("max_refine_hz", max_refine_hz)):
-            if named_zero is not None and not isinstance(named_zero, bool) and named_zero == 0:
-                raise _refuse(f"{name} must not be 0 (leave it out for the default)")
         config = SonarePolyphonicConfig()
         # None keeps the value sonare_polyphonic_config_init set; a given value is
         # read literally and range-checked by the library.
@@ -305,7 +300,6 @@ class PolyphonicAnalysis:
         for name, value in values.items():
             if value is not None:
                 setattr(config, name, _narrow_double(value, name))
-        # 0 is the core's "no split"; on this surface that is None, so a given 0 is refused.
         if reattack_ratio is not None:
             config.reattack_ratio = _transcribe_reattack(reattack_ratio)
         config.tonality = 1 if tonality else 0
@@ -662,11 +656,7 @@ class PolyphonicAnalysis:
         """
         lib = _get_lib()
         handle = self._require_handle()
-        config = SonareNoteRenderConfig(
-            _NOTE_STRUCT_VERSION,
-            0.0 if fade_ms is None else fade_ms,
-            0.0 if vibrato_cutoff_hz is None else vibrato_cutoff_hz,
-        )
+        config = SonareNoteRenderConfig._given(fade_ms=fade_ms, vibrato_cutoff_hz=vibrato_cutoff_hz)
         with _out_float_array(lib) as (out, out_length):
             _check(
                 lib.sonare_polyphonic_render(

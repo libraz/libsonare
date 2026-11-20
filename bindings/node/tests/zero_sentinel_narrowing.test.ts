@@ -126,19 +126,25 @@ describe('decomposeStems counts', () => {
       (nComponents) => decomposeStems({ ...base, nComponents, nIter: 8 }),
       read,
       3,
+      'refused',
     );
   });
 
   it('refuses a fractional nIter rather than running the default schedule', () => {
-    expectSentinelRefused((nIter) => decomposeStems({ ...base, nIter }), read, 3);
+    expectSentinelRefused((nIter) => decomposeStems({ ...base, nIter }), read, 3, 'refused');
   });
 
   it('refuses a fractional nFft rather than transforming at the default size', () => {
-    expectSentinelRefused((nFft) => decomposeStems({ ...base, nFft }), read, 1024);
+    expectSentinelRefused((nFft) => decomposeStems({ ...base, nFft }), read, 1024, 'refused');
   });
 
   it('refuses a fractional hopLength rather than framing at the default hop', () => {
-    expectSentinelRefused((hopLength) => decomposeStems({ ...base, hopLength }), read, 256);
+    expectSentinelRefused(
+      (hopLength) => decomposeStems({ ...base, hopLength }),
+      read,
+      256,
+      'refused',
+    );
   });
 });
 

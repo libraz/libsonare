@@ -95,18 +95,14 @@
   },
   "float": {
     "floor": {
-      "parameters": 7,
-      "functions": 7,
-      "files": 3
+      "parameters": 6,
+      "functions": 6,
+      "files": 2
     },
     "distribution": [
       {
         "file": "bindings/features/core.cpp",
         "count": 5
-      },
-      {
-        "file": "bindings/features/music.cpp",
-        "count": 1
       },
       {
         "file": "bindings/features/spectrogram.cpp",
@@ -180,23 +176,6 @@
         "reason": "The core refuses every frequency with no note, non-finite included, with a coded InvalidParameter, so a saturated value is refused there exactly as any other unnameable one. A checked reader ahead of it would only duplicate that refusal under a different message."
       },
       {
-        "js": "vqt",
-        "symbol": "js_vqt",
-        "index": 6,
-        "name": "gamma",
-        "mechanism": [
-          {
-            "file": "include/sonare/sonare_c_features.h",
-            "contains": "Negative or NaN selects the"
-          },
-          {
-            "file": "src/feature/vqt.cpp",
-            "contains": "config.gamma < 0.0f || std::isnan(config.gamma)"
-          }
-        ],
-        "reason": "A NaN gamma is one of the two spellings of the automatic ERB-derived bandwidth, alongside a negative value, and the core resolves both. A checked read would refuse the sentinel rather than an overflow. The wrapper still refuses an infinity, which selects nothing."
-      },
-      {
         "js": "vqtToAudio",
         "symbol": "js_vqt_to_audio",
         "index": 7,
@@ -204,14 +183,14 @@
         "mechanism": [
           {
             "file": "include/sonare/sonare_c_features.h",
-            "contains": "Negative or NaN selects the"
+            "contains": "negative or NaN selects the"
           },
           {
             "file": "src/feature/vqt.cpp",
             "contains": "config.gamma < 0.0f || std::isnan(config.gamma)"
           }
         ],
-        "reason": "The inverse of vqt under the same gamma contract: the pair has to accept the same sentinel or a round trip through the automatic bandwidth cannot be spelled on this surface. An infinity is still refused."
+        "reason": "sonare_vqt_to_audio resolves its gamma in the core, where a negative value and NaN both select the automatic ERB-derived bandwidth, so a checked read would refuse a documented spelling rather than an overflow. NaN is also what vqt reads as not given, so a round trip through the automatic bandwidth can be spelled on this surface. An infinity is still refused."
       }
     ]
   }

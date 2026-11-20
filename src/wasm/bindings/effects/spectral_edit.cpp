@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <string>
 
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -75,24 +76,23 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
 
   SpectralEditConfig config;
   if (!options.isUndefined() && !options.isNull()) {
-    // Mirror the C-ABI oracle (sonare_spectral_edit): a value of 0 means "keep
-    // the core default" rather than forcing an invalid 0 into the core, which
-    // requires n_fft/hop_length >= 1 and heal_radius_frames >= 1. Previously the
-    // WASM path passed 0 through verbatim and threw where Node/Python succeeded.
+    // An absent key keeps the core default (an absent hop derives it from nFft);
+    // a given value is read literally and checked as sonare_spectral_edit checks it.
     if (hasProperty(options, "nFft")) {
-      const int n_fft = checkedIntFromVal(options["nFft"], "nFft");
-      if (n_fft != 0) config.n_fft = n_fft;
+      config.n_fft = checkedIntFromVal(options["nFft"], "nFft");
+      sonare::util::check::integer_at_least(config.n_fft, 1, "nFft");
     }
     if (hasProperty(options, "hopLength")) {
-      const int hop_length = checkedIntFromVal(options["hopLength"], "hopLength");
-      if (hop_length != 0) config.hop_length = hop_length;
+      config.hop_length = checkedIntFromVal(options["hopLength"], "hopLength");
+      sonare::util::check::integer_at_least(config.hop_length, 1, "hopLength");
     }
     if (hasProperty(options, "window")) {
       config.window = parseSpectralEditWindow(options["window"]);
     }
     if (hasProperty(options, "healRadiusFrames")) {
-      const int heal_radius = checkedIntFromVal(options["healRadiusFrames"], "healRadiusFrames");
-      if (heal_radius != 0) config.heal_radius_frames = heal_radius;
+      config.heal_radius_frames =
+          checkedIntFromVal(options["healRadiusFrames"], "healRadiusFrames");
+      sonare::util::check::integer_at_least(config.heal_radius_frames, 1, "healRadiusFrames");
     }
   }
 
@@ -124,8 +124,11 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
       }
       if (hasProperty(op, "lowHz"))
         region.low_hz = checkedFloatFromVal(op["lowHz"], opPath(i, "lowHz").c_str());
-      if (hasProperty(op, "highHz"))
+      // An absent high edge is nyquist (the core's 0); a given one must be positive.
+      if (hasProperty(op, "highHz")) {
         region.high_hz = checkedFloatFromVal(op["highHz"], opPath(i, "highHz").c_str());
+        sonare::util::check::greater_than(region.high_hz, 0.0, opPath(i, "highHz").c_str());
+      }
       if (hasProperty(op, "gainDb"))
         region.gain_db = checkedFloatFromVal(op["gainDb"], opPath(i, "gainDb").c_str());
       region.mode =

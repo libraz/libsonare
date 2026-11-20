@@ -16,6 +16,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -379,7 +380,7 @@ TEST_CASE("sonare_polyphonic_config_init sets every documented default", "[c_api
   CHECK(c.struct_size == sizeof(SonarePolyphonicConfig));
   CHECK(c.n_fft == 4096);
   CHECK(c.hop_length == 512);
-  CHECK(c.win_length == 0);
+  CHECK(c.win_length == SONARE_POLYPHONIC_WIN_LENGTH_FFT);
   CHECK(c.cent_ref_hz == 55.0f);
   CHECK(c.cents_per_bin == 100.0f / 3.0f);
   CHECK(c.cent_max_hz == 8000.0f);
@@ -397,7 +398,7 @@ TEST_CASE("sonare_polyphonic_config_init sets every documented default", "[c_api
   CHECK(c.max_jump_cents == 50.0f);
   CHECK(c.min_ridge_peak_ratio == 0.10f);
   CHECK(c.min_ridge_duration_ms == 140.0f);
-  CHECK(c.reattack_ratio == 0.0f);
+  CHECK(std::isnan(c.reattack_ratio));
   CHECK(c.mask_harmonics == 20);
   CHECK(c.claim_lobes == 1.0f);
   CHECK(c.inharmonicity == 0.0f);
@@ -409,7 +410,7 @@ TEST_CASE("sonare_polyphonic_config_init sets every documented default", "[c_api
   CHECK(c.min_partial_separation == 0.01f);
   CHECK(c.max_fit_residual == 0.02f);
   CHECK(c.max_weight_modulus == 8.0f);
-  CHECK(c.max_refine_hz == 0.0f);
+  CHECK(std::isnan(c.max_refine_hz));
   CHECK(c.f0_tolerance_cents == 50.0f);
   CHECK(c.segmentation_threshold_cents == 50.0f);
   CHECK(c.min_note_ms == 30.0f);
@@ -427,7 +428,8 @@ TEST_CASE("the edit is the one thing a host writes, and it reaches the render",
   const std::vector<float> unedited = render(handle.get());
 
   SECTION("a pitch shift on one note changes the render") {
-    SonareNoteEdit edit{};
+    SonareNoteEdit edit;
+    sonare_note_edit_init(&edit);
     edit.pitch_semitones = 1.0f;
     REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 0, &edit, nullptr, 0) == SONARE_OK);
 
@@ -443,7 +445,8 @@ TEST_CASE("the edit is the one thing a host writes, and it reaches the render",
   }
 
   SECTION("an envelope is copied, so the caller's array need not outlive the call") {
-    SonareNoteEdit edit{};
+    SonareNoteEdit edit;
+    sonare_note_edit_init(&edit);
     {
       const std::vector<float> envelope{1.0f, 0.25f, 0.0f};
       REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 1, &edit, envelope.data(),
@@ -471,19 +474,30 @@ TEST_CASE("the edit is the one thing a host writes, and it reaches the render",
     CHECK(std::equal(edited.begin(), edited.end(), unedited.begin()) == false);
   }
 
-  SECTION("a zero stretch ratio reads as one, the way the by-value door reads it") {
-    SonareNoteEdit edit{};
+  SECTION("a zero stretch ratio and an uninitialised edit are refused by name") {
+    SonareNoteEdit edit;
+    sonare_note_edit_init(&edit);
     edit.time_stretch_ratio = 0.0f;
+    REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 0, &edit, nullptr, 0) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("edit.time_stretch_ratio") == 0);
+
+    SonareNoteEdit zeroed{};
+    REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 0, &zeroed, nullptr, 0) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "edit.struct_size must be set by sonare_note_edit_init");
+    // The identity edit leaves the render untouched.
+    sonare_note_edit_init(&edit);
     REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 0, &edit, nullptr, 0) == SONARE_OK);
-    CHECK(notes_of(handle.get())[0].edit.time_stretch_ratio == 1.0f);
-    // A zeroed edit is the identity, so the render is untouched.
     const std::vector<float> again = render(handle.get());
     REQUIRE(again.size() == unedited.size());
     CHECK(std::equal(again.begin(), again.end(), unedited.begin()));
   }
 
   SECTION("an edit is replaced rather than merged") {
-    SonareNoteEdit edit{};
+    SonareNoteEdit edit;
+    sonare_note_edit_init(&edit);
     edit.gain_db = -6.0f;
     REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 0, &edit, nullptr, 0) == SONARE_OK);
     REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 0, nullptr, nullptr, 0) == SONARE_OK);
@@ -515,8 +529,8 @@ TEST_CASE("the polyphonic C API refuses what it cannot do", "[c_api][polyphony]"
     config.struct_size = sizeof(SonarePolyphonicConfig) - 1;
     CHECK(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &config, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()).find("SonarePolyphonicConfig.struct_size") !=
-          std::string::npos);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.struct_size must be set by sonare_polyphonic_config_init");
     CHECK(out == nullptr);
   }
 
@@ -549,6 +563,8 @@ TEST_CASE("the polyphonic C API refuses what it cannot do", "[c_api][polyphony]"
         {"max_fit_residual 0", [](SonarePolyphonicConfig& c) { c.max_fit_residual = 0.0f; }},
         {"f0_tolerance_cents 0", [](SonarePolyphonicConfig& c) { c.f0_tolerance_cents = 0.0f; }},
         {"reference_hz 0", [](SonarePolyphonicConfig& c) { c.reference_hz = 0.0f; }},
+        {"win_length 0", [](SonarePolyphonicConfig& c) { c.win_length = 0; }},
+        {"max_refine_hz 0", [](SonarePolyphonicConfig& c) { c.max_refine_hz = 0.0f; }},
     };
     for (const NamedField& field : fields) {
       INFO(field.what);
@@ -827,7 +843,7 @@ TEST_CASE("the stretch accessor sizes a buffer the way its siblings do", "[c_api
 
 TEST_CASE("reattack_ratio splits a pitch struck again while it sounds", "[c_api][polyphony]") {
   SonarePolyphonicConfig config = initialized_config();
-  REQUIRE(config.reattack_ratio == 0.0f);
+  REQUIRE(std::isnan(config.reattack_ratio));
   const size_t off = restruck_note_count(config);
 
   config.reattack_ratio = 2.5f;
@@ -835,10 +851,11 @@ TEST_CASE("reattack_ratio splits a pitch struck again while it sounds", "[c_api]
   CHECK(split > off);
 }
 
-TEST_CASE("reattack_ratio outside 0 or above 1 is refused", "[c_api][polyphony]") {
+TEST_CASE("reattack_ratio is refused at or below 1 and when infinite; NaN is not given",
+          "[c_api][polyphony]") {
   const std::vector<float> samples = chord();
   SonarePolyphonicConfig config = initialized_config();
-  for (const float ratio : {-1.0f, 0.5f, 1.0f, std::nanf("")}) {
+  for (const float ratio : {-1.0f, 0.0f, 0.5f, 1.0f, std::numeric_limits<float>::infinity()}) {
     config.reattack_ratio = ratio;
     SonarePolyphonicAnalysis* out = nullptr;
     CHECK(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &config, &out) ==

@@ -16,7 +16,6 @@
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/parameter_checks.h"
-#include "util/zero_is_default.h"
 
 using namespace sonare_node;
 
@@ -227,24 +226,17 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   Napi::Object opts = info.Length() >= 3 && info[2].IsObject() ? info[2].As<Napi::Object>()
                                                                : Napi::Object::New(env);
 
+  // As the C ABI reads its struct: an omitted key keeps the library default and a given
+  // value is read literally, so a 0 outside a field's domain is refused by name.
   sonare::RoomEstimateConfig cfg;
-  // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
-  // the same input is accepted identically on every surface (raw 0 would be
-  // rejected by the core's finite-positive check).
-  cfg.aspect_hint_lw = sonare::ZeroIsDefault(FloatProperty(opts, "aspectHintLw", 0.0f))
-                           .or_default(cfg.aspect_hint_lw);
-  cfg.aspect_hint_lh = sonare::ZeroIsDefault(FloatProperty(opts, "aspectHintLh", 0.0f))
-                           .or_default(cfg.aspect_hint_lh);
-  cfg.reference_absorption = sonare::ZeroIsDefault(FloatProperty(opts, "referenceAbsorption", 0.0f))
-                                 .or_default(cfg.reference_absorption);
-  cfg.prefer_eyring = BoolProperty(opts, "preferEyring", true);
-  const int n_bands = IntProperty(opts, "nOctaveBands", kZeroIsSentinel);
-  if (n_bands != 0) cfg.acoustic.n_octave_bands = n_bands;
-  cfg.acoustic.min_decay_db = sonare::ZeroIsDefault(FloatProperty(opts, "minDecayDb", 0.0f))
-                                  .or_default(cfg.acoustic.min_decay_db);
+  cfg.aspect_hint_lw = FloatProperty(opts, "aspectHintLw", cfg.aspect_hint_lw);
+  cfg.aspect_hint_lh = FloatProperty(opts, "aspectHintLh", cfg.aspect_hint_lh);
+  cfg.reference_absorption = FloatProperty(opts, "referenceAbsorption", cfg.reference_absorption);
+  cfg.prefer_eyring = BoolProperty(opts, "preferEyring", cfg.prefer_eyring);
+  cfg.acoustic.n_octave_bands = IntProperty(opts, "nOctaveBands", cfg.acoustic.n_octave_bands);
+  cfg.acoustic.min_decay_db = FloatProperty(opts, "minDecayDb", cfg.acoustic.min_decay_db);
   cfg.acoustic.noise_floor_margin_db =
-      sonare::ZeroIsDefault(FloatProperty(opts, "noiseFloorMarginDb", 0.0f))
-          .or_default(cfg.acoustic.noise_floor_margin_db);
+      FloatProperty(opts, "noiseFloorMarginDb", cfg.acoustic.noise_floor_margin_db);
   switch (NamedSelectorProperty(opts, "mode", sonare::acoustic::kAcousticModeSelectorNames, 0)) {
     case 1:
       cfg.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
@@ -257,6 +249,17 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
       break;
   }
 
+  // The C ABI's checks, which the core does not make itself (it clamps the absorption).
+  {
+    namespace check = sonare::util::check;
+    check::greater_than(cfg.aspect_hint_lw, 0.0, "aspectHintLw");
+    check::greater_than(cfg.aspect_hint_lh, 0.0, "aspectHintLh");
+    check::in_range(cfg.reference_absorption, sonare::kRoomReferenceAbsorptionMin,
+                    sonare::kRoomReferenceAbsorptionMax, "referenceAbsorption");
+    check::greater_than(cfg.acoustic.min_decay_db, 0.0, "minDecayDb");
+    check::at_least(cfg.acoustic.noise_floor_margin_db, 0.0, "noiseFloorMarginDb");
+    check::integer_at_least(cfg.acoustic.n_octave_bands, 1, "nOctaveBands");
+  }
   const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
   // Absorption (from the inverse problem) and RT60 (from the decay fit) are
   // independent estimates and either can fail on its own. Both arrays report at

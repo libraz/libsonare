@@ -33,6 +33,9 @@ class CqtResult:
     """Magnitude per bin and frame, shape ``(n_bins, n_frames)``."""
     frequencies: NDArray[np.float32]
     """Center frequency of each bin in Hz."""
+    gamma: float
+    """Bandwidth offset in Hz the transform ran with: the resolved value for :func:`vqt`, 0 for
+    the constant-Q transforms."""
 
 
 @dataclass(frozen=True, slots=True)

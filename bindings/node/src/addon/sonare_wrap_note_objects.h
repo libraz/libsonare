@@ -23,8 +23,8 @@ inline Napi::Float32Array CopyToFloat32(Napi::Env env, const float* values, size
   return array;
 }
 
-/// @brief Reads an edit off its own JS object. A zeroed SonareNoteEdit is the
-///        identity, so an omitted key is a no-op.
+/// @brief Reads an edit off its own JS object onto @p out, which the caller started from
+///        sonare_note_edit_init (the identity), so an omitted key is a no-op.
 ///
 /// The envelope is appended to @p envelopes and addressed by offset, because that
 /// is how the by-value C ABI keeps the pool's ownership straight; a handle-based

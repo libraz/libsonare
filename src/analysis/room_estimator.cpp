@@ -106,7 +106,9 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
   // synthesis path uses (Eyring by default) so the round-trip is consistent.
   // Clamped silently; the interval's width is a budget. See RoomEstimateConfig.
   const bool use_eyring = config.prefer_eyring;
-  const double a0 = std::clamp(static_cast<double>(config.reference_absorption), 0.01, 0.99);
+  const double a0 = std::clamp(static_cast<double>(config.reference_absorption),
+                               static_cast<double>(kRoomReferenceAbsorptionMin),
+                               static_cast<double>(kRoomReferenceAbsorptionMax));
   const double absn0 = use_eyring ? -std::log(1.0 - a0) : a0;
   // The air term the synthesis adds by default (ISO reference climate) is part of every decay.
   const acoustic::AirAbsorption reference_air{};

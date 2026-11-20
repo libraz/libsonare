@@ -36,7 +36,7 @@ using Handle = std::unique_ptr<SonareRealtimeVoiceChanger, HandleDeleter>;
 
 Config default_config() {
   Config c{};
-  REQUIRE(sonare_realtime_voice_changer_config_default(&c) == SONARE_OK);
+  sonare_realtime_voice_changer_config_init(&c);
   return c;
 }
 
@@ -252,38 +252,37 @@ TEST_CASE("The voice changer POD is version 2 and the ABI version is 4",
   STATIC_REQUIRE(sizeof(Config::harmony_steps) == 3u * sizeof(int32_t));
 }
 
-TEST_CASE("config_default and every preset_config write struct_version 2",
-          "[capi][voice_transform]") {
+TEST_CASE("config_init and every preset_config write struct_size", "[capi][voice_transform]") {
   Config c{};
-  c.struct_version = -1;
-  REQUIRE(sonare_realtime_voice_changer_config_default(&c) == SONARE_OK);
-  CHECK(c.struct_version == 2);
+  sonare_realtime_voice_changer_config_init(&c);
+  CHECK(c.struct_size == sizeof(Config));
+  sonare_realtime_voice_changer_config_init(nullptr);
   for (const auto preset : kAllPresets) {
     INFO("preset " << sonare_voice_character_preset_id(preset));
     Config p{};
-    p.struct_version = -1;
     REQUIRE(sonare_realtime_voice_changer_preset_config(preset, &p) == SONARE_OK);
-    CHECK(p.struct_version == 2);
+    CHECK(p.struct_size == sizeof(Config));
   }
   const Handle h = make(c);
-  CHECK(read_config(h).struct_version == 2);
+  CHECK(read_config(h).struct_size == sizeof(Config));
 }
 
-TEST_CASE("struct_version 0, 1 and 3 are refused and the previous config is kept",
+TEST_CASE("a struct_size below sizeof is refused and the previous config is kept",
           "[capi][voice_transform]") {
   const Config good = default_config();
   const Handle h = make(good);
   const Config before = read_config(h);
-  for (const int32_t version : {-1, 0, 1, 3, 2147483647}) {
-    INFO("struct_version " << version);
+  for (const uint32_t size : {0u, 1u, static_cast<uint32_t>(sizeof(Config) - 1)}) {
+    INFO("struct_size " << size);
     Config bad = good;
-    bad.struct_version = version;
+    bad.struct_size = size;
     Handle none;
     CHECK(create(bad, &none) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(none == nullptr);
     CHECK(sonare_realtime_voice_changer_set_config(h.get(), &bad) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    CHECK_THAT(std::string(sonare_last_error_message()), ContainsSubstring("struct_version"));
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.struct_size must be set by sonare_realtime_voice_changer_config_init");
     CHECK(same_bytes(read_config(h), before));
   }
 }

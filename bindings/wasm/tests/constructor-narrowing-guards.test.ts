@@ -26,7 +26,7 @@
  * These drive the embind classes off the module rather than the TS facades.
  * `RealtimeEngine`'s facade always passes five arguments, so the four-argument
  * overload is unreachable through it, and `StreamAnalyzer`'s facade resolves
- * `window` and `outputFormat` client-side, so a test through it would measure
+ * `window` client-side, so a test through it would measure
  * the facade rather than the binding.
  */
 
@@ -40,7 +40,7 @@ beforeAll(async () => {
 });
 
 /** Analyzer fields whose domain guard lives in the binding rather than the core. */
-const BINDING_GUARDS = new Set(['window', 'outputFormat']);
+const BINDING_GUARDS = new Set(['window']);
 
 /** An argument refusal: a native `RangeError`, not a coded `SonareError`. */
 function refusalFor(fn: () => unknown): Error {
@@ -112,7 +112,6 @@ const ANALYZER_BASE = {
   keyUpdateIntervalSec: 5,
   bpmUpdateIntervalSec: 10,
   window: 0,
-  outputFormat: 0,
 };
 
 type AnalyzerOverrides = Partial<Record<keyof typeof ANALYZER_BASE, number>>;
@@ -127,7 +126,6 @@ function newAnalyzer(overrides: AnalyzerOverrides = {}) {
     c.fmin,
     c.fmax,
     c.tuningRefHz,
-    false,
     true,
     false,
     false,
@@ -138,7 +136,6 @@ function newAnalyzer(overrides: AnalyzerOverrides = {}) {
     c.keyUpdateIntervalSec,
     c.bpmUpdateIntervalSec,
     c.window,
-    c.outputFormat,
   );
 }
 
@@ -246,15 +243,6 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     legal: 1,
     domainRefusal: 'window is out of range',
     construct: (window) => newAnalyzer({ window }),
-  },
-  {
-    // Float32 is the only accepted format, so its legal value is the base one;
-    // the pairing here is between 0 and everything a wrap used to turn into 0.
-    entry: 'StreamAnalyzer',
-    field: 'outputFormat',
-    legal: 0,
-    domainRefusal: 'outputFormat is deprecated',
-    construct: (outputFormat) => newAnalyzer({ outputFormat }),
   },
 ];
 

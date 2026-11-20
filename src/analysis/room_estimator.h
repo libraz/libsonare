@@ -45,6 +45,10 @@ struct RoomEstimate {
   float confidence = 0.0f;              ///< honest [0,1] support for the estimate
 };
 
+/// Bounds `estimate_room` clamps the absorption prior into.
+inline constexpr float kRoomReferenceAbsorptionMin = 0.01f;
+inline constexpr float kRoomReferenceAbsorptionMax = 0.99f;
+
 /// @brief Priors and analysis settings for `estimate_room`.
 struct RoomEstimateConfig {
   /// Delegated to the underlying blind/IR acoustic analyzer.

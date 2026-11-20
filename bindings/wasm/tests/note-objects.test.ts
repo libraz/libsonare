@@ -598,13 +598,20 @@ describe('renderNotes', () => {
         ],
       }),
     );
-    expectRangeRefusal(() => renderNotes({ samples, sampleRate, notes, fadeMs: -1 }));
-    expectCoreRefusal(() =>
+    // A given fade is read literally, so 0 is refused beside a negative one.
+    for (const fadeMs of [0, -1]) {
+      expect(() => renderNotes({ samples, sampleRate, notes, fadeMs })).toThrow(
+        new RangeError('renderNotes: fadeMs must be finite and greater than 0'),
+      );
+    }
+    expect(() =>
       renderNotes({
         samples,
         sampleRate,
         notes: [{ onsetSample: 0, offsetSample: 8192, edit: { timeStretchRatio: -1 } }],
       }),
+    ).toThrow(
+      new RangeError('renderNotes: note.edit.timeStretchRatio must be finite and greater than 0'),
     );
     expect(() => renderNotes({ samples, sampleRate: 7999, notes })).toThrow(RangeError);
   });
@@ -953,7 +960,7 @@ describe('note input validation', () => {
     }
   });
 
-  it('rejects negative stretch through split and merge while keeping zero as identity', () => {
+  it('rejects a non-positive stretch through split and merge', () => {
     const source = gappedSource();
     const extracted = extractNotes(source);
     expect(extracted).toHaveLength(3);
@@ -1000,18 +1007,23 @@ describe('note input validation', () => {
       }
     }
 
+    // A ratio of 0 is no longer read as the identity: it is refused like a negative one.
     const zeroed = extracted.map((note, index) =>
       index === 0 ? { ...note, edit: { timeStretchRatio: 0 } } : note,
     );
-    const split = splitNote({ ...source, notes: zeroed, index: 0, frame: 5 });
-    expect(split).toHaveLength(4);
-    for (const note of split) {
-      expect(note.edit.timeStretchRatio).toBe(1);
-    }
+    expect(() => splitNote({ ...source, notes: zeroed, index: 0, frame: 5 })).toThrow(
+      new RangeError('splitNote: note.edit.timeStretchRatio must be finite and greater than 0'),
+    );
+    expect(() => mergeNotes({ ...source, notes: zeroed, first: 0, last: 1 })).toThrow(
+      new RangeError('mergeNotes: note.edit.timeStretchRatio must be finite and greater than 0'),
+    );
 
-    const merged = mergeNotes({ ...source, notes: zeroed, first: 0, last: 1 });
-    expect(merged).toHaveLength(2);
-    expect(merged[0].edit.timeStretchRatio).toBe(1);
+    // Control: the unit ratio splits and merges.
+    const unit = extracted.map((note, index) =>
+      index === 0 ? { ...note, edit: { timeStretchRatio: 1 } } : note,
+    );
+    expect(splitNote({ ...source, notes: unit, index: 0, frame: 5 })).toHaveLength(4);
+    expect(mergeNotes({ ...source, notes: unit, first: 0, last: 1 })).toHaveLength(2);
   });
 });
 
@@ -1204,7 +1216,7 @@ describe('renderNotes pitch curve edits', () => {
     ).toHaveLength(source.length);
   });
 
-  it('cuts the curve where vibratoCutoffHz says, defaulting at 0', () => {
+  it('cuts the curve where vibratoCutoffHz says, defaulting at 3 Hz', () => {
     const renderedAt = (vibratoCutoffHz?: number): Float32Array =>
       renderNotes({
         samples: source,
@@ -1215,9 +1227,8 @@ describe('renderNotes pitch curve edits', () => {
         vibratoCutoffHz,
       });
 
-    // 0 and absent both keep the default 3 Hz.
+    // Absent keeps the default 3 Hz.
     const fromDefault = renderedAt();
-    expect(renderedAt(0)).toEqual(fromDefault);
     expect(renderedAt(3)).toEqual(fromDefault);
 
     // 5.5 Hz sits above a 3 Hz cut and below an 8 Hz one, so flattening the
@@ -1236,7 +1247,7 @@ describe('renderNotes pitch curve edits', () => {
   });
 
   it('rejects a cutoff that cannot be one', () => {
-    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, 0]) {
       expectRangeRefusal(() =>
         renderNotes({
           samples: source,
@@ -1966,21 +1977,20 @@ describe('splitNote', () => {
     }
   });
 
-  it('normalizes a timeStretchRatio of 0 to 1', () => {
+  it('refuses a timeStretchRatio of 0 rather than reading it as 1', () => {
     const source = plainSource();
     const before = extractNotes(source);
     expect(before).toHaveLength(1);
 
-    // The identity ratio is spelled 0 on the way in, and the split re-derives
-    // its notes, so what comes back is the 1.0 spelling of the same edit.
     const zeroed = [{ ...before[0], edit: { timeStretchRatio: 0 } }];
-    const split = splitNote({ ...source, notes: zeroed, index: 0, frame: 20 });
+    expect(() => splitNote({ ...source, notes: zeroed, index: 0, frame: 20 })).toThrow(
+      new RangeError('splitNote: note.edit.timeStretchRatio must be finite and greater than 0'),
+    );
+    // Control: the extracted note, whose ratio is already 1, splits in two.
+    const split = splitNote({ ...source, notes: before, index: 0, frame: 20 });
     expect(split).toHaveLength(2);
     for (const half of split) {
       expect(half.edit.timeStretchRatio).toBe(1);
-      expect(half.edit.gainDb).toBe(0);
-      expect(half.edit.muted).toBe(false);
-      expect(half.edit.amplitudeEnvelope).toHaveLength(0);
     }
   });
 

@@ -46,7 +46,10 @@ SONARE_PITCH_TARGET_SCALE = 1
 class SonarePitchCorrectionConfig(CStruct):
     """Maps to SonarePitchCorrectionConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_pitch_correction_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("target_mode", ctypes.c_int32),
         ("target_midi", ctypes.c_float),
         ("scale_root", ctypes.c_int32),

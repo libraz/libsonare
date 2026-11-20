@@ -251,7 +251,51 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     name: 'vqt fmin',
     site: 'features/advanced.cpp Vqt fmin',
     control: [32.7, 130.81],
-    call: (v) => native.vqt(AUDIO, SAMPLE_RATE, 512, v, 24, 12, -1).frequencies[0],
+    call: (v) => native.vqt(AUDIO, SAMPLE_RATE, 512, v, 24, 12).frequencies[0],
+  },
+  {
+    name: 'vqt filterScale',
+    site: 'features/advanced.cpp Vqt filterScale',
+    control: [1, 0.5],
+    call: (v) => magnitudeSum(native.vqt(AUDIO, SAMPLE_RATE, 512, 32.7, 24, 12, v).magnitude),
+  },
+  {
+    name: 'cqt filterScale',
+    site: 'features/advanced.cpp CqtLike filterScale',
+    control: [1, 0.5],
+    call: (v) => magnitudeSum(native.cqt(AUDIO, SAMPLE_RATE, 512, 32.7, 24, 12, v).magnitude),
+  },
+  {
+    name: 'pseudoCqt filterScale',
+    site: 'features/advanced.cpp CqtLike filterScale',
+    control: [1, 0.5],
+    call: (v) => magnitudeSum(native.pseudoCqt(AUDIO, SAMPLE_RATE, 512, 32.7, 24, 12, v).magnitude),
+  },
+  {
+    name: 'hybridCqt filterScale',
+    site: 'features/advanced.cpp CqtLike filterScale',
+    control: [1, 0.5],
+    call: (v) => magnitudeSum(native.hybridCqt(AUDIO, SAMPLE_RATE, 512, 32.7, 24, 12, v).magnitude),
+  },
+  {
+    name: 'biquadFilter cutoffHz',
+    site: 'sonare_wrap_effects.cpp BiquadFilter cutoffHz',
+    control: [200, 2000],
+    call: (v) => magnitudeSum(native.biquadFilter(AUDIO, SAMPLE_RATE, 0, 2, false, v)),
+  },
+  {
+    name: 'biquadFilter centerHz',
+    site: 'sonare_wrap_effects.cpp BiquadFilter centerHz',
+    control: [440, 2000],
+    call: (v) =>
+      magnitudeSum(native.biquadFilter(AUDIO, SAMPLE_RATE, 2, 2, false, undefined, v, 200)),
+  },
+  {
+    name: 'biquadFilter bandwidthHz',
+    site: 'sonare_wrap_effects.cpp BiquadFilter bandwidthHz',
+    control: [50, 2000],
+    call: (v) =>
+      magnitudeSum(native.biquadFilter(AUDIO, SAMPLE_RATE, 2, 2, false, undefined, 440, v)),
   },
   {
     name: 'cqtToAudio fmin',
@@ -601,16 +645,16 @@ describe('an optional float argument is refused rather than saturated', () => {
  * The two arguments that stay on `OptionalFloatArg`, which passes a non-finite value.
  *
  * A NaN gamma SELECTS the librosa-compatible ERB-derived automatic value at
- * `src/feature/vqt.cpp`, so refusing it would be a regression of a working
- * feature rather than the repair of a doc mismatch. The saturation defect still
- * closes: the reader refuses `1e39` under either verdict.
+ * `src/feature/vqt.cpp`, so the reader must let it through. The saturation defect
+ * still closes: the reader refuses `1e39` under either verdict.
  */
 const PASSTHRU_ARGUMENTS: FloatArgument[] = [
   {
     name: 'vqt gamma',
     site: 'features/advanced.cpp Vqt gamma',
-    control: [-1, 0],
-    call: (v) => magnitudeSum(native.vqt(AUDIO, SAMPLE_RATE, 512, 32.7, 24, 12, v).magnitude),
+    control: [Number.NaN, 0],
+    call: (v) =>
+      magnitudeSum(native.vqt(AUDIO, SAMPLE_RATE, 512, 32.7, 24, 12, undefined, v).magnitude),
   },
   {
     name: 'vqtToAudio gamma',
@@ -629,8 +673,7 @@ describe('a gamma keeps its NaN, which selects the automatic ERB value', () => {
     (_name, argument) => {
       const [automatic, standardCqt] = argument.control;
       expect(argument.call(automatic)).not.toBe(argument.call(standardCqt));
-      // NaN resolves to the same automatic value a negative gamma selects, which
-      // is what a finite refusal here would have taken away.
+      // NaN resolves to the automatic value, which a finite refusal here would take away.
       expect(argument.call(Number.NaN)).toBe(argument.call(automatic));
       for (const value of PAST_FLOAT_RANGE) {
         expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
@@ -853,12 +896,6 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.splitSilence(GATED, v, 2048, 512).length,
   },
   {
-    name: 'meteringDetectClipping threshold',
-    site: 'analysis/metering.cpp MeteringDetectClipping threshold',
-    control: [0.999, 0.2],
-    call: (v) => native.meteringDetectClipping(AUDIO, SAMPLE_RATE, v, 1).clippedSamples,
-  },
-  {
     name: 'meteringDynamicRange windowSec',
     site: 'analysis/metering.cpp MeteringDynamicRange windowSec',
     control: [0.4, 0.05],
@@ -913,6 +950,25 @@ describe('a required float argument is refused rather than saturated', () => {
       }
     },
   );
+});
+
+describe('the clipping threshold reads NaN as not given', () => {
+  // Optional and type-only: NaN is the library default, a value past the float
+  // range is refused by the reader, and an infinity by the core's domain text.
+  const clipped = (v?: number) =>
+    native.meteringDetectClipping(AUDIO, SAMPLE_RATE, v, 1).clippedSamples;
+  it('meteringDetectClipping thresholdDb', () => {
+    expect(clipped(-0.01)).not.toBe(clipped(-14));
+    expect(clipped(Number.NaN)).toBe(clipped(undefined));
+    for (const value of PAST_FLOAT_RANGE) {
+      expect(() => clipped(value), `thresholdDb ${value}`).toThrow(
+        /must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
+      );
+    }
+    expect(() => clipped(Number.POSITIVE_INFINITY)).toThrow(
+      /thresholdDb must be finite and in \[-120, 0\]/,
+    );
+  });
 });
 
 /** The block the automation rows mix. */

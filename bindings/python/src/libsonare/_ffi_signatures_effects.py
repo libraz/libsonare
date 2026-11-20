@@ -142,9 +142,9 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    # sonare_pitch_correction_config_default + sonare_pitch_correct_timevarying
-    lib.sonare_pitch_correction_config_default.restype = ctypes.c_int32
-    lib.sonare_pitch_correction_config_default.argtypes = [
+    # sonare_pitch_correction_config_init + sonare_pitch_correct_timevarying
+    lib.sonare_pitch_correction_config_init.restype = None
+    lib.sonare_pitch_correction_config_init.argtypes = [
         ctypes.POINTER(SonarePitchCorrectionConfig),
     ]
     lib.sonare_pitch_correct_timevarying.restype = ctypes.c_int32
@@ -249,9 +249,9 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_free_note_targets.restype = None
     lib.sonare_free_note_targets.argtypes = [ctypes.POINTER(SonareNoteTarget)]
 
-    # sonare_note_target_assign_config_default + sonare_assign_note_targets
-    lib.sonare_note_target_assign_config_default.restype = ctypes.c_int32
-    lib.sonare_note_target_assign_config_default.argtypes = [
+    # sonare_note_target_assign_config_init + sonare_assign_note_targets
+    lib.sonare_note_target_assign_config_init.restype = None
+    lib.sonare_note_target_assign_config_init.argtypes = [
         ctypes.POINTER(SonareNoteTargetAssignConfig)
     ]
     lib.sonare_assign_note_targets.restype = ctypes.c_int32
@@ -705,6 +705,24 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+
+    # The config initialisers: each writes sizeof and the defaults.
+    for _name, _init_cfg in (
+        ("sonare_decompose_stems_config_init", SonareDecomposeStemsConfig),
+        ("sonare_note_edit_init", SonareNoteEdit),
+        ("sonare_note_extractor_config_init", SonareNoteExtractorConfig),
+        ("sonare_note_render_config_init", SonareNoteRenderConfig),
+        ("sonare_note_segmenter_config_init", SonareNoteSegmenterConfig),
+        ("sonare_percussive_event_config_init", SonarePercussiveEventConfig),
+        ("sonare_percussive_render_config_init", SonarePercussiveRenderConfig),
+        ("sonare_realtime_voice_changer_config_init", SonareRealtimeVoiceChangerConfig),
+        ("sonare_room_estimate_config_init", SonareRoomEstimateConfig),
+        ("sonare_spectral_edit_config_init", SonareSpectralEditConfig),
+        ("sonare_spectral_region_op_init", SonareSpectralRegionOp),
+    ):
+        _fn = getattr(lib, _name)
+        _fn.restype = None
+        _fn.argtypes = [ctypes.POINTER(_init_cfg)]
 
     # sonare_trim
     lib.sonare_trim.restype = ctypes.c_int32

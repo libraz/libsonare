@@ -177,29 +177,27 @@ def _stems_config(
     init: NmfInit | None,
     mask_power: float | None,
 ) -> SonareDecomposeStemsConfig:
-    """Build a stems config; an omitted value is the C field's 0 / NULL, the core's default.
+    """Build a stems config; an omitted value keeps the init function's default.
 
-    A given count is narrowed before its positivity check: int(0.5) is the 0
-    sentinel, so a fraction would run at the default and report success. The C
-    reader treats "" as NULL, so the init token is checked here.
+    A given count is narrowed before its positivity check, so int(0.5) cannot run
+    as 0, and the init token is checked here so "" is refused by name.
     """
     counts = {"n_components": n_components, "n_iter": n_iter}
-    c_counts = {name: 0 for name in counts}
-    for name, value in counts.items():
-        if value is not None:
-            c_counts[name] = _narrow_int(value, name, 1, _C_INT_MAX)
-    c_mask_power = 0.0
+    c_counts = {
+        name: None if value is None else _narrow_int(value, name, 1, _C_INT_MAX)
+        for name, value in counts.items()
+    }
+    c_mask_power = None
     if mask_power is not None:
         c_mask_power = _narrow_double(mask_power, "mask_power")
         if c_mask_power < 1.0:
             raise _refuse("mask_power must be at least 1")
-    return SonareDecomposeStemsConfig(
-        struct_version=1,
+    return SonareDecomposeStemsConfig._given(
         n_components=c_counts["n_components"],
-        n_fft=0 if n_fft is None else _validate_stft_n_fft(n_fft),
-        hop_length=0 if hop_length is None else _validate_effect_hop(hop_length),
+        n_fft=None if n_fft is None else _validate_stft_n_fft(n_fft),
+        hop_length=None if hop_length is None else _validate_effect_hop(hop_length),
         n_iter=c_counts["n_iter"],
-        beta=0.0 if beta is None else _narrow_double(beta, "beta"),
+        beta=None if beta is None else _narrow_double(beta, "beta"),
         init=None if init is None else _utf8_arg(_token_arg(init, _NMF_INITS, "init"), "init"),
         mask_power=c_mask_power,
     )
@@ -233,8 +231,8 @@ def decompose_stems(
         n_fft: STFT size. Default: the library's (2048).
         hop_length: STFT hop. Default: ``n_fft / 4``, derived by the library.
         n_iter: NMF multiplicative-update iterations. Default: the library's (100).
-        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler). Default:
-            the library's (2.0).
+        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler, 0 =
+            Itakura-Saito). Default: the library's (2.0).
         init: NMF initialisation, ``"random"`` or ``"nndsvd"``; any other
             string, the empty one included, is refused. Default: the library's
             (``"random"``).
@@ -252,7 +250,7 @@ def decompose_stems(
         SonareValueError: If a given ``n_components``, ``n_iter``, ``n_fft`` or
             ``hop_length`` is below 1, ``mask_power`` is below 1, or
             ``init`` is not a known token. Leaving a value out is spelled
-            ``None``, so 0 is refused rather than read as the C ABI's default.
+            ``None``.
         SonareError: If the library rejects a value that reaches it, such as a
             non-finite ``beta`` or ``mask_power``.
     """
@@ -330,8 +328,8 @@ def decompose_stems_linked(
         n_fft: STFT size. Default: the library's (2048).
         hop_length: STFT hop. Default: ``n_fft / 4``, derived by the library.
         n_iter: NMF multiplicative-update iterations. Default: the library's (100).
-        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler). Default:
-            the library's (2.0).
+        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler, 0 =
+            Itakura-Saito). Default: the library's (2.0).
         init: NMF initialisation, ``"random"`` or ``"nndsvd"``; any other
             string, the empty one included, is refused. Default: the library's
             (``"random"``).

@@ -28,6 +28,7 @@
 
 #include "editing/note_model/note_renderer.h"
 #include "editing/polyphony/polyphonic_edit.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/common/note_val.h"
 
@@ -101,6 +102,16 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
   set_float("maxWeightModulus", out.shared_bins.max_weight_modulus);
   set_float("maxRefineHz", out.shared_bins.max_refine_hz);
   set_float("f0ToleranceCents", out.shared_bins.f0_tolerance_cents);
+  // The core reads 0 on these three as "derive it"; the C ABI spells that as
+  // absence and refuses a given 0, so a given value is checked as it is there.
+  namespace check = sonare::util::check;
+  if (hasProperty(config, "winLength")) check::integer_at_least(stft.win_length, 1, "winLength");
+  if (hasProperty(config, "reattackRatio")) {
+    check::greater_than(ridges.reattack_ratio, 1.0, "reattackRatio");
+  }
+  if (hasProperty(config, "maxRefineHz")) {
+    check::greater_than(out.shared_bins.max_refine_hz, 0.0, "maxRefineHz");
+  }
 
   set_float("segmentationThresholdCents", out.notes.segmenter.segmentation_threshold_cents);
   set_float("minNoteMs", out.notes.segmenter.min_note_ms);

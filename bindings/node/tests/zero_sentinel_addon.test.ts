@@ -258,7 +258,7 @@ describe('a bounce option whose zero derives the value', () => {
   });
 });
 
-describe('an analysis band count whose zero keeps the library default', () => {
+describe('an analysis band count read literally', () => {
   const impulseResponse = (): Float32Array => {
     const sampleRate = 48000;
     const out = new Float32Array(sampleRate);
@@ -279,7 +279,8 @@ describe('an analysis band count whose zero keeps the library default', () => {
       }
       return native.estimateRoom(ir, 48000, options).rt60Bands.length;
     };
-    expect(bands(0)).toBe(bands(undefined));
+    expect(() => bands(0)).toThrow(RangeError);
+    expect(() => bands(0)).toThrow(/nOctaveBands must be an integer in \[1, 2147483647\]/);
     expect(bands(4)).not.toBe(bands(undefined)); // positive control
     for (const value of FRACTIONS) {
       expect(() => bands(value), `nOctaveBands ${value}`).toThrow(RangeError);
@@ -401,7 +402,7 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
       native.decomposeStems(samples, SAMPLE_RATE, nComponents === undefined ? {} : { nComponents })
         .w.length;
 
-    expect(width(0)).toBe(width(undefined));
+    expect(() => width(0)).toThrow(RangeError);
     expect(width(2)).not.toBe(width(undefined)); // positive control
     for (const value of FRACTIONS) {
       expect(
@@ -424,7 +425,9 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
         ),
       );
 
-    expect(healed(0)).toBe(healed(undefined));
+    expect(() => healed(0)).toThrow(
+      new RangeError('spectralEdit: healRadiusFrames must be an integer in [1, 2147483647]'),
+    );
     expect(healed(8)).not.toBe(healed(undefined)); // positive control
     for (const value of FRACTIONS) {
       expect(

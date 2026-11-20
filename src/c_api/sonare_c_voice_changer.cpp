@@ -179,9 +179,8 @@ SonareError sonare_voice_change_ex(const float* samples, size_t length, int samp
       err != SONARE_OK) {
     return err;
   }
-  if (config == nullptr || config->struct_version < 0 || config->struct_version > 1 ||
-      (config->formant_mode != SONARE_FORMANT_MODE_RELATIVE &&
-       config->formant_mode != SONARE_FORMANT_MODE_ABSOLUTE)) {
+  if (config == nullptr || (config->formant_mode != SONARE_FORMANT_MODE_RELATIVE &&
+                            config->formant_mode != SONARE_FORMANT_MODE_ABSOLUTE)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_REQUIRE_NONNULL(out);
@@ -357,12 +356,8 @@ editing::voice_changer::RealtimeVoiceChangerConfig vc_config_from_pod(
   return c;
 }
 
-// The POD's own fields that no core validation sees: its layout version and the mode selector.
+// The POD's own fields that no core validation sees: the enum ordinals and the mode selector.
 bool vc_pod_is_valid(const SonareRealtimeVoiceChangerConfig& pod, std::string* error) {
-  if (pod.struct_version != 2) {
-    *error = "unsupported SonareRealtimeVoiceChangerConfig struct_version (must be 2)";
-    return false;
-  }
 #define X(cpp_path, pod_field, cpp_enum, last)                                              \
   if (pod.pod_field < 0 || pod.pod_field > (last)) {                                        \
     *error = std::string(#pod_field " must be an ordinal in [0, ") + std::to_string(last) + \
@@ -392,7 +387,7 @@ void vc_config_to_pod(const editing::voice_changer::RealtimeVoiceChangerConfig& 
 #define X(cpp_path, pod_field, cpp_enum, last) pod->pod_field = static_cast<int32_t>(c.cpp_path);
   SONARE_VC_ENUM_FIELDS(X)
 #undef X
-  pod->struct_version = 2;
+  pod->struct_size = sizeof(SonareRealtimeVoiceChangerConfig);
   pod->formant_mode = c.formant_mode == editing::voice_changer::FormantMode::Absolute
                           ? SONARE_FORMANT_MODE_ABSOLUTE
                           : SONARE_FORMANT_MODE_RELATIVE;
@@ -466,18 +461,14 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
 #endif
 }
 
-SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChangerConfig* out) {
-  SONARE_C_API_ENTRY;
+void sonare_realtime_voice_changer_config_init(SonareRealtimeVoiceChangerConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_TRY
-  const auto config = editing::voice_changer::realtime_voice_changer_preset(
-      editing::voice_changer::VoiceCharacterPreset::NeutralMonitor);
-  vc_config_to_pod(config, out);
-  return SONARE_OK;
-  SONARE_C_CATCH
-#else
-  SONARE_C_STUB_NOT_SUPPORTED(out);
+  vc_config_to_pod(editing::voice_changer::realtime_voice_changer_preset(
+                       editing::voice_changer::VoiceCharacterPreset::NeutralMonitor),
+                   config);
 #endif
 }
 
@@ -491,6 +482,8 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
   SONARE_C_TRY
   editing::voice_changer::RealtimeVoiceChangerConfig cfg;
   if (config) {
+    require_struct_size(config->struct_size, sizeof(SonareRealtimeVoiceChangerConfig), "config",
+                        "sonare_realtime_voice_changer_config_init");
     // Mirror the JSON entry path: refuse NaN/Inf and out-of-range fields.
     editing::voice_changer::RealtimeVoiceChangerConfig normalized;
     std::string error;
@@ -536,6 +529,8 @@ SonareError sonare_realtime_voice_changer_set_config(
   SONARE_C_REQUIRE_NONNULL(handle);
   SONARE_C_REQUIRE_NONNULL(config);
   SONARE_C_TRY
+  require_struct_size(config->struct_size, sizeof(SonareRealtimeVoiceChangerConfig), "config",
+                      "sonare_realtime_voice_changer_config_init");
   editing::voice_changer::RealtimeVoiceChangerConfig normalized;
   std::string error;
   if (!vc_pod_is_valid(*config, &error) ||

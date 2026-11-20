@@ -683,8 +683,8 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
   auto samples = generate_sine(440.0f, sr, 0.4f);
 
   SECTION("emits one flat component buffer plus the factorisation") {
-    SonareDecomposeStemsConfig config{};
-    config.struct_version = 1;
+    SonareDecomposeStemsConfig config;
+    sonare_decompose_stems_config_init(&config);
     config.n_components = 2;
     config.n_fft = 1024;
     config.hop_length = 256;
@@ -731,8 +731,8 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
   }
 
   SECTION("W and H can be requested independently") {
-    SonareDecomposeStemsConfig config{};
-    config.struct_version = 1;
+    SonareDecomposeStemsConfig config;
+    sonare_decompose_stems_config_init(&config);
     config.n_components = 2;
     config.n_fft = 256;
     config.hop_length = 64;
@@ -773,9 +773,8 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
     sonare_free_floats(h_only);
   }
 
-  SECTION("rejects an unknown struct version and an out-of-range mask power") {
+  SECTION("rejects an uninitialised config, a zero in a nonzero field and a low mask power") {
     SonareDecomposeStemsConfig config{};
-    config.struct_version = 99;
     float* out = non_null_sentinel_float_ptr();
     size_t count = 99;
     size_t length = 99;
@@ -785,8 +784,23 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
     REQUIRE(out == nullptr);
     REQUIRE(count == 0);
     REQUIRE(length == 0);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.struct_size must be set by sonare_decompose_stems_config_init");
 
-    config = SonareDecomposeStemsConfig{};
+    for (const auto zero : std::vector<void (*)(SonareDecomposeStemsConfig&)>{
+             [](SonareDecomposeStemsConfig& c) { c.n_components = 0; },
+             [](SonareDecomposeStemsConfig& c) { c.n_fft = 0; },
+             [](SonareDecomposeStemsConfig& c) { c.hop_length = 0; },
+             [](SonareDecomposeStemsConfig& c) { c.n_iter = 0; }}) {
+      sonare_decompose_stems_config_init(&config);
+      zero(config);
+      REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
+                                     &length, nullptr, nullptr, nullptr,
+                                     nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()).find("config.") == 0);
+    }
+
+    sonare_decompose_stems_config_init(&config);
     config.mask_power = 0.5f;
     REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
                                    &length, nullptr, nullptr, nullptr,
@@ -811,8 +825,8 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
   const float* channels[2] = {left.data(), right.data()};
 
   SECTION("emits [component][channel][sample] plus the factorisation") {
-    SonareDecomposeStemsConfig config{};
-    config.struct_version = 1;
+    SonareDecomposeStemsConfig config;
+    sonare_decompose_stems_config_init(&config);
     config.n_components = 2;
     config.n_fft = 1024;
     config.hop_length = 256;
@@ -860,8 +874,8 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
   }
 
   SECTION("one channel matches sonare_decompose_stems bit for bit") {
-    SonareDecomposeStemsConfig config{};
-    config.struct_version = 1;
+    SonareDecomposeStemsConfig config;
+    sonare_decompose_stems_config_init(&config);
     config.n_components = 2;
     config.n_fft = 1024;
     config.hop_length = 256;
@@ -923,9 +937,8 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
     sonare_free_floats(out);
   }
 
-  SECTION("rejects an unknown struct version and an out-of-range mask power") {
+  SECTION("rejects an uninitialised config, a zero in a nonzero field and a low mask power") {
     SonareDecomposeStemsConfig config{};
-    config.struct_version = 99;
     float* out = non_null_sentinel_float_ptr();
     size_t component_count = 99;
     size_t channel_count = 99;
@@ -938,8 +951,10 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
     REQUIRE(component_count == 0);
     REQUIRE(channel_count == 0);
     REQUIRE(component_length == 0);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.struct_size must be set by sonare_decompose_stems_config_init");
 
-    config = SonareDecomposeStemsConfig{};
+    sonare_decompose_stems_config_init(&config);
     config.mask_power = 0.5f;
     REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, &config, &out,
                                           &component_count, &channel_count, &component_length,
@@ -1117,12 +1132,12 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
 
   SECTION("attenuating a band runs and returns same-length finite audio") {
     SonareSpectralEditConfig config;
+    sonare_spectral_edit_config_init(&config);
     config.n_fft = 2048;
     config.hop_length = 512;
-    config.window = SONARE_WINDOW_HANN;
-    config.heal_radius_frames = 2;
 
     SonareSpectralRegionOp op;
+    sonare_spectral_region_op_init(&op);
     op.start_sample = 0;
     op.end_sample = static_cast<int64_t>(samples.size());
     op.low_hz = 4000.0f;
@@ -1148,7 +1163,10 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
     REQUIRE(out == nullptr);
     REQUIRE(out_len == 0);
 
-    SonareSpectralRegionOp bad{0, static_cast<int64_t>(samples.size()), 0.0f, 0.0f, 0.0f, 99};
+    SonareSpectralRegionOp bad;
+    sonare_spectral_region_op_init(&bad);
+    bad.end_sample = static_cast<int64_t>(samples.size());
+    bad.mode = 99;
     out = non_null_sentinel_float_ptr();
     REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, &bad, 1, &out,
                                  &out_len) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1160,7 +1178,8 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
     // Bounds derive from the enum, so a new enumerator widens the accepted range here too.
     const int bad_windows[] = {SONARE_WINDOW_HANN - 1, SONARE_WINDOW_RECTANGULAR + 1, 99};
     for (int bad_window : bad_windows) {
-      SonareSpectralEditConfig config{};
+      SonareSpectralEditConfig config;
+      sonare_spectral_edit_config_init(&config);
       config.window = bad_window;
       out = non_null_sentinel_float_ptr();
       out_len = 99;
@@ -1174,6 +1193,7 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
 
   SECTION("every mapped window is accepted and changes the output") {
     SonareSpectralRegionOp op;
+    sonare_spectral_region_op_init(&op);
     op.start_sample = 0;
     op.end_sample = static_cast<int64_t>(samples.size());
     op.low_hz = 4000.0f;
@@ -1188,7 +1208,8 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
 
     std::vector<std::vector<float>> rendered(kWindowCount);
     for (size_t i = 0; i < kWindowCount; ++i) {
-      SonareSpectralEditConfig config{};
+      SonareSpectralEditConfig config;
+      sonare_spectral_edit_config_init(&config);
       config.window = windows[i];
       float* out = nullptr;
       size_t out_len = 0;
@@ -1211,18 +1232,22 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
     }
   }
 
-  SECTION("a zero-filled config selects Hann and the documented defaults") {
-    SonareSpectralEditConfig zeroed{};
-    REQUIRE(SONARE_WINDOW_HANN == 0);
-    REQUIRE(zeroed.window == SONARE_WINDOW_HANN);
+  SECTION("init selects Hann and the documented defaults") {
+    SonareSpectralEditConfig initialised;
+    sonare_spectral_edit_config_init(&initialised);
+    CHECK(initialised.struct_size == sizeof(SonareSpectralEditConfig));
+    CHECK(initialised.n_fft == 2048);
+    CHECK(initialised.hop_length == SONARE_STFT_HOP_AUTO);
+    CHECK(initialised.window == SONARE_WINDOW_HANN);
+    CHECK(initialised.heal_radius_frames == 2);
 
-    SonareSpectralEditConfig spelled_out{};
-    spelled_out.n_fft = 2048;
+    SonareSpectralEditConfig spelled_out = initialised;
     spelled_out.hop_length = 512;
-    spelled_out.window = SONARE_WINDOW_HANN;
-    spelled_out.heal_radius_frames = 2;
 
     SonareSpectralRegionOp op;
+    sonare_spectral_region_op_init(&op);
+    CHECK(op.struct_size == sizeof(SonareSpectralRegionOp));
+    CHECK(std::isnan(op.high_hz));
     op.start_sample = 0;
     op.end_sample = static_cast<int64_t>(samples.size());
     op.low_hz = 4000.0f;
@@ -1230,22 +1255,55 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
     op.gain_db = -24.0f;
     op.mode = SONARE_SPECTRAL_EDIT_MODE_ATTENUATE;
 
-    float* zeroed_out = nullptr;
-    size_t zeroed_len = 0;
-    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &zeroed, &op, 1, &zeroed_out,
-                                 &zeroed_len) == SONARE_OK);
-    REQUIRE(zeroed_out != nullptr);
-    REQUIRE(zeroed_len == samples.size());
+    float* init_out = nullptr;
+    size_t init_len = 0;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &initialised, &op, 1,
+                                 &init_out, &init_len) == SONARE_OK);
+    REQUIRE(init_out != nullptr);
+    REQUIRE(init_len == samples.size());
 
     float* spelled_out_audio = nullptr;
     size_t spelled_out_len = 0;
     REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &spelled_out, &op, 1,
                                  &spelled_out_audio, &spelled_out_len) == SONARE_OK);
-    REQUIRE(spelled_out_len == zeroed_len);
-    REQUIRE(max_abs_difference(zeroed_out, spelled_out_audio, zeroed_len) == 0.0f);
+    REQUIRE(spelled_out_len == init_len);
+    REQUIRE(max_abs_difference(init_out, spelled_out_audio, init_len) == 0.0f);
 
-    sonare_free_floats(zeroed_out);
+    sonare_free_floats(init_out);
     sonare_free_floats(spelled_out_audio);
+  }
+
+  SECTION("an uninitialised config or op, a zero field and a non-positive high edge are refused") {
+    float* out = nullptr;
+    size_t out_len = 0;
+    SonareSpectralEditConfig zeroed{};
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &zeroed, nullptr, 0, &out,
+                                 &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.struct_size must be set by sonare_spectral_edit_config_init");
+
+    SonareSpectralEditConfig config;
+    sonare_spectral_edit_config_init(&config);
+    config.n_fft = 0;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &config, nullptr, 0, &out,
+                                 &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("config.n_fft") == 0);
+    sonare_spectral_edit_config_init(&config);
+    config.heal_radius_frames = 0;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &config, nullptr, 0, &out,
+                                 &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("config.heal_radius_frames") == 0);
+
+    SonareSpectralRegionOp op{};
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, &op, 1, &out,
+                                 &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "ops[0].struct_size must be set by sonare_spectral_region_op_init");
+    sonare_spectral_region_op_init(&op);
+    op.high_hz = 0.0f;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, &op, 1, &out,
+                                 &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("ops[0].high_hz") == 0);
   }
 }
 

@@ -377,12 +377,11 @@ def note_segments(
     if voiced_count != f0_count:
         voicing = "voiced" if voiced is not None else "voiced_prob"
         raise _refuse(f"f0_hz and {voicing} must have the same length")
-    config = SonareNoteSegmenterConfig(
-        2,
-        0.0 if segmentation_threshold_cents is None else segmentation_threshold_cents,
-        0.0 if min_note_ms is None else min_note_ms,
-        0.0 if reference_hz is None else reference_hz,
-        0.0 if voiced_threshold is None else voiced_threshold,
+    config = SonareNoteSegmenterConfig._given(
+        segmentation_threshold_cents=segmentation_threshold_cents,
+        min_note_ms=min_note_ms,
+        reference_hz=reference_hz,
+        voiced_threshold=voiced_threshold,
     )
     out = SonareNoteSegmentsResult()
     rc = lib.sonare_note_segments(

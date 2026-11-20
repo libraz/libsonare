@@ -103,7 +103,7 @@ void sonare_stream_config_init(SonareStreamConfig* config) {
   config->n_mels = defaults.n_mels;
   config->fmin_hz = defaults.fmin;
   // The core spells the Nyquist default as 0; the C field leaves it absent.
-  config->fmax_hz = defaults.fmax > 0.0f ? defaults.fmax : std::numeric_limits<float>::quiet_NaN();
+  config->fmax_hz = defaults.fmax == 0.0f ? std::numeric_limits<float>::quiet_NaN() : defaults.fmax;
   config->reference_hz = defaults.tuning_ref_hz;
   // The C ABI streaming surface has no magnitude read path, so the default
   // config advertises it as off (an explicit non-zero is rejected by _create).

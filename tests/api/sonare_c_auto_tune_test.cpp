@@ -152,8 +152,8 @@ TEST_CASE("sonare_auto_tune with no key equals passing the detected key", "[c_ap
 
 TEST_CASE("sonare_auto_tune strength 0 leaves the audio unchanged", "[c_api]") {
   const std::vector<float> input = detuned_melody(kDetuneCents);
-  SonarePitchCorrectionConfig config{};
-  REQUIRE(sonare_pitch_correction_config_default(&config) == SONARE_OK);
+  SonarePitchCorrectionConfig config;
+  sonare_pitch_correction_config_init(&config);
   config.retune_amount = 0.0f;
   const SonareKey key{SONARE_PITCH_C, SONARE_MODE_MAJOR, 0.0f};
   float* out = nullptr;
@@ -176,8 +176,8 @@ TEST_CASE("sonare_auto_tune refuses bad arguments and defines its outputs", "[c_
   SonareKey used{SONARE_PITCH_B, SONARE_MODE_LOCRIAN, 0.5f};
   const SonareKey bad_root{static_cast<SonarePitchClass>(12), SONARE_MODE_MAJOR, 1.0f};
   const SonareKey bad_mode{SONARE_PITCH_C, static_cast<SonareMode>(7), 1.0f};
-  SonarePitchCorrectionConfig config{};
-  REQUIRE(sonare_pitch_correction_config_default(&config) == SONARE_OK);
+  SonarePitchCorrectionConfig config;
+  sonare_pitch_correction_config_init(&config);
   config.retune_amount = 1.5f;
   const SonareKey good{SONARE_PITCH_C, SONARE_MODE_MAJOR, 1.0f};
 

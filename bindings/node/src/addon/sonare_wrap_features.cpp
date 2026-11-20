@@ -739,7 +739,8 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   std::vector<int32_t> flags_i32;
   if (has_flags) flags_i32.assign(voiced_flags.Data(), voiced_flags.Data() + voicing_length);
 
-  SonareNoteSegmenterConfig config{};
+  SonareNoteSegmenterConfig config;
+  sonare_note_segmenter_config_init(&config);
   const Napi::Value config_value = info[4];
   if (!config_value.IsUndefined() && !config_value.IsNull()) {
     if (!config_value.IsObject() || config_value.IsArray()) {
@@ -747,7 +748,6 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     const Napi::Object options = config_value.As<Napi::Object>();
-    config.struct_version = 2;
     // Analysis options bag: the presence-checked reader family, so an explicit
     // `undefined` reads as the documented default and a wrong-typed value is
     // refused by name rather than silently taking it.

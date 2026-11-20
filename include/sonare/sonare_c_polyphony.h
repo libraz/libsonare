@@ -35,6 +35,10 @@
 extern "C" {
 #endif
 
+/// The analysis window as long as the FFT. Outside the window length's real domain (a positive
+/// sample count), so it never reads as a length.
+#define SONARE_POLYPHONIC_WIN_LENGTH_FFT (-1)
+
 /// @brief Opaque analysis: one STFT, the tracked ridges, a mask per note, and the
 ///        notes themselves.
 typedef struct SonarePolyphonicAnalysis SonarePolyphonicAnalysis;
@@ -44,8 +48,9 @@ typedef struct SonarePolyphonicAnalysis SonarePolyphonicAnalysis;
 ///          @c struct_size and every field's library default; every field is then
 ///          read literally (a 0 is a 0) and checked against the range given beside
 ///          it, an out-of-range value being refused with
-///          SONARE_ERROR_INVALID_PARAMETER. Three fields keep a named meaning at 0
-///          and say so: @c win_length, @c max_refine_hz and @c reattack_ratio.
+///          SONARE_ERROR_INVALID_PARAMETER. Three fields have an absent spelling and say
+///          so: @c win_length (@ref SONARE_POLYPHONIC_WIN_LENGTH_FFT) and @c max_refine_hz
+///          and @c reattack_ratio (NaN, not given).
 ///
 ///          The window function and the centred framing are not settable. Every
 ///          other entry point in this library states an STFT as a size and a hop,
@@ -65,8 +70,8 @@ typedef struct {
   int32_t n_fft;
   /// STFT hop in samples at 44100 Hz. Default 512; positive.
   int32_t hop_length;
-  /// Analysis window length in samples at 44100 Hz. Default 0, which means n_fft; otherwise in
-  /// [1, n_fft].
+  /// Analysis window length in samples at 44100 Hz, in [1, n_fft]. Default
+  /// @ref SONARE_POLYPHONIC_WIN_LENGTH_FFT, which means n_fft.
   int32_t win_length;
 
   // The cent axis the salience is folded onto.
@@ -116,7 +121,8 @@ typedef struct {
   /// Ridges shorter than this many milliseconds are dropped. Default 140; non-negative.
   float min_ridge_duration_ms;
   /// Splits a ridge where its salience climbs past this multiple of the level just before, the
-  /// same pitch struck again while it sounds. Default 0, which means no split; otherwise above 1.
+  /// same pitch struck again while it sounds. Above 1; default NaN (not given), which means no
+  /// split.
   float reattack_ratio;
 
   // Claims: which bins a note asks for. A claim is predicted from the note's f0 and harmonic
@@ -163,8 +169,8 @@ typedef struct {
   /// still sum to the input. Lowering it trades separation for a quieter residual. Default 8; at
   /// least 1.
   float max_weight_modulus;
-  /// Highest partial frequency in Hz usable to refine f0. Default 0, which derives one;
-  /// otherwise positive.
+  /// Highest partial frequency in Hz usable to refine f0; positive. Default NaN (not given),
+  /// which derives one.
   float max_refine_hz;
   /// Worst f0 error tolerated, in cents. Default 50, in (0, 1200].
   float f0_tolerance_cents;
@@ -251,7 +257,8 @@ SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, So
 /// @details The only thing a host writes. Everything else on a note is a measurement,
 ///          and the order is the pairing with the claim sets, so neither is settable.
 /// @param note Index below @ref sonare_polyphonic_note_count.
-/// @param edit The new edit, or NULL for the identity edit. Its @c envelope_offset
+/// @param edit The new edit, or NULL for the identity edit; otherwise started from
+///        @ref sonare_note_edit_init. Its @c envelope_offset
 ///        and @c envelope_count are ignored: the envelope is @p envelope here, which
 ///        the handle copies, so the caller's array need not outlive this call.
 /// @param envelope Per-frame linear gain points over the note's span, on top of
@@ -337,9 +344,10 @@ SonareError sonare_polyphonic_note_inharmonicity(const SonarePolyphonicAnalysis*
 ///          note's contribution is identical between two renders. That is worth
 ///          stating because it is also the limit: it means a host cannot tell from
 ///          two renders whether a claim set divided the energy correctly.
-/// @param config Optional versioned configuration; NULL selects the defaults. The
-///        same struct @ref sonare_render_notes takes, and its @c vibrato_cutoff_hz
-///        has to be whatever a curve edit was drawn at.
+/// @param config Optional @ref SonareNoteRenderConfig started from
+///        @ref sonare_note_render_config_init; NULL selects the defaults. It is the same struct
+///        @ref sonare_render_notes takes, and its @c vibrato_cutoff_hz has to be whatever a
+///        curve edit was drawn at.
 /// @param out Receives the rendered audio, which has the source's length.
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.

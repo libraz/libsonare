@@ -142,6 +142,42 @@ const REMOVED_FILTERS: ReadonlyArray<{
     reason:
       'The built-in synth patch fields and the SF2 player config, every one documented as "0 => default". clamp_synth_config reads a non-positive or non-finite field as the default and reports nothing, so a request that got that far came back as a successful call at a level the caller never chose. Only these fields are asserted absent: block_size, num_channels and sample_rate read only 0 as the default and refuse a negative value.',
   },
+  {
+    file: 'src/c_api/features_spectral_pitch.cpp',
+    fields: ['segmentation_threshold_cents', 'min_note_ms', 'reference_hz', 'voiced_threshold'],
+    reason:
+      'The note-segmenter config, seeded by its init function and read literally. A 0 used to keep the core default and a negative was refused beside it; a given 0 is now refused as out of domain, so no comparison may read it as "not given".',
+  },
+  {
+    file: 'src/c_api/sonare_c_daw.cpp',
+    fields: ['segmentation_threshold_cents', 'min_note_ms', 'reference_hz', 'voiced_threshold'],
+    reason:
+      'The same note-segmenter fields on the note-extraction door, with the same contract as the pitch-feature one.',
+  },
+  {
+    file: 'src/c_api/note_render_common.h',
+    fields: ['fade_ms', 'vibrato_cutoff_hz'],
+    reason:
+      'The note render config shared by sonare_render_notes and sonare_polyphonic_render, seeded by its init function. Both fields must be greater than 0, so a 0 is refused rather than read as the default fade or cutoff.',
+  },
+  {
+    file: 'src/c_api/sonare_c_effects.cpp',
+    fields: ['n_components', 'n_fft', 'hop_length', 'n_iter', 'mask_power'],
+    reason:
+      'The stem decomposition config, seeded by its init function. Every count must be at least 1 and the mask power at least 1, so a 0 is refused rather than selecting the library value.',
+  },
+  {
+    file: 'src/wasm/bindings/effects/notes.cpp',
+    fields: ['threshold_cents', 'min_note_ms', 'reference_hz', 'voiced_threshold', 'fade_ms'],
+    reason:
+      'The WASM note extraction and render configs, which reach the core directly and so restate the C checks: an omitted key keeps the seeded default, a given 0 is refused.',
+  },
+  {
+    file: 'src/wasm/bindings/effects/decomposition.cpp',
+    fields: ['n_components', 'n_fft', 'hop_length', 'n_iter', 'mask_power'],
+    reason:
+      'The WASM stem decomposition config, read literally with the C checks restated; an omitted hopLength is the automatic hop, a given 0 is refused.',
+  },
 ];
 
 /**
@@ -164,51 +200,6 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
    */
   refusedAs?: string;
 }> = [
-  {
-    file: 'src/c_api/features_spectral_pitch.cpp',
-    field: 'segmentation_threshold_cents',
-    reason: 'Note-segmenter threshold in cents; 0 keeps the core default, negative is refused.',
-  },
-  {
-    file: 'src/c_api/features_spectral_pitch.cpp',
-    field: 'min_note_ms',
-    reason: 'Minimum note length; 0 keeps the core default, negative is refused.',
-  },
-  {
-    file: 'src/c_api/features_spectral_pitch.cpp',
-    field: 'reference_hz',
-    reason: 'Tuning reference; 0 keeps the core default, negative is refused.',
-  },
-  {
-    file: 'src/c_api/features_spectral_pitch.cpp',
-    field: 'voiced_threshold',
-    reason: 'Voicing probability threshold; 0 keeps the core default, outside [0,1] is refused.',
-  },
-  {
-    file: 'src/c_api/sonare_c_daw.cpp',
-    field: 'segmentation_threshold_cents',
-    reason: 'As the features_spectral_pitch field of the same name; one config, two doors.',
-  },
-  {
-    file: 'src/c_api/sonare_c_daw.cpp',
-    field: 'min_note_ms',
-    reason: 'As the features_spectral_pitch field of the same name.',
-  },
-  {
-    file: 'src/c_api/sonare_c_daw.cpp',
-    field: 'reference_hz',
-    reason: 'As the features_spectral_pitch field of the same name.',
-  },
-  {
-    file: 'src/c_api/sonare_c_daw.cpp',
-    field: 'voiced_threshold',
-    reason: 'As the features_spectral_pitch field of the same name.',
-  },
-  {
-    file: 'src/c_api/note_render_common.h',
-    field: 'fade_ms',
-    reason: 'Note-render fade length; 0 keeps the core default, negative and non-finite refused.',
-  },
   {
     file: 'src/c_api/sonare_c_daw.cpp',
     field: 'vibrato_cutoff_hz',
@@ -237,32 +228,6 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
     reason: 'dB floor; 0 keeps the core default, negative and non-finite refused.',
   },
   {
-    file: 'src/c_api/sonare_c_effects.cpp',
-    field: 'n_components',
-    reason: 'Stem-decomposition component count; 0 keeps the core default (4), negative refused.',
-  },
-  {
-    file: 'src/c_api/sonare_c_effects.cpp',
-    field: 'n_fft',
-    reason: 'Stem-decomposition window size; 0 keeps the core default (2048), negative refused.',
-  },
-  {
-    file: 'src/c_api/sonare_c_effects.cpp',
-    field: 'hop_length',
-    reason: 'Stem-decomposition hop; 0 keeps the core default (512), negative refused.',
-  },
-  {
-    file: 'src/c_api/sonare_c_effects.cpp',
-    field: 'n_iter',
-    reason: 'Stem-decomposition iterations; 0 keeps the core default (100), negative refused.',
-  },
-  {
-    file: 'src/c_api/sonare_c_effects.cpp',
-    field: 'mask_power',
-    reason:
-      'Stem mask exponent; 0 keeps the core default (1), negative and non-finite refused and the resolved value must be at least 1.',
-  },
-  {
     file: 'src/c_api/sonare_c_engine.cpp',
     field: 'click_sec',
     reason:
@@ -273,11 +238,6 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
     file: 'src/c_api/sonare_c_engine_render.cpp',
     field: 'dither_bits',
     reason: 'Dither target word length; 0 keeps the default (16), negative refused.',
-  },
-  {
-    file: 'src/c_api/note_render_common.h',
-    field: 'vibrato_cutoff_hz',
-    reason: 'Shared note-render cutoff; 0 keeps the core default, negative and non-finite refused.',
   },
   {
     file: 'src/c_api/synth_patch_common.h',
@@ -327,58 +287,8 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
   },
   {
     file: 'src/wasm/bindings/effects/notes.cpp',
-    field: 'threshold_cents',
-    reason: 'WASM spelling of segmentation_threshold_cents; same sentinel, same refusal.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/notes.cpp',
-    field: 'min_note_ms',
-    reason: 'WASM note-extractor config field; 0 keeps the core default, negative refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/notes.cpp',
-    field: 'reference_hz',
-    reason: 'WASM note-extractor config field; 0 keeps the core default, negative refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/notes.cpp',
-    field: 'voiced_threshold',
-    reason: 'WASM note-extractor config field; 0 keeps the core default, outside [0,1] refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/notes.cpp',
-    field: 'fade_ms',
-    reason: 'WASM note-render config field; 0 keeps the core default, negative refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/notes.cpp',
     field: 'vibrato_cutoff_hz',
     reason: 'WASM pitch-decomposition cutoff; 0 keeps the core default, negative refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/decomposition.cpp',
-    field: 'n_components',
-    reason: 'WASM stem-decomposition field; 0 keeps the core default, negative refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/decomposition.cpp',
-    field: 'n_fft',
-    reason: 'WASM stem-decomposition field; 0 keeps the core default, negative refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/decomposition.cpp',
-    field: 'hop_length',
-    reason: 'WASM stem-decomposition field; 0 keeps the core default, negative refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/decomposition.cpp',
-    field: 'n_iter',
-    reason: 'WASM stem-decomposition field; 0 keeps the core default, negative refused.',
-  },
-  {
-    file: 'src/wasm/bindings/effects/decomposition.cpp',
-    field: 'mask_power',
-    reason: 'WASM stem mask exponent; 0 keeps the core default, negative refused.',
   },
   {
     file: 'src/wasm/bindings/metering/metering.cpp',
@@ -427,6 +337,10 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
   [
     'bindings/node/src/addon/sonare_wrap_synth_patch.h:num_mod_routings',
     'The routing count on a patch the core produced, sizing the JS array it is copied into.',
+  ],
+  [
+    'src/c_api/features_streaming.cpp:fmax',
+    "The core streaming default, whose 0 spells Nyquist; the init function converts it to the C field's NaN. It reads a library constant, never a caller value.",
   ],
   [
     'src/c_api/project_bounce_mixer.cpp:stage_latency_q8',
@@ -502,7 +416,7 @@ describe('a `> 0` sentinel filter is removed or answered', () => {
     // RED WHEN: the scan's regexes stop matching (a clang-format change that
     // wraps these comparisons, a rename of the shapes). Without this, a dead
     // regex would report an empty population and read as a clean tree.
-    expect(filterSites().length).toBeGreaterThan(50);
+    expect(filterSites().length).toBeGreaterThan(40);
     expect(new Set(filterSites().map((site) => site.file)).size).toBeGreaterThan(10);
   });
 

@@ -5,8 +5,8 @@
 ///        note-object and polyphonic-editing TUs.
 ///
 /// An absent edit field is its own identity spelling, so `{}` and an omitted edit
-/// both leave the note untouched, and a `timeStretchRatio` of 0 reads as 1 -- the C
-/// ABI's rule, kept so one edit means one thing whichever chain applies it.
+/// both leave the note untouched. A given `timeStretchRatio` is read literally and must be
+/// finite and greater than 0, as the C ABI's SonareNoteEdit requires.
 ///
 /// Two things the C ABI's fixed records cannot carry inline cross as arrays here,
 /// because nothing on this surface needs a pool to own them: a note's amplitude
@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "editing/note_model/note_object.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 namespace sonare_wasm_editing {
@@ -50,9 +51,9 @@ inline sonare::editing::note_model::NoteEdit noteEditFromVal(const val& edit, co
   }
   out.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f);
   out.gain_db = floatProperty(edit, "gainDb", 0.0f);
-  const float stretch_ratio = floatProperty(edit, "timeStretchRatio", out.time_stretch_ratio);
-  // A zeroed edit must be the identity, so 0 reads as 1 (SonareNoteEdit).
-  out.time_stretch_ratio = stretch_ratio == 0.0f ? 1.0f : stretch_ratio;
+  out.time_stretch_ratio = floatProperty(edit, "timeStretchRatio", out.time_stretch_ratio);
+  sonare::util::check::greater_than(out.time_stretch_ratio, 0.0,
+                                    (std::string(subject) + ".timeStretchRatio").c_str());
   out.formant_shift_semitones = floatProperty(edit, "formantSemitones", 0.0f);
   out.vibrato_depth_change = floatProperty(edit, "vibratoDepthChange", 0.0f);
   out.drift_change = floatProperty(edit, "driftChange", 0.0f);

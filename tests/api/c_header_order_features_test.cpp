@@ -139,7 +139,7 @@ TEST_CASE("spectral and pitch entries name the earlier parameter first", "[c_api
 }
 
 TEST_CASE("CQT entries name the audio buffer before out", "[c_api][header_order]") {
-  REQUIRE(sonare_cqt(nullptr, 0, 22050, 512, 32.7f, 84, 12, nullptr) ==
+  REQUIRE(sonare_cqt(nullptr, 0, 22050, 512, 32.7f, 84, 12, 1.0f, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples must be a non-empty buffer");
 
@@ -148,14 +148,14 @@ TEST_CASE("CQT entries name the audio buffer before out", "[c_api][header_order]
   result.n_frames = 5;
   result.magnitude = garbage_pointer<float>();
   result.frequencies = garbage_pointer<float>();
-  REQUIRE(sonare_cqt(nullptr, 0, 22050, 512, 32.7f, 84, 12, &result) ==
+  REQUIRE(sonare_cqt(nullptr, 0, 22050, 512, 32.7f, 84, 12, 1.0f, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(result.n_bins == 0);
   CHECK(result.n_frames == 0);
   CHECK(result.magnitude == nullptr);
   CHECK(result.frequencies == nullptr);
 
-  REQUIRE(sonare_vqt(nullptr, 0, 22050, 512, 32.7f, 84, 12, 0.0f, nullptr) ==
+  REQUIRE(sonare_vqt(nullptr, 0, 22050, 512, 32.7f, 84, 12, 1.0f, 0.0f, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "samples must be a non-empty buffer");
 }

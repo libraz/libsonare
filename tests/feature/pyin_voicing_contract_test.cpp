@@ -68,8 +68,8 @@ Pyin run_pyin(float midi) {
 
 size_t segment_count(const std::vector<float>& f0, const std::vector<float>& voicing,
                      float voiced_threshold) {
-  SonareNoteSegmenterConfig config{};
-  config.struct_version = 2;
+  SonareNoteSegmenterConfig config;
+  sonare_note_segmenter_config_init(&config);
   config.voiced_threshold = voiced_threshold;
   SonareNoteSegmentsResult result{};
   REQUIRE(sonare_note_segments(f0.data(), voicing.data(), nullptr, f0.size(),

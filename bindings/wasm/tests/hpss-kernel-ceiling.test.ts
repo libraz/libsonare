@@ -349,12 +349,12 @@ describe('percussive-event separation kernel', () => {
         capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: -1 })),
       );
       expect(error.message).toBe(
-        `extractPercussiveEvents: the framing and kernel sizes must be integers in [0, 2147483647]`,
+        `extractPercussiveEvents: ${key} must be an integer in [1, 2147483647]`,
       );
     });
 
-    // The native config reads 0 as "use the default", so an explicit 0 would
-    // separate on the default while reporting success; it is refused by name.
+    // A given 0 is refused by name, ahead of the native domain check, rather
+    // than read as "use the default".
     it(`refuses an explicit zero ${direction} kernel by name`, () => {
       const caught = capture(() =>
         extractPercussiveEvents({ samples: hits, sampleRate, [key]: 0 }),
@@ -508,10 +508,9 @@ describe('percussive-event separation framing', () => {
           capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: passed })),
         );
         expect(error.message).toContain(`${key} must be an integer`);
-        // -0.5 truncates to 0, so the module's own negativity check cannot see
-        // it; a refusal quoting that check would mean the integrality guard
-        // never ran.
-        expect(error.message).not.toContain('framing and kernel sizes');
+        // -0.5 truncates to 0, which the module's domain check would refuse too;
+        // a refusal quoting that check would mean the integrality guard never ran.
+        expect(error.message).not.toContain('must be an integer in [1, 2147483647]');
       });
     }
 

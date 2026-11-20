@@ -1,4 +1,5 @@
 #include "c_api/core_internal.h"
+#include "util/parameter_checks.h"
 
 namespace {
 
@@ -6,7 +7,8 @@ namespace {
 template <typename Transform>
 SonareError run_cqt_family(const char* fn, const char* name, const float* samples, size_t length,
                            int sample_rate, int hop_length, float fmin, int n_bins,
-                           int bins_per_octave, SonareCqtResult* out, Transform&& transform) {
+                           int bins_per_octave, float filter_scale, SonareCqtResult* out,
+                           Transform&& transform) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   if (const SonareError err = validate_audio_params(fn, name, samples, length, sample_rate);
@@ -19,6 +21,7 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
         config.fmin = fmin;
         config.n_bins = n_bins;
         config.bins_per_octave = bins_per_octave;
+        config.filter_scale = filter_scale;
         validate_cqt_config(config);
       });
       err != SONARE_OK) {
@@ -33,6 +36,7 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
                                     config.fmin = fmin;
                                     config.n_bins = n_bins;
                                     config.bins_per_octave = bins_per_octave;
+                                    config.filter_scale = filter_scale;
                                     CqtResult result = transform(audio, config);
                                     return fill_cqt_result(result, out);
                                   });
@@ -41,36 +45,38 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
 }  // namespace
 
 SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                       float fmin_hz, int n_bins, int bins_per_octave, SonareCqtResult* out) {
+                       float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
+                       SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   return run_cqt_family(
       "cqt", "samples", samples, length, sample_rate, hop_length, fmin_hz, n_bins, bins_per_octave,
-      out, [](const Audio& audio, const CqtConfig& config) { return cqt(audio, config); });
+      filter_scale, out,
+      [](const Audio& audio, const CqtConfig& config) { return cqt(audio, config); });
 }
 
 SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                              float fmin_hz, int n_bins, int bins_per_octave,
+                              float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
                               SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   return run_cqt_family(
       "pseudo_cqt", "samples", samples, length, sample_rate, hop_length, fmin_hz, n_bins,
-      bins_per_octave, out,
+      bins_per_octave, filter_scale, out,
       [](const Audio& audio, const CqtConfig& config) { return pseudo_cqt(audio, config); });
 }
 
 SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                              float fmin_hz, int n_bins, int bins_per_octave,
+                              float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
                               SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   return run_cqt_family(
       "hybrid_cqt", "samples", samples, length, sample_rate, hop_length, fmin_hz, n_bins,
-      bins_per_octave, out,
+      bins_per_octave, filter_scale, out,
       [](const Audio& audio, const CqtConfig& config) { return hybrid_cqt(audio, config); });
 }
 
 SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
-                       float fmin_hz, int n_bins, int bins_per_octave, float gamma,
-                       SonareCqtResult* out) {
+                       float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
+                       float gamma, SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   if (const SonareError err = validate_audio_params("vqt", "samples", samples, length, sample_rate);
@@ -83,8 +89,10 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
         config.fmin = fmin_hz;
         config.n_bins = n_bins;
         config.bins_per_octave = bins_per_octave;
+        config.filter_scale = filter_scale;
         validate_cqt_config(config.to_cqt_config());
-        validate_vqt_gamma(gamma);
+        // NaN is the automatic spelling; every other value is a bandwidth offset in Hz.
+        if (!std::isnan(gamma)) util::check::at_least(gamma, 0.0, "gamma");
       });
       err != SONARE_OK) {
     return err;
@@ -98,8 +106,11 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
                                     config.fmin = fmin_hz;
                                     config.n_bins = n_bins;
                                     config.bins_per_octave = bins_per_octave;
+                                    config.filter_scale = filter_scale;
                                     config.gamma = gamma;
                                     VqtResult result = vqt(audio, config);
-                                    return fill_cqt_result(result, out);
+                                    const SonareError filled = fill_cqt_result(result, out);
+                                    if (filled == SONARE_OK) out->gamma = resolve_vqt_gamma(config);
+                                    return filled;
                                   });
 }

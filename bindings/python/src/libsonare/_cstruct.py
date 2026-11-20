@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ctypes
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 from ._narrowing import _narrow_float, _narrow_int
 
@@ -136,6 +136,11 @@ class CStruct(ctypes.Structure):
             setattr(self, name, value)
         for name, value in kwargs.items():
             setattr(self, name, value)
+
+    @classmethod
+    def _given(cls, **fields: Any) -> Self:
+        """Seed through the init function, then write only the fields that are not None."""
+        return cls(**{name: value for name, value in fields.items() if value is not None})
 
     def __setattr__(self, name: str, value: Any) -> None:
         # ctypes keeps an unknown name as a plain attribute, so a renamed field

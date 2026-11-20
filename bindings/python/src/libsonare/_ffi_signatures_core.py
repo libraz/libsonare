@@ -663,6 +663,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.c_float,
         ctypes.POINTER(SonareCqtResult),
     ]
     lib.sonare_pseudo_cqt.restype = ctypes.c_int32
@@ -674,6 +675,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.c_float,
         ctypes.POINTER(SonareCqtResult),
     ]
     lib.sonare_hybrid_cqt.restype = ctypes.c_int32
@@ -685,6 +687,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.c_float,
         ctypes.POINTER(SonareCqtResult),
     ]
     lib.sonare_vqt.restype = ctypes.c_int32
@@ -696,6 +699,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.c_float,
         ctypes.c_float,
         ctypes.POINTER(SonareCqtResult),
     ]

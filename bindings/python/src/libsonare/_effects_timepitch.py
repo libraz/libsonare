@@ -215,7 +215,6 @@ def pitch_correct_timevarying(
     lib = _get_lib()
 
     config = SonarePitchCorrectionConfig()
-    _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
     config.target_mode = (
         SONARE_PITCH_TARGET_SCALE if target == "scale" else SONARE_PITCH_TARGET_FIXED_MIDI
     )
@@ -330,7 +329,6 @@ def auto_tune(
 
     named = _auto_tune_key(key)
     config = SonarePitchCorrectionConfig()
-    _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
     if retune_amount is not None:
         config.retune_amount = _narrow_double(retune_amount, "retune_amount")
     if scale_reference_midi is not None:

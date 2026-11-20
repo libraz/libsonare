@@ -56,6 +56,8 @@ export interface CqtRequest extends SampleInput {
   nBins?: number;
   /** Bins per octave; default 12. */
   binsPerOctave?: number;
+  /** Filter length scale factor, finite and greater than 0; default 1 (librosa's). */
+  filterScale?: number;
 }
 
 /** Canonical request form for {@link pseudoCqt}. */
@@ -231,6 +233,7 @@ function cqtFamily<R extends CqtRequest>(
     sampleRate: native.sampleRate,
     magnitude: toMatrix2D(native.magnitude, native.nBins, native.nFrames),
     frequencies: native.frequencies,
+    gamma: native.gamma,
   };
 }
 
@@ -239,7 +242,7 @@ function cqtFamily<R extends CqtRequest>(
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `hopLength` (512), `fminHz` (32.70319566257483, C1), `nBins` (84), `binsPerOctave` (12)
+ * @param options - `hopLength` (512), `fminHz` (32.70319566257483, C1), `nBins` (84), `binsPerOctave` (12), `filterScale` (1)
  * @returns CQT magnitude result
  */
 export function cqt(request: CqtRequest): CqtResult;
@@ -251,7 +254,7 @@ export function cqt(
 export function cqt(...args: unknown[]): CqtResult {
   return withEntry('cqt', () => {
     return cqtFamily<CqtRequest>('cqt', args, (r, hop, fmin, nBins, bpo) =>
-      requireModule().cqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+      requireModule().cqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
     );
   });
 }
@@ -269,7 +272,7 @@ export function pseudoCqt(
 export function pseudoCqt(...args: unknown[]): CqtResult {
   return withEntry('pseudoCqt', () => {
     return cqtFamily<PseudoCqtRequest>('pseudoCqt', args, (r, hop, fmin, nBins, bpo) =>
-      requireModule().pseudoCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+      requireModule().pseudoCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
     );
   });
 }
@@ -287,7 +290,7 @@ export function hybridCqt(
 export function hybridCqt(...args: unknown[]): CqtResult {
   return withEntry('hybridCqt', () => {
     return cqtFamily<HybridCqtRequest>('hybridCqt', args, (r, hop, fmin, nBins, bpo) =>
-      requireModule().hybridCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+      requireModule().hybridCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
     );
   });
 }
@@ -316,7 +319,8 @@ export function vqt(...args: unknown[]): CqtResult {
         fmin,
         nBins,
         bpo,
-        resolveOptionalNonNegative(r.gamma, 'gamma'),
+        r.filterScale,
+        r.gamma ?? undefined,
       ),
     );
   });

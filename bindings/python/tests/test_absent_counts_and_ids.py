@@ -264,17 +264,15 @@ def test_percussive_separation_refuses_zero_where_none_is_the_default(field: str
         libsonare.render_percussive_events(tone, SR, [], **{field: 0})
 
 
-@pytest.mark.parametrize(
-    ("field", "zero"), [("onset_wait", 0), ("onset_delta", 0.0), ("max_event_ms", 0.0)]
-)
-def test_percussive_detection_refuses_zero_the_c_config_reads_as_the_default(
-    field: str, zero: float
-) -> None:
-    tone = _tone()
-    assert isinstance(libsonare.extract_percussive_events(tone, SR), list)
+@pytest.mark.parametrize(("field", "zero"), [("onset_wait", 0), ("onset_delta", 0.0)])
+def test_percussive_detection_reads_a_given_zero_literally(field: str, zero: float) -> None:
+    given: dict[str, Any] = {field: zero}
+    assert isinstance(libsonare.extract_percussive_events(_tone(), SR, **given), list)
+
+
+def test_percussive_detection_refuses_a_zero_event_cap() -> None:
     with pytest.raises(
         SonareValueError,
-        match=rf"^extract_percussive_events: {field} must not be 0; omit it for the library value$",
+        match=r"^extract_percussive_events: max_event_ms must be finite and greater than 0$",
     ):
-        given: dict[str, Any] = {field: zero}
-        libsonare.extract_percussive_events(tone, SR, **given)
+        libsonare.extract_percussive_events(_tone(), SR, max_event_ms=0.0)

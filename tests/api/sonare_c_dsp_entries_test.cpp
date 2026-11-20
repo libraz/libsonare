@@ -2,6 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -132,6 +133,11 @@ TEST_CASE("sonare_biquad_filter refuses a field its type does not read and an or
   sonare_biquad_filter_config_init(&config);
   CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,
                              &out.length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "config.cutoff_hz must be given when config.type is highPass or lowPass");
+
+  config.cutoff_hz = 0.0f;
+  CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,
+                             &out.length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "config.cutoff_hz must be finite and in (0, 11025)");
 
   config.cutoff_hz = 1000.0f;
@@ -149,6 +155,19 @@ TEST_CASE("sonare_biquad_filter refuses a field its type does not read and an or
   CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,
                              &out.length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "config.order must be 2 when config.type is bandPass or notch");
+
+  config.order = 2;
+  config.bandwidth_hz = std::numeric_limits<float>::quiet_NaN();
+  CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,
+                             &out.length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "config.bandwidth_hz must be given when config.type is bandPass or notch");
+
+  SonareBiquadFilterConfig zeroed{};
+  CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &zeroed, &out.data,
+                             &out.length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_error() == "config.struct_size must be set by sonare_biquad_filter_config_init");
+  config.order = 4;
+  config.bandwidth_hz = 100.0f;
 
   config.order = 3;
   CHECK(sonare_biquad_filter(samples.data(), samples.size(), kSampleRate, &config, &out.data,

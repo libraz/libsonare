@@ -16,14 +16,13 @@ from ._ffi import (
     SonarePercussiveEventsResult,
     SonarePercussiveRenderConfig,
 )
-from ._narrowing import _narrow_double, _narrow_float, _optional_nonzero, _resolve_zero_default
+from ._narrowing import _narrow_double, _narrow_int
 from ._runtime import (
     _C_INT_MAX,
     _check,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
-    _optional_positive_int,
     _out_float_array,
     _resolve_sample_bound,
     _resolve_time_offset,
@@ -34,10 +33,6 @@ from ._runtime import (
     _to_c_size_t,
     _validate_c_int_field,
 )
-
-# The two percussive-event configs are versioned separately from the note-object
-# ones, and are likewise at layout version 1.
-_PERCUSSIVE_STRUCT_VERSION = 1
 
 
 @dataclasses.dataclass
@@ -143,14 +138,13 @@ def _percussive_separation(
     hop_length: int | None,
     hpss_kernel_harmonic: int | None,
     hpss_kernel_percussive: int | None,
-) -> dict[str, int]:
-    """The separation fields both percussive configs carry; ``None`` is the C 0 default.
+) -> dict[str, int | None]:
+    """The separation fields both percussive configs carry; ``None`` keeps the init's default.
 
     Extraction measures events against this separation and rendering has to
     repeat it, so it is one set of fields both sides take rather than a framing
-    each of them restates -- and one place the narrowing is checked, since 0 is
-    the default here: an explicit 0, or a value that wraps to it, would separate
-    on the default while reporting success, so both are refused.
+    each of them restates -- and one place the narrowing is checked, so a value
+    that wraps to the hop's AUTO spelling is refused rather than separating on it.
     """
     fields = {
         "n_fft": n_fft,
@@ -159,7 +153,8 @@ def _percussive_separation(
         "hpss_kernel_percussive": hpss_kernel_percussive,
     }
     return {
-        name: _optional_positive_int(value, f"{name}", _C_INT_MAX) for name, value in fields.items()
+        name: None if value is None else _narrow_int(value, name, 1, _C_INT_MAX)
+        for name, value in fields.items()
     }
 
 
@@ -233,20 +228,6 @@ def _percussive_events_to_c(
     return c_events, count, respelled
 
 
-def _onset_wait(onset_wait: int | None) -> int:
-    """The C ``onset_wait``; its 0 means "use the default", so an explicit 0 is refused.
-
-    Narrowed rather than coerced: ``int(0.5)`` is that 0, so a fractional wait
-    would run at the default and report success.
-    """
-    if onset_wait is None:
-        return 0
-    wait = _validate_c_int_field(onset_wait, "onset_wait")
-    if wait == 0:
-        raise _refuse("onset_wait must not be 0; omit it for the library value")
-    return wait
-
-
 @_entry("extract_percussive_events")
 @_guard_buffer("samples")
 def extract_percussive_events(
@@ -290,14 +271,11 @@ def extract_percussive_events(
             time; ``None`` keeps the library default. A longer harmonic kernel calls
             more of a sustained sound harmonic.
         hpss_kernel_percussive: The same, along frequency.
-        onset_wait: Minimum frames between consecutive onsets, a positive whole
-            number; ``None`` keeps the library default. An explicit 0 is refused
-            because the C configuration cannot yet tell it from the default.
+        onset_wait: Minimum frames between consecutive onsets, a whole number
+            of at least 0; ``None`` keeps the library default (1).
         onset_delta: Offset added to the detector's adaptive threshold; raising
             it finds fewer, stronger hits and lowering it finds more. ``None``
-            keeps the library default. An explicit 0 is refused because the C
-            configuration cannot yet tell it from the default; a negative one is
-            accepted and puts the threshold below the default.
+            keeps the library default (0.06); 0 and negative values are ordinary.
 
             It is in the units of :attr:`PercussiveEvent.strength`, the onset
             envelope's own scale, which is **not** normalised: three isolated
@@ -306,15 +284,13 @@ def extract_percussive_events(
             extraction returns rather than guessing one -- a number chosen
             assuming the scale is around 1 looks like a knob that does nothing.
         max_event_ms: Caps a span that no onset follows, a positive duration;
-            ``None`` keeps the library default and an explicit 0 is refused. It
+            ``None`` keeps the library default (500 ms). It
             binds at the end of a phrase and at the end of the track, and nowhere
             else. A span never runs past the end of the audio
             whatever this says.
         min_percussive_ratio: Drops an event whose ``percussive_ratio`` falls
-            below this; must be in ``[0, 1]``. ``None`` keeps the default, which
-            is 0 -- and 0 is also the meaningful "keep everything", so unlike
-            every other argument here passing it explicitly is not distinct from
-            passing ``None``. Raising it is useful on material that is mostly
+            below this; must be in ``[0, 1]``. ``None`` keeps the default, 0,
+            which keeps everything. Raising it is useful on material that is mostly
             drums and wrong on a dense mix, where it also drops real hits sitting
             over a loud sustain. Spans are fixed before it drops anything, so
             raising it selects events without lengthening the survivors.
@@ -324,13 +300,11 @@ def extract_percussive_events(
         detected, which is reported rather than raised.
 
     Raises:
-        SonareValueError: If ``samples`` is empty or non-finite, a framing,
-            kernel size or ``onset_wait`` is not an integer in
-            ``[1, 2**31 - 1]``, or ``onset_delta`` or ``max_event_ms`` is
-            an explicit 0.
-        SonareError: If the C call rejects the request (a framing that breaks
-            overlap-add, a negative ``onset_wait``, a negative ``max_event_ms``,
-            or a ``min_percussive_ratio`` outside ``[0, 1]``).
+        SonareValueError: If ``samples`` is empty or non-finite, a framing or
+            kernel size is not an integer in ``[1, 2**31 - 1]``, or the library
+            refuses a value (a framing that breaks overlap-add, a negative
+            ``onset_wait``, a ``max_event_ms`` that is not above 0, or a
+            ``min_percussive_ratio`` outside ``[0, 1]``).
 
     Example:
         >>> events = libsonare.extract_percussive_events(audio, sr)
@@ -340,30 +314,18 @@ def extract_percussive_events(
     lib = _get_lib()
 
     c_array, length = _to_c_float_array(samples)
-    config = SonarePercussiveEventConfig(
-        struct_version=_PERCUSSIVE_STRUCT_VERSION,
+    config = SonarePercussiveEventConfig._given(
         **_percussive_separation(
             n_fft,
             hop_length,
             hpss_kernel_harmonic,
             hpss_kernel_percussive,
         ),
-        onset_wait=_onset_wait(onset_wait),
-        onset_delta=_narrow_float(
-            _optional_nonzero(onset_delta, "onset_delta"),
-            "onset_delta",
-        ),
-        max_event_ms=_narrow_float(
-            _optional_nonzero(max_event_ms, "max_event_ms"),
-            "max_event_ms",
-        ),
-        # 0 is this field's own meaning as well as its default, so it is passed
-        # through rather than read as "leave the default".
-        min_percussive_ratio=(
-            0.0
-            if min_percussive_ratio is None
-            else _narrow_double(min_percussive_ratio, "min_percussive_ratio")
-        ),
+        # Narrowed rather than coerced: int(0.5) would run at a wait of 0.
+        onset_wait=None if onset_wait is None else _validate_c_int_field(onset_wait, "onset_wait"),
+        onset_delta=onset_delta,
+        max_event_ms=max_event_ms,
+        min_percussive_ratio=min_percussive_ratio,
     )
     out = SonarePercussiveEventsResult()
     rc = lib.sonare_extract_percussive_events(
@@ -431,10 +393,9 @@ def render_percussive_events(
             span opens in front of its transient, where the percussive component
             is near-silent, so cutting square there costs nothing and keeps a
             muted hit's attack from surviving inside a fade. A zero-length fade
-            is refused with ``SonareValueError`` (omit it for the default), and
-            a hard cut is not a thing to want anyway, because what the fade
-            shapes is the signal being subtracted, so squaring it off leaves a
-            step.
+            is refused with ``SonareValueError``, and a hard cut is not a thing
+            to want anyway, because what the fade shapes is the signal being
+            subtracted, so squaring it off leaves a step.
 
     Returns:
         ``numpy.ndarray`` of ``float32`` with the same length as the input.
@@ -458,15 +419,14 @@ def render_percussive_events(
 
     c_array, length = _to_c_float_array(samples)
     c_events, count, respelled = _percussive_events_to_c(events, sample_rate)
-    config = SonarePercussiveRenderConfig(
-        struct_version=_PERCUSSIVE_STRUCT_VERSION,
+    config = SonarePercussiveRenderConfig._given(
         **_percussive_separation(
             n_fft,
             hop_length,
             hpss_kernel_harmonic,
             hpss_kernel_percussive,
         ),
-        fade_ms=_resolve_zero_default(fade_ms, "fade_ms"),
+        fade_ms=fade_ms,
     )
     with _out_float_array(lib) as (out, out_length):
         _check(

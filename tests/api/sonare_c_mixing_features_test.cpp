@@ -764,7 +764,8 @@ TEST_CASE("mixer strip lookup, scene and query entries name the refused argument
   CHECK(sonare_mixer_configure_master_meter(nullptr, &config) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(mixer_refusal_message() == "mixer must not be NULL");
   CHECK(sonare_mixer_configure_master_meter(mixer, &config) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(mixer_refusal_message() == "config.struct_size is below sizeof");
+  CHECK(mixer_refusal_message() ==
+        "config.struct_size must be set by sonare_mixer_master_meter_config_init");
   sonare_mixer_destroy(mixer);
 }
 

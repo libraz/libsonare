@@ -1729,14 +1729,14 @@ export const CASES: AbortGuardCase[] = [
   {
     name: 'Audio.detectClipping',
     missingRequired: [],
-    // The facade always passes an options object carrying the linear threshold;
-    // a call without one is refused rather than measured against a default.
+    // The facade always passes an options object; an absent thresholdDb is the
+    // library default, so only a wrong-typed one is refused, by name.
     rejectsArgument: [
       { argument: 'options', call: () => readerAudio().detectClipping() },
       {
-        argument: 'threshold',
-        call: () => readerAudio().detectClipping({}),
-        message: /threshold/,
+        argument: 'thresholdDb',
+        call: () => readerAudio().detectClipping({ thresholdDb: '-1' }),
+        message: /thresholdDb/,
       },
     ],
   },

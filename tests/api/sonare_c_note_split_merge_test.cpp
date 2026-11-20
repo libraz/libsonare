@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -738,10 +739,9 @@ TEST_CASE("sonare_split_note normalizes a time_stretch_ratio of 0 to 1",
   REQUIRE(extract_from(source, &extracted) == SONARE_OK);
   REQUIRE(extracted.count == 1);
 
-  // A zeroed edit spells the identity ratio as 0, and the split re-derives its
-  // notes, so what comes back is the 1.0 spelling of the same edit.
-  extracted.notes[0].edit = SonareNoteEdit{};
-  REQUIRE(extracted.notes[0].edit.time_stretch_ratio == 0.0f);
+  // The split re-derives its notes, so an initialised identity edit comes back as one.
+  sonare_note_edit_init(&extracted.notes[0].edit);
+  REQUIRE(extracted.notes[0].edit.time_stretch_ratio == 1.0f);
 
   SonareNoteObjectsResult split{};
   REQUIRE(split_from(source, extracted.notes, extracted.count, nullptr, 0, 0, 20, &split) ==
@@ -821,9 +821,15 @@ TEST_CASE("sonare split and merge validate negative stretch on every note",
     }
   }
 
-  // C's zeroed edit remains the documented identity sentinel on both paths.
+  // An edit never started from its init function is refused on both paths; an initialised
+  // identity edit is accepted.
   std::vector<SonareNoteObject> zeroed(extracted.notes, extracted.notes + extracted.count);
   zeroed[0].edit = SonareNoteEdit{};
+  expect_split_invalid(zeroed);
+  expect_merge_invalid(zeroed);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "notes[0].edit.struct_size must be set by sonare_note_edit_init");
+  sonare_note_edit_init(&zeroed[0].edit);
   SonareNoteObjectsResult split{};
   CHECK(split_from(source, zeroed.data(), zeroed.size(), nullptr, 0, 0, 5, &split) == SONARE_OK);
   if (split.notes != nullptr) {

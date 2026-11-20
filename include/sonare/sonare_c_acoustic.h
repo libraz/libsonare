@@ -139,28 +139,24 @@ typedef struct {
 
 /// @brief Priors + analysis settings for blind room estimation.
 ///
-/// EVERY float field below follows this ABI's "0 selects the library value"
-/// rule, without exception, so `SonareRoomEstimateConfig cfg = {};` estimates
-/// the same room as a default-argument call on any binding. The rule is
-/// struct-wide rather than per-field on purpose: a lone literal-zero field is
-/// indistinguishable from an unset one at the call site, and a zero absorption
-/// prior in particular is not a physical request — it scales the reported volume
-/// by the cube of the prior, so a 0 that meant "unset" would report a room three
-/// orders of magnitude too small with full confidence.
+/// Prepare one with sonare_room_estimate_config_init, which sets struct_size and every
+/// field's library default; every field is then read literally and checked against its
+/// domain, so a 0 in a field whose domain excludes it is refused by name.
 typedef struct {
-  float aspect_hint_lw;  ///< Length/width shape prior; 0 = library default.
-  float aspect_hint_lh;  ///< Length/height shape prior; 0 = library default.
-  /// Absorption prior anchoring the volume scale; 0 = library default (0.15). Clamped into
-  /// [0.01, 0.99] rather than refused, so a value outside that range returns a successful
-  /// estimate computed from the clamped prior. The reported volume scales with the cube of
-  /// the prior, so the substitution is worth three orders of magnitude at the low end.
+  /// sizeof(SonareRoomEstimateConfig), set by sonare_room_estimate_config_init. A smaller value
+  /// is refused with SONARE_ERROR_INVALID_PARAMETER.
+  uint32_t struct_size;
+  float aspect_hint_lw;  ///< Length/width shape prior, finite and > 0; default 1.
+  float aspect_hint_lh;  ///< Length/height shape prior, finite and > 0; default 1.
+  /// Absorption prior anchoring the volume scale, in [0.01, 0.99]; default 0.15. A value
+  /// outside that range is refused. The reported volume scales with the cube of the prior.
   float reference_absorption;
-  float min_decay_db;           ///< Analyzer decay-fit span in dB; 0 = library default.
-  float noise_floor_margin_db;  ///< Analyzer noise-floor margin in dB; 0 = library default.
-  int prefer_eyring;            ///< 1 = Eyring model, 0 = Sabine.
-  int n_octave_bands;           ///< Analyzer octave-band count; 0 = library default.
+  float min_decay_db;           ///< Analyzer decay-fit span in dB, finite and > 0; default 30.
+  float noise_floor_margin_db;  ///< Analyzer noise-floor margin in dB, finite and >= 0; default 10.
+  int prefer_eyring;            ///< 1 = Eyring model, 0 = Sabine; default 1.
+  int n_octave_bands;           ///< Analyzer octave-band count, >= 1; default 6.
   /// A @ref SONARE_ACOUSTIC_MODE_AUTO, @ref SONARE_ACOUSTIC_MODE_BLIND or
-  /// @ref SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE value routing the analyzer.
+  /// @ref SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE value routing the analyzer; default AUTO.
   int mode;
 } SonareRoomEstimateConfig;
 
@@ -269,7 +265,7 @@ static_assert(offsetof(SonareRirSynthConfig, air_absorption_enabled) ==
 static_assert(offsetof(SonareRirSynthConfig, air_humidity_percent) ==
                   offsetof(SonareRirSynthConfig, air_temperature_c) + sizeof(float),
               "SonareRirSynthConfig air climate layout changed");
-static_assert(sizeof(SonareRoomEstimateConfig) == 8u * sizeof(float),
+static_assert(sizeof(SonareRoomEstimateConfig) == 9u * sizeof(float),
               "SonareRoomEstimateConfig unexpected size");
 // SonareRoomMorphConfig prefix: struct_size + 15 floats + 3 ints/unsigned = 19 four-byte
 // members, padded to the pointer's alignment.
@@ -318,6 +314,11 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                                   SonareRirSynthResult* out);
 /// @brief Release the buffer of a @ref SonareRirSynthResult; NULL-safe.
 void sonare_free_rir_synth_result(SonareRirSynthResult* result);
+
+/// @brief Fill @p config with struct_size and the library default of every field: aspect
+///   priors 1 and 1, reference_absorption 0.15, min_decay_db 30, noise_floor_margin_db 10,
+///   EYRING, 6 octave bands, ACOUSTIC_MODE_AUTO. No-op on NULL.
+void sonare_room_estimate_config_init(SonareRoomEstimateConfig* config);
 
 /// @brief Estimate an equivalent room from a recording (or impulse response).
 SonareError sonare_estimate_room(const float* samples, size_t length, int sample_rate,

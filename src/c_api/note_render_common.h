@@ -11,24 +11,22 @@
 
 namespace sonare_c_detail {
 
-/// Resolves the versioned C config onto note-render defaults.
+/// Checks the C config and copies it onto note-render defaults.
 ///
 /// A null config deliberately leaves @p out untouched, matching the public
-/// entry points' default-constructed core config. Zero-valued fields likewise
-/// retain their core defaults; validation happens before either field is copied.
+/// entry points' default-constructed core config.
 inline SonareError resolve_note_render_config(const SonareNoteRenderConfig* config,
                                               sonare::editing::note_model::NoteRenderConfig& out) {
   if (config == nullptr) return SONARE_OK;
   const SonareError error = run_validation([&] {
-    sonare::util::check::integer_in_range(config->struct_version, 0, 1, "config.struct_version");
-    sonare::util::check::at_least(config->fade_ms, 0.0, "config.fade_ms");
-    sonare::util::check::at_least(config->vibrato_cutoff_hz, 0.0, "config.vibrato_cutoff_hz");
+    require_struct_size(config->struct_size, sizeof(SonareNoteRenderConfig), "config",
+                        "sonare_note_render_config_init");
+    sonare::util::check::greater_than(config->fade_ms, 0.0, "config.fade_ms");
+    sonare::util::check::greater_than(config->vibrato_cutoff_hz, 0.0, "config.vibrato_cutoff_hz");
   });
   if (error != SONARE_OK) return error;
-  if (config->fade_ms > 0.0f) out.fade_ms = config->fade_ms;
-  if (config->vibrato_cutoff_hz > 0.0f) {
-    out.decomposition.vibrato_cutoff_hz = config->vibrato_cutoff_hz;
-  }
+  out.fade_ms = config->fade_ms;
+  out.decomposition.vibrato_cutoff_hz = config->vibrato_cutoff_hz;
   return SONARE_OK;
 }
 

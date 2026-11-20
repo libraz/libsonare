@@ -23,7 +23,6 @@ import {
   assertPositiveFloatValue,
   assertPositiveInteger,
   requestOnly,
-  resolveOptionalNonNegative,
   sampleOneShot,
 } from './validation.js';
 
@@ -100,6 +99,8 @@ export interface CqtRequest {
   nBins?: number;
   /** Bins per octave. Default 12. */
   binsPerOctave?: number;
+  /** Filter length scale factor, finite and greater than 0. Default `1` (librosa's). */
+  filterScale?: number;
 }
 
 /** Request for {@link pseudoCqt}. */
@@ -261,6 +262,7 @@ interface NativeCqt {
   sampleRate: number;
   magnitude: Float32Array;
   frequencies: Float32Array;
+  gamma: number;
 }
 
 function toCqtResult(r: NativeCqt): CqtResult {
@@ -269,6 +271,7 @@ function toCqtResult(r: NativeCqt): CqtResult {
     sampleRate: r.sampleRate,
     magnitude: toMatrix2D(r.magnitude, r.nBins, r.nFrames),
     frequencies: r.frequencies,
+    gamma: r.gamma,
   };
 }
 
@@ -406,6 +409,7 @@ export function cqt(...args: unknown[]): CqtResult {
         request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
         request.nBins ?? 84,
         request.binsPerOctave ?? 12,
+        request.filterScale,
       ),
     );
   });
@@ -430,6 +434,7 @@ export function pseudoCqt(...args: unknown[]): CqtResult {
         request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
         request.nBins ?? 84,
         request.binsPerOctave ?? 12,
+        request.filterScale,
       ),
     );
   });
@@ -454,6 +459,7 @@ export function hybridCqt(...args: unknown[]): CqtResult {
         request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
         request.nBins ?? 84,
         request.binsPerOctave ?? 12,
+        request.filterScale,
       ),
     );
   });
@@ -482,7 +488,8 @@ export function vqt(...args: unknown[]): CqtResult {
         request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
         request.nBins ?? 84,
         request.binsPerOctave ?? 12,
-        resolveOptionalNonNegative(request.gamma, 'gamma'),
+        request.filterScale,
+        request.gamma ?? undefined,
       ),
     );
   });

@@ -189,7 +189,7 @@ TEST_CASE("C-API insert-automation distinguishes non-RT parameters and full lane
 
   size_t scheduled = 0;
   for (unsigned int insert = 0; insert < 6 && scheduled < 64; ++insert) {
-    for (unsigned int param = 0; param < 12 && scheduled < 64; ++param) {
+    for (unsigned int param = 0; param < 11 && scheduled < 64; ++param) {
       REQUIRE(sonare_strip_schedule_insert_automation(compressor_strip, insert, param, 0, 0.5f,
                                                       0) == SONARE_OK);
       ++scheduled;
@@ -198,7 +198,7 @@ TEST_CASE("C-API insert-automation distinguishes non-RT parameters and full lane
   REQUIRE(scheduled == 64);
   // The 65th distinct target is valid and RT-safe, so only lane capacity can
   // reject it; the C ABI must preserve that as OutOfMemory.
-  REQUIRE(sonare_strip_schedule_insert_automation(compressor_strip, 5, 4, 0, 0.5f, 0) ==
+  REQUIRE(sonare_strip_schedule_insert_automation(compressor_strip, 5, 9, 0, 0.5f, 0) ==
           SONARE_ERROR_OUT_OF_MEMORY);
   sonare_mixer_destroy(compressors);
 }

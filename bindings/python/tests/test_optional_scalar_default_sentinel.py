@@ -91,7 +91,7 @@ class TestMelFrequencyBounds:
 
 
 class TestScaleQuantizerReference:
-    """sonare_scale_quantize_midi scale_reference_midi: None is A4, an explicit 0 is refused."""
+    """sonare_scale_quantize_midi scale_reference_midi: None is A4, an explicit 0 is MIDI note 0."""
 
     QUANTIZED = [60.4, 61.6, 66.3, 70.2]
 
@@ -105,8 +105,8 @@ class TestScaleQuantizerReference:
             scale_quantize_midi(0, C_MAJOR_MASK, 60.4, scale_reference_midi=127.5)
         assert "reference_midi" in str(excinfo.value)
 
-    @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
-    def test_the_c_abi_refuses_a_non_finite_reference(self, value: float) -> None:
+    @pytest.mark.parametrize("value", [math.inf, -math.inf])
+    def test_the_c_abi_refuses_an_infinite_reference(self, value: float) -> None:
         # Driven through ctypes rather than the facade: the Python layer rejects
         # a non-finite scalar of its own, which would hide whether the C ABI
         # underneath refuses the value or promotes it to the default.
@@ -132,14 +132,11 @@ class TestScaleQuantizerReference:
         )
 
     @pytest.mark.parametrize("fn", [scale_quantize_midi, scale_correction_semitones])
-    def test_an_explicit_zero_reference_is_refused_for_now(self, fn: Callable[..., float]) -> None:
-        with pytest.raises(SonareValueError, match="temporarily unsupported"):
-            fn(0, C_MAJOR_MASK, 60.4, scale_reference_midi=0.0)
+    def test_an_explicit_zero_reference_is_accepted(self, fn: Callable[..., float]) -> None:
+        # An integer anchor is the default grid whatever its value, so 0 lands on A4's.
+        assert fn(0, C_MAJOR_MASK, 60.4, scale_reference_midi=0.0) == fn(0, C_MAJOR_MASK, 60.4)
 
-    def test_the_c_abi_still_reads_a_zero_reference_as_a4(self) -> None:
-        # The refusal above stands in for a core that reads 0 as A4. When this
-        # fails the core takes 0 literally: drop the refusal and this case, and
-        # let an explicit 0 through as MIDI note 0.
+    def test_the_c_abi_reads_nan_as_a4_and_zero_literally(self) -> None:
         from libsonare._runtime import _get_lib
 
         def quantize(reference: float) -> float:
@@ -154,9 +151,10 @@ class TestScaleQuantizerReference:
             assert rc == 0
             return float(out.value)
 
-        # A fractional query separates the A4 grid from the grid anchored on 0.5.
-        assert quantize(0.0) == quantize(DEFAULT_REFERENCE_MIDI)
+        assert quantize(math.nan) == quantize(DEFAULT_REFERENCE_MIDI)
+        # A fractional anchor near 0 separates "0 read literally" from a 0 promoted to A4.
         assert quantize(0.5) != quantize(DEFAULT_REFERENCE_MIDI)
+        assert quantize(0.5) == quantize(DEFAULT_REFERENCE_MIDI + 0.5)
 
     def test_a_detuned_reference_moves_the_grid(self) -> None:
         # The anchor only shifts the grid by its fractional part, so the control

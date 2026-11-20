@@ -20,16 +20,16 @@
 #include "acoustic/material.h"
 #include "analysis/room_estimator.h"
 #include "core/audio.h"
-#include "util/zero_is_default.h"
+#include "util/parameter_checks.h"
 #endif
 
 #include "sonare_c_internal.h"
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 using sonare::Audio;
+using sonare_c_detail::require_struct_size;
 using sonare_c_detail::run_mono_offline;
 using sonare_c_detail::run_offline;
-using sonare_c_detail::struct_size_accepted;
 #endif
 
 namespace {
@@ -184,6 +184,23 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
   SONARE_C_CATCH
 }
 
+void sonare_room_estimate_config_init(SonareRoomEstimateConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
+  const sonare::RoomEstimateConfig defaults;
+  config->aspect_hint_lw = defaults.aspect_hint_lw;
+  config->aspect_hint_lh = defaults.aspect_hint_lh;
+  config->reference_absorption = defaults.reference_absorption;
+  config->min_decay_db = defaults.acoustic.min_decay_db;
+  config->noise_floor_margin_db = defaults.acoustic.noise_floor_margin_db;
+  config->prefer_eyring = defaults.prefer_eyring ? 1 : 0;
+  config->n_octave_bands = defaults.acoustic.n_octave_bands;
+  config->mode = static_cast<int>(defaults.acoustic.mode);
+#endif
+}
+
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,
                                   SonareRirSynthResult* out) {
   SONARE_C_API_ENTRY;
@@ -193,9 +210,10 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   // The result records the requested rate even when the call is refused.
   if (out != nullptr) out->sample_rate = sample_rate;
   SONARE_C_REQUIRE_NONNULL(config);
-  if (!struct_size_accepted(config->struct_size, sizeof(SonareRirSynthConfig),
-                            "SonareRirSynthConfig") ||
-      sample_rate < sonare_c_detail::kMinSampleRate ||
+  SONARE_C_TRY
+  require_struct_size(config->struct_size, sizeof(SonareRirSynthConfig), "config",
+                      "sonare_rir_synth_config_init");
+  if (sample_rate < sonare_c_detail::kMinSampleRate ||
       sample_rate > sonare_c_detail::kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -228,7 +246,6 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
     if (!unit(config->band_scattering[i])) return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_TRY
   using namespace sonare::acoustic;
   const ShoeboxRoom room =
       make_room(config->length_m, config->width_m, config->height_m, config->absorption,
@@ -277,34 +294,35 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
   SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   SONARE_C_REQUIRE_NONNULL(config);
+  SONARE_C_TRY
+  require_struct_size(config->struct_size, sizeof(SonareRoomEstimateConfig), "config",
+                      "sonare_room_estimate_config_init");
   sonare::AcousticConfig::Mode mode = sonare::AcousticConfig::Mode::Auto;
   if (!sonare_c_detail::ordinal_to_enum(config->mode, SONARE_ACOUSTIC_MODE_AUTO,
                                         SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE, &mode)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  namespace check = sonare::util::check;
+  check::greater_than(config->aspect_hint_lw, 0.0, "config.aspect_hint_lw");
+  check::greater_than(config->aspect_hint_lh, 0.0, "config.aspect_hint_lh");
+  check::in_range(config->reference_absorption, sonare::kRoomReferenceAbsorptionMin,
+                  sonare::kRoomReferenceAbsorptionMax, "config.reference_absorption");
+  check::greater_than(config->min_decay_db, 0.0, "config.min_decay_db");
+  check::at_least(config->noise_floor_margin_db, 0.0, "config.noise_floor_margin_db");
+  check::integer_at_least(config->n_octave_bands, 1, "config.n_octave_bands");
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
       "estimate_room", "samples", samples, length, sample_rate,
       [&](const Audio& audio) -> SonareError {
         sonare::RoomEstimateConfig cfg;
-        // Same "0 selects the library value" rule as the RIR-synth config above,
-        // applied to EVERY float in the struct rather than field by field. An
-        // exception here is not a small one: the Eyring volume scales with the cube
-        // of the absorption prior, so a literal 0 clamped to the analyzer's 0.01
-        // floor reports a 36.7 m^3 room as 0.0087 m^3.
-        cfg.aspect_hint_lw =
-            sonare::ZeroIsDefault(config->aspect_hint_lw).or_default(cfg.aspect_hint_lw);
-        cfg.aspect_hint_lh =
-            sonare::ZeroIsDefault(config->aspect_hint_lh).or_default(cfg.aspect_hint_lh);
-        cfg.reference_absorption = sonare::ZeroIsDefault(config->reference_absorption)
-                                       .or_default(cfg.reference_absorption);
+        cfg.aspect_hint_lw = config->aspect_hint_lw;
+        cfg.aspect_hint_lh = config->aspect_hint_lh;
+        cfg.reference_absorption = config->reference_absorption;
         cfg.prefer_eyring = config->prefer_eyring != 0;
-        if (config->n_octave_bands != 0) cfg.acoustic.n_octave_bands = config->n_octave_bands;
-        cfg.acoustic.min_decay_db =
-            sonare::ZeroIsDefault(config->min_decay_db).or_default(cfg.acoustic.min_decay_db);
-        cfg.acoustic.noise_floor_margin_db = sonare::ZeroIsDefault(config->noise_floor_margin_db)
-                                                 .or_default(cfg.acoustic.noise_floor_margin_db);
+        cfg.acoustic.n_octave_bands = config->n_octave_bands;
+        cfg.acoustic.min_decay_db = config->min_decay_db;
+        cfg.acoustic.noise_floor_margin_db = config->noise_floor_margin_db;
         cfg.acoustic.mode = mode;
 
         const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
@@ -334,6 +352,7 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
         *out = staged;
         return SONARE_OK;
       });
+  SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);
 #endif
@@ -351,10 +370,6 @@ namespace {
 
 // The scalar and band checks the core does not repeat, shared by both morph entries.
 bool room_morph_config_is_valid(const SonareRoomMorphConfig& config) {
-  if (!struct_size_accepted(config.struct_size, sizeof(SonareRoomMorphConfig),
-                            "SonareRoomMorphConfig")) {
-    return false;
-  }
   const auto unit = [](float value) {
     return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
   };
@@ -412,7 +427,11 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
   SONARE_C_ZERO_OUTS(out, out_length);
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
-  if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  require_struct_size(config->struct_size, sizeof(SonareRoomMorphConfig), "config",
+                      "sonare_room_morph_config_init");
+  if (!room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   return run_mono_offline("room_morph", "samples", samples, length, sample_rate, out, out_length,
                           [&](const Audio& audio) -> Audio {
@@ -425,6 +444,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
                             publish_rir_diagnostics(result.diagnostics);
                             return std::move(result.audio);
                           });
+  SONARE_C_CATCH
 #else
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);
@@ -444,10 +464,12 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   err = sonare_c_detail::validate_audio_params("room_morph_stereo", "right", right, length,
                                                sample_rate);
   if (err != SONARE_OK) return err;
-  if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-
   SONARE_C_TRY
+  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  require_struct_size(config->struct_size, sizeof(SonareRoomMorphConfig), "config",
+                      "sonare_room_morph_config_init");
+  if (!room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   const sonare::effects::acoustic::RoomMorphStereoResult result =
       sonare::effects::acoustic::room_morph_stereo(Audio::from_buffer(left, length, sample_rate),
                                                    Audio::from_buffer(right, length, sample_rate),

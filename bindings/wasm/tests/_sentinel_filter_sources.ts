@@ -302,7 +302,7 @@ export interface Finding {
 export function evaluateSentinelFilterScope(
   sources: readonly SentinelSource[],
   reasons: ReadonlyMap<string, string>,
-  floor = 50,
+  floor = 40,
 ): Finding[] {
   const sites = filterSites(sources);
   const findings: Finding[] = [];

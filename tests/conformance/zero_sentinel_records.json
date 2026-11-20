@@ -16,29 +16,11 @@
     "past it means lowering it deliberately in the same change."
   ],
   "floor": {
-    "sites": 20,
-    "comparisons": 250,
-    "helper_calls": 35
+    "sites": 16,
+    "comparisons": 230,
+    "helper_calls": 18
   },
   "sites": [
-    {
-      "file": "src/c_api/features_spectral_pitch.cpp",
-      "value": "config->segmentation_threshold_cents",
-      "measured": "no",
-      "reason": "Note segmentation threshold; core response not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_daw.cpp",
-      "value": "config->segmentation_threshold_cents",
-      "measured": "no",
-      "reason": "Same segmentation threshold as the features_spectral_pitch.cpp copy; moves with it."
-    },
-    {
-      "file": "src/c_api/note_render_common.h",
-      "value": "config->vibrato_cutoff_hz",
-      "measured": "no",
-      "reason": "Decomposition vibrato cutoff on the struct path; core response not driven."
-    },
     {
       "file": "src/c_api/sonare_c_engine.cpp",
       "value": "config.click_sec",
@@ -52,52 +34,10 @@
       "reason": "WASM twin of the sonare_c_engine.cpp metronome click; moves with it."
     },
     {
-      "file": "src/c_api/features_spectral_pitch.cpp",
-      "value": "config->min_note_ms",
-      "measured": "yes",
-      "reason": "NoteSegmenter derives a frame count as max(1, ceil(min_note_ms * ...)), so a negative reaches the same one-frame floor the filter hands it."
-    },
-    {
-      "file": "src/c_api/features_spectral_pitch.cpp",
-      "value": "config->reference_hz",
-      "measured": "yes",
-      "reason": "NoteSegmenter returns no regions for a non-positive or non-finite reference, so the filter maps 0 to the default (and refuses a negative or non-finite value) before the core would return nothing."
-    },
-    {
-      "file": "src/c_api/features_spectral_pitch.cpp",
-      "value": "config->voiced_threshold",
-      "measured": "no",
-      "reason": "Core response to a negative or non-finite threshold not driven."
-    },
-    {
       "file": "src/c_api/project_bounce_internal.h",
       "value": "max_block_size",
       "measured": "no",
       "reason": "Bounce ring capacity; core response not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_daw.cpp",
-      "value": "config->min_note_ms",
-      "measured": "yes",
-      "reason": "Same NoteSegmenter frame-count floor as the features_spectral_pitch.cpp copy."
-    },
-    {
-      "file": "src/c_api/sonare_c_daw.cpp",
-      "value": "config->reference_hz",
-      "measured": "yes",
-      "reason": "Same NoteSegmenter default substitution as the features_spectral_pitch.cpp copy."
-    },
-    {
-      "file": "src/c_api/sonare_c_daw.cpp",
-      "value": "config->voiced_threshold",
-      "measured": "no",
-      "reason": "Core response to a negative or non-finite threshold not driven."
-    },
-    {
-      "file": "src/c_api/note_render_common.h",
-      "value": "config->fade_ms",
-      "measured": "no",
-      "reason": "Core response to a negative or non-finite fade not driven."
     },
     {
       "file": "src/c_api/sonare_c_daw.cpp",
@@ -130,36 +70,6 @@
       "reason": "Metering spectrum dB floor; guarded by the same test as db_ref."
     },
     {
-      "file": "src/c_api/sonare_c_effects.cpp",
-      "value": "config->n_components",
-      "measured": "no",
-      "reason": "Decomposition component count; core response not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_effects.cpp",
-      "value": "config->n_fft",
-      "measured": "no",
-      "reason": "Decomposition FFT size; core response not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_effects.cpp",
-      "value": "config->hop_length",
-      "measured": "no",
-      "reason": "Decomposition hop; core response not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_effects.cpp",
-      "value": "config->n_iter",
-      "measured": "no",
-      "reason": "Decomposition iteration count; core response not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_effects.cpp",
-      "value": "config->mask_power",
-      "measured": "no",
-      "reason": "Decomposition mask exponent; core response not driven."
-    },
-    {
       "file": "src/c_api/sonare_c_engine_render.cpp",
       "value": "options->dither_bits",
       "measured": "no",
@@ -179,69 +89,9 @@
     },
     {
       "file": "src/wasm/bindings/effects/notes.cpp",
-      "value": "threshold_cents",
-      "measured": "no",
-      "reason": "Note segmentation threshold; core response not driven."
-    },
-    {
-      "file": "src/wasm/bindings/effects/notes.cpp",
-      "value": "min_note_ms",
-      "measured": "yes",
-      "reason": "Same NoteSegmenter frame-count floor as the C-ABI copies."
-    },
-    {
-      "file": "src/wasm/bindings/effects/notes.cpp",
-      "value": "reference_hz",
-      "measured": "yes",
-      "reason": "Same NoteSegmenter default substitution as the C-ABI copies."
-    },
-    {
-      "file": "src/wasm/bindings/effects/notes.cpp",
-      "value": "voiced_threshold",
-      "measured": "no",
-      "reason": "WASM twin of the C-ABI voiced threshold; moves with it."
-    },
-    {
-      "file": "src/wasm/bindings/effects/notes.cpp",
-      "value": "fade_ms",
-      "measured": "no",
-      "reason": "WASM twin of the C-ABI fade; moves with it."
-    },
-    {
-      "file": "src/wasm/bindings/effects/notes.cpp",
       "value": "vibrato_cutoff_hz",
       "measured": "no",
       "reason": "WASM twin of the C-ABI cutoff; moves with it."
-    },
-    {
-      "file": "src/wasm/bindings/effects/decomposition.cpp",
-      "value": "n_components",
-      "measured": "no",
-      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
-    },
-    {
-      "file": "src/wasm/bindings/effects/decomposition.cpp",
-      "value": "n_fft",
-      "measured": "no",
-      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
-    },
-    {
-      "file": "src/wasm/bindings/effects/decomposition.cpp",
-      "value": "hop_length",
-      "measured": "no",
-      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
-    },
-    {
-      "file": "src/wasm/bindings/effects/decomposition.cpp",
-      "value": "n_iter",
-      "measured": "no",
-      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
-    },
-    {
-      "file": "src/wasm/bindings/effects/decomposition.cpp",
-      "value": "mask_power",
-      "measured": "no",
-      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
     },
     {
       "file": "src/wasm/bindings/metering/metering.cpp",

@@ -149,6 +149,20 @@ std::vector<float> note_then_hit() {
   return samples;
 }
 
+/// An event config started from its init function: the defaults, ready to be overridden.
+SonarePercussiveEventConfig event_config() {
+  SonarePercussiveEventConfig config;
+  sonare_percussive_event_config_init(&config);
+  return config;
+}
+
+/// A render config started from its init function.
+SonarePercussiveRenderConfig render_config() {
+  SonarePercussiveRenderConfig config;
+  sonare_percussive_render_config_init(&config);
+  return config;
+}
+
 SonareError extract_at(const std::vector<float>& samples, const SonarePercussiveEventConfig* config,
                        SonarePercussiveEventsResult* out) {
   return sonare_extract_percussive_events(samples.data(), samples.size(), kSampleRate, config, out);
@@ -370,7 +384,7 @@ TEST_CASE("sonare_extract_percussive_events returns nothing detected as NULL and
   sonare_free_percussive_events_result(&from_silence);
 
   const std::vector<float> samples = two_hits();
-  SonarePercussiveEventConfig unreachable{};
+  SonarePercussiveEventConfig unreachable = event_config();
   unreachable.onset_delta = 1.0e6f;
   SonarePercussiveEventsResult none{};
   REQUIRE(extract_at(samples, &unreachable, &none) == SONARE_OK);
@@ -408,37 +422,31 @@ TEST_CASE("percussive_ratio reads both ends of its range through the C layer",
   sonare_free_percussive_events_result(&out);
 }
 
-// --- The zero-is-default rule ---------------------------------------------
+// --- Config defaults ------------------------------------------------------
 
-TEST_CASE("a NULL SonarePercussiveEventConfig and a zeroed one select the same defaults",
+TEST_CASE("a NULL SonarePercussiveEventConfig and an initialised one select the same defaults",
           "[c_api][percussive_events]") {
   const std::vector<float> samples = three_hits();
 
   SonarePercussiveEventsResult from_null = extracted(samples);
-  SonarePercussiveEventConfig zeroed{};
-  SonarePercussiveEventsResult from_zeroed = extracted(samples, &zeroed);
+  SonarePercussiveEventConfig initialised = event_config();
+  CHECK(initialised.struct_size == sizeof(SonarePercussiveEventConfig));
+  SonarePercussiveEventsResult from_init = extracted(samples, &initialised);
   REQUIRE(from_null.count == 3);
-  REQUIRE(same_events(from_null, from_zeroed));
-
-  // struct_version 0 and 1 both select the version-1 layout.
-  SonarePercussiveEventConfig version_one{};
-  version_one.struct_version = 1;
-  SonarePercussiveEventsResult from_v1 = extracted(samples, &version_one);
-  REQUIRE(same_events(from_null, from_v1));
+  REQUIRE(same_events(from_null, from_init));
 
   sonare_free_percussive_events_result(&from_null);
-  sonare_free_percussive_events_result(&from_zeroed);
-  sonare_free_percussive_events_result(&from_v1);
+  sonare_free_percussive_events_result(&from_init);
 }
 
-TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
+TEST_CASE("every SonarePercussiveEventConfig field carries its default from init",
           "[c_api][percussive_events]") {
   const std::vector<float> samples = three_hits();
   SonarePercussiveEventsResult defaults = extracted(samples);
   REQUIRE(defaults.count == 3);
 
   SECTION("the framing defaults to 2048 and 512") {
-    SonarePercussiveEventConfig config{};
+    SonarePercussiveEventConfig config = event_config();
     config.n_fft = 2048;
     config.hop_length = 512;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
@@ -448,20 +456,20 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     // A hop of exactly half the window is the inclusive end of the overlap-add
     // rule, and one sample past it is not. Both are read against the default
     // n_fft, so the pair is resolved field by field.
-    SonarePercussiveEventConfig half{};
+    SonarePercussiveEventConfig half = event_config();
     half.hop_length = 1024;
     SonarePercussiveEventsResult at_half = extracted(samples, &half);
     require_well_formed(at_half, samples.size());
     sonare_free_percussive_events_result(&at_half);
 
-    SonarePercussiveEventConfig past_half{};
+    SonarePercussiveEventConfig past_half = event_config();
     past_half.hop_length = 1025;
     SonarePercussiveEventsResult rejected{};
     REQUIRE(extract_at(samples, &past_half, &rejected) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("both median kernels default to 31") {
-    SonarePercussiveEventConfig config{};
+    SonarePercussiveEventConfig config = event_config();
     config.hpss_kernel_harmonic = 31;
     config.hpss_kernel_percussive = 31;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
@@ -472,7 +480,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     // identity, so nothing is separated by time any more and a struck sound is
     // no longer called percussive by it. Read as the largest ratio in the set,
     // which does not depend on the detector finding the same hits.
-    SonarePercussiveEventConfig flattened{};
+    SonarePercussiveEventConfig flattened = event_config();
     flattened.hpss_kernel_harmonic = 1;
     SonarePercussiveEventsResult short_kernel = extracted(samples, &flattened);
     require_well_formed(short_kernel, samples.size());
@@ -489,7 +497,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
   }
 
   SECTION("onset_wait defaults to one frame") {
-    SonarePercussiveEventConfig config{};
+    SonarePercussiveEventConfig config = event_config();
     config.onset_wait = 1;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
     REQUIRE(same_events(defaults, explicit_default));
@@ -498,7 +506,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     // 200 frames is 4.6 s at this framing, longer than the fixture, so the
     // spacing rule leaves exactly the first onset -- at the sample the default
     // run put it, since backtracking is per onset.
-    SonarePercussiveEventConfig spaced{};
+    SonarePercussiveEventConfig spaced = event_config();
     spaced.onset_wait = 200;
     SonarePercussiveEventsResult sparse = extracted(samples, &spaced);
     REQUIRE(sparse.count == 1);
@@ -507,7 +515,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
   }
 
   SECTION("onset_delta defaults to 0.06") {
-    SonarePercussiveEventConfig config{};
+    SonarePercussiveEventConfig config = event_config();
     config.onset_delta = 0.06f;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
     REQUIRE(same_events(defaults, explicit_default));
@@ -522,7 +530,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     REQUIRE(strengths.size() == 3);
     REQUIRE(strengths[0] > strengths[1]);
 
-    SonarePercussiveEventConfig selective{};
+    SonarePercussiveEventConfig selective = event_config();
     selective.onset_delta = 0.5f * (strengths[0] + strengths[1]);
     SonarePercussiveEventsResult fewer = extracted(samples, &selective);
     REQUIRE(fewer.count < defaults.count);
@@ -532,7 +540,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
   }
 
   SECTION("max_event_ms defaults to 500 ms") {
-    SonarePercussiveEventConfig config{};
+    SonarePercussiveEventConfig config = event_config();
     config.max_event_ms = 500.0f;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
     REQUIRE(same_events(defaults, explicit_default));
@@ -541,7 +549,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     // 40 ms is 882 samples at this rate, exactly, and shorter than the 400 ms
     // between hits, so it closes every span including the interior ones. The cap
     // moves an offset and never an onset.
-    SonarePercussiveEventConfig tight{};
+    SonarePercussiveEventConfig tight = event_config();
     tight.max_event_ms = 40.0f;
     SonarePercussiveEventsResult capped = extracted(samples, &tight);
     REQUIRE(capped.count == defaults.count);
@@ -556,16 +564,15 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
   sonare_free_percussive_events_result(&defaults);
 }
 
-TEST_CASE("min_percussive_ratio is assigned at 0 rather than read as a default",
+TEST_CASE("min_percussive_ratio 0 keeps every onset and a raised value selects",
           "[c_api][percussive_events]") {
-  // Every other field takes its default at 0; this one's default and its own
-  // meaning are both 0, so it is assigned as-is. The first half of that is that
-  // nothing changes at 0, the second is that a raised threshold selects.
+  // Its default is 0, which keeps everything. The first half is that nothing changes at 0, the
+  // second is that a raised threshold selects.
   const std::vector<float> samples = note_then_hit();
   SonarePercussiveEventsResult from_null = extracted(samples);
-  SonarePercussiveEventConfig keep_all{};
+  SonarePercussiveEventConfig keep_all = event_config();
   SonarePercussiveEventsResult zeroed = extracted(samples, &keep_all);
-  SonarePercussiveEventConfig explicit_zero{};
+  SonarePercussiveEventConfig explicit_zero = event_config();
   explicit_zero.min_percussive_ratio = 0.0f;
   SonarePercussiveEventsResult from_zero = extracted(samples, &explicit_zero);
   REQUIRE(from_null.count >= 2);
@@ -581,7 +588,7 @@ TEST_CASE("min_percussive_ratio is assigned at 0 rather than read as a default",
   // Without a spread there is no threshold that selects, and the case is vacuous.
   REQUIRE(highest - lowest > 0.2f);
 
-  SonarePercussiveEventConfig selective{};
+  SonarePercussiveEventConfig selective = event_config();
   selective.min_percussive_ratio = 0.5f * (lowest + highest);
   SonarePercussiveEventsResult kept = extracted(samples, &selective);
 
@@ -607,7 +614,7 @@ TEST_CASE("min_percussive_ratio is assigned at 0 rather than read as a default",
   }
 
   // Both ends of the documented range are values rather than errors.
-  SonarePercussiveEventConfig ceiling{};
+  SonarePercussiveEventConfig ceiling = event_config();
   ceiling.min_percussive_ratio = 1.0f;
   SonarePercussiveEventsResult at_ceiling = extracted(samples, &ceiling);
   REQUIRE(at_ceiling.count <= from_null.count);
@@ -644,37 +651,41 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
   };
 
   SECTION("a config rejected before anything is allocated") {
-    for (const int32_t bad_version : {-1, 2, 99}) {
+    {
       SonarePercussiveEventConfig config{};
-      config.struct_version = bad_version;
       rejects([&](SonarePercussiveEventsResult* out) { return extract_at(samples, &config, out); });
+      CHECK(std::string(sonare_last_error_message()) ==
+            "config.struct_size must be set by sonare_percussive_event_config_init");
     }
 
-    // Negative integer fields are rejected rather than silently clamped.
-    for (const int32_t bad : {-1, -2048}) {
-      SonarePercussiveEventConfig n_fft{};
+    // Zero and negative integer fields are rejected rather than silently clamped; a hop of -1
+    // is the auto spelling, so the hop is driven separately.
+    for (const int32_t bad : {0, -1, -2048}) {
+      SonarePercussiveEventConfig n_fft = event_config();
       n_fft.n_fft = bad;
-      SonarePercussiveEventConfig hop{};
-      hop.hop_length = bad;
-      SonarePercussiveEventConfig harmonic{};
+      SonarePercussiveEventConfig hop = event_config();
+      hop.hop_length = bad == -1 ? 0 : bad;
+      SonarePercussiveEventConfig harmonic = event_config();
       harmonic.hpss_kernel_harmonic = bad;
-      SonarePercussiveEventConfig percussive{};
+      SonarePercussiveEventConfig percussive = event_config();
       percussive.hpss_kernel_percussive = bad;
-      SonarePercussiveEventConfig wait{};
+      SonarePercussiveEventConfig wait = event_config();
       wait.onset_wait = bad;
-      for (const SonarePercussiveEventConfig* config :
-           {&n_fft, &hop, &harmonic, &percussive, &wait}) {
+      std::vector<const SonarePercussiveEventConfig*> refused = {&n_fft, &hop, &harmonic,
+                                                                 &percussive};
+      if (bad != 0) refused.push_back(&wait);
+      for (const SonarePercussiveEventConfig* config : refused) {
         rejects(
             [&](SonarePercussiveEventsResult* out) { return extract_at(samples, config, out); });
       }
     }
 
     for (const float bad : {kNaN, kInf, -kInf}) {
-      SonarePercussiveEventConfig delta{};
+      SonarePercussiveEventConfig delta = event_config();
       delta.onset_delta = bad;
-      SonarePercussiveEventConfig max_event{};
+      SonarePercussiveEventConfig max_event = event_config();
       max_event.max_event_ms = bad;
-      SonarePercussiveEventConfig ratio{};
+      SonarePercussiveEventConfig ratio = event_config();
       ratio.min_percussive_ratio = bad;
       for (const SonarePercussiveEventConfig* config : {&delta, &max_event, &ratio}) {
         rejects(
@@ -682,13 +693,15 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
       }
     }
 
-    SonarePercussiveEventConfig negative_span{};
-    negative_span.max_event_ms = -1.0f;
-    rejects([&](SonarePercussiveEventsResult* out) {
-      return extract_at(samples, &negative_span, out);
-    });
-    CHECK(std::string(sonare_last_error_message()) == "max_event_ms must be finite and at least 0");
-    SonarePercussiveEventConfig negative_wait{};
+    for (const float span : {0.0f, -1.0f}) {
+      SonarePercussiveEventConfig bad_span = event_config();
+      bad_span.max_event_ms = span;
+      rejects(
+          [&](SonarePercussiveEventsResult* out) { return extract_at(samples, &bad_span, out); });
+      CHECK(std::string(sonare_last_error_message()) ==
+            "config.max_event_ms must be finite and greater than 0");
+    }
+    SonarePercussiveEventConfig negative_wait = event_config();
     negative_wait.onset_wait = -1;
     rejects([&](SonarePercussiveEventsResult* out) {
       return extract_at(samples, &negative_wait, out);
@@ -697,24 +710,22 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
           "onset_wait must be an integer in [0, 2147483647]");
 
     for (const float outside : {-0.01f, -1.0f, 1.01f, 2.0f}) {
-      SonarePercussiveEventConfig ratio{};
+      SonarePercussiveEventConfig ratio = event_config();
       ratio.min_percussive_ratio = outside;
       rejects([&](SonarePercussiveEventsResult* out) { return extract_at(samples, &ratio, out); });
     }
   }
 
   SECTION("a framing rejected after the argument checks, inside the separation") {
-    // A framing whose parts are all non-negative reaches the separation and is
+    // A framing whose parts are all positive reaches the separation and is
     // refused there by the overlap-add rule: n_fft even and at least 2, hop
-    // positive and no more than half of it. Negative parts never get that far --
-    // the argument check above has them -- and 0 is not a framing at all here but
-    // the spelling of the default, so "no window" and "no advance" are the one
-    // pair of core-level violations this surface cannot express.
+    // positive and no more than half of it. Zero and negative parts never get that
+    // far -- the argument check above has them.
     const int32_t kBrokenFramings[][2] = {{2047, 512},  {1023, 256}, {1, 1},
                                           {2048, 1025}, {1024, 513}, {2048, 2048}};
     for (const auto& framing : kBrokenFramings) {
       INFO("n_fft " << framing[0] << " hop " << framing[1]);
-      SonarePercussiveEventConfig config{};
+      SonarePercussiveEventConfig config = event_config();
       config.n_fft = framing[0];
       config.hop_length = framing[1];
       rejects([&](SonarePercussiveEventsResult* out) { return extract_at(samples, &config, out); });
@@ -724,9 +735,9 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
     // rather than a rounded value.
     for (const int32_t even : {2, 30, 32}) {
       INFO("kernel " << even);
-      SonarePercussiveEventConfig harmonic{};
+      SonarePercussiveEventConfig harmonic = event_config();
       harmonic.hpss_kernel_harmonic = even;
-      SonarePercussiveEventConfig percussive{};
+      SonarePercussiveEventConfig percussive = event_config();
       percussive.hpss_kernel_percussive = even;
       for (const SonarePercussiveEventConfig* config : {&harmonic, &percussive}) {
         rejects(
@@ -881,7 +892,7 @@ TEST_CASE("any non-zero muted silences a hit, not only 1", "[c_api][percussive_e
   sonare_free_percussive_events_result(&out);
 }
 
-TEST_CASE("the SonarePercussiveRenderConfig fields take their defaults at 0",
+TEST_CASE("the SonarePercussiveRenderConfig fields carry their defaults from init",
           "[c_api][percussive_events]") {
   const std::vector<float> samples = three_hits();
 
@@ -894,11 +905,11 @@ TEST_CASE("the SonarePercussiveRenderConfig fields take their defaults at 0",
 
   const std::vector<float> zeroed = render_ok(samples, &event, 1);
 
-  SonarePercussiveRenderConfig defaulted{};
+  SonarePercussiveRenderConfig defaulted = render_config();
+  CHECK(defaulted.struct_size == sizeof(SonarePercussiveRenderConfig));
   REQUIRE(first_mismatch(render_ok(samples, &event, 1, &defaulted), zeroed) == kNoMismatch);
 
-  SonarePercussiveRenderConfig explicit_default{};
-  explicit_default.struct_version = 1;
+  SonarePercussiveRenderConfig explicit_default = render_config();
   explicit_default.n_fft = 2048;
   explicit_default.hop_length = 512;
   explicit_default.hpss_kernel_harmonic = 31;
@@ -909,7 +920,7 @@ TEST_CASE("the SonarePercussiveRenderConfig fields take their defaults at 0",
   // A longer fade lifts less of the span's tail, so what the mute leaves behind
   // over that tail is nearer the source. Measured over the last 50 ms of the
   // span, which the 50 ms fade covers whole and the 5 ms default barely touches.
-  SonarePercussiveRenderConfig slow{};
+  SonarePercussiveRenderConfig slow = render_config();
   slow.fade_ms = 50.0f;
   const std::vector<float> long_fade = render_ok(samples, &event, 1, &slow);
   const size_t tail_start = static_cast<size_t>(event.offset_sample) - 1102;  // 50 ms
@@ -942,7 +953,6 @@ TEST_CASE("sonare_render_percussive_events defines its outputs on every refusal"
 
   // A refusal that precedes the render, on the config rather than the events.
   SonarePercussiveRenderConfig config{};
-  config.struct_version = 2;
   out = &poison;
   out_length = 7;
   REQUIRE(render_at(samples, nullptr, 0, &config, &out, &out_length) ==
@@ -1032,21 +1042,20 @@ TEST_CASE("sonare_render_percussive_events rejects malformed arguments",
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
-  for (const int32_t bad_version : {-1, 2, 99}) {
+  {
     SonarePercussiveRenderConfig config{};
-    config.struct_version = bad_version;
     REQUIRE(render_at(samples, &event, 1, &config, &out, &out_length) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
-  for (const int32_t bad : {-1, -2048}) {
-    SonarePercussiveRenderConfig n_fft{};
+  for (const int32_t bad : {0, -1, -2048}) {
+    SonarePercussiveRenderConfig n_fft = render_config();
     n_fft.n_fft = bad;
-    SonarePercussiveRenderConfig hop{};
-    hop.hop_length = bad;
-    SonarePercussiveRenderConfig harmonic{};
+    SonarePercussiveRenderConfig hop = render_config();
+    hop.hop_length = bad == -1 ? 0 : bad;
+    SonarePercussiveRenderConfig harmonic = render_config();
     harmonic.hpss_kernel_harmonic = bad;
-    SonarePercussiveRenderConfig percussive{};
+    SonarePercussiveRenderConfig percussive = render_config();
     percussive.hpss_kernel_percussive = bad;
     for (const SonarePercussiveRenderConfig* config : {&n_fft, &hop, &harmonic, &percussive}) {
       REQUIRE(render_at(samples, &event, 1, config, &out, &out_length) ==
@@ -1054,18 +1063,16 @@ TEST_CASE("sonare_render_percussive_events rejects malformed arguments",
     }
   }
 
-  // A zero-length fade is the default rather than a hard cut, so only a negative
-  // or non-finite one is rejected here.
-  for (const float bad_fade : {kNaN, kInf, -kInf, -1.0f}) {
-    SonarePercussiveRenderConfig config{};
+  // A hard cut is not selectable, so a zero, negative or non-finite fade is rejected.
+  for (const float bad_fade : {kNaN, kInf, -kInf, -1.0f, 0.0f}) {
+    SonarePercussiveRenderConfig config = render_config();
     config.fade_ms = bad_fade;
     REQUIRE(render_at(samples, &event, 1, &config, &out, &out_length) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
   // Positive control: the same event under a fully spelled-out config renders.
-  SonarePercussiveRenderConfig valid{};
-  valid.struct_version = 1;
+  SonarePercussiveRenderConfig valid = render_config();
   valid.n_fft = 1024;
   valid.hop_length = 512;
   valid.fade_ms = 5.0f;
@@ -1092,15 +1099,14 @@ TEST_CASE("sonare_render_percussive_events rejects a broken framing on every set
   // below is the framing's doing and not the set's.
   REQUIRE(first_mismatch(render_ok(samples, identity, 2), samples) == kNoMismatch);
 
-  // 0 is the default's spelling on this side rather than a framing, so every row
-  // here carries two non-zero parts that break the overlap-add rule together.
+  // Every row here carries two positive parts that break the overlap-add rule together.
   const int32_t kBrokenFramings[][2] = {{2047, 512},  {1023, 256}, {1, 1},
                                         {2048, 1025}, {1024, 513}, {2048, 2048}};
   float* out = nullptr;
   size_t out_length = 0;
   for (const auto& framing : kBrokenFramings) {
     INFO("n_fft " << framing[0] << " hop " << framing[1]);
-    SonarePercussiveRenderConfig config{};
+    SonarePercussiveRenderConfig config = render_config();
     config.n_fft = framing[0];
     config.hop_length = framing[1];
     REQUIRE(render_at(samples, identity, 2, &config, &out, &out_length) ==
@@ -1115,7 +1121,7 @@ TEST_CASE("sonare_render_percussive_events rejects a broken framing on every set
   const int32_t kValidFramings[][2] = {{2048, 512}, {2048, 1024}, {1024, 512}};
   for (const auto& framing : kValidFramings) {
     INFO("n_fft " << framing[0] << " hop " << framing[1]);
-    SonarePercussiveRenderConfig config{};
+    SonarePercussiveRenderConfig config = render_config();
     config.n_fft = framing[0];
     config.hop_length = framing[1];
     REQUIRE(first_mismatch(render_ok(samples, identity, 2, &config), samples) == kNoMismatch);
@@ -1132,7 +1138,6 @@ TEST_CASE("sonare_extract_percussive_events holds its contract across its config
   // whole pairs untried, and what interacts here is the framing, the two median
   // kernels, the two detector rules and the two span rules.
   struct Row {
-    int32_t struct_version;
     int32_t n_fft;
     int32_t hop_length;
     int32_t kernel_harmonic;
@@ -1142,27 +1147,26 @@ TEST_CASE("sonare_extract_percussive_events holds its contract across its config
     float max_event_ms;
     float min_percussive_ratio;
   };
+  constexpr int32_t kAuto = SONARE_STFT_HOP_AUTO;
   static const Row kRows[] = {
-      {0, 0, 0, 31, 0, 0, 0.12f, 0.0f, 0.25f},        {0, 2048, 512, 0, 15, 3, 0.06f, 500.0f, 1.0f},
-      {0, 1024, 256, 15, 15, 1, 0.0f, 40.0f, 0.0f},   {0, 2048, 1024, 15, 0, 0, 0.06f, 40.0f, 1.0f},
-      {1, 0, 0, 0, 0, 1, 0.0f, 500.0f, 0.25f},        {1, 2048, 512, 31, 15, 3, 0.12f, 40.0f, 0.0f},
-      {1, 1024, 256, 0, 0, 0, 0.06f, 0.0f, 0.0f},     {1, 2048, 1024, 31, 15, 1, 0.12f, 0.0f, 1.0f},
-      {1, 2048, 1024, 15, 0, 3, 0.0f, 0.0f, 0.25f},   {1, 0, 0, 15, 15, 0, 0.12f, 500.0f, 0.0f},
-      {0, 0, 0, 0, 15, 3, 0.06f, 40.0f, 0.25f},       {1, 0, 0, 31, 0, 0, 0.0f, 500.0f, 1.0f},
-      {1, 2048, 512, 15, 0, 0, 0.0f, 0.0f, 0.25f},    {0, 2048, 512, 31, 0, 1, 0.06f, 500.0f, 1.0f},
-      {0, 1024, 256, 31, 15, 3, 0.12f, 500.0f, 1.0f}, {1, 1024, 256, 0, 15, 0, 0.12f, 0.0f, 0.25f},
-      {1, 2048, 1024, 0, 15, 1, 0.06f, 500.0f, 0.0f},
+      {2048, kAuto, 31, 31, 1, 0.12f, 500.0f, 0.25f}, {2048, 512, 31, 15, 3, 0.06f, 500.0f, 1.0f},
+      {1024, 256, 15, 15, 1, 0.06f, 40.0f, 0.0f},     {2048, 1024, 15, 31, 1, 0.06f, 40.0f, 1.0f},
+      {2048, kAuto, 31, 31, 1, 0.06f, 500.0f, 0.25f}, {2048, 512, 31, 15, 3, 0.12f, 40.0f, 0.0f},
+      {1024, 256, 31, 31, 1, 0.06f, 500.0f, 0.0f},    {2048, 1024, 31, 15, 1, 0.12f, 500.0f, 1.0f},
+      {2048, 1024, 15, 31, 3, 0.06f, 500.0f, 0.25f},  {2048, kAuto, 15, 15, 1, 0.12f, 500.0f, 0.0f},
+      {2048, kAuto, 31, 15, 3, 0.06f, 40.0f, 0.25f},  {2048, kAuto, 31, 31, 1, 0.06f, 500.0f, 1.0f},
+      {2048, 512, 15, 31, 1, 0.06f, 500.0f, 0.25f},   {2048, 512, 31, 31, 1, 0.06f, 500.0f, 1.0f},
+      {1024, 256, 31, 15, 3, 0.12f, 500.0f, 1.0f},    {1024, 256, 31, 15, 1, 0.12f, 500.0f, 0.25f},
+      {2048, 1024, 31, 15, 1, 0.06f, 500.0f, 0.0f},
   };
 
   const std::vector<float> samples = two_hits();
   for (const Row& row : kRows) {
-    INFO("version " << row.struct_version << " n_fft " << row.n_fft << " hop " << row.hop_length
-                    << " kernels " << row.kernel_harmonic << "/" << row.kernel_percussive
-                    << " wait " << row.onset_wait << " delta " << row.onset_delta
-                    << " max_event_ms " << row.max_event_ms << " min_ratio "
-                    << row.min_percussive_ratio);
-    SonarePercussiveEventConfig config{};
-    config.struct_version = row.struct_version;
+    INFO("n_fft " << row.n_fft << " hop " << row.hop_length << " kernels " << row.kernel_harmonic
+                  << "/" << row.kernel_percussive << " wait " << row.onset_wait << " delta "
+                  << row.onset_delta << " max_event_ms " << row.max_event_ms << " min_ratio "
+                  << row.min_percussive_ratio);
+    SonarePercussiveEventConfig config = event_config();
     config.n_fft = row.n_fft;
     config.hop_length = row.hop_length;
     config.hpss_kernel_harmonic = row.kernel_harmonic;
@@ -1184,20 +1188,19 @@ TEST_CASE("sonare_extract_percussive_events holds its contract across its config
     // that the row found something.
     if (row.min_percussive_ratio == 0.0f && row.onset_delta <= 0.06f && row.onset_wait <= 1) {
       REQUIRE(out.count >= 1);
-      const int32_t hop = row.hop_length == 0 ? 512 : row.hop_length;
+      const int32_t hop = row.hop_length == kAuto ? 512 : row.hop_length;
       if (hop <= 512) REQUIRE(out.count == 2);
     }
 
     // Whatever the config, the set it produced is renderable over its own audio
     // and is a pass-through.
-    SonarePercussiveRenderConfig render_config{};
-    render_config.struct_version = row.struct_version;
-    render_config.n_fft = row.n_fft;
-    render_config.hop_length = row.hop_length;
-    render_config.hpss_kernel_harmonic = row.kernel_harmonic;
-    render_config.hpss_kernel_percussive = row.kernel_percussive;
-    REQUIRE(first_mismatch(render_ok(samples, out.events, out.count, &render_config), samples) ==
-            kNoMismatch);
+    SonarePercussiveRenderConfig pass_through_config = render_config();
+    pass_through_config.n_fft = row.n_fft;
+    pass_through_config.hop_length = row.hop_length;
+    pass_through_config.hpss_kernel_harmonic = row.kernel_harmonic;
+    pass_through_config.hpss_kernel_percussive = row.kernel_percussive;
+    REQUIRE(first_mismatch(render_ok(samples, out.events, out.count, &pass_through_config),
+                           samples) == kNoMismatch);
     sonare_free_percussive_events_result(&out);
   }
 }
@@ -1210,7 +1213,6 @@ TEST_CASE("sonare_render_percussive_events holds its contract across its edit an
   // span.
   enum class Shift { kNone, kSpanForward, kOffLeft, kOffRight };
   struct Row {
-    int32_t struct_version;
     int32_t n_fft;
     int32_t hop_length;
     float fade_ms;
@@ -1218,25 +1220,26 @@ TEST_CASE("sonare_render_percussive_events holds its contract across its edit an
     float gain_db;
     Shift shift;
   };
+  constexpr int32_t kAuto = SONARE_STFT_HOP_AUTO;
   static const Row kRows[] = {
-      {0, 0, 0, 5.0f, 0, 0.0f, Shift::kNone},
-      {0, 1024, 256, 50.0f, -1, 6.0206f, Shift::kOffLeft},
-      {0, 2048, 1024, 0.0f, kLargeMuted, -6.0206f, Shift::kSpanForward},
-      {0, 2048, 1024, 50.0f, 1, 0.0f, Shift::kOffRight},
-      {1, 0, 0, 0.0f, 1, 6.0206f, Shift::kSpanForward},
-      {1, 1024, 256, 5.0f, -1, -6.0206f, Shift::kOffRight},
-      {1, 2048, 1024, 0.0f, 0, 0.0f, Shift::kOffLeft},
-      {1, 0, 0, 50.0f, kLargeMuted, -6.0206f, Shift::kNone},
-      {1, 0, 0, 0.0f, -1, 6.0206f, Shift::kNone},
-      {0, 0, 0, 5.0f, 1, -6.0206f, Shift::kOffLeft},
-      {0, 0, 0, 5.0f, kLargeMuted, 6.0206f, Shift::kOffRight},
-      {1, 1024, 256, 0.0f, -1, 0.0f, Shift::kSpanForward},
-      {0, 1024, 256, 50.0f, 0, -6.0206f, Shift::kSpanForward},
-      {1, 1024, 256, 50.0f, 1, -6.0206f, Shift::kNone},
-      {0, 1024, 256, 5.0f, kLargeMuted, 0.0f, Shift::kSpanForward},
-      {1, 2048, 1024, 5.0f, -1, 6.0206f, Shift::kNone},
-      {1, 2048, 1024, 0.0f, 0, 6.0206f, Shift::kOffRight},
-      {0, 0, 0, 0.0f, kLargeMuted, -6.0206f, Shift::kOffLeft},
+      {2048, kAuto, 5.0f, 0, 0.0f, Shift::kNone},
+      {1024, 256, 50.0f, -1, 6.0206f, Shift::kOffLeft},
+      {2048, 1024, 5.0f, kLargeMuted, -6.0206f, Shift::kSpanForward},
+      {2048, 1024, 50.0f, 1, 0.0f, Shift::kOffRight},
+      {2048, kAuto, 5.0f, 1, 6.0206f, Shift::kSpanForward},
+      {1024, 256, 5.0f, -1, -6.0206f, Shift::kOffRight},
+      {2048, 1024, 5.0f, 0, 0.0f, Shift::kOffLeft},
+      {2048, kAuto, 50.0f, kLargeMuted, -6.0206f, Shift::kNone},
+      {2048, kAuto, 5.0f, -1, 6.0206f, Shift::kNone},
+      {2048, kAuto, 5.0f, 1, -6.0206f, Shift::kOffLeft},
+      {2048, kAuto, 5.0f, kLargeMuted, 6.0206f, Shift::kOffRight},
+      {1024, 256, 5.0f, -1, 0.0f, Shift::kSpanForward},
+      {1024, 256, 50.0f, 0, -6.0206f, Shift::kSpanForward},
+      {1024, 256, 50.0f, 1, -6.0206f, Shift::kNone},
+      {1024, 256, 5.0f, kLargeMuted, 0.0f, Shift::kSpanForward},
+      {2048, 1024, 5.0f, -1, 6.0206f, Shift::kNone},
+      {2048, 1024, 5.0f, 0, 6.0206f, Shift::kOffRight},
+      {2048, kAuto, 5.0f, kLargeMuted, -6.0206f, Shift::kOffLeft},
   };
 
   const std::vector<float> samples = two_hits();
@@ -1245,9 +1248,9 @@ TEST_CASE("sonare_render_percussive_events holds its contract across its edit an
   const int64_t span = out.events[0].offset_sample - out.events[0].onset_sample;
 
   for (const Row& row : kRows) {
-    INFO("version " << row.struct_version << " n_fft " << row.n_fft << " hop " << row.hop_length
-                    << " fade_ms " << row.fade_ms << " muted " << row.muted << " gain_db "
-                    << row.gain_db << " shift " << static_cast<int>(row.shift));
+    INFO("n_fft " << row.n_fft << " hop " << row.hop_length << " fade_ms " << row.fade_ms
+                  << " muted " << row.muted << " gain_db " << row.gain_db << " shift "
+                  << static_cast<int>(row.shift));
     int64_t offset = 0;
     switch (row.shift) {
       case Shift::kNone:
@@ -1271,8 +1274,7 @@ TEST_CASE("sonare_render_percussive_events holds its contract across its edit an
     edited.edit.gain_db = row.gain_db;
     edited.edit.time_offset_samples = offset;
 
-    SonarePercussiveRenderConfig config{};
-    config.struct_version = row.struct_version;
+    SonarePercussiveRenderConfig config = render_config();
     config.n_fft = row.n_fft;
     config.hop_length = row.hop_length;
     config.fade_ms = row.fade_ms;

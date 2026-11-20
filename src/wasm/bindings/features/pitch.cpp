@@ -99,8 +99,8 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
     }
     flags.assign(raw.begin(), raw.end());
   }
-  SonareNoteSegmenterConfig config{};
-  config.struct_version = 2;
+  SonareNoteSegmenterConfig config;
+  sonare_note_segmenter_config_init(&config);
   config.segmentation_threshold_cents =
       floatProperty(options, "segmentationThresholdCents", config.segmentation_threshold_cents);
   config.min_note_ms = floatProperty(options, "minNoteMs", config.min_note_ms);

@@ -39,15 +39,10 @@ SonareRirSynthConfig valid_rir_config() {
 }
 
 SonareRoomEstimateConfig valid_estimate_config() {
-  SonareRoomEstimateConfig cfg{};
+  SonareRoomEstimateConfig cfg;
+  sonare_room_estimate_config_init(&cfg);
   cfg.aspect_hint_lw = 7.0f / 5.0f;
   cfg.aspect_hint_lh = 7.0f / 3.0f;
-  cfg.reference_absorption = 0.15f;
-  cfg.min_decay_db = 0.0f;
-  cfg.noise_floor_margin_db = 0.0f;
-  cfg.prefer_eyring = 1;
-  cfg.n_octave_bands = 0;
-  cfg.mode = SONARE_ACOUSTIC_MODE_AUTO;
   return cfg;
 }
 
@@ -256,7 +251,9 @@ TEST_CASE("sonare acoustic C API refuses a room config below its struct_size",
   SonareRirSynthResult result{};
   REQUIRE(sonare_synthesize_rir(&rir, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(result.rir == nullptr);
-  CHECK(std::string(sonare_last_error_message()).find("struct_size") != std::string::npos);
+  CHECK(std::string(sonare_last_error_message())
+            .find("config.struct_size must be set by sonare_rir_synth_config_init") !=
+        std::string::npos);
   rir.struct_size = sizeof(SonareRirSynthConfig) - 1;
   REQUIRE(sonare_synthesize_rir(&rir, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
 
@@ -270,6 +267,9 @@ TEST_CASE("sonare acoustic C API refuses a room config below its struct_size",
   size_t out_length = 0;
   REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &morph, &out, &out_length) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message())
+            .find("config.struct_size must be set by sonare_room_morph_config_init") !=
+        std::string::npos);
   CHECK(out == nullptr);
   SonareRoomMorphStereoResult stereo{};
   REQUIRE(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &morph,
@@ -1017,48 +1017,80 @@ TEST_CASE("sonare acoustic C API air absorption selector", "[c_api][acoustic]") 
   }
 }
 
-TEST_CASE("sonare acoustic C API zero-init estimate config matches the binding defaults",
+TEST_CASE("sonare acoustic C API estimate config init carries the library defaults",
           "[c_api][acoustic]") {
-  // The documented C idiom is `SonareRoomEstimateConfig cfg = {};`. Every float
-  // in that struct follows the "0 selects the library value" rule, so a zeroed
-  // config must estimate the same room the bindings' default arguments do.
-  // reference_absorption was the exception: a literal 0 fell to the analyzer's
-  // 0.01 floor, and the Eyring volume goes as the cube of the prior, so the room
-  // came back three orders of magnitude too small with full confidence.
+  SonareRoomEstimateConfig cfg;
+  sonare_room_estimate_config_init(&cfg);
+  CHECK(cfg.struct_size == sizeof(SonareRoomEstimateConfig));
+  CHECK(cfg.aspect_hint_lw == 1.0f);
+  CHECK(cfg.aspect_hint_lh == 1.0f);
+  CHECK(cfg.reference_absorption == 0.15f);
+  CHECK(cfg.min_decay_db == 30.0f);
+  CHECK(cfg.noise_floor_margin_db == 10.0f);
+  CHECK(cfg.prefer_eyring == 1);
+  CHECK(cfg.n_octave_bands == 6);
+  CHECK(cfg.mode == SONARE_ACOUSTIC_MODE_AUTO);
+  sonare_room_estimate_config_init(nullptr);
+}
+
+TEST_CASE(
+    "sonare acoustic C API estimate config refuses a zero struct_size and every 0 outside "
+    "its domain",
+    "[c_api][acoustic]") {
   SonareRirSynthConfig synth_cfg = valid_rir_config();
   synth_cfg.max_sec = 0.0f;
   SonareRirSynthResult rir{};
   REQUIRE(sonare_synthesize_rir(&synth_cfg, 48000, &rir) == SONARE_OK);
   REQUIRE(rir.length > 0);
 
+  const auto refused_by = [&](const SonareRoomEstimateConfig& cfg, const char* subject) {
+    SonareRoomEstimate out{};
+    REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &cfg, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find(subject) != std::string::npos);
+  };
+
   SonareRoomEstimateConfig zeroed{};
-  SonareRoomEstimate zero_init{};
-  REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &zeroed, &zero_init) == SONARE_OK);
+  refused_by(zeroed, "config.struct_size must be set by sonare_room_estimate_config_init");
 
-  SonareRoomEstimateConfig explicit_cfg{};
-  explicit_cfg.reference_absorption = 0.15f;  // the library default, stated
-  SonareRoomEstimate explicit_estimate{};
-  REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &explicit_cfg, &explicit_estimate) ==
-          SONARE_OK);
+  SonareRoomEstimateConfig cfg = valid_estimate_config();
+  cfg.aspect_hint_lw = 0.0f;
+  refused_by(cfg, "config.aspect_hint_lw");
+  cfg = valid_estimate_config();
+  cfg.aspect_hint_lh = 0.0f;
+  refused_by(cfg, "config.aspect_hint_lh");
+  cfg = valid_estimate_config();
+  cfg.reference_absorption = 0.0f;
+  refused_by(cfg, "config.reference_absorption");
+  cfg.reference_absorption = 1.0f;
+  refused_by(cfg, "config.reference_absorption");
+  cfg = valid_estimate_config();
+  cfg.min_decay_db = 0.0f;
+  refused_by(cfg, "config.min_decay_db");
+  cfg = valid_estimate_config();
+  cfg.n_octave_bands = 0;
+  refused_by(cfg, "config.n_octave_bands");
 
-  REQUIRE(explicit_estimate.volume > 0.0f);
-  CHECK(zero_init.volume == explicit_estimate.volume);
-  CHECK(zero_init.length_m == explicit_estimate.length_m);
-  CHECK(zero_init.width_m == explicit_estimate.width_m);
-  CHECK(zero_init.height_m == explicit_estimate.height_m);
+  // 0 dB is a real noise-floor margin, so it is read literally.
+  cfg = valid_estimate_config();
+  cfg.noise_floor_margin_db = 0.0f;
+  SonareRoomEstimate ok{};
+  CHECK(sonare_estimate_room(rir.rir, rir.length, 48000, &cfg, &ok) == SONARE_OK);
 
-  // Non-vacuity: the value the zeroed field used to resolve to reports a room
-  // three orders of magnitude smaller, so the equality above is a real check
-  // rather than an insensitive one.
-  SonareRoomEstimateConfig floored = explicit_cfg;
+  // The default prior and the bound it is clamped to by the core give rooms far apart.
+  SonareRoomEstimateConfig def = valid_estimate_config();
+  SonareRoomEstimate def_estimate{};
+  REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &def, &def_estimate) == SONARE_OK);
+  SonareRoomEstimateConfig floored = def;
   floored.reference_absorption = 0.01f;
   SonareRoomEstimate floored_estimate{};
   REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &floored, &floored_estimate) ==
           SONARE_OK);
-  CHECK(floored_estimate.volume < explicit_estimate.volume / 1000.0f);
+  REQUIRE(def_estimate.volume > 0.0f);
+  CHECK(floored_estimate.volume < def_estimate.volume / 1000.0f);
 
-  sonare_free_room_estimate(&zero_init);
-  sonare_free_room_estimate(&explicit_estimate);
+  sonare_free_room_estimate(&ok);
+  sonare_free_room_estimate(&def_estimate);
   sonare_free_room_estimate(&floored_estimate);
   sonare_free_rir_synth_result(&rir);
 }

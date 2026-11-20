@@ -57,7 +57,7 @@ class TestBiquadFilter:
     def test_band_pass_without_center_is_refused(self) -> None:
         with pytest.raises(
             SonareValueError,
-            match=r"^biquad_filter: center_hz must be finite and in \(0, 11025\)$",
+            match=r"^biquad_filter: center_hz must be given when type is bandPass or notch$",
         ):
             libsonare.biquad_filter(sine(440.0, 0.1, SR), SR, type="bandPass", bandwidth_hz=100.0)
 

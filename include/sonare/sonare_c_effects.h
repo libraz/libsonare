@@ -9,6 +9,10 @@
 extern "C" {
 #endif
 
+/// STFT hop of a config struct: a quarter of the FFT size in use (at least 1). Outside the
+/// hop's real domain (a positive sample count), so it never reads as a length.
+#define SONARE_STFT_HOP_AUTO (-1)
+
 // ============================================================================
 // Effects
 // ============================================================================
@@ -138,26 +142,26 @@ typedef enum SONARE_ENUM_BASE {
 } SonarePitchTargetMode;
 
 /// @brief Tunable configuration for @ref sonare_pitch_correct_timevarying.
-/// @details Zero-initialising this struct is NOT a valid default — populate it
-///          via @ref sonare_pitch_correction_config_default first, then override
-///          the fields you care about.
+/// @details Prepare one with @ref sonare_pitch_correction_config_init, then override the fields
+///          you care about; every field is read literally.
 typedef struct {
+  uint32_t struct_size;        ///< sizeof(SonarePitchCorrectionConfig); set by the init function.
   int32_t target_mode;         ///< A @ref SonarePitchTargetMode selecting how the target is chosen.
   float target_midi;           ///< Target note when @c target_mode is FIXED_MIDI ([0,127]).
   int32_t scale_root;          ///< Scale root pitch class (0=C .. 11=B) when target_mode is SCALE.
   uint32_t scale_mode_mask;    ///< 12-bit degree mask, bit i = semitone i above the root enabled.
-  float scale_reference_midi;  ///< Reference MIDI anchoring the scale grid (default 69 = A4).
+  float scale_reference_midi;  ///< Finite reference MIDI anchoring the scale grid; default 69 (A4).
   float retune_amount;         ///< Correction strength [0,1]; 1 = full snap, 0 = bypass.
-  float max_correction_semitones;  ///< Hard clamp on per-frame correction magnitude.
-  float retune_speed_ms;           ///< Retune IIR time constant (ms); larger = slower glide.
-  float vibrato_threshold_cents;   ///< Corrections below this are bypassed to preserve vibrato.
+  float max_correction_semitones;  ///< Hard clamp on per-frame correction magnitude, >= 0.
+  float retune_speed_ms;           ///< Retune IIR time constant (ms), >= 0; larger = slower glide.
+  float vibrato_threshold_cents;   ///< Corrections below this are bypassed; >= 0.
 } SonarePitchCorrectionConfig;
 
-/// @brief Fills @p config with the library defaults (major scale, full retune).
+/// @brief Fills @p config with sizeof and the library defaults (major scale, full retune).
 /// @details Mirrors the core PitchCorrectionConfig defaults: FIXED_MIDI target,
 ///          C-major mask, reference A4, retune 1.0, 12-semitone clamp, 50 ms
-///          glide, 20-cent vibrato threshold.
-SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* config);
+///          glide, 20-cent vibrato threshold. A NULL @p config is ignored.
+void sonare_pitch_correction_config_init(SonarePitchCorrectionConfig* config);
 
 /// @brief Per-frame pitch correction toward a fixed MIDI note OR a musical scale.
 /// @details Generalises @ref sonare_pitch_correct_to_midi_timevarying: the same
@@ -232,22 +236,22 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
 // Effects - Note objects
 // ============================================================================
 
-/// @brief Versioned configuration for @ref sonare_extract_notes.
-/// @details Zero-initialize for the defaults (50 cents, 30 ms, A4 = 440 Hz,
-///          voiced threshold 0.5). @c struct_version 0 and 1 both select the
-///          version-1 layout. Every float takes its default at 0, so a zeroed
-///          struct and a NULL pointer behave alike.
+/// @brief Configuration for @ref sonare_extract_notes.
+/// @details Prepare one with @ref sonare_note_extractor_config_init (50 cents, 30 ms,
+///          A4 = 440 Hz, voiced threshold 0.5); every field is then read literally. A NULL
+///          config pointer takes the same defaults.
 typedef struct {
-  /// Layout version; 0 and 1 both select version 1.
-  int32_t struct_version;
-  /// Distance in cents from a note's pitch beyond which a frame leaves the note; 0 keeps 50.
+  uint32_t struct_size;  ///< sizeof(SonareNoteExtractorConfig); set by the init function.
+  /// Distance in cents from a note's pitch beyond which a frame leaves the note; finite and
+  /// > 0, default 50.
   float segmentation_threshold_cents;
-  /// Milliseconds a deviation must persist before it starts a new note; 0 keeps 30.
+  /// Milliseconds a deviation must persist before it starts a new note; finite and >= 0
+  /// (0 keeps no minimum beyond two frames), default 30.
   float min_note_ms;
-  /// Tuning reference in Hz that @c median_cents is measured from; 0 keeps 440.
+  /// Tuning reference in Hz that @c median_cents is measured from; finite and > 0, default 440.
   float reference_hz;
-  /// Value of @c voiced_prob at or above which a frame counts as voiced. Read
-  /// only when @c voiced is NULL. 0 keeps the default 0.5.
+  /// Value of @c voiced_prob at or above which a frame counts as voiced, in [0, 1], default
+  /// 0.5. Read only when @c voiced is NULL.
   ///
   /// pYIN's @c voiced_prob is a frame's voiced observation mass and rises with
   /// F0 for a fixed frame length, so the 0.5 default silently drops low
@@ -255,19 +259,21 @@ typedef struct {
   float voiced_threshold;
 } SonareNoteExtractorConfig;
 
-/// @brief Versioned configuration for @ref sonare_render_notes.
-/// @details Zero-initialize for the defaults (5 ms fade, 3 Hz vibrato cutoff).
-///          @c struct_version 0 and 1 both select the version-1 layout.
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_note_extractor_config_init(SonareNoteExtractorConfig* config);
+
+/// @brief Configuration for @ref sonare_render_notes.
+/// @details Prepare one with @ref sonare_note_render_config_init (5 ms fade, 3 Hz vibrato
+///          cutoff); every field is then read literally. A NULL config pointer takes the same
+///          defaults.
 typedef struct {
-  /// Layout version; 0 and 1 both select version 1.
-  int32_t struct_version;
+  uint32_t struct_size;  ///< sizeof(SonareNoteRenderConfig); set by the init function.
   /// Cross-fade at each edited note's edges, weighted to hold the level whether
-  /// the note is coherent with the audio under it or not. 0 keeps the default
-  /// 5 ms; a hard cut is deliberately not selectable, because the seam it
-  /// leaves behind is a click.
+  /// the note is coherent with the audio under it or not; finite and > 0, default 5 ms. A
+  /// hard cut is deliberately not selectable, because the seam it leaves behind is a click.
   float fade_ms;
   /// Boundary between the drift and the vibrato that @c vibrato_depth_change
-  /// and @c drift_change act on, in Hz. 0 keeps the default 3 Hz.
+  /// and @c drift_change act on, in Hz; finite and > 0, default 3.
   ///
   /// Pass whatever @ref sonare_decompose_note_pitch was called with. A host
   /// that draws the vibrato at one cutoff and edits it at another edits a
@@ -275,11 +281,15 @@ typedef struct {
   float vibrato_cutoff_hz;
 } SonareNoteRenderConfig;
 
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_note_render_config_init(SonareNoteRenderConfig* config);
+
 /// @brief A pending, non-destructive change to one note.
-/// @details Zero-initializing gives the identity edit: @c time_stretch_ratio 0
-///          reads as 1 and an envelope of zero length is no envelope, so a
-///          zeroed struct changes nothing.
+/// @details @ref sonare_note_edit_init gives the identity edit: ratio 1 and an envelope of zero
+///          length, which is no envelope, so the edit changes nothing. Every note an entry
+///          point takes carries its own edit, so each one is started from the init function.
 typedef struct {
+  uint32_t struct_size;  ///< sizeof(SonareNoteEdit); set by the init function.
   /// Moves the note along the timeline. Negative moves it earlier.
   int64_t time_offset_samples;
   /// Index of this note's amplitude envelope in the envelope array that travels
@@ -301,7 +311,7 @@ typedef struct {
   float pitch_semitones;
   /// Gain applied to the note in dB; 0 leaves the level alone.
   float gain_db;
-  /// >1 lengthens the note, <1 shortens it; pitch is preserved. 0 reads as 1.
+  /// >1 lengthens the note, <1 shortens it; pitch is preserved. Finite and > 0, default 1.
   float time_stretch_ratio;
   /// Moves the spectral envelope, in semitones, on top of whatever the pitch
   /// shift already did to it.
@@ -325,8 +335,14 @@ typedef struct {
   int32_t muted;
 } SonareNoteEdit;
 
+/// @brief Fills @p edit with sizeof and the identity edit (time_stretch_ratio 1, all else 0).
+///        A NULL @p edit is ignored.
+void sonare_note_edit_init(SonareNoteEdit* edit);
+
 /// One editable note. Sample bounds are half-open into the source audio; frame
 /// bounds are half-open into the caller's own F0 track.
+/// @details A data record: the measured fields are the library's and the edit carries its own
+///          struct_size, so a note built by hand sets @c edit with @ref sonare_note_edit_init.
 typedef struct {
   /// First sample of the note in the source audio.
   int64_t onset_sample;
@@ -393,7 +409,7 @@ typedef struct {
 /// @param voiced Per-frame voiced flags (non-zero = voiced), or NULL.
 /// @param n_frames Number of F0 frames; must be non-zero.
 /// @param frame_rate F0 frames per second; must be finite and > 0.
-/// @param config Optional versioned configuration; NULL selects the defaults.
+/// @param config Optional configuration started from its init function; NULL selects the defaults.
 /// @param out Receives a heap-owned result, cleared before validation. An empty
 ///        segmentation is returned as NULL pointers with zero counts.
 SonareError sonare_extract_notes(const float* samples, size_t length, int sample_rate,
@@ -447,7 +463,7 @@ void sonare_free_note_objects_result(SonareNoteObjectsResult* result);
 /// @param n_frames Number of F0 frames, or 0 when @p f0_hz is NULL.
 /// @param frame_rate F0 frames per second; must be finite and > 0 when @p f0_hz
 ///        is given.
-/// @param config Optional versioned configuration; NULL selects the defaults.
+/// @param config Optional configuration started from its init function; NULL selects the defaults.
 /// @param out Receives the rendered audio, which has the input's length.
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.
@@ -608,26 +624,27 @@ typedef enum SONARE_ENUM_BASE {
 } SonareNoteTargetUnmatchedPolicy;
 
 /// @brief Tunable configuration for @ref sonare_assign_note_targets.
-/// @details Zero-initialising this struct is NOT a valid default -- a zeroed
-///          @c max_correction_semitones saturates every correction to nothing,
-///          so the call would assign targets and move no note. Populate it via
-///          @ref sonare_note_target_assign_config_default, or pass NULL to take
-///          the library defaults.
+/// @details Prepare one with @ref sonare_note_target_assign_config_init, or pass NULL to take the
+///          same library defaults. Every field is read literally: a zeroed
+///          @c max_correction_semitones saturates every correction to nothing, so the call
+///          would assign targets and move no note.
 typedef struct {
+  uint32_t struct_size;      ///< sizeof(SonareNoteTargetAssignConfig); set by the init function.
   int32_t unmatched_policy;  ///< A @ref SonareNoteTargetUnmatchedPolicy for notes with no target.
-  /// Fraction of the note that must overlap a target for it to count. 0 is its
-  /// own meaning -- any overlap at all counts -- not a request for the default.
+  /// Fraction of the note that must overlap a target for it to count, in [0, 1]; default 0.5.
+  /// 0 means any overlap at all counts.
   float min_overlap_ratio;
   /// The assigned shift saturates here rather than being refused, matching
   /// @c SonareNoteEdit::formant_semitones: a reference an octave out is a
   /// wrong reference, and a rejected call tells the caller less than a bounded
-  /// correction does. 0 is its own meaning, as above.
+  /// correction does. Finite and >= 0, default 12; 0 allows no correction.
   float max_correction_semitones;
 } SonareNoteTargetAssignConfig;
 
-/// @brief Fills @p config with the library defaults (unmatched notes left alone,
-///        half the note must overlap, corrections saturate at an octave).
-SonareError sonare_note_target_assign_config_default(SonareNoteTargetAssignConfig* config);
+/// @brief Fills @p config with sizeof and the library defaults (unmatched notes left alone,
+///        half the note must overlap, corrections saturate at an octave). A NULL @p config is
+///        ignored.
+void sonare_note_target_assign_config_init(SonareNoteTargetAssignConfig* config);
 
 /// @brief Reads one track of an in-memory Standard MIDI File as a reference melody.
 /// @details Each note-on is paired with the next note-off of the same note number
@@ -693,41 +710,34 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
 // Effects - Percussive events
 // ============================================================================
 
-/// @brief Versioned configuration for @ref sonare_extract_percussive_events.
-/// @details Zero-initialize for the defaults (2048-point FFT, a hop of a quarter of it, 31-frame
-///          median kernels, onset delta 0.06, one frame of minimum spacing, a
-///          500 ms span cap and no ratio filter). @c struct_version 0 and 1 both
-///          select the version-1 layout. Every field takes its default at 0, so
-///          a zeroed struct and a NULL pointer behave alike.
+/// @brief Configuration for @ref sonare_extract_percussive_events.
+/// @details Prepare one with @ref sonare_percussive_event_config_init (2048-point FFT, a hop of
+///          a quarter of it, 31-frame median kernels, onset delta 0.06, one frame of minimum
+///          spacing, a 500 ms span cap and no ratio filter); every field is then read
+///          literally. A NULL config pointer takes the same defaults.
 typedef struct {
-  /// Layout version; 0 and 1 both select version 1.
-  int32_t struct_version;
+  uint32_t struct_size;  ///< sizeof(SonarePercussiveEventConfig); set by the init function.
   /// FFT size and hop the separation and the onset detector share. They cannot
   /// be set apart: an event measured on one framing and lifted out on another is
-  /// not the same signal. An n_fft of 0 keeps 2048 and a hop of 0 is a quarter of the
-  /// n_fft in use. The pair must overlap-add --
-  /// @c n_fft even and at least 2, @c hop_length no more than half of it --
-  /// because the separation inverts an STFT. A negative value is rejected on its
-  /// own, before the zero-is-default rule could swallow it.
+  /// not the same signal. @c n_fft defaults to 2048 and @c hop_length to
+  /// @ref SONARE_STFT_HOP_AUTO, a quarter of the n_fft in use. The pair must overlap-add --
+  /// @c n_fft even and at least 2, @c hop_length positive and no more than half of it --
+  /// because the separation inverts an STFT.
   int32_t n_fft;
-  /// Hop in samples; see @c n_fft.
+  /// Hop in samples, or @ref SONARE_STFT_HOP_AUTO; see @c n_fft.
   int32_t hop_length;
   /// Median filter lengths the separation runs, along time and along frequency.
-  /// A longer harmonic kernel calls more of a sustained sound harmonic. 0 keeps
-  /// the default 31; any other value must be odd and positive, so an even one is
-  /// rejected rather than rounded. 1 is legal and degenerate -- a length-1
-  /// median is the identity, so both components come back as the source.
+  /// A longer harmonic kernel calls more of a sustained sound harmonic. Odd and positive,
+  /// default 31, so an even one is rejected rather than rounded. 1 is legal and degenerate --
+  /// a length-1 median is the identity, so both components come back as the source.
   int32_t hpss_kernel_harmonic;
   /// Percussive median kernel length (frequency axis); see @c hpss_kernel_harmonic.
   int32_t hpss_kernel_percussive;
-  /// Minimum frames between consecutive onsets. 0 keeps the default 1; negative
-  /// is rejected.
+  /// Minimum frames between consecutive onsets, >= 0; default 1.
   int32_t onset_wait;
   /// Offset added to the detector's adaptive threshold; raising it finds fewer,
-  /// stronger hits and lowering it finds more. 0 keeps the default 0.06, so
-  /// exactly zero is the one value not selectable from here -- a negative one is
-  /// accepted and puts the threshold below the default, which is the direction
-  /// a caller reaching for zero wanted anyway.
+  /// stronger hits and lowering it finds more. Finite, default 0.06; 0 and negative values
+  /// are ordinary.
   ///
   /// It is in the units of @c SonarePercussiveEvent::strength, which is the
   /// onset envelope's own scale and is not normalized -- three isolated hits
@@ -738,40 +748,40 @@ typedef struct {
   float onset_delta;
   /// Caps a span that no onset follows. It binds at the end of a phrase and at
   /// the end of the track; anywhere else the next onset closes the span first.
-  /// 0 keeps the default 500 ms.
+  /// Finite and > 0, default 500 ms.
   float max_event_ms;
   /// Drops an event whose @c percussive_ratio falls below this; must be in
-  /// [0, 1]. 0 is both the default and the meaningful "keep everything", so
-  /// nothing is lost here to the rule that 0 selects the default. Raising it is
+  /// [0, 1], default 0 (keep everything). Raising it is
   /// useful on material that is mostly drums and wrong on a dense mix, where it
   /// also drops real hits sitting over a loud sustain.
   float min_percussive_ratio;
 } SonarePercussiveEventConfig;
 
-/// @brief Versioned configuration for @ref sonare_render_percussive_events.
-/// @details Zero-initialize for the defaults (2048-point FFT, a hop of a quarter of it, 31-frame
-///          median kernels, 5 ms fade). @c struct_version 0 and 1 both select
-///          the version-1 layout.
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_percussive_event_config_init(SonarePercussiveEventConfig* config);
+
+/// @brief Configuration for @ref sonare_render_percussive_events.
+/// @details Prepare one with @ref sonare_percussive_render_config_init (2048-point FFT, a hop of
+///          a quarter of it, 31-frame median kernels, 5 ms fade); every field is then read
+///          literally. A NULL config pointer takes the same defaults.
 typedef struct {
-  /// Layout version; 0 and 1 both select version 1.
-  int32_t struct_version;
-  /// The separation the events were measured against. Pass back what
-  /// @ref sonare_extract_percussive_events was called with: a different
-  /// separation lifts a different signal out of the span than the one the
-  /// events describe. Validated even when every edit is the identity and no
-  /// separation runs, so an unusable framing is an error on every set.
+  uint32_t struct_size;  ///< sizeof(SonarePercussiveRenderConfig); set by the init function.
+  /// The separation the events were measured against; even and at least 2, default 2048.
+  /// Pass back what @ref sonare_extract_percussive_events was called with: a different
+  /// separation lifts a different signal out of the span than the one the events describe.
+  /// Validated even when every edit is the identity and no separation runs, so an unusable
+  /// framing is an error on every set.
   int32_t n_fft;
-  /// Hop in samples of the separation; 0 keeps 512.
+  /// Hop in samples of the separation, or @ref SONARE_STFT_HOP_AUTO (the default), a quarter
+  /// of @c n_fft.
   int32_t hop_length;
-  /// Harmonic median kernel length of the separation; 0 keeps 31.
+  /// Harmonic median kernel length of the separation; odd and positive, default 31.
   int32_t hpss_kernel_harmonic;
-  /// Percussive median kernel length of the separation; 0 keeps 31.
+  /// Percussive median kernel length of the separation; odd and positive, default 31.
   int32_t hpss_kernel_percussive;
-  /// Fade-out at the tail of each lifted span. 0 keeps the default 5 ms, so a
-  /// zero-length fade is unreachable from here rather than rejected -- a zeroed
-  /// struct has to mean the defaults, and that outranks passing the core's own
-  /// refusal through. A hard cut is not a thing to want anyway: what the fade
-  /// shapes is the signal being subtracted, so squaring it off leaves a step.
+  /// Fade-out at the tail of each lifted span; finite and > 0, default 5 ms. A hard cut is not
+  /// selectable: what the fade shapes is the signal being subtracted, so squaring it off
+  /// leaves a step.
   ///
   /// There is deliberately no matching fade-in: a span opens in front of its
   /// transient, where the percussive component is near-silent, so cutting square
@@ -779,6 +789,9 @@ typedef struct {
   /// fade.
   float fade_ms;
 } SonarePercussiveRenderConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_percussive_render_config_init(SonarePercussiveRenderConfig* config);
 
 /// @brief A pending, non-destructive change to one percussive event.
 /// @details Zero-initializing gives the identity edit. A struck sound has no
@@ -853,7 +866,7 @@ typedef struct {
 ///          that survive.
 /// @param samples Source audio; @p length must be non-zero.
 /// @param sample_rate Sample rate in Hz; must be > 0.
-/// @param config Optional versioned configuration; NULL selects the defaults.
+/// @param config Optional configuration started from its init function; NULL selects the defaults.
 /// @param out Receives a heap-owned result, cleared before validation. Audio in
 ///        which nothing was detected is returned as a NULL pointer and a zero
 ///        count rather than as an error. Events come back in ascending sample
@@ -893,7 +906,7 @@ void sonare_free_percussive_events_result(SonarePercussiveEventsResult* result);
 ///        checked for every event including the ones whose edit is the identity:
 ///        an unrenderable set is unrenderable whether or not this call would
 ///        have touched the offending event.
-/// @param config Optional versioned configuration; NULL selects the defaults.
+/// @param config Optional configuration started from its init function; NULL selects the defaults.
 /// @param out Receives the rendered audio, which has the input's length.
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.
@@ -926,12 +939,9 @@ typedef enum {
   SONARE_FORMANT_MODE_ABSOLUTE = 1
 } SonareFormantMode;
 
-/// @brief Versioned configuration for @ref sonare_voice_change_ex.
-/// @details No field has an "unspecified" spelling: set all four. @c struct_version 0 and
-///          1 both select the version-1 layout.
+/// @brief Configuration for @ref sonare_voice_change_ex.
+/// @details A data record: no field has an "unspecified" spelling, so set all three.
 typedef struct {
-  /// Layout version; 0 and 1 both select version 1.
-  int32_t struct_version;
   /// Transpose in semitones; 0 leaves the pitch alone. Must be finite.
   float pitch_semitones;
   /// Formant scale; its meaning is chosen by @c formant_mode. Must be finite.
@@ -1005,7 +1015,8 @@ typedef enum SONARE_ENUM_BASE {
 /// @brief Configuration for @ref sonare_biquad_filter.
 /// @details Fill with @ref sonare_biquad_filter_config_init, then set the
 ///   frequency fields @c type reads. A frequency field @c type does not read
-///   must stay 0; any other value is refused.
+///   must stay NaN (not given); any other value is refused, and so is NaN in a
+///   field @c type reads.
 typedef struct {
   uint32_t struct_size;  ///< sizeof(SonareBiquadFilterConfig); set by the init function.
   int32_t type;          ///< A @ref SonareBiquadFilterType (default HIGH_PASS).
@@ -1016,8 +1027,8 @@ typedef struct {
   float bandwidth_hz;    ///< BAND_PASS / NOTCH bandwidth, > 0.
 } SonareBiquadFilterConfig;
 
-/// @brief Fills @p config with the defaults; every frequency field is 0, so
-///   the caller sets the one @c type reads. A NULL @p config is ignored.
+/// @brief Fills @p config with sizeof and the defaults; every frequency field is NaN, so
+///   the caller sets the ones @c type reads. A NULL @p config is ignored.
 void sonare_biquad_filter_config_init(SonareBiquadFilterConfig* config);
 
 /// @brief Filters mono audio with a biquad (or a cascade of two for order 4).
@@ -1122,19 +1133,26 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
                                        float** out_w, size_t* out_w_length, float** out_h,
                                        size_t* out_h_length);
 
-/// @brief Versioned options for @ref sonare_decompose_stems.
-/// @details Zero-initialize for the defaults (4 components, 2048/512 STFT,
-///          100 iterations, Frobenius beta, random init, magnitude mask).
+/// @brief Options for @ref sonare_decompose_stems.
+/// @details Prepare one with @ref sonare_decompose_stems_config_init (4 components, 2048/512
+///          STFT, 100 iterations, Frobenius beta, random init, magnitude mask); every field is
+///          then read literally. A NULL config pointer takes the same defaults.
 typedef struct {
-  int struct_version;  ///< Layout version; 0 and 1 both select version 1.
-  int n_components;    ///< Number of NMF components (stems); 0 selects 4.
-  int n_fft;           ///< STFT size in samples; 0 selects 2048.
-  int hop_length;      ///< STFT hop in samples; 0 is a quarter of n_fft.
-  int n_iter;          ///< Multiplicative-update iterations; 0 selects 100.
-  float beta;          ///< Beta divergence; 0 selects 2 (Frobenius), 1 is KL, tiny is IS.
-  const char* init;    ///< Initialiser "random" or "nndsvd"; NULL selects "random".
-  float mask_power;    ///< Soft-mask exponent; 0 selects 1 (magnitude ratio), 2 is Wiener-style.
+  uint32_t struct_size;  ///< sizeof(SonareDecomposeStemsConfig); set by the init function.
+  int n_components;      ///< Number of NMF components (stems), >= 1; default 4.
+  int n_fft;             ///< STFT size in samples, even and at least 4; default 2048.
+  /// STFT hop in samples, positive and at most n_fft / 2; default @ref SONARE_STFT_HOP_AUTO
+  /// (a quarter of n_fft).
+  int hop_length;
+  int n_iter;        ///< Multiplicative-update iterations, >= 1; default 100.
+  float beta;        ///< Finite beta divergence: 2 = Frobenius (default), 1 = KL, 0 = IS.
+  const char* init;  ///< Initialiser "random" (default) or "nndsvd"; never NULL once initialised.
+  float mask_power;  ///< Soft-mask exponent, finite and >= 1; default 1 (magnitude ratio), 2 is
+                     ///< Wiener-style.
 } SonareDecomposeStemsConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_decompose_stems_config_init(SonareDecomposeStemsConfig* config);
 
 /// @brief NMF separation that CARRIES the original phase, so each component is
 ///        directly listenable.
@@ -1149,7 +1167,7 @@ typedef struct {
 /// @param samples Input signal (mono).
 /// @param length Number of samples.
 /// @param sample_rate Sample rate in Hz.
-/// @param config Optional versioned options; NULL selects the defaults.
+/// @param config Optional options started from the init function; NULL selects the defaults.
 /// @param out Receives one heap buffer per component, laid out as a single
 ///        flat array of @p out_component_count * @p out_component_length
 ///        floats (component c starts at c * @p out_component_length). Release
@@ -1188,7 +1206,7 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 ///        NULL. At least one and at most 64 channels.
 /// @param length Samples per channel. One length for the set.
 /// @param sample_rate Sample rate in Hz, shared by every channel.
-/// @param config Optional versioned options; NULL selects the defaults.
+/// @param config Optional options started from the init function; NULL selects the defaults.
 /// @param out Receives one heap buffer holding every (component, channel)
 ///        signal, laid out as a single flat array of @p out_component_count * @p out_num_channels
 ///        * @p out_component_length floats: component c, channel ch starts at
@@ -1342,24 +1360,38 @@ typedef enum SONARE_ENUM_BASE {
 } SonareSpectralEditMode;
 
 /// @brief STFT + heal parameters for @ref sonare_spectral_edit.
-/// @details Zero-init friendly: every "0 => default" field below picks the
-///          documented default so a memset(0) config is the all-defaults case.
+/// @details Prepare one with @ref sonare_spectral_edit_config_init; every field is then read
+///          literally. A NULL config pointer takes the same defaults.
 typedef struct {
-  int n_fft;  ///< STFT size in samples; 0 selects 2048, otherwise a power of two in [4, 262144].
-  int hop_length;  ///< STFT hop in samples; 0 is a quarter of n_fft, otherwise 0 < hop <= n_fft/2.
-  int window;      ///< A @ref SonareWindowType (sonare_c_streaming.h); 0 is Hann.
-  int heal_radius_frames;  ///< Neighbour frames on each side that heal reads; 0 selects 2.
+  uint32_t struct_size;  ///< sizeof(SonareSpectralEditConfig); set by the init function.
+  int n_fft;             ///< STFT size in samples, a power of two in [4, 262144]; default 2048.
+  /// STFT hop in samples, 0 < hop <= n_fft/2; default @ref SONARE_STFT_HOP_AUTO (a quarter of
+  /// n_fft).
+  int hop_length;
+  int window;              ///< A @ref SonareWindowType (sonare_c_streaming.h); default Hann.
+  int heal_radius_frames;  ///< Neighbour frames on each side that heal reads, >= 1; default 2.
 } SonareSpectralEditConfig;
 
-/// @brief One time x frequency rectangle edit op (POD; ops apply in array order).
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_spectral_edit_config_init(SonareSpectralEditConfig* config);
+
+/// @brief One time x frequency rectangle edit op (ops apply in array order).
+/// @details Prepare each op with @ref sonare_spectral_region_op_init, then set the fields.
 typedef struct {
+  uint32_t struct_size;  ///< sizeof(SonareSpectralRegionOp); set by the init function.
   int64_t start_sample;  ///< Region start in input samples; clamped to [0, length].
   int64_t end_sample;    ///< Region end in input samples, exclusive; clamped to [0, length].
   float low_hz;          ///< Region low edge in Hz; clamped to [0, nyquist].
-  float high_hz;         ///< Region high edge in Hz; <= 0 or >= nyquist means nyquist.
-  float gain_db;         ///< Gain in dB for GAIN and ATTENUATE; ignored by MUTE and HEAL.
-  int mode;              ///< A @ref SonareSpectralEditMode selecting how the region is modified.
+  /// Region high edge in Hz, finite and > 0, clamped to nyquist; NaN (the init value) means
+  /// nyquist.
+  float high_hz;
+  float gain_db;  ///< Gain in dB for GAIN and ATTENUATE; ignored by MUTE and HEAL.
+  int mode;       ///< A @ref SonareSpectralEditMode selecting how the region is modified.
 } SonareSpectralRegionOp;
+
+/// @brief Fills @p op with sizeof, an empty region at 0, high_hz NaN (nyquist), gain 0 dB and
+///        mode GAIN. A NULL @p op is ignored.
+void sonare_spectral_region_op_init(SonareSpectralRegionOp* op);
 
 /// @brief Region-based spectral editing: STFT -> per-op bin/frame masking -> iSTFT.
 /// @details Stateless mono transform; output has the same length/sample rate as the

@@ -49,8 +49,10 @@ extern "C" {
 ///          @c SONARE_ERROR_INVALID_PARAMETER (the message names the field, its range and the
 ///          value) and the handle keeps its previous configuration, as the JSON entry points do.
 typedef struct {
-  /// @brief Layout version; must be 2. Earlier layouts are refused.
-  int32_t struct_version;
+  /// @brief sizeof(SonareRealtimeVoiceChangerConfig), set by
+  ///        @ref sonare_realtime_voice_changer_config_init. A smaller value is refused with
+  ///        SONARE_ERROR_INVALID_PARAMETER.
+  uint32_t struct_size;
 
   /// Gain applied before the chain in dB, [-24, 24].
   float input_gain_db;
@@ -269,12 +271,13 @@ uint32_t sonare_voice_changer_abi_version(void);
 SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPreset preset,
                                                         SonareRealtimeVoiceChangerConfig* out);
 
-/// @brief Populates @p out with the default configuration used by
+/// @brief Fills @p config with sizeof and the default configuration used by
 ///        @ref sonare_realtime_voice_changer_create when its config is NULL.
-/// @details This is the normalized neutralMonitor preset. Do not use a
-///          zero-initialized POD as a default: in particular, zero disables
-///          the ISP limiter whereas the library default enables it.
-SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChangerConfig* out);
+/// @details This is the normalized neutralMonitor preset. A zero-initialized POD is refused
+///          for its struct_size, and would disable the ISP limiter whereas the library default
+///          enables it. A NULL @p config is ignored; a build without the voice changer sets
+///          only struct_size.
+void sonare_realtime_voice_changer_config_init(SonareRealtimeVoiceChangerConfig* config);
 
 /// @brief Same as @ref sonare_realtime_voice_changer_create_json but accepts
 ///        a flat POD config. Pass NULL to start from the neutralMonitor preset. A config

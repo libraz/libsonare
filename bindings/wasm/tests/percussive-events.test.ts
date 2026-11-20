@@ -329,14 +329,15 @@ const brokenFramings: readonly { nFft: number; hopLength: number }[] = [
 ];
 
 /**
- * Refuses a broken framing: a negative size is the binding's own refusal, every
- * other break is the STFT configuration's, which the core refuses by field name.
+ * Refuses a broken framing: a non-positive size is refused by its field name and
+ * domain, every other break is the STFT configuration's, which the core refuses
+ * by field name.
  */
 function expectBrokenFraming(framing: { nFft: number; hopLength: number }, run: () => void) {
   if (framing.nFft < 0 || framing.hopLength < 0) {
     expectRefusalOf(run);
     expect(() => run()).toThrow(
-      /^(extractPercussiveEvents|renderPercussiveEvents): the framing and kernel sizes must be integers in \[0, 2147483647\]$/,
+      /^(extractPercussiveEvents|renderPercussiveEvents): (nFft|hopLength) must be an integer in \[1, 2147483647\]$/,
     );
   } else {
     expectCoreRefusal(
@@ -662,8 +663,8 @@ describe('extractPercussiveEvents', () => {
       extractPercussiveEvents({ samples: Float32Array.from([Number.NaN, 0.5]), sampleRate }),
     ).toThrow(RangeError);
 
-    // Negative counts are rejected before the zero-is-default promotion, so none
-    // of them is quietly swallowed as "keep the default".
+    // Negative counts are refused by name, so none of them is quietly swallowed
+    // as "keep the default".
     for (const options of [
       { nFft: -2048 },
       { hopLength: -512 },
@@ -1025,7 +1026,7 @@ describe('renderPercussiveEvents', () => {
     ]) {
       expectRangeRefusal(() => render([edited(4410, 15435)], options));
       expect(() => render([edited(4410, 15435)], options)).toThrow(
-        'renderPercussiveEvents: the framing and kernel sizes must be integers in [0, 2147483647]',
+        `renderPercussiveEvents: ${Object.keys(options)[0]} must be an integer in [1, 2147483647]`,
       );
     }
     for (const options of [{ hpssKernelHarmonic: 4 }, { hpssKernelPercussive: 4 }]) {

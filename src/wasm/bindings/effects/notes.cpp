@@ -13,6 +13,7 @@
 #include "editing/note_model/note_target.h"
 #include "editing/note_model/pitch_decomposition.h"
 #include "editing/pitch_editor/f0_provider.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/common/note_val.h"
 
@@ -28,25 +29,22 @@ namespace {
 using sonare_wasm_editing::noteObjectsToVal;
 using sonare_wasm_editing::noteRowEditFromVal;
 
-// Every field takes its default at 0 or absent, mirroring
-// SonareNoteExtractorConfig.
+// An omitted key keeps the core default and a given one is read literally, checked against
+// the domain SonareNoteExtractorConfig states.
 editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options) {
+  namespace check = sonare::util::check;
   editing::note_model::NoteExtractorConfig config;
-  const float threshold_cents = floatProperty(options, "segmentationThresholdCents", 0.0f);
-  const float min_note_ms = floatProperty(options, "minNoteMs", 0.0f);
-  const float reference_hz = floatProperty(options, "referenceHz", 0.0f);
-  const float voiced_threshold = floatProperty(options, "voicedThreshold", 0.0f);
-  if (!std::isfinite(threshold_cents) || !std::isfinite(min_note_ms) ||
-      !std::isfinite(reference_hz) || !std::isfinite(voiced_threshold) || threshold_cents < 0.0f ||
-      min_note_ms < 0.0f || reference_hz < 0.0f || voiced_threshold < 0.0f ||
-      voiced_threshold > 1.0f) {
-    throw WasmRangeError(
-        "config values must be finite and at least 0, and voicedThreshold must be in [0, 1]");
-  }
-  if (threshold_cents > 0.0f) config.segmenter.segmentation_threshold_cents = threshold_cents;
-  if (min_note_ms > 0.0f) config.segmenter.min_note_ms = min_note_ms;
-  if (reference_hz > 0.0f) config.segmenter.reference_hz = reference_hz;
-  if (voiced_threshold > 0.0f) config.voiced_threshold = voiced_threshold;
+  config.segmenter.segmentation_threshold_cents = floatProperty(
+      options, "segmentationThresholdCents", config.segmenter.segmentation_threshold_cents);
+  config.segmenter.min_note_ms = floatProperty(options, "minNoteMs", config.segmenter.min_note_ms);
+  config.segmenter.reference_hz =
+      floatProperty(options, "referenceHz", config.segmenter.reference_hz);
+  config.voiced_threshold = floatProperty(options, "voicedThreshold", config.voiced_threshold);
+  check::greater_than(config.segmenter.segmentation_threshold_cents, 0.0,
+                      "segmentationThresholdCents");
+  check::at_least(config.segmenter.min_note_ms, 0.0, "minNoteMs");
+  check::greater_than(config.segmenter.reference_hz, 0.0, "referenceHz");
+  check::in_range(config.voiced_threshold, 0.0, 1.0, "voicedThreshold");
   return config;
 }
 
@@ -278,16 +276,11 @@ val js_extract_notes(val samples, const val& sample_rate_val, val f0_hz, val voi
 val js_render_notes(val samples, const val& sample_rate, val notes, val options) {
   const int rate = checkedIntFromVal(sample_rate, "sampleRate");
   editing::note_model::NoteRenderConfig config;
-  const float fade_ms = floatProperty(options, "fadeMs", 0.0f);
-  if (!std::isfinite(fade_ms) || fade_ms < 0.0f) {
-    throw WasmRangeError("fadeMs must be finite and at least 0");
-  }
-  if (fade_ms > 0.0f) config.fade_ms = fade_ms;
-  const float vibrato_cutoff_hz = floatProperty(options, "vibratoCutoffHz", 0.0f);
-  if (!std::isfinite(vibrato_cutoff_hz) || vibrato_cutoff_hz < 0.0f) {
-    throw WasmRangeError("vibratoCutoffHz must be finite and at least 0");
-  }
-  if (vibrato_cutoff_hz > 0.0f) config.decomposition.vibrato_cutoff_hz = vibrato_cutoff_hz;
+  config.fade_ms = floatProperty(options, "fadeMs", config.fade_ms);
+  config.decomposition.vibrato_cutoff_hz =
+      floatProperty(options, "vibratoCutoffHz", config.decomposition.vibrato_cutoff_hz);
+  sonare::util::check::greater_than(config.fade_ms, 0.0, "fadeMs");
+  sonare::util::check::greater_than(config.decomposition.vibrato_cutoff_hz, 0.0, "vibratoCutoffHz");
 
   std::size_t cumulative_count = 0;
   accumulateWasmFloat32ArrayLength(samples, "samples", &cumulative_count);
@@ -439,12 +432,8 @@ NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
   // strictest one and saturates a bad bound to zero -- both in-domain values
   // nothing downstream can tell from a deliberate one. This is the C ABI's
   // resolve_note_target_config, which this surface does not go through.
-  if (config.min_overlap_ratio < 0.0f || config.min_overlap_ratio > 1.0f) {
-    throw WasmRangeError("minOverlapRatio must be in [0, 1]");
-  }
-  if (config.max_correction_semitones < 0.0f) {
-    throw WasmRangeError("maxCorrectionSemitones must be at least 0");
-  }
+  sonare::util::check::in_range(config.min_overlap_ratio, 0.0, 1.0, "minOverlapRatio");
+  sonare::util::check::at_least(config.max_correction_semitones, 0.0, "maxCorrectionSemitones");
   return config;
 }
 

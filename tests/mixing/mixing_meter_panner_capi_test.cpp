@@ -701,7 +701,8 @@ TEST_CASE("The master meter is read only once enabled and refuses a config it ca
   SonareMixerMasterMeterConfig config{};
   CHECK(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(std::string(sonare_last_error_message()),
-             Catch::Matchers::ContainsSubstring("config.struct_size is below sizeof"));
+             Catch::Matchers::ContainsSubstring(
+                 "config.struct_size must be set by sonare_mixer_master_meter_config_init"));
   sonare_mixer_master_meter_config_init(&config);
   config.struct_size = sizeof(config) - 1;
   CHECK(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_ERROR_INVALID_PARAMETER);

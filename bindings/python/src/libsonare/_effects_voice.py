@@ -47,9 +47,7 @@ from ._runtime import (
 from ._types_engine import PlanarChannels
 from ._types_enums import _VOICE_PRESET_IDS, VoicePresetId
 
-_VOICE_CHANGE_STRUCT_VERSION = 1
 _FORMANT_MODES = {"relative": 0, "absolute": 1}
-_REALTIME_CONFIG_STRUCT_VERSION = 2
 
 FormantMode: TypeAlias = Literal["relative", "absolute"]
 """How ``formant_factor`` relates to the pitch shift."""
@@ -147,7 +145,6 @@ def voice_change(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     config = SonareVoiceChangeConfig(
-        struct_version=_VOICE_CHANGE_STRUCT_VERSION,
         pitch_semitones=_to_c_float(pitch_semitones, "pitch_semitones"),
         formant_factor=_to_c_float(formant_factor, "formant_factor"),
         formant_mode=_FORMANT_MODES[formant_mode],
@@ -1067,7 +1064,7 @@ class RealtimeVoiceChangerConfig:
         """Copy field-for-field out of a ctypes struct."""
         values: dict[str, Any] = {}
         for name, *_ in pod._fields_:
-            if name == "struct_version":
+            if name == "struct_size":
                 continue
             value = getattr(pod, name)
             if name == "harmony_steps":
@@ -1084,9 +1081,8 @@ class RealtimeVoiceChangerConfig:
     def _to_pod(self) -> SonareRealtimeVoiceChangerConfig:
         """Copy field-for-field into a freshly allocated ctypes struct."""
         out = SonareRealtimeVoiceChangerConfig()
-        out.struct_version = _REALTIME_CONFIG_STRUCT_VERSION
         for name, *_ in out._fields_:
-            if name == "struct_version":
+            if name == "struct_size":
                 continue
             value = getattr(self, name)
             if name == "harmony_steps":
