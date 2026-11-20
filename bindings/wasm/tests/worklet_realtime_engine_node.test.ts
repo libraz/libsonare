@@ -1760,8 +1760,15 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTrackLanes([{ trackId: 1 }]);
         const before = posted.length;
         for (const layout of ['mono', '5.1', '7.1'] as const) {
-          expect(() => engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: layout }])).toThrow(
-            RangeError,
+          expect(() =>
+            engine.setTrackLanes([{ trackId: 1 }, { trackId: 2, sourceChannelLayout: layout }]),
+          ).toThrow(
+            expect.objectContaining({
+              name: 'SonareError',
+              code: ErrorCode.NotSupported,
+              message:
+                'SonareEngine.setTrackLanes: lanes[1].sourceChannelLayout other than stereo is not supported',
+            }),
           );
         }
         expect(posted).toHaveLength(before);

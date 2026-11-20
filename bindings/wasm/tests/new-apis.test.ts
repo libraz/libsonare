@@ -1097,7 +1097,12 @@ describe('v1.2 feature additions (WASM)', () => {
       ).not.toThrow();
       for (const layout of ['mono', '5.1', '7.1'] as const) {
         expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: layout }])).toThrow(
-          /must be stereo/,
+          expect.objectContaining({
+            code: ErrorCode.NotSupported,
+            message: expect.stringMatching(
+              /: lanes\[0\]\.sourceChannelLayout other than stereo is not supported$/,
+            ),
+          }),
         );
       }
       expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
@@ -1105,7 +1110,10 @@ describe('v1.2 feature additions (WASM)', () => {
       const lanes = Array.from({ length: MAX_TRACK_LANES + 1 }, (_, i) => ({ trackId: i + 1 }));
       expect(MAX_TRACK_LANES).toBe(32);
       expect(() => engine.setTrackLanes(lanes.slice(0, MAX_TRACK_LANES))).not.toThrow();
-      expect(() => engine.setTrackLanes(lanes)).toThrow(/at most 32 track lanes/);
+      expect(() => engine.setTrackLanes(lanes)).toThrow(RangeError);
+      expect(() => engine.setTrackLanes(lanes)).toThrow(
+        /: laneCount must be an integer in \[0, 32\]$/,
+      );
       expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
       // An unknown name is a RangeError and an ordinal, wrapping ones included
       // (257 narrows to 1 if the bound is checked after truncating to uint8_t),

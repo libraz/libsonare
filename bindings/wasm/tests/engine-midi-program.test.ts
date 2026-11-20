@@ -59,17 +59,17 @@ describe('RealtimeEngine.pushMidiProgram', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
       const calls: Array<[() => void, string]> = [
-        [() => engine.pushMidiProgram(DEST, 16, 0, 0), 'group must be in [0, 15]'],
-        [() => engine.pushMidiProgram(DEST, -1, 0, 0), 'group must be in [0, 15]'],
-        [() => engine.pushMidiProgram(DEST, 0, 16, 0), 'channel must be in [0, 15]'],
-        [() => engine.pushMidiProgram(DEST, 0, 0, 128), 'program must be in [0, 127]'],
+        [() => engine.pushMidiProgram(DEST, 16, 0, 0), 'group must be an integer in [0, 15]'],
+        [() => engine.pushMidiProgram(DEST, -1, 0, 0), 'group must be an integer in [0, 15]'],
+        [() => engine.pushMidiProgram(DEST, 0, 16, 0), 'channel must be an integer in [0, 15]'],
+        [() => engine.pushMidiProgram(DEST, 0, 0, 128), 'program must be an integer in [0, 127]'],
         [
           () => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 128, lsb: 0 }),
-          'bank_msb must be in [0, 127]',
+          'bank_msb must be an integer in [0, 127]',
         ],
         [
           () => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 0, lsb: 128 }),
-          'bank_lsb must be in [0, 127]',
+          'bank_lsb must be an integer in [0, 127]',
         ],
       ];
       for (const [call, message] of calls) {
@@ -108,10 +108,14 @@ describe('RealtimeEngine.pushMidiInputProgram', () => {
         engine.pushMidiInputProgram(0, 0, 5, { msb: 1, lsb: 2, valid: false } as never),
       ).toThrow(TypeError);
       expect(() => engine.pushMidiInputProgram(0, 16, 0)).toThrow(
-        new RangeError('RealtimeEngine.pushMidiInputProgram: channel must be in [0, 15]'),
+        new RangeError(
+          'RealtimeEngine.pushMidiInputProgram: channel must be an integer in [0, 15]',
+        ),
       );
       expect(() => engine.pushMidiInputProgram(0, 0, 128)).toThrow(
-        new RangeError('RealtimeEngine.pushMidiInputProgram: program must be in [0, 127]'),
+        new RangeError(
+          'RealtimeEngine.pushMidiInputProgram: program must be an integer in [0, 127]',
+        ),
       );
     } finally {
       engine.destroy();

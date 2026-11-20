@@ -640,18 +640,19 @@ export function replayInsertParamOverrides(
  * append new track ids after them. Entries carrying `sends` replace that
  * track's send list; entries without `sends` leave existing sends untouched.
  * The same omission rule preserves an existing source channel layout.
- * A `sourceChannelLayout` other than `'stereo'` throws a `RangeError`.
+ * A `sourceChannelLayout` other than `'stereo'` throws a `SonareError` coded `NotSupported`.
  *
  * @param lanes Lane descriptors in the desired lane order.
  */
 export function setTrackLanes(ctx: EngineMixerContext, lanes: readonly EngineTrackLane[]): void {
-  for (const lane of lanes) {
+  for (const [i, lane] of lanes.entries()) {
     if (typeof lane !== 'object' || lane === null) {
       throw refuseType('each lane must be an EngineTrackLane object');
     }
     if (lane.sourceChannelLayout !== undefined && lane.sourceChannelLayout !== 'stereo') {
-      throw refuse(
-        'track lane sourceChannelLayout must be stereo; multichannel lanes are not implemented',
+      throw codedError(
+        ErrorCode.NotSupported,
+        `lanes[${i}].sourceChannelLayout other than stereo is not supported`,
       );
     }
   }
