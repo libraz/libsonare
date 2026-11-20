@@ -109,6 +109,14 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
                                           take.size(), 22050, &config, &anchors, &count,
                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.bins_per_octave must be an integer in [0, 2147483647]");
+  config = SonareTakeAlignConfig{};
+  for (const int hop : {-256, 65537}) {
+    config.hop_length = hop;
+    CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
+                                            take.size(), 22050, &config, &anchors, &count,
+                                            &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "config.hop_length must be an integer in [0, 65536]");
+  }
 }
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
 

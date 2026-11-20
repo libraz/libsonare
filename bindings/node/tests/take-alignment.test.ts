@@ -156,6 +156,14 @@ describe('alignTakeToReference', () => {
     );
   });
 
+  it('refuses a hop outside the constant-Q bound by its name', () => {
+    for (const hopLength of [-256, 65_537]) {
+      expect(() => alignTakeToReference(request({ hopLength }))).toThrow(
+        new RangeError('alignTakeToReference: hopLength must be an integer in [0, 65536]'),
+      );
+    }
+  });
+
   it('reports an unalignable pair rather than answering with an unusable map', () => {
     // One chroma frame per signal cannot yield two distinct anchors, and the
     // library says so instead of handing back a map setWarpMap would refuse.

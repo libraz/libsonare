@@ -6,6 +6,7 @@ namespace check = sonare::util::check;
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "arrangement/harmonic_limits.h"
 #include "core/resample.h"
+#include "feature/cqt.h"
 #include "mir/key_context.h"
 #endif
 
@@ -541,6 +542,16 @@ SonareError sonare_align_take_to_reference_ex(
       check::refuse_relation({"take_len", "take_sample_rate", "reference_sample_rate"},
                              "{0} resampled from {1} to {2} must not exceed the buffer size limit");
     });
+  }
+  // The chroma is a constant-Q one, so its hop takes the transform's bound; 0 is the library value.
+  if (config != nullptr) {
+    if (const SonareError err = run_validation([&] {
+          check::integer_in_range(config->hop_length, 0, sonare::kMaxCqtHopLength,
+                                  "config.hop_length");
+        });
+        err != SONARE_OK) {
+      return err;
+    }
   }
   // Chroma folds the grid into 12 classes, so a grid it cannot fold is refused by its C member.
   if (config != nullptr && config->bins_per_octave != 0) {

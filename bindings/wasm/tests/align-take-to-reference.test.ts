@@ -233,7 +233,7 @@ describe('WASM alignTakeToReference', () => {
     }
 
     const unusable: Array<[string, Partial<AlignTakeToReferenceRequest>, string]> = [
-      ['a negative hop', { hopLength: -256 }, 'Invalid parameter'],
+      ['a negative hop', { hopLength: -256 }, 'hopLength must be an integer in [0, 65536]'],
       [
         'a negative resolution',
         { binsPerOctave: -12 },
