@@ -334,7 +334,9 @@ describe('a clip channel count required beside interleaved audio', () => {
     expect(addClip(1, 44100).sampleRateHint).toBe(44100);
     expect(() => addClip(1, 48000.5)).toThrow(RangeError);
     expect(() => addClip(1, 48000.5)).toThrow(/audioSampleRate must be an integer/);
-    expect(() => addClip(1, 0)).toThrow(/^Project\.addClip: .*audio_sample_rate must be between/);
+    expect(() => addClip(1, 0)).toThrow(
+      /^Project\.addClip: .*audio_?[sS]ample_?[rR]ate must be an integer in \[8000, 384000\]$/,
+    );
     expect(() => addClip(1, 0.5)).toThrow(/audioSampleRate must be an integer/);
   });
 });
