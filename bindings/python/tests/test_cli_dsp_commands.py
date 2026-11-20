@@ -100,7 +100,13 @@ def test_fade_payload_reports_omitted_side_as_zero(source: Path, tmp_path: Path)
     [
         (["--type", "low-pass", "--cutoff-hz", "2000"], 2, 2000.0, None, None),
         (["--type", "high-pass", "--cutoff-hz", "500", "--order", "4"], 4, 500.0, None, None),
-        (["--type", "notch", "--center-hz", "1000", "--bandwidth-hz", "200"], 2, None, 1000.0, 200.0),
+        (
+            ["--type", "notch", "--center-hz", "1000", "--bandwidth-hz", "200"],
+            2,
+            None,
+            1000.0,
+            200.0,
+        ),
     ],
 )
 def test_filter_payload(
