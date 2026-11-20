@@ -112,6 +112,14 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(result.translation_returns, 1)
         self.assertEqual([r.line for r in result.refusals], [10])
 
+    def test_an_unguarded_return_after_its_message_is_a_texted_helper(self) -> None:
+        r = one(
+            "SonareError refuse_x(const char* e) {\n"
+            "  set_last_error(SONARE_ERROR_INVALID_PARAMETER, e);\n"
+            "  return SONARE_ERROR_INVALID_PARAMETER;\n}\n"
+        )
+        self.assertEqual((r.classes, r.state), ({"helper"}, "text"))
+
     def test_a_return_with_no_guard_is_unclassified_and_listed(self) -> None:
         r = one("SonareError f() {\n  return SONARE_ERROR_INVALID_PARAMETER;\n}\n")
         self.assertEqual((r.classes, r.guard), ({"unclassified"}, "(no guard)"))

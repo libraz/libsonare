@@ -456,6 +456,9 @@ def scan_text(
         guard = " ".join(cond.split())
         if guard:
             classes = {classify_disjunct(d, refusing) for d in split_top(guard, "||")}
+        elif region_raw is not None and message_literals(region_raw):
+            # An unguarded return after the message is set: the body of a refusing helper.
+            classes = {"helper"}
         else:
             classes = {"unclassified"}
         names = set(re.findall(r"[A-Za-z_]\w*", guard))
