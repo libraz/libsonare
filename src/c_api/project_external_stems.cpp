@@ -233,7 +233,10 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     check::refuse("request.stems", "must carry names and roles that are valid UTF-8");
   }
   // Every argument cause is refused above; what is left is a failed staging.
-  if (validation.error != ImportError::kOk) return SONARE_ERROR_INVALID_STATE;
+  if (validation.error != ImportError::kOk) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "could not stage the stems into the project");
+    return SONARE_ERROR_INVALID_STATE;
+  }
 
   // The project allocator and the sidecar map normally advance together, but
   // callers can construct an inconsistent store through the C++ seam. Reject
