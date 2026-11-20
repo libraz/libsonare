@@ -390,10 +390,11 @@ def noexcept_names(source_root: Path) -> frozenset[str]:
     The promise is the declaration's, and the compiler holds the body to it.  A
     name with one declaration that does not make it -- an overload, or a method
     of the same name on another class -- is not taken, since a call site cannot
-    be told apart by name.
+    be told apart by name. A statement macro alone on its line (``SONARE_C_TRY``)
+    is not a return type, so the call that follows it is not read as a declaration.
     """
     declaration = re.compile(
-        r"^[ \t]*(?!return\b|else\b|case\b|default\b|delete\b|new\b)"
+        r"^[ \t]*(?!return\b|else\b|case\b|default\b|delete\b|new\b|[A-Z][A-Z0-9_]*\s*\n)"
         r"(?:(?:virtual|static|inline|constexpr|explicit|friend)\s+)*"
         r"[A-Za-z_][\w:<>,\s\*&]*?[\s\*&]([A-Za-z_]\w*)\s*\(",
         re.MULTILINE,

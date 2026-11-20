@@ -400,7 +400,7 @@ bool vc_pod_is_valid(const SonareRealtimeVoiceChangerConfig& pod, std::string* e
 }
 
 void vc_config_to_pod(const editing::voice_changer::RealtimeVoiceChangerConfig& c,
-                      SonareRealtimeVoiceChangerConfig* pod) {
+                      SonareRealtimeVoiceChangerConfig* pod) noexcept {
 #define X(cpp_path, pod_field) pod->pod_field = c.cpp_path;
   SONARE_VC_FIELDS(X)
 #undef X

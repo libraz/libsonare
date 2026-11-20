@@ -62,7 +62,7 @@ VoiceCharacterPreset preset_from_id_or_throw(std::string_view id, ErrorCode code
 
 }  // namespace detail
 
-RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset preset) {
+RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset preset) noexcept {
   RealtimeVoiceChangerConfig c;
   c.limiter.ceiling_db = -1.0f;
   switch (preset) {

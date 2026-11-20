@@ -669,7 +669,7 @@ class RealtimeVoiceChanger {
   float deess_gain_alpha_ = 1.0f;  // Smoothing of the deesser reduction gain.
 };
 
-RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset preset);
+RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset preset) noexcept;
 VoiceCharacterPreset realtime_voice_changer_preset_from_id(std::string_view id);
 const char* realtime_voice_changer_preset_id(VoiceCharacterPreset preset) noexcept;
 std::vector<std::string> realtime_voice_changer_preset_names();
