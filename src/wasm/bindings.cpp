@@ -412,8 +412,10 @@ val js_audio_from_memory(val bytes) {
 
 namespace {
 
-// Raises a C-ABI failure as the core exception the JS facade already classifies.
+// Raises a C-ABI failure as its recorded refusal, else as the core exception the JS facade
+// already classifies.
 [[noreturn]] void throw_c_error(SonareError err) {
+  rethrowLastCRefusal();
   const char* detail = sonare_last_error_message();
   const char* text = detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(err);
   throw SonareException(sonare_c_detail::error_code_from_c_error(err), text);

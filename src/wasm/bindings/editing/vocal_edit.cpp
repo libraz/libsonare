@@ -49,6 +49,7 @@ val vectorToFloat64Array(const double* data, std::size_t count) {
   sonare_vocal_last_error_detail(&structured);
   vocal_error_sequence =
       vocal_error_sequence == std::numeric_limits<uint64_t>::max() ? 0 : vocal_error_sequence + 1;
+  rethrowLastCRefusal();
   std::string message;
   const char* detail = sonare_last_error_message();
   const char* fallback = sonare_error_message(error);
