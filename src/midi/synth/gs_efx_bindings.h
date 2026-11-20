@@ -443,11 +443,11 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
     {0x0122, 5, kGsEfxRowDesigned, 0, 1, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 11, 0,
      58, 0},
     // accel.rotor -> effects.modulation.rotary.accelTauSec
-    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 1, 0},
+    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
+     11, 0, 1, 0},
     // accel.rotor -> effects.modulation.rotary.decelTauSec
-    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 34, 0},
+    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
+     11, 0, 34, 0},
     // accel.rotor -> effects.modulation.rotary.undershootHz
     {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
      GsEfxOut::kUndershootHz, 11, 0, 115, 0},
@@ -1676,11 +1676,11 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
     {0x020C, 12, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
      0, 58, 0},
     // accel.rotor -> effects.modulation.rotary.accelTauSec
-    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 1, 0},
+    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
+     11, 0, 1, 0},
     // accel.rotor -> effects.modulation.rotary.decelTauSec
-    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 34, 0},
+    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
+     11, 0, 34, 0},
     // accel.rotor -> effects.modulation.rotary.undershootHz
     {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
      GsEfxOut::kUndershootHz, 11, 0, 115, 0},
@@ -2504,11 +2504,11 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
     {0x1104, 10, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
      0, 58, 0},
     // accel.rotor -> effects.modulation.rotary.accelTauSec
-    {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 1, 0},
+    {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
+     11, 0, 1, 0},
     // accel.rotor -> effects.modulation.rotary.decelTauSec
-    {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 34, 0},
+    {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
+     11, 0, 34, 0},
     // accel.rotor -> effects.modulation.rotary.undershootHz
     {0x1104, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
      GsEfxOut::kUndershootHz, 11, 0, 115, 0},
@@ -2672,11 +2672,11 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
     {0x1107, 10, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
      0, 58, 0},
     // accel.rotor -> effects.modulation.rotary.accelTauSec
-    {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 1, 0},
+    {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
+     11, 0, 1, 0},
     // accel.rotor -> effects.modulation.rotary.decelTauSec
-    {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
-     0, 34, 0},
+    {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
+     11, 0, 34, 0},
     // accel.rotor -> effects.modulation.rotary.undershootHz
     {0x1107, 11, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
      GsEfxOut::kUndershootHz, 11, 0, 115, 0},

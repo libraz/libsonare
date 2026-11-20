@@ -170,9 +170,9 @@ def out_of(key: str) -> str:
     spelled = key.lower()
     if spelled.endswith("undershoothz"):
         return "GsEfxOut::kUndershootHz"
-    if spelled.endswith("deceltaus"):
+    if spelled.endswith("deceltausec"):
         return "GsEfxOut::kDecelTau"
-    if spelled.endswith("acceltaus"):
+    if spelled.endswith("acceltausec"):
         return "GsEfxOut::kAccelTau"
     return "GsEfxOut::kValue"
 
