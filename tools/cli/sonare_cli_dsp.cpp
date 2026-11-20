@@ -126,10 +126,10 @@ int cmd_filter(const CliArgs& args, const Audio& audio) {
       static_cast<int32_t>(std::find(tokens.begin(), tokens.end(), type) - tokens.begin());
   config.order = args.get_int("order", config.order);
   config.zero_phase = args.has("zero-phase") ? 1 : 0;
-  // The validator has refused a frequency the type does not read, so each one left out is 0.
-  config.cutoff_hz = args.get_float("cutoff-hz", 0.0f);
-  config.center_hz = args.get_float("center-hz", 0.0f);
-  config.bandwidth_hz = args.get_float("bandwidth-hz", 0.0f);
+  // The validator has refused a frequency the type does not read; one left out stays not given.
+  if (args.has("cutoff-hz")) config.cutoff_hz = args.get_float("cutoff-hz", 0.0f);
+  if (args.has("center-hz")) config.center_hz = args.get_float("center-hz", 0.0f);
+  if (args.has("bandwidth-hz")) config.bandwidth_hz = args.get_float("bandwidth-hz", 0.0f);
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError err = sonare_biquad_filter(audio.data(), audio.size(), audio.sample_rate(),
