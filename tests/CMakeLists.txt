@@ -223,6 +223,7 @@ add_executable(sonare_tests
   api/c_header_order_features_test.cpp
   api/c_header_order_mastering_test.cpp
   api/sonare_c_dsp_entries_test.cpp
+  api/sonare_c_refusal_entry_test.cpp
   api/sonare_c_repair_config_root_test.cpp
   api/sonare_c_note_objects_test.cpp
   api/sonare_c_auto_tune_test.cpp
