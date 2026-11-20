@@ -175,6 +175,15 @@ class ClassificationTest(unittest.TestCase):
         self.assertEqual(report.classes.get("realtime"), 1)
 
 
+    def test_a_call_under_a_default_label_is_not_a_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "a.h").write_text("void note(int code) noexcept;\n", encoding="utf-8")
+            (Path(tmp) / "a.cpp").write_text(
+                "int f(int s) {\n  switch (s) {\n    default:\n      note(s);\n  }\n}\n",
+                encoding="utf-8",
+            )
+            self.assertIn("note", CHECKER.noexcept_names(Path(tmp)))
+
 class TreeTest(unittest.TestCase):
     """The scan against the shipped C-ABI sources."""
 

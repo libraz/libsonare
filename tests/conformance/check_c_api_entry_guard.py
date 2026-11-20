@@ -393,7 +393,7 @@ def noexcept_names(source_root: Path) -> frozenset[str]:
     be told apart by name.
     """
     declaration = re.compile(
-        r"^[ \t]*(?!return\b|else\b|case\b|delete\b|new\b)"
+        r"^[ \t]*(?!return\b|else\b|case\b|default\b|delete\b|new\b)"
         r"(?:(?:virtual|static|inline|constexpr|explicit|friend)\s+)*"
         r"[A-Za-z_][\w:<>,\s\*&]*?[\s\*&]([A-Za-z_]\w*)\s*\(",
         re.MULTILINE,
