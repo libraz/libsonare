@@ -170,10 +170,7 @@ int cmd_scale_quantize(const CliArgs& args, const Audio&) {
   editing::pitch_editor::ScaleQuantizerConfig config;
   config.root = args.get_int("root", 0);
   config.mode_mask = static_cast<uint16_t>(mode_mask_option(args, "mode-mask"));
-  // An absent flag is the registry default (69) and a given value is the anchor.
-  // The Python CLI reaches the C ABI, which reads 0 as "library default"; that
-  // is the same grid, because the anchor only fixes which integers are
-  // candidates and 0 and 69 name the same ones.
+  // An absent flag is the registry default (69) and a given value, 0 included, is the anchor.
   config.reference_midi = args.get_float("reference-midi", 69.0f);
 
   const editing::pitch_editor::ScaleQuantizer quantizer(config);

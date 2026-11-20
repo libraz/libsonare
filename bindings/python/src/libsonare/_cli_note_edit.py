@@ -134,9 +134,8 @@ def cmd_note_move(args: argparse.Namespace) -> int:
 def cmd_scale_quantize(args: argparse.Namespace) -> int:
     from . import scale_quantize_midi
 
-    # The flag keeps the command line's 0 = A4.
     value = scale_quantize_midi(
-        args.root, args.mode_mask, args.midi, scale_reference_midi=args.reference_midi or None
+        args.root, args.mode_mask, args.midi, scale_reference_midi=args.reference_midi
     )
     if args.json:
         print(_strict_json_dumps({"input_midi": args.midi, "quantized_midi": value}))
@@ -704,8 +703,7 @@ def register_note_edit_parsers(
     # The parser accepts all three and the library refuses them after parsing,
     # so their accepted sets are declared here rather than left for a reader to
     # infer from where the refusal happens to live. ``--reference-midi`` is
-    # closed at 0 because the anchor is a MIDI note; the C ABI reads 0 as the
-    # library default, which is the same grid as any other whole-number anchor.
+    # closed at 0 because the anchor is a MIDI note, and a given 0 is note 0.
     _cli_domain(
         scale_quantize_p.add_argument("--root", type=_c_int, default=0),
         minimum=0,
