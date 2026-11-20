@@ -1069,6 +1069,10 @@ describe('renderPercussiveEvents', () => {
         renderPercussiveEvents({ samples: three, sampleRate: SR, events: edited, fadeMs }),
       );
     }
+    // The request flattens the C config, so its root is not part of the name.
+    expect(() =>
+      renderPercussiveEvents({ samples: three, sampleRate: SR, events: edited, fadeMs: -1 }),
+    ).toThrow(new RangeError('renderPercussiveEvents: fadeMs must be finite and at least 0'));
     for (const field of [
       'nFft',
       'hopLength',

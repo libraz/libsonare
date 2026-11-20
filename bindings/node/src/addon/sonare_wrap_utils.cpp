@@ -121,6 +121,24 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix)
       .ThrowAsJavaScriptException();
 }
 
+void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_root) {
+  if (env.IsExceptionPending()) return;
+  const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
+  if (refusal == nullptr) {
+    ThrowSonareError(env, err);
+    return;
+  }
+  const std::string root = std::string(c_root) + ".";
+  const sonare::SonareParameterRefusal flat = refusal->respelled(
+      refusal->code(),
+      [&root](const std::string& subject) {
+        return subject.rfind(root, 0) == 0 ? subject.substr(root.size()) : subject;
+      },
+      false);
+  MakeSonareError(env, err, sonare::util::check::camel_spelled(flat).what(), flat.shape_error())
+      .ThrowAsJavaScriptException();
+}
+
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message) {
   if (env.IsExceptionPending()) return;
   MakeSonareError(env, err, message).ThrowAsJavaScriptException();

@@ -60,6 +60,11 @@ Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& m
 ///        The detail message is @p prefix + the thread-local / generic message.
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix = "");
 
+/// @brief ThrowSonareError for an entry whose JS request object flattens the C struct parameter
+///        @p c_root into its own keys: a refused subject whose first path segment is @p c_root
+///        is named by the rest of its path.
+void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_root);
+
 /// @brief Like ThrowSonareError but uses an explicit detail message (e.g. a
 ///        caught SonareException's what()).
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message);
