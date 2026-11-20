@@ -7191,7 +7191,7 @@
           "placeholder": "project_warning_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "4ce8c7ebec104220b5395038c4b466f1f307f677bea666f9b16c156bdb14029d"
+          "sha256": "91d7f8ac76988f191a99ab92b2ce6b70ade0f4a6f93e5c6a3079d0dbfff16fdb"
         }
       }
     },
@@ -14577,19 +14577,19 @@
           "placeholder": "align_takes_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "8cdefa5e2e716b4b527f11cc44428abead08ab7777da7730302a3ed2662f8262"
+          "sha256": "f8182ce4098a7c4984fda876c9034464b5fe75410704096527864de29fca17cb"
         },
         "aligned_project_many": {
           "placeholder": "align_takes_many_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "a50d8d82ad2d8bdb684050be9615e3a358ff59e0eacaf4c5ed895a9542c177b0"
+          "sha256": "4cf6d97d2ba683aa0e139e9255c0a85927dc9807ca6d9cb7a2b553d36ed25ab0"
         },
         "aligned_project_other_rate": {
           "placeholder": "align_takes_other_rate_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "4c331a5d48e614fd4abe38df89413060d3a4bccd842e15f6f4329c81b5287181"
+          "sha256": "c87acee5c11e701bbc16a49b02fe28c54c4b3bd7bd6580350638a209d335378c"
         }
       }
     },
