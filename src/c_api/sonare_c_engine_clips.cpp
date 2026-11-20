@@ -291,7 +291,7 @@ SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_sampl
                                              int64_t page_frames,
                                              SonareClipPageProvider** out_provider) {
   SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(out_provider);
+  SONARE_C_ZERO_OUTS(out_provider);
   if (!engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
     return run_validation([&] {
       util::check::integer_in_range(num_channels, 1, engine::kMaxClipPageChannels, "num_channels");
@@ -303,6 +303,7 @@ SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_sampl
                                        " pages of {1} frames");
     });
   }
+  SONARE_C_REQUIRE_NONNULL(out_provider);
   SONARE_C_TRY
   auto handle = std::make_unique<SonareClipPageProvider>();
   handle->provider = std::make_shared<CClipPageProvider>(num_channels, num_samples, page_frames);

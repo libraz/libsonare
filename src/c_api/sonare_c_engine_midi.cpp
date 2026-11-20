@@ -529,6 +529,7 @@ SonareError sonare_engine_set_articulation(SonareEngine* engine, uint32_t destin
 SonareError sonare_engine_articulation(SonareEngine* engine, uint32_t destination_id,
                                        uint8_t channel, int* out_articulation) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_articulation);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (channel > 15) {
     return run_validation([&] { util::check::integer_in_range(channel, 0, 15, "channel"); });

@@ -122,6 +122,13 @@ TEST_CASE("engine transport refusals name the parameter", "[c_api][engine_refusa
   CHECK(last_message() == "start_sample must be an integer of at least 0");
   CHECK(sonare_engine_count_in_end_sample(engine, 0, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_sample must not be NULL");
+  // Two refused arguments: the earlier one in the header is named, and the out is cleared first.
+  CHECK(sonare_engine_sample_at_ppq(engine, -1.0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == refused("ppq", refusal::range_predicate(0.0, 1.0e12)));
+  sample = 7;
+  CHECK(sonare_engine_count_in_end_sample(engine, -1, 1, &sample) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sample == 0);
 
   CHECK(sonare_engine_set_loop(nullptr, 0.0, 1.0, 1) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "engine must not be NULL");

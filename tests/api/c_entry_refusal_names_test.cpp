@@ -156,6 +156,5 @@ TEST_CASE("an enabled empty capture punch window is refused by name", "[c_api][e
   PreparedEngine prepared;
   CHECK(sonare_engine_set_capture_punch(prepared.engine, 100, 100, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::Equals(
-                                 "end_sample must not equal start_sample when enabled is not 0"));
+  CHECK_THAT(last_message(), Catch::Matchers::Equals("end_sample must not equal start_sample"));
 }

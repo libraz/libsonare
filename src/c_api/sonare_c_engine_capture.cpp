@@ -158,8 +158,7 @@ SonareError sonare_engine_set_capture_punch(SonareEngine* engine, int64_t start_
                                        "{0} must not be before {1}");
         }
         if (enabled != 0 && end_sample == start_sample) {
-          util::check::refuse_relation({"end_sample", "start_sample", "enabled"},
-                                       "{0} must not equal {1} when {2} is not 0");
+          util::check::refuse_relation({"end_sample", "start_sample"}, "{0} must not equal {1}");
         }
       });
       err != SONARE_OK) {

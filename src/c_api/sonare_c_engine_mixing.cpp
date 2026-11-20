@@ -658,6 +658,7 @@ SonareError sonare_engine_set_track_output_bus(SonareEngine* engine, uint32_t tr
 SonareError sonare_engine_set_lane_sidechain(SonareEngine* engine, uint32_t track_id,
                                              unsigned int insert_index, uint32_t source_track_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
 #if !defined(SONARE_WITH_MIXING)
@@ -674,6 +675,7 @@ SonareError sonare_engine_set_lane_sidechain(SonareEngine* engine, uint32_t trac
       engine->engine.can_set_lane_sidechain(track_id, insert_index, source_track_id), wording,
       track_has_lane(engine->engine, track_id), SONARE_SIDECHAIN_SOURCE_TRACK);
 #endif
+  SONARE_C_CATCH
 }
 
 #if defined(SONARE_WITH_MIXING)
@@ -1318,13 +1320,11 @@ SonareError sonare_engine_resolve_track_insert_automation_id(SonareEngine* engin
                                                              const char* param_name,
                                                              uint32_t* out_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_id);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
-  // Defined on every exit path, so an unresolved name and a feature-disabled
-  // build both leave the caller a readable id rather than uninitialised memory.
-  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   (void)track_id;
   (void)insert_index;
@@ -1345,11 +1345,10 @@ SonareError sonare_engine_resolve_master_insert_automation_id(SonareEngine* engi
                                                               const char* param_name,
                                                               uint32_t* out_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_id);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
-  // Defined on every exit path, as in the track and bus resolvers.
-  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   (void)insert_index;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -1367,11 +1366,10 @@ SonareError sonare_engine_resolve_master_insert_automation_id(SonareEngine* engi
 SonareError sonare_engine_resolve_master_automation_id(SonareEngine* engine, const char* param_name,
                                                        uint32_t* out_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_id);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
-  // Defined on every exit path, as in the other resolvers.
-  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
@@ -1392,12 +1390,11 @@ SonareError sonare_engine_resolve_bus_insert_automation_id(SonareEngine* engine,
                                                            const char* param_name,
                                                            uint32_t* out_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_id);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
-  // Defined on every exit path, as in the track and master resolvers.
-  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   (void)bus_id;
   (void)insert_index;
@@ -1417,12 +1414,11 @@ SonareError sonare_engine_resolve_track_lane_automation_id(SonareEngine* engine,
                                                            const char* param_name,
                                                            uint32_t* out_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_id);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
-  // Defined on every exit path, as in the insert resolvers.
-  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   (void)track_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -1447,12 +1443,11 @@ SonareError sonare_engine_resolve_track_lane_automation_id(SonareEngine* engine,
 SonareError sonare_engine_resolve_bus_automation_id(SonareEngine* engine, uint32_t bus_id,
                                                     const char* param_name, uint32_t* out_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_id);
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
   if (const SonareError err = check_param_name(param_name); err != SONARE_OK) return err;
   SONARE_C_REQUIRE_NONNULL(out_id);
-  // Defined on every exit path, as in the insert resolvers.
-  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   (void)bus_id;
   return SONARE_ERROR_NOT_SUPPORTED;

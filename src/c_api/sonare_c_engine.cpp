@@ -400,13 +400,14 @@ SonareError sonare_engine_set_time_signature_segments(
 
 SonareError sonare_engine_sample_at_ppq(SonareEngine* engine, double ppq, int64_t* out_sample) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_sample);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_sample);
   if (const SonareError err =
           run_validation([&] { util::check::in_range(ppq, 0.0, transport::kMaxPublicPpq, "ppq"); });
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_sample);
   *out_sample = engine->engine.sample_at_ppq(ppq);
   return SONARE_OK;
 }
@@ -743,13 +744,14 @@ SonareError sonare_engine_metronome(SonareEngine* engine, SonareEngineMetronomeC
 SonareError sonare_engine_count_in_end_sample(SonareEngine* engine, int64_t start_sample, int bars,
                                               int64_t* out_sample) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_sample);
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(out_sample);
   if (const SonareError err = run_validation(
           [&] { util::check::integer_at_least<int64_t>(start_sample, 0, "start_sample"); });
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_sample);
   // bars <= 0 counts nothing and answers start_sample, as the core does.
   *out_sample = engine->engine.count_in_end_sample(start_sample, bars);
   return SONARE_OK;

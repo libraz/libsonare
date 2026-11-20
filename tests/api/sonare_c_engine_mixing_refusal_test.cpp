@@ -22,7 +22,7 @@ SonareEngine* make_engine() {
   return engine;
 }
 
-constexpr const char* kEmptyScene = R"({"version":1,"strips":[],"buses":[],"connections":[]})";
+constexpr const char* kEmptyScene = R"({"version":2,"strips":[],"buses":[],"connections":[]})";
 
 }  // namespace
 
@@ -84,7 +84,7 @@ TEST_CASE("capture punch, source and monitor refuse by name", "[c_api][engine_re
   CHECK(sonare_engine_set_capture_punch(engine, 10, 5, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "end_sample must not be before start_sample");
   CHECK(sonare_engine_set_capture_punch(engine, 10, 10, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "end_sample must not equal start_sample when enabled is not 0");
+  CHECK(last_message() == "end_sample must not equal start_sample");
 
   CHECK(sonare_engine_set_capture_source(engine, static_cast<SonareEngineCaptureSource>(7)) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -651,7 +651,7 @@ TEST_CASE("track buses name the state that forbids dropping a routed bus",
 TEST_CASE("master strip inserts name the index or parameter the mixer refused",
           "[c_api][engine_refusal]") {
   constexpr const char* kMasterWithInsert =
-      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
+      R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
   constexpr const char* kPastInserts =
       "insert_index must be less than the number of inserts on the master strip";
   SonareEngine* engine = make_engine();
@@ -674,6 +674,11 @@ TEST_CASE("master strip inserts name the index or parameter the mixer refused",
   CHECK(sonare_engine_resolve_master_insert_automation_id(engine, 5, "ratio", &id) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == kPastInserts);
+  id = 7;
+  CHECK(sonare_engine_resolve_master_automation_id(engine, nullptr, &id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "param_name must not be NULL");
+  CHECK(id == 0);
   sonare_engine_destroy(engine);
 }
 
