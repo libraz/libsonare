@@ -1352,6 +1352,9 @@ def _c_error_path_files(root: Path) -> list[dict]:
         unset: list[str] = []
         entries = _c_entry_bodies(code)
         for name, offset, body in entries:
+            # Audio-thread entries keep a bare code: they may not write the error channel.
+            if "SONARE_C_RT_API_ENTRY" in body:
+                continue
             for at, _ in _c_unset_returns(body, setters):
                 unset.append(f"{name}:{code.count(chr(10), 0, offset + at) + 1}")
         if entries:
@@ -1458,33 +1461,24 @@ def _c_error_path_violation(r: dict) -> str | None:
 
 _C_ERROR_PATH_PENDING: dict[str, int] = {
     "src/c_api/core_audio.cpp": 1,
-    "src/c_api/features_inverse.cpp": 22,
-    "src/c_api/features_spectral_pitch.cpp": 11,
-    "src/c_api/mixing_graph.cpp": 3,
-    "src/c_api/mixing_mixer.cpp": 2,
-    "src/c_api/mixing_strip.cpp": 5,
+    "src/c_api/mixing_graph.cpp": 1,
+    "src/c_api/mixing_strip.cpp": 4,
     "src/c_api/project_core.cpp": 2,
-    "src/c_api/project_midi.cpp": 10,
+    "src/c_api/project_midi.cpp": 8,
     "src/c_api/project_soundfont.cpp": 1,
     "src/c_api/sonare_c_acoustic.cpp": 1,
     "src/c_api/sonare_c_compat.cpp": 7,
     "src/c_api/sonare_c_editing.cpp": 11,
     "src/c_api/sonare_c_effects.cpp": 9,
-    "src/c_api/sonare_c_engine.cpp": 4,
-    "src/c_api/sonare_c_engine_controller.cpp": 8,
-    "src/c_api/sonare_c_engine_midi.cpp": 45,
-    "src/c_api/sonare_c_engine_mixing.cpp": 48,
-    "src/c_api/sonare_c_engine_render.cpp": 2,
     "src/c_api/sonare_c_mastering_apply.cpp": 4,
-    "src/c_api/sonare_c_mastering_eq.cpp": 2,
+    "src/c_api/sonare_c_mastering_eq.cpp": 1,
     "src/c_api/sonare_c_mastering_repair.cpp": 5,
-    "src/c_api/sonare_c_mastering_streaming.cpp": 15,
+    "src/c_api/sonare_c_mastering_streaming.cpp": 14,
     "src/c_api/sonare_c_memory.cpp": 1,
-    "src/c_api/sonare_c_playback.cpp": 3,
     "src/c_api/sonare_c_polyphony.cpp": 8,
     "src/c_api/sonare_c_sample_bank.cpp": 1,
     "src/c_api/sonare_c_streaming_retune.cpp": 7,
-    "src/c_api/sonare_c_voice_changer.cpp": 22,
+    "src/c_api/sonare_c_voice_changer.cpp": 2,
 }
 
 

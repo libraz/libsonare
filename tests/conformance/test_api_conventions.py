@@ -1124,6 +1124,10 @@ class CErrorPathRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/bad.cpp"])
         self.assertIn("sonare_bad:4", verdict.violations[0].detail)
 
+    def test_an_audio_thread_entry_keeps_its_bare_code(self) -> None:
+        rt = self.BAD.replace("SONARE_C_API_ENTRY", "SONARE_C_RT_API_ENTRY")
+        self.assertFalse(self.judge(good=self.GOOD, rt=rt).failed)
+
     def test_pending_entry_holding_the_measured_count_defers(self) -> None:
         verdict = self.judge({"c:src/c_api/bad.cpp": 1}, bad=self.BAD)
         self.assertEqual(verdict.deferred, ["c:src/c_api/bad.cpp"])
