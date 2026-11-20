@@ -253,7 +253,7 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,
                                                     &detection) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()) ==
-            "clip_threshold_db must be finite and in [-890, 0]");
+            "config.clip_threshold_db must be finite and in [-890, 0]");
     // Below -890 dB the linear threshold can round to 0, outside the (0, 1] it must lie in.
     config.clip_threshold_db = -1000.0f;
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,

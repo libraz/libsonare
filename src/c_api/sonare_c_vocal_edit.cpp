@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <climits>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <string>
@@ -10,6 +11,7 @@
 #include "feature/pitch.h"
 #include "sonare_c_internal.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
 #include "editing/vocal_edit/renderer.h"
@@ -121,6 +123,10 @@ SonareError invoke(F&& action) {
     sonare_c_detail::set_last_error(code, error.what());
     return code;
 #endif
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    last_detail.reason = SONARE_VOCAL_REASON_INVALID_INPUT;
+    copy_text(last_detail.field, refusal.subject());
+    return sonare_c_detail::record_current_exception();
   } catch (const sonare::SonareException& error) {
     last_detail.reason = error.code() == sonare::ErrorCode::NotSupported
                              ? SONARE_VOCAL_REASON_UNSUPPORTED
@@ -567,6 +573,24 @@ vocal::VocalSessionCreateOptions import_options(const SonareVocalCreateOptions* 
   sonare_vocal_create_options_init(&defaults);
   const auto& v = input ? *input : defaults;
   require_header(&v, "create options header");
+  // The options struct is a per-call parameter bag: every member is refused by its C path.
+  namespace check = sonare::util::check;
+  check::at_least(v.edge_fade_ms, 0.0, "options.edge_fade_ms");
+  check::greater_than(v.vibrato_cutoff_hz, 0.0, "options.vibrato_cutoff_hz");
+  if (!v.analysis) {
+    check::greater_than(v.segmentation_threshold_cents, 0.0,
+                        "options.segmentation_threshold_cents");
+    check::greater_than(v.min_note_ms, 0.0, "options.min_note_ms");
+    check::integer_at_least(v.frame_length_samples, 1, "options.frame_length_samples");
+    check::integer_at_least(v.hop_length_samples, 1, "options.hop_length_samples");
+    check::greater_than(v.fmin_hz, 0.0, "options.fmin_hz");
+    if (!(std::isfinite(v.fmax_hz) && v.fmax_hz > v.fmin_hz))
+      check::refuse_relation({"options.fmax_hz", "options.fmin_hz"},
+                             "{0} must be finite and greater than {1}");
+    check::in_interval(v.yin_threshold, 0.0, false, 1.0, true, "options.yin_threshold");
+    check::in_range(v.voiced_threshold, 0.0, 1.0, "options.voiced_threshold");
+    check::greater_than(v.reference_hz, 0.0, "options.reference_hz");
+  }
   vocal::VocalSessionCreateOptions options;
   options.output_length_samples = v.output_length_samples;
   options.render_settings.edge_fade_ms = v.edge_fade_ms;

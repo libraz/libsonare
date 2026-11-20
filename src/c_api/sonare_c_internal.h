@@ -550,6 +550,10 @@ SonareError run_offline(const char* fn, const char* name, const float* samples, 
   SONARE_C_CATCH
 }
 
+/// @brief @p e with each subject joined under @p root, coded InvalidParameter.
+sonare::SonareParameterRefusal relabel_struct_refusal(const sonare::SonareParameterRefusal& e,
+                                                      const char* root);
+
 /// @brief Runs a core argument validator ahead of run_offline and returns its verdict as a status.
 /// @details Lets an entry refuse its parameters through the core's own rule (recording the
 ///          core's message as the last error) while keeping that refusal ahead of the audio
@@ -558,6 +562,21 @@ template <typename Fn>
 SonareError run_validation(Fn check) {
   SONARE_C_TRY
   check();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+/// @brief run_validation for a validator that names the members of the struct passed as @p root:
+///        a parameter refusal it throws is recorded with each subject under @p root
+///        ("threshold" becomes "config.threshold"), as InvalidParameter.
+template <typename Fn>
+SonareError run_validation_under(const char* root, Fn check) {
+  SONARE_C_TRY
+  try {
+    check();
+  } catch (const sonare::SonareParameterRefusal& e) {
+    throw relabel_struct_refusal(e, root);
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 }

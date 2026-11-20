@@ -4,6 +4,7 @@
 /// @brief Exception classes for libsonare.
 
 #include <cstddef>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -34,6 +35,15 @@ class SonareException : public std::runtime_error {
   ErrorCode code_;
 };
 
+/// @brief The numeric domain a value refusal states, kept beside its text so a binding that
+///        converted the value from another unit can state the domain in that unit.
+struct RefusalDomain {
+  std::optional<double> lo;  ///< Lower bound, or none for a domain open below.
+  std::optional<double> hi;  ///< Upper bound, or none for a domain open above.
+  bool lo_included = true;
+  bool hi_included = true;
+};
+
 /// @brief A refusal of one or more parameters that carries their subject keys as data.
 /// @details The layer that knows where a parameter sits in a document, or how its caller spells
 ///          it, rethrows the refusal with each subject rewritten. what() reads
@@ -51,6 +61,15 @@ class SonareParameterRefusal : public SonareException {
                                           const std::string& predicate) {
     return SonareParameterRefusal(code, Form::Predicate, {subject}, predicate, std::string(),
                                   std::string(), false);
+  }
+
+  /// @brief A refusal reading "<subject> <predicate>" where @p predicate states @p domain.
+  static SonareParameterRefusal predicate(ErrorCode code, const std::string& subject,
+                                          const std::string& predicate,
+                                          const RefusalDomain& domain) {
+    SonareParameterRefusal refusal = SonareParameterRefusal::predicate(code, subject, predicate);
+    refusal.domain_ = domain;
+    return refusal;
   }
 
   /// @brief A refusal reading "<subject> <predicate>" for a value of the wrong type.
@@ -91,6 +110,8 @@ class SonareParameterRefusal : public SonareException {
   const std::string& renamed_to() const { return renamed_to_; }
   /// @brief The accepted keys an unknown-key refusal lists, or empty.
   const std::string& expected() const { return expected_; }
+  /// @brief The numeric domain the predicate states, when it states one.
+  const std::optional<RefusalDomain>& domain() const { return domain_; }
   /// @brief Whether the subjects are already in the caller's spelling.
   bool caller_spelled() const { return caller_spelled_; }
 
@@ -106,9 +127,11 @@ class SonareParameterRefusal : public SonareException {
     std::vector<std::string> subjects;
     subjects.reserve(subjects_.size());
     for (const std::string& subject : subjects_) subjects.push_back(spell(subject));
-    return SonareParameterRefusal(code, form_, std::move(subjects), predicate_,
-                                  renamed_to_.empty() ? std::string() : spell(renamed_to_),
-                                  expected_, caller_spelled_ || caller_spelled);
+    SonareParameterRefusal refusal(code, form_, std::move(subjects), predicate_,
+                                   renamed_to_.empty() ? std::string() : spell(renamed_to_),
+                                   expected_, caller_spelled_ || caller_spelled);
+    refusal.domain_ = domain_;
+    return refusal;
   }
 
  private:
@@ -164,6 +187,7 @@ class SonareParameterRefusal : public SonareException {
   std::string renamed_to_;
   std::string expected_;
   bool caller_spelled_;
+  std::optional<RefusalDomain> domain_;
 };
 
 /// @def SONARE_CHECK

@@ -623,15 +623,23 @@ const char* sonare_last_refusal_subject(size_t index);
 /// @brief Renders the last parameter refusal's message with @p subjects in place of its own.
 /// @param subjects @p subject_count replacement subjects, in the order of
 ///   @ref sonare_last_refusal_subject.
+/// @param scales NULL, or @p subject_count factors: how many of the refused parameter's units
+///   one unit of the caller's replacement holds (the sample rate, for seconds given in place of
+///   samples). A refusal stating a numeric domain then states it divided by its subject's
+///   factor, as a real interval whose bounds are rounded inward to four significant digits when
+///   they have no shorter exact decimal ("must be finite and in [0, 20]"). Any other refusal
+///   changes only its names. Each factor must be finite and greater than 0; 1 leaves a subject's
+///   domain as it is.
 /// @param subject_count Must equal @ref sonare_last_refusal_subject_count.
 /// @param[out] out_text Receives the message, released with @ref sonare_free_string; set to NULL
 ///   on failure.
 /// @return SONARE_ERROR_INVALID_STATE when no parameter refusal is recorded;
 ///   SONARE_ERROR_INVALID_PARAMETER when @p out_text is NULL, @p subject_count differs from the
-///   recorded count, or a subject is NULL; SONARE_ERROR_OUT_OF_MEMORY when the copy cannot be
-///   allocated. Records no error, so the refusal being rendered survives the call.
-SonareError sonare_last_refusal_render(const char* const* subjects, size_t subject_count,
-                                       char** out_text);
+///   recorded count, a subject is NULL or a factor is not finite and greater than 0;
+///   SONARE_ERROR_OUT_OF_MEMORY when the copy cannot be allocated. Records no error, so the refusal
+///   being rendered survives the call.
+SonareError sonare_last_refusal_render(const char* const* subjects, const double* scales,
+                                       size_t subject_count, char** out_text);
 
 // Version
 /// @brief Returns the library version string (e.g. "1.2.3").

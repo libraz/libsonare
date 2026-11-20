@@ -1686,17 +1686,18 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
   SECTION("hop_length above n_fft is refused by the shared pre-check on all three entries") {
     SonareDereverbClassicalConfig bad = base;
     bad.hop_length = bad.n_fft * 2;
-    // The core would refuse too, but with a message; the pre-check records none.
     SonareDereverbResult mono_out{};
     REQUIRE(sonare_mastering_repair_dereverb_classical(
                 reverberant.data(), length, sr, &bad, &mono_out) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()).empty());
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.hop_length must be an integer in [1, 512]");
 
     SonareDereverbStereoResult stereo{};
     REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(reverberant.data(), other.data(),
                                                               length, sr, &bad, &stereo) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()).empty());
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.hop_length must be an integer in [1, 512]");
 
     std::vector<float> left(length);
     std::vector<float> right(length);
@@ -1705,7 +1706,8 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     SonareDereverbReport report{};
     REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
                 in, 2, length, sr, &bad, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()).empty());
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.hop_length must be an integer in [1, 512]");
   }
 }
 
@@ -1826,12 +1828,13 @@ TEST_CASE("a parameter refusal is kept beside the flat message and cleared with 
   REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config,
                                                &result) == SONARE_ERROR_INVALID_PARAMETER);
   // C reads the core's own spelling; a JS binding renders the same refusal in request keys.
-  CHECK(std::string(sonare_last_error_message()) == "window_ms must be finite and in (0, 10000]");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "config.window_ms must be finite and in (0, 10000]");
   const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
   REQUIRE(refusal != nullptr);
-  CHECK(refusal->subject() == "window_ms");
+  CHECK(refusal->subject() == "config.window_ms");
   CHECK(std::string(sonare::util::check::camel_spelled(*refusal).what()) ==
-        "windowMs must be finite and in (0, 10000]");
+        "config.windowMs must be finite and in (0, 10000]");
 
   // A later failure that is no parameter refusal replaces it rather than leaving it behind.
   config.window_ms = 400.0f;

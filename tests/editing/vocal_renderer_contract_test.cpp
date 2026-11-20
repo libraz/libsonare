@@ -9,6 +9,7 @@
 #include "editing/vocal_edit/session.h"
 #include "support/alloc_guard.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/numeric_validation.h"
 
 namespace {
@@ -304,14 +305,24 @@ TEST_CASE("cached vocal note work does not allocate for unrelated notes", "[voca
   CHECK(large == small);
 }
 
-TEST_CASE("a render range whose end is not after its start names both members",
+TEST_CASE("a render range is refused as a structured refusal naming its members",
           "[vocal_renderer_contract]") {
   auto session = tone_session(16000, 1);
   auto snapshot = session.capture_render_snapshot();
   CHECK_THROWS_WITH(VocalRenderJob(snapshot, {{100, 100}, 1}),
-                    "range.end must be greater than range.start");
+                    "range.end_sample must be greater than range.start_sample");
   CHECK_THROWS_WITH(VocalRenderJob(snapshot, {{200, 100}, 1}),
-                    "range.end must be greater than range.start");
+                    "range.end_sample must be greater than range.start_sample");
   CHECK_THROWS_WITH(VocalRenderJob(snapshot, {{0, 16001}, 1}),
-                    "render range is outside output bounds");
+                    "range.end_sample must be an integer in [0, 16000]");
+  CHECK_THROWS_WITH(VocalRenderJob(snapshot, {{-1, 100}, 1}),
+                    "range.start_sample must be an integer in [0, 16000]");
+  try {
+    VocalRenderJob(snapshot, {{0, 16001}, 1});
+    FAIL("the range was accepted");
+  } catch (const sonare::SonareParameterRefusal& refusal) {
+    REQUIRE(refusal.domain().has_value());
+    CHECK(refusal.domain()->lo == 0.0);
+    CHECK(refusal.domain()->hi == 16000.0);
+  }
 }

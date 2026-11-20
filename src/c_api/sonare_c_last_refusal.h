@@ -24,8 +24,16 @@ size_t last_refusal_subject_count() noexcept;
 /// @brief Backs sonare_last_refusal_subject; NULL past the count.
 const char* last_refusal_subject(size_t index) noexcept;
 
+/// @brief @p refusal with its subjects replaced by @p subjects, in order, and a predicate's domain
+///        divided by @p scales[0] (C units per caller unit; NULL means 1).
+/// @throws SonareParameterRefusal(InvalidParameter) on a count other than the refusal's subjects
+///         plus a named successor, a NULL subject, or a scale that is not finite and positive.
+sonare::SonareParameterRefusal respelled_refusal(const sonare::SonareParameterRefusal& refusal,
+                                                 const char* const* subjects, const double* scales,
+                                                 size_t subject_count);
+
 /// @brief Backs sonare_last_refusal_render. Records no error.
-SonareError render_last_refusal(const char* const* subjects, size_t subject_count,
-                                char** out_text) noexcept;
+SonareError render_last_refusal(const char* const* subjects, const double* scales,
+                                size_t subject_count, char** out_text) noexcept;
 
 }  // namespace sonare_c_detail

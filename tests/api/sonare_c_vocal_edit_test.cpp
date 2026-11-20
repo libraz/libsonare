@@ -1,3 +1,4 @@
+#include <sonare/sonare_c.h>
 #include <sonare/sonare_c_vocal_edit.h>
 
 #include <array>
@@ -208,6 +209,42 @@ TEST_CASE("vocal C snapshots own PCM after session destruction and jobs cancel s
   sonare_vocal_render_job_destroy(job);
 }
 
+TEST_CASE("a vocal render range outside the output is a structured refusal a binding respells",
+          "[vocal_c_api]") {
+  VocalFixture f;
+  auto s = f.create();
+  SonareVocalSnapshot* raw = nullptr;
+  REQUIRE(sonare_vocal_session_capture_snapshot(s.get(), &raw) == SONARE_OK);
+  std::unique_ptr<SonareVocalSnapshot, decltype(&sonare_vocal_snapshot_destroy)> snapshot(
+      raw, sonare_vocal_snapshot_destroy);
+  SonareVocalRenderJob* job = nullptr;
+  REQUIRE(sonare_vocal_render_job_begin(raw, {0, 3201}, 1, &job) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(job == nullptr);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "range.end_sample must be an integer in [0, 3200]");
+  SonareVocalErrorDetail detail;
+  sonare_vocal_error_detail_init(&detail);
+  sonare_vocal_last_error_detail(&detail);
+  CHECK(detail.reason == SONARE_VOCAL_REASON_INVALID_INPUT);
+  CHECK(std::string(detail.field) == "range.end_sample");
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  const char* seconds[] = {"range.endSec"};
+  const double per_second[] = {16000.0};
+  char* text = nullptr;
+  REQUIRE(sonare_last_refusal_render(seconds, per_second, 1, &text) == SONARE_OK);
+  CHECK(std::string(text).rfind("range.endSec must be ", 0) == 0);
+  CHECK(std::string(text).find("0.2") != std::string::npos);
+  sonare_free_string(text);
+
+  REQUIRE(sonare_vocal_render_job_begin(raw, {200, 100}, 1, &job) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "range.end_sample must be greater than range.start_sample");
+  REQUIRE(sonare_last_refusal_subject_count() == 2);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "range.start_sample");
+  CHECK(std::string(sonare_last_refusal_subject(1)) == "range.end_sample");
+}
+
 TEST_CASE("vocal C state restores exact source and reports digest mismatch", "[vocal_c_api]") {
   VocalFixture f;
   auto s = f.create();
@@ -378,6 +415,37 @@ TEST_CASE("vocal C analysis settings survive authoritative roundtrip",
   sonare_free_vocal_analysis_result(&result);
   sonare_vocal_session_destroy(roundtrip);
   sonare_vocal_session_destroy(session);
+}
+
+TEST_CASE("vocal C create refuses each options member by its own path",
+          "[c_api][vocal_edit_root]") {
+  const std::vector<float> samples(22050, 0.0f);
+  struct Case {
+    void (*apply)(SonareVocalCreateOptions&);
+    const char* message;
+    const char* subject;
+  };
+  const Case cases[] = {
+      {[](SonareVocalCreateOptions& o) { o.voiced_threshold = 2.0; },
+       "options.voiced_threshold must be finite and in [0, 1]", "options.voiced_threshold"},
+      {[](SonareVocalCreateOptions& o) { o.min_note_ms = -1.0; },
+       "options.min_note_ms must be finite and greater than 0", "options.min_note_ms"},
+      {[](SonareVocalCreateOptions& o) { o.fmin_hz = -1.0; },
+       "options.fmin_hz must be finite and greater than 0", "options.fmin_hz"},
+  };
+  for (const Case& c : cases) {
+    SonareVocalCreateOptions options;
+    sonare_vocal_create_options_init(&options);
+    c.apply(options);
+    SonareVocalSession* session = nullptr;
+    CHECK(sonare_vocal_session_create(samples.data(), static_cast<int64_t>(samples.size()), 1,
+                                      22050, &options, &session) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(session == nullptr);
+    CHECK(std::string(sonare_last_error_message()) == c.message);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_last_refusal_subject_count() == 1);
+    CHECK(std::string(sonare_last_refusal_subject(0)) == c.subject);
+  }
 }
 
 #else

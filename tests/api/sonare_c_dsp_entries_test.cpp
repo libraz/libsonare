@@ -206,15 +206,16 @@ TEST_CASE("the last parameter refusal re-renders with the subjects a binding sup
 
   const char* flattened[] = {"cutoff_hz", "type"};
   char* text = reinterpret_cast<char*>(0x1);
-  REQUIRE(sonare_last_refusal_render(flattened, 2, &text) == SONARE_OK);
+  REQUIRE(sonare_last_refusal_render(flattened, nullptr, 2, &text) == SONARE_OK);
   CHECK(std::string(text) == "cutoff_hz does not apply when type is bandPass or notch");
   sonare_free_string(text);
 
-  CHECK(sonare_last_refusal_render(flattened, 1, &text) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_refusal_render(flattened, nullptr, 1, &text) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(text == nullptr);
   const char* with_null[] = {"cutoff_hz", nullptr};
-  CHECK(sonare_last_refusal_render(with_null, 2, &text) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_last_refusal_render(flattened, 2, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_refusal_render(with_null, nullptr, 2, &text) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_refusal_render(flattened, nullptr, 2, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == message);
   CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
 
@@ -223,6 +224,6 @@ TEST_CASE("the last parameter refusal re-renders with the subjects a binding sup
   CHECK(sonare_last_refusal_subject_count() == 0);
   CHECK(sonare_last_refusal_subject(0) == nullptr);
   text = reinterpret_cast<char*>(0x1);
-  CHECK(sonare_last_refusal_render(nullptr, 0, &text) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_last_refusal_render(nullptr, nullptr, 0, &text) == SONARE_ERROR_INVALID_STATE);
   CHECK(text == nullptr);
 }

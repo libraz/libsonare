@@ -27,7 +27,8 @@ namespace sonare::util::check {
 inline void in_range(double value, double lo, double hi, const char* subject) {
   if (!(std::isfinite(value) && value >= lo && value <= hi)) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::range_predicate(lo, hi));
+                                            refusal::range_predicate(lo, hi),
+                                            RefusalDomain{lo, hi, true, true});
   }
 }
 
@@ -35,7 +36,8 @@ inline void in_range(double value, double lo, double hi, const char* subject) {
 inline void in_computed_range(double value, double lo, double hi, const char* subject) {
   if (!(std::isfinite(value) && value >= lo && value <= hi)) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::computed_range_predicate(lo, hi));
+                                            refusal::computed_range_predicate(lo, hi),
+                                            RefusalDomain{lo, hi, true, true});
   }
 }
 
@@ -47,7 +49,8 @@ inline void in_interval(double value, double lo, bool lo_included, double hi, bo
   if (!(std::isfinite(value) && above && below)) {
     throw SonareParameterRefusal::predicate(
         ErrorCode::InvalidParameter, subject,
-        refusal::interval_predicate(lo, lo_included, hi, hi_included));
+        refusal::interval_predicate(lo, lo_included, hi, hi_included),
+        RefusalDomain{lo, hi, lo_included, hi_included});
   }
 }
 
@@ -55,7 +58,8 @@ inline void in_interval(double value, double lo, bool lo_included, double hi, bo
 inline void at_least(double value, double bound, const char* subject) {
   if (!(std::isfinite(value) && value >= bound)) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::at_least_predicate(bound));
+                                            refusal::at_least_predicate(bound),
+                                            RefusalDomain{bound, std::nullopt, true, true});
   }
 }
 
@@ -63,7 +67,8 @@ inline void at_least(double value, double bound, const char* subject) {
 inline void greater_than(double value, double bound, const char* subject) {
   if (!(std::isfinite(value) && value > bound)) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::greater_than_predicate(bound));
+                                            refusal::greater_than_predicate(bound),
+                                            RefusalDomain{bound, std::nullopt, false, true});
   }
 }
 
@@ -71,7 +76,8 @@ inline void greater_than(double value, double bound, const char* subject) {
 inline void at_most(double value, double bound, const char* subject) {
   if (!(std::isfinite(value) && value <= bound)) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::at_most_predicate(bound));
+                                            refusal::at_most_predicate(bound),
+                                            RefusalDomain{std::nullopt, bound, true, true});
   }
 }
 
@@ -79,7 +85,8 @@ inline void at_most(double value, double bound, const char* subject) {
 inline void less_than(double value, double bound, const char* subject) {
   if (!(std::isfinite(value) && value < bound)) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::less_than_predicate(bound));
+                                            refusal::less_than_predicate(bound),
+                                            RefusalDomain{std::nullopt, bound, true, false});
   }
 }
 
@@ -109,7 +116,8 @@ inline void integer_in_range(long long value, long long lo, long long hi, const 
   if (value < lo || value > hi) {
     throw SonareParameterRefusal::predicate(
         ErrorCode::InvalidParameter, subject,
-        refusal::integer_range_predicate(static_cast<double>(lo), static_cast<double>(hi)));
+        refusal::integer_range_predicate(static_cast<double>(lo), static_cast<double>(hi)),
+        RefusalDomain{static_cast<double>(lo), static_cast<double>(hi), true, true});
   }
 }
 
@@ -124,10 +132,13 @@ inline void integer_at_least(T value, long long bound, const char* subject) {
     throw SonareParameterRefusal::predicate(
         ErrorCode::InvalidParameter, subject,
         refusal::integer_range_predicate(static_cast<double>(bound),
-                                         static_cast<double>(std::numeric_limits<T>::max())));
+                                         static_cast<double>(std::numeric_limits<T>::max())),
+        RefusalDomain{static_cast<double>(bound),
+                      static_cast<double>(std::numeric_limits<T>::max()), true, true});
   } else {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
-                                            refusal::integer_at_least_predicate(bound));
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, subject, refusal::integer_at_least_predicate(bound),
+        RefusalDomain{static_cast<double>(bound), std::nullopt, true, true});
   }
 }
 

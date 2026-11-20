@@ -281,8 +281,8 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
   uint8_t group = 0;
   uint8_t channel = 0;
   bool reference_auto = false;
-  const SonareError config_error = sonare_c_detail::run_validation(
-      [&] { read_config(config, &core_config, &group, &channel, &reference_auto); });
+  const SonareError config_error = sonare_c_detail::run_validation_under(
+      "config", [&] { read_config(config, &core_config, &group, &channel, &reference_auto); });
   if (config_error != SONARE_OK) return config_error;
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -332,8 +332,8 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   uint8_t group = 0;
   uint8_t channel = 0;
   bool reference_auto = false;
-  const SonareError config_error = sonare_c_detail::run_validation(
-      [&] { read_config(config, &core_config, &group, &channel, &reference_auto); });
+  const SonareError config_error = sonare_c_detail::run_validation_under(
+      "config", [&] { read_config(config, &core_config, &group, &channel, &reference_auto); });
   if (config_error != SONARE_OK) return config_error;
 
   SONARE_C_TRY

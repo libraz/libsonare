@@ -6,6 +6,8 @@
 #include "c_api/sonare_c_error_mapping.h"
 #include "c_api/sonare_c_last_refusal.h"
 #include "util/error_classification.h"
+#include "util/json_schema.h"
+#include "util/parameter_checks.h"
 #include "util/refusal_predicates.h"
 
 namespace sonare_c_detail {
@@ -86,10 +88,23 @@ const sonare::SonareParameterRefusal* last_parameter_refusal() noexcept {
   return refusal.has_value() ? &*refusal : nullptr;
 }
 
+sonare::SonareParameterRefusal relabel_struct_refusal(const sonare::SonareParameterRefusal& e,
+                                                      const char* root) {
+  return sonare::util::json::schema::relabel_under(e, root, sonare::ErrorCode::InvalidParameter);
+}
+
+namespace {
+
+/// The subjects a binding names to render @p refusal: its own plus a named successor.
+size_t refusal_subject_count(const sonare::SonareParameterRefusal& refusal) {
+  return refusal.subjects().size() + (refusal.renamed_to().empty() ? 0 : 1);
+}
+
+}  // namespace
+
 size_t last_refusal_subject_count() noexcept {
   const sonare::SonareParameterRefusal* refusal = last_parameter_refusal();
-  if (refusal == nullptr) return 0;
-  return refusal->subjects().size() + (refusal->renamed_to().empty() ? 0 : 1);
+  return refusal == nullptr ? 0 : refusal_subject_count(*refusal);
 }
 
 const char* last_refusal_subject(size_t index) noexcept {
@@ -103,24 +118,69 @@ const char* last_refusal_subject(size_t index) noexcept {
   return nullptr;
 }
 
-SonareError render_last_refusal(const char* const* subjects, size_t subject_count,
-                                char** out_text) noexcept {
+namespace {
+
+/// The predicate stating @p domain divided by @p scale. Each bound is a computed one, rounded
+/// inward, so a printed bound is itself accepted; the domain is no longer an integer one.
+std::string scaled_domain_predicate(const sonare::RefusalDomain& domain, double scale) {
+  namespace refusal = sonare::util::refusal;
+  using refusal::Inward;
+  const auto lo = [&] { return refusal::bound_text(*domain.lo / scale, Inward::Up); };
+  const auto hi = [&] { return refusal::bound_text(*domain.hi / scale, Inward::Down); };
+  if (domain.lo && domain.hi) {
+    return std::string("must be finite and in ") + (domain.lo_included ? "[" : "(") + lo() + ", " +
+           hi() + (domain.hi_included ? "]" : ")");
+  }
+  if (domain.lo) {
+    return (domain.lo_included ? "must be finite and at least "
+                               : "must be finite and greater than ") +
+           lo();
+  }
+  return (domain.hi_included ? "must be finite and at most " : "must be finite and less than ") +
+         hi();
+}
+
+}  // namespace
+
+sonare::SonareParameterRefusal respelled_refusal(const sonare::SonareParameterRefusal& refusal,
+                                                 const char* const* subjects, const double* scales,
+                                                 size_t subject_count) {
+  namespace check = sonare::util::check;
+  if (subject_count != refusal_subject_count(refusal)) {
+    check::refuse("subject_count", "must equal the refusal's subject count");
+  }
+  if (subject_count > 0 && subjects == nullptr) check::refuse("subjects", "must not be NULL");
+  for (size_t i = 0; i < subject_count; ++i) {
+    if (subjects[i] == nullptr) check::refuse("subjects", "must not contain NULL");
+    if (scales != nullptr) check::greater_than(scales[i], 0.0, "scales");
+  }
+  size_t next = 0;
+  sonare::SonareParameterRefusal rendered = refusal.respelled(
+      refusal.code(), [&](const std::string&) { return std::string(subjects[next++]); },
+      refusal.caller_spelled());
+  if (scales == nullptr || scales[0] == 1.0 || !rendered.domain() ||
+      rendered.form() != sonare::SonareParameterRefusal::Form::Predicate) {
+    return rendered;
+  }
+  sonare::RefusalDomain scaled = *rendered.domain();
+  if (scaled.lo) *scaled.lo /= scales[0];
+  if (scaled.hi) *scaled.hi /= scales[0];
+  return sonare::SonareParameterRefusal::predicate(
+      rendered.code(), rendered.subject(), scaled_domain_predicate(*rendered.domain(), scales[0]),
+      scaled);
+}
+
+SonareError render_last_refusal(const char* const* subjects, const double* scales,
+                                size_t subject_count, char** out_text) noexcept {
   if (out_text == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_text = nullptr;
   const sonare::SonareParameterRefusal* refusal = last_parameter_refusal();
   if (refusal == nullptr) return SONARE_ERROR_INVALID_STATE;
-  if (subject_count != last_refusal_subject_count()) return SONARE_ERROR_INVALID_PARAMETER;
-  if (subject_count > 0 && subjects == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  for (size_t i = 0; i < subject_count; ++i) {
-    if (subjects[i] == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  }
   try {
-    size_t next = 0;
-    const sonare::SonareParameterRefusal rendered = refusal->respelled(
-        refusal->code(), [&](const std::string&) { return std::string(subjects[next++]); },
-        refusal->caller_spelled());
-    *out_text = copy_string(rendered.what());
+    *out_text = copy_string(respelled_refusal(*refusal, subjects, scales, subject_count).what());
     return SONARE_OK;
+  } catch (const sonare::SonareParameterRefusal&) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   } catch (...) {
     return SONARE_ERROR_OUT_OF_MEMORY;
   }

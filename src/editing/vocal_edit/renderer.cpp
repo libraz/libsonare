@@ -24,6 +24,7 @@
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::vocal_edit {
 
@@ -441,14 +442,14 @@ VocalRenderJob::VocalRenderJob(std::shared_ptr<const VocalRenderSnapshot> snapsh
                                VocalRenderRequest request)
     : impl_(std::make_unique<Impl>()) {
   if (!snapshot || !snapshot->valid()) invalid("snapshot", "render snapshot is invalid");
-  if (request.range.start < 0 || request.range.end > snapshot->data().output_length_samples) {
-    invalid("request.range", "render range is outside output bounds");
-  }
+  const int64_t output_length = snapshot->data().output_length_samples;
+  sonare::util::check::integer_in_range(request.range.start, 0, output_length,
+                                        "range.start_sample");
+  sonare::util::check::integer_in_range(request.range.end, 0, output_length, "range.end_sample");
   if (request.range.end <= request.range.start) {
-    invalid("request.range", SonareParameterRefusal::relation(ErrorCode::InvalidParameter,
-                                                              {"range.start", "range.end"},
-                                                              "{1} must be greater than {0}")
-                                 .what());
+    throw SonareParameterRefusal::relation(ErrorCode::InvalidParameter,
+                                           {"range.start_sample", "range.end_sample"},
+                                           "{1} must be greater than {0}");
   }
   impl_->snapshot = std::move(snapshot);
   impl_->request = request;
