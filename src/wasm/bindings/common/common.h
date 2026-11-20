@@ -37,6 +37,7 @@
 #include "analysis/timbre_analyzer.h"
 #include "automation/parameter.h"
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_api/sonare_c_last_refusal.h"
 #include "core/audio.h"
 #include "core/convert.h"
 #include "core/db_convert.h"
@@ -210,9 +211,18 @@ inline std::string cErrorMessage(SonareError err) {
   return detail != nullptr && detail[0] != '\0' ? detail : fallback;
 }
 
-/// @brief Throws the returned @p err as its SonareException with
+/// @brief Rethrows the parameter refusal the last C-ABI call recorded, so the JS translation
+///        point renders it in request keys and classifies it by kind; returns when none was.
+inline void rethrowLastCRefusal() {
+  if (const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal()) {
+    throw *refusal;
+  }
+}
+
+/// @brief Throws the returned @p err as its recorded refusal, else as its SonareException with
 ///        cErrorMessage(@p err).
 [[noreturn]] inline void throwCodedCError(SonareError err) {
+  rethrowLastCRefusal();
   throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err), cErrorMessage(err));
 }
 
@@ -235,6 +245,7 @@ inline std::vector<std::string> lastDiagnosticMessages() {
 ///        the recorded detail as the message.
 /// @param fallback Code used when the library recorded none (the code reads Ok).
 [[noreturn]] inline void throwLastCError(SonareError fallback = SONARE_ERROR_INVALID_STATE) {
+  rethrowLastCRefusal();
   SonareError code = sonare_last_error_code();
   if (code == SONARE_OK) code = fallback;
   const char* detail = sonare_last_error_message();

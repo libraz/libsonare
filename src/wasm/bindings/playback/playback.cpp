@@ -31,6 +31,7 @@ namespace {
 constexpr int kMaxInputChannels = 8;
 
 [[noreturn]] void throwPlaybackError(SonareError err) {
+  rethrowLastCRefusal();
   const char* detail = sonare_last_error_message();
   std::string message;
   message += detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(err);

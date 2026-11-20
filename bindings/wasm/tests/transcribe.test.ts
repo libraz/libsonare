@@ -336,7 +336,7 @@ describe('WASM transcribe', () => {
     expect(() => transcribe({ samples, sampleRate, f0MinHz: 1800, tempoBpm: 120 })).not.toThrow();
     expect(() =>
       transcribe({ samples, sampleRate, polyphonic: true, f0MinHz: 1800, tempoBpm: 120 }),
-    ).toThrow(/^transcribe: f0_?max_?hz must be greater than f0_?min_?hz$/i);
+    ).toThrow(/^transcribe: f0MaxHz must be greater than f0MinHz$/);
   });
 
   it('emits on the requested group and channel', () => {
@@ -471,7 +471,7 @@ describe('WASM transcribe', () => {
       messageOf(() => project.transcribeToClip({ clipId: unknownClipId, samples, sampleRate }));
 
     expect(annotated()).toMatch(/group/);
-    expect(unannotated()).toMatch(/:\s*Invalid parameter$/);
+    expect(unannotated()).toMatch(/: clipId must be the id of /);
     expect(unannotated()).not.toMatch(/group/);
     // Once more in the other order, so neither result can be the one the slot
     // happened to be holding when the test started.
@@ -579,7 +579,7 @@ describe('WASM transcribe', () => {
       thrown = error;
     }
     expectArgumentRefusal(thrown, RangeError);
-    expect((thrown as Error).message).toContain('min_note_division');
+    expect((thrown as Error).message).toContain('minNoteDivision');
   });
 
   it('surfaces the C refusal of a polyphonic-only option on the monophonic path', () => {
@@ -597,8 +597,7 @@ describe('WASM transcribe', () => {
       }
       const name = Object.keys(options)[0];
       expectArgumentRefusal(thrown, RangeError, name);
-      const field = name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
-      expect((thrown as Error).message, name).toContain(field);
+      expect((thrown as Error).message, name).toContain(name);
     }
   });
 

@@ -81,6 +81,7 @@ inline sonare::ErrorCode codeFromCError(SonareError err) {
 }
 
 [[noreturn]] inline void throwCError(SonareError err) {
+  rethrowLastCRefusal();
   throwCErrorMessage(err, cErrorMessage(err));
 }
 
