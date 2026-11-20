@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _atomic_write_bytes,
     _load_channels_or_downmix,
-    _parse_json_list,
     _parse_kv_params,
     _strict_json_dumps,
     _write_channel_output,
@@ -274,42 +274,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     params_raw = getattr(args, "params", "") or ""
     bits = _wav_bits(args)
 
-    # Named by the option's canonical spelling, which is --chain-config; `mode`
-    # below stays the reported payload value.
-    selectors = [
-        name
-        for name, selected in (
-            ("preset", bool(preset)),
-            ("chain-config", bool(config_raw)),
-            ("assistant", assistant),
-        )
-        if selected
-    ]
-    # Alongside --assistant, --preset names the base the suggestion starts from
-    # rather than a second chain, so only --chain-config excludes the other two.
-    if config_raw and (preset or assistant):
-        raise ValueError("--chain-config is mutually exclusive with --preset and --assistant")
-    if not selectors:
-        raise ValueError(
-            "mastering needs --preset or --chain-config, or --assistant (which may take "
-            "--preset); loudness-only normalisation is mastering-normalize-loudness"
-        )
-    # Every option that only reaches an AssistantConfig field, refused rather
-    # than accepted and dropped -- the same list, in the same order, the native
-    # handler refuses.
-    if not assistant:
-        for name in (
-            "target-lufs",
-            "ceiling-dbtp",
-            "enable-repair",
-            "explain",
-            "target-platform",
-            "no-streaming-safe",
-            "speech-mono-amount",
-        ):
-            if _option_supplied(args, name):
-                raise ValueError(f"--{name} requires --assistant")
-
+    # _validate_mastering_selection() has settled the chain selector before the input was read.
     params = _parse_kv_params(params_raw, names=True) if params_raw else {}
 
     def _run_chain(config: dict[str, Any]) -> Any:
@@ -766,15 +731,92 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+# The record's keys, all required, and the spellings it used to take.
+_STREAMING_PLATFORM_KEYS = ("name", "target_lufs", "ceiling_dbtp")
+_STREAMING_PLATFORM_RENAMED = {
+    "targetLufs": "target_lufs",
+    "ceilingDb": "ceiling_dbtp",
+    "ceilingDbtp": "ceiling_dbtp",
+    "ceiling_db": "ceiling_dbtp",
+}
+_FLOAT32_MAX = 3.4028234663852886e38
+
+
+def _refuse_json_constant(token: str) -> None:
+    raise ValueError(token)
+
+
+def _streaming_platform_number(entry: dict[str, Any], where: str, key: str) -> float:
+    value = entry[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{where}.{key} must be a number")
+    if not abs(float(value)) <= _FLOAT32_MAX:
+        raise ValueError(f"{where}.{key} must be finite")
+    return float(value)
+
+
+def _parse_streaming_platforms(text: str, subject: str) -> list[dict[str, Any]]:
+    """Read a platform document, refused in the native CLI's words under ``subject``."""
+    if not text:
+        return []
+    try:
+        try:
+            document = json.loads(text, parse_constant=_refuse_json_constant)
+        except ValueError:
+            document = None
+        if not isinstance(document, list) or not all(isinstance(e, dict) for e in document):
+            raise ValueError("must be a JSON array of platform objects")
+        platforms: list[dict[str, Any]] = []
+        for index, entry in enumerate(document):
+            where = f"platforms[{index}]"
+            for key in entry:
+                if key in _STREAMING_PLATFORM_RENAMED:
+                    renamed = _STREAMING_PLATFORM_RENAMED[key]
+                    raise ValueError(f"unknown key {where}.{key} (renamed to {where}.{renamed})")
+                if key not in _STREAMING_PLATFORM_KEYS:
+                    expected = ", ".join(_STREAMING_PLATFORM_KEYS)
+                    raise ValueError(f"unknown key {where}.{key} (expected {expected})")
+            for key in _STREAMING_PLATFORM_KEYS:
+                if key not in entry:
+                    raise ValueError(f"{where}.{key} must be given")
+            name = entry["name"]
+            if not isinstance(name, str):
+                raise ValueError(f"{where}.name must be a string")
+            if not name:
+                raise ValueError(f"{where}.name must not be empty")
+            platforms.append(
+                {
+                    "name": name,
+                    "target_lufs": _streaming_platform_number(entry, where, "target_lufs"),
+                    "ceiling_dbtp": _streaming_platform_number(entry, where, "ceiling_dbtp"),
+                }
+            )
+    except ValueError as exc:
+        raise ValueError(f"{subject}: {exc}") from None
+    return platforms
+
+
+def _streaming_platforms_refusal(args: argparse.Namespace) -> str | None:
+    """The refusal of a --platforms document, or None; --platforms-file wins when both are given."""
+    if args.platforms_file or args.platforms is None:
+        return None
+    try:
+        _parse_streaming_platforms(args.platforms, "argument --platforms")
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
 def cmd_mastering_streaming(args: argparse.Namespace) -> int:
     from . import mastering_streaming_preview
 
     samples, sr = _load_audio(args.file)
-    # The facade refuses any record key other than its own, so the parsed JSON goes through as is.
-    platforms = cast(
-        "list[StreamingPlatform] | None",
-        _parse_json_list(args.platforms, args.platforms_file) or None,
-    )
+    if args.platforms_file:
+        with open(args.platforms_file, encoding="utf-8") as fh:
+            records = _parse_streaming_platforms(fh.read(), "--platforms-file")
+    else:
+        records = _parse_streaming_platforms(args.platforms or "", "argument --platforms")
+    platforms = cast("list[StreamingPlatform] | None", records or None)
     result = mastering_streaming_preview(samples, sample_rate=sr, platforms=platforms)
     print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0

@@ -1,5 +1,8 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
 #include <utility>
 
 #include "sonare_cli.h"
@@ -117,127 +120,6 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
     params.push_back({item.substr(0, eq), value});
   }
   return params;
-}
-
-std::vector<mastering::api::Param> parse_chain_params(const std::string& text) {
-  namespace json = sonare::util::json;
-  // Read as the flat params of a chain document, so the core decides a choice-valued key
-  // (a name is resolved, a number refused) in its own words.
-  json::Object params;
-  std::stringstream stream(text);
-  std::string item;
-  while (std::getline(stream, item, ',')) {
-    const auto eq = item.find('=');
-    if (eq == std::string::npos || eq == 0 || eq + 1 == item.size()) {
-      throw std::invalid_argument("invalid parameter entry: '" + item + "' (expected key=value)");
-    }
-    const std::string value_text = item.substr(eq + 1);
-    std::istringstream ss(value_text);
-    ss.imbue(std::locale::classic());
-    double number = 0.0;
-    ss >> number;
-    const bool is_number = ss && ss.peek() == std::char_traits<char>::eof();
-    params[item.substr(0, eq)] = is_number ? json::Value(number) : json::Value(value_text);
-  }
-  json::Object document;
-  document.emplace("version", json::Value(2.0));
-  document.emplace("params", json::Value(std::move(params)));
-  std::vector<mastering::api::Param> out;
-  for (auto& leaf :
-       mastering::api::chain_config_flat_params(json::dump(json::Value(std::move(document))))) {
-    out.push_back({std::move(leaf.key), leaf.value});
-  }
-  return out;
-}
-
-/// One `--platforms` entry, owning its name so the C array built from it can
-/// borrow a stable pointer.
-struct StreamingPlatformSpec {
-  std::string name;
-  float target_lufs = 0.0f;
-  float ceiling_dbtp = 0.0f;
-};
-
-namespace {
-
-/// The record's keys; every one is required, matching the library's platform record.
-constexpr const char* kStreamingPlatformKeys[] = {"name", "target_lufs", "ceiling_dbtp"};
-
-/// Spellings the record used to take, refused with the key that replaced them.
-constexpr std::pair<const char*, const char*> kStreamingPlatformRenamed[] = {
-    {"targetLufs", "target_lufs"},
-    {"ceilingDb", "ceiling_dbtp"},
-    {"ceilingDbtp", "ceiling_dbtp"},
-    {"ceiling_db", "ceiling_dbtp"},
-};
-
-float streaming_platform_number(const sonare::util::json::Value& entry, const std::string& where,
-                                const char* key) {
-  const sonare::util::json::Value& value = *entry.find(key);
-  if (!value.is_number()) {
-    throw std::invalid_argument("--platforms: " + where + "." + key + " must be a number");
-  }
-  return value.as_float();
-}
-
-// The texts are the library's own platform-record refusals, keyed by the record's path.
-void check_streaming_platform_keys(const sonare::util::json::Value& entry,
-                                   const std::string& where) {
-  for (const auto& [key, unused] : entry.as_object()) {
-    (void)unused;
-    for (const auto& [old_key, new_key] : kStreamingPlatformRenamed) {
-      if (key == old_key) {
-        throw std::invalid_argument("--platforms: unknown key " + where + "." + key +
-                                    " (renamed to " + where + "." + new_key + ")");
-      }
-    }
-    bool known = false;
-    std::string expected_list;
-    for (const char* expected : kStreamingPlatformKeys) {
-      known = known || key == expected;
-      expected_list += (expected_list.empty() ? "" : ", ") + std::string(expected);
-    }
-    if (!known) {
-      throw std::invalid_argument("--platforms: unknown key " + where + "." + key + " (expected " +
-                                  expected_list + ")");
-    }
-  }
-  for (const char* expected : kStreamingPlatformKeys) {
-    if (entry.find(expected) == nullptr) {
-      throw std::invalid_argument("--platforms: " + where + "." + expected + " must be given");
-    }
-  }
-}
-
-}  // namespace
-
-std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& text) {
-  // Same document the Python CLI's --platforms takes, so one platform list
-  // drives either front-end. An absent option is not an empty set: it selects
-  // the built-in platform list, which is what the C entry point reads NULL/0 as.
-  std::vector<StreamingPlatformSpec> platforms;
-  if (text.empty()) return platforms;
-  const auto document = sonare::util::json::parse(text);
-  if (!document.is_array()) {
-    throw std::invalid_argument("--platforms expects a JSON array of platform objects");
-  }
-  for (const auto& entry : document.as_array()) {
-    if (!entry.is_object()) {
-      throw std::invalid_argument("--platforms entries must be JSON objects");
-    }
-    const std::string where = "platforms[" + std::to_string(platforms.size()) + "]";
-    check_streaming_platform_keys(entry, where);
-    StreamingPlatformSpec spec;
-    const sonare::util::json::Value& name = *entry.find("name");
-    if (!name.is_string() || name.as_string().empty()) {
-      throw std::invalid_argument("--platforms: " + where + ".name must be a non-empty string");
-    }
-    spec.name = name.as_string();
-    spec.target_lufs = streaming_platform_number(entry, where, "target_lufs");
-    spec.ceiling_dbtp = streaming_platform_number(entry, where, "ceiling_dbtp");
-    platforms.push_back(std::move(spec));
-  }
-  return platforms;
 }
 
 namespace {
@@ -465,32 +347,10 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
 }  // namespace
 
 int cmd_mastering(const CliArgs& args, const Audio& audio) {
-  const bool has_preset = args.has("preset");
+  // validate_mastering_selection() has settled the chain selector before the input was read.
   const bool has_config = args.has("chain-config");
   const bool has_assistant = args.has("assistant");
-  // Alongside --assistant, --preset names the base the suggestion starts from
-  // rather than a second chain, so only --chain-config excludes the other two.
-  const int selector_count =
-      static_cast<int>(has_config) + static_cast<int>(has_preset || has_assistant);
-  if (selector_count > 1) {
-    throw std::invalid_argument(
-        "--chain-config is mutually exclusive with --preset and --assistant");
-  }
-  if (!selector_count) {
-    throw std::invalid_argument(
-        "mastering needs --preset or --chain-config, or --assistant (which may take --preset); "
-        "loudness-only normalisation is mastering-normalize-loudness");
-  }
   const std::string params_text = args.get_string("params");
-  // Every option that only reaches an AssistantConfig field is refused without
-  // --assistant rather than accepted and dropped.
-  for (const char* assistant_option :
-       {"target-lufs", "ceiling-dbtp", "enable-repair", "explain", "target-platform",
-        "no-streaming-safe", "speech-mono-amount"}) {
-    if (args.has(assistant_option) && !has_assistant) {
-      throw std::invalid_argument(std::string("--") + assistant_option + " requires --assistant");
-    }
-  }
 
   // main() probed the channel count for this invocation; a two-channel input is
   // mastered as a stereo pair rather than through the mono downmix it was also
@@ -938,8 +798,10 @@ int cmd_mastering_streaming(const CliArgs& args, const Audio& audio) {
   // the call, so the borrowed name pointers stay valid. --platforms-file wins
   // over --platforms when both are given, as it does on the Python CLI.
   const std::string platforms_file = args.get_string("platforms-file");
-  const auto specs = parse_streaming_platforms(
-      platforms_file.empty() ? args.get_string("platforms", "") : read_text_file(platforms_file));
+  const auto specs =
+      platforms_file.empty()
+          ? parse_streaming_platforms(args.get_string("platforms", ""), "argument --platforms")
+          : parse_streaming_platforms(read_text_file(platforms_file), "--platforms-file");
   std::vector<SonareStreamingPlatform> platforms;
   platforms.reserve(specs.size());
   for (const auto& spec : specs) {

@@ -105,7 +105,7 @@ TEST_CASE("CLI mastering needs a chain and leaves loudness-only work to its own 
          {"", " --target-lufs -18", " --params loudness.targetLufs=-18"}) {
       CAPTURE(extra);
       auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + extra + " --json -q");
-      CHECK(code == 3);
+      CHECK(code == 2);
       CHECK_THAT(output, ContainsSubstring("mastering needs --preset or --chain-config, or "
                                            "--assistant (which may take --preset)"));
       CHECK_THAT(output, ContainsSubstring("mastering-normalize-loudness"));
@@ -123,7 +123,7 @@ TEST_CASE("CLI mastering needs a chain and leaves loudness-only work to its own 
     CHECK(based_code == 0);
     auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV +
                                        " --assistant --chain-config " + config + " --json -q");
-    CHECK(code == 3);
+    CHECK(code == 2);
     CHECK_THAT(output, ContainsSubstring(
                            "--chain-config is mutually exclusive with --preset and --assistant"));
     std::remove(config.c_str());
@@ -461,11 +461,11 @@ TEST_CASE("CLI mastering assistant delivery targets", "[cli][mastering]") {
     // without --assistant is refused instead of accepted and dropped.
     for (const std::string option :
          {"--target-lufs -12", "--ceiling-dbtp -2", "--target-platform broadcast",
-          "--no-streaming-safe", "--speech-mono-amount 0.5"}) {
+          "--no-streaming-safe", "--speech-mono-amount 0.5", "--enable-repair", "--explain"}) {
       CAPTURE(option);
       auto [code, output] =
           exec_command(CLI + " mastering " + TEST_WAV + " --preset pop " + option + " -q");
-      REQUIRE(code == 3);
+      REQUIRE(code == 2);
       REQUIRE_THAT(output, ContainsSubstring("requires --assistant"));
     }
   }
@@ -632,25 +632,41 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
             ? R"([{"name":"custom","targetLufs":-14,"ceiling_dbtp":-1}])"
             : R"([{"name":"custom","target_lufs":-14,")" + old_key + R"(":-1}])";
     const SplitResult refused = run(record);
-    CHECK(refused.exit_code == 3);
-    CHECK_THAT(refused.err, ContainsSubstring("unknown key platforms[0]." + old_key +
-                                              " (renamed to platforms[0]." + new_key + ")"));
+    CHECK(refused.exit_code == 2);
+    CHECK_THAT(refused.err,
+               ContainsSubstring("argument --platforms: unknown key platforms[0]." + old_key +
+                                 " (renamed to platforms[0]." + new_key + ")"));
   }
 
   const SplitResult missing = run(R"([{"name":"custom","target_lufs":-14}])");
-  CHECK(missing.exit_code == 3);
-  CHECK_THAT(missing.err, ContainsSubstring("platforms[0].ceiling_dbtp must be given"));
+  CHECK(missing.exit_code == 2);
+  CHECK_THAT(missing.err,
+             ContainsSubstring("argument --platforms: platforms[0].ceiling_dbtp must be given"));
 
   const SplitResult mistyped = run(R"([{"name":"custom","target_lufs":"loud","ceiling_dbtp":-1}])");
-  CHECK(mistyped.exit_code == 3);
-  CHECK_THAT(mistyped.err, ContainsSubstring("platforms[0].target_lufs must be a number"));
+  CHECK(mistyped.exit_code == 2);
+  CHECK_THAT(mistyped.err,
+             ContainsSubstring("argument --platforms: platforms[0].target_lufs must be a number"));
 
   const SplitResult unknown =
       run(R"([{"name":"custom","target_lufs":-14,"ceiling_dbtp":-1,"x":1}])");
-  CHECK(unknown.exit_code == 3);
+  CHECK(unknown.exit_code == 2);
   CHECK_THAT(
       unknown.err,
       ContainsSubstring("unknown key platforms[0].x (expected name, target_lufs, ceiling_dbtp)"));
+
+  // A file is read with the input, so the same document is refused after it, by its source.
+  const std::string document = unique_temp_path("_platforms.json");
+  {
+    std::ofstream file(document);
+    file << R"([{"name":"custom","target_lufs":-14}])";
+  }
+  const SplitResult from_file = exec_command_split(CLI + " mastering-streaming " + TEST_WAV +
+                                                   " --platforms-file " + document + " --json -q");
+  CHECK(from_file.exit_code == 3);
+  CHECK_THAT(from_file.err,
+             ContainsSubstring("--platforms-file: platforms[0].ceiling_dbtp must be given"));
+  std::remove(document.c_str());
 }
 
 TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a number",
@@ -1280,13 +1296,13 @@ TEST_CASE("CLI repair --detect and the options it refuses", "[cli][mastering][re
   SECTION("--explain is refused with --preset or --detect, where nothing was chosen to explain") {
     auto [preset_code, preset_output] =
         exec_command(CLI + " repair " + TEST_WAV + " --preset speech --explain -q -o " + TEST_OUT);
-    REQUIRE(preset_code == 3);
-    REQUIRE_THAT(preset_output, ContainsSubstring("--explain requires the default"));
+    REQUIRE(preset_code == 2);
+    REQUIRE_THAT(preset_output, ContainsSubstring("--explain cannot be combined with --preset"));
 
     auto [detect_code, detect_output] =
         exec_command(CLI + " repair " + TEST_WAV + " --detect --explain -q");
-    REQUIRE(detect_code == 3);
-    REQUIRE_THAT(detect_output, ContainsSubstring("--explain requires the default"));
+    REQUIRE(detect_code == 2);
+    REQUIRE_THAT(detect_output, ContainsSubstring("--explain cannot be combined with --detect"));
   }
 }
 
@@ -1297,8 +1313,9 @@ TEST_CASE("CLI repair --params stays inside the repair config", "[cli][mastering
                                      " --params loudness.enabled=1 "
                                      "-o " +
                                      TEST_OUT + " -q");
-  REQUIRE(code == 3);
-  REQUIRE_THAT(output, ContainsSubstring("--params key for repair must start with 'repair.'"));
+  REQUIRE(code == 2);
+  REQUIRE_THAT(output,
+               ContainsSubstring("--params key must be a repair.* field: loudness.enabled"));
 
   auto [ok_code, ok_output] = exec_command(
       CLI + " repair " + TEST_WAV + " --params repair.denoise.enabled=1 -o " + TEST_OUT + " -q");
@@ -1354,7 +1371,7 @@ TEST_CASE("CLI repair --stages runs exactly the named stages", "[cli][mastering]
         {"--stages declip,,dehum", "--stages has an empty entry"},
         {"--stages \"\"", "--stages has an empty entry"},
         {"--stages declip --preset speech", "--stages cannot be combined with --preset"},
-        {"--stages declip --explain", "--explain requires the default preset selection"},
+        {"--stages declip --explain", "--explain cannot be combined with --stages"},
         {"--stages dehum --params repair.declip.lpcOrder=24",
          "repair.declip.lpcOrder names a stage --stages does not run"},
     };
@@ -1362,12 +1379,12 @@ TEST_CASE("CLI repair --stages runs exactly the named stages", "[cli][mastering]
       CAPTURE(extra);
       auto [code, output] =
           exec_command(CLI + " repair " + input + " " + extra + " -o " + TEST_OUT + " -q");
-      CHECK(code == 3);
+      CHECK(code == 2);
       CHECK_THAT(output, ContainsSubstring(message));
     }
     auto [detect_code, detect_output] =
         exec_command(CLI + " repair " + input + " --detect --stages declip -q");
-    CHECK(detect_code == 3);
+    CHECK(detect_code == 2);
     CHECK_THAT(detect_output, ContainsSubstring("--stages cannot be combined with --detect"));
   }
   std::remove(input.c_str());

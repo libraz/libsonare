@@ -613,13 +613,54 @@ def _validate_render_channels(args: argparse.Namespace, parser: argparse.Argumen
 
 
 def _validate_repair_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    # --output is required to repair and refused when --detect only measures.
-    detect = bool(getattr(args, "detect", False))
-    output = getattr(args, "output", None)
-    if detect and output:
-        parser.error("--output cannot be combined with --detect")
-    if not detect and not output:
-        parser.error("--output is required unless --detect is given")
+    # The command's own module owns the checks; imported here to keep the module graph acyclic.
+    from ._cli_repair import _repair_argument_refusal
+
+    refusal = _repair_argument_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
+def _validate_streaming_platforms(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    # A --platforms document is command-line text, so it is refused before the input is read.
+    from ._cli_mastering import _streaming_platforms_refusal
+
+    refusal = _streaming_platforms_refusal(args)
+    if refusal is not None:
+        parser.error(refusal)
+
+
+def _validate_mastering_selection(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    # One chain, chosen by --preset, --chain-config or --assistant. Alongside --assistant,
+    # --preset names the base the suggestion starts from, so only --chain-config excludes both.
+    assistant = _option_supplied(args, "assistant")
+    config = _option_supplied(args, "config")
+    preset = _option_supplied(args, "preset")
+    if config and (preset or assistant):
+        parser.error("--chain-config is mutually exclusive with --preset and --assistant")
+    if not (config or preset or assistant):
+        parser.error(
+            "mastering needs --preset or --chain-config, or --assistant (which may take "
+            "--preset); loudness-only normalisation is mastering-normalize-loudness"
+        )
+    if assistant:
+        return
+    # An option that only reaches an AssistantConfig field is refused, not dropped.
+    for name in (
+        "target-lufs",
+        "ceiling-dbtp",
+        "enable-repair",
+        "explain",
+        "target-platform",
+        "no-streaming-safe",
+        "speech-mono-amount",
+    ):
+        if _option_supplied(args, name):
+            parser.error(f"--{name} requires --assistant")
 
 
 def _validate_mix_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -662,6 +703,8 @@ _COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentPa
     "note-move": _validate_note_move_bounds,
     "note-stretch": _validate_note_stretch_bounds,
     "repair": _validate_repair_namespace,
+    "mastering": _validate_mastering_selection,
+    "mastering-streaming": _validate_streaming_platforms,
     "project.bounce": _validate_render_channels,
     "midi-render": _validate_render_channels,
 }

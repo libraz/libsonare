@@ -402,7 +402,6 @@ _NEGATIVE_NON_FINITE_LITERALS = ("-nan", "-inf", "-1e400")
 # appear with and without --assistant because that flag selects a different
 # consumer for the same value.
 _NON_FINITE_FLOAT_SITES = (
-    (["mastering", "input.wav"], "--target-lufs"),
     (["mastering", "input.wav", "--assistant"], "--target-lufs"),
     (["mastering", "input.wav", "--assistant"], "--speech-mono-amount"),
     (["pitch", "input.wav"], "--f0-min-hz"),
@@ -620,11 +619,15 @@ def test_an_inline_value_on_a_valued_option_is_untouched() -> None:
     """Only flag-arity options gain the form; a valued option keeps argparse's."""
     from libsonare import cli
 
-    args = cli._build_parser().parse_args(["mastering", "input.wav", "--target-lufs=-9.5"])
+    args = cli._build_parser().parse_args(
+        ["mastering", "input.wav", "--assistant", "--target-lufs=-9.5"]
+    )
     assert args.target_lufs == pytest.approx(-9.5)
     # And a valued option still refuses a value it cannot parse.
     with pytest.raises(SystemExit) as raised:
-        cli._build_parser().parse_args(["mastering", "input.wav", "--target-lufs=nope"])
+        cli._build_parser().parse_args(
+            ["mastering", "input.wav", "--assistant", "--target-lufs=nope"]
+        )
     assert raised.value.code == 2
 
 
@@ -1575,5 +1578,13 @@ def test_mastering_streaming_takes_one_platform_record_spelling(
     refused = _run_console(
         "mastering-streaming", str(source), "--platforms", f"[{record}]", "--json"
     )
-    assert refused.returncode == 3
-    assert message in refused.stderr
+    assert refused.returncode == 2, refused.stderr
+    assert f"argument --platforms: {message}" in refused.stderr
+    # A file is read with the input, so the same document is refused after it, by its source.
+    document = tmp_path / "platforms.json"
+    document.write_text(f"[{record}]", encoding="utf-8")
+    from_file = _run_console(
+        "mastering-streaming", str(source), "--platforms-file", str(document), "--json"
+    )
+    assert from_file.returncode == 3, from_file.stderr
+    assert f"--platforms-file: {message}" in from_file.stderr

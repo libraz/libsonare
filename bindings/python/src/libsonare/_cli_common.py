@@ -716,19 +716,6 @@ def _load_json_object(path: str) -> dict[str, Any]:
     return loaded
 
 
-def _parse_json_list(raw: str, path: str) -> list[dict[str, Any]]:
-    if path:
-        with open(path, encoding="utf-8") as fh:
-            loaded = json.load(fh)
-    elif raw:
-        loaded = json.loads(raw)
-    else:
-        return []
-    if not isinstance(loaded, list) or not all(isinstance(item, dict) for item in loaded):
-        raise ValueError("platforms must be a JSON array of objects")
-    return cast(list[dict[str, Any]], loaded)
-
-
 def _audio_array(value: object) -> np.ndarray:
     """Convert a whole-buffer result to float32 in one bulk pass, without boxing samples."""
     return np.asarray(value, dtype=np.float32)

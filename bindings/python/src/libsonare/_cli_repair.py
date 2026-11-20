@@ -22,7 +22,8 @@ from ._cli_options import (
     _option_supplied,
     _wav_bits,
 )
-from ._mastering_offline import _chain_config_paths, _nest_chain_config
+from ._errors import SonareError
+from ._mastering_offline import _chain_config_paths, _check_chain_document, _nest_chain_config
 from ._result_records import _result_to_json_dict
 
 if TYPE_CHECKING:
@@ -114,6 +115,44 @@ def _parse_repair_params(raw: str) -> dict[str, float | str]:
         except ValueError:
             params[key] = value
     return params
+
+
+def _repair_argument_refusal(args: argparse.Namespace) -> str | None:
+    """The first refusal of ``repair``'s mode switches, ``--stages`` and ``--params``, or None.
+
+    Decided from the command line alone, in the order the native CLI decides it.
+    """
+    has_preset = _option_supplied(args, "preset")
+    has_stages = _option_supplied(args, "stages")
+    explain = _option_supplied(args, "explain")
+    if _option_supplied(args, "detect"):
+        # --detect only measures, so nothing that shapes or writes a repair applies.
+        for name in ("output", "explain", "preset", "stages", "params", "bits"):
+            if _option_supplied(args, name):
+                return f"--{name} cannot be combined with --detect"
+        return None
+    if not getattr(args, "output", None):
+        return "--output is required unless --detect is given"
+    if has_stages and has_preset:
+        return "--stages cannot be combined with --preset"
+    # Why each stage was chosen exists only when the assistant chooses them.
+    if explain and has_stages:
+        return "--explain cannot be combined with --stages"
+    if explain and has_preset:
+        return "--explain cannot be combined with --preset"
+    try:
+        stages = _parse_repair_stages(args.stages) if has_stages else []
+        params = _parse_repair_params(getattr(args, "params", "") or "")
+        if params:
+            _check_chain_document(params)
+        if has_stages:
+            _reject_unlisted_stage_params(params, stages)
+    except SonareError as exc:
+        # The core's own words, without the binding's "[code] " prefix.
+        return str(exc).partition("] ")[2]
+    except ValueError as exc:
+        return str(exc)
+    return None
 
 
 # select_repair_stages() (suggester.cpp) names the stage at the start of every
@@ -270,33 +309,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
     explain = bool(getattr(args, "explain", False))
     output = getattr(args, "output", "") or ""
 
-    if detect_only:
-        if explain:
-            raise ValueError(
-                "--explain has nothing to explain under --detect: no repair stage "
-                "runs, so none was chosen -- drop --detect to see why the assistant "
-                "would pick a stage"
-            )
-        for name in ("preset", "stages", "params", "bits"):
-            if _option_supplied(args, name):
-                raise ValueError(f"--{name} cannot be combined with --detect")
-
-    if stages_raw is not None and preset:
-        raise ValueError("--stages cannot be combined with --preset")
-    if stages_raw is not None and explain:
-        raise ValueError(
-            "--explain has nothing to explain under --stages: the stages are named "
-            "directly, not chosen by measurement -- drop --stages to see why the "
-            "assistant would pick a stage"
-        )
+    # _repair_argument_refusal() has refused every invalid combination before the input was read.
     stage_list = _parse_repair_stages(stages_raw) if stages_raw is not None else []
-
-    if preset and explain:
-        raise ValueError(
-            "--explain has nothing to explain under --preset: a preset's repair "
-            "stages are named directly, not chosen by measurement -- drop --preset "
-            "to see why the assistant would pick a stage"
-        )
 
     # A two-channel input is measured and repaired as a pair, its detectors run
     # per channel and aggregated.

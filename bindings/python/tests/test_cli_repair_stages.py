@@ -90,7 +90,7 @@ def test_repair_stages_takes_a_stage_name_in_any_letter_case(tmp_path) -> None:
         (["--stages", "declip,,dehum"], "--stages has an empty entry"),
         (["--stages", ""], "--stages has an empty entry"),
         (["--stages", "declip", "--preset", "speech"], "--stages cannot be combined with --preset"),
-        (["--stages", "declip", "--explain"], "--explain has nothing to explain under --stages"),
+        (["--stages", "declip", "--explain"], "--explain cannot be combined with --stages"),
         (
             ["--stages", "dehum", "--params", "repair.declip.lpcOrder=24"],
             "repair.declip.lpcOrder names a stage --stages does not run",
@@ -100,12 +100,13 @@ def test_repair_stages_takes_a_stage_name_in_any_letter_case(tmp_path) -> None:
 def test_repair_stages_refusals(tmp_path, extra: list[str], message: str) -> None:
     source = _clipped_source(tmp_path)
     result = _run_cli(["repair", str(source), "-o", str(tmp_path / "o.wav"), *extra])
-    assert result.returncode == 3, result.stderr
+    # Decided from the command line, so a usage error before the input is read.
+    assert result.returncode == 2, result.stderr
     assert message in result.stderr
 
 
 def test_repair_stages_is_refused_beside_detect(tmp_path) -> None:
     source = _clipped_source(tmp_path)
     result = _run_cli(["repair", str(source), "--detect", "--stages", "declip"])
-    assert result.returncode == 3, result.stderr
+    assert result.returncode == 2, result.stderr
     assert "--stages cannot be combined with --detect" in result.stderr

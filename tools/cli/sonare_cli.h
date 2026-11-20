@@ -275,8 +275,24 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
                                                           bool resolve_names = false,
                                                           const std::string& processor = {});
 /// Parses a chain `--params` list through the core's chain document reader; defined in
-/// sonare_cli_mastering.cpp.
+/// sonare_cli_mastering_args.cpp.
 std::vector<mastering::api::Param> parse_chain_params(const std::string& text);
+/// Parses `repair --stages` into the stage names it lists, lower-cased; defined in
+/// sonare_cli_mastering_args.cpp.
+std::vector<std::string> parse_repair_stages(const std::string& text);
+
+/// One `--platforms` entry, owning its name so the C array built from it can
+/// borrow a stable pointer.
+struct StreamingPlatformSpec {
+  std::string name;
+  float target_lufs = 0.0f;
+  float ceiling_dbtp = 0.0f;
+};
+
+/// Reads a platform document, refusing it under "<subject>: "; an empty text selects
+/// the built-in list. Defined in sonare_cli_mastering_args.cpp.
+std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& text,
+                                                             const std::string& subject);
 #endif
 
 #ifdef SONARE_WITH_MIXING

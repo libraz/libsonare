@@ -172,3 +172,12 @@ std::string dump_cli_contract_json();
 CliOptionValue null_default();
 const CliOptionSpec* option_for_spec(const CliCommandSpec* command, const std::string& option);
 std::string command_path_for_args(const CliArgs& args);
+
+#ifdef SONARE_WITH_MASTERING
+/// The first refusal of `repair`'s mode switches, `--stages` and `--params`, decided from
+/// the command line alone, or empty; defined in sonare_cli_mastering_args.cpp.
+std::string repair_argument_refusal(const CliArgs& args);
+/// The refusal of a `mastering-streaming --platforms` document, prefixed
+/// "argument --platforms: ", or empty; defined in sonare_cli_mastering_args.cpp.
+std::string streaming_platforms_refusal(const CliArgs& args);
+#endif

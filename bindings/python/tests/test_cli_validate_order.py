@@ -61,6 +61,23 @@ _CHANNELS = (
         ),
         (["time-stretch", _UNREADABLE, "-o", "{output}"], "Missing required option '--rate'"),
         (["hpss", _UNREADABLE], "Missing required option '--output'"),
+        (
+            ["repair", _UNREADABLE, "-o", "{output}", "--explain", "--preset", "pop"],
+            "--explain cannot be combined with --preset",
+        ),
+        (
+            ["repair", _UNREADABLE, "-o", "{output}", "--stages", "declip,reverb"],
+            "--stages: unknown stage 'reverb'",
+        ),
+        (
+            ["mastering", _UNREADABLE, "--preset", "pop", "--enable-repair"],
+            "--enable-repair requires --assistant",
+        ),
+        (["mastering", _UNREADABLE], "mastering needs --preset or --chain-config"),
+        (
+            ["mastering-streaming", _UNREADABLE, "--platforms", '[{"name":""}]'],
+            "argument --platforms: platforms[0].target_lufs must be given",
+        ),
     ],
 )
 def test_cross_option_refusal_precedes_the_input_read(tmp_path, argv, message) -> None:

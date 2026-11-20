@@ -315,16 +315,38 @@ CliOptionSpec target_platform_value() {
                      choices_of(sonare::mastering::assistant::platform_names()));
 }
 
-// `repair` writes a repaired file, so `--output` is normally required; `--detect`
-// trades processing for a report, writes no file, and so refuses one. A plain
-// `required_output()` cannot express that the requirement is conditional, so
-// the command carries this validator instead.
-CliValidationError validate_repair_output(const CliArgs& args) {
-  if (args.has("detect") && args.has("output")) {
-    return {"--output cannot be combined with --detect"};
+// `mastering` runs one chain, chosen by --preset, --chain-config or --assistant; the
+// choice and the options only the assistant reads are decided before the input is read.
+CliValidationError validate_mastering_selection(const CliArgs& args) {
+  const bool has_assistant = args.has("assistant");
+  // Alongside --assistant, --preset names the base the suggestion starts from
+  // rather than a second chain, so only --chain-config excludes the other two.
+  if (args.has("chain-config") && (args.has("preset") || has_assistant)) {
+    return {"--chain-config is mutually exclusive with --preset and --assistant"};
   }
-  if (args.has("detect") || args.has("output")) return {};
-  return {"--output is required unless --detect is given"};
+  if (!args.has("chain-config") && !args.has("preset") && !has_assistant) {
+    return {
+        "mastering needs --preset or --chain-config, or --assistant (which may take "
+        "--preset); loudness-only normalisation is mastering-normalize-loudness"};
+  }
+  if (has_assistant) return {};
+  // An option that only reaches an AssistantConfig field is refused, not dropped.
+  for (const char* name : {"target-lufs", "ceiling-dbtp", "enable-repair", "explain",
+                           "target-platform", "no-streaming-safe", "speech-mono-amount"}) {
+    if (args.has(name)) return {std::string("--") + name + " requires --assistant"};
+  }
+  return {};
+}
+
+// A --platforms document is command-line text, so its refusals precede the input read.
+CliValidationError validate_streaming_platforms(const CliArgs& args) {
+  return {streaming_platforms_refusal(args)};
+}
+
+// `repair` switches between measuring (`--detect`) and repairing by the assistant, a
+// preset or `--stages`; every combination is decided before the input is read.
+CliValidationError validate_repair_arguments(const CliArgs& args) {
+  return {repair_argument_refusal(args)};
 }
 #endif
 
@@ -891,7 +913,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  // refusing an outside value.
                  target_platform_value(), flag("no-streaming-safe"),
                  number_value("speech-mono-amount", 1.0)},
-                {}, nullptr, 0, /*preserves_stereo_input=*/true);
+                {}, validate_mastering_selection, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mastering-normalize-loudness", true,
                 {number_value("target-lufs", -14.0), number_value("ceiling-dbtp", -1.0),
                  bits_value(), true_peak_oversample_value(), path_value("report"), output_value()},
@@ -947,11 +969,12 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "mastering-presets", false, {});
     add_command(commands, "mastering-profile", true, {string_value("params")});
     add_command(commands, "mastering-streaming", true,
-                {nullable_string_value("platforms"), path_value("platforms-file")});
+                {nullable_string_value("platforms"), path_value("platforms-file")}, {},
+                validate_streaming_platforms);
     add_command(commands, "repair", true,
                 {string_value("preset"), string_value("stages"), string_value("params"),
                  bits_value(), output_value(), flag("detect"), flag("explain")},
-                {}, validate_repair_output, 0, /*preserves_stereo_input=*/true);
+                {}, validate_repair_arguments, 0, /*preserves_stereo_input=*/true);
 #endif
 #ifdef SONARE_WITH_MIXING
     // `mix-strip` is the only spelling for the strip. `mix` names the Python

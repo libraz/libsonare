@@ -159,23 +159,15 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
     assert json.loads(capsys.readouterr().out)["explanation"] == ["repair enabled"]
 
 
-def test_mastering_semantic_selector_conflicts_are_invalid_parameters(monkeypatch) -> None:
-    from libsonare import _cli_mastering
+def test_mastering_semantic_selector_conflicts_are_usage_errors(capsys) -> None:
+    from libsonare import cli
 
-    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
-    args = argparse.Namespace(
-        file="input.wav",
-        preset="pop",
-        config="{}",
-        assistant=False,
-        params="",
-        bits=16,
-        enable_repair=False,
-        explain=False,
-        report=None,
-    )
-    with pytest.raises(ValueError, match="mutually exclusive"):
-        _cli_mastering.cmd_mastering(args)
+    with pytest.raises(SystemExit) as caught:
+        cli._build_parser().parse_args(
+            ["mastering", "input.wav", "--preset", "pop", "--chain-config", "chain.json"]
+        )
+    assert caught.value.code == 2
+    assert "mutually exclusive" in capsys.readouterr().err
 
 
 def test_mastering_processor_hands_a_stereo_source_to_the_facade_unmixed(
@@ -522,23 +514,23 @@ def test_preset_names_the_base_the_assistant_starts_from(monkeypatch, capsys) ->
         explanation("--preset", "vinyl")
 
 
-def test_assistant_controls_are_refused_without_assistant(monkeypatch) -> None:
+def test_assistant_controls_are_refused_without_assistant(capsys) -> None:
     """Options that only reach an AssistantConfig field are refused, not dropped."""
-    from libsonare import _cli_mastering, cli
+    from libsonare import cli
 
-    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     for option in (
+        ["--enable-repair"],
+        ["--explain"],
         ["--target-lufs", "-12"],
         ["--ceiling-dbtp", "-2"],
         ["--target-platform", "broadcast"],
         ["--no-streaming-safe"],
         ["--speech-mono-amount", "0.5"],
     ):
-        args = cli._build_parser().parse_args(
-            ["mastering", "input.wav", "--preset", "pop", *option]
-        )
-        with pytest.raises(ValueError, match="requires --assistant"):
-            _cli_mastering.cmd_mastering(args)
+        with pytest.raises(SystemExit) as caught:
+            cli._build_parser().parse_args(["mastering", "input.wav", "--preset", "pop", *option])
+        assert caught.value.code == 2
+        assert f"error: {option[0]} requires --assistant" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -593,28 +585,28 @@ def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
     ],
 )
 def test_a_loudness_target_carrying_its_default_is_refused_without_assistant(
-    monkeypatch, option, value
+    capsys, option, value
 ) -> None:
     """The loudness targets reach only the assistant, so a preset chain refuses them."""
-    from libsonare import _cli_mastering, cli
+    from libsonare import cli
 
-    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
-    args = cli._build_parser().parse_args(
-        ["mastering", "input.wav", "--preset", "pop", f"{option}={value}"]
-    )
-    with pytest.raises(ValueError, match=f"{option} requires --assistant"):
-        _cli_mastering.cmd_mastering(args)
+    with pytest.raises(SystemExit) as caught:
+        cli._build_parser().parse_args(
+            ["mastering", "input.wav", "--preset", "pop", f"{option}={value}"]
+        )
+    assert caught.value.code == 2
+    assert f"{option} requires --assistant" in capsys.readouterr().err
 
 
-def test_mastering_needs_a_chain_and_names_the_loudness_command(monkeypatch) -> None:
+def test_mastering_needs_a_chain_and_names_the_loudness_command(capsys) -> None:
     """With no chain selector the command is refused rather than normalising loudness."""
-    from libsonare import _cli_mastering, cli
+    from libsonare import cli
 
-    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     for extra in ([], ["--params", "loudness.targetLufs=-18"]):
-        args = cli._build_parser().parse_args(["mastering", "input.wav", *extra])
-        with pytest.raises(ValueError, match="mastering-normalize-loudness"):
-            _cli_mastering.cmd_mastering(args)
+        with pytest.raises(SystemExit) as caught:
+            cli._build_parser().parse_args(["mastering", "input.wav", *extra])
+        assert caught.value.code == 2
+        assert "mastering-normalize-loudness" in capsys.readouterr().err
     # The oversampling factor is a chain parameter on mastering, not a flag.
     with pytest.raises(SystemExit):
         cli._build_parser().parse_args(
@@ -627,15 +619,15 @@ def test_mastering_needs_a_chain_and_names_the_loudness_command(monkeypatch) -> 
     ["--target-platform=streaming", "--speech-mono-amount=1.0"],
 )
 def test_an_assistant_option_carrying_its_default_is_refused_without_assistant(
-    monkeypatch, option
+    capsys, option
 ) -> None:
     """The refusal follows the flag, not the value it happens to carry."""
-    from libsonare import _cli_mastering, cli
+    from libsonare import cli
 
-    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
-    args = cli._build_parser().parse_args(["mastering", "input.wav", "--preset", "pop", option])
-    with pytest.raises(ValueError, match="requires --assistant"):
-        _cli_mastering.cmd_mastering(args)
+    with pytest.raises(SystemExit) as caught:
+        cli._build_parser().parse_args(["mastering", "input.wav", "--preset", "pop", option])
+    assert caught.value.code == 2
+    assert "requires --assistant" in capsys.readouterr().err
 
 
 def test_presence_gated_mastering_options_match_the_native_handler() -> None:

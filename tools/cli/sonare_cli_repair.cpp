@@ -23,72 +23,6 @@ mastering::api::MasteringChainConfig repair_only_config(
   return config;
 }
 
-/// `--params` on `repair` is documented as repair config overrides, so a key
-/// reaching any other stage would let an override silently master -- refusing
-/// it here is what makes that promise actual rather than aspirational.
-void reject_non_repair_overrides(const std::vector<mastering::api::Param>& overrides) {
-  for (const auto& param : overrides) {
-    if (param.key.rfind("repair.", 0) == 0) continue;
-    throw std::invalid_argument("--params key for repair must start with 'repair.': " + param.key);
-  }
-}
-
-/// The stage vocabulary `--stages` accepts; the chain, not this list, decides
-/// the order they run in.
-constexpr std::array<const char*, 6> kRepairStageNames = {"declip", "declick", "decrackle",
-                                                          "dehum",  "denoise", "dereverb"};
-
-/// Parses `--stages` into the stage names it lists, lower-cased: a closed set,
-/// with an empty entry or a repeated stage refused rather than ignored.
-std::vector<std::string> parse_repair_stages(const std::string& text) {
-  std::vector<std::string> stages;
-  std::string expected;
-  for (const char* name : kRepairStageNames) {
-    if (!expected.empty()) expected += ", ";
-    expected += name;
-  }
-  std::size_t start = 0;
-  while (true) {
-    const std::size_t comma = text.find(',', start);
-    std::string entry =
-        text.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
-    const auto first = entry.find_first_not_of(" \t");
-    const auto last = entry.find_last_not_of(" \t");
-    entry = first == std::string::npos ? std::string() : entry.substr(first, last - first + 1);
-    std::transform(entry.begin(), entry.end(), entry.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (entry.empty()) throw std::invalid_argument("--stages has an empty entry");
-    if (std::find(kRepairStageNames.begin(), kRepairStageNames.end(), entry) ==
-        kRepairStageNames.end()) {
-      throw std::invalid_argument("--stages: unknown stage '" + entry + "' (expected " + expected +
-                                  ")");
-    }
-    if (std::find(stages.begin(), stages.end(), entry) != stages.end()) {
-      throw std::invalid_argument("--stages names " + entry + " twice");
-    }
-    stages.push_back(entry);
-    if (comma == std::string::npos) break;
-    start = comma + 1;
-  }
-  return stages;
-}
-
-/// Under `--stages`, a `--params` key reaching a stage the list leaves out
-/// would tune nothing, so it is refused by name.
-void reject_unlisted_stage_overrides(const std::vector<mastering::api::Param>& overrides,
-                                     const std::vector<std::string>& stages) {
-  for (const auto& param : overrides) {
-    const std::string rest = param.key.substr(std::string("repair.").size());
-    const std::string stage = rest.substr(0, rest.find('.'));
-    if (std::find(kRepairStageNames.begin(), kRepairStageNames.end(), stage) ==
-        kRepairStageNames.end()) {
-      continue;
-    }
-    if (std::find(stages.begin(), stages.end(), stage) != stages.end()) continue;
-    throw std::invalid_argument(param.key + " names a stage --stages does not run");
-  }
-}
-
 /// Appends the six repair detectors' measurements, one group per detector in
 /// the shape of the audio-profile JSON. The object is omitted when no detector
 /// ran, because nobody looking is not the same as clean. A large
@@ -258,23 +192,10 @@ std::vector<float> interleave_pair(const StereoPlanes& planes) {
 }  // namespace
 
 int cmd_repair(const CliArgs& args, const Audio& audio) {
+  // repair_argument_refusal() has refused every invalid combination before the input was read.
   const bool has_preset = args.has("preset");
   const bool has_stages = args.has("stages");
   const bool detect_only = args.has("detect");
-
-  if (has_stages && has_preset) {
-    throw std::invalid_argument("--stages cannot be combined with --preset");
-  }
-  if (has_stages && detect_only) {
-    throw std::invalid_argument("--stages cannot be combined with --detect");
-  }
-  // Why each stage was chosen only exists on the default (measure-and-choose)
-  // path: a preset or --stages names its stages, and --detect picks none, so
-  // the flag would report on a decision that never ran.
-  if (args.has("explain") && (has_preset || has_stages || detect_only)) {
-    throw std::invalid_argument(
-        "--explain requires the default preset selection (omit --preset, --stages and --detect)");
-  }
   const std::vector<std::string> stage_list =
       has_stages ? parse_repair_stages(args.get_string("stages")) : std::vector<std::string>{};
 
@@ -343,8 +264,6 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
 
   auto repair_config = repair_only_config(source_config);
   const auto user_overrides = parse_chain_params(args.get_string("params"));
-  reject_non_repair_overrides(user_overrides);
-  if (has_stages) reject_unlisted_stage_overrides(user_overrides, stage_list);
   std::vector<mastering::api::Param> overrides;
   for (const auto& stage : stage_list) overrides.push_back({"repair." + stage + ".enabled", 1.0});
   overrides.insert(overrides.end(), user_overrides.begin(), user_overrides.end());

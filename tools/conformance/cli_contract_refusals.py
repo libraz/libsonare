@@ -285,6 +285,152 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
         "--output cannot be combined with --detect",
     ),
     (
+        ["repair", "{input}", "--detect", "--explain"],
+        "--explain cannot be combined with --detect",
+    ),
+    (
+        ["repair", "{input}", "--detect", "--preset", "pop"],
+        "--preset cannot be combined with --detect",
+    ),
+    (
+        ["repair", "{input}", "--detect", "--stages", "declip"],
+        "--stages cannot be combined with --detect",
+    ),
+    (
+        ["repair", "{input}", "--detect", "--params", "repair.declip.enabled=1"],
+        "--params cannot be combined with --detect",
+    ),
+    (
+        ["repair", "{input}", "--detect", "--bits", "24"],
+        "--bits cannot be combined with --detect",
+    ),
+    (
+        ["repair", "{input}", "-o", "{output}", "--stages", "declip", "--preset", "pop"],
+        "--stages cannot be combined with --preset",
+    ),
+    (
+        ["repair", "{input}", "-o", "{output}", "--explain", "--stages", "declip"],
+        "--explain cannot be combined with --stages",
+    ),
+    (
+        ["repair", "{input}", "-o", "{output}", "--explain", "--preset", "pop"],
+        "--explain cannot be combined with --preset",
+    ),
+    (
+        ["repair", "{input}", "-o", "{output}", "--params", "eq.enabled=1"],
+        "--params key must be a repair.* field: eq.enabled",
+    ),
+    (
+        ["mastering", "{input}"],
+        "mastering needs --preset or --chain-config, or --assistant (which may take --preset); loudness-only normalisation is mastering-normalize-loudness",
+    ),
+    (
+        ["mastering", "{input}", "--chain-config", "{output}", "--preset", "pop"],
+        "--chain-config is mutually exclusive with --preset and --assistant",
+    ),
+    (
+        ["mastering", "{input}", "--chain-config", "{output}", "--assistant"],
+        "--chain-config is mutually exclusive with --preset and --assistant",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--target-lufs", "-14"],
+        "--target-lufs requires --assistant",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--ceiling-dbtp", "-1"],
+        "--ceiling-dbtp requires --assistant",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--enable-repair"],
+        "--enable-repair requires --assistant",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--explain"],
+        "--explain requires --assistant",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--target-platform", "streaming"],
+        "--target-platform requires --assistant",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--no-streaming-safe"],
+        "--no-streaming-safe requires --assistant",
+    ),
+    (
+        ["mastering", "{input}", "--preset", "pop", "--speech-mono-amount", "0.5"],
+        "--speech-mono-amount requires --assistant",
+    ),
+    (
+        [
+            "mastering-streaming",
+            "{input}",
+            "--platforms",
+            '[{"name":"a","target_lufs":-14,"ceilingDb":-1}]',
+        ],
+        "argument --platforms: unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)",
+    ),
+    (
+        [
+            "mastering-streaming",
+            "{input}",
+            "--platforms",
+            '[{"name":"a","target_lufs":-14,"ceiling_dbtp":-1,"z":0}]',
+        ],
+        "argument --platforms: unknown key platforms[0].z (expected name, target_lufs, ceiling_dbtp)",
+    ),
+    (
+        ["mastering-streaming", "{input}", "--platforms", '[{"name":"a","target_lufs":-14}]'],
+        "argument --platforms: platforms[0].ceiling_dbtp must be given",
+    ),
+    (
+        [
+            "mastering-streaming",
+            "{input}",
+            "--platforms",
+            '[{"name":1,"target_lufs":-14,"ceiling_dbtp":-1}]',
+        ],
+        "argument --platforms: platforms[0].name must be a string",
+    ),
+    (
+        [
+            "mastering-streaming",
+            "{input}",
+            "--platforms",
+            '[{"name":"","target_lufs":-14,"ceiling_dbtp":-1}]',
+        ],
+        "argument --platforms: platforms[0].name must not be empty",
+    ),
+    (
+        [
+            "mastering-streaming",
+            "{input}",
+            "--platforms",
+            '[{"name":"a","target_lufs":true,"ceiling_dbtp":-1}]',
+        ],
+        "argument --platforms: platforms[0].target_lufs must be a number",
+    ),
+    (
+        [
+            "mastering-streaming",
+            "{input}",
+            "--platforms",
+            '[{"name":"a","target_lufs":-14,"ceiling_dbtp":1e39}]',
+        ],
+        "argument --platforms: platforms[0].ceiling_dbtp must be finite",
+    ),
+    (
+        ["mastering-streaming", "{input}", "--platforms", '{"name":"a"}'],
+        "argument --platforms: must be a JSON array of platform objects",
+    ),
+    (
+        ["mastering-streaming", "{input}", "--platforms", "[1]"],
+        "argument --platforms: must be a JSON array of platform objects",
+    ),
+    (
+        ["mastering-streaming", "{input}", "--platforms", "[NaN]"],
+        "argument --platforms: must be a JSON array of platform objects",
+    ),
+    (
         ["project", "bounce", "{input}", "--channels", "3", "-o", "{output}"],
         "argument --channels: must be one of 1, 2, 6, 8; leave it out for the scene master's width",
     ),

@@ -290,7 +290,7 @@ def test_mastering_assistant_renders_the_chain_it_suggests(tmp_path, capsys, cha
         ("mastering", ["--assistant", "--chain-config", "chain.json"]),
     ],
 )
-def test_chain_config_conflicts_are_refused_by_name(tmp_path, command, extra) -> None:
+def test_chain_config_conflicts_are_refused_by_name(tmp_path, capsys, command, extra) -> None:
     source = tmp_path / "input.wav"
     _write_source(source)
     config = tmp_path / "chain.json"
@@ -301,9 +301,11 @@ def test_chain_config_conflicts_are_refused_by_name(tmp_path, command, extra) ->
         *(str(config) if item == "chain.json" else item for item in extra),
     ]
 
-    with pytest.raises(ValueError) as caught:
+    # A usage error, refused before the input is read.
+    with pytest.raises(SystemExit) as caught:
         _run(argv)
-    message = str(caught.value)
+    assert caught.value.code == 2
+    message = capsys.readouterr().err
     assert "mutually exclusive" in message
     for option in ("--preset", "--chain-config", "--assistant"):
         assert option in message
@@ -340,16 +342,17 @@ def test_the_reported_mode_is_the_token_the_native_cli_reports(tmp_path, capsys)
     assert 'mode = "chainConfig";' in _NATIVE_HANDLER.read_text(encoding="utf-8")
 
 
-def test_a_loudness_target_beside_a_chain_config_is_refused(tmp_path) -> None:
+def test_a_loudness_target_beside_a_chain_config_is_refused(tmp_path, capsys) -> None:
     """The loudness targets reach only the assistant, so a chain config refuses them."""
     source = tmp_path / "input.wav"
     _write_source(source)
     config = tmp_path / "chain.json"
     config.write_text(json.dumps({"version": 2, "params": {"loudness.enabled": True}}), "utf-8")
 
-    with pytest.raises(ValueError) as caught:
+    with pytest.raises(SystemExit) as caught:
         _run(["mastering", str(source), "--chain-config", str(config), "--target-lufs", "-12"])
-    assert str(caught.value) == "--target-lufs requires --assistant"
+    assert caught.value.code == 2
+    assert "error: --target-lufs requires --assistant" in capsys.readouterr().err
 
 
 def test_mastering_chain_config_has_no_second_spelling() -> None:
@@ -377,12 +380,13 @@ def test_native_front_end_declares_the_same_spelling() -> None:
     registry = _NATIVE_REGISTRY.read_text(encoding="utf-8")
     assert 'path_value("chain-config")' in registry
     assert 'string_value("config-out", "")' in registry
+    # The selector is settled by the command's validator, before the input is read.
+    assert '"--chain-config is mutually exclusive with --preset and --assistant"' in registry
 
     handler = _NATIVE_HANDLER.read_text(encoding="utf-8")
     # Written through the chain serializer on the config in hand, which is the
     # one form `--chain-config` parses on either front-end.
     assert "mastering::api::chain_config_to_json(suggestion.config)" in handler
-    assert '"--chain-config is mutually exclusive with --preset and --assistant"' in handler
     # The chain-config selector is read under its canonical spelling.
     assert 'args.has("chain-config")' in handler
     assert 'args.get_string("chain-config")' in handler

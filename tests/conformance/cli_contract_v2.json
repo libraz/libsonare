@@ -7982,7 +7982,7 @@
             "{audio}",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -15567,13 +15567,13 @@
             "[{\"name\":\"custom\",\"target_lufs\":-14,\"ceilingDb\":-1}]",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)"
+            "argument --platforms: unknown key platforms[0].ceilingDb (renamed to platforms[0].ceiling_dbtp)"
           ]
         },
         {
@@ -15585,13 +15585,13 @@
             "[{\"name\":\"custom\",\"target_lufs\":-14}]",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "platforms[0].ceiling_dbtp must be given"
+            "argument --platforms: platforms[0].ceiling_dbtp must be given"
           ]
         }
       ],

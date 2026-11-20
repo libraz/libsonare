@@ -9,6 +9,7 @@ add_executable(sonare
   cli/sonare_cli_features_metering.cpp
   cli/sonare_cli_json.cpp
   cli/sonare_cli_mastering.cpp
+  cli/sonare_cli_mastering_args.cpp
   cli/sonare_cli_mixing.cpp
   cli/sonare_cli_option_validation.cpp
   cli/sonare_cli_playback.cpp
