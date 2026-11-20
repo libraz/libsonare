@@ -473,16 +473,16 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
       err != SONARE_OK) {
     return err;
   }
-  PitchClass label_root = PitchClass::C;
-  Mode label_mode = Mode::Major;
-  (void)from_c_pitch_class(key_root, &label_root);
-  (void)from_c_mode(key_mode, &label_mode);
   SONARE_C_REQUIRE_NONNULL(chords);
   SONARE_C_REQUIRE_NONNULL(roman);
   SONARE_C_REQUIRE_NONNULL(functions);
 
   return run_offline("chord_functional_analysis", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
+                       PitchClass label_root = PitchClass::C;
+                       Mode label_mode = Mode::Major;
+                       (void)from_c_pitch_class(key_root, &label_root);
+                       (void)from_c_mode(key_mode, &label_mode);
                        const ChordConfig config = chord_config_from_options(*options);
 
                        ChordAnalyzer analyzer(audio, config);

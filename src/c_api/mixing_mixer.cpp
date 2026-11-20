@@ -159,19 +159,24 @@ SonareError refuse_duplicate_id(const char* thing) {
 
 // Names the member list element that is NULL; the text is built on the refusal path only.
 SonareError refuse_null_member(size_t index) {
-  return sonare_c_detail::refuse_null(("members[" + std::to_string(index) + "]").c_str());
+  return sonare_c_detail::run_validation([&] {
+    check::refuse(sonare::util::json::schema::index_path("members", index).c_str(),
+                  sonare::util::refusal::kNonNullPredicate);
+  });
 }
 
 // Names the per-strip channel pointer that is NULL; built on the refusal path only.
 SonareError refuse_null_channel(const char* array, size_t index) {
-  return sonare_c_detail::refuse_null(
-      (std::string(array) + "[" + std::to_string(index) + "]").c_str());
+  return sonare_c_detail::run_validation([&] {
+    check::refuse(sonare::util::json::schema::index_path(array, index).c_str(),
+                  sonare::util::refusal::kNonNullPredicate);
+  });
 }
 
 // Names the per-strip channel whose block carries a NaN or infinity.
 SonareError refuse_non_finite_block(const char* array, size_t index) {
   return sonare_c_detail::run_validation([&] {
-    check::refuse((std::string(array) + "[" + std::to_string(index) + "]").c_str(),
+    check::refuse(sonare::util::json::schema::index_path(array, index).c_str(),
                   "must contain only finite samples");
   });
 }

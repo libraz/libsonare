@@ -544,7 +544,6 @@ SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned
     return sonare_c_detail::run_validation(
         [] { check::refuse_unknown_id("param_id", "a parameter", "insert"); });
   }
-  SONARE_C_CATCH
   if (const SonareError err = require_finite(value, "value"); err != SONARE_OK) return err;
   sonare::mixing::AutomationCurveType curve_enum;
   if (const SonareError err = require_curve(curve, &curve_enum); err != SONARE_OK) return err;
@@ -560,6 +559,7 @@ SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned
       return SONARE_ERROR_OUT_OF_MEMORY;
   }
   return SONARE_ERROR_UNKNOWN;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_strip_schedule_fader_automation(SonareStrip* strip, int64_t sample_pos,
