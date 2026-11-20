@@ -348,7 +348,7 @@ describe('repair: session', () => {
       });
     expect(earlier).toThrow(expect.objectContaining({ code: sonare.ErrorCode.InvalidFormat }));
     expect(earlier).toThrow(
-      /unknown key \[0\]\.clipThreshold \(renamed to \[0\]\.clipThresholdDb\)/,
+      /unknown key stages\[0\]\.clipThreshold \(renamed to stages\[0\]\.clipThresholdDb\)/,
     );
     // @ts-expect-error a misspelt stage setting is a type error
     const _bad: MasteringRepairStage = { stage: 'declick', thresholdd: 1 };

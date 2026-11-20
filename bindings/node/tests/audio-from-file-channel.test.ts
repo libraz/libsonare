@@ -85,12 +85,15 @@ describe('Audio.fromFileChannel', () => {
         /^Audio\.fromFileChannel: (Audio::from_file_channel: channel index is outside the file's channels|Invalid parameter)$/;
       for (const call of [
         () => Audio.fromFileChannel(stereo, 2),
-        () => Audio.fromFileChannel(stereo, -1),
         () => Audio.fromFileChannel(mono, 1),
       ]) {
         expect(call).toThrow(RangeError);
         expect(call).toThrow(outOfRange);
       }
+      // A negative index is refused before the file is read.
+      expect(() => Audio.fromFileChannel(stereo, -1)).toThrow(
+        new RangeError('Audio.fromFileChannel: channelIndex must be an integer in [0, 2147483647]'),
+      );
 
       // The refusals above are the file's channel count talking, not a blanket
       // rejection: the channels the file does have still load.
