@@ -203,3 +203,14 @@ TEST_CASE("an empty string, an unknown id and a stated predicate are refused by 
   CHECK(std::string(stated.what()) == "layout must name a declared value");
   CHECK_FALSE(stated.shape_error());
 }
+
+TEST_CASE("a finite-only double is refused by name, and an indexed member names its element",
+          "[util][refusal]") {
+  CHECK_NOTHROW(check::finite(1.0e300, "gain_db"));
+  CHECK(refusal_text([] { check::finite(NAN, "gain_db"); }) == "gain_db must be finite");
+  CHECK(refusal_text([] { check::finite(-INFINITY, "gain_db"); }) == "gain_db must be finite");
+  CHECK(check::indexed_subject("lanes", 2, "send_count") == "lanes[2].send_count");
+  const auto indexed = caught_refusal(
+      [] { check::finite(INFINITY, check::indexed_subject("bands", 0, "gain_db").c_str()); });
+  CHECK(std::string(check::camel_spelled(indexed).what()) == "bands[0].gainDb must be finite");
+}

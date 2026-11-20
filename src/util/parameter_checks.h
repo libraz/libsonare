@@ -91,6 +91,19 @@ inline void finite_float(float value, const char* subject) {
   }
 }
 
+/// @brief Refuses @p value unless it is finite, for a double member with no narrower domain.
+inline void finite(double value, const char* subject) {
+  if (!std::isfinite(value)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            refusal::kFiniteDoublePredicate);
+  }
+}
+
+/// @brief The subject "<array>[<index>].<field>" naming one member of an array element.
+inline std::string indexed_subject(const char* array, std::size_t index, const char* field) {
+  return std::string(array) + "[" + std::to_string(index) + "]." + field;
+}
+
 /// @brief Refuses @p value unless it is in [lo, hi].
 inline void integer_in_range(long long value, long long lo, long long hi, const char* subject) {
   if (value < lo || value > hi) {

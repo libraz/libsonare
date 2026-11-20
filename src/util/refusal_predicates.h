@@ -114,6 +114,9 @@ inline std::string less_than_predicate(double bound) {
 inline constexpr const char* kFloatRangePredicate =
     "must be finite and in [-3.4028235e38, 3.4028235e38]";
 
+/// @brief The domain of a value held as a double, for one with no narrower declared range.
+inline constexpr const char* kFiniteDoublePredicate = "must be finite";
+
 /// @brief "must be an integer in [lo, hi]".
 inline std::string integer_range_predicate(double lo, double hi) {
   return "must be an integer in [" + bound_text(lo) + ", " + bound_text(hi) + "]";
