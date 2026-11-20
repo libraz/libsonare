@@ -18,7 +18,7 @@ SonareError refuse_matrix(const float* values, const char* values_name, int rows
     if (static_cast<size_t>(rows) > sonare_c_detail::kMaxBufferSize / static_cast<size_t>(cols)) {
       check::refuse_relation(
           {rows_name, cols_name},
-          "{0} * {1} must be at most " + sonare::util::refusal::bound_text(
+          "{0} * {1} must be at most " + sonare::util::refusal::integer_bound_text(
                                              static_cast<double>(sonare_c_detail::kMaxBufferSize)));
     }
   });
@@ -52,7 +52,7 @@ SonareError sonare_segment_cross_similarity(const float* x, int x_rows, int x_co
                                             int y_rows, int y_cols, int k, const char* metric,
                                             const char* mode, SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   if (const SonareError err = refuse_matrix(x, "x", x_rows, "x_rows", x_cols, "x_cols");
       err != SONARE_OK) {
     return err;
@@ -86,7 +86,7 @@ SonareError sonare_segment_recurrence_matrix(const float* data, int rows, int co
                                              int width, int sym, const char* metric,
                                              const char* mode, SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   if (const SonareError err = refuse_matrix(data, "data", rows, "rows", cols, "cols");
       err != SONARE_OK) {
     return err;
@@ -111,7 +111,7 @@ SonareError sonare_segment_recurrence_matrix(const float* data, int rows, int co
 SonareError sonare_segment_recurrence_to_lag(const float* recurrence, int n, int pad,
                                              SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   if (const SonareError err = refuse_matrix(recurrence, "recurrence", n, "n", n, "n");
       err != SONARE_OK) {
     return err;
@@ -129,7 +129,7 @@ SonareError sonare_segment_recurrence_to_lag(const float* recurrence, int n, int
 SonareError sonare_segment_lag_to_recurrence(const float* lag, int n_rows, int n_lags,
                                              SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   // The product is symmetric, so the extents are refused in parameter order.
   if (const SonareError err = refuse_matrix(lag, "lag", n_rows, "n_rows", n_lags, "n_lags");
       err != SONARE_OK) {
@@ -145,7 +145,7 @@ SonareError sonare_segment_subsegment(const float* data, int rows, int cols, con
                                       size_t boundary_count, int n_segments,
                                       SonareSegmentIndices* out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   if (const SonareError err = refuse_matrix(data, "data", rows, "rows", cols, "cols");
       err != SONARE_OK) {
     return err;
@@ -167,7 +167,7 @@ SonareError sonare_segment_subsegment(const float* data, int rows, int cols, con
 SonareError sonare_segment_agglomerative(const float* data, int rows, int cols, int k,
                                          const char* linkage, SonareSegmentIndices* out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   if (const SonareError err = refuse_matrix(data, "data", rows, "rows", cols, "cols");
       err != SONARE_OK) {
     return err;
@@ -186,7 +186,7 @@ SonareError sonare_segment_agglomerative(const float* data, int rows, int cols, 
 SonareError sonare_segment_path_enhance(const float* recurrence, int n, int win, int max_ratio,
                                         int min_ratio, int n_filters, SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   if (const SonareError err = refuse_matrix(recurrence, "recurrence", n, "n", n, "n");
       err != SONARE_OK) {
     return err;

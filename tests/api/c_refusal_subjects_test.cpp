@@ -319,7 +319,7 @@ TEST_CASE("the chord entries refuse an option member and a chord element by its 
   CHECK(sonare_chord_functions(chords, std::numeric_limits<size_t>::max() / 2, SONARE_PITCH_C,
                                SONARE_MODE_MAJOR, &roman,
                                &functions) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "count must be an integer in [0, 5e8]");
+  CHECK(last_message() == "count must be an integer in [0, 500000000]");
   CHECK(sonare_chord_functions(chords, 1, SONARE_PITCH_C, static_cast<SonareMode>(-1), &roman,
                                &functions) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "key_mode must be an integer in [0, 6]");
@@ -361,7 +361,7 @@ TEST_CASE("the segment entries refuse each matrix argument by its name", "[c_api
   CHECK(sonare_segment_recurrence_matrix(features.data(), 1 << 16, 1 << 16, 0, 1, 1, "euclidean",
                                          "connectivity",
                                          &matrix) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "rows * cols must be at most 5e8");
+  CHECK(last_message() == "rows * cols must be at most 500000000");
   CHECK(sonare_segment_recurrence_matrix(features.data(), 2, 3, 0, -1, 1, "euclidean",
                                          "connectivity",
                                          &matrix) == SONARE_ERROR_INVALID_PARAMETER);

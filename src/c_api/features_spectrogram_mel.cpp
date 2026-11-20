@@ -25,11 +25,7 @@ MelConfig make_mel_config(int n_fft, int hop_length, int n_mels, float fmin, flo
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
                         int hop_length, SonareStftResult* out) {
   SONARE_C_API_ENTRY;
-
-  if (out != nullptr) {
-    out->magnitude = nullptr;
-    out->power = nullptr;
-  }
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("stft", "samples", samples, length, sample_rate,
@@ -66,9 +62,7 @@ SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
   // Zero every out param up front, not just the owned out_db pointer, so a
   // validate_audio_params rejection inside run_offline (which skips the body
   // below) never leaves *out_n_bins / *out_n_frames as caller stack garbage.
-  if (out_n_bins != nullptr) *out_n_bins = 0;
-  if (out_n_frames != nullptr) *out_n_frames = 0;
-  if (out_db != nullptr) *out_db = nullptr;
+  SONARE_C_ZERO_OUTS(out_n_bins, out_n_frames, out_db);
   SONARE_C_REQUIRE_NONNULL(out_n_bins);
   SONARE_C_REQUIRE_NONNULL(out_n_frames);
   SONARE_C_REQUIRE_NONNULL(out_db);
@@ -98,7 +92,10 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
                                       float fmax_hz, int htk, SonareMelResult* out) {
   SONARE_C_API_ENTRY;
 
-  if (out != nullptr) *out = {};
+  if (out != nullptr) {
+    *out = {};
+    out->struct_version = SONARE_MEL_RESULT_VERSION;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("mel_spectrogram_ex", "samples", samples, length, sample_rate,
@@ -145,7 +142,10 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
                            int htk, float lifter, SonareMfccResult* out) {
   SONARE_C_API_ENTRY;
 
-  if (out != nullptr) *out = {};
+  if (out != nullptr) {
+    *out = {};
+    out->struct_version = SONARE_MFCC_RESULT_VERSION;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
@@ -183,7 +183,7 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
 SonareError sonare_mel_delta(const float* features, int n_features, int n_frames, int width,
                              float** out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(features);
   if (const SonareError err = run_validation([&] {
         namespace check = sonare::util::check;
@@ -193,7 +193,7 @@ SonareError sonare_mel_delta(const float* features, int n_features, int n_frames
         if (n_features > kIntMax / n_frames) {
           check::refuse_relation(
               {"n_features", "n_frames"},
-              "{0} * {1} must be at most " + sonare::util::refusal::bound_text(kIntMax));
+              "{0} * {1} must be at most " + sonare::util::refusal::integer_bound_text(kIntMax));
         }
         check::odd_integer_in_range(width, 3, kIntMax, "width");
       });
