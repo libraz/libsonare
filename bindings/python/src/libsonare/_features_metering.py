@@ -70,11 +70,15 @@ def _oversample_factor(oversample_factor: int | None) -> int | float:
     return _resolve_zero_default(oversample_factor, "oversample_factor")
 
 
-def _clipping_args(threshold_db: float | None, min_region_samples: int | None) -> tuple[float, int]:
+def _clipping_args(
+    threshold_db: float | None, min_region_samples: int | None
+) -> tuple[float, ctypes.c_size_t]:
     """The clipping arguments, an omitted level as the C ABI's NaN and an omitted run as 1."""
     return (
         math.nan if threshold_db is None else _narrow_float(threshold_db, "threshold_db"),
-        1 if min_region_samples is None else min_region_samples,
+        ctypes.c_size_t(1)
+        if min_region_samples is None
+        else _to_c_size_t(min_region_samples, "min_region_samples"),
     )
 
 
@@ -452,7 +456,7 @@ def metering_detect_clipping(
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         _domain_float(c_threshold, "threshold_db"),
-        _to_c_size_t(c_min_region, "min_region_samples"),
+        c_min_region,
         ctypes.byref(out),
     )
     _check(rc)

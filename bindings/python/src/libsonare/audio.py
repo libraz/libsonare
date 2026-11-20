@@ -1317,7 +1317,7 @@ class Audio:
         rc = self._lib.sonare_audio_detect_clipping(
             handle,
             _domain_float(c_threshold, "threshold_db"),
-            _to_c_size_t(c_min_region, "min_region_samples"),
+            c_min_region,
             ctypes.byref(out),
         )
         _check(rc)
