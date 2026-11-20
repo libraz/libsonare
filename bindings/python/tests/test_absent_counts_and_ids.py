@@ -135,7 +135,7 @@ def test_onset_threshold_is_none_for_the_adaptive_path_and_zero_is_refused() -> 
     assert libsonare.detect_onsets(tone, SR).dtype == np.float32
     with pytest.raises(
         SonareValueError,
-        match="^detect_onsets: threshold must not be 0; omit it for the adaptive threshold$",
+        match="^detect_onsets: threshold must be finite and greater than 0$",
     ):
         libsonare.detect_onsets(tone, SR, threshold=0.0)
 

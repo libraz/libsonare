@@ -94,7 +94,6 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
 
   if (out != nullptr) {
     *out = {};
-    out->struct_version = SONARE_MEL_RESULT_VERSION;
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -104,7 +103,6 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
                            make_mel_config(n_fft, hop_length, n_mels, fmin_hz, fmax_hz, htk);
                        MelSpectrogram mel = MelSpectrogram::compute(audio, config);
 
-                       out->struct_version = SONARE_MEL_RESULT_VERSION;
                        out->n_mels = mel.n_mels();
                        out->n_frames = mel.n_frames();
                        out->sample_rate = mel.sample_rate();
@@ -144,7 +142,6 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
 
   if (out != nullptr) {
     *out = {};
-    out->struct_version = SONARE_MFCC_RESULT_VERSION;
   }
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -154,7 +151,6 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
         MelSpectrogram mel = MelSpectrogram::compute(audio, config);
         std::vector<float> mfcc_data = mel.mfcc(n_mfcc, lifter);
 
-        out->struct_version = SONARE_MFCC_RESULT_VERSION;
         out->n_mfcc = n_mfcc;
         out->n_frames = mel.n_frames();
         out->sample_rate = mel.sample_rate();

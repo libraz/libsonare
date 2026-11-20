@@ -321,73 +321,79 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "n_fft",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "n_fft",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "kernel_size",
+        "name": "hop_length",
         "offset": 8,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "threshold",
+        "kind": "signed",
+        "name": "kernel_size",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "absolute_threshold",
+        "name": "threshold",
         "offset": 16,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "n_mfcc",
+        "kind": "float",
+        "name": "absolute_threshold",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_chroma",
+        "name": "n_mfcc",
         "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_chroma",
+        "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
         "name": "peak_distance_sec",
-        "offset": 28,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "use_mfcc",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "use_chroma",
+        "name": "use_mfcc",
         "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_chroma",
+        "offset": 40,
         "size": 4
       },
       {
         "kind": "float",
         "name": "reference_window_sec",
-        "offset": 40,
+        "offset": 44,
         "size": 4
       }
     ],
-    "size": 44
+    "size": 48
   },
   "SonareBoundaryResult": {
     "align": 8,
@@ -633,15 +639,9 @@
     "align": 8,
     "fields": [
       {
-        "kind": "signed",
-        "name": "struct_version",
-        "offset": 0,
-        "size": 4
-      },
-      {
         "kind": "float",
         "name": "tuning_cents",
-        "offset": 4,
+        "offset": 0,
         "size": 4
       },
       {
@@ -663,8 +663,8 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "struct_version",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
@@ -987,56 +987,56 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "threshold_db",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "ratio",
+        "name": "threshold_db",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "attack_ms",
+        "name": "ratio",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "release_ms",
+        "name": "attack_ms",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "knee_db",
+        "name": "release_ms",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "makeup_gain_db",
+        "name": "knee_db",
         "offset": 20,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "auto_makeup",
+        "kind": "float",
+        "name": "makeup_gain_db",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "detector",
+        "name": "auto_makeup",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "sidechain_high_pass_enabled",
+        "name": "detector",
         "offset": 32,
         "size": 4
       },
@@ -1179,37 +1179,43 @@
     "align": 8,
     "fields": [
       {
-        "kind": "float",
-        "name": "threshold",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "neighbor_ratio",
+        "name": "threshold",
         "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "neighbor_ratio",
+        "offset": 8,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "max_click_samples",
-        "offset": 8,
+        "offset": 16,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "lpc_order",
-        "offset": 16,
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
         "name": "residual_ratio",
-        "offset": 20,
+        "offset": 28,
         "size": 4
       }
     ],
-    "size": 24
+    "size": 32
   },
   "SonareDeclickReport": {
     "align": 8,
@@ -1311,31 +1317,37 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "clip_threshold_db",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "lpc_order",
+        "kind": "float",
+        "name": "clip_threshold_db",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "iterations",
+        "name": "lpc_order",
         "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "iterations",
+        "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
         "name": "lpc_blend",
-        "offset": 12,
+        "offset": 16,
         "size": 4
       }
     ],
-    "size": 16
+    "size": 20
   },
   "SonareDeclipReport": {
     "align": 8,
@@ -1491,25 +1503,31 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "threshold",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "mode",
+        "kind": "float",
+        "name": "threshold",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "levels",
+        "name": "mode",
         "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "levels",
+        "offset": 12,
         "size": 4
       }
     ],
-    "size": 12
+    "size": 16
   },
   "SonareDecrackleReport": {
     "align": 8,
@@ -1611,61 +1629,67 @@
     "align": 4,
     "fields": [
       {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
         "kind": "float",
         "name": "fundamental_hz",
-        "offset": 0,
+        "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "harmonics",
-        "offset": 4,
+        "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
         "name": "q",
-        "offset": 8,
+        "offset": 12,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "adaptive",
-        "offset": 12,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "search_range_hz",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "adaptation",
+        "name": "search_range_hz",
         "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "adaptation",
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "frame_size",
-        "offset": 24,
+        "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
         "name": "pll_bandwidth",
-        "offset": 28,
+        "offset": 32,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "mode",
-        "offset": 32,
+        "offset": 36,
         "size": 4
       }
     ],
-    "size": 36
+    "size": 40
   },
   "SonareDehumReport": {
     "align": 4,
@@ -1761,73 +1785,79 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "mode",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "noise_estimator",
+        "name": "mode",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_fft",
+        "name": "noise_estimator",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "n_fft",
         "offset": 12,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "dd_alpha",
+        "kind": "signed",
+        "name": "hop_length",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "reduction_db",
+        "name": "dd_alpha",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "over_subtraction",
+        "name": "reduction_db",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "spectral_floor",
+        "name": "over_subtraction",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "noise_estimation_quantile",
+        "name": "spectral_floor",
         "offset": 32,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "speech_presence_gain",
+        "kind": "float",
+        "name": "noise_estimation_quantile",
         "offset": 36,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "gain_smoothing",
+        "name": "speech_presence_gain",
         "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "gain_smoothing",
+        "offset": 44,
         "size": 4
       }
     ],
-    "size": 44
+    "size": 48
   },
   "SonareDenoiseReport": {
     "align": 4,
@@ -1917,79 +1947,85 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "threshold",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "attenuation",
+        "name": "threshold",
         "offset": 4,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "n_fft",
+        "kind": "float",
+        "name": "attenuation",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "n_fft",
         "offset": 12,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "t60_sec",
+        "kind": "signed",
+        "name": "hop_length",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "late_delay_ms",
+        "name": "t60_sec",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "over_subtraction",
+        "name": "late_delay_ms",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "spectral_floor",
+        "name": "over_subtraction",
         "offset": 28,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "wpe_enabled",
+        "kind": "float",
+        "name": "spectral_floor",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "wpe_iterations",
+        "name": "wpe_enabled",
         "offset": 36,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "wpe_taps",
+        "name": "wpe_iterations",
         "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "wpe_taps",
+        "offset": 44,
         "size": 4
       },
       {
         "kind": "float",
         "name": "wpe_strength",
-        "offset": 44,
+        "offset": 48,
         "size": 4
       }
     ],
-    "size": 48
+    "size": 52
   },
   "SonareDereverbReport": {
     "align": 4,
@@ -3399,49 +3435,55 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "threshold_db",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "attack_ms",
+        "name": "threshold_db",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "release_ms",
+        "name": "attack_ms",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "range_db",
+        "name": "release_ms",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "hold_ms",
+        "name": "range_db",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "close_threshold_db",
+        "name": "hold_ms",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "key_high_pass_hz",
+        "name": "close_threshold_db",
         "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "key_high_pass_hz",
+        "offset": 28,
         "size": 4
       }
     ],
-    "size": 28
+    "size": 32
   },
   "SonareHpssResult": {
     "align": 8,
@@ -3915,37 +3957,43 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "target_lufs",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "ceiling_dbtp",
+        "name": "target_lufs",
         "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "ceiling_dbtp",
+        "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "true_peak_oversample",
-        "offset": 8,
+        "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
         "name": "release_ms",
-        "offset": 12,
+        "offset": 16,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "apply_gain_at_input_rate",
-        "offset": 16,
+        "offset": 20,
         "size": 4
       }
     ],
-    "size": 20
+    "size": 24
   },
   "SonareMasteringLoudnessSummary": {
     "align": 4,
@@ -4174,62 +4222,56 @@
     "fields": [
       {
         "kind": "signed",
-        "name": "struct_version",
+        "name": "n_mels",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_mels",
+        "name": "n_frames",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_frames",
+        "name": "sample_rate",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "sample_rate",
+        "name": "hop_length",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
-        "offset": 16,
-        "size": 4
-      },
-      {
-        "kind": "signed",
         "name": "n_fft",
-        "offset": 20,
+        "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
         "name": "fmin_hz",
-        "offset": 24,
+        "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
         "name": "fmax_hz",
-        "offset": 28,
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "htk",
-        "offset": 32,
+        "offset": 28,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "is_db",
-        "offset": 36,
+        "offset": 32,
         "size": 4
       },
       {
@@ -4317,49 +4359,55 @@
     "align": 4,
     "fields": [
       {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
         "kind": "aggregate",
         "name": "candidate_numerators",
-        "offset": 0,
+        "offset": 4,
         "size": 64
       },
       {
         "kind": "signed",
         "name": "candidate_numerator_count",
-        "offset": 64,
+        "offset": 68,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "denominator",
-        "offset": 68,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "downbeat_weight",
         "offset": 72,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "measure_weight",
+        "name": "downbeat_weight",
         "offset": 76,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "subdivision_weight",
+        "name": "measure_weight",
         "offset": 80,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "compound_subdivision_threshold",
+        "name": "subdivision_weight",
         "offset": 84,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "compound_subdivision_threshold",
+        "offset": 88,
         "size": 4
       }
     ],
-    "size": 88
+    "size": 92
   },
   "SonareMeterTelemetryRecord": {
     "align": 8,
@@ -4792,74 +4840,68 @@
     "fields": [
       {
         "kind": "signed",
-        "name": "struct_version",
+        "name": "n_mfcc",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_mfcc",
+        "name": "n_frames",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_frames",
+        "name": "sample_rate",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "sample_rate",
+        "name": "hop_length",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "n_fft",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_fft",
-        "offset": 20,
-        "size": 4
-      },
-      {
-        "kind": "signed",
         "name": "n_mels",
-        "offset": 24,
+        "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
         "name": "fmin_hz",
-        "offset": 28,
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
         "name": "fmax_hz",
-        "offset": 32,
+        "offset": 28,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "htk",
-        "offset": 36,
+        "offset": 32,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "is_db",
-        "offset": 40,
+        "offset": 36,
         "size": 4
       },
       {
         "kind": "float",
         "name": "lifter",
-        "offset": 44,
+        "offset": 40,
         "size": 4
       },
       {
@@ -5181,8 +5223,8 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "struct_version",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
@@ -5763,79 +5805,85 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "n_fft",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "n_fft",
         "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
         "name": "threshold",
-        "offset": 8,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "pre_max",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "post_max",
+        "name": "pre_max",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "pre_avg",
+        "name": "post_max",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "post_avg",
+        "name": "pre_avg",
         "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "post_avg",
+        "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
         "name": "delta",
-        "offset": 28,
+        "offset": 32,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "wait",
-        "offset": 32,
+        "offset": 36,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "backtrack",
-        "offset": 36,
+        "offset": 40,
         "size": 1
       },
       {
         "kind": "aggregate",
         "name": "reserved",
-        "offset": 37,
+        "offset": 41,
         "size": 3
       },
       {
         "kind": "signed",
         "name": "backtrack_range",
-        "offset": 40,
+        "offset": 44,
         "size": 4
       }
     ],
-    "size": 44
+    "size": 48
   },
   "SonareParameterInfo": {
     "align": 4,
@@ -8991,31 +9039,37 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "n_fft",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "n_fft",
         "offset": 4,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "min_section_sec",
+        "kind": "signed",
+        "name": "hop_length",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "threshold",
+        "name": "min_section_sec",
         "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "threshold",
+        "offset": 16,
         "size": 4
       }
     ],
-    "size": 16
+    "size": 20
   },
   "SonareSectionResult": {
     "align": 8,
@@ -9441,127 +9495,133 @@
     "align": 8,
     "fields": [
       {
-        "kind": "signed",
-        "name": "sample_rate",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_fft",
+        "name": "sample_rate",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "n_fft",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_mels",
+        "name": "hop_length",
         "offset": 12,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "fmin_hz",
+        "kind": "signed",
+        "name": "n_mels",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "fmax_hz",
+        "name": "fmin_hz",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "reference_hz",
+        "name": "fmax_hz",
         "offset": 24,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "compute_magnitude",
+        "kind": "float",
+        "name": "reference_hz",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "compute_mel",
+        "name": "compute_magnitude",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "compute_chroma",
+        "name": "compute_mel",
         "offset": 36,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "compute_onset",
+        "name": "compute_chroma",
         "offset": 40,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "compute_spectral",
+        "name": "compute_onset",
         "offset": 44,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "emit_every_n_frames",
+        "name": "compute_spectral",
         "offset": 48,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "magnitude_downsample",
+        "name": "emit_every_n_frames",
         "offset": 52,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "magnitude_downsample",
+        "offset": 56,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "max_pending_frames",
-        "offset": 56,
+        "offset": 64,
         "size": 8
       },
       {
         "kind": "float",
         "name": "key_update_interval_sec",
-        "offset": 64,
+        "offset": 72,
         "size": 4
       },
       {
         "kind": "float",
         "name": "bpm_update_interval_sec",
-        "offset": 68,
+        "offset": 76,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "window",
-        "offset": 72,
+        "offset": 80,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "output_format",
-        "offset": 76,
+        "offset": 84,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "max_progression_entries",
-        "offset": 80,
+        "offset": 88,
         "size": 8
       }
     ],
-    "size": 88
+    "size": 96
   },
   "SonareStreamFrames": {
     "align": 8,
@@ -9819,37 +9879,43 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "mel_db_min",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "mel_db_max",
+        "name": "mel_db_min",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "onset_max",
+        "name": "mel_db_max",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "rms_max",
+        "name": "onset_max",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "centroid_max",
+        "name": "rms_max",
         "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "centroid_max",
+        "offset": 20,
         "size": 4
       }
     ],
-    "size": 20
+    "size": 24
   },
   "SonareStreamStats": {
     "align": 8,
@@ -10755,8 +10821,8 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "struct_version",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
@@ -10869,15 +10935,9 @@
     "align": 8,
     "fields": [
       {
-        "kind": "signed",
-        "name": "struct_version",
-        "offset": 0,
-        "size": 4
-      },
-      {
         "kind": "float",
         "name": "tuning_cents",
-        "offset": 4,
+        "offset": 0,
         "size": 4
       },
       {
@@ -10911,67 +10971,73 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "attack_gain_db",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "sustain_gain_db",
+        "name": "attack_gain_db",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "fast_attack_ms",
+        "name": "sustain_gain_db",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "fast_release_ms",
+        "name": "fast_attack_ms",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "slow_attack_ms",
+        "name": "fast_release_ms",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "slow_release_ms",
+        "name": "slow_attack_ms",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "sensitivity",
+        "name": "slow_release_ms",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_gain_db",
+        "name": "sensitivity",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "gain_smoothing_ms",
+        "name": "max_gain_db",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "lookahead_ms",
+        "name": "gain_smoothing_ms",
         "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "lookahead_ms",
+        "offset": 40,
         "size": 4
       }
     ],
-    "size": 40
+    "size": 44
   },
   "SonareTransportState": {
     "align": 8,
@@ -11109,9 +11175,15 @@
     "align": 8,
     "fields": [
       {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
         "kind": "float",
         "name": "threshold_db",
-        "offset": 0,
+        "offset": 4,
         "size": 4
       },
       {

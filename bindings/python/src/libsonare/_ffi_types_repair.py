@@ -10,7 +10,10 @@ from ._cstruct import CStruct
 class SonareDeclickConfig(CStruct):
     """Maps to SonareDeclickConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_declick_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("threshold", ctypes.c_float),
         ("neighbor_ratio", ctypes.c_float),
         ("max_click_samples", ctypes.c_size_t),
@@ -73,7 +76,10 @@ SONARE_COMPRESSOR_DETECTOR_LOG_RMS = 2
 class SonareCompressorConfig(CStruct):
     """Maps to SonareCompressorConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_compressor_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("threshold_db", ctypes.c_float),
         ("ratio", ctypes.c_float),
         ("attack_ms", ctypes.c_float),
@@ -82,7 +88,6 @@ class SonareCompressorConfig(CStruct):
         ("makeup_gain_db", ctypes.c_float),
         ("auto_makeup", ctypes.c_int),
         ("detector", ctypes.c_int),
-        ("sidechain_high_pass_enabled", ctypes.c_int),
         ("sidechain_high_pass_hz", ctypes.c_float),
         ("pdr_time_ms", ctypes.c_float),
         ("pdr_release_scale", ctypes.c_float),
@@ -92,7 +97,10 @@ class SonareCompressorConfig(CStruct):
 class SonareGateConfig(CStruct):
     """Maps to SonareGateConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_gate_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("threshold_db", ctypes.c_float),
         ("attack_ms", ctypes.c_float),
         ("release_ms", ctypes.c_float),
@@ -106,7 +114,10 @@ class SonareGateConfig(CStruct):
 class SonareTransientShaperConfig(CStruct):
     """Maps to SonareTransientShaperConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_transient_shaper_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("attack_gain_db", ctypes.c_float),
         ("sustain_gain_db", ctypes.c_float),
         ("fast_attack_ms", ctypes.c_float),
@@ -135,7 +146,10 @@ SONARE_DENOISE_NOISE_ESTIMATOR_SPP = 3
 class SonareDenoiseClassicalConfig(CStruct):
     """Maps to SonareDenoiseClassicalConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_denoise_classical_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("mode", ctypes.c_int),
         ("noise_estimator", ctypes.c_int),
         ("n_fft", ctypes.c_int),
@@ -203,7 +217,10 @@ class SonareDenoiseStereoResult(CStruct):
 class SonareDeclipConfig(CStruct):
     """Maps to SonareDeclipConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_declip_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("clip_threshold_db", ctypes.c_float),
         ("lpc_order", ctypes.c_int),
         ("iterations", ctypes.c_int),
@@ -268,7 +285,10 @@ SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE = 1
 class SonareDecrackleConfig(CStruct):
     """Maps to SonareDecrackleConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_decrackle_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("threshold", ctypes.c_float),
         ("mode", ctypes.c_int),
         ("levels", ctypes.c_int),
@@ -327,7 +347,10 @@ SONARE_DEHUM_MODE_NOTCH = 1
 class SonareDehumConfig(CStruct):
     """Maps to SonareDehumConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_dehum_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("fundamental_hz", ctypes.c_float),
         ("harmonics", ctypes.c_int),
         ("q", ctypes.c_float),
@@ -392,7 +415,10 @@ class SonareDehumStereoResult(CStruct):
 class SonareDereverbClassicalConfig(CStruct):
     """Maps to SonareDereverbClassicalConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_dereverb_classical_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("threshold", ctypes.c_float),
         ("attenuation", ctypes.c_float),
         ("n_fft", ctypes.c_int),
@@ -462,7 +488,10 @@ SONARE_TRIM_SILENCE_MODE_LUFS_GATED = 1
 class SonareTrimSilenceConfig(CStruct):
     """Maps to SonareTrimSilenceConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_trim_silence_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("threshold_db", ctypes.c_float),
         ("padding_samples", ctypes.c_size_t),
         ("mode", ctypes.c_int),

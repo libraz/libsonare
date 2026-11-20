@@ -121,8 +121,7 @@ TEST_CASE("Compressor set_config is safe to call concurrently with process",
     cfg.attack_ms = 5.0f + static_cast<float>(i % 20);
     cfg.release_ms = 50.0f + static_cast<float>(i % 100);
     cfg.detector = (i & 1) ? DetectorMode::Rms : DetectorMode::Peak;
-    cfg.sidechain_high_pass_enabled = (i % 3) == 0;
-    cfg.sidechain_high_pass_hz = 80.0f + static_cast<float>(i % 200);
+    cfg.sidechain_high_pass_hz = (i % 3) == 0 ? 80.0f + static_cast<float>(i % 200) : 0.0f;
     compressor.set_config(cfg);
   }
   // On a heavily loaded CI runner the control loop above can finish before the
@@ -168,11 +167,10 @@ TEST_CASE("Compressor set_parameter exposes full insert parameter surface",
   REQUIRE(compressor.set_parameter(5, 6.0f));
   REQUIRE(compressor.set_parameter(6, 1.0f));
   REQUIRE(compressor.set_parameter(7, 2.0f));
-  REQUIRE(compressor.set_parameter(8, 1.0f));
-  REQUIRE(compressor.set_parameter(9, 250.0f));
-  REQUIRE(compressor.set_parameter(10, 30.0f));
-  REQUIRE(compressor.set_parameter(11, 1.75f));
-  REQUIRE_FALSE(compressor.set_parameter(12, 0.0f));
+  REQUIRE(compressor.set_parameter(8, 250.0f));
+  REQUIRE(compressor.set_parameter(9, 30.0f));
+  REQUIRE(compressor.set_parameter(10, 1.75f));
+  REQUIRE_FALSE(compressor.set_parameter(11, 0.0f));
 
   std::vector<float> block = generate_sine_samples(1000.0f, 48000, 256, 0.8f);
   float* channels[] = {block.data()};
@@ -187,7 +185,6 @@ TEST_CASE("Compressor set_parameter exposes full insert parameter surface",
   REQUIRE(cfg.knee_db == 6.0f);
   REQUIRE(cfg.auto_makeup);
   REQUIRE(cfg.detector == DetectorMode::LogRms);
-  REQUIRE(cfg.sidechain_high_pass_enabled);
   REQUIRE(cfg.sidechain_high_pass_hz == 250.0f);
   REQUIRE(cfg.pdr_time_ms == 30.0f);
   REQUIRE(cfg.pdr_release_scale == 1.75f);
@@ -201,7 +198,7 @@ TEST_CASE("Compressor sidechain HPF ignores low-frequency detector energy",
   auto hpf_keyed = input;
 
   Compressor full({-24.0f, 6.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Peak});
-  Compressor hpf({-24.0f, 6.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Peak, true, 120.0f});
+  Compressor hpf({-24.0f, 6.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Peak, 120.0f});
   full.prepare(48000.0, 1024);
   hpf.prepare(48000.0, 1024);
 

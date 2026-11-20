@@ -68,15 +68,14 @@ typedef struct {
 } SonareClippingResult;
 
 /// @brief Detects clipped sample runs.
-/// @param threshold Linear absolute threshold in [0, 1] (typical: 0.999f). Pass
-///                  exactly 0.0f for the library default (0.999f); every other
-///                  value outside the domain, negative included, is rejected
-///                  with SONARE_ERROR_INVALID_PARAMETER rather than promoted to
-///                  the default.
-/// @param min_region_samples Minimum run length to report. Pass 0 for the
-///                  library default (1).
+/// @param threshold_db Detection level in dBFS; finite and in [-120, 0], or NaN for the library
+///                  default (the level of a linear 0.999). A sample whose magnitude reaches the
+///                  level counts as clipped; an out-of-domain level is rejected with
+///                  SONARE_ERROR_INVALID_PARAMETER.
+/// @param min_region_samples Minimum run length to report; a run of at least that many samples
+///                  is listed, so 0 and 1 both list every run.
 SonareError sonare_metering_detect_clipping(const float* samples, size_t length, int sample_rate,
-                                            float threshold, size_t min_region_samples,
+                                            float threshold_db, size_t min_region_samples,
                                             SonareClippingResult* out);
 
 /// @brief Frees the regions of a result and zeroes it. Safe on NULL.
@@ -419,8 +418,9 @@ SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample
                                         float* out_db);
 
 /// @brief Handle form of @ref sonare_metering_detect_clipping.
+/// @param threshold_db Detection level in dBFS, as for @ref sonare_metering_detect_clipping.
 /// @param out Receives heap-owned regions; free with @ref sonare_free_clipping_result.
-SonareError sonare_audio_detect_clipping(const SonareAudio* audio, float threshold,
+SonareError sonare_audio_detect_clipping(const SonareAudio* audio, float threshold_db,
                                          size_t min_region_samples, SonareClippingResult* out);
 
 /// @brief Handle form of @ref sonare_metering_dynamic_range.

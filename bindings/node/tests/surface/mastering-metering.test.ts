@@ -416,7 +416,7 @@ describe('mastering metering surface', () => {
       expect(error).toBeInstanceOf(errorClass);
     });
 
-    it('maps sidechainHighPassHz onto the native enable flag and corner', () => {
+    it('maps sidechainHighPassHz onto the detector high-pass corner', () => {
       const plain = api.masteringDynamicsCompressor({
         samples,
         sampleRate,
@@ -434,12 +434,29 @@ describe('mastering metering surface', () => {
       expect(sameAsPlain).toBe(false);
     });
 
-    it.each([0, -50])('refuses sidechainHighPassHz = %d', (value) => {
+    it('refuses a negative sidechainHighPassHz', () => {
       expect(
         thrown(() =>
-          api.masteringDynamicsCompressor({ samples, sampleRate, sidechainHighPassHz: value }),
+          api.masteringDynamicsCompressor({ samples, sampleRate, sidechainHighPassHz: -50 }),
         ),
       ).toBeInstanceOf(RangeError);
+    });
+
+    it('reads sidechainHighPassHz = 0 as no detector high-pass, the same as omitting it', () => {
+      const omitted = api.masteringDynamicsCompressor({
+        samples,
+        sampleRate,
+        thresholdDb: -30,
+        ratio: 8,
+      }) as { samples: Float32Array };
+      const zero = api.masteringDynamicsCompressor({
+        samples,
+        sampleRate,
+        thresholdDb: -30,
+        ratio: 8,
+        sidechainHighPassHz: 0,
+      }) as { samples: Float32Array };
+      expect(Array.from(zero.samples)).toEqual(Array.from(omitted.samples));
     });
 
     it('refuses the removed sidechain pair', () => {
@@ -529,7 +546,7 @@ describe('mastering metering surface', () => {
     const rawCases: Array<[string, () => Record<string, unknown>, string, string | null]> = [
       [
         'the clipping report counts under clippingRatio',
-        () => module().meteringDetectClipping(clippedTone(), sampleRate, 0.4, 1) as never,
+        () => module().meteringDetectClipping(clippedTone(), sampleRate, -6, 1) as never,
         'clippingRatio',
         'clippedRatio',
       ],
@@ -568,12 +585,16 @@ describe('mastering metering surface', () => {
       }
     });
 
-    it('the clip threshold is read as a linear amplitude', () => {
-      // 0.5 ceiling: a linear 0.4 catches it, a linear 0.6 does not.
-      const catches = module().meteringDetectClipping(clippedTone(), sampleRate, 0.4, 1);
-      const misses = module().meteringDetectClipping(clippedTone(), sampleRate, 0.6, 1);
+    it('the clip threshold is read in dBFS, absent selecting the library level', () => {
+      // 0.5 ceiling: the level of a linear 0.4 catches it, that of a linear 0.6 does not.
+      const at = (linear: number) => 20 * Math.log10(linear);
+      const catches = module().meteringDetectClipping(clippedTone(), sampleRate, at(0.4), 1);
+      const misses = module().meteringDetectClipping(clippedTone(), sampleRate, at(0.6), 1);
       expect(catches.clippedSamples).toBeGreaterThan(0);
       expect(misses.clippedSamples).toBe(0);
+      // The library level (that of a linear 0.999) sits above the 0.5 ceiling.
+      const absent = module().meteringDetectClipping(clippedTone(), sampleRate, undefined, 1);
+      expect(absent.clippedSamples).toBe(0);
     });
 
     it('the spectrum frame start is the positional frame_offset', () => {

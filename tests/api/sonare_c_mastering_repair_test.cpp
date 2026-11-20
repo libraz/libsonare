@@ -30,7 +30,8 @@ TEST_CASE("sonare_mastering_repair_declick", "[c_api][mastering]") {
   }
 
   SECTION("accepts explicit config") {
-    SonareDeclickConfig config = {};
+    SonareDeclickConfig config;
+    sonare_declick_config_init(&config);
     config.threshold = 0.8f;
     config.neighbor_ratio = 4.0f;
     config.max_click_samples = 8;
@@ -57,7 +58,8 @@ TEST_CASE("sonare_mastering_repair_declick", "[c_api][mastering]") {
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
-    SonareDeclickConfig config = {};
+    SonareDeclickConfig config;
+    sonare_declick_config_init(&config);
     config.threshold = 0.0f;
     config.neighbor_ratio = 4.0f;
     config.max_click_samples = 8;
@@ -198,7 +200,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
   }
 
   SECTION("Berouti SpectralSubtraction config runs") {
-    SonareDenoiseClassicalConfig config = {};
+    SonareDenoiseClassicalConfig config;
+    sonare_denoise_classical_config_init(&config);
     config.mode = SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION;
     config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
     config.n_fft = 1024;
@@ -219,7 +222,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
   }
 
   SECTION("rejects non-power-of-two n_fft and bad hop") {
-    SonareDenoiseClassicalConfig config = {};
+    SonareDenoiseClassicalConfig config;
+    sonare_denoise_classical_config_init(&config);
     config.mode = SONARE_DENOISE_MODE_LOG_MMSE;
     config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
     config.n_fft = 1500;  // not a power of two
@@ -242,7 +246,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
   }
 
   SECTION("rejects unknown mode and noise estimator enums") {
-    SonareDenoiseClassicalConfig config = {};
+    SonareDenoiseClassicalConfig config;
+    sonare_denoise_classical_config_init(&config);
     config.mode = 999;
     config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
     config.n_fft = 1024;
@@ -353,7 +358,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
   }
 
   SECTION("the gain floor is observable in the modes that have one") {
-    SonareDenoiseClassicalConfig config = {};
+    SonareDenoiseClassicalConfig config;
+    sonare_denoise_classical_config_init(&config);
     config.mode = SONARE_DENOISE_MODE_LOG_MMSE;
     config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
     config.n_fft = 1024;
@@ -419,7 +425,9 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
                                                              noisy.size(), sr, nullptr, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
 
-    SonareDenoiseClassicalConfig bad = {};
+    SonareDenoiseClassicalConfig bad;
+
+    sonare_denoise_classical_config_init(&bad);
     bad.n_fft = 1000;  // not a power of two
     bad.hop_length = 256;
     REQUIRE(sonare_mastering_repair_denoise_classical_stereo(noisy.data(), noisy.data(),
@@ -639,7 +647,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
 
     // The same config pre-check the mono and stereo entries carry, so the three
     // agree on which configs they reject before the core ever sees them.
-    SonareDenoiseClassicalConfig bad = {};
+    SonareDenoiseClassicalConfig bad;
+    sonare_denoise_classical_config_init(&bad);
     bad.n_fft = 1000;  // not a power of two
     bad.hop_length = 256;
     REQUIRE(sonare_mastering_repair_denoise_classical_linked(
@@ -761,7 +770,8 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
   }
 
   SECTION("explicit config") {
-    SonareDeclipConfig config = {};
+    SonareDeclipConfig config;
+    sonare_declip_config_init(&config);
     config.clip_threshold_db = 20.0f * std::log10(0.85f);
     config.lpc_order = 24;
     config.iterations = 1;
@@ -773,7 +783,8 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
-    SonareDeclipConfig config = {};
+    SonareDeclipConfig config;
+    sonare_declip_config_init(&config);
     config.clip_threshold_db = 6.0f;  // above full scale
     config.lpc_order = 24;
     config.iterations = 1;
@@ -806,7 +817,8 @@ TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
   }
 
   SECTION("wavelet shrinkage mode") {
-    SonareDecrackleConfig config = {};
+    SonareDecrackleConfig config;
+    sonare_decrackle_config_init(&config);
     config.threshold = 0.4f;
     config.mode = SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE;
     config.levels = 4;
@@ -818,7 +830,8 @@ TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
-    SonareDecrackleConfig config = {};
+    SonareDecrackleConfig config;
+    sonare_decrackle_config_init(&config);
     config.threshold = 0.0f;
     config.mode = SONARE_DECRACKLE_MODE_MEDIAN;
     config.levels = 4;
@@ -832,7 +845,8 @@ TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
   }
 
   SECTION("rejects unknown mode enum") {
-    SonareDecrackleConfig config = {};
+    SonareDecrackleConfig config;
+    sonare_decrackle_config_init(&config);
     config.threshold = 0.4f;
     config.mode = 999;
     config.levels = 4;
@@ -939,7 +953,8 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
   }
 
   SECTION("wavelet mode reports through its own fields") {
-    SonareDecrackleConfig config = {};
+    SonareDecrackleConfig config;
+    sonare_decrackle_config_init(&config);
     config.threshold = 0.4f;
     config.mode = SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE;
     config.levels = 4;
@@ -968,7 +983,8 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
     // the configured value changes the result only below that estimate. A
     // value above it is passed through faithfully and changes nothing, which
     // would let this assertion pass without the value ever arriving.
-    SonareDecrackleConfig loose = {};
+    SonareDecrackleConfig loose;
+    sonare_decrackle_config_init(&loose);
     loose.threshold = 10.0f;
     loose.mode = SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE;
     loose.levels = 4;
@@ -1008,7 +1024,8 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
   }
 
   SECTION("rejects unknown mode enum") {
-    SonareDecrackleConfig config = {};
+    SonareDecrackleConfig config;
+    sonare_decrackle_config_init(&config);
     config.threshold = 0.4f;
     config.mode = 999;
     config.levels = 4;
@@ -1035,7 +1052,8 @@ TEST_CASE("sonare_mastering_repair_dehum", "[c_api][mastering]") {
   }
 
   SECTION("adaptive tracking with explicit config") {
-    SonareDehumConfig config = {};
+    SonareDehumConfig config;
+    sonare_dehum_config_init(&config);
     config.fundamental_hz = 50.0f;
     config.harmonics = 4;
     config.q = 20.0f;
@@ -1052,7 +1070,8 @@ TEST_CASE("sonare_mastering_repair_dehum", "[c_api][mastering]") {
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
-    SonareDehumConfig config = {};
+    SonareDehumConfig config;
+    sonare_dehum_config_init(&config);
     config.fundamental_hz = 0.0f;
     config.harmonics = 4;
     config.q = 20.0f;
@@ -1082,7 +1101,9 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
     right[i] = 0.3f * right[i] + 0.2f * std::sin(2.0f * 3.14159265f * kRightHumHz * t);
   }
 
-  SonareDehumConfig fixed = {};
+  SonareDehumConfig fixed;
+
+  sonare_dehum_config_init(&fixed);
   fixed.fundamental_hz = kLeftHumHz;
   fixed.harmonics = 4;
   fixed.q = 20.0f;
@@ -1231,7 +1252,8 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical", "[c_api][mastering]") {
   }
 
   SECTION("WPE-enabled config") {
-    SonareDereverbClassicalConfig config = {};
+    SonareDereverbClassicalConfig config;
+    sonare_dereverb_classical_config_init(&config);
     config.threshold = 0.05f;
     config.attenuation = 0.5f;
     config.n_fft = 1024;
@@ -1252,7 +1274,8 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical", "[c_api][mastering]") {
   }
 
   SECTION("rejects bad n_fft / hop_length") {
-    SonareDereverbClassicalConfig config = {};
+    SonareDereverbClassicalConfig config;
+    sonare_dereverb_classical_config_init(&config);
     config.threshold = 0.05f;
     config.attenuation = 0.5f;
     config.n_fft = 1500;  // not a power of two
@@ -1302,7 +1325,9 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
   }
   std::vector<float> silence(reverberant.size(), 0.0f);
 
-  SonareDereverbClassicalConfig base = {};
+  SonareDereverbClassicalConfig base;
+
+  sonare_dereverb_classical_config_init(&base);
   base.threshold = 0.0f;
   base.attenuation = 1.0f;
   base.n_fft = 1024;
@@ -1482,7 +1507,9 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
   const std::vector<float> other = reverberate(99u, 0.45f);
   const size_t length = reverberant.size();
 
-  SonareDereverbClassicalConfig base = {};
+  SonareDereverbClassicalConfig base;
+
+  sonare_dereverb_classical_config_init(&base);
   base.threshold = 0.0f;
   base.attenuation = 1.0f;
   base.n_fft = 1024;
@@ -1623,7 +1650,9 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 1, tiny.size(), sr, &base, outs,
                                                               &report) == SONARE_OK);
 
-    SonareDenoiseClassicalConfig denoise = {};
+    SonareDenoiseClassicalConfig denoise;
+
+    sonare_denoise_classical_config_init(&denoise);
     denoise.mode = SONARE_DENOISE_MODE_LOG_MMSE;
     denoise.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
     denoise.n_fft = 1024;
@@ -1770,7 +1799,8 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
   }
 
   SECTION("LUFS-gated mode with padding") {
-    SonareTrimSilenceConfig config = {};
+    SonareTrimSilenceConfig config;
+    sonare_trim_silence_config_init(&config);
     config.threshold_db = -60.0f;
     config.padding_samples = 1200;
     config.mode = SONARE_TRIM_SILENCE_MODE_LUFS_GATED;
@@ -1785,7 +1815,8 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
-    SonareTrimSilenceConfig config = {};
+    SonareTrimSilenceConfig config;
+    sonare_trim_silence_config_init(&config);
     config.threshold_db = 6.0f;  // above full scale
     config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
     config.window_ms = 400.0f;
@@ -1799,7 +1830,8 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
   }
 
   SECTION("rejects unknown mode enum") {
-    SonareTrimSilenceConfig config = {};
+    SonareTrimSilenceConfig config;
+    sonare_trim_silence_config_init(&config);
     config.threshold_db = -60.0f;
     config.padding_samples = 0;
     config.mode = 999;
@@ -1819,7 +1851,8 @@ TEST_CASE("a parameter refusal is kept beside the flat message and cleared with 
           "[c_api][mastering]") {
   const int sr = 48000;
   auto samples = generate_sine(440.0f, sr, 0.1f);
-  SonareTrimSilenceConfig config = {};
+  SonareTrimSilenceConfig config;
+  sonare_trim_silence_config_init(&config);
   config.threshold_db = -60.0f;
   config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
   config.gate_lufs = -60.0f;
@@ -2103,7 +2136,9 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
   fill_burst(left, kLeftFirst, kLeftEnd);
   fill_burst(right, kRightFirst, kRightEnd);
 
-  SonareTrimSilenceConfig peak = {};
+  SonareTrimSilenceConfig peak;
+
+  sonare_trim_silence_config_init(&peak);
   peak.threshold_db = -60.0f;
   peak.padding_samples = 0;
   peak.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
@@ -2434,7 +2469,8 @@ TEST_CASE("sonare_mastering_dynamics_compressor", "[c_api][mastering]") {
   }
 
   SECTION("strong threshold + 4:1 ratio reduces peak vs input") {
-    SonareCompressorConfig config = {};
+    SonareCompressorConfig config;
+    sonare_compressor_config_init(&config);
     config.threshold_db = -24.0f;
     config.ratio = 4.0f;
     config.attack_ms = 1.0f;
@@ -2483,7 +2519,8 @@ TEST_CASE("sonare_mastering_dynamics_gate", "[c_api][mastering]") {
   }
 
   SECTION("gate attenuates the silent tail vs input") {
-    SonareGateConfig config = {};
+    SonareGateConfig config;
+    sonare_gate_config_init(&config);
     config.threshold_db = -40.0f;
     config.attack_ms = 1.0f;
     config.release_ms = 20.0f;
@@ -2521,7 +2558,8 @@ TEST_CASE("sonare_mastering_dynamics_transient_shaper", "[c_api][mastering]") {
   }
 
   SECTION("boosted attack lifts the click peaks") {
-    SonareTransientShaperConfig config = {};
+    SonareTransientShaperConfig config;
+    sonare_transient_shaper_config_init(&config);
     config.attack_gain_db = 9.0f;
     config.sustain_gain_db = 0.0f;
     config.fast_attack_ms = 0.0f;
@@ -2625,6 +2663,128 @@ TEST_CASE("sonare_mastering_repair_analyze and sonare_mastering_repair_apply",
     CHECK(seen.stages == std::vector<std::string>{"repair.declick"});
     CHECK(a[0] == 7.5f);
   }
+}
+
+TEST_CASE("repair and dynamics configs are refused until their init sets struct_size",
+          "[c_api][mastering]") {
+  const int sr = 48000;
+  const auto samples = generate_sine(440.0f, sr, 0.25f);
+  const auto refused_by = [](const char* init_name) {
+    CHECK(std::string(sonare_last_error_message()) ==
+          std::string("config.struct_size must be set by ") + init_name);
+  };
+
+  SECTION("repair configs") {
+    {
+      SonareDeclickConfig zeroed{};
+      SonareDeclickResult out{};
+      REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, &zeroed, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_declick_config_init");
+    }
+    {
+      SonareDenoiseClassicalConfig zeroed{};
+      SonareDenoiseResult out{};
+      REQUIRE(sonare_mastering_repair_denoise_classical(samples.data(), samples.size(), sr, &zeroed,
+                                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_denoise_classical_config_init");
+    }
+    {
+      SonareDeclipConfig zeroed{};
+      SonareDeclipResult out{};
+      REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, &zeroed, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_declip_config_init");
+    }
+    {
+      SonareDecrackleConfig zeroed{};
+      SonareDecrackleResult out{};
+      REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &zeroed,
+                                                &out) == SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_decrackle_config_init");
+    }
+    {
+      SonareDehumConfig zeroed{};
+      SonareDehumResult out{};
+      REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, &zeroed, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_dehum_config_init");
+    }
+    {
+      SonareDereverbClassicalConfig zeroed{};
+      SonareDereverbResult out{};
+      REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr,
+                                                         &zeroed,
+                                                         &out) == SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_dereverb_classical_config_init");
+    }
+    {
+      SonareTrimSilenceConfig zeroed{};
+      SonareTrimSilenceResult out{};
+      REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &zeroed,
+                                                   &out) == SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_trim_silence_config_init");
+    }
+  }
+
+  SECTION("dynamics configs") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    {
+      SonareCompressorConfig zeroed{};
+      REQUIRE(sonare_mastering_dynamics_compressor(samples.data(), samples.size(), sr, &zeroed,
+                                                   &out, &out_length,
+                                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_compressor_config_init");
+    }
+    {
+      SonareGateConfig zeroed{};
+      REQUIRE(sonare_mastering_dynamics_gate(samples.data(), samples.size(), sr, &zeroed, &out,
+                                             &out_length,
+                                             nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_gate_config_init");
+    }
+    {
+      SonareTransientShaperConfig zeroed{};
+      REQUIRE(sonare_mastering_dynamics_transient_shaper(samples.data(), samples.size(), sr,
+                                                         &zeroed, &out, &out_length, nullptr) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      refused_by("sonare_transient_shaper_config_init");
+    }
+  }
+}
+
+TEST_CASE("compressor sidechain high-pass is one frequency and 0 is off", "[c_api][mastering]") {
+  const int sr = 48000;
+  auto samples = generate_sine(110.0f, sr, 0.5f);
+  for (auto& s : samples) s *= 0.9f;
+
+  SonareCompressorConfig config;
+  sonare_compressor_config_init(&config);
+  REQUIRE(config.sidechain_high_pass_hz == 0.0f);
+  config.threshold_db = -24.0f;
+  config.ratio = 4.0f;
+  config.detector = SONARE_COMPRESSOR_DETECTOR_PEAK;
+
+  const auto run = [&](float high_pass_hz) {
+    config.sidechain_high_pass_hz = high_pass_hz;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_dynamics_compressor(samples.data(), samples.size(), sr, &config, &out,
+                                                 &out_length, nullptr) == SONARE_OK);
+    const float peak = max_abs(out, out_length);
+    sonare_free_floats(out);
+    return peak;
+  };
+  // A 2 kHz corner removes the 110 Hz tone from the detector, so less is compressed.
+  REQUIRE(run(2000.0f) > run(0.0f));
+
+  config.sidechain_high_pass_hz = -1.0f;
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_mastering_dynamics_compressor(samples.data(), samples.size(), sr, &config, &out,
+                                               &out_length,
+                                               nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 #endif

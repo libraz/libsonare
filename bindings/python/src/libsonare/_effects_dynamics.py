@@ -33,11 +33,6 @@ def _coerce_compressor_detector(value: CompressorDetector, key: str) -> int:
     return _token_ordinal(value, _COMPRESSOR_DETECTORS, key)
 
 
-# The C config still pairs an enable flag with a corner it validates as positive
-# even while the flag is off, so a disabled sidechain high-pass carries this.
-_SIDECHAIN_HIGH_PASS_UNUSED_HZ = 100.0
-
-
 def _high_pass_corner(value: object, name: str, *, positive: bool) -> float:
     """Narrow a given high-pass corner, refusing one outside its domain by name."""
     corner = _narrow_double(value, name)
@@ -129,8 +124,8 @@ def mastering_dynamics_compressor(
         makeup_gain_db=_narrow_double(makeup_gain_db, "makeup_gain_db"),
         auto_makeup=1 if auto_makeup else 0,
         detector=_coerce_compressor_detector(detector, "detector"),
-        sidechain_high_pass_enabled=0 if sidechain_high_pass_hz is None else 1,
-        sidechain_high_pass_hz=_SIDECHAIN_HIGH_PASS_UNUSED_HZ
+        # The C config reads a 0 Hz corner as no sidechain filter.
+        sidechain_high_pass_hz=0.0
         if sidechain_high_pass_hz is None
         else _high_pass_corner(sidechain_high_pass_hz, "sidechain_high_pass_hz", positive=True),
         pdr_time_ms=_narrow_double(pdr_time_ms, "pdr_time_ms"),

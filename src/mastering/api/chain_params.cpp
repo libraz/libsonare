@@ -268,7 +268,7 @@ std::optional<double> multiband_parameter_value(const MultibandCompStage& stage,
   const auto& band = config.bands[index];
   // Absent while the high-pass is off, so a read-back never reports a frequency that is not in use.
   if (field == "sidechainHighPassHz") {
-    if (!band.sidechain_high_pass_enabled) return std::nullopt;
+    if (!(band.sidechain_high_pass_hz > 0.0f)) return std::nullopt;
     return detail::field_as_double(band.sidechain_high_pass_hz);
   }
 #define X(jkey, member, meta) \
@@ -286,17 +286,15 @@ namespace {
 // `if` blocks keeps the block-nesting depth at 1, which avoids MSVC error
 // C1061 ("blocks nested too deeply") that a long else-if chain triggers.
 
-// A compressor's sidechain high-pass is one optional key: giving it turns the filter on at that
-// frequency, and a value that is not finite and positive is refused rather than read as off.
+// A compressor's sidechain high-pass is one optional frequency: 0 passes everything, the same as
+// leaving it out, and a value that is not finite and at least 0 is refused.
 void set_sidechain_high_pass(dynamics::CompressorConfig& config, double v, const std::string& key) {
   const float hz = static_cast<float>(v);
-  if (!std::isfinite(v) || !std::isfinite(hz) || !(hz > 0.0f)) {
-    throw SonareParameterRefusal::predicate(
-        ErrorCode::InvalidParameter, key,
-        "must be finite and > 0; leave it out to keep the sidechain high-pass off")
+  if (!std::isfinite(v) || !std::isfinite(hz) || !(hz >= 0.0f)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, key,
+                                            "must be finite and >= 0")
         .as_caller_spelled();
   }
-  config.sidechain_high_pass_enabled = true;
   config.sidechain_high_pass_hz = hz;
 }
 

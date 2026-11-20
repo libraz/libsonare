@@ -655,11 +655,10 @@ TEST_CASE("measured bounds reproduce the validation they were measured through",
   REQUIRE(find_param(compressor, "makeupGainDb")->find("min")->is_null());
   const double makeup_max = find_param(compressor, "makeupGainDb")->find("max")->as_number();
   REQUIRE(makeup_max == 770.0);
-  // sidechainHighPassHz is validated as strictly positive, and an exclusive bound is
-  // published as the limit it excludes, flagged as such.
+  // sidechainHighPassHz is validated as non-negative: 0 passes everything.
   REQUIRE(find_param(compressor, "sidechainHighPassHz")->find("min")->as_number() == 0.0);
-  REQUIRE(find_param(compressor, "sidechainHighPassHz")->find("minExclusive")->as_bool());
-  REQUIRE_FALSE(builds_with("dynamics.compressor", "sidechainHighPassHz", json::Value(0.0)));
+  REQUIRE_FALSE(find_param(compressor, "sidechainHighPassHz")->find("minExclusive")->as_bool());
+  REQUIRE(builds_with("dynamics.compressor", "sidechainHighPassHz", json::Value(0.0)));
   // An inclusive bound carries a false flag, and an absent bound never an exclusive one.
   REQUIRE_FALSE(find_param(compressor, "attackMs")->find("minExclusive")->as_bool());
   REQUIRE_FALSE(find_param(compressor, "thresholdDb")->find("minExclusive")->as_bool());

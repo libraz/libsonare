@@ -402,15 +402,15 @@ class SonareWaveformPeakPyramidResult(CStruct):
 
 
 SONARE_MAX_METER_CANDIDATE_NUMERATORS = 16
-# Layout version the C ABI requires of SonareMusicAnalyzeOptions.struct_version.
-SONARE_MUSIC_ANALYZE_OPTIONS_VERSION = 2
 
 
 class SonareMusicAnalyzeOptions(CStruct):
     """Maps to SonareMusicAnalyzeOptions in sonare_c_types_functions.h."""
 
+    _c_init_ = "sonare_music_analyze_options_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int),
+        ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int),
         ("hop_length", ctypes.c_int),
         ("bpm_min", ctypes.c_float),
@@ -439,7 +439,10 @@ class SonareMusicAnalyzeOptions(CStruct):
 class SonareMeterOptions(CStruct):
     """Maps to SonareMeterOptions in sonare_c_types_functions.h."""
 
+    _c_init_ = "sonare_meter_options_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("candidate_numerators", ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS),
         ("candidate_numerator_count", ctypes.c_int),
         ("denominator", ctypes.c_int),

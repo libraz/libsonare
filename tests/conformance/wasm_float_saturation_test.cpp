@@ -352,8 +352,8 @@ TEST_CASE("The voice changer refuses a saturated pitch or formant", "[conformanc
 TEST_CASE("Metering refuses a saturated window or threshold", "[conformance][wasm]") {
   const Audio audio = test_tone();
 
-  REQUIRE(refuses([&] { metering::clipping_params_from_public(kSaturated, 0); }));
-  REQUIRE_FALSE(refuses([&] { metering::clipping_params_from_public(0.99f, 0); }));
+  REQUIRE(refuses([&] { metering::clipping_threshold_from_db(kSaturated); }));
+  REQUIRE_FALSE(refuses([&] { metering::clipping_threshold_from_db(-1.0f); }));
 
   // -80 dB and -1 dB measured 0.0 and 1.0 against this tone: the full range of
   // the result, so the threshold is read rather than ignored.

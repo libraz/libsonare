@@ -15,7 +15,6 @@
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c_internal.h"
-#include "util/zero_is_default.h"
 
 namespace sonare_c_mastering_detail {
 
@@ -30,14 +29,14 @@ inline sonare::mastering::maximizer::LoudnessOptimizeConfig to_cpp_config(
     const SonareMasteringConfig* config) {
   sonare::mastering::maximizer::LoudnessOptimizeConfig cpp;
   if (config) {
+    sonare_c_detail::require_struct_size(config->struct_size, sizeof(SonareMasteringConfig),
+                                         "config", "sonare_mastering_config_init");
     cpp.target_lufs = config->target_lufs;
     cpp.ceiling_dbtp = config->ceiling_dbtp;
-    // Both fields take 0 as "keep the C++ default", so a zero-initialized
-    // config validates. Any other request reaches the loudness validator --
-    // which rejects an oversample outside {1, 2, 4, 8, 16} and a non-positive
-    // release -- instead of being replaced by the default it would have failed.
-    if (config->true_peak_oversample != 0) cpp.true_peak_oversample = config->true_peak_oversample;
-    cpp.release_ms = sonare::ZeroIsDefault(config->release_ms).or_default(cpp.release_ms);
+    // The loudness validator refuses an oversample outside {1, 2, 4, 8, 16} and a
+    // non-positive release.
+    cpp.true_peak_oversample = config->true_peak_oversample;
+    cpp.release_ms = config->release_ms;
     cpp.apply_gain_at_input_rate = config->apply_gain_at_input_rate != 0;
   }
   return cpp;

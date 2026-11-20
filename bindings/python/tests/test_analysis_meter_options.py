@@ -62,9 +62,9 @@ def four_four_result() -> libsonare.AnalysisResult:
 @pytest.fixture(scope="module")
 def native_option_defaults() -> Any:
     """The C ABI's own SonareMusicAnalyzeOptions defaults."""
-    from libsonare._runtime import _get_lib
+    from libsonare._ffi import SonareMusicAnalyzeOptions
 
-    return _get_lib().sonare_music_analyze_options_default()
+    return SonareMusicAnalyzeOptions()
 
 
 def test_analyze_reports_downbeats_drawn_from_beats(four_four_result) -> None:

@@ -110,7 +110,7 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
   key_source_gate_.admit(use_external, restart_hpf);
   internal_source_gate_.admit(!use_external, restart_hpf);
   const bool sidechain_high_pass_enabled =
-      sidechain_high_pass_gate_.admit(cfg.sidechain_high_pass_enabled, [this] {
+      sidechain_high_pass_gate_.admit(cfg.sidechain_high_pass_hz > 0.0f, [this] {
         std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
         std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
       });
@@ -254,12 +254,7 @@ void SidechainRouter::validate_config(const SidechainRouterConfig& config) {
   check::at_least(config.release_ms, 0.0, "release_ms");
   check::at_least(config.range_db, 0.0, "range_db");
   check::at_least(config.lookahead_ms, 0.0, "lookahead_ms");
-  // The high-pass corner is only held positive while the filter is enabled.
-  if (config.sidechain_high_pass_enabled) {
-    check::greater_than(config.sidechain_high_pass_hz, 0.0, "sidechain_high_pass_hz");
-  } else {
-    check::finite_float(config.sidechain_high_pass_hz, "sidechain_high_pass_hz");
-  }
+  check::at_least(config.sidechain_high_pass_hz, 0.0, "sidechain_high_pass_hz");
 }
 
 float SidechainRouter::gain_reduction_db(float input_db, const SidechainRouterConfig& config) {
@@ -274,10 +269,15 @@ float SidechainRouter::gain_reduction_db(float input_db, const SidechainRouterCo
 
 void SidechainRouter::update_coefficients(const SidechainRouterConfig& config) {
   follower_.prepare(sample_rate_, config.attack_ms, config.release_ms);
-  const auto hpf = sonare::rt::onepole_highpass_coeffs(
-      static_cast<double>(config.sidechain_high_pass_hz), sample_rate_);
-  hpf_b0_ = hpf.b0;
-  hpf_a1_ = hpf.a1;
+  if (config.sidechain_high_pass_hz > 0.0f) {
+    const auto hpf = sonare::rt::onepole_highpass_coeffs(
+        static_cast<double>(config.sidechain_high_pass_hz), sample_rate_);
+    hpf_b0_ = hpf.b0;
+    hpf_a1_ = hpf.a1;
+  } else {
+    hpf_b0_ = 1.0f;
+    hpf_a1_ = 0.0f;
+  }
 }
 
 void SidechainRouter::ensure_capacity(int num_channels) const {

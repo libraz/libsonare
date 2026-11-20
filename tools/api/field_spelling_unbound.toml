@@ -6,7 +6,7 @@
 # until that lands it sits under [pending] with the change that retires it, and the
 # run fails once it binds.
 [pending]
-"metering_detect_clipping.threshold" = "unit split: retires on the C rename to threshold_db"
+"metering_detect_clipping.threshold_db" = "unit split: retires when the Python facade takes threshold_db"
 
 [params]
 "align_take_to_reference.reference_len" = "derived length: reference.length"
@@ -25,13 +25,14 @@
 "chord_symbol_from_analysis.extension_capacity" = "C-only plumbing: output buffer capacity"
 "deemphasis.use_zi" = "folded into zi: given or absent"
 "preemphasis.use_zi" = "folded into zi: given or absent"
-"downmix.frames" = "derived length: channel length"
 "downmix.num_channels" = "derived length: channel count"
 "fourier_tempogram.norm" = "C-only plumbing: the facade passes a fixed value"
 "mastering_ab_match_loudness.reference_length" = "derived length: reference.length"
 "mastering_ab_match_loudness.source_length" = "derived length: source.length"
 "mastering_ab_match_loudness_stereo.reference_length" = "derived length: reference.length"
 "mastering_ab_match_loudness_stereo.source_length" = "derived length: source.length"
+"master_audio.overrides_json" = "folded into overrides"
+"master_audio_stereo.overrides_json" = "folded into overrides"
 "mastering_repair_analyze.request_json" = "C-only plumbing: serialized from the facade's options"
 "mastering_repair_apply.stages_json" = "folded into stages"
 "mastering_repair_apply.cancel_cb" = "C-only plumbing: cancellation hook"
@@ -58,6 +59,8 @@
 "mixing_assistant_suggest.track_lengths" = "derived length: tracks[] channel length"
 "mixing_assistant_suggest.track_sample_rates" = "folded into tracks[].sampleRate"
 "split_silence_common.lengths" = "derived length: signals[].length"
+"streaming_loudness_gain.config_json" = "folded into config"
+"streaming_loudness_gain_stereo.config_json" = "folded into config"
 "tempogram_ratio.win_length" = "derived length: tempogram.rows"
 "trim_silence.end_sample" = "output"
 "trim_silence.start_sample" = "output"

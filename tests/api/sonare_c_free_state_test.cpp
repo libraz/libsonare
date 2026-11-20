@@ -107,11 +107,9 @@ TEST_CASE("sonare_free_bpm_analysis_result leaves the result zeroed", "[c_api][c
 
 TEST_CASE("sonare_free_chord_analysis_result leaves the result zeroed", "[c_api][c_free]") {
   SonareChordAnalysisResult r{};
-  r.struct_version = static_cast<decltype(r.struct_version)>(1);
   r.tuning_cents = static_cast<decltype(r.tuning_cents)>(1);
   r.chord_count = static_cast<decltype(r.chord_count)>(1);
   sonare_free_chord_analysis_result(&r);
-  CHECK(r.struct_version == static_cast<decltype(r.struct_version)>(0));
   CHECK(r.tuning_cents == static_cast<decltype(r.tuning_cents)>(0));
   CHECK(r.chords == nullptr);
   CHECK(r.chord_count == static_cast<decltype(r.chord_count)>(0));
@@ -898,7 +896,6 @@ TEST_CASE("sonare_free_mastering_stereo_result leaves the result zeroed", "[c_ap
 
 TEST_CASE("sonare_free_mel_result leaves the result zeroed", "[c_api][c_free]") {
   SonareMelResult r{};
-  r.struct_version = static_cast<decltype(r.struct_version)>(1);
   r.n_mels = static_cast<decltype(r.n_mels)>(1);
   r.n_frames = static_cast<decltype(r.n_frames)>(1);
   r.sample_rate = static_cast<decltype(r.sample_rate)>(1);
@@ -909,7 +906,6 @@ TEST_CASE("sonare_free_mel_result leaves the result zeroed", "[c_api][c_free]") 
   r.htk = static_cast<decltype(r.htk)>(1);
   r.is_db = static_cast<decltype(r.is_db)>(1);
   sonare_free_mel_result(&r);
-  CHECK(r.struct_version == static_cast<decltype(r.struct_version)>(0));
   CHECK(r.n_mels == static_cast<decltype(r.n_mels)>(0));
   CHECK(r.n_frames == static_cast<decltype(r.n_frames)>(0));
   CHECK(r.sample_rate == static_cast<decltype(r.sample_rate)>(0));
@@ -941,7 +937,6 @@ TEST_CASE("sonare_free_melody_result leaves the result zeroed", "[c_api][c_free]
 
 TEST_CASE("sonare_free_mfcc_result leaves the result zeroed", "[c_api][c_free]") {
   SonareMfccResult r{};
-  r.struct_version = static_cast<decltype(r.struct_version)>(1);
   r.n_mfcc = static_cast<decltype(r.n_mfcc)>(1);
   r.n_frames = static_cast<decltype(r.n_frames)>(1);
   r.sample_rate = static_cast<decltype(r.sample_rate)>(1);
@@ -954,7 +949,6 @@ TEST_CASE("sonare_free_mfcc_result leaves the result zeroed", "[c_api][c_free]")
   r.is_db = static_cast<decltype(r.is_db)>(1);
   r.lifter = static_cast<decltype(r.lifter)>(1);
   sonare_free_mfcc_result(&r);
-  CHECK(r.struct_version == static_cast<decltype(r.struct_version)>(0));
   CHECK(r.n_mfcc == static_cast<decltype(r.n_mfcc)>(0));
   CHECK(r.n_frames == static_cast<decltype(r.n_frames)>(0));
   CHECK(r.sample_rate == static_cast<decltype(r.sample_rate)>(0));
@@ -1368,13 +1362,11 @@ TEST_CASE("sonare_free_timbre_result leaves the result zeroed", "[c_api][c_free]
 
 TEST_CASE("sonare_free_transcribe_result leaves the result zeroed", "[c_api][c_free]") {
   SonareTranscribeResult r{};
-  r.struct_version = static_cast<decltype(r.struct_version)>(1);
   r.tuning_cents = static_cast<decltype(r.tuning_cents)>(1);
   r.count = static_cast<decltype(r.count)>(1);
   r.note_count = static_cast<decltype(r.note_count)>(1);
   r.tempo_bpm = static_cast<decltype(r.tempo_bpm)>(1);
   sonare_free_transcribe_result(&r);
-  CHECK(r.struct_version == static_cast<decltype(r.struct_version)>(0));
   CHECK(r.tuning_cents == static_cast<decltype(r.tuning_cents)>(0));
   CHECK(r.events == nullptr);
   CHECK(r.count == static_cast<decltype(r.count)>(0));

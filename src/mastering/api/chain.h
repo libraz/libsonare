@@ -169,9 +169,7 @@ struct LoudnessStage {
   float target_lufs = -14.0f;
   float ceiling_dbtp = -1.0f;
   int true_peak_oversample = 4;
-  /// Post true-peak limiter release in ms. 0 selects the library default
-  /// (@ref mastering::maximizer::kDefaultLoudnessReleaseMs); a negative or
-  /// non-finite value is rejected.
+  /// Post true-peak limiter release in ms; finite and greater than 0.
   float release_ms = mastering::maximizer::kDefaultLoudnessReleaseMs;
   bool apply_gain_at_input_rate = false;
   /// @brief How deep (dB, >= 0) the stage may drive its post-gain true-peak

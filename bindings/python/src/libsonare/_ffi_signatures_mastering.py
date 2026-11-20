@@ -10,6 +10,8 @@ from ._ffi_types import *  # noqa: F403,F405
 
 def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
     if hasattr(lib, "sonare_mastering_process"):
+        lib.sonare_mastering_config_init.restype = None
+        lib.sonare_mastering_config_init.argtypes = [ctypes.POINTER(SonareMasteringConfig)]
         lib.sonare_mastering_process.restype = ctypes.c_int32
         lib.sonare_mastering_process.argtypes = [
             ctypes.POINTER(ctypes.c_float),

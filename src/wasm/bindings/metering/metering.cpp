@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
 #include <limits>
 
 #include "util/zero_is_default.h"
@@ -163,18 +164,22 @@ float js_metering_true_peak_db(val samples, const val& sample_rate_val,
 val js_metering_detect_clipping(val samples, const val& sample_rate_val, const val& threshold_val,
                                 const val& min_region_samples_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
+  // An infinity goes on to the core, which refuses it in its own domain text.
+  const bool threshold_infinite =
+      threshold_val.isNumber() && std::isinf(threshold_val.as<double>());
+  const float threshold_db =
+      threshold_val.isUndefined()
+          ? std::numeric_limits<float>::quiet_NaN()
+          : (threshold_infinite ? static_cast<float>(threshold_val.as<double>())
+                                : checkedFloatFromVal(threshold_val, "thresholdDb"));
   const int min_region_samples = checkedIntFromVal(min_region_samples_val, "minRegionSamples");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   if (min_region_samples < 0) {
     throw WasmRangeError("minRegionSamples must be an integer in [0, 2147483647]");
   }
-  // Only the documented sentinel (0) selects the library default; any other
-  // out-of-domain threshold is rejected, matching the C ABI.
-  const metering::ClippingParams params =
-      metering::clipping_params_from_public(threshold, static_cast<size_t>(min_region_samples));
   metering::ClippingResult result =
-      metering::detect_clipping(audio, params.threshold, params.min_region_samples);
+      metering::detect_clipping(audio, metering::clipping_threshold_from_db(threshold_db),
+                                static_cast<size_t>(min_region_samples));
   val regions = val::array();
   for (size_t i = 0; i < result.regions.size(); ++i) {
     val region = val::object();

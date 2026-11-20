@@ -235,7 +235,6 @@ def test_stream_output_format_is_the_float_default_and_unreachable() -> None:
 
     lib = _get_lib()
     raw = SonareStreamConfig()
-    assert lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)) == 0
     assert raw.output_format == _STREAMING["output_format_default"]
     # The analyzer never offers the generic output format, so a legacy one cannot be asked for.
     assert "output_format" not in inspect.signature(StreamAnalyzer).parameters

@@ -32,14 +32,25 @@ sonare::mastering::repair::DecrackleMode parse_decrackle_mode(
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
-constexpr SonareDeclickConfig kDeclickConfigDefaults{0.8f, 4.0f, 8, 20, 8.0f};
+SonareDeclickConfig DefaultDeclickConfig() {
+  SonareDeclickConfig config{};
+  sonare_declick_config_init(&config);
+  return config;
+}
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
-// clip_threshold_db is 20*log10(0.98) dBFS.
-constexpr SonareDeclipConfig kDeclipConfigDefaults{-0.17547849f, 36, 2, 0.65f};
+SonareDeclipConfig DefaultDeclipConfig() {
+  SonareDeclipConfig config{};
+  sonare_declip_config_init(&config);
+  return config;
+}
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
-constexpr SonareDecrackleConfig kDecrackleConfigDefaults{0.4f, SONARE_DECRACKLE_MODE_MEDIAN, 4};
+SonareDecrackleConfig DefaultDecrackleConfig() {
+  SonareDecrackleConfig config{};
+  sonare_decrackle_config_init(&config);
+  return config;
+}
 
 /// @brief Marshal one channel's click detection into the JS shape shared by
 ///        the mono and stereo declick reports.
@@ -236,7 +247,8 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   // Library defaults (sonare_c_mastering.h SonareDeclickConfig), applied
   // before any options key overrides a field.
-  SonareDeclickConfig config{0.8f, 4.0f, 8, 20, 8.0f};
+  SonareDeclickConfig config{};
+  sonare_declick_config_init(&config);
   if (info.Length() >= 4 && info[3].IsObject()) {
     config = read_declick_config_c(env, info[3].As<Napi::Object>(), config);
   }
@@ -262,7 +274,7 @@ Napi::Value SonareWrap::MasteringRepairDetectClicks(const Napi::CallbackInfo& in
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
-  SonareDeclickConfig config = kDeclickConfigDefaults;
+  SonareDeclickConfig config = DefaultDeclickConfig();
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_declick_config_c(env, info[2].As<Napi::Object>(), config);
   SonareClickDetection detection{};
@@ -327,7 +339,7 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   // Library defaults (sonare_c_mastering.h SonareDeclipConfig), applied before
   // any options key overrides a field.
-  SonareDeclipConfig config = kDeclipConfigDefaults;
+  SonareDeclipConfig config = DefaultDeclipConfig();
   if (info.Length() >= 4 && info[3].IsObject()) {
     config = read_declip_config_c(info[3].As<Napi::Object>(), config);
   }
@@ -353,7 +365,7 @@ Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
-  SonareDeclipConfig config = kDeclipConfigDefaults;
+  SonareDeclipConfig config = DefaultDeclipConfig();
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) {
     config = read_declip_config_c(info[2].As<Napi::Object>(), config);
@@ -418,7 +430,8 @@ Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo&
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   // Library defaults (sonare_c_mastering.h SonareDecrackleConfig), applied before
   // any options key overrides a field.
-  SonareDecrackleConfig config{0.4f, SONARE_DECRACKLE_MODE_MEDIAN, 4};
+  SonareDecrackleConfig config{};
+  sonare_decrackle_config_init(&config);
   if (info.Length() >= 4 && info[3].IsObject()) {
     config = read_decrackle_config_c(info[3].As<Napi::Object>(), config);
   }
@@ -444,7 +457,7 @@ Napi::Value SonareWrap::MasteringRepairDetectCrackle(const Napi::CallbackInfo& i
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
-  SonareDecrackleConfig config = kDecrackleConfigDefaults;
+  SonareDecrackleConfig config = DefaultDecrackleConfig();
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_decrackle_config_c(info[2].As<Napi::Object>(), config);
   SonareCrackleDetection detection{};

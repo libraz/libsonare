@@ -30,7 +30,6 @@ using sonare::constants::kFloorDb;
 // Field domains shared by validate_config and live automation.
 bool valid_ratio(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
 bool valid_non_negative(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
-bool valid_positive(float v) noexcept { return std::isfinite(v) && v > 0.0f; }
 bool valid_release_scale(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
 
 constexpr float kRmsWindowMs = 10.0f;
@@ -107,7 +106,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   const float makeup_db = compute_makeup_db(cfg);
 
   const bool sidechain_high_pass_enabled =
-      sidechain_high_pass_gate_.admit(cfg.sidechain_high_pass_enabled, [this] {
+      sidechain_high_pass_gate_.admit(cfg.sidechain_high_pass_hz > 0.0f, [this] {
         std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
         std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
       });
@@ -279,17 +278,14 @@ bool Compressor::apply_parameter(CompressorConfig& config, unsigned int param_id
       next.detector = detector_mode_from_param(value);
       break;
     case 8:
-      next.sidechain_high_pass_enabled = value != 0.0f;
-      break;
-    case 9:
-      if (!valid_positive(value)) return false;
+      if (!valid_non_negative(value)) return false;
       next.sidechain_high_pass_hz = value;
       break;
-    case 10:
+    case 9:
       if (!valid_non_negative(value)) return false;
       next.pdr_time_ms = value;
       break;
-    case 11:
+    case 10:
       if (!valid_release_scale(value)) return false;
       next.pdr_release_scale = value;
       break;
@@ -303,10 +299,9 @@ bool Compressor::apply_parameter(CompressorConfig& config, unsigned int param_id
 }
 
 std::vector<rt::ParamDescriptor> Compressor::parameter_descriptors() const {
-  return {{"thresholdDb", 0},         {"ratio", 1},        {"attackMs", 2},
-          {"releaseMs", 3},           {"makeupGainDb", 4}, {"kneeDb", 5},
-          {"autoMakeup", 6},          {"detector", 7},     {"sidechainHighPassEnabled", 8},
-          {"sidechainHighPassHz", 9}, {"pdrTimeMs", 10},   {"pdrReleaseScale", 11}};
+  return {{"thresholdDb", 0},         {"ratio", 1},     {"attackMs", 2},        {"releaseMs", 3},
+          {"makeupGainDb", 4},        {"kneeDb", 5},    {"autoMakeup", 6},      {"detector", 7},
+          {"sidechainHighPassHz", 8}, {"pdrTimeMs", 9}, {"pdrReleaseScale", 10}};
 }
 
 void Compressor::validate_config(const CompressorConfig& config) {
@@ -315,7 +310,7 @@ void Compressor::validate_config(const CompressorConfig& config) {
   check::at_least(config.attack_ms, 0.0, "attack_ms");
   check::at_least(config.release_ms, 0.0, "release_ms");
   check::at_least(config.knee_db, 0.0, "knee_db");
-  check::greater_than(config.sidechain_high_pass_hz, 0.0, "sidechain_high_pass_hz");
+  check::at_least(config.sidechain_high_pass_hz, 0.0, "sidechain_high_pass_hz");
   check::at_least(config.pdr_time_ms, 0.0, "pdr_time_ms");
   check::at_least(config.pdr_release_scale, 1.0, "pdr_release_scale");
   // The makeup gain in force is the manual one, or the auto one derived from threshold and ratio.
@@ -361,10 +356,15 @@ void Compressor::update_coefficients(const CompressorConfig& config) {
   update_release_table(config);
   // Bilinear-transformed 1st-order highpass with frequency prewarping. Same
   // 6 dB/oct slope as a 1-pole RC, but the cutoff is frequency-accurate.
-  const auto hpf = sonare::rt::onepole_highpass_coeffs(
-      static_cast<double>(config.sidechain_high_pass_hz), sample_rate_);
-  hpf_b0_ = hpf.b0;
-  hpf_a1_ = hpf.a1;
+  if (config.sidechain_high_pass_hz > 0.0f) {
+    const auto hpf = sonare::rt::onepole_highpass_coeffs(
+        static_cast<double>(config.sidechain_high_pass_hz), sample_rate_);
+    hpf_b0_ = hpf.b0;
+    hpf_a1_ = hpf.a1;
+  } else {
+    hpf_b0_ = 1.0f;
+    hpf_a1_ = 0.0f;
+  }
 }
 
 void Compressor::update_release_table(const CompressorConfig& config) noexcept {

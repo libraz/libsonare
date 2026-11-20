@@ -148,15 +148,10 @@ class SonareChord(CStruct):
     ]
 
 
-# Layout version of SonareChordDetectionOptions.struct_version.
-SONARE_CHORD_DETECTION_OPTIONS_VERSION = 2
-
-
 class SonareChordAnalysisResult(CStruct):
     """Maps to SonareChordAnalysisResult in sonare_c.h."""
 
     _fields_ = [
-        ("struct_version", ctypes.c_int),
         ("tuning_cents", ctypes.c_float),
         ("chords", ctypes.POINTER(SonareChord)),
         ("chord_count", ctypes.c_size_t),
@@ -166,8 +161,10 @@ class SonareChordAnalysisResult(CStruct):
 class SonareChordDetectionOptions(CStruct):
     """Maps to SonareChordDetectionOptions in sonare_c.h."""
 
+    _c_init_ = "sonare_chord_detection_options_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int),
+        ("struct_size", ctypes.c_uint32),
         ("min_duration_sec", ctypes.c_float),
         ("smoothing_window_sec", ctypes.c_float),
         ("threshold", ctypes.c_float),
@@ -248,7 +245,10 @@ class SonareBoundaryResult(CStruct):
 class SonareBoundaryOptions(CStruct):
     """Maps to SonareBoundaryOptions in sonare_c.h."""
 
+    _c_init_ = "sonare_boundary_options_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("kernel_size", ctypes.c_int32),
@@ -266,7 +266,10 @@ class SonareBoundaryOptions(CStruct):
 class SonareSectionOptions(CStruct):
     """Maps to SonareSectionOptions in sonare_c.h."""
 
+    _c_init_ = "sonare_section_options_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("min_section_sec", ctypes.c_float),
@@ -323,7 +326,10 @@ class SonareInverseResult(CStruct):
 class SonareStreamConfig(CStruct):
     """Maps to SonareStreamConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_stream_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("sample_rate", ctypes.c_int32),
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
@@ -350,7 +356,10 @@ class SonareStreamConfig(CStruct):
 class SonareStreamQuantizeConfig(CStruct):
     """Maps to SonareStreamQuantizeConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_stream_quantize_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("mel_db_min", ctypes.c_float),
         ("mel_db_max", ctypes.c_float),
         ("onset_max", ctypes.c_float),
@@ -497,7 +506,6 @@ class SonareMelResult(CStruct):
     """Maps to SonareMelResult in sonare_c.h."""
 
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
         ("n_mels", ctypes.c_int32),
         ("n_frames", ctypes.c_int32),
         ("sample_rate", ctypes.c_int32),
@@ -516,7 +524,6 @@ class SonareMfccResult(CStruct):
     """Maps to SonareMfccResult in sonare_c.h."""
 
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
         ("n_mfcc", ctypes.c_int32),
         ("n_frames", ctypes.c_int32),
         ("sample_rate", ctypes.c_int32),

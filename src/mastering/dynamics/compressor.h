@@ -32,8 +32,8 @@ struct CompressorConfig {
   float makeup_gain_db = 0.0f;
   bool auto_makeup = false;
   DetectorMode detector = DetectorMode::Rms;
-  bool sidechain_high_pass_enabled = false;
-  float sidechain_high_pass_hz = 100.0f;
+  /// Detector high-pass corner in Hz; 0 passes everything, which is the same as off.
+  float sidechain_high_pass_hz = 0.0f;
   float pdr_time_ms = 0.0f;
   float pdr_release_scale = 1.0f;
 };
@@ -71,10 +71,9 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   //   5 = knee_db (refused unless >= 0)
   //   6 = auto_makeup (value != 0)
   //   7 = detector (0=Peak, 1=Rms, 2=LogRms)
-  //   8 = sidechain_high_pass_enabled (value != 0)
-  //   9 = sidechain_high_pass_hz (refused unless > 0)
-  //  10 = pdr_time_ms (refused unless >= 0)
-  //  11 = pdr_release_scale (refused unless >= 1)
+  //   8 = sidechain_high_pass_hz (refused unless >= 0)
+  //   9 = pdr_time_ms (refused unless >= 0)
+  //  10 = pdr_release_scale (refused unless >= 1)
   //
   // RT-safe: set_parameter updates the audio thread's live working config
   // (active_) in place and re-derives the scalar coefficients without publishing
@@ -85,8 +84,8 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   // allocation) is dropped. MUST NOT run concurrently with set_config() (single
   // producer).
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs,
-  // 4=makeupGainDb, 5=kneeDb, 6=autoMakeup, 7=detector, 8=sidechainHighPassEnabled,
-  // 9=sidechainHighPassHz, 10=pdrTimeMs, 11=pdrReleaseScale.
+  // 4=makeupGainDb, 5=kneeDb, 6=autoMakeup, 7=detector, 8=sidechainHighPassHz,
+  // 9=pdrTimeMs, 10=pdrReleaseScale.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   static void validate_config(const CompressorConfig& config);

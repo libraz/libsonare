@@ -245,8 +245,8 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
                                  float** out_times, size_t* out_count);
 
 /// @brief Controls peak-picking for @ref sonare_detect_onsets_ex.
-/// @details Zero-initialize this POD, then set every field explicitly; the
-///          legacy @ref sonare_detect_onsets function retains its defaults.
+/// @details Start from @ref sonare_onset_detect_config_init, then set the fields to change;
+///          the legacy @ref sonare_detect_onsets function retains its defaults.
 ///
 ///          @p pre_max, @p post_max, @p pre_avg, @p post_avg, @p wait and
 ///          @p backtrack_range are FRAME counts, and a frame is @p hop_length
@@ -256,11 +256,13 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
 ///          carries, and filling this struct with the values listed as defaults
 ///          reproduces @ref sonare_detect_onsets exactly.
 typedef struct {
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_onset_detect_config_init.
   /// FFT window length in samples at 22050 Hz, rescaled to the input rate. Default 2048.
   int32_t n_fft;
   /// Hop in samples at the analysis rate. Default 512.
   int32_t hop_length;
-  /// Minimum onset strength a peak must reach; 0 selects the adaptive path.
+  /// Minimum onset strength a peak must reach, greater than 0; NaN (the default) selects the
+  /// adaptive path, where the threshold follows the running mean of the envelope.
   /// Expressed in the units of the onset envelope this call computes internally,
   /// which is not normalized, so the usable range depends on the magnitudes the
   /// caller's own audio produces and cannot be derived from the signature. The
@@ -292,12 +294,16 @@ typedef struct {
 } SonareOnsetDetectConfig;
 
 #ifdef __cplusplus
-static_assert(sizeof(SonareOnsetDetectConfig) == 44u, "SonareOnsetDetectConfig layout drift");
-static_assert(offsetof(SonareOnsetDetectConfig, hop_length) == 4u,
+static_assert(sizeof(SonareOnsetDetectConfig) == 48u, "SonareOnsetDetectConfig layout drift");
+static_assert(offsetof(SonareOnsetDetectConfig, hop_length) == 8u,
               "SonareOnsetDetectConfig hop_length offset");
-static_assert(offsetof(SonareOnsetDetectConfig, backtrack_range) == 40u,
+static_assert(offsetof(SonareOnsetDetectConfig, backtrack_range) == 44u,
               "SonareOnsetDetectConfig backtrack_range offset");
 #endif
+
+/// @brief Fills @p config with sizeof and the library defaults, the threshold being NaN
+///        (adaptive). A NULL @p config is ignored.
+void sonare_onset_detect_config_init(SonareOnsetDetectConfig* config);
 
 /// @brief Detect onsets with explicit FFT, peak-picking, and backtracking settings.
 /// @note Free @p out_times with @ref sonare_free_floats.
@@ -331,19 +337,12 @@ SonareError sonare_analyze_json(const float* samples, size_t length, int sample_
 /// every binding rejects an over-long list rather than truncating it.
 #define SONARE_MAX_METER_CANDIDATE_NUMERATORS 16
 
-/// Layout version of SonareMusicAnalyzeOptions, written by
-/// sonare_music_analyze_options_default(). sonare_analyze_json_ex refuses any
-/// other value, so a caller built against the layout that had no version field
-/// is refused rather than read at the wrong offsets.
-#define SONARE_MUSIC_ANALYZE_OPTIONS_VERSION 2
-
 /// @brief Options for sonare_analyze_json_ex. Boolean fields are 0/1 ints.
-/// @details Always start from sonare_music_analyze_options_default() rather than zeroing the
-///   struct: a zeroed meter_candidate_numerator_count is rejected, not treated as "use the
-///   default set". Defaults below are those of that function.
+/// @details Start from sonare_music_analyze_options_init(): a zeroed
+///   meter_candidate_numerator_count is rejected, not treated as "use the default set".
+///   Defaults below are those of that function.
 typedef struct {
-  /// Must be SONARE_MUSIC_ANALYZE_OPTIONS_VERSION.
-  int struct_version;
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_music_analyze_options_init.
   /// Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048.
   int n_fft;
   /// Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above
@@ -403,22 +402,22 @@ typedef struct {
   /// to this unit.
   float tuning_cents;
   /// Non-zero measures the tuning from the audio instead of reading
-  /// tuning_cents. sonare_music_analyze_options_default sets it to 1; a
-  /// zeroed struct reads tuning_cents. The value used, given or measured, is
+  /// tuning_cents. Default 1. The value used, given or measured, is
   /// the result's "tuningCents".
   int tuning_auto;
 } SonareMusicAnalyzeOptions;
 
-/// @brief Returns the library defaults for every field, with struct_version set.
-SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void);
+/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
+void sonare_music_analyze_options_init(SonareMusicAnalyzeOptions* options);
 /// @note Free @p out_json with @ref sonare_free_string.
 SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
                                    const SonareMusicAnalyzeOptions* options, char** out_json);
 
 /// @brief Scoring options for sonare_estimate_meter_json.
-/// @details Always start from sonare_meter_options_default() rather than zeroing the struct: a
-///   zeroed candidate_numerator_count is rejected, not treated as "use the default set".
+/// @details Start from sonare_meter_options_init(): a zeroed candidate_numerator_count is
+///   rejected, not treated as "use the default set".
 typedef struct {
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_meter_options_init.
   /// Meter numerators to score. Only the first candidate_numerator_count
   /// entries are read; each must be in [2, 32].
   int candidate_numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS];
@@ -442,8 +441,8 @@ typedef struct {
   float compound_subdivision_threshold;
 } SonareMeterOptions;
 
-/// @brief Returns the library defaults for every field.
-SonareMeterOptions sonare_meter_options_default(void);
+/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
+void sonare_meter_options_init(SonareMeterOptions* options);
 
 /// @brief Estimates meter over a caller-supplied beat series, without audio and
 ///   without re-running analysis.

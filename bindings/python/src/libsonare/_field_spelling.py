@@ -18,8 +18,6 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("frames_to_time", "sample_rate"): "sr",
     ("hybrid_cqt", "fmin_hz"): "fmin",
     ("hybrid_cqt", "sample_rate"): "sr",
-    ("lufs_interleaved", "channels"): "num_channels",
-    ("lufs_series_interleaved", "channels"): "num_channels",
     ("mel_to_audio", "fmax_hz"): "fmax",
     ("mel_to_audio", "fmin_hz"): "fmin",
     ("mel_to_audio", "sample_rate"): "sr",
@@ -62,8 +60,6 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("voice_change_realtime", "preset"): "config",
     ("vqt", "fmin_hz"): "fmin",
     ("vqt", "sample_rate"): "sr",
-    ("waveform_peak_pyramid", "channels"): "num_channels",
-    ("waveform_peaks", "channels"): "num_channels",
     ("zero_crossing_rate", "sample_rate"): "sr",
 }
 

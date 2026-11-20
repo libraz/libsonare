@@ -52,7 +52,6 @@ TEST_CASE("Compressor sidechain HPF re-entry does not replay ordinary bypass his
   config.attack_ms = 0.0f;
   config.release_ms = 0.0f;
   config.detector = sonare::mastering::dynamics::DetectorMode::Peak;
-  config.sidechain_high_pass_enabled = true;
   config.sidechain_high_pass_hz = 80.0f;
   sonare::mastering::dynamics::Compressor subject(config);
   sonare::mastering::dynamics::Compressor control(config);
@@ -69,7 +68,7 @@ TEST_CASE("Compressor sidechain HPF re-entry does not replay ordinary bypass his
   auto control_gap = gap;
   process_mono(subject, gap);
   process_mono(control, control_gap);
-  REQUIRE(subject.set_parameter(8, 1.0f));
+  REQUIRE(subject.set_parameter(8, 80.0f));
 
   auto reentry = cosine(256, kRate, 1000.0, 0.01f);
   auto control_reentry = reentry;
@@ -91,7 +90,6 @@ TEST_CASE("Compressor excluded detector plane re-entry does not replay HPF histo
   config.attack_ms = 0.0f;
   config.release_ms = 0.0f;
   config.detector = sonare::mastering::dynamics::DetectorMode::Peak;
-  config.sidechain_high_pass_enabled = true;
   config.sidechain_high_pass_hz = 80.0f;
   sonare::mastering::dynamics::Compressor subject(config);
   sonare::mastering::dynamics::Compressor control(config);

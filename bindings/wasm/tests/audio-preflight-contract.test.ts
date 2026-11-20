@@ -358,7 +358,6 @@ const NOT_AUDIO: string[] = [
     'voiceChangerAbiVersion',
     'vocalEditAbiVersion',
     'isSonareError',
-    'streamAnalyzerConfigDefault',
   ],
   // Analysis-to-annotation conversions over a chord or a key mode.
   ...['chordSymbolFromAnalysis', 'keyModeFromAnalysis'],

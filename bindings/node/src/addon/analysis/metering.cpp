@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -383,7 +384,10 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float threshold{};
-  if (!RequiredFiniteFloatValue(env, info[2], "threshold", &threshold)) return env.Undefined();
+  // Type-only: the core states the domain, so an infinity is refused in its text.
+  if (!OptionalFloatArg(env, info, 2, "thresholdDb", std::numeric_limits<float>::quiet_NaN(),
+                        &threshold))
+    return env.Undefined();
   int64_t min_region_value{};
   if (!OptionalInt64Arg(env, info, 3, "minRegionValue", 1, &min_region_value))
     return env.Undefined();
@@ -907,8 +911,10 @@ Napi::Value SonareWrap::DetectClippingInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Object opts = info[0].As<Napi::Object>();
-  float threshold{};
-  if (!RequiredFiniteFloatValue(env, opts.Get("threshold"), "threshold", &threshold))
+  float threshold = std::numeric_limits<float>::quiet_NaN();
+  const Napi::Value threshold_value = opts.Get("thresholdDb");
+  if (!threshold_value.IsUndefined() && !threshold_value.IsNull() &&
+      !RequiredFloatValue(env, threshold_value, "thresholdDb", &threshold))
     return env.Undefined();
   const int64_t min_region_value = Int64Property(opts, "minRegionSamples", 1);
   if (min_region_value < 0) {

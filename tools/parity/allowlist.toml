@@ -119,22 +119,6 @@ python = [
 #     caller-owned result or request POD and sets its schema version. The facades
 #     build those values as plain objects, so none has a free-function
 #     counterpart.
-#   boundary_options_default: Node reads the seeder live, WASM starts from
-#     BoundaryConfig itself, and Python's detect_boundaries keyword defaults are
-#     held to it by test.
-#   meter_options_default: same three routes, against MeterConfig and
-#     estimate_meter.
-#   music_analyze_options_default: same, against MusicAnalyzerConfig and
-#     analyze. Only four of the nineteen Python defaults are pinned by a test;
-#     the rest agree without anything holding them.
-#   transcribe_config_default: the struct the facades deliberately do NOT
-#     forward — sonare_c_transcribe.h states that a zero field means the default
-#     in C and does not in a binding, so Python and WASM spell absence
-#     themselves and only Node reads the seeder.
-#   section_options_default: Node and Python seed SonareSectionOptions from it
-#     before overlaying the caller's fields; WASM's analyzeSections spells
-#     n_fft 2048, hop 512 and 4 s itself and leaves an omitted threshold to the
-#     core, matching the seeder.
 #   project_tempo_options_default: all three facades call it internally to seed
 #     SonareProjectTempoOptions before overlaying the caller's fields, so no
 #     facade restates a value.
@@ -214,12 +198,8 @@ node = [
   "last_refusal_subject_count",
   "last_refusal_subject",
   "last_refusal_render",
-  "boundary_options_default",
-  "meter_options_default",
-  "music_analyze_options_default",
-  "transcribe_config_default",
+  "last_refusal_entry",
   "project_tempo_options_default",
-  "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
@@ -257,7 +237,6 @@ node = [
   # facades apply the identical defaults inline (or via a typed config object /
   # dataclass) and never call the seeder, so there is no 1:1 facade member.
   "engine_bounce_options_default",
-  "stream_quantize_config_default",
   # pitch_correction_config_default seeds a SonarePitchCorrectionConfig POD with
   # the documented defaults; the facade pitchCorrectTimevarying applies them
   # inline through its PitchCorrectOptions bag, so there is no 1:1 facade member.
@@ -338,12 +317,8 @@ wasm = [
   "last_refusal_subject_count",
   "last_refusal_subject",
   "last_refusal_render",
-  "boundary_options_default",
-  "meter_options_default",
-  "music_analyze_options_default",
-  "transcribe_config_default",
+  "last_refusal_entry",
   "project_tempo_options_default",
-  "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
@@ -369,7 +344,6 @@ wasm = [
   "analyze_melody_ex",
   # --- Internal default-struct seeders (see node note above) ---
   "engine_bounce_options_default",
-  "stream_quantize_config_default",
   "pitch_correction_config_default",
   "note_target_assign_config_default",
   # --- WASM platform / API-shape differences ---
@@ -440,12 +414,7 @@ python = [
   "last_error_code",
   "last_diagnostic_count",
   "last_diagnostic",
-  "boundary_options_default",
-  "meter_options_default",
-  "music_analyze_options_default",
-  "transcribe_config_default",
   "project_tempo_options_default",
-  "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
@@ -473,7 +442,6 @@ python = [
   # The Python facade calls these inside its constructors/dataclasses to seed
   # defaults; they are not re-exposed as standalone public methods.
   "engine_bounce_options_default",
-  "stream_quantize_config_default",
   # pitch_correct_timevarying seeds its SonarePitchCorrectionConfig by calling
   # this internally; not re-exposed as a standalone public function.
   "pitch_correction_config_default",

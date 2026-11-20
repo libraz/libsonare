@@ -245,7 +245,10 @@ class TestNormalizeStereoPairRefusals:
         with pytest.raises(SonareValueError) as caught:
             call(left, right, 0)  # type: ignore[operator]
         assert caught.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
-        assert str(caught.value) == "normalize_stereo: sample_rate is out of the supported range"
+        assert (
+            str(caught.value)
+            == "normalize_stereo: sample_rate must be an integer in [8000, 384000]"
+        )
 
     @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_a_positive_target_is_refused_by_name(self, call: object) -> None:

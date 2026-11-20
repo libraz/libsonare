@@ -1,7 +1,7 @@
 import { chordQualityToken } from './analysis_helpers.js';
-import { entryClass, refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { entryClass, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
-import { WINDOW_TYPES, windowOrdinal } from './internal/window_type.js';
+import { windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
 import type { Key, PitchClass } from './public_types.js';
 import type {
@@ -213,35 +213,6 @@ function assertReferenceHz(referenceHz: unknown): asserts referenceHz is number 
 }
 
 /**
- * The native configuration defaults. `fmaxHz` is Nyquist, the value the
- * analyzer reads an absent upper edge as.
- */
-export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
-  return withEntry('streamAnalyzerConfigDefault', () => {
-    const d = getSonareModule().streamAnalyzerConfigDefault();
-    return {
-      sampleRate: d.sampleRate,
-      nFft: d.nFft,
-      hopLength: d.hopLength,
-      nMels: d.nMels,
-      fminHz: d.fmin,
-      fmaxHz: d.fmax > 0 ? d.fmax : d.sampleRate / 2,
-      referenceHz: d.referenceHz,
-      computeMel: d.computeMel,
-      computeChroma: d.computeChroma,
-      computeOnset: d.computeOnset,
-      computeSpectral: d.computeSpectral,
-      emitEveryNFrames: d.emitEveryNFrames,
-      maxPendingFrames: d.maxPendingFrames,
-      maxProgressionEntries: d.maxProgressionEntries,
-      keyUpdateIntervalSec: d.keyUpdateIntervalSec,
-      bpmUpdateIntervalSec: d.bpmUpdateIntervalSec,
-      window: WINDOW_TYPES[d.window],
-    };
-  });
-}
-
-/**
  * Real-time streaming audio analyzer.
  *
  * @example
@@ -329,28 +300,26 @@ export class StreamAnalyzer {
         assertIntegerValue(config[key], key);
       }
     }
+    // An absent field reaches the native constructor as undefined and keeps the library default.
     const module = getSonareModule();
-    const defaults = module.streamAnalyzerConfigDefault();
     this.analyzerHandle = new module.StreamAnalyzer(
       config.sampleRate,
-      config.nFft ?? defaults.nFft,
-      config.hopLength ?? defaults.hopLength,
-      config.nMels ?? defaults.nMels,
-      config.fminHz ?? defaults.fmin,
-      config.fmaxHz ?? defaults.fmax,
-      config.referenceHz ?? defaults.referenceHz,
-      defaults.computeMagnitude,
-      config.computeMel ?? defaults.computeMel,
-      config.computeChroma ?? defaults.computeChroma,
-      config.computeOnset ?? defaults.computeOnset,
-      config.computeSpectral ?? defaults.computeSpectral,
-      config.emitEveryNFrames ?? defaults.emitEveryNFrames,
-      config.maxPendingFrames ?? defaults.maxPendingFrames,
-      config.maxProgressionEntries ?? defaults.maxProgressionEntries,
-      config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,
-      config.bpmUpdateIntervalSec ?? defaults.bpmUpdateIntervalSec,
-      config.window === undefined ? defaults.window : windowOrdinal(config.window),
-      defaults.outputFormat,
+      config.nFft,
+      config.hopLength,
+      config.nMels,
+      config.fminHz,
+      config.fmaxHz,
+      config.referenceHz,
+      config.computeMel,
+      config.computeChroma,
+      config.computeOnset,
+      config.computeSpectral,
+      config.emitEveryNFrames,
+      config.maxPendingFrames,
+      config.maxProgressionEntries,
+      config.keyUpdateIntervalSec,
+      config.bpmUpdateIntervalSec,
+      config.window === undefined ? undefined : windowOrdinal(config.window),
     );
   }
 

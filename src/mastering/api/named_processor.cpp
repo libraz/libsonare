@@ -863,9 +863,9 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
         f(map, "maxLimiterGainReductionDb", defaults.max_limiter_gain_reduction_db);
     // Same validator as the mono helper, before the limiter config is built, so
     // the two branches accept and reject the same parameter map.
-    const float release_ms = maximizer::validate_loudness_params(
-        target_lufs, ceiling_dbtp, f(map, "releaseMs", defaults.release_ms),
-        max_limiter_gain_reduction_db, true_peak_oversample);
+    const float release_ms = f(map, "releaseMs", defaults.release_ms);
+    maximizer::validate_loudness_params(target_lufs, ceiling_dbtp, release_ms,
+                                        max_limiter_gain_reduction_db, true_peak_oversample);
     const maximizer::TruePeakLimiterConfig config = maximizer::loudness_limiter_config(
         ceiling_dbtp, true_peak_oversample, release_ms,
         b(map, "applyGainAtInputRate", defaults.apply_gain_at_input_rate));

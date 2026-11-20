@@ -32,9 +32,20 @@ using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
 
+/// Refuses a config whose struct_size was not set by its _init. Every caller runs inside
+/// check_config, which joins "config." in front of the subject.
+template <typename CConfig>
+void require_config_size(const CConfig& config, const char* init_name) {
+  if (config.struct_size >= sizeof(CConfig)) return;
+  throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter,
+                                                  "struct_size",
+                                                  std::string("must be set by ") + init_name);
+}
+
 sonare::mastering::repair::DeclickConfig to_cpp_declick_config(const SonareDeclickConfig* config) {
   sonare::mastering::repair::DeclickConfig cpp;
   if (!config) return cpp;
+  require_config_size(*config, "sonare_declick_config_init");
   cpp.threshold = config->threshold;
   cpp.neighbor_ratio = config->neighbor_ratio;
   cpp.max_click_samples = config->max_click_samples;
@@ -74,6 +85,7 @@ sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
     const SonareDenoiseClassicalConfig* config) {
   sonare::mastering::repair::DenoiseClassicalConfig cpp;
   if (!config) return cpp;
+  require_config_size(*config, "sonare_denoise_classical_config_init");
   cpp.mode = to_cpp_denoise_mode(config->mode);
   cpp.noise_estimator = to_cpp_denoise_noise_estimator(config->noise_estimator);
   cpp.n_fft = config->n_fft;
@@ -91,6 +103,7 @@ sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
 sonare::mastering::repair::DeclipConfig to_cpp_declip_config(const SonareDeclipConfig* config) {
   sonare::mastering::repair::DeclipConfig cpp;
   if (!config) return cpp;
+  require_config_size(*config, "sonare_declip_config_init");
   cpp.clip_threshold = sonare::mastering::repair::clip_threshold_from_db(config->clip_threshold_db,
                                                                          "clip_threshold_db");
   cpp.lpc_order = config->lpc_order;
@@ -113,6 +126,7 @@ sonare::mastering::repair::DecrackleConfig to_cpp_decrackle_config(
     const SonareDecrackleConfig* config) {
   sonare::mastering::repair::DecrackleConfig cpp;
   if (!config) return cpp;
+  require_config_size(*config, "sonare_decrackle_config_init");
   cpp.threshold = config->threshold;
   cpp.mode = to_cpp_decrackle_mode(config->mode);
   cpp.levels = config->levels;
@@ -132,6 +146,7 @@ sonare::mastering::repair::DehumMode to_cpp_dehum_mode(int mode) {
 sonare::mastering::repair::DehumConfig to_cpp_dehum_config(const SonareDehumConfig* config) {
   sonare::mastering::repair::DehumConfig cpp;
   if (!config) return cpp;
+  require_config_size(*config, "sonare_dehum_config_init");
   cpp.fundamental_hz = config->fundamental_hz;
   cpp.harmonics = config->harmonics;
   cpp.q = config->q;
@@ -148,6 +163,7 @@ sonare::mastering::repair::DereverbClassicalConfig to_cpp_dereverb_config(
     const SonareDereverbClassicalConfig* config) {
   sonare::mastering::repair::DereverbClassicalConfig cpp;
   if (!config) return cpp;
+  require_config_size(*config, "sonare_dereverb_classical_config_init");
   cpp.threshold = config->threshold;
   cpp.attenuation = config->attenuation;
   cpp.n_fft = config->n_fft;
@@ -177,6 +193,7 @@ sonare::mastering::repair::TrimSilenceConfig to_cpp_trim_silence_config(
     const SonareTrimSilenceConfig* config) {
   sonare::mastering::repair::TrimSilenceConfig cpp;
   if (!config) return cpp;
+  require_config_size(*config, "sonare_trim_silence_config_init");
   cpp.threshold =
       sonare::mastering::repair::trim_threshold_from_db(config->threshold_db, "threshold_db");
   cpp.padding_samples = config->padding_samples;
@@ -184,6 +201,49 @@ sonare::mastering::repair::TrimSilenceConfig to_cpp_trim_silence_config(
   cpp.gate_lufs = config->gate_lufs;
   cpp.window_ms = config->window_ms;
   return cpp;
+}
+
+int to_c_denoise_mode(sonare::mastering::repair::DenoiseMode mode) {
+  switch (mode) {
+    case sonare::mastering::repair::DenoiseMode::MmseStsa:
+      return SONARE_DENOISE_MODE_MMSE_STSA;
+    case sonare::mastering::repair::DenoiseMode::SpectralSubtraction:
+      return SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION;
+    case sonare::mastering::repair::DenoiseMode::LogMmse:
+      return SONARE_DENOISE_MODE_LOG_MMSE;
+  }
+  return SONARE_DENOISE_MODE_LOG_MMSE;
+}
+
+int to_c_denoise_noise_estimator(sonare::mastering::repair::DenoiseNoiseEstimator estimator) {
+  switch (estimator) {
+    case sonare::mastering::repair::DenoiseNoiseEstimator::Mcra:
+      return SONARE_DENOISE_NOISE_ESTIMATOR_MCRA;
+    case sonare::mastering::repair::DenoiseNoiseEstimator::Imcra:
+      return SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA;
+    case sonare::mastering::repair::DenoiseNoiseEstimator::Quantile:
+      return SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
+    case sonare::mastering::repair::DenoiseNoiseEstimator::Spp:
+      return SONARE_DENOISE_NOISE_ESTIMATOR_SPP;
+  }
+  return SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
+}
+
+int to_c_decrackle_mode(sonare::mastering::repair::DecrackleMode mode) {
+  return mode == sonare::mastering::repair::DecrackleMode::WaveletShrinkage
+             ? SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE
+             : SONARE_DECRACKLE_MODE_MEDIAN;
+}
+
+int to_c_dehum_mode(sonare::mastering::repair::DehumMode mode) {
+  return mode == sonare::mastering::repair::DehumMode::Notch ? SONARE_DEHUM_MODE_NOTCH
+                                                             : SONARE_DEHUM_MODE_SUBTRACT;
+}
+
+int to_c_trim_silence_mode(sonare::mastering::repair::TrimSilenceMode mode) {
+  return mode == sonare::mastering::repair::TrimSilenceMode::LufsGated
+             ? SONARE_TRIM_SILENCE_MODE_LUFS_GATED
+             : SONARE_TRIM_SILENCE_MODE_PEAK;
 }
 
 SonareClickDetection to_c_click_detection(const sonare::mastering::repair::ClickDetection& cpp) {
@@ -477,6 +537,104 @@ void fill_stereo_channels(const StereoResult& result, CResult* out) {
 }
 
 }  // namespace
+
+void sonare_declick_config_init(SonareDeclickConfig* config) {
+  if (config == nullptr) return;
+  const sonare::mastering::repair::DeclickConfig cpp;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->threshold = cpp.threshold;
+  config->neighbor_ratio = cpp.neighbor_ratio;
+  config->max_click_samples = cpp.max_click_samples;
+  config->lpc_order = cpp.lpc_order;
+  config->residual_ratio = cpp.residual_ratio;
+}
+
+void sonare_denoise_classical_config_init(SonareDenoiseClassicalConfig* config) {
+  if (config == nullptr) return;
+  const sonare::mastering::repair::DenoiseClassicalConfig cpp;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->mode = to_c_denoise_mode(cpp.mode);
+  config->noise_estimator = to_c_denoise_noise_estimator(cpp.noise_estimator);
+  config->n_fft = cpp.n_fft;
+  config->hop_length = cpp.hop_length;
+  config->dd_alpha = cpp.dd_alpha;
+  config->reduction_db = cpp.reduction_db;
+  config->over_subtraction = cpp.over_subtraction;
+  config->spectral_floor = cpp.spectral_floor;
+  config->noise_estimation_quantile = cpp.noise_estimation_quantile;
+  config->speech_presence_gain = cpp.speech_presence_gain ? 1 : 0;
+  config->gain_smoothing = cpp.gain_smoothing ? 1 : 0;
+}
+
+void sonare_declip_config_init(SonareDeclipConfig* config) {
+  if (config == nullptr) return;
+  const sonare::mastering::repair::DeclipConfig cpp;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->clip_threshold_db = sonare::linear_to_db(cpp.clip_threshold);
+  config->lpc_order = cpp.lpc_order;
+  config->iterations = cpp.iterations;
+  config->lpc_blend = cpp.lpc_blend;
+}
+
+void sonare_decrackle_config_init(SonareDecrackleConfig* config) {
+  if (config == nullptr) return;
+  const sonare::mastering::repair::DecrackleConfig cpp;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->threshold = cpp.threshold;
+  config->mode = to_c_decrackle_mode(cpp.mode);
+  config->levels = cpp.levels;
+}
+
+void sonare_dehum_config_init(SonareDehumConfig* config) {
+  if (config == nullptr) return;
+  const sonare::mastering::repair::DehumConfig cpp;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->fundamental_hz = cpp.fundamental_hz;
+  config->harmonics = cpp.harmonics;
+  config->q = cpp.q;
+  config->adaptive = cpp.adaptive ? 1 : 0;
+  config->search_range_hz = cpp.search_range_hz;
+  config->adaptation = cpp.adaptation;
+  config->frame_size = cpp.frame_size;
+  config->pll_bandwidth = cpp.pll_bandwidth;
+  config->mode = to_c_dehum_mode(cpp.mode);
+}
+
+void sonare_dereverb_classical_config_init(SonareDereverbClassicalConfig* config) {
+  if (config == nullptr) return;
+  const sonare::mastering::repair::DereverbClassicalConfig cpp;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->threshold = cpp.threshold;
+  config->attenuation = cpp.attenuation;
+  config->n_fft = cpp.n_fft;
+  config->hop_length = cpp.hop_length;
+  config->t60_sec = cpp.t60_sec;
+  config->late_delay_ms = cpp.late_delay_ms;
+  config->over_subtraction = cpp.over_subtraction;
+  config->spectral_floor = cpp.spectral_floor;
+  config->wpe_enabled = cpp.wpe_enabled ? 1 : 0;
+  config->wpe_iterations = cpp.wpe_iterations;
+  config->wpe_taps = cpp.wpe_taps;
+  config->wpe_strength = cpp.wpe_strength;
+}
+
+void sonare_trim_silence_config_init(SonareTrimSilenceConfig* config) {
+  if (config == nullptr) return;
+  const sonare::mastering::repair::TrimSilenceConfig cpp;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->threshold_db = sonare::linear_to_db(cpp.threshold);
+  config->padding_samples = cpp.padding_samples;
+  config->mode = to_c_trim_silence_mode(cpp.mode);
+  config->gate_lufs = cpp.gate_lufs;
+  config->window_ms = cpp.window_ms;
+}
 
 SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
                                             const SonareDeclickConfig* config,
@@ -908,6 +1066,8 @@ SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
   }
   // Round-trips through the C++ config so the mapping lives in one place; only
   // the two fields a measurement determines are written back.
+  require_struct_size(config->struct_size, sizeof(SonareDereverbClassicalConfig), "config",
+                      "sonare_dereverb_classical_config_init");
   sonare::mastering::repair::DereverbClassicalConfig cpp = to_cpp_dereverb_config(config);
   sonare::mastering::repair::apply_room_measurement(cpp, sonare::mid_frequency_rt60(bands),
                                                     estimate->volume);

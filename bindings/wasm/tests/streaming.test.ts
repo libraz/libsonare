@@ -3,13 +3,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  CHORD_QUALITIES,
-  detectKey,
-  init,
-  StreamAnalyzer,
-  streamAnalyzerConfigDefault,
-} from '../dist/index.js';
+import { CHORD_QUALITIES, detectKey, init, StreamAnalyzer } from '../dist/index.js';
 import { unknownKeyError } from './_helpers';
 
 const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -43,9 +37,9 @@ describe('StreamAnalyzer', () => {
   });
 
   describe('lifecycle', () => {
-    it('uses native StreamConfig defaults for omitted WASM options', () => {
-      const defaults = streamAnalyzerConfigDefault();
-      expect(defaults).toEqual({
+    it('reads an omitted option as the library default', () => {
+      // The library defaults, spelled out: an analyzer given them answers as one given nothing.
+      const explicit = {
         sampleRate: 44100,
         nFft: 2048,
         hopLength: 512,
@@ -63,11 +57,23 @@ describe('StreamAnalyzer', () => {
         keyUpdateIntervalSec: 5,
         bpmUpdateIntervalSec: 10,
         window: 'hann',
-      });
-
-      const analyzer = new StreamAnalyzer({ sampleRate: defaults.sampleRate });
-      expect(analyzer.sampleRate).toBe(defaults.sampleRate);
-      analyzer.destroy();
+      } as const;
+      const tone = new Float32Array(44100);
+      for (let i = 0; i < tone.length; i++) {
+        tone[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / 44100);
+      }
+      const frames = (analyzer: StreamAnalyzer) => {
+        analyzer.process(tone);
+        analyzer.finalize();
+        const out = analyzer.readFrames(4096);
+        analyzer.destroy();
+        return out;
+      };
+      const omitted = frames(new StreamAnalyzer({ sampleRate: 44100 }));
+      expect(omitted.nFrames).toBeGreaterThan(0);
+      expect(omitted).toEqual(frames(new StreamAnalyzer(explicit)));
+      // Non-vacuity: a field moved off its default changes the answer.
+      expect(omitted).not.toEqual(frames(new StreamAnalyzer({ ...explicit, nMels: 64 })));
     });
 
     it('exposes destroy() as its only release method', () => {

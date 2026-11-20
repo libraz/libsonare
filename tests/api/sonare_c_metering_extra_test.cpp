@@ -625,6 +625,7 @@ void require_spectrum_result_equal(const SonareSpectrumResult& handle_result,
 }
 
 constexpr int kScalarSampleRate = 48000;
+constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
 
 // One second of a DC-biased 440 Hz tone followed by one second of near-silence,
 // so peak, rms, dc_offset, crest factor and silence_ratio are all mid-range
@@ -799,8 +800,8 @@ TEST_CASE("Handle-form detect_clipping matches its buffer twin field by field",
 
   SonareClippingResult handle_result = {};
   SonareClippingResult buffer_result = {};
-  REQUIRE(sonare_audio_detect_clipping(audio, 0.0f, 0, &handle_result) == SONARE_OK);
-  REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), kScalarSampleRate, 0.0f,
+  REQUIRE(sonare_audio_detect_clipping(audio, kNaN, 0, &handle_result) == SONARE_OK);
+  REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), kScalarSampleRate, kNaN,
                                           0, &buffer_result) == SONARE_OK);
 
   REQUIRE(handle_result.region_count > 0);  // the fixture is built to clip
@@ -1039,8 +1040,8 @@ TEST_CASE("Handle-form and buffer-form metering agree on a null out-pointer",
   CHECK(sonare_ebur128_loudness_range_lu(samples.data(), samples.size(), kScalarSampleRate,
                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
-  CHECK(sonare_audio_detect_clipping(audio, 0.0f, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_metering_detect_clipping(samples.data(), samples.size(), kScalarSampleRate, 0.0f, 0,
+  CHECK(sonare_audio_detect_clipping(audio, kNaN, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_metering_detect_clipping(samples.data(), samples.size(), kScalarSampleRate, kNaN, 0,
                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   CHECK(sonare_audio_dynamic_range(audio, 0.0f, 0.0f, -1.0f, -1.0f, nullptr) ==
@@ -1076,7 +1077,7 @@ TEST_CASE("A NULL handle is refused rather than dereferenced by every handle-for
         SONARE_ERROR_INVALID_PARAMETER);
 
   SonareClippingResult clipping_result = {};
-  CHECK(sonare_audio_detect_clipping(nullptr, 0.0f, 0, &clipping_result) ==
+  CHECK(sonare_audio_detect_clipping(nullptr, kNaN, 0, &clipping_result) ==
         SONARE_ERROR_INVALID_PARAMETER);
 
   SonareDynamicRangeResult dynamic_range_result = {};
@@ -1123,18 +1124,16 @@ TEST_CASE("Handle-form and buffer-form metering agree on out-of-domain parameter
   }
 
   SECTION(
-      "detect_clipping: 0 selects the default threshold, and a negative threshold is refused "
-      "rather "
-      "than promoted") {
+      "detect_clipping: NaN selects the default level, and a level above full scale is refused") {
     SonareClippingResult handle_default = {};
     SonareClippingResult buffer_default = {};
-    REQUIRE(sonare_audio_detect_clipping(audio, 0.0f, 0, &handle_default) == SONARE_OK);
-    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), kScalarSampleRate, 0.0f,
+    REQUIRE(sonare_audio_detect_clipping(audio, kNaN, 0, &handle_default) == SONARE_OK);
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), kScalarSampleRate, kNaN,
                                             0, &buffer_default) == SONARE_OK);
     sonare_free_clipping_result(&handle_default);
     sonare_free_clipping_result(&buffer_default);
 
-    for (float bad_threshold : {-0.5f, -1e-6f, 1.5f}) {
+    for (float bad_threshold : {0.5f, 1e-6f, 1.5f}) {
       CAPTURE(bad_threshold);
       SonareClippingResult handle_result = {};
       SonareClippingResult buffer_result = {};

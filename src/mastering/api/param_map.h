@@ -357,7 +357,6 @@ inline std::string renamed_param_successor(const std::string& owner, const std::
   };
   static const Renamed kRenamed[] = {
       {"", "clipThreshold", "clipThresholdDb"},
-      {"", "sidechainHpfEnabled", "sidechainHighPassEnabled"},
       {"", "sidechainHpfHz", "sidechainHighPassHz"},
       {"", "ceilingDb", "ceilingDbtp"},
       {"dynamics.deesser", "bandpassQ", "bandPassQ"},

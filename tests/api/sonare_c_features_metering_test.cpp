@@ -768,13 +768,17 @@ TEST_CASE("sonare waveform peak entries refuse their arguments by name", "[c_api
   refused(sonare_waveform_peak_pyramid(samples.data(), 5, 2, levels, 2, nullptr), "out");
 }
 
+namespace {
+constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+}  // namespace
+
 TEST_CASE("sonare_metering_detect_clipping", "[c_api]") {
   SECTION("reports clipped regions and frees them") {
     // Hard-clipped signal: ones in a run.
     std::vector<float> samples(8000, 0.1f);
     for (size_t i = 1000; i < 1064; ++i) samples[i] = 1.0f;
     SonareClippingResult result = {};
-    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.999f, 0,
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, kNaN, 0,
                                             &result) == SONARE_OK);
     REQUIRE(result.region_count >= 1);
     REQUIRE(result.regions != nullptr);
@@ -789,33 +793,41 @@ TEST_CASE("sonare_metering_detect_clipping", "[c_api]") {
     auto samples = generate_sine(440.0f, 48000, 0.5f);
     for (auto& s : samples) s *= 0.3f;
     SonareClippingResult result = {};
-    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.999f, 0,
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, kNaN, 0,
                                             &result) == SONARE_OK);
     REQUIRE(result.region_count == 0);
     REQUIRE(result.regions == nullptr);
     sonare_free_clipping_result(&result);
   }
 
-  SECTION("only the documented 0.0f sentinel selects the library default") {
+  SECTION("NaN selects the library default level, and every other level is checked") {
     std::vector<float> samples(8000, 0.1f);
     for (size_t i = 1000; i < 1064; ++i) samples[i] = 1.0f;
 
-    // The sentinel reproduces the documented default threshold exactly.
-    SonareClippingResult sentinel = {};
+    // NaN reproduces the default level (the dB of a linear 0.999) exactly.
+    SonareClippingResult absent = {};
     SonareClippingResult explicit_default = {};
-    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.0f, 0,
-                                            &sentinel) == SONARE_OK);
-    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.999f, 0,
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, kNaN, 0,
+                                            &absent) == SONARE_OK);
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000,
+                                            20.0f * std::log10(0.999f), 0,
                                             &explicit_default) == SONARE_OK);
-    REQUIRE(sentinel.clipped_samples == explicit_default.clipped_samples);
-    REQUIRE(sentinel.region_count == explicit_default.region_count);
-    sonare_free_clipping_result(&sentinel);
+    REQUIRE(absent.clipped_samples == explicit_default.clipped_samples);
+    REQUIRE(absent.region_count == explicit_default.region_count);
+    sonare_free_clipping_result(&absent);
     sonare_free_clipping_result(&explicit_default);
 
-    // Every other out-of-domain threshold is refused. A negative one used to
-    // take the sentinel branch and come back as the default, while 1.5 -- just
-    // as far outside [0,1] -- was correctly refused.
-    for (float invalid : {-0.5f, -0.001f, 1.5f, std::numeric_limits<float>::quiet_NaN()}) {
+    // 0 dBFS is an ordinary level, not the default.
+    SonareClippingResult full_scale = {};
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.0f, 0,
+                                            &full_scale) == SONARE_OK);
+    REQUIRE(full_scale.clipped_samples == 64);
+    sonare_free_clipping_result(&full_scale);
+
+    // A level above full scale, below the numerical floor (where every sample would read as
+    // clipped), or an infinity is refused.
+    for (float invalid : {0.5f, 6.0f, -120.5f, -910.0f, std::numeric_limits<float>::infinity(),
+                          -std::numeric_limits<float>::infinity()}) {
       CAPTURE(invalid);
       SonareClippingResult rejected = {};
       REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, invalid, 0,
@@ -823,6 +835,22 @@ TEST_CASE("sonare_metering_detect_clipping", "[c_api]") {
       REQUIRE(rejected.regions == nullptr);
       REQUIRE(rejected.region_count == 0);
     }
+  }
+
+  SECTION("a zero minimum run length lists every run, like 1") {
+    std::vector<float> samples(8000, 0.1f);
+    samples[100] = 1.0f;
+    for (size_t i = 1000; i < 1064; ++i) samples[i] = 1.0f;
+    SonareClippingResult zero = {};
+    SonareClippingResult one = {};
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, kNaN, 0,
+                                            &zero) == SONARE_OK);
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, kNaN, 1, &one) ==
+            SONARE_OK);
+    REQUIRE(zero.region_count == 2);
+    REQUIRE(zero.region_count == one.region_count);
+    sonare_free_clipping_result(&zero);
+    sonare_free_clipping_result(&one);
   }
 }
 
@@ -1176,7 +1204,6 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
     SonareMelResult mel{};
     REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 100.0f,
                                       0.0f, 1, &mel) == SONARE_OK);
-    CHECK(mel.struct_version == SONARE_MEL_RESULT_VERSION);
     CHECK(mel.n_mels == 40);
     CHECK(mel.sample_rate == 22050);
     CHECK(mel.hop_length == 512);
@@ -1211,7 +1238,6 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
     SonareMfccResult mfcc{};
     REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, 0.0f, 8000.0f,
                            0, 22.0f, &mfcc) == SONARE_OK);
-    CHECK(mfcc.struct_version == SONARE_MFCC_RESULT_VERSION);
     CHECK(mfcc.n_mfcc == 13);
     CHECK(mfcc.n_mels == 40);
     CHECK(mfcc.sample_rate == 22050);

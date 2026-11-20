@@ -6,7 +6,7 @@
 import type { ClippingReport } from '../metering.js';
 import type { ClipDetection, DeclipReport } from '../types_repair.js';
 import { assertAudioChannels, assertAudioSamples, assertFloatValue } from '../validation.js';
-import { refuse, refuseType } from './entry.js';
+import { refuse } from './entry.js';
 import { interleavePlanar } from './planar.js';
 
 /**
@@ -101,28 +101,6 @@ type NativeClipDetection = Omit<ClipDetection, 'clippedSamples' | 'clippedRatio'
   sampleCount: number;
   sampleFraction: number;
 };
-
-/**
- * The linear amplitude the clip detector still reads, from `thresholdDb` in dBFS.
- * Absent is the native 0, which selects the library's threshold; a level that
- * would reach the detector as 0 is refused, since it would select it silently.
- */
-export function clipThresholdLinear(thresholdDb: unknown): number {
-  if (thresholdDb === undefined || thresholdDb === null) {
-    return 0;
-  }
-  if (typeof thresholdDb !== 'number') {
-    throw refuseType(`thresholdDb must be a number`);
-  }
-  if (Number.isNaN(thresholdDb) || thresholdDb > 0) {
-    throw refuse(`thresholdDb must be at most 0 dBFS`);
-  }
-  const linear = Math.fround(10 ** (thresholdDb / 20));
-  if (linear === 0) {
-    throw refuse(`thresholdDb is below the smallest level the detector can hold`);
-  }
-  return linear;
-}
 
 /** The addon's declip analysis, whose counts are still `sampleCount` / `sampleFraction`, under the public names. */
 export function clipDetectionFromNative(native: NativeClipDetection): ClipDetection {

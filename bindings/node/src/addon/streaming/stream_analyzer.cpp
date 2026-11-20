@@ -147,43 +147,6 @@ bool ParseWindowOption(const Napi::Object& options, Napi::Env env, sonare::Windo
   return true;
 }
 
-// Returns the C ABI's real-time defaults as a plain object whose keys are the
-// StreamAnalyzer constructor's option names.
-Napi::Value StreamAnalyzerConfigDefault(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SonareStreamConfig config{};
-  const SonareError err = sonare_stream_analyzer_config_default(&config);
-  if (err != SONARE_OK) {
-    ThrowSonareError(env, err);
-    return env.Undefined();
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("sampleRate", Napi::Number::New(env, config.sample_rate));
-  out.Set("nFft", Napi::Number::New(env, config.n_fft));
-  out.Set("hopLength", Napi::Number::New(env, config.hop_length));
-  out.Set("nMels", Napi::Number::New(env, config.n_mels));
-  out.Set("fmin", Napi::Number::New(env, config.fmin_hz));
-  out.Set("fmax", Napi::Number::New(env, config.fmax_hz));
-  out.Set("referenceHz", Napi::Number::New(env, config.reference_hz));
-  out.Set("computeMagnitude", Napi::Boolean::New(env, config.compute_magnitude != 0));
-  out.Set("computeMel", Napi::Boolean::New(env, config.compute_mel != 0));
-  out.Set("computeChroma", Napi::Boolean::New(env, config.compute_chroma != 0));
-  out.Set("computeOnset", Napi::Boolean::New(env, config.compute_onset != 0));
-  out.Set("computeSpectral", Napi::Boolean::New(env, config.compute_spectral != 0));
-  out.Set("emitEveryNFrames", Napi::Number::New(env, config.emit_every_n_frames));
-  out.Set("maxPendingFrames",
-          Napi::Number::New(env, static_cast<double>(config.max_pending_frames)));
-  out.Set("keyUpdateIntervalSec", Napi::Number::New(env, config.key_update_interval_sec));
-  out.Set("bpmUpdateIntervalSec", Napi::Number::New(env, config.bpm_update_interval_sec));
-  out.Set("window", Napi::Number::New(env, config.window));
-  out.Set("outputFormat", Napi::Number::New(env, config.output_format));
-  out.Set("maxProgressionEntries",
-          Napi::Number::New(env, static_cast<double>(config.max_progression_entries)));
-  return out;
-  SONARE_NODE_CATCH(env)
-}
-
 }  // namespace
 
 Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
@@ -215,8 +178,6 @@ Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
       });
 
   exports.Set("StreamAnalyzer", func);
-  exports.Set("streamAnalyzerConfigDefault", Napi::Function::New(env, &StreamAnalyzerConfigDefault,
-                                                                 "streamAnalyzerConfigDefault"));
   return exports;
 }
 

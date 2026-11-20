@@ -128,9 +128,6 @@ void add_parameter_targets(std::vector<StreamingParameterTarget>& targets,
                            bool loudness_stage = false) {
   const auto descriptors = processor->parameter_descriptors();
   for (const auto& descriptor : descriptors) {
-    // The chain's records carry the sidechain high-pass as one optional frequency, so the
-    // processor's enable switch has no chain key.
-    if (descriptor.key == "sidechainHighPassEnabled") continue;
     std::string full_key;
     std::string config_key;
     if (loudness_stage) {
@@ -422,19 +419,10 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   // matches the offline render.
   std::unique_ptr<rt::ProcessorBase> loudness_limiter;
   if (config_.loudness.enabled) {
-    // release_ms 0 is the documented "use the library default" sentinel
-    // (LoudnessStage::release_ms); the offline chain resolves it the same way
-    // (loudness_release_ms(), chain.cpp) before building its own limiter
-    // config, so the two chains must resolve it identically here too. The
-    // config was already accepted by validate_mastering_chain_config() above,
-    // so this call cannot throw -- it exists only for the resolved value.
-    const float resolved_release_ms = mastering::maximizer::validate_loudness_params(
-        config_.loudness.target_lufs, config_.loudness.ceiling_dbtp, config_.loudness.release_ms,
-        config_.loudness.max_limiter_gain_reduction_db, config_.loudness.true_peak_oversample);
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
             config_.loudness.ceiling_dbtp, config_.loudness.true_peak_oversample,
-            resolved_release_ms, config_.loudness.apply_gain_at_input_rate);
+            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
     limiter->prepare(sample_rate, max_block_size, num_channels);
     add_parameter_targets(parameter_targets, "loudness.optimize", limiter.get(), true);
@@ -644,26 +632,7 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   validate_realtime_parameter_domain(full_key, canonical_value, impl_->prepared_sample_rate);
   validate_chain_config_for_rate(candidate, impl_->prepared_sample_rate);
 
-  float live_value = canonical_value;
-  if (full_key == "loudness.releaseMs" && canonical_value == 0.0f) {
-    // Zero is the loudness sentinel: config() keeps 0, the limiter gets the default.
-    live_value = mastering::maximizer::validate_loudness_params(
-        candidate.loudness.target_lufs, candidate.loudness.ceiling_dbtp,
-        candidate.loudness.release_ms, candidate.loudness.max_limiter_gain_reduction_db,
-        candidate.loudness.true_peak_oversample);
-  }
-  // The sentinel and an explicit default resolve alike: update config() only.
-  bool live_value_unchanged = false;
-  if (full_key == "loudness.releaseMs") {
-    const float current_live_value = mastering::maximizer::validate_loudness_params(
-        config_.loudness.target_lufs, config_.loudness.ceiling_dbtp, config_.loudness.release_ms,
-        config_.loudness.max_limiter_gain_reduction_db, config_.loudness.true_peak_oversample);
-    live_value_unchanged = current_live_value == live_value;
-  }
-  if (live_value_unchanged) {
-    config_ = std::move(candidate);
-    return;
-  }
+  const float live_value = canonical_value;
   if (!target->processor->set_parameter(target->id, live_value)) {
     throw SonareException(
         ErrorCode::InvalidParameter,

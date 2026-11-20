@@ -63,15 +63,11 @@ typedef struct {
 
 /** Layout version of SonareMelResult and SonareMfccResult, written by the
    function that fills them. */
-#define SONARE_MEL_RESULT_VERSION 2
-#define SONARE_MFCC_RESULT_VERSION 2  ///< Layout version of SonareMfccResult.
 
 /** Mel spectrogram result. Besides the matrices it carries the parameters of
    the forward transform, so the result is enough to invert it: the inverse
    entry points take the same values as arguments. */
 typedef struct {
-  /** SONARE_MEL_RESULT_VERSION. */
-  int struct_version;
   int n_mels;       ///< Mel bands per frame.
   int n_frames;     ///< Time frames.
   int sample_rate;  ///< Sample rate in Hz.
@@ -93,8 +89,6 @@ typedef struct {
 /** MFCC result. Carries the Mel parameters its coefficients were derived with,
    plus the lifter, so the result is enough to invert it. */
 typedef struct {
-  /** SONARE_MFCC_RESULT_VERSION. */
-  int struct_version;
   int n_mfcc;       ///< Coefficients per frame.
   int n_frames;     ///< Time frames.
   int sample_rate;  ///< Sample rate in Hz.
@@ -271,12 +265,8 @@ typedef struct {
   SonarePitchClass bass;       ///< Bass pitch class, for inversion notation.
 } SonareChord;
 
-#define SONARE_CHORD_ANALYSIS_RESULT_VERSION 2  ///< Layout version of SonareChordAnalysisResult.
-
 /// @brief Detected chord sequence; free with sonare_free_chord_analysis_result.
 typedef struct {
-  /** SONARE_CHORD_ANALYSIS_RESULT_VERSION, written by the filling function. */
-  int struct_version;
   /** Tuning the chroma was built with, in cents: the options' value, or the
      measured one when tuning_auto was set. The entry points that take no
      tuning measure it. */
@@ -333,9 +323,9 @@ typedef struct {
   char* form;
 } SonareSectionResult;
 
-/** Zeroing this struct is NOT equivalent to the defaults: `n_fft` and `hop_length`
- * 0 are refused. Start from sonare_section_options_default(). */
+/** Start from sonare_section_options_init(): `n_fft` and `hop_length` 0 are refused. */
 typedef struct {
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_section_options_init.
   /** Window length in samples at 22050 Hz, rescaled to the analysis rate. The analysis rate is
    * 22050 Hz for input above it and the input rate otherwise. Default 2048. */
   int n_fft;
@@ -348,6 +338,9 @@ typedef struct {
    * boundary layer's 0.3 because sections snap to downbeats and enforce a minimum length. */
   float threshold;
 } SonareSectionOptions;
+
+/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
+void sonare_section_options_init(SonareSectionOptions* options);
 
 /** Structural boundary detection. This is the layer sonare_analyze_sections is
  * built on and is not a coarser view of it: sections are labelled spans, these
@@ -381,13 +374,12 @@ typedef struct {
   int frame_stride;       ///< raw frames averaged per analysis frame; 1 unless pooled
 } SonareBoundaryResult;
 
-/** Zeroing this struct is NOT equivalent to the defaults and changes what is
- * detected: `absolute_threshold` 0 disables the floor that asks whether the
- * features changed at all, and without it a stationary input segments anyway,
- * because the relative threshold is applied to a curve scaled by its local
- * maximum. Start from sonare_boundary_options_default(). */
+/** Start from sonare_boundary_options_init(): `absolute_threshold` 0 disables the floor that
+ * asks whether the features changed at all, and without it a stationary input segments anyway,
+ * because the relative threshold is applied to a curve scaled by its local maximum. */
 typedef struct {
-  int n_fft;  ///< Window length in samples at 22050 Hz, rescaled to the analysis rate.
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_boundary_options_init.
+  int n_fft;             ///< Window length in samples at 22050 Hz, rescaled to the analysis rate.
   /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above
    * 22050 Hz, the input itself otherwise. */
   int hop_length;
@@ -407,6 +399,9 @@ typedef struct {
   float reference_window_sec;
 } SonareBoundaryOptions;
 
+/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
+void sonare_boundary_options_init(SonareBoundaryOptions* options);
+
 /// @brief One melody contour point.
 typedef struct {
   float time_sec;      ///< seconds
@@ -424,15 +419,11 @@ typedef struct {
   float vibrato_rate_hz;      ///< Vibrato rate in Hz; 0 with no vibrato.
 } SonareMelodyResult;
 
-/** Layout version of SonareChordDetectionOptions; the caller sets it. 0 reads as
-   the current version, so a zero-filled struct with the fields set is valid. */
-#define SONARE_CHORD_DETECTION_OPTIONS_VERSION 2
-
 /// @brief Options for chord detection.
+/// @details Start from @ref sonare_chord_detection_options_init.
 typedef struct {
-  /** SONARE_CHORD_DETECTION_OPTIONS_VERSION, or 0 for the same. */
-  int struct_version;
-  float min_duration_sec;      ///< Minimum chord duration in seconds.
+  uint32_t struct_size;    ///< sizeof of this struct; set by sonare_chord_detection_options_init.
+  float min_duration_sec;  ///< Minimum chord duration in seconds.
   float smoothing_window_sec;  ///< Smoothing window in seconds.
   float threshold;      ///< final-template correlation threshold [0, 1]; below => UNKNOWN / N.C.
   int use_triads_only;  ///< Non-zero restricts the vocabulary to triads.
@@ -451,10 +442,13 @@ typedef struct {
      this unit. */
   float tuning_cents;
   /** Non-zero measures the tuning from the audio instead of reading
-     @c tuning_cents; a zeroed struct reads @c tuning_cents. The value used,
-     given or measured, is SonareChordAnalysisResult.tuning_cents. */
+     @c tuning_cents. The value used, given or measured, is
+     SonareChordAnalysisResult.tuning_cents. */
   int tuning_auto;
 } SonareChordDetectionOptions;
+
+/// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
+void sonare_chord_detection_options_init(SonareChordDetectionOptions* options);
 
 /* ============================================================================
  * NativeSynth patch (versioned) — the patch-driven synthesizer surface

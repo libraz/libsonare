@@ -12,28 +12,23 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/parameter_checks.h"
-#include "util/zero_is_default.h"
 
 namespace sonare::mastering::maximizer {
 
-float validate_loudness_params(float target_lufs, float ceiling_dbtp, float release_ms,
-                               float max_limiter_gain_reduction_db, int true_peak_oversample) {
+void validate_loudness_params(float target_lufs, float ceiling_dbtp, float release_ms,
+                              float max_limiter_gain_reduction_db, int true_peak_oversample) {
   util::check::finite_float(target_lufs, "target_lufs");
   util::check::at_most(ceiling_dbtp, 0.0, "ceiling_dbtp");
-  util::check::at_least(release_ms, 0.0, "release_ms");
+  util::check::greater_than(release_ms, 0.0, "release_ms");
   util::check::at_least(max_limiter_gain_reduction_db, 0.0, "max_limiter_gain_reduction_db");
   util::check::one_of(true_peak_oversample, std::array<int, 5>{1, 2, 4, 8, 16},
                       "true_peak_oversample");
-  // Checked above, so the sentinel is the only value that resolves to anything
-  // other than itself.
-  return ZeroIsDefault(release_ms).or_default(kDefaultLoudnessReleaseMs);
 }
 
 LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptimizeConfig& config) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  const float release_ms =
-      validate_loudness_params(config.target_lufs, config.ceiling_dbtp, config.release_ms,
-                               config.max_limiter_gain_reduction_db, config.true_peak_oversample);
+  validate_loudness_params(config.target_lufs, config.ceiling_dbtp, config.release_ms,
+                           config.max_limiter_gain_reduction_db, config.true_peak_oversample);
 
   // The re-gated solve the chain and the stereo named processor use, so every
   // entry point requests the same gain for the same input.
@@ -54,7 +49,7 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   // silence and removes the delayed prefix. Its fixed-size blocks also keep
   // the limiter's oversampled scratch allocation independent of track length.
   const TruePeakLimiterConfig limiter_config =
-      loudness_limiter_config(config.ceiling_dbtp, config.true_peak_oversample, release_ms,
+      loudness_limiter_config(config.ceiling_dbtp, config.true_peak_oversample, config.release_ms,
                               config.apply_gain_at_input_rate);
   TruePeakLimiter limiter(limiter_config);
   api::internal::run_processor_mono(limiter, samples, audio.sample_rate());

@@ -47,7 +47,6 @@ import {
   estimateMeter,
   noteSegments,
   resample,
-  streamAnalyzerConfigDefault,
   transcribe,
 } from '../../dist/index.js';
 import { unknownKeyError } from '../_helpers.js';
@@ -734,12 +733,5 @@ describe('noteSegments voiced', () => {
     expect(noteSegments({ f0Hz, frameRate, voiced, voicedProb: new Float32Array(50) })).toEqual(
       result,
     );
-  });
-});
-
-describe('streamAnalyzerConfigDefault', () => {
-  it('is exported on Node as in C', () => {
-    expect(typeof streamAnalyzerConfigDefault).toBe('function');
-    expect(streamAnalyzerConfigDefault().sampleRate).toBeGreaterThan(0);
   });
 });

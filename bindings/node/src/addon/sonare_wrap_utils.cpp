@@ -13,6 +13,7 @@
 #include "c_api/sonare_c_refusal_record.h"
 #include "c_entry_names.h"
 #include "effects/hpss.h"
+#include "field_spelling.h"
 #include "sonare_wrap_options.h"
 #include "util/constants.h"
 #include "util/error_classification.h"
@@ -25,8 +26,9 @@ using sonare::constants::kDefaultNFft;
 
 std::string ErrorMessageForCode(SonareError err) {
   // A recorded parameter refusal is rendered in request keys from its subjects, never parsed.
-  if (const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal()) {
-    return sonare::util::check::camel_spelled(*refusal).what();
+  if (const std::optional<sonare::SonareParameterRefusal> shown =
+          sonare_field_spelling::node::SpelledLastRefusal()) {
+    return shown->what();
   }
   const char* detail = sonare_last_error_message();
   if (detail != nullptr && detail[0] != '\0') {
@@ -56,9 +58,7 @@ bool LastRefusalIsShape() {
 }
 
 std::optional<sonare::SonareParameterRefusal> ShownLastRefusal() {
-  const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
-  if (refusal == nullptr) return std::nullopt;
-  return sonare::util::check::camel_spelled(*refusal);
+  return sonare_field_spelling::node::SpelledLastRefusal();
 }
 
 namespace {
@@ -252,21 +252,14 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix)
 
 void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_root) {
   if (env.IsExceptionPending()) return;
-  const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
-  if (refusal == nullptr) {
+  const std::optional<sonare::SonareParameterRefusal> shown =
+      sonare_field_spelling::node::SpelledLastRefusal(c_root);
+  if (!shown) {
     ThrowSonareError(env, err);
     return;
   }
-  const std::string root = std::string(c_root) + ".";
-  const sonare::SonareParameterRefusal flat = refusal->respelled(
-      refusal->code(),
-      [&root](const std::string& subject) {
-        return subject.rfind(root, 0) == 0 ? subject.substr(root.size()) : subject;
-      },
-      false);
-  const sonare::SonareParameterRefusal shown = sonare::util::check::camel_spelled(flat);
-  Napi::Error error = MakeSonareError(env, err, shown.what(), flat.shape_error());
-  AttachRefusal(env, error.Value(), shown);
+  Napi::Error error = MakeSonareError(env, err, shown->what(), shown->shape_error());
+  AttachRefusal(env, error.Value(), *shown);
   error.ThrowAsJavaScriptException();
 }
 
@@ -413,7 +406,7 @@ bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
 
 bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions* options) {
   if (options == nullptr) return false;
-  *options = sonare_music_analyze_options_default();
+  sonare_music_analyze_options_init(options);
   if (!value.IsObject()) return false;
 
   const Napi::Object object = value.As<Napi::Object>();

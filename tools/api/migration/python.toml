@@ -11603,34 +11603,36 @@ test = "bindings/python/tests/test_spectral_edit.py::test_an_explicit_zero_is_re
 [[entry]]
 kind = "option"
 old = "metering_detect_clipping(threshold)"
-changed = "omitted hands the core its default (was the literal 0.999); an explicit 0 raises SonareValueError"
+to = "metering_detect_clipping(threshold_db)"
+changed = "threshold -> threshold_db, a level in dBFS in [-120, 0] instead of a linear amplitude (default 20*log10(0.999)); omitted or NaN hands the core its default and a level outside the range raises SonareValueError"
 domain = "mastering"
-rule = "library-owned-defaults"
-test = "bindings/python/tests/test_metering_and_scale.py::test_an_omitted_clipping_setting_is_the_library_default"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_metering_and_scale.py::test_a_clipping_level_outside_its_domain_is_refused_by_name"
 
 [[entry]]
 kind = "option"
 old = "metering_detect_clipping(min_region_samples)"
-changed = "omitted hands the core its default (was the literal 1); an explicit 0 raises SonareValueError"
+changed = "omitted or 0 hands the core its default (was the literal 1)"
 domain = "mastering"
-rule = "library-owned-defaults"
-test = "bindings/python/tests/test_metering_and_scale.py::test_an_explicit_zero_clipping_setting_is_refused"
-
-[[entry]]
-kind = "option"
-old = "Audio.detect_clipping(threshold)"
-changed = "omitted hands the core its default (was the literal 0.999); an explicit 0 raises SonareValueError"
-domain = "core"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_metering_and_scale.py::test_an_omitted_clipping_setting_is_the_library_default"
 
 [[entry]]
 kind = "option"
+old = "Audio.detect_clipping(threshold)"
+to = "Audio.detect_clipping(threshold_db)"
+changed = "threshold -> threshold_db, a level in dBFS in [-120, 0] instead of a linear amplitude (default 20*log10(0.999)); omitted or NaN hands the core its default and a level outside the range raises SonareValueError"
+domain = "core"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_metering_and_scale.py::test_a_clipping_level_outside_its_domain_is_refused_by_name"
+
+[[entry]]
+kind = "option"
 old = "Audio.detect_clipping(min_region_samples)"
-changed = "omitted hands the core its default (was the literal 1); an explicit 0 raises SonareValueError"
+changed = "omitted or 0 hands the core its default (was the literal 1)"
 domain = "core"
 rule = "library-owned-defaults"
-test = "bindings/python/tests/test_metering_and_scale.py::test_an_explicit_zero_clipping_setting_is_refused"
+test = "bindings/python/tests/test_metering_and_scale.py::test_an_omitted_clipping_setting_is_the_library_default"
 
 [[entry]]
 kind = "option"

@@ -1108,7 +1108,7 @@ TEST_CASE("maximizer.loudnessOptimize validates one parameter map identically on
     bool accepted;
   };
   const Case cases[] = {
-      {"releaseMs", 0.0, true},
+      {"releaseMs", 0.0, false},
       {"releaseMs", -1.0, false},
       {"releaseMs", std::numeric_limits<double>::quiet_NaN(), false},
       {"releaseMs", std::numeric_limits<double>::infinity(), false},
@@ -1132,7 +1132,7 @@ TEST_CASE("maximizer.loudnessOptimize validates one parameter map identically on
   }
 }
 
-TEST_CASE("maximizer.loudnessOptimize releaseMs 0 runs the library default release",
+TEST_CASE("maximizer.loudnessOptimize releaseMs is a plain value and 0 is refused",
           "[mastering][maximizer]") {
   constexpr int kSampleRate = 48000;
   const std::vector<float> samples = limiter_driving_signal(kSampleRate, 0.25f);
@@ -1146,17 +1146,13 @@ TEST_CASE("maximizer.loudnessOptimize releaseMs 0 runs the library default relea
     return params;
   };
 
-  const auto sentinel = loudness_mono(samples, kSampleRate, with_release(0.0));
-  const auto library_default = loudness_mono(samples, kSampleRate, with_release(50.0));
+  CHECK_THROWS_AS(loudness_mono(samples, kSampleRate, with_release(0.0)), SonareException);
+  CHECK_THROWS_AS(loudness_stereo(samples, kSampleRate, with_release(0.0)), SonareException);
+  const auto library_default = loudness_mono(samples, kSampleRate, base);
+  const auto explicit_default = loudness_mono(samples, kSampleRate, with_release(50.0));
   const auto immediate = loudness_mono(samples, kSampleRate, with_release(1.0));
-  CHECK(sentinel.samples == library_default.samples);
-  CHECK(sentinel.samples != immediate.samples);
-
-  const auto stereo_sentinel = loudness_stereo(samples, kSampleRate, with_release(0.0));
-  const auto stereo_default = loudness_stereo(samples, kSampleRate, with_release(50.0));
-  const auto stereo_immediate = loudness_stereo(samples, kSampleRate, with_release(1.0));
-  CHECK(stereo_sentinel.left == stereo_default.left);
-  CHECK(stereo_sentinel.left != stereo_immediate.left);
+  CHECK(explicit_default.samples == library_default.samples);
+  CHECK(explicit_default.samples != immediate.samples);
 }
 
 TEST_CASE("LoudnessOptimize returns time-aligned output and reports the latency it removed",

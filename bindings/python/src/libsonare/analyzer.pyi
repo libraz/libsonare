@@ -2119,7 +2119,7 @@ def metering_true_peak_dbtp(
 def metering_detect_clipping(
     samples: FloatSamples,
     sample_rate: int,
-    threshold: float | None = None,
+    threshold_db: float | None = None,
     min_region_samples: int | None = None,
 ) -> ClippingReport: ...
 def metering_dynamic_range(

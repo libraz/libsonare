@@ -13662,7 +13662,7 @@ entry = "./analysis"
 [[entry]]
 kind = "function"
 old = "streamAnalyzerConfigDefaults"
-new = "streamAnalyzerConfigDefault"
+removed = "Omit a StreamConfig field; the analyzer reads an absent field as the library default."
 domain = "analysis"
 rule = "individual"
 

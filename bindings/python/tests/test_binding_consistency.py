@@ -572,21 +572,17 @@ def test_estimate_meter_keyword_defaults_match_the_core() -> None:
     """`estimate_meter`'s keyword defaults are the core's, not a hand-copy.
 
     The five scoring knobs were restated as Python literals while the C ABI
-    already publishes them through ``sonare_meter_options_default()`` — which is
+    already publishes them through ``sonare_meter_options_init()`` — which is
     what the Node addon reads live. The existing meter-options test compares a
-    different struct (``sonare_music_analyze_options_default``), so these five
+    different struct (``sonare_music_analyze_options_init``), so these five
     had nothing checking them; parity does not look at defaults either.
     """
     import ctypes
 
     import libsonare
     from libsonare._ffi_types_analysis import SonareMeterOptions
-    from libsonare._runtime import _get_lib
 
-    lib = _get_lib()
-    lib.sonare_meter_options_default.restype = SonareMeterOptions
-    lib.sonare_meter_options_default.argtypes = []
-    core = lib.sonare_meter_options_default()
+    core = SonareMeterOptions()
 
     parameters = inspect.signature(libsonare.estimate_meter).parameters
     # int fields compare exactly; the float knobs are stored as C float, so
@@ -610,7 +606,7 @@ def test_estimate_meter_keyword_defaults_match_the_core() -> None:
 def test_detect_boundaries_keyword_defaults_match_the_core() -> None:
     """`detect_boundaries`' ten keyword defaults are the core's, not a hand-copy.
 
-    ``sonare_boundary_options_default()`` was added so a caller could not reach
+    ``sonare_boundary_options_init()`` was added so a caller could not reach
     the detector through a zeroed struct, and its ctypes signature is declared
     beside ``sonare_detect_boundaries`` — but nothing on this surface called it,
     so the ten Python literals were the effective defaults with nothing holding
@@ -622,12 +618,8 @@ def test_detect_boundaries_keyword_defaults_match_the_core() -> None:
 
     import libsonare
     from libsonare._ffi_types_streaming import SonareBoundaryOptions
-    from libsonare._runtime import _get_lib
 
-    lib = _get_lib()
-    lib.sonare_boundary_options_default.restype = SonareBoundaryOptions
-    lib.sonare_boundary_options_default.argtypes = []
-    core = lib.sonare_boundary_options_default()
+    core = SonareBoundaryOptions()
 
     parameters = inspect.signature(libsonare.detect_boundaries).parameters
     for name in ("n_fft", "hop_length", "kernel_size", "n_mfcc", "n_chroma"):

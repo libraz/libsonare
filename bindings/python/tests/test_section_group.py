@@ -69,9 +69,9 @@ def test_alternating_material_yields_distinct_groups(abab) -> None:
 
 
 def test_analyze_sections_threshold_none_is_the_library_default(abab) -> None:
-    from libsonare._runtime import _get_lib
+    from libsonare._ffi import SonareSectionOptions
 
-    default = float(_get_lib().sonare_section_options_default().threshold)
+    default = float(SonareSectionOptions().threshold)
     omitted = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0)
     explicit = libsonare.analyze_sections(
         abab, sample_rate=_SR, min_section_sec=4.0, threshold=default

@@ -123,7 +123,6 @@
 #include "effects/reverb/room_reverb.h"
 #include "util/insertion_sort.h"
 #include "util/number_format.h"
-#include "util/zero_is_default.h"
 #endif
 #endif
 
@@ -703,15 +702,15 @@ V read_vec3(const ParamMap& params, const std::string& prefix, const V& defaults
           f(params, (prefix + "Z").c_str(), defaults.z, kMeters)};
 }
 
-// Climate pair and receiver spacing; 0 selects the library value for each.
+// Climate pair and receiver spacing; an absent key keeps the config's value. A given 0 is the
+// real value (0 degC, 0 % humidity); a 0 receiver spacing is refused by the room's own check.
 template <typename Config>
 void read_air_and_spacing(const ParamMap& params, Config& config) {
-  config.air.temperature_c = ZeroIsDefault(f(params, "airTemperatureC", 0.0f, kDegreesCelsius))
-                                 .or_default(config.air.temperature_c);
-  config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f, kPercent))
-                                    .or_default(config.air.humidity_percent);
-  config.receiver_spacing_m = ZeroIsDefault(f(params, "receiverSpacingM", 0.0f, kMeters))
-                                  .or_default(config.receiver_spacing_m);
+  config.air.temperature_c =
+      f(params, "airTemperatureC", config.air.temperature_c, kDegreesCelsius);
+  config.air.humidity_percent =
+      f(params, "airHumidityPercent", config.air.humidity_percent, kPercent);
+  config.receiver_spacing_m = f(params, "receiverSpacingM", config.receiver_spacing_m, kMeters);
 }
 
 // The room validators refuse config member paths; these are the flat keys each one is read from.
@@ -930,9 +929,6 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
-    // The climate pair follows the acoustic ABI's "0 selects the library value"
-    // rule (the ISO reference climate), so the same option bag resolves to the
-    // same room here as on the offline facade.
     read_air_and_spacing(params, config);
     return make<RoomReverb>(config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
@@ -964,11 +960,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.late_model = b(params, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                         : sonare::acoustic::ReverbModel::Sabine;
     config.mixing_time_ms = f(params, "mixingTimeMs", config.mixing_time_ms, kMs);
-    // A zero crossfade means "use the library default" on the offline acoustic
-    // facade; preserve that normalization for the streaming insert as well.
-    config.crossfade_ms = ZeroIsDefault(f(params, "crossfadeMs", 0.0f, kMs))
-                              .checked(config.crossfade_ms, 0.0f,
-                                       sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
+    config.crossfade_ms = f(params, "crossfadeMs", config.crossfade_ms, kMs);
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
     // Same climate convention as effects.reverb.room above.

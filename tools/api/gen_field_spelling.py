@@ -156,10 +156,14 @@ def render_cpp(surface: str, rows: list[Row]) -> str:
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <string>
 #include <string_view>
 
-namespace sonare_field_spelling {{
+#include "c_api/sonare_c_last_refusal.h"
+#include "util/parameter_checks.h"
+
+namespace sonare_field_spelling::{surface} {{
 
 struct Override {{
   std::string_view entry;
@@ -180,20 +184,30 @@ inline std::string SurfaceSpelling(std::string_view entry, std::string_view subj
   if (it != kOverrides.end() && it->entry == entry && it->subject == subject) {{
     return std::string(it->spelling);
   }}
-  std::string out;
-  bool upper = false;
-  for (char c : subject) {{
-    if (c == '_') {{
-      upper = true;
-      continue;
-    }}
-    out += upper && c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c;
-    upper = false;
-  }}
-  return out;
+  return sonare::util::check::camel_path(std::string(subject));
 }}
 
-}}  // namespace sonare_field_spelling
+// The last C refusal with each subject in the {surface} caller's spelling, looked up under the
+// refused entry; @p c_root strips a "<c_root>." prefix the request keys do not carry.
+inline std::optional<sonare::SonareParameterRefusal> SpelledLastRefusal(
+    std::string_view c_root = {{}}) {{
+  const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
+  if (refusal == nullptr) return std::nullopt;
+  if (refusal->caller_spelled()) return *refusal;
+  const char* entry = sonare_c_detail::last_refusal_entry();
+  const std::string_view key = entry != nullptr ? entry : "";
+  const std::string root = c_root.empty() ? std::string() : std::string(c_root) + ".";
+  return refusal->respelled(
+      refusal->code(),
+      [key, &root](const std::string& subject) {{
+        const bool rooted = !root.empty() && subject.rfind(root, 0) == 0;
+        return SurfaceSpelling(key, rooted ? std::string_view(subject).substr(root.size())
+                                           : std::string_view(subject));
+      }},
+      true);
+}}
+
+}}  // namespace sonare_field_spelling::{surface}
 """
 
 

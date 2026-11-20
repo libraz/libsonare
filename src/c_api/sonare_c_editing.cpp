@@ -190,7 +190,7 @@ SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, 
 }
 
 SonareError sonare_metering_detect_clipping(const float* samples, size_t length, int sample_rate,
-                                            float threshold, size_t min_region_samples,
+                                            float threshold_db, size_t min_region_samples,
                                             SonareClippingResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
@@ -198,14 +198,10 @@ SonareError sonare_metering_detect_clipping(const float* samples, size_t length,
   return run_offline(
       "metering_detect_clipping", "samples", samples, length, sample_rate,
       [&](const Audio& audio) -> SonareError {
-        // Only the documented sentinel (0) selects the library default; any other
-        // out-of-domain threshold throws here and run_offline maps it to
-        // SONARE_ERROR_INVALID_PARAMETER, so a negative request is refused exactly
-        // like the equally out-of-domain 1.5 always was.
-        const metering::ClippingParams params =
-            metering::clipping_params_from_public(threshold, min_region_samples);
         return fill_clipping_result(
-            metering::detect_clipping(audio, params.threshold, params.min_region_samples), out);
+            metering::detect_clipping(audio, metering::clipping_threshold_from_db(threshold_db),
+                                      min_region_samples),
+            out);
       });
 }
 
@@ -585,17 +581,16 @@ SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample
   SONARE_C_CATCH
 }
 
-SonareError sonare_audio_detect_clipping(const SonareAudio* audio, float threshold,
+SonareError sonare_audio_detect_clipping(const SonareAudio* audio, float threshold_db,
                                          size_t min_region_samples, SonareClippingResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(audio);
   SONARE_C_TRY
-  const metering::ClippingParams params =
-      metering::clipping_params_from_public(threshold, min_region_samples);
+  const float threshold = metering::clipping_threshold_from_db(threshold_db);
   SONARE_C_REQUIRE_NONNULL(out);
   return fill_clipping_result(
-      metering::detect_clipping(audio->audio, params.threshold, params.min_region_samples), out);
+      metering::detect_clipping(audio->audio, threshold, min_region_samples), out);
   SONARE_C_CATCH
 }
 

@@ -128,10 +128,16 @@ describe('tuning converters', () => {
 
   it('refuse values outside their domain', () => {
     expect(() => tuningToReferenceHz(Number.NaN)).toThrow();
-    // The core's plain refusal for each.
-    expect(() => tuningToReferenceHz(0, 0)).toThrow(/^tuningToReferenceHz: Invalid parameter$/);
-    expect(() => referenceHzToTuning(-1)).toThrow(/^referenceHzToTuning: Invalid parameter$/);
-    expect(() => referenceHzToTuning(440, 0)).toThrow(/^referenceHzToTuning: Invalid parameter$/);
+    // The core names the refused argument in each.
+    expect(() => tuningToReferenceHz(0, 0)).toThrow(
+      'tuningToReferenceHz: a4Hz must be finite and greater than 0',
+    );
+    expect(() => referenceHzToTuning(-1)).toThrow(
+      'referenceHzToTuning: referenceHz must be finite and greater than 0',
+    );
+    expect(() => referenceHzToTuning(440, 0)).toThrow(
+      'referenceHzToTuning: a4Hz must be finite and greater than 0',
+    );
     for (const refuse of [
       () => tuningToReferenceHz(0, 0),
       () => referenceHzToTuning(-1),

@@ -16,7 +16,6 @@ import {
   type StreamPatternScore,
   type StreamProgressiveEstimate,
   type StreamStats,
-  streamAnalyzerConfigDefault,
 } from '../../dist/index.js';
 import * as workletModule from '../../dist/worklet.js';
 import {
@@ -55,17 +54,10 @@ describe('stream analyzer surface', () => {
     await init();
   });
 
-  it('names the config default in the singular and drops the old aliases', () => {
-    const defaults = streamAnalyzerConfigDefault();
-    expect(defaults.sampleRate).toBeGreaterThan(0);
-    expect(defaults.fminHz).toBeGreaterThanOrEqual(0);
-    expect(defaults.referenceHz).toBe(440);
-    expect(defaults.window).toBe('hann');
-    for (const removed of ['fmin', 'fmax', 'tuningRefHz', 'computeMagnitude', 'outputFormat']) {
-      expect(defaults).not.toHaveProperty(removed);
+  it('publishes no defaults function: an omitted field already means the default', () => {
+    for (const name of ['streamAnalyzerConfigDefault', 'streamAnalyzerConfigDefaults']) {
+      expect((indexModule as Record<string, unknown>)[name]).toBeUndefined();
     }
-    expect((indexModule as Record<string, unknown>).streamAnalyzerConfigDefaults).toBeUndefined();
-    expectTypeOf(defaults).toEqualTypeOf<Required<StreamConfig>>();
   });
 
   it('reads frameCount, sampleRate, availableFrames and currentTimeSec as getters', () => {

@@ -39,8 +39,11 @@ sonare::mastering::repair::DereverbClassicalConfig read_dereverb_config(
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
-constexpr SonareDereverbClassicalConfig kDereverbConfigDefaults{0.0f, 1.0f,  1024, 256, 0.4f, 50.0f,
-                                                                1.0f, 0.08f, 0,    2,   3,    0.7f};
+SonareDereverbClassicalConfig DefaultDereverbConfig() {
+  SonareDereverbClassicalConfig config{};
+  sonare_dereverb_classical_config_init(&config);
+  return config;
+}
 
 /// @brief Marshal the pair-level reverb analysis into the JS shape the dereverb
 ///        stereo report carries.
@@ -145,8 +148,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalStereo(const Napi::Callb
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   // Library defaults (sonare_c_mastering.h SonareDereverbClassicalConfig),
   // applied before any options key overrides a field.
-  SonareDereverbClassicalConfig config{0.0f, 1.0f,  1024, 256, 0.4f, 50.0f,
-                                       1.0f, 0.08f, 0,    2,   3,    0.7f};
+  SonareDereverbClassicalConfig config{};
+  sonare_dereverb_classical_config_init(&config);
   if (info.Length() >= 4 && info[3].IsObject()) {
     config = read_dereverb_config_c(info[3].As<Napi::Object>(), config);
   }
@@ -209,7 +212,7 @@ Napi::Value SonareWrap::MasteringRepairDetectReverb(const Napi::CallbackInfo& in
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
-  SonareDereverbClassicalConfig config = kDereverbConfigDefaults;
+  SonareDereverbClassicalConfig config = DefaultDereverbConfig();
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_dereverb_config_c(info[2].As<Napi::Object>(), config);
   SonareReverbDetection detection{};
@@ -233,7 +236,7 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalLinked(const Napi::Callb
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[1], "sampleRate");
-  SonareDereverbClassicalConfig config = kDereverbConfigDefaults;
+  SonareDereverbClassicalConfig config = DefaultDereverbConfig();
   if (info.Length() >= 3 && info[2].IsObject()) {
     config = read_dereverb_config_c(info[2].As<Napi::Object>(), config);
   }

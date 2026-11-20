@@ -2,7 +2,6 @@ import { refuse, withEntry } from './internal/entry.js';
 import {
   assertUnitInterval,
   clippingReportFromNative,
-  clipThresholdLinear,
   interleaveMeterChannels,
   refuseZeroSentinel,
   waveformReportFromNative,
@@ -327,10 +326,8 @@ export function meteringDetectClipping(...args: unknown[]): ClippingReport {
     if (r.minRegionSamples !== undefined && r.minRegionSamples !== null) {
       assertNonNegativeSafeInteger(r.minRegionSamples, 'minRegionSamples');
     }
-    // Native still takes the linear threshold.
-    const threshold = clipThresholdLinear(r.thresholdDb);
     return clippingReportFromNative(
-      addon.meteringDetectClipping(r.samples, r.sampleRate, threshold, r.minRegionSamples),
+      addon.meteringDetectClipping(r.samples, r.sampleRate, r.thresholdDb, r.minRegionSamples),
     );
   });
 }

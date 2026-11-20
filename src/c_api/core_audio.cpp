@@ -143,9 +143,12 @@ SonareError sonare_downmix(const float* channels, size_t frames, size_t num_chan
   SONARE_C_ZERO_OUTS(out_samples);
   mixing::DownmixOptions fold;
   if (options != nullptr) {
-    if (!sonare_c_detail::struct_size_accepted(options->struct_size, sizeof(SonareDownmixOptions),
-                                               "options")) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (const SonareError err = sonare_c_detail::run_validation([&] {
+          sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareDownmixOptions),
+                                               "options", "sonare_downmix_options_init");
+        });
+        err != SONARE_OK) {
+      return err;
     }
     fold.include_lfe = options->include_lfe != 0;
     fold.normalize = options->normalize != 0;

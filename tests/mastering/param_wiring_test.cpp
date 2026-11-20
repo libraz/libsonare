@@ -247,7 +247,6 @@ TEST_CASE("chain compressor advanced fields survive flat-param apply",
 
   REQUIRE(cfg.dynamics.compressor.enabled);
   REQUIRE(c.detector == sonare::mastering::dynamics::DetectorMode::LogRms);
-  REQUIRE(c.sidechain_high_pass_enabled);
   REQUIRE(c.sidechain_high_pass_hz == 250.0f);
   REQUIRE(c.pdr_time_ms == 30.0f);
   REQUIRE(c.pdr_release_scale == 1.5f);
@@ -258,7 +257,6 @@ TEST_CASE("chain compressor advanced fields round-trip through JSON",
   MasteringChainConfig cfg;
   cfg.dynamics.compressor.enabled = true;
   cfg.dynamics.compressor.config.detector = sonare::mastering::dynamics::DetectorMode::Peak;
-  cfg.dynamics.compressor.config.sidechain_high_pass_enabled = true;
   cfg.dynamics.compressor.config.sidechain_high_pass_hz = 180.0f;
   cfg.dynamics.compressor.config.pdr_time_ms = 22.0f;
   cfg.dynamics.compressor.config.pdr_release_scale = 2.25f;
@@ -268,7 +266,6 @@ TEST_CASE("chain compressor advanced fields round-trip through JSON",
 
   REQUIRE(restored.dynamics.compressor.enabled);
   REQUIRE(c.detector == sonare::mastering::dynamics::DetectorMode::Peak);
-  REQUIRE(c.sidechain_high_pass_enabled);
   REQUIRE(c.sidechain_high_pass_hz == 180.0f);
   REQUIRE(c.pdr_time_ms == 22.0f);
   REQUIRE(c.pdr_release_scale == 2.25f);
@@ -1474,22 +1471,19 @@ TEST_CASE("a renamed processor parameter is refused naming its successor",
 
   SECTION("compressor and router keep their indices under the new names") {
     sonare::mastering::dynamics::Compressor compressor;
-    unsigned int enabled_id = 99;
     unsigned int hz_id = 99;
     for (const auto& descriptor : compressor.parameter_descriptors()) {
-      if (descriptor.key == "sidechainHighPassEnabled") enabled_id = descriptor.id;
       if (descriptor.key == "sidechainHighPassHz") hz_id = descriptor.id;
       CHECK(descriptor.key.find("Hpf") == std::string::npos);
+      CHECK(descriptor.key != "sidechainHighPassEnabled");
     }
-    CHECK(enabled_id == 8);
-    CHECK(hz_id == 9);
+    CHECK(hz_id == 8);
 
     std::vector<std::string> unknown;
-    REQUIRE(make_insert("dynamics.compressor",
-                        R"({"sidechainHighPassEnabled":1,"sidechainHighPassHz":200})",
-                        &unknown) != nullptr);
+    REQUIRE(make_insert("dynamics.compressor", R"({"sidechainHighPassHz":200})", &unknown) !=
+            nullptr);
     CHECK(unknown.empty());
-    for (const char* old_key : {"sidechainHpfEnabled", "sidechainHpfHz"}) {
+    for (const char* old_key : {"sidechainHpfHz"}) {
       const std::string message = refusal_of([&] {
         api::apply_named_processor("dynamics.compressor", samples.data(), samples.size(), 48000,
                                    {{old_key, 1.0}});
@@ -1500,8 +1494,7 @@ TEST_CASE("a renamed processor parameter is refused naming its successor",
     }
 
     std::vector<std::string> router_unknown;
-    REQUIRE(make_insert("dynamics.sidechainRouter",
-                        R"({"sidechainHighPassEnabled":1,"sidechainHighPassHz":200})",
+    REQUIRE(make_insert("dynamics.sidechainRouter", R"({"sidechainHighPassHz":200})",
                         &router_unknown) != nullptr);
     CHECK(router_unknown.empty());
     REQUIRE(make_insert("dynamics.sidechainRouter", R"({"sidechainHpfHz":200})", &router_unknown) !=

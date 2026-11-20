@@ -674,13 +674,12 @@ TEST_CASE("The declip threshold is a dBFS key", "[mastering][chain]") {
 
 TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering][chain]") {
   const MasteringChainConfig defaults;
-  REQUIRE_FALSE(defaults.dynamics.compressor.config.sidechain_high_pass_enabled);
+  REQUIRE(defaults.dynamics.compressor.config.sidechain_high_pass_hz == 0.0f);
   REQUIRE_THAT(chain_config_to_json(defaults), !ContainsSubstring("sidechainH"));
   REQUIRE_FALSE(chain_config_parameter_value(defaults, "dynamics.compressor.sidechainHighPassHz"));
 
   Param params[] = {{"dynamics.compressor.sidechainHighPassHz", 180.0}};
   const MasteringChainConfig config = parse_chain_config_params(params, 1);
-  REQUIRE(config.dynamics.compressor.config.sidechain_high_pass_enabled);
   REQUIRE(config.dynamics.compressor.config.sidechain_high_pass_hz == 180.0f);
   REQUIRE(*chain_config_parameter_value(config, "dynamics.compressor.sidechainHighPassHz") ==
           180.0);
@@ -688,12 +687,14 @@ TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering]
   REQUIRE_THAT(document, ContainsSubstring("dynamics.compressor.sidechainHighPassHz"));
   REQUIRE_THAT(document, !ContainsSubstring("sidechainHpf"));
   const MasteringChainConfig reloaded = chain_config_from_json(document);
-  REQUIRE(reloaded.dynamics.compressor.config.sidechain_high_pass_enabled);
   REQUIRE(reloaded.dynamics.compressor.config.sidechain_high_pass_hz == 180.0f);
 
-  // Presence needs a finite positive frequency; zero is a refusal, not "off".
-  for (const double bad : {0.0, -5.0, std::numeric_limits<double>::infinity(),
-                           std::numeric_limits<double>::quiet_NaN()}) {
+  // Zero is the same as leaving the key out; a negative or non-finite value is refused.
+  Param zero[] = {{"dynamics.compressor.sidechainHighPassHz", 0.0}};
+  REQUIRE(parse_chain_config_params(zero, 1).dynamics.compressor.config.sidechain_high_pass_hz ==
+          0.0f);
+  for (const double bad :
+       {-5.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
     CAPTURE(bad);
     REQUIRE(dot_key_refusal("dynamics.compressor.sidechainHighPassHz", bad).first ==
             ErrorCode::InvalidParameter);
@@ -723,8 +724,7 @@ TEST_CASE("A multiband band's sidechain high-pass is one optional key", "[master
   Param params[] = {{high_pass_key.c_str(), 140.0}};
   const MasteringChainConfig config = parse_chain_config_params(params, 1);
   const auto& bands = config.dynamics.multiband_comp.config.bands;
-  REQUIRE_FALSE(bands[0].sidechain_high_pass_enabled);
-  REQUIRE(bands[1].sidechain_high_pass_enabled);
+  REQUIRE(bands[0].sidechain_high_pass_hz == 0.0f);
   REQUIRE(bands[1].sidechain_high_pass_hz == 140.0f);
   REQUIRE(*chain_config_parameter_value(config, high_pass_key) == 140.0);
   REQUIRE_FALSE(
@@ -736,11 +736,9 @@ TEST_CASE("A multiband band's sidechain high-pass is one optional key", "[master
   REQUIRE_THAT(document, !ContainsSubstring("sidechainHpf"));
   const MasteringChainConfig reloaded = chain_config_from_json(document);
   const auto& reloaded_bands = reloaded.dynamics.multiband_comp.config.bands;
-  REQUIRE_FALSE(reloaded_bands[0].sidechain_high_pass_enabled);
-  REQUIRE(reloaded_bands[1].sidechain_high_pass_enabled);
+  REQUIRE(reloaded_bands[0].sidechain_high_pass_hz == 0.0f);
   REQUIRE(reloaded_bands[1].sidechain_high_pass_hz == 140.0f);
 
-  REQUIRE(dot_key_refusal(high_pass_key.c_str(), 0.0).first == ErrorCode::InvalidParameter);
   REQUIRE(dot_key_refusal(high_pass_key.c_str(), -1.0).first == ErrorCode::InvalidParameter);
 
   for (const char* old_field : {"sidechainHpfEnabled", "sidechainHpfHz"}) {
@@ -1529,24 +1527,15 @@ TEST_CASE("StreamingMasteringChain options constructor ignores gain when loudnes
   REQUIRE(std::find(names.begin(), names.end(), "loudness.optimize") == names.end());
 }
 
-// mastering-013: release_ms=0 is the documented "use the library default"
-// sentinel (LoudnessStage::release_ms). The offline chain resolves it before
-// building its post-gain true-peak limiter (loudness_release_ms(), chain.cpp);
-// the streaming chain used to pass the raw sentinel straight through, so its
-// limiter ran with an effectively instantaneous release instead of
-// kDefaultLoudnessReleaseMs. A config built with the sentinel and one built
-// with the default spelled out explicitly must therefore process identically.
-TEST_CASE(
-    "StreamingMasteringChain resolves the loudness release_ms=0 sentinel like the offline "
-    "chain",
-    "[mastering][chain][streaming]") {
+// release_ms is a plain value: a loudness stage with 0 is refused at construction, and a
+// stage left at the default builds the same limiter as one spelling the default out.
+TEST_CASE("StreamingMasteringChain refuses loudness release_ms 0 and runs the default otherwise",
+          "[mastering][chain][streaming]") {
   constexpr int kSampleRate = 48000;
   constexpr int kBlockSize = 256;
   constexpr int kSamples = 4096;
 
   auto burst_then_quiet = []() {
-    // A loud transient burst forces real gain reduction; the long quiet tail
-    // that follows is where a 0 ms and a 50 ms release audibly disagree.
     std::vector<float> signal(static_cast<size_t>(kSamples), 0.02f);
     for (int i = 0; i < 200; ++i) {
       signal[static_cast<size_t>(i)] = 0.95f;
@@ -1554,14 +1543,17 @@ TEST_CASE(
     return signal;
   };
 
-  auto process = [&](float release_ms) {
+  auto make_config = [](float release_ms) {
     MasteringChainConfig config;
     config.loudness.enabled = true;
     config.loudness.target_lufs = -6.0f;
     config.loudness.ceiling_dbtp = -0.3f;
     config.loudness.release_ms = release_ms;
     config.loudness.max_limiter_gain_reduction_db = 24.0f;
+    return config;
+  };
 
+  auto process = [&](const MasteringChainConfig& config) {
     StreamingMasteringChainOptions options;
     options.loudness_static_gain_db = 18.0f;  // drive the limiter hard
 
@@ -1577,11 +1569,14 @@ TEST_CASE(
     return signal;
   };
 
-  const auto sentinel = process(0.0f);
-  const auto explicit_default = process(sonare::mastering::maximizer::kDefaultLoudnessReleaseMs);
+  StreamingMasteringChainOptions options;
+  options.loudness_static_gain_db = 18.0f;
+  CHECK_THROWS_AS(StreamingMasteringChain(make_config(0.0f), options), sonare::SonareException);
 
-  REQUIRE(sentinel.size() == explicit_default.size());
-  CHECK(max_abs_difference(sentinel, explicit_default) == 0.0f);
+  const auto fallback =
+      process(make_config(sonare::mastering::maximizer::kDefaultLoudnessReleaseMs));
+  const auto fast = process(make_config(1.0f));
+  CHECK(max_abs_difference(fallback, fast) > 0.0f);
 }
 
 TEST_CASE("StreamingMasteringChain processes mono blocks", "[mastering][chain][streaming]") {
@@ -1913,7 +1908,7 @@ TEST_CASE("chain parameter lookup preserves non-default boolean fields",
   MasteringChainConfig config;
   config.dynamics.compressor.enabled = true;
   config.dynamics.compressor.config.auto_makeup = true;
-  config.dynamics.compressor.config.sidechain_high_pass_enabled = true;
+  config.dynamics.compressor.config.sidechain_high_pass_hz = 120.0f;
   REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.autoMakeup") ==
           std::optional<double>{1.0});
   REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.sidechainHighPassHz") ==
@@ -2385,7 +2380,7 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
                       SonareException);
   }
 
-  SECTION("loudness aliases keep the static gain and resolve release sentinel") {
+  SECTION("loudness aliases keep the static gain and refuse a zero release") {
     MasteringChainConfig config;
     config.loudness.enabled = true;
     StreamingMasteringChainOptions options;
@@ -2393,9 +2388,10 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
     StreamingMasteringChain chain(config, options);
     chain.prepare(kSampleRate, kBlockSize, 1);
     REQUIRE_NOTHROW(chain.set_parameter("loudness.ceilingDbtp", -2.0));
-    REQUIRE_NOTHROW(chain.set_parameter("loudness.releaseMs", 0.0));
+    REQUIRE_THROWS_AS(chain.set_parameter("loudness.releaseMs", 0.0), SonareException);
     REQUIRE(chain.config().loudness.ceiling_dbtp == Catch::Approx(-2.0f));
-    REQUIRE(chain.config().loudness.release_ms == Catch::Approx(0.0f));
+    REQUIRE_NOTHROW(chain.set_parameter("loudness.releaseMs", 80.0));
+    REQUIRE(chain.config().loudness.release_ms == Catch::Approx(80.0f));
   }
 }
 
@@ -3150,10 +3146,7 @@ void require_same_band(const CompressorConfig& actual, const CompressorConfig& e
   CHECK(actual.makeup_gain_db == expected.makeup_gain_db);
   CHECK(actual.auto_makeup == expected.auto_makeup);
   CHECK(actual.detector == expected.detector);
-  CHECK(actual.sidechain_high_pass_enabled == expected.sidechain_high_pass_enabled);
-  // A record carries the corner only while the high-pass is on, so an off band's corner is unused.
-  if (expected.sidechain_high_pass_enabled)
-    CHECK(actual.sidechain_high_pass_hz == expected.sidechain_high_pass_hz);
+  CHECK(actual.sidechain_high_pass_hz == expected.sidechain_high_pass_hz);
   CHECK(actual.pdr_time_ms == expected.pdr_time_ms);
   CHECK(actual.pdr_release_scale == expected.pdr_release_scale);
 }
@@ -3191,8 +3184,7 @@ MultibandCompStage four_band_stage() {
     band.makeup_gain_db = 0.5f * step;
     band.auto_makeup = index % 2 == 1;
     band.detector = static_cast<DetectorMode>(index % 3);
-    band.sidechain_high_pass_enabled = index % 2 == 0;
-    band.sidechain_high_pass_hz = 70.0f + 5.0f * step;
+    band.sidechain_high_pass_hz = index % 2 == 0 ? 70.0f + 5.0f * step : 0.0f;
     band.pdr_time_ms = 2.0f * step;
     band.pdr_release_scale = 1.0f + 0.25f * step;
   }
@@ -3223,7 +3215,7 @@ std::vector<Param> array_spelling(const MultibandCompStage& stage) {
     params.push_back({mb_key(prefix + "makeupGainDb"), band.makeup_gain_db});
     params.push_back({mb_key(prefix + "autoMakeup"), band.auto_makeup ? 1.0 : 0.0});
     params.push_back({mb_key(prefix + "detector"), static_cast<double>(band.detector)});
-    if (band.sidechain_high_pass_enabled) {
+    if (band.sidechain_high_pass_hz > 0.0f) {
       params.push_back({mb_key(prefix + "sidechainHighPassHz"), band.sidechain_high_pass_hz});
     }
     params.push_back({mb_key(prefix + "pdrTimeMs"), band.pdr_time_ms});

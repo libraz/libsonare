@@ -573,7 +573,7 @@ class TestMonoRefusals:
         assert excinfo.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
         assert (
             str(excinfo.value)
-            == f"mastering_repair_{name}: sample_rate is out of the supported range"
+            == f"mastering_repair_{name}: sample_rate must be an integer in [8000, 384000]"
         )
 
         assert entry(tone, SR) is not None
@@ -741,6 +741,6 @@ class TestStereoRefusals:
             libsonare.mastering_repair_detect_trim_range_stereo(burst, burst, 0)
         assert excinfo.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
         entry = "mastering_repair_detect_trim_range_stereo"
-        assert str(excinfo.value) == f"{entry}: sample_rate is out of the supported range"
+        assert str(excinfo.value) == f"{entry}: sample_rate must be an integer in [8000, 384000]"
 
         assert libsonare.mastering_repair_detect_trim_range_stereo(burst, burst, SR) is not None

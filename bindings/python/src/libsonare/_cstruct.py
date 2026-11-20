@@ -78,6 +78,10 @@ class CStruct(ctypes.Structure):
 
     __slots__ = ()
 
+    # The C function a struct with a ``struct_size`` field starts from: it writes sizeof and
+    # the defaults, so a construction seeds them before applying its own arguments.
+    _c_init_: ClassVar[str | None] = None
+
     # Read through ``cls.__dict__`` rather than attribute lookup, so a subclass
     # builds its own table instead of inheriting its parent's.
     _integer_bounds_cache: ClassVar[dict[str, tuple[int, int]]]
@@ -116,6 +120,22 @@ class CStruct(ctypes.Structure):
             names = frozenset(field[0] for field in getattr(cls, "_fields_", ()))
             cls._field_names_cache = names
         return names
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        init = type(self)._c_init_
+        if init is None:
+            super().__init__(*args, **kwargs)
+            return
+        super().__init__()
+        from ._runtime import _get_lib
+
+        getattr(_get_lib(), init)(ctypes.byref(self))
+        # Positional arguments start after struct_size, which only the init function writes.
+        named = [field[0] for field in type(self)._fields_ if field[0] != "struct_size"]
+        for name, value in zip(named, args, strict=False):
+            setattr(self, name, value)
+        for name, value in kwargs.items():
+            setattr(self, name, value)
 
     def __setattr__(self, name: str, value: Any) -> None:
         # ctypes keeps an unknown name as a plain attribute, so a renamed field

@@ -67,6 +67,18 @@ void set_stereo_result(const sonare::mastering::api::StereoResult& result,
 
 }  // namespace
 
+void sonare_mastering_config_init(SonareMasteringConfig* config) {
+  if (config == nullptr) return;
+  const sonare::mastering::maximizer::LoudnessOptimizeConfig cpp;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->target_lufs = cpp.target_lufs;
+  config->ceiling_dbtp = cpp.ceiling_dbtp;
+  config->true_peak_oversample = cpp.true_peak_oversample;
+  config->release_ms = cpp.release_ms;
+  config->apply_gain_at_input_rate = cpp.apply_gain_at_input_rate ? 1 : 0;
+}
+
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
                                      const SonareMasteringConfig* config,
                                      SonareMasteringResult* out) {

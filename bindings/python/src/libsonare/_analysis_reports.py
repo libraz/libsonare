@@ -22,7 +22,6 @@ from ._cancellation import (
 from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import (
     SONARE_MAX_METER_CANDIDATE_NUMERATORS,
-    SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
     SonareAcousticResult,
     SonareAnalyzeProgressCallback,
     SonareBpmAnalysisResult,
@@ -109,7 +108,6 @@ def _music_analyze_options(
         )
     tuning_value, tuning_auto = _tuning_arg(tuning_cents)
     return SonareMusicAnalyzeOptions(
-        struct_version=SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
         n_fft=n_fft,
         hop_length=hop_length,
         bpm_min=_DEFAULT_BPM_MIN if bpm_min is None else bpm_min,

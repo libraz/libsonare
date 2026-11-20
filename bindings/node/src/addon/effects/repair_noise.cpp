@@ -52,22 +52,18 @@ int parse_dehum_mode(const Napi::Object& options, int fallback) {
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
-constexpr SonareDenoiseClassicalConfig kDenoiseConfigDefaults{
-    SONARE_DENOISE_MODE_LOG_MMSE,
-    SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
-    1024,
-    256,
-    0.98f,
-    26.0f,
-    2.0f,
-    0.05f,
-    0.1f,
-    1,
-    1};
+SonareDenoiseClassicalConfig DefaultDenoiseConfig() {
+  SonareDenoiseClassicalConfig config{};
+  sonare_denoise_classical_config_init(&config);
+  return config;
+}
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
-constexpr SonareDehumConfig kDehumConfigDefaults{
-    50.0f, 4, 20.0f, 0, 2.0f, 0.25f, 2048, 0.01f, SONARE_DEHUM_MODE_SUBTRACT};
+SonareDehumConfig DefaultDehumConfig() {
+  SonareDehumConfig config{};
+  sonare_dehum_config_init(&config);
+  return config;
+}
 
 /// @brief Marshal the pair-level noise analysis into the JS shape the denoise
 ///        stereo report carries.
@@ -233,17 +229,8 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalStereo(const Napi::Callba
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   // Library defaults (sonare_c_mastering.h SonareDenoiseClassicalConfig), applied
   // before any options key overrides a field.
-  SonareDenoiseClassicalConfig config{SONARE_DENOISE_MODE_LOG_MMSE,
-                                      SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
-                                      1024,
-                                      256,
-                                      0.98f,
-                                      26.0f,
-                                      2.0f,
-                                      0.05f,
-                                      0.1f,
-                                      1,
-                                      1};
+  SonareDenoiseClassicalConfig config{};
+  sonare_denoise_classical_config_init(&config);
   if (info.Length() >= 4 && info[3].IsObject()) {
     config = read_denoise_config(info[3].As<Napi::Object>(), config);
   }
@@ -271,7 +258,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalLinked(const Napi::Callba
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[1], "sampleRate");
-  SonareDenoiseClassicalConfig config = kDenoiseConfigDefaults;
+  SonareDenoiseClassicalConfig config = DefaultDenoiseConfig();
   if (info.Length() >= 3 && info[2].IsObject()) {
     config = read_denoise_config(info[2].As<Napi::Object>(), config);
   }
@@ -297,7 +284,7 @@ Napi::Value SonareWrap::MasteringRepairDetectNoiseFloor(const Napi::CallbackInfo
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
-  SonareDenoiseClassicalConfig config = kDenoiseConfigDefaults;
+  SonareDenoiseClassicalConfig config = DefaultDenoiseConfig();
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_denoise_config(info[2].As<Napi::Object>(), config);
   SonareNoiseDetection detection{};
@@ -318,7 +305,7 @@ Napi::Value SonareWrap::MasteringRepairNoiseBandBins(const Napi::CallbackInfo& i
   // nFft is optional (an omitted request reads as an empty one); sampleRate is not.
   Napi::Object request = info.Length() >= 1 && info[0].IsObject() ? info[0].As<Napi::Object>()
                                                                   : Napi::Object::New(env);
-  const int n_fft = IntProperty(request, "nFft", kDenoiseConfigDefaults.n_fft);
+  const int n_fft = IntProperty(request, "nFft", DefaultDenoiseConfig().n_fft);
   int sample_rate{};
   if (!RequiredIntProperty(env, request, "sampleRate", &sample_rate)) return env.Undefined();
   // The C entry writes into the array's own storage; no intermediate buffer.
@@ -388,8 +375,8 @@ Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& inf
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   // Library defaults (sonare_c_mastering.h SonareDehumConfig), applied before
   // any options key overrides a field.
-  SonareDehumConfig config{
-      50.0f, 4, 20.0f, 0, 2.0f, 0.25f, 2048, 0.01f, SONARE_DEHUM_MODE_SUBTRACT};
+  SonareDehumConfig config{};
+  sonare_dehum_config_init(&config);
   if (info.Length() >= 4 && info[3].IsObject()) {
     config = read_dehum_config_c(info[3].As<Napi::Object>(), config);
   }
@@ -415,7 +402,7 @@ Napi::Value SonareWrap::MasteringRepairDetectHum(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
-  SonareDehumConfig config = kDehumConfigDefaults;
+  SonareDehumConfig config = DefaultDehumConfig();
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_dehum_config_c(info[2].As<Napi::Object>(), config);
   SonareHumDetection detection{};

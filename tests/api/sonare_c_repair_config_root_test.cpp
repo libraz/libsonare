@@ -31,7 +31,8 @@ TEST_CASE("config struct members are refused under the config parameter", "[c_ap
   const std::vector<float> samples = test_signal();
 
   SECTION("declick names threshold") {
-    SonareDeclickConfig config{};
+    SonareDeclickConfig config;
+    sonare_declick_config_init(&config);
     config.threshold = -1.0f;
     config.neighbor_ratio = 4.0f;
     config.max_click_samples = 8;
@@ -45,7 +46,8 @@ TEST_CASE("config struct members are refused under the config parameter", "[c_ap
   }
 
   SECTION("detect_clipping names clip_threshold_db") {
-    SonareDeclipConfig config{};
+    SonareDeclipConfig config;
+    sonare_declip_config_init(&config);
     config.clip_threshold_db = 1.0f;
     config.lpc_order = 36;
     config.iterations = 2;
@@ -59,7 +61,8 @@ TEST_CASE("config struct members are refused under the config parameter", "[c_ap
   }
 
   SECTION("trim_silence names window_ms") {
-    SonareTrimSilenceConfig config{};
+    SonareTrimSilenceConfig config;
+    sonare_trim_silence_config_init(&config);
     config.threshold_db = -60.0f;
     config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
     config.gate_lufs = -60.0f;
@@ -74,12 +77,13 @@ TEST_CASE("config struct members are refused under the config parameter", "[c_ap
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   SECTION("transcribe names min_note_division") {
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     config.min_note_division = 129;
     SonareTranscribeResult result{};
     REQUIRE(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
                               &result) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_error() == "config.min_note_division must be 0 or an integer in [1, 128]");
+    CHECK(last_error() == "config.min_note_division must be an integer in [1, 128]");
     CHECK(first_subject() == "config.min_note_division");
     sonare_free_transcribe_result(&result);
   }

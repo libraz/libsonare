@@ -11,7 +11,7 @@ import numpy as np
 from . import _ffi_types_streaming as _ffi_streaming
 from ._analysis_detection import _UNKNOWN_QUALITY_ORDINAL
 from ._errors import _entry, _require_open
-from ._narrowing import _narrow_double, _resolve_zero_default
+from ._narrowing import _narrow_double
 from ._runtime import (
     _WINDOW_TYPES,
     Key,
@@ -124,7 +124,6 @@ class StreamAnalyzer:
         self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
         raw = _ffi_streaming.SonareStreamConfig()
-        _check(lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)))
         # Integer fields are assigned bare: SonareStreamConfig is a CStruct, so
         # each field narrows onto its own declared type and refuses a fraction.
         raw.sample_rate = sample_rate
@@ -136,9 +135,8 @@ class StreamAnalyzer:
             raw.n_mels = n_mels
         if fmin_hz is not None:
             raw.fmin_hz = _narrow_double(fmin_hz, "fmin_hz")
-        # The C ABI reads 0 as Nyquist, so an explicit 0 is refused.
         if fmax_hz is not None:
-            raw.fmax_hz = _narrow_double(_resolve_zero_default(fmax_hz, "fmax_hz"), "fmax_hz")
+            raw.fmax_hz = _narrow_double(fmax_hz, "fmax_hz")
         if reference_hz is not None:
             raw.reference_hz = _narrow_double(reference_hz, "reference_hz")
         # The flags are spelled out as 0/1: the field guard refuses a bool.

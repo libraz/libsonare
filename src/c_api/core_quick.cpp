@@ -337,6 +337,24 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
       });
 }
 
+void sonare_onset_detect_config_init(SonareOnsetDetectConfig* config) {
+  if (config == nullptr) return;
+  const sonare::OnsetDetectConfig native;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->n_fft = native.n_fft;
+  config->hop_length = native.hop_length;
+  config->threshold = std::numeric_limits<float>::quiet_NaN();
+  config->pre_max = native.pre_max;
+  config->post_max = native.post_max;
+  config->pre_avg = native.pre_avg;
+  config->post_avg = native.post_avg;
+  config->delta = native.delta;
+  config->wait = native.wait;
+  config->backtrack = native.backtrack ? 1 : 0;
+  config->backtrack_range = native.backtrack_range;
+}
+
 SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sample_rate,
                                     const SonareOnsetDetectConfig* config, float** out_times,
                                     size_t* out_count) {
@@ -348,9 +366,16 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(config);
-  // backtrack is a C byte standing in for a bool, so its range is this layer's own.
-  if (const SonareError err = run_validation(
-          [&] { util::check::integer_in_range(config->backtrack, 0, 1, "config.backtrack"); });
+  // backtrack is a C byte standing in for a bool, so its range is this layer's own. A NaN
+  // threshold is the adaptive path; a given one is a real minimum strength, above 0.
+  if (const SonareError err = run_validation([&] {
+        sonare_c_detail::require_struct_size(config->struct_size, sizeof(SonareOnsetDetectConfig),
+                                             "config", "sonare_onset_detect_config_init");
+        util::check::integer_in_range(config->backtrack, 0, 1, "config.backtrack");
+        if (!std::isnan(config->threshold)) {
+          util::check::greater_than(config->threshold, 0.0, "config.threshold");
+        }
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -358,7 +383,7 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
   sonare::OnsetDetectConfig native;
   native.n_fft = config->n_fft;
   native.hop_length = config->hop_length;
-  native.threshold = config->threshold;
+  native.threshold = std::isnan(config->threshold) ? 0.0f : config->threshold;
   native.pre_max = config->pre_max;
   native.post_max = config->post_max;
   native.pre_avg = config->pre_avg;
@@ -420,40 +445,37 @@ static_assert(SONARE_MAX_METER_CANDIDATE_NUMERATORS == sonare::kMaxMeterCandidat
               "The C array capacity and the core's validation limit must agree, or a list the "
               "core accepts would not fit the flat struct");
 
-SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
+void sonare_music_analyze_options_init(SonareMusicAnalyzeOptions* options) {
+  if (options == nullptr) return;
   const MusicAnalyzerConfig config;
-  // Positional aggregate initialization: the order here must track the field
-  // order in SonareMusicAnalyzeOptions.
-  SonareMusicAnalyzeOptions options = {SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
-                                       config.n_fft,
-                                       config.hop_length,
-                                       config.bpm_min,
-                                       config.bpm_max,
-                                       config.start_bpm,
-                                       config.use_triads_only ? 1 : 0,
-                                       config.use_hpss ? 1 : 0,
-                                       config.chroma_highpass_hz,
-                                       config.use_bass_weighted ? 1 : 0,
-                                       config.chroma_hop_multiplier,
-                                       config.use_chord_hmm ? 1 : 0,
-                                       config.use_chord_key_context ? 1 : 0,
-                                       config.chord_hmm_beam_width,
-                                       config.detect_chord_inversions ? 1 : 0,
-                                       config.adaptive_tempo ? 1 : 0,
-                                       config.tempo_update_interval_beats,
-                                       config.compute_tempo_curve ? 1 : 0,
-                                       {},
-                                       0,
-                                       config.meter_denominator,
-                                       config.tuning ? tuning_to_cents(*config.tuning) : 0.0f,
-                                       config.tuning ? 0 : 1};
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->n_fft = config.n_fft;
+  options->hop_length = config.hop_length;
+  options->bpm_min = config.bpm_min;
+  options->bpm_max = config.bpm_max;
+  options->start_bpm = config.start_bpm;
+  options->use_triads_only = config.use_triads_only ? 1 : 0;
+  options->use_hpss = config.use_hpss ? 1 : 0;
+  options->chroma_high_pass_hz = config.chroma_highpass_hz;
+  options->use_bass_weighted = config.use_bass_weighted ? 1 : 0;
+  options->chroma_hop_multiplier = config.chroma_hop_multiplier;
+  options->use_chord_hmm = config.use_chord_hmm ? 1 : 0;
+  options->use_chord_key_context = config.use_chord_key_context ? 1 : 0;
+  options->chord_hmm_beam_width = config.chord_hmm_beam_width;
+  options->detect_chord_inversions = config.detect_chord_inversions ? 1 : 0;
+  options->adaptive_tempo = config.adaptive_tempo ? 1 : 0;
+  options->tempo_update_interval_beats = config.tempo_update_interval_beats;
+  options->compute_tempo_curve = config.compute_tempo_curve ? 1 : 0;
+  options->meter_denominator = config.meter_denominator;
+  options->tuning_cents = config.tuning ? tuning_to_cents(*config.tuning) : 0.0f;
+  options->tuning_auto = config.tuning ? 0 : 1;
   const size_t count = std::min(config.meter_candidate_numerators.size(),
                                 static_cast<size_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS));
   for (size_t i = 0; i < count; ++i) {
-    options.meter_candidate_numerators[i] = config.meter_candidate_numerators[i];
+    options->meter_candidate_numerators[i] = config.meter_candidate_numerators[i];
   }
-  options.meter_candidate_numerator_count = static_cast<int>(count);
-  return options;
+  options->meter_candidate_numerator_count = static_cast<int>(count);
 }
 
 namespace {
@@ -512,9 +534,9 @@ SonareError sonare_analyze_json_ex_with_progress(
   }
   SONARE_C_REQUIRE_NONNULL(options);
   if (const SonareError err = run_validation([&] {
-        util::check::one_of(options->struct_version,
-                            std::array<int, 1>{SONARE_MUSIC_ANALYZE_OPTIONS_VERSION},
-                            "options.struct_version");
+        sonare_c_detail::require_struct_size(options->struct_size,
+                                             sizeof(SonareMusicAnalyzeOptions), "options",
+                                             "sonare_music_analyze_options_init");
         util::check::integer_in_range(options->meter_candidate_numerator_count, 0,
                                       SONARE_MAX_METER_CANDIDATE_NUMERATORS,
                                       "options.meter_candidate_numerator_count");
@@ -546,22 +568,22 @@ SonareError sonare_analyze_json_ex_with_progress(
       });
 }
 
-SonareMeterOptions sonare_meter_options_default(void) {
+void sonare_meter_options_init(SonareMeterOptions* options) {
+  if (options == nullptr) return;
   const MeterConfig config;
-  SonareMeterOptions options = {{},
-                                0,
-                                config.denominator,
-                                config.downbeat_weight,
-                                config.measure_weight,
-                                config.subdivision_weight,
-                                config.compound_subdivision_threshold};
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->denominator = config.denominator;
+  options->downbeat_weight = config.downbeat_weight;
+  options->measure_weight = config.measure_weight;
+  options->subdivision_weight = config.subdivision_weight;
+  options->compound_subdivision_threshold = config.compound_subdivision_threshold;
   const size_t count = std::min(config.candidate_numerators.size(),
                                 static_cast<size_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS));
   for (size_t i = 0; i < count; ++i) {
-    options.candidate_numerators[i] = config.candidate_numerators[i];
+    options->candidate_numerators[i] = config.candidate_numerators[i];
   }
-  options.candidate_numerator_count = static_cast<int>(count);
-  return options;
+  options->candidate_numerator_count = static_cast<int>(count);
 }
 
 SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
@@ -578,6 +600,8 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(beat_strengths, beat_count);
   SONARE_C_REQUIRE_NONNULL(options);
   if (const SonareError err = run_validation([&] {
+        sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareMeterOptions),
+                                             "options", "sonare_meter_options_init");
         util::check::integer_in_range(options->candidate_numerator_count, 0,
                                       SONARE_MAX_METER_CANDIDATE_NUMERATORS,
                                       "options.candidate_numerator_count");
@@ -616,6 +640,7 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
 SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
                                 char** out_json) {
   SONARE_C_API_ENTRY;
-  const SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+  SonareMusicAnalyzeOptions options;
+  sonare_music_analyze_options_init(&options);
   return sonare_analyze_json_ex(samples, length, sample_rate, &options, out_json);
 }

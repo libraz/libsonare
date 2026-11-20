@@ -30,10 +30,10 @@ using sonare::test::collect_schema_paths;
 
 TEST_CASE("sonare_detect_onsets_ex", "[c_api]") {
   const auto samples = generate_clicks(120.0f, 22050, 2.0f);
-  SonareOnsetDetectConfig config{};
+  SonareOnsetDetectConfig config;
+  sonare_onset_detect_config_init(&config);
   config.n_fft = 256;
   config.hop_length = 64;
-  config.threshold = 0.0f;
   config.pre_max = 1;
   config.post_max = 1;
   config.pre_avg = 3;
@@ -52,6 +52,31 @@ TEST_CASE("sonare_detect_onsets_ex", "[c_api]") {
   config.hop_length = 0;
   REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
+
+  // A given threshold is a real minimum strength: 0 and negatives are refused by name, NaN is
+  // the adaptive path.
+  config.hop_length = 64;
+  config.threshold = 0.0f;
+  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("config.threshold") != std::string::npos);
+  config.threshold = -1.0f;
+  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  config.threshold = 0.5f;
+  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+          SONARE_OK);
+  sonare_free_floats(times);
+  config.threshold = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+          SONARE_OK);
+  sonare_free_floats(times);
+
+  SonareOnsetDetectConfig zeroed{};
+  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &zeroed, &times, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          "config.struct_size must be set by sonare_onset_detect_config_init");
 }
 
 TEST_CASE("the configured onset entry agrees with the plain one at every rate", "[c_api][onsets]") {
@@ -61,10 +86,10 @@ TEST_CASE("the configured onset entry agrees with the plain one at every rate", 
   // field is a FRAME count and a frame is hop_length over the rate in force, so
   // an entry that analysed at a different rate would reinterpret all of them
   // while looking like it had been handed nothing.
-  SonareOnsetDetectConfig config{};
+  SonareOnsetDetectConfig config;
+  sonare_onset_detect_config_init(&config);
   config.n_fft = 2048;
   config.hop_length = 512;
-  config.threshold = 0.0f;
   config.pre_max = 1;
   config.post_max = 1;
   config.pre_avg = 3;
@@ -110,10 +135,10 @@ TEST_CASE("a configured onset detector still answers to its configuration", "[c_
   // The control for the agreement above. Without it that equality also holds for
   // an entry point that ignored the configuration and called the plain path.
   const std::vector<float> samples = generate_clicks(120.0f, 44100, 4.0f);
-  SonareOnsetDetectConfig config{};
+  SonareOnsetDetectConfig config;
+  sonare_onset_detect_config_init(&config);
   config.n_fft = 2048;
   config.hop_length = 512;
-  config.threshold = 0.0f;
   config.pre_max = 1;
   config.post_max = 1;
   config.pre_avg = 3;
@@ -422,6 +447,8 @@ TEST_CASE("sonare_downmix reports the unnormalised fold and applies the options"
   options.struct_size = 0;
   CHECK(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &options, &out) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.struct_size must be set by sonare_downmix_options_init");
 }
 
 TEST_CASE("sonare_downmix folds an unmodelled channel count to mono by mean", "[c_api][audio_io]") {
@@ -876,8 +903,8 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
 }
 
 TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized frames", "[c_api]") {
-  SonareStreamConfig config = {};
-  REQUIRE(sonare_stream_analyzer_config_default(&config) == SONARE_OK);
+  SonareStreamConfig config;
+  sonare_stream_config_init(&config);
   REQUIRE(config.max_progression_entries == 4096);
   config.sample_rate = 22050;
   config.n_fft = 1024;
@@ -1033,7 +1060,30 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     bad.fmax_hz = 500.0f;
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()) ==
-            "config.fmax_hz must be 0 or greater than config.fmin_hz");
+            "config.fmax_hz must be greater than config.fmin_hz");
+
+    // NaN is the Nyquist default; a given 0 is refused by name.
+    REQUIRE(std::isnan(config.fmax_hz));
+    bad = config;
+    bad.fmax_hz = 0.0f;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find("config.fmax_hz") != std::string::npos);
+  }
+
+  SECTION("refuses a config or quantize config not started from its init") {
+    SonareStreamAnalyzer* analyzer = nullptr;
+    SonareStreamConfig zeroed{};
+    REQUIRE(sonare_stream_analyzer_create(&zeroed, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "config.struct_size must be set by sonare_stream_config_init");
+    REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+    SonareStreamQuantizeConfig quantize{};
+    SonareStreamFramesU8 frames{};
+    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(analyzer, &quantize, 0, &frames) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "config.struct_size must be set by sonare_stream_quantize_config_init");
+    sonare_stream_analyzer_destroy(analyzer);
   }
 
   SECTION("create and the live setter accept one tuning range") {
@@ -1074,13 +1124,14 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_set_expected_duration(analyzer, -inf) ==
             SONARE_ERROR_INVALID_PARAMETER);
 
-    SonareStreamQuantizeConfig quantize{};
-    REQUIRE(sonare_stream_quantize_config_default(&quantize) == SONARE_OK);
+    SonareStreamQuantizeConfig quantize;
+
+    sonare_stream_quantize_config_init(&quantize);
     quantize.rms_max = inf;
     SonareStreamFramesU8 frames{};
     REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(analyzer, &quantize, 0, &frames) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_stream_quantize_config_default(&quantize) == SONARE_OK);
+    sonare_stream_quantize_config_init(&quantize);
     quantize.mel_db_min = quantize.mel_db_max;
     REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(analyzer, &quantize, 0, &frames) ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -1158,8 +1209,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
   }
 
   SECTION("quantize-config override widens the saturating range") {
-    SonareStreamQuantizeConfig qdefault = {};
-    REQUIRE(sonare_stream_quantize_config_default(&qdefault) == SONARE_OK);
+    SonareStreamQuantizeConfig qdefault;
+    sonare_stream_quantize_config_init(&qdefault);
     REQUIRE(qdefault.onset_max == Catch::Approx(50.0f));
     REQUIRE(qdefault.rms_max == Catch::Approx(1.0f));
     REQUIRE(qdefault.centroid_max == Catch::Approx(11025.0f));
@@ -1542,7 +1593,9 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
       s->last = progress;
     };
 
-    const SonareMusicAnalyzeOptions defaults = sonare_music_analyze_options_default();
+    SonareMusicAnalyzeOptions defaults;
+
+    sonare_music_analyze_options_init(&defaults);
     char* json = nullptr;
     SonareError err = sonare_analyze_json_ex_with_progress(
         samples.data(), samples.size(), 22050, &defaults, cb, &state, &json, nullptr, nullptr);
@@ -1575,7 +1628,9 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
       int calls = 0;
     };
 
-    const SonareMusicAnalyzeOptions defaults = sonare_music_analyze_options_default();
+    SonareMusicAnalyzeOptions defaults;
+
+    sonare_music_analyze_options_init(&defaults);
     char* reference_json = nullptr;
     MutateState quiet{nullptr, 0};
     auto count_only = [](float, const char*, void* user_data) {
@@ -1633,7 +1688,9 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
       return static_cast<CancelState*>(user_data)->should_cancel ? 1 : 0;
     };
 
-    const SonareMusicAnalyzeOptions defaults = sonare_music_analyze_options_default();
+    SonareMusicAnalyzeOptions defaults;
+
+    sonare_music_analyze_options_init(&defaults);
     char* json = nullptr;
     REQUIRE(sonare_analyze_json_ex_with_progress(samples.data(), samples.size(), 22050, &defaults,
                                                  progress, &state, &json, cancel,
@@ -1649,7 +1706,8 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
   }
 
   SECTION("accepts the complete analyzer configuration") {
-    SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+    SonareMusicAnalyzeOptions options;
+    sonare_music_analyze_options_init(&options);
     options.bpm_min = 30.0f;
     options.bpm_max = 90.0f;
     options.start_bpm = 55.0f;
@@ -1671,7 +1729,8 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
   }
 
   SECTION("emits the tempo curve only when it is asked for") {
-    SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+    SonareMusicAnalyzeOptions options;
+    sonare_music_analyze_options_init(&options);
     REQUIRE(options.compute_tempo_curve == 0);
 
     char* json = nullptr;
@@ -1821,8 +1880,9 @@ TEST_CASE("meter_result_to_json matches its schema snapshot", "[c_api][analysis_
   }
 }
 
-TEST_CASE("sonare_meter_options_default mirrors the core defaults", "[c_api]") {
-  const SonareMeterOptions options = sonare_meter_options_default();
+TEST_CASE("sonare_meter_options_init mirrors the core defaults", "[c_api]") {
+  SonareMeterOptions options;
+  sonare_meter_options_init(&options);
 
   REQUIRE(options.candidate_numerator_count == 3);
   REQUIRE(options.candidate_numerators[0] == 3);
@@ -1858,7 +1918,8 @@ TEST_CASE("sonare_meter_options_default mirrors the core defaults", "[c_api]") {
 
 TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
   const auto series = make_beat_series(4, 8);
-  const SonareMeterOptions defaults = sonare_meter_options_default();
+  SonareMeterOptions defaults;
+  sonare_meter_options_init(&defaults);
   // Every rejecting call below starts from a non-null value: this entry point
   // clears the caller's pointer before any early return, so initializing to
   // nullptr would let a path that never touches it pass the check anyway.
@@ -1916,6 +1977,7 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
 
   SECTION("rejects a zeroed options struct rather than reading it as the defaults") {
     SonareMeterOptions zeroed = {};
+    zeroed.struct_size = sizeof(zeroed);
     char* json = sentinel();
     REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
                                        series.times.size(), &zeroed,

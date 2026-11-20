@@ -740,13 +740,10 @@ TEST_CASE("effects.reverb.room and effects.acoustic.roomMorph reach air absorpti
   }
 }
 
-TEST_CASE("acoustic inserts resolve a zero air climate to the ISO reference climate",
+TEST_CASE("acoustic inserts read an absent air climate as the ISO reference and 0 as 0",
           "[mastering][insert_factory][effects][acoustic][numeric]") {
-  // INVARIANT (a): airTemperatureC / airHumidityPercent follow the acoustic
-  // ABI's "0 selects the library value" rule on the streaming inserts too, so
-  // the same option bag describes the same room here as on the offline facade.
-  // The expected climate is read from the library default rather than written
-  // as a literal, which is exactly what the offline facade substitutes for 0.
+  // airTemperatureC / airHumidityPercent default to the library's reference climate when the key
+  // is absent; a given 0 is 0 degC and 0 % humidity, which is a different room.
   const sonare::acoustic::AirAbsorption iso{};
   constexpr int block = 256;
   const auto render = [](const std::string& name, const std::string& params) {
@@ -778,15 +775,14 @@ TEST_CASE("acoustic inserts resolve a zero air climate to the ISO reference clim
   const std::string iso_climate = std::string("{") + geometry + R"(,"airTemperatureC":)" +
                                   std::to_string(iso.temperature_c) + R"(,"airHumidityPercent":)" +
                                   std::to_string(iso.humidity_percent) + "}";
-  // A humidity that is not the sentinel must reach the synthesizer, which keeps
-  // the equality above from passing for the trivial reason that the insert
-  // ignores the climate entirely.
+  const std::string absent_climate = std::string("{") + geometry + "}";
   const std::string other_climate =
       std::string("{") + geometry + R"(,"airTemperatureC":0,"airHumidityPercent":1})";
 
   for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
     DYNAMIC_SECTION(name) {
-      REQUIRE(same(render(name, zero_climate), render(name, iso_climate)));
+      REQUIRE(same(render(name, absent_climate), render(name, iso_climate)));
+      REQUIRE_FALSE(same(render(name, zero_climate), render(name, iso_climate)));
       REQUIRE_FALSE(same(render(name, zero_climate), render(name, other_climate)));
     }
   }
@@ -794,9 +790,8 @@ TEST_CASE("acoustic inserts resolve a zero air climate to the ISO reference clim
 
 TEST_CASE("effects.acoustic.roomMorph rejects a crossfade the caller cannot see ignored",
           "[mastering][insert_factory][effects][acoustic][numeric]") {
-  // INVARIANT (b): a timing value is applied or rejected. Only the documented
-  // sentinel resolves to the library default, so a negative crossfade cannot
-  // reach the synthesizer as the default and report success.
+  // A timing value is applied or rejected, so a negative crossfade cannot reach the synthesizer
+  // as the default and report success.
   constexpr const char* geometry =
       R"("lengthM":12,"widthM":9,"heightM":5,"absorption":0.2,"dryWet":1,)"
       R"("sourceTailSuppression":0,"maxSec":0.3,"seed":7)";
@@ -814,8 +809,7 @@ TEST_CASE("effects.acoustic.roomMorph rejects a crossfade the caller cannot see 
     }
   }
 
-  // The sentinel keeps its meaning: 0 is the library default, not a request for
-  // a zero-width crossfade, so it renders exactly like omitting the key.
+  // A given 0 is a zero-width crossfade, not the default, so it renders unlike omitting the key.
   const auto render = [](const std::string& params) {
     auto processor = make_insert("effects.acoustic.roomMorph", params);
     REQUIRE(processor != nullptr);
@@ -829,11 +823,13 @@ TEST_CASE("effects.acoustic.roomMorph rejects a crossfade the caller cannot see 
     }
     return buf;
   };
-  REQUIRE(render(std::string("{") + geometry + "}") ==
+  REQUIRE(render(std::string("{") + geometry + "}") !=
           render(std::string("{") + geometry + R"(,"crossfadeMs":0})"));
+  REQUIRE(render(std::string("{") + geometry + "}") ==
+          render(std::string("{") + geometry + R"(,"crossfadeMs":5})"));
 }
 
-TEST_CASE("acoustic room inserts read receiverSpacingM with 0 as the library default",
+TEST_CASE("acoustic room inserts read an absent receiverSpacingM as the default and refuse 0",
           "[mastering][insert_factory][effects][acoustic][stereo]") {
   constexpr const char* geometry =
       R"("lengthM":8,"widthM":6,"heightM":3.5,"absorption":0.15,"maxSec":0.3,"seed":3,)"
@@ -863,10 +859,10 @@ TEST_CASE("acoustic room inserts read receiverSpacingM with 0 as the library def
     DYNAMIC_SECTION(name) {
       REQUIRE(ListContains(insert_param_names(name), "receiverSpacingM"));
       const std::vector<float> omitted = render(name, with(""));
-      REQUIRE(render(name, with(R"("receiverSpacingM":0)")) == omitted);
       REQUIRE(render(name, with(R"("receiverSpacingM":0.5)")) == omitted);
       REQUIRE_FALSE(render(name, with(R"("receiverSpacingM":1.0)")) == omitted);
-      for (const char* refused : {R"("receiverSpacingM":4.5)", R"("receiverSpacingM":-0.5)"}) {
+      for (const char* refused :
+           {R"("receiverSpacingM":0)", R"("receiverSpacingM":4.5)", R"("receiverSpacingM":-0.5)"}) {
         try {
           auto processor = make_insert(name, with(refused));
           (void)processor;

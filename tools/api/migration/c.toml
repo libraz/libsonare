@@ -1563,7 +1563,7 @@ test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_retune_cre
 [[entry]]
 kind = "function"
 old = "sonare_analyze_sections"
-changed = "takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_default, which also carries the boundary threshold"
+changed = "takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_init, which also carries the boundary threshold"
 domain = "analysis"
 rule = "options-struct"
 test = "tests/api/sonare_c_music_test.cpp::sonare_analyze_sections threshold reaches the boundary picker"
@@ -1903,7 +1903,7 @@ rule = "individual"
 [[entry]]
 kind = "field"
 old = "SonareCompressorConfig.sidechain_hpf_enabled"
-new = "SonareCompressorConfig.sidechain_high_pass_enabled"
+removed = "set sidechain_high_pass_hz; 0 leaves the sidechain unfiltered"
 domain = "mastering"
 rule = "high-pass"
 
@@ -1941,3 +1941,129 @@ old = "SonareSectionResult"
 changed = "gains an owned char* form, one letter per section in time order, freed by sonare_free_section_result"
 domain = "analysis"
 rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareChordAnalysisResult.struct_version"
+removed = "the field is gone; read the result's other fields directly"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareChordDetectionOptions.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_chord_detection_options_init"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareMelResult.struct_version"
+removed = "the field is gone; read the result's other fields directly"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareMfccResult.struct_version"
+removed = "the field is gone; read the result's other fields directly"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareMusicAnalyzeOptions.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_music_analyze_options_init"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareTranscribeConfig.struct_version"
+removed = "the struct leads with uint32_t struct_size instead; initialise it with sonare_transcribe_config_init"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareTranscribeResult.struct_version"
+removed = "the field is gone; read the result's other fields directly"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "export"
+old = "SONARE_CHORD_ANALYSIS_RESULT_VERSION"
+removed = "the macro is gone; the struct carries no version field"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "export"
+old = "SONARE_MEL_RESULT_VERSION"
+removed = "the macro is gone; the struct carries no version field"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "export"
+old = "SONARE_MFCC_RESULT_VERSION"
+removed = "the macro is gone; the struct carries no version field"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "export"
+old = "SONARE_CHORD_DETECTION_OPTIONS_VERSION"
+removed = "the macro is gone; initialise the struct with its _init function, which sets struct_size"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "export"
+old = "SONARE_MUSIC_ANALYZE_OPTIONS_VERSION"
+removed = "the macro is gone; initialise the struct with its _init function, which sets struct_size"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_boundary_options_default"
+removed = "call sonare_boundary_options_init(&config) on a caller-owned struct instead"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_meter_options_default"
+removed = "call sonare_meter_options_init(&config) on a caller-owned struct instead"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_music_analyze_options_default"
+removed = "call sonare_music_analyze_options_init(&config) on a caller-owned struct instead"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_config_default"
+removed = "call sonare_stream_config_init(&config) on a caller-owned struct instead"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_quantize_config_default"
+removed = "call sonare_stream_quantize_config_init(&config) on a caller-owned struct instead"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_transcribe_config_default"
+removed = "call sonare_transcribe_config_init(&config) on a caller-owned struct instead"
+domain = "analysis"
+rule = "options-struct"

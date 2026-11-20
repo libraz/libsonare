@@ -289,29 +289,6 @@ export interface WasmDynamicsAnalysisResult {
   loudnessRmsDb: Float32Array;
 }
 
-export interface WasmStreamConfigDefaults {
-  sampleRate: number;
-  /** Window in samples at 44100 Hz; rescaled below that rate, never shorter than `hopLength`. */
-  nFft: number;
-  hopLength: number;
-  nMels: number;
-  fmin: number;
-  fmax: number;
-  referenceHz: number;
-  computeMagnitude: boolean;
-  computeMel: boolean;
-  computeChroma: boolean;
-  computeOnset: boolean;
-  computeSpectral: boolean;
-  emitEveryNFrames: number;
-  maxPendingFrames: number;
-  maxProgressionEntries: number;
-  keyUpdateIntervalSec: number;
-  bpmUpdateIntervalSec: number;
-  window: number;
-  outputFormat: number;
-}
-
 export interface WasmTimbreFrameResult {
   brightness: number;
   warmth: number;
@@ -2223,7 +2200,7 @@ export interface SonareModule {
   meteringDetectClipping: (
     samples: Float32Array,
     sampleRate: number,
-    threshold: number,
+    thresholdDb: number | undefined,
     minRegionSamples: number,
   ) => {
     clippedSamples: number;
@@ -3738,27 +3715,25 @@ export interface SonareModule {
   };
 
   // Streaming - StreamAnalyzer
-  streamAnalyzerConfigDefault: () => WasmStreamConfigDefaults;
+  /** Every field but the rate may be undefined, which keeps the library default. */
   StreamAnalyzer: new (
     sampleRate: number,
-    nFft: number,
-    hopLength: number,
-    nMels: number,
-    fmin: number,
-    fmax: number,
-    referenceHz: number,
-    computeMagnitude: boolean,
-    computeMel: boolean,
-    computeChroma: boolean,
-    computeOnset: boolean,
-    computeSpectral: boolean,
-    emitEveryNFrames: number,
-    maxPendingFrames: number,
-    maxProgressionEntries: number,
-    keyUpdateIntervalSec: number,
-    bpmUpdateIntervalSec: number,
-    window: number,
-    outputFormat: number,
+    nFft: number | undefined,
+    hopLength: number | undefined,
+    nMels: number | undefined,
+    fmin: number | undefined,
+    fmax: number | undefined,
+    referenceHz: number | undefined,
+    computeMel: boolean | undefined,
+    computeChroma: boolean | undefined,
+    computeOnset: boolean | undefined,
+    computeSpectral: boolean | undefined,
+    emitEveryNFrames: number | undefined,
+    maxPendingFrames: number | undefined,
+    maxProgressionEntries: number | undefined,
+    keyUpdateIntervalSec: number | undefined,
+    bpmUpdateIntervalSec: number | undefined,
+    window: number | undefined,
   ) => WasmStreamAnalyzer;
 
   ClipPageProvider: new (

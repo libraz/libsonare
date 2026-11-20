@@ -1305,18 +1305,18 @@ class Audio:
     @_entry("Audio.detect_clipping")
     def detect_clipping(
         self,
-        threshold: float | None = None,
+        threshold_db: float | None = None,
         min_region_samples: int | None = None,
     ) -> ClippingReport:
         """Detect clipped runs; see :func:`libsonare.metering_detect_clipping`."""
         from ._ffi import SonareClippingResult
 
-        c_threshold, c_min_region = _clipping_args(threshold, min_region_samples)
+        c_threshold, c_min_region = _clipping_args(threshold_db, min_region_samples)
         handle = self._require_handle()
         out = SonareClippingResult()
         rc = self._lib.sonare_audio_detect_clipping(
             handle,
-            _to_c_float(c_threshold, "threshold"),
+            c_threshold,
             _to_c_size_t(c_min_region, "min_region_samples"),
             ctypes.byref(out),
         )

@@ -59,7 +59,7 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
 
 // Seeds the C ABI's own defaults, then applies whichever keys the caller wrote.
 // Seeding rather than zeroing keeps the documented default of every field in one
-// place — sonare_transcribe_config_default() — so this file cannot drift from
+// place — sonare_transcribe_config_init() — so this file cannot drift from
 // the header a caller reads. f0MinHz/f0MaxHz intentionally remain zero when omitted:
 // the C layer resolves those sentinels against the selected tracker source, and
 // so does minNoteMs, whose default is the source's.
@@ -75,7 +75,7 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
 // is refused. The C ABI still reads the 0 an omitted key sends as "measure";
 // what changed is that no caller can spell it.
 bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTranscribeConfig* out) {
-  *out = sonare_transcribe_config_default();
+  sonare_transcribe_config_init(out);
   out->polyphonic = BoolProperty(request, "polyphonic", out->polyphonic != 0) ? 1 : 0;
   bool reference_auto = false;
   out->reference_hz =
@@ -100,10 +100,8 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   const Napi::Value fixed_velocity = request.Get("fixedVelocity");
   const bool wrote_fixed_velocity = !fixed_velocity.IsUndefined() && !fixed_velocity.IsNull();
   out->fixed_velocity = IntProperty(request, "fixedVelocity", 0);
-  // maxPolyphony, minNoteDivision and the two peak ratios carry presence for the same reason as
-  // fixedVelocity: the C ABI's 0 means "default", so an omitted key stays 0 while
-  // a written 0 is either refused (maxPolyphony) or mapped to the C ABI's spelling
-  // of a real zero (the ratios, where a negative value means 0 / no split).
+  // maxPolyphony and minNoteDivision carry presence for the same reason as fixedVelocity: the
+  // C ABI's 0 means "default", so an omitted key stays 0 while a written 0 is refused.
   const Napi::Value max_polyphony = request.Get("maxPolyphony");
   const bool wrote_max_polyphony = !max_polyphony.IsUndefined() && !max_polyphony.IsNull();
   out->max_polyphony = IntProperty(request, "maxPolyphony", 0);
@@ -113,12 +111,14 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   out->min_note_division = IntProperty(request, "minNoteDivision", 0);
   const Napi::Value frame_ratio = request.Get("minFramePeakRatio");
   const bool wrote_frame_ratio = !frame_ratio.IsUndefined() && !frame_ratio.IsNull();
-  out->min_frame_peak_ratio = FiniteFloatProperty(request, "minFramePeakRatio", 0.0f);
+  out->min_frame_peak_ratio =
+      FiniteFloatProperty(request, "minFramePeakRatio", out->min_frame_peak_ratio);
   const Napi::Value ridge_ratio = request.Get("minRidgePeakRatio");
   const bool wrote_ridge_ratio = !ridge_ratio.IsUndefined() && !ridge_ratio.IsNull();
-  out->min_ridge_peak_ratio = FiniteFloatProperty(request, "minRidgePeakRatio", 0.0f);
-  // 0 is the C meaning "no split"; any other value is validated by the C layer.
-  out->reattack_ratio = FiniteFloatProperty(request, "reattackRatio", 0.0f);
+  out->min_ridge_peak_ratio =
+      FiniteFloatProperty(request, "minRidgePeakRatio", out->min_ridge_peak_ratio);
+  // Absent stays NaN, the C meaning "no split"; a given value is validated by the C layer.
+  out->reattack_ratio = FiniteFloatProperty(request, "reattackRatio", out->reattack_ratio);
   // A string name rather than the ordinal: undefined/null keeps the C default
   // (segments), a non-string is a TypeError and an unknown name a RangeError.
   const std::string monophonic_model = StringProperty(request, "monophonicModel", "segments");
@@ -165,8 +165,6 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
                               std::string(ratio.key) + " must be a number in [0, 1]");
       return false;
     }
-    // A written 0 is a real zero; the C ABI spells that as a negative value.
-    if (*ratio.value == 0.0f) *ratio.value = -1.0f;
   }
   return RefuseOutOfDomain(env, *out, wrote_f0_min, wrote_f0_max, wrote_min_note_ms);
 }

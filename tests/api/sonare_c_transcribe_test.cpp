@@ -222,69 +222,53 @@ TEST_CASE("Project MIDI export drops a note at or below one tick like SMF import
 
 // --- The config door ------------------------------------------------------
 
-TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out",
+TEST_CASE("sonare_transcribe_config_init is the core's defaults, spelled out",
           "[c_api][transcribe]") {
-  const SonareTranscribeConfig config = sonare_transcribe_config_default();
+  SonareTranscribeConfig config;
+  sonare_transcribe_config_init(&config);
   const ntm::TranscribeConfig core;
 
-  REQUIRE(config.struct_version == 4);
+  REQUIRE(config.struct_size == sizeof(SonareTranscribeConfig));
   CHECK(config.polyphonic == (core.source == ntm::TranscribeSource::kPolyphonic ? 1 : 0));
   CHECK(config.monophonic_model ==
         (core.monophonic_model == ntm::MonophonicModel::kSinging ? 1 : 0));
   CHECK(config.reference_hz == core.reference_hz);
-  CHECK(config.f0_min_hz == core.fmin);
-  CHECK(config.f0_max_hz == core.fmax);
-  CHECK(config.min_note_ms == core.min_note_ms);
   CHECK(config.segmentation_threshold_cents == core.segmentation_threshold_cents);
   CHECK(config.velocity_floor_db == core.velocity_floor_db);
-  CHECK(config.fixed_velocity == core.fixed_velocity);
   CHECK(config.group == 0);
   CHECK(config.channel == 0);
+  CHECK(config.reference_auto == 0);
 
-  CHECK(config.max_polyphony == core.max_polyphony);
-  CHECK(config.min_frame_peak_ratio == core.min_frame_peak_ratio);
-  CHECK(config.min_ridge_peak_ratio == core.min_ridge_peak_ratio);
-  CHECK(config.min_note_division == core.min_note_division);
+  // The fields whose default depends on the source are absent, not a number the struct happened
+  // to arrive with: the selected source supplies each when the config is read.
+  CHECK(std::isnan(config.f0_min_hz));
+  CHECK(std::isnan(config.f0_max_hz));
+  CHECK(std::isnan(config.min_note_ms));
+  CHECK(std::isnan(config.min_frame_peak_ratio));
+  CHECK(std::isnan(config.min_ridge_peak_ratio));
+  CHECK(std::isnan(config.reattack_ratio));
+  CHECK(config.max_polyphony == SONARE_MAX_POLYPHONY_UNSET);
+  CHECK(config.min_note_division == SONARE_NOTE_DIVISION_UNSET);
+  CHECK(config.fixed_velocity == SONARE_FIXED_VELOCITY_UNSET);
 
-  // Every one of those is a value, not a zero the struct happened to arrive
-  // with: a default seeder that stopped copying would leave these at 0. The
-  // fields whose default depends on the source are the intentional exceptions:
-  // the tracker endpoints, min_note_ms and the four polyphonic limits stay 0, so
-  // the selected source supplies each when the config is read.
   CHECK(config.reference_hz > 0.0f);
-  CHECK(config.f0_min_hz == 0.0f);
-  CHECK(config.f0_max_hz == 0.0f);
-  CHECK(config.min_note_ms == 0.0f);
-  CHECK(config.max_polyphony == 0);
-  CHECK(config.min_frame_peak_ratio == 0.0f);
-  CHECK(config.min_ridge_peak_ratio == 0.0f);
-  CHECK(config.reattack_ratio == 0.0f);
-  CHECK(config.monophonic_model == 0);
   CHECK(config.segmentation_threshold_cents > 0.0f);
   CHECK(config.velocity_floor_db < 0.0f);
 }
 
-TEST_CASE("the three spellings of the defaults are one answer", "[c_api][transcribe]") {
+TEST_CASE("the two spellings of the defaults are one answer", "[c_api][transcribe]") {
   const std::vector<float> samples = separated_notes({60, 64, 67, 72});
 
   Result by_null;
   transcribe_into(&by_null, samples, 120.0f, nullptr);
 
-  const SonareTranscribeConfig explicit_defaults = sonare_transcribe_config_default();
+  SonareTranscribeConfig explicit_defaults;
+  sonare_transcribe_config_init(&explicit_defaults);
   Result by_default;
   transcribe_into(&by_default, samples, 120.0f, &explicit_defaults);
 
-  // The documented "0 => default" contract: a zeroed struct carrying only its
-  // version is the defaults, field for field.
-  SonareTranscribeConfig zeroed{};
-  zeroed.struct_version = 1;
-  Result by_zero;
-  transcribe_into(&by_zero, samples, 120.0f, &zeroed);
-
   require_same_events(by_default.events(), by_null.events());
-  require_same_events(by_zero.events(), by_null.events());
   CHECK(by_default.get().tempo_bpm == by_null.get().tempo_bpm);
-  CHECK(by_zero.get().tempo_bpm == by_null.get().tempo_bpm);
 }
 
 TEST_CASE("sonare_transcribe refuses what it cannot read", "[c_api][transcribe]") {
@@ -309,14 +293,17 @@ TEST_CASE("sonare_transcribe refuses what it cannot read", "[c_api][transcribe]"
     CHECK(result.get().note_count == 0);
   }
 
-  SECTION("a struct version that is not 1 to 4") {
-    for (const int32_t version : {0, 5, -1, 99}) {
-      INFO("struct_version " << version);
-      SonareTranscribeConfig config = sonare_transcribe_config_default();
-      config.struct_version = version;
+  SECTION("a struct that was not started from its init") {
+    for (const uint32_t size : {0u, 4u}) {
+      INFO("struct_size " << size);
+      SonareTranscribeConfig config;
+      sonare_transcribe_config_init(&config);
+      config.struct_size = size;
       Result result;
       CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
                               result.out()) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            "config.struct_size must be set by sonare_transcribe_config_init");
       CHECK(result.get().events == nullptr);
     }
   }
@@ -326,45 +313,55 @@ TEST_CASE("sonare_transcribe refuses what it cannot read", "[c_api][transcribe]"
     const float inf = std::numeric_limits<float>::infinity();
 
     std::vector<std::pair<const char*, SonareTranscribeConfig>> rejected;
-    auto add = [&rejected](const char* what, SonareTranscribeConfig config) {
-      config.struct_version = 1;
+    const auto fresh = [] {
+      SonareTranscribeConfig config;
+      sonare_transcribe_config_init(&config);
+      return config;
+    };
+    auto add = [&rejected](const char* what, const SonareTranscribeConfig& config) {
       rejected.emplace_back(what, config);
     };
-    for (const float bad : {nan, inf, -inf, -1.0f}) {
-      SonareTranscribeConfig reference{};
+    // A given 0 is a value out of each of these domains, not the default.
+    for (const float bad : {nan, inf, -inf, -1.0f, 0.0f}) {
+      SonareTranscribeConfig reference = fresh();
       reference.reference_hz = bad;
       add("reference_hz", reference);
-      SonareTranscribeConfig low{};
-      low.f0_min_hz = bad;
-      add("f0_min_hz", low);
-      SonareTranscribeConfig shortest{};
-      shortest.min_note_ms = bad;
-      add("min_note_ms", shortest);
-      SonareTranscribeConfig threshold{};
+      SonareTranscribeConfig threshold = fresh();
       threshold.segmentation_threshold_cents = bad;
       add("segmentation_threshold_cents", threshold);
     }
+    for (const float bad : {inf, -inf, -1.0f, 0.0f}) {
+      SonareTranscribeConfig low = fresh();
+      low.f0_min_hz = bad;
+      add("f0_min_hz", low);
+      SonareTranscribeConfig high = fresh();
+      high.f0_max_hz = bad;
+      add("f0_max_hz", high);
+      SonareTranscribeConfig shortest = fresh();
+      shortest.min_note_ms = bad;
+      add("min_note_ms", shortest);
+    }
     {
-      SonareTranscribeConfig inverted{};
+      SonareTranscribeConfig inverted = fresh();
       inverted.f0_min_hz = 2093.0f;
       inverted.f0_max_hz = 65.0f;
       add("f0_min_hz above f0_max_hz", inverted);
     }
-    for (const float bad : {nan, inf, 1.0f}) {
-      SonareTranscribeConfig floor_db{};
+    for (const float bad : {nan, inf, 1.0f, 0.0f}) {
+      SonareTranscribeConfig floor_db = fresh();
       floor_db.velocity_floor_db = bad;
       add("velocity_floor_db", floor_db);
     }
     for (const int32_t bad : {-1, 128, 1000}) {
-      SonareTranscribeConfig fixed{};
+      SonareTranscribeConfig fixed = fresh();
       fixed.fixed_velocity = bad;
       add("fixed_velocity", fixed);
     }
     for (const int32_t bad : {-1, 16, 99}) {
-      SonareTranscribeConfig group{};
+      SonareTranscribeConfig group = fresh();
       group.group = bad;
       add("group", group);
-      SonareTranscribeConfig channel{};
+      SonareTranscribeConfig channel = fresh();
       channel.channel = bad;
       add("channel", channel);
     }
@@ -595,8 +592,10 @@ TEST_CASE("sonare_project_transcribe_to_clip refuses what it cannot write", "[c_
                                           samples.size(), 0, nullptr,
                                           &note_count) == SONARE_ERROR_INVALID_PARAMETER);
 
-  SonareTranscribeConfig config = sonare_transcribe_config_default();
-  config.struct_version = 5;
+  SonareTranscribeConfig config;
+
+  sonare_transcribe_config_init(&config);
+  config.struct_size = 0;
   CHECK(sonare_project_transcribe_to_clip(fixture.project(), fixture.clip(), samples.data(),
                                           samples.size(), kSampleRate, &config,
                                           &note_count) == SONARE_ERROR_INVALID_PARAMETER);
@@ -618,7 +617,8 @@ TEST_CASE("a config field the C door forwards changes the events", "[c_api][tran
   const std::vector<float> samples = separated_notes({60, 64, 67, 72});
 
   SECTION("fixed_velocity is every note-on's velocity") {
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     config.fixed_velocity = 42;
     Result result;
     transcribe_into(&result, samples, 120.0f, &config);
@@ -643,7 +643,8 @@ TEST_CASE("a config field the C door forwards changes the events", "[c_api][tran
   }
 
   SECTION("reference_hz moves every note number") {
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     config.reference_hz = sonare::constants::kA4Hz * std::pow(2.0f, 1.0f / 12.0f);
     Result raised;
     transcribe_into(&raised, samples, 120.0f, &config);
@@ -660,7 +661,8 @@ TEST_CASE("a config field the C door forwards changes the events", "[c_api][tran
   }
 
   SECTION("group and channel are the ones the events carry") {
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     config.group = 3;
     config.channel = 9;
     Result result;
@@ -676,7 +678,9 @@ TEST_CASE("a config field the C door forwards changes the events", "[c_api][tran
 TEST_CASE("the C door forwards the polyphonic tracker range", "[c_api][transcribe]") {
   const std::vector<float> samples = separated_notes({69});
 
-  SonareTranscribeConfig inclusive = sonare_transcribe_config_default();
+  SonareTranscribeConfig inclusive;
+
+  sonare_transcribe_config_init(&inclusive);
   inclusive.polyphonic = 1;
   inclusive.f0_min_hz = 400.0f;
   inclusive.f0_max_hz = 500.0f;
@@ -706,9 +710,10 @@ TEST_CASE("the C door forwards the polyphonic tracker range", "[c_api][transcrib
 TEST_CASE("the C door resolves a partial tracker range from its source", "[c_api][transcribe]") {
   const std::vector<float> samples = separated_notes({69});
 
-  SonareTranscribeConfig monophonic = sonare_transcribe_config_default();
+  SonareTranscribeConfig monophonic;
+
+  sonare_transcribe_config_init(&monophonic);
   monophonic.f0_min_hz = 1800.0f;
-  monophonic.f0_max_hz = 0.0f;
   Result mono_result;
   REQUIRE(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &monophonic,
                             mono_result.out()) == SONARE_OK);
@@ -737,13 +742,13 @@ TEST_CASE("reference_auto measures the tuning and the result reports what was us
   }
 
   SECTION("a given reference is reported as the tuning it amounts to") {
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     float expected = 0.0f;
     REQUIRE(sonare_reference_hz_to_tuning(432.0f, 440.0f, &expected) == SONARE_OK);
     config.reference_hz = 432.0f;
     Result result;
     transcribe_into(&result, samples, 120.0f, &config);
-    CHECK(result.get().struct_version == 2);
     CHECK_THAT(result.get().tuning_cents, WithinAbs(expected, 1e-3));
 
     Result defaulted;
@@ -752,7 +757,8 @@ TEST_CASE("reference_auto measures the tuning and the result reports what was us
   }
 
   SECTION("reference_auto reads the recording's own tuning, and the notes stay on their pitches") {
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     config.reference_auto = 1;
     Result result;
     transcribe_into(&result, samples, 120.0f, &config);
@@ -764,16 +770,10 @@ TEST_CASE("reference_auto measures the tuning and the result reports what was us
       if (event.status == kNoteOn) notes.insert(event.note);
     }
     CHECK(notes == std::set<int>{60, 64, 67, 72});
-
-    // The flag is a version-2 field: a version-1 struct that carries it is read as not asking.
-    config.struct_version = 1;
-    Result v1;
-    transcribe_into(&v1, samples, 120.0f, &config);
-    CHECK(v1.get().tuning_cents == 0.0f);
   }
 }
 
-// --- The version-3 polyphonic limits --------------------------------------
+// --- The polyphonic limits ------------------------------------------------
 
 namespace {
 
@@ -812,31 +812,16 @@ int most_sounding_at_once(const std::vector<float>& samples, const SonareTranscr
 
 }  // namespace
 
-TEST_CASE("a version-3 struct reads the polyphonic limits and an older one does not",
-          "[c_api][transcribe]") {
+TEST_CASE("the polyphonic limits are read", "[c_api][transcribe]") {
   const std::vector<float> samples = held_chord();
-  SonareTranscribeConfig config = sonare_transcribe_config_default();
+  SonareTranscribeConfig config;
+  sonare_transcribe_config_init(&config);
   config.polyphonic = 1;
   REQUIRE(most_sounding_at_once(samples, config) == 2);
 
   // One voice per frame, so no two ridges share a frame and no two notes overlap.
   config.max_polyphony = 1;
   CHECK(most_sounding_at_once(samples, config) == 1);
-
-  SECTION("a version-2 struct ignores the trailing fields, valid or not") {
-    config.struct_version = 2;
-    CHECK(most_sounding_at_once(samples, config) == 2);
-    // Out of every field's domain, and on a monophonic config: never read, so never refused.
-    config.max_polyphony = 99;
-    config.min_frame_peak_ratio = std::numeric_limits<float>::quiet_NaN();
-    config.min_ridge_peak_ratio = 7.0f;
-    config.reattack_ratio = 0.5f;
-    CHECK(most_sounding_at_once(samples, config) == 2);
-    config.polyphonic = 0;
-    Result mono;
-    CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
-                            mono.out()) == SONARE_OK);
-  }
 }
 
 TEST_CASE("a monophonic config carrying a polyphonic limit is refused by name",
@@ -848,14 +833,15 @@ TEST_CASE("a monophonic config carrying a polyphonic limit is refused by name",
   };
   const Case cases[] = {
       {"max_polyphony", [](SonareTranscribeConfig* c) { c->max_polyphony = 4; }},
-      {"min_frame_peak_ratio", [](SonareTranscribeConfig* c) { c->min_frame_peak_ratio = -1.0f; }},
+      {"min_frame_peak_ratio", [](SonareTranscribeConfig* c) { c->min_frame_peak_ratio = 0.0f; }},
       {"min_frame_peak_ratio", [](SonareTranscribeConfig* c) { c->min_frame_peak_ratio = 0.3f; }},
-      {"min_ridge_peak_ratio", [](SonareTranscribeConfig* c) { c->min_ridge_peak_ratio = -1.0f; }},
+      {"min_ridge_peak_ratio", [](SonareTranscribeConfig* c) { c->min_ridge_peak_ratio = 0.0f; }},
       {"min_ridge_peak_ratio", [](SonareTranscribeConfig* c) { c->min_ridge_peak_ratio = 0.3f; }},
       {"reattack_ratio", [](SonareTranscribeConfig* c) { c->reattack_ratio = 2.5f; }},
   };
   for (const Case& entry : cases) {
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     entry.set(&config);
     INFO(entry.field);
     Result result;
@@ -872,11 +858,14 @@ TEST_CASE("a monophonic config carrying a polyphonic limit is refused by name",
   }
 }
 
-// Model: source {mono, poly} x max_polyphony {0, 1, 64, 65} x min_frame_peak_ratio
-// {0, neg, 0.3, 1.5} x min_ridge_peak_ratio {0, neg, 0.3, 1.5} x reattack_ratio
-// {0, neg, 0.5, 1.0, 2.5} x min_note_ms {0, 45}; pairwise (coverwise, seed 1): 26 cases.
-TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the explicit default",
+// Model: source {mono, poly} x max_polyphony {unset, 1, 64, 65} x min_frame_peak_ratio
+// {absent, 0, 0.3, 1.5, neg} x min_ridge_peak_ratio {absent, 0, 0.3, 1.5, neg} x reattack_ratio
+// {absent, 0.5, 1.0, 2.5} x min_note_ms {absent, 45}.
+TEST_CASE("the polyphonic limits refuse out of domain and resolve an absent field as the default",
           "[c_api][transcribe]") {
+  constexpr float kAbsent = std::numeric_limits<float>::quiet_NaN();
+  constexpr float kNeg = -1.0f;
+  constexpr int32_t kUnset = SONARE_MAX_POLYPHONY_UNSET;
   struct Row {
     bool polyphonic;
     int32_t max_polyphony;
@@ -885,21 +874,21 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
     float reattack;
     float min_note_ms;
   };
-  constexpr float kNeg = -1.0f;
   const Row rows[] = {
-      {false, 64, 0.3f, 1.5f, 1.0f, 45.0f}, {true, 65, kNeg, 1.5f, kNeg, 0.0f},
-      {true, 0, 0.3f, 0.0f, 0.0f, 45.0f},   {false, 1, 0.0f, 0.3f, 0.5f, 0.0f},
-      {true, 0, 0.0f, kNeg, 1.0f, 0.0f},    {true, 1, 1.5f, 0.3f, 2.5f, 45.0f},
-      {false, 0, kNeg, 0.3f, 1.0f, 45.0f},  {false, 65, 0.0f, kNeg, kNeg, 45.0f},
-      {false, 64, 1.5f, kNeg, 0.0f, 0.0f},  {false, 1, kNeg, 0.0f, 2.5f, 45.0f},
-      {true, 65, 1.5f, 0.0f, 0.5f, 45.0f},  {false, 65, 0.3f, 0.0f, 2.5f, 0.0f},
-      {true, 65, kNeg, 0.3f, 0.0f, 0.0f},   {false, 1, 0.3f, kNeg, 1.0f, 45.0f},
-      {true, 64, 0.0f, 0.0f, kNeg, 0.0f},   {true, 1, 0.0f, 1.5f, 0.0f, 45.0f},
-      {true, 1, 0.3f, 0.0f, kNeg, 0.0f},    {false, 0, 1.5f, 1.5f, kNeg, 45.0f},
-      {true, 0, 0.0f, kNeg, 2.5f, 45.0f},   {false, 64, kNeg, 1.5f, 2.5f, 45.0f},
-      {true, 65, kNeg, kNeg, 0.5f, 0.0f},   {false, 64, 0.3f, 0.3f, 0.5f, 45.0f},
-      {true, 0, 1.5f, 0.0f, 1.0f, 0.0f},    {true, 65, 0.3f, kNeg, 1.0f, 45.0f},
-      {true, 0, 1.5f, 1.5f, 0.5f, 0.0f},    {true, 64, 0.0f, 0.3f, kNeg, 0.0f},
+      {false, 64, 0.3f, 1.5f, 1.0f, 45.0f},
+      {true, 65, kNeg, 1.5f, kAbsent, kAbsent},
+      {true, kUnset, 0.3f, 0.0f, kAbsent, 45.0f},
+      {false, 1, 0.0f, 0.3f, 0.5f, kAbsent},
+      {true, kUnset, 0.0f, kNeg, 1.0f, kAbsent},
+      {true, 1, 1.5f, 0.3f, 2.5f, 45.0f},
+      {false, kUnset, kNeg, 0.3f, 1.0f, 45.0f},
+      {false, kUnset, kAbsent, kAbsent, kAbsent, 45.0f},
+      {true, kUnset, kAbsent, kAbsent, kAbsent, kAbsent},
+      {true, 64, 0.0f, 0.0f, 2.5f, kAbsent},
+      {true, 1, 0.3f, 0.3f, kAbsent, 45.0f},
+      {false, kUnset, kAbsent, kAbsent, kAbsent, kAbsent},
+      {true, kUnset, 1.0f, 1.0f, 0.5f, kAbsent},
+      {false, 65, kAbsent, kAbsent, kAbsent, kAbsent},
   };
 
   const std::vector<float> samples = separated_notes({60, 64});
@@ -908,7 +897,8 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
   for (size_t i = 0; i < std::size(rows); ++i) {
     const Row& row = rows[i];
     INFO("row " << i);
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     config.polyphonic = row.polyphonic ? 1 : 0;
     config.max_polyphony = row.max_polyphony;
     config.min_frame_peak_ratio = row.frame_ratio;
@@ -919,15 +909,20 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
     // The fields that make the row unreadable: out of domain first, else the
     // polyphonic-only fields a monophonic row carries.
     std::vector<std::string> offending;
+    const auto given = [](float value) { return !std::isnan(value); };
     if (row.max_polyphony == 65) offending.emplace_back("max_polyphony");
-    if (row.frame_ratio > 1.0f) offending.emplace_back("min_frame_peak_ratio");
-    if (row.ridge_ratio > 1.0f) offending.emplace_back("min_ridge_peak_ratio");
-    if (row.reattack != 0.0f && row.reattack <= 1.0f) offending.emplace_back("reattack_ratio");
+    if (given(row.frame_ratio) && (row.frame_ratio < 0.0f || row.frame_ratio > 1.0f)) {
+      offending.emplace_back("min_frame_peak_ratio");
+    }
+    if (given(row.ridge_ratio) && (row.ridge_ratio < 0.0f || row.ridge_ratio > 1.0f)) {
+      offending.emplace_back("min_ridge_peak_ratio");
+    }
+    if (given(row.reattack) && row.reattack <= 1.0f) offending.emplace_back("reattack_ratio");
     if (offending.empty() && !row.polyphonic) {
-      if (row.max_polyphony != 0) offending.emplace_back("max_polyphony");
-      if (row.frame_ratio != 0.0f) offending.emplace_back("min_frame_peak_ratio");
-      if (row.ridge_ratio != 0.0f) offending.emplace_back("min_ridge_peak_ratio");
-      if (row.reattack != 0.0f) offending.emplace_back("reattack_ratio");
+      if (row.max_polyphony != kUnset) offending.emplace_back("max_polyphony");
+      if (given(row.frame_ratio)) offending.emplace_back("min_frame_peak_ratio");
+      if (given(row.ridge_ratio)) offending.emplace_back("min_ridge_peak_ratio");
+      if (given(row.reattack)) offending.emplace_back("reattack_ratio");
     }
 
     Result result;
@@ -947,40 +942,43 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
 
     ++accepted;
     REQUIRE(error == SONARE_OK);
-    // Each 0 is the core's resolved default spelled out, except reattack_ratio, whose 0 is
-    // "no split" and whose negatives are refused; a negative ratio stays negative.
+    // Each absent field is the core's resolved default spelled out; a polyphonic-only field is
+    // spelled only where the row is polyphonic, since a monophonic row may not carry one.
     ntm::TranscribeConfig source;
     source.source = ntm::TranscribeSource::kPolyphonic;
     source.tempo_bpm = 120.0f;
     const ntm::TranscribePolyphonyLimits defaults =
         ntm::resolve_transcribe_polyphony_limits(source);
     SonareTranscribeConfig spelled = config;
-    if (spelled.max_polyphony == 0) spelled.max_polyphony = defaults.max_polyphony;
-    if (spelled.min_frame_peak_ratio == 0.0f) {
-      spelled.min_frame_peak_ratio = defaults.min_frame_peak_ratio;
+    if (row.polyphonic) {
+      if (spelled.max_polyphony == kUnset) spelled.max_polyphony = defaults.max_polyphony;
+      if (std::isnan(spelled.min_frame_peak_ratio)) {
+        spelled.min_frame_peak_ratio = defaults.min_frame_peak_ratio;
+      }
+      if (std::isnan(spelled.min_ridge_peak_ratio)) {
+        spelled.min_ridge_peak_ratio = defaults.min_ridge_peak_ratio;
+      }
     }
-    if (spelled.min_ridge_peak_ratio == 0.0f) {
-      spelled.min_ridge_peak_ratio = defaults.min_ridge_peak_ratio;
-    }
-    if (spelled.min_note_ms == 0.0f) spelled.min_note_ms = defaults.min_note_ms;
+    if (std::isnan(spelled.min_note_ms)) spelled.min_note_ms = defaults.min_note_ms;
     Result explicit_result;
     REQUIRE(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &spelled,
                               explicit_result.out()) == SONARE_OK);
     require_same_events(result.events(), explicit_result.events());
   }
   // Both outcomes are reached, so neither half of the table is vacuous.
-  CHECK(accepted == 2);
-  CHECK(refused == 24);
+  CHECK(accepted >= 4);
+  CHECK(refused >= 4);
 }
 
-TEST_CASE("reattack_ratio 0 is no split and anything else must be above 1", "[c_api][transcribe]") {
+TEST_CASE("reattack_ratio absent is no split and a given value must be above 1",
+          "[c_api][transcribe]") {
   const std::vector<float> samples = held_chord();
-  const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();
   const float neg_inf = -inf;
-  for (const float bad : {-1.0f, -0.5f, 0.5f, 1.0f, nan, inf, neg_inf}) {
+  for (const float bad : {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f, inf, neg_inf}) {
     INFO("reattack_ratio " << bad);
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     config.polyphonic = 1;
     config.reattack_ratio = bad;
     Result result;
@@ -988,7 +986,8 @@ TEST_CASE("reattack_ratio 0 is no split and anything else must be above 1", "[c_
                             result.out()) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()).find("reattack_ratio") != std::string::npos);
   }
-  SonareTranscribeConfig off = sonare_transcribe_config_default();
+  SonareTranscribeConfig off;
+  sonare_transcribe_config_init(&off);
   off.polyphonic = 1;
   Result no_split;
   CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &off,
@@ -1025,7 +1024,8 @@ size_t note_ons_of(const std::vector<SonareMidiEventPod>& events, int note) {
 }
 
 SonareTranscribeConfig polyphonic_config() {
-  SonareTranscribeConfig config = sonare_transcribe_config_default();
+  SonareTranscribeConfig config;
+  sonare_transcribe_config_init(&config);
   config.polyphonic = 1;
   return config;
 }
@@ -1087,7 +1087,8 @@ TEST_CASE("the shortest note is read at the transcription tempo", "[c_api][trans
   }
 
   SECTION("a division applies to the monophonic path too") {
-    SonareTranscribeConfig division = sonare_transcribe_config_default();
+    SonareTranscribeConfig division;
+    sonare_transcribe_config_init(&division);
     division.min_note_division = 8;
     Result dropped;
     transcribe_into(&dropped, samples, 120.0f, &division);
@@ -1095,12 +1096,12 @@ TEST_CASE("the shortest note is read at the transcription tempo", "[c_api][trans
   }
 }
 
-TEST_CASE("min_note_division is refused by name and read only from version 3",
-          "[c_api][transcribe]") {
+TEST_CASE("min_note_division is refused by name", "[c_api][transcribe]") {
   const std::vector<float> samples = separated_notes({60, 64});
   for (const int32_t polyphonic : {0, 1}) {
     INFO("polyphonic " << polyphonic);
-    SonareTranscribeConfig base = sonare_transcribe_config_default();
+    SonareTranscribeConfig base;
+    sonare_transcribe_config_init(&base);
     base.polyphonic = polyphonic;
     std::vector<SonareTranscribeConfig> refused;
     for (const int32_t division : {-1, 129}) {
@@ -1117,13 +1118,6 @@ TEST_CASE("min_note_division is refused by name and read only from version 3",
       CHECK(std::string(sonare_last_error_message()).find("min_note_division") !=
             std::string::npos);
     }
-
-    SonareTranscribeConfig older = base;
-    older.struct_version = 2;
-    older.min_note_division = 999;
-    Result result;
-    CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &older,
-                            result.out()) == SONARE_OK);
   }
 }
 
@@ -1153,10 +1147,10 @@ std::vector<float> vibrato_note() {
 
 }  // namespace
 
-TEST_CASE("monophonic_model selects the singing decoder from a version-4 struct",
-          "[c_api][transcribe]") {
+TEST_CASE("monophonic_model selects the singing decoder", "[c_api][transcribe]") {
   const std::vector<float> samples = vibrato_note();
-  SonareTranscribeConfig segments = sonare_transcribe_config_default();
+  SonareTranscribeConfig segments;
+  sonare_transcribe_config_init(&segments);
   Result by_segments;
   transcribe_into(&by_segments, samples, 120.0f, &segments);
 
@@ -1165,18 +1159,6 @@ TEST_CASE("monophonic_model selects the singing decoder from a version-4 struct"
   Result by_singing;
   transcribe_into(&by_singing, samples, 120.0f, &singing);
   CHECK(by_singing.get().note_count != by_segments.get().note_count);
-
-  SECTION("a version-3 struct never reads the field, valid or not") {
-    for (const int32_t garbage : {1, 7, -1}) {
-      INFO("monophonic_model " << garbage);
-      SonareTranscribeConfig older = segments;
-      older.struct_version = 3;
-      older.monophonic_model = garbage;
-      Result result;
-      transcribe_into(&result, samples, 120.0f, &older);
-      require_same_events(result.events(), by_segments.events());
-    }
-  }
 }
 
 TEST_CASE("monophonic_model is refused by name", "[c_api][transcribe]") {
@@ -1185,7 +1167,8 @@ TEST_CASE("monophonic_model is refused by name", "[c_api][transcribe]") {
   SECTION("a value that is neither model") {
     for (const int32_t bad : {-1, 2, 99}) {
       INFO("monophonic_model " << bad);
-      SonareTranscribeConfig config = sonare_transcribe_config_default();
+      SonareTranscribeConfig config;
+      sonare_transcribe_config_init(&config);
       config.monophonic_model = bad;
       Result result;
       CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
@@ -1196,7 +1179,8 @@ TEST_CASE("monophonic_model is refused by name", "[c_api][transcribe]") {
   }
 
   SECTION("a monophonic-only model on the polyphonic chain") {
-    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    SonareTranscribeConfig config;
+    sonare_transcribe_config_init(&config);
     config.polyphonic = 1;
     config.monophonic_model = 1;
     Result result;

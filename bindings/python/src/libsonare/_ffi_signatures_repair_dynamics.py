@@ -249,6 +249,24 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareDereverbClassicalConfig),
         ]
 
+    # The config initialisers: each writes sizeof and the defaults.
+    for _name, _init_cfg in (
+        ("sonare_declick_config_init", SonareDeclickConfig),
+        ("sonare_denoise_classical_config_init", SonareDenoiseClassicalConfig),
+        ("sonare_declip_config_init", SonareDeclipConfig),
+        ("sonare_decrackle_config_init", SonareDecrackleConfig),
+        ("sonare_dehum_config_init", SonareDehumConfig),
+        ("sonare_dereverb_classical_config_init", SonareDereverbClassicalConfig),
+        ("sonare_trim_silence_config_init", SonareTrimSilenceConfig),
+        ("sonare_compressor_config_init", SonareCompressorConfig),
+        ("sonare_gate_config_init", SonareGateConfig),
+        ("sonare_transient_shaper_config_init", SonareTransientShaperConfig),
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = None
+            _fn.argtypes = [ctypes.POINTER(_init_cfg)]
+
     # --- Mastering: offline dynamics processors ---
     # The dynamics signature appends `int* out_latency_samples` to the repair
     # shape, so we register it separately from the repair loop above.

@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -174,7 +175,9 @@ TEST_CASE("the C surface joins a room estimate to a dereverb config",
   estimate.rt60_bands = bands.data();
   estimate.band_count = bands.size();
 
-  SonareDereverbClassicalConfig config{};
+  SonareDereverbClassicalConfig config;
+
+  sonare_dereverb_classical_config_init(&config);
   config.attenuation = 0.9f;
   config.n_fft = 1024;
   config.hop_length = 256;
@@ -193,22 +196,32 @@ TEST_CASE("the C surface joins a room estimate to a dereverb config",
 }
 
 TEST_CASE("the C surface takes every config field literally", "[mastering][dereverb_room]") {
-  // The dereverb call itself reads a NULL config as "library defaults"; this
-  // one has no such rule, so a caller must not zero-initialize and expect them.
+  // The config is read AND written; fields other than the two a measurement fixes keep the
+  // caller's values, and a struct not started from its init is refused.
   std::vector<float> bands = {0.0f, 0.0f, 1.0f, 1.0f};
   SonareRoomEstimate estimate{};
   estimate.volume = 400.0f;
   estimate.rt60_bands = bands.data();
   estimate.band_count = bands.size();
 
-  SonareDereverbClassicalConfig config{};
+  SonareDereverbClassicalConfig config;
+  sonare_dereverb_classical_config_init(&config);
+  config.attenuation = 0.5f;
+  config.n_fft = 512;
+  config.hop_length = 128;
+  config.spectral_floor = 0.2f;
   REQUIRE(sonare_mastering_repair_dereverb_apply_room_estimate(&estimate, &config) == SONARE_OK);
   CHECK(config.t60_sec == Catch::Approx(1.0f));
   CHECK(config.late_delay_ms == Catch::Approx(20.0f));
-  // Untouched fields stay at the zeros the caller left, not at any default.
-  CHECK(config.attenuation == 0.0f);
-  CHECK(config.n_fft == 0);
-  CHECK(config.spectral_floor == 0.0f);
+  CHECK(config.attenuation == 0.5f);
+  CHECK(config.n_fft == 512);
+  CHECK(config.spectral_floor == 0.2f);
+
+  SonareDereverbClassicalConfig zeroed{};
+  CHECK(sonare_mastering_repair_dereverb_apply_room_estimate(&estimate, &zeroed) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "config.struct_size must be set by sonare_dereverb_classical_config_init");
 }
 
 TEST_CASE("an estimate with no bands at all is accepted and changes nothing",
@@ -220,7 +233,9 @@ TEST_CASE("an estimate with no bands at all is accepted and changes nothing",
   estimate.rt60_bands = nullptr;
   estimate.band_count = 0;
 
-  SonareDereverbClassicalConfig config{};
+  SonareDereverbClassicalConfig config;
+
+  sonare_dereverb_classical_config_init(&config);
   SonareDereverbClassicalConfig before = config;
   REQUIRE(sonare_mastering_repair_dereverb_apply_room_estimate(&estimate, &config) == SONARE_OK);
   CHECK(config.t60_sec == before.t60_sec);

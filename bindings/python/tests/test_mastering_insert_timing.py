@@ -35,12 +35,17 @@ def test_param_info_flags_exclusive_bounds_and_nyquist_ceilings() -> None:
     compressor = {
         param.name: param for param in libsonare.mastering_insert_param_info("dynamics.compressor")
     }
+    # A 0 Hz sidechain corner is the filter switched off, so 0 is inside the domain.
     hpf = compressor["sidechainHighPassHz"]
     assert hpf.min == 0
-    assert isinstance(hpf.min_exclusive, bool)
-    assert hpf.min_exclusive is True
-    assert hpf.max_exclusive is False
-    assert hpf.max_relative_to is None
+    assert hpf.min_exclusive is False
+    tilt = {param.name: param for param in libsonare.mastering_insert_param_info("eq.tilt")}
+    pivot = tilt["pivotHz"]
+    assert pivot.min == 0
+    assert isinstance(pivot.min_exclusive, bool)
+    assert pivot.min_exclusive is True
+    assert pivot.max_exclusive is False
+    assert pivot.max_relative_to is None
     eq = {param.name: param for param in libsonare.mastering_insert_param_info("eq.parametric")}
     assert eq["band0.frequencyHz"].max_relative_to == "nyquist"
 

@@ -2137,7 +2137,6 @@
 "stft_result": {"domain": "analysis", "surfaces": ["c", "node", "python", "wasm"]},
 "stream_analyzer": {"domain": "analysis", "surfaces": ["c", "node", "python", "wasm"]},
 "stream_analyzer_available_frames": {"domain": "analysis", "surfaces": ["c"]},
-"stream_analyzer_config_default": {"domain": "analysis", "surfaces": ["c", "wasm"]},
 "stream_analyzer_create": {"domain": "analysis", "surfaces": ["c"]},
 "stream_analyzer_current_time": {"domain": "analysis", "surfaces": ["c"]},
 "stream_analyzer_destroy": {"domain": "analysis", "surfaces": ["c"]},

@@ -159,7 +159,8 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   int sample_rate{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
-  SonareSectionOptions options = sonare_section_options_default();
+  SonareSectionOptions options;
+  sonare_section_options_init(&options);
   if (!OptionalIntArg(env, info, 2, "nFft", options.n_fft, &options.n_fft) ||
       !OptionalIntArg(env, info, 3, "hopLength", options.hop_length, &options.hop_length) ||
       !OptionalFiniteFloatArg(env, info, 4, "minSectionSec", options.min_section_sec,
@@ -213,7 +214,8 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   // Seeded from the C ABI rather than restated, so the facade cannot drift from
   // the core's BoundaryConfig. No field here takes ZeroIsSentinel: the C entry
   // refuses a zero size and reads a zero threshold as "accept every peak".
-  SonareBoundaryOptions options = sonare_boundary_options_default();
+  SonareBoundaryOptions options;
+  sonare_boundary_options_init(&options);
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object bag = info[2].As<Napi::Object>();
     options.n_fft = IntProperty(bag, "nFft", options.n_fft);

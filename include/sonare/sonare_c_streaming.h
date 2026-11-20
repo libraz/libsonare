@@ -16,18 +16,19 @@ extern "C" {
 /// @brief Construction config for SonareStreamAnalyzer.
 ///
 /// Mirrors the relevant subset of sonare::StreamConfig exposed by the WASM StreamAnalyzer
-/// constructor. Use sonare_stream_analyzer_config_default to populate librosa/real-time defaults
-/// before overriding fields.
+/// constructor. Start from sonare_stream_config_init, which writes the librosa/real-time defaults.
 typedef struct {
-  int sample_rate;  ///< Input sample rate in Hz (default 44100)
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_stream_config_init.
+  int sample_rate;       ///< Input sample rate in Hz (default 44100)
   /// Window in samples at 44100 Hz (default 2048); rescaled below that rate, never shorter than
   /// the hop.
   int n_fft;
   int hop_length;  ///< Hop between analysis frames in input samples (default 512, at most n_fft)
   int n_mels;      ///< Number of Mel bands (default 128)
   float fmin_hz;   ///< Lowest Mel filterbank frequency in Hz (default 0)
-  /// Highest Mel filterbank frequency in Hz (0 = Nyquist, default 0); at most 22050 effective
-  /// above 44100 Hz input, where the analyzer works at 44100 Hz.
+  /// Highest Mel filterbank frequency in Hz, greater than fmin_hz; NaN (the default) is the
+  /// Nyquist frequency. At most 22050 effective above 44100 Hz input, where the analyzer works
+  /// at 44100 Hz.
   float fmax_hz;
   /// A4 tuning reference in Hz (default 440; must be within 220..880, the same range
   /// sonare_stream_analyzer_set_reference_hz accepts).
@@ -52,6 +53,10 @@ typedef struct {
   /// Per chord/bar progression cap; drops oldest (default 4096)
   size_t max_progression_entries;
 } SonareStreamConfig;
+
+/// @brief Fills @p config with sizeof and the real-time defaults (44100 Hz, n_fft 2048, etc.).
+///        A NULL @p config is ignored.
+void sonare_stream_config_init(SonareStreamConfig* config);
 
 /// @brief Analysis window applied to each frame before the FFT.
 typedef enum SONARE_ENUM_BASE {
@@ -177,17 +182,22 @@ typedef struct {
 
 /// @brief Quantization ranges for the u8/i16 bandwidth-reduction read paths.
 ///
-/// Mirrors sonare::QuantizeConfig. Populate with sonare_stream_quantize_config_default, then widen
+/// Mirrors sonare::QuantizeConfig. Populate with sonare_stream_quantize_config_init, then widen
 /// any range whose source values exceed the defaults: the quantizers clamp normalized values to
 /// [0,1], so a stream louder/quieter than these ranges otherwise saturates silently to the
 /// endpoints. Every range must be finite and ordered / positive or the read is refused.
 typedef struct {
-  float mel_db_min;    ///< dB floor for mel quantization (default -80)
-  float mel_db_max;    ///< dB ceiling for mel quantization (default 0)
-  float onset_max;     ///< max expected onset strength (default 50)
-  float rms_max;       ///< max expected RMS energy (default 1)
-  float centroid_max;  ///< max expected spectral centroid Hz (default 11025)
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_stream_quantize_config_init.
+  float mel_db_min;      ///< dB floor for mel quantization (default -80)
+  float mel_db_max;      ///< dB ceiling for mel quantization (default 0)
+  float onset_max;       ///< max expected onset strength (default 50)
+  float rms_max;         ///< max expected RMS energy (default 1)
+  float centroid_max;    ///< max expected spectral centroid Hz (default 11025)
 } SonareStreamQuantizeConfig;
+
+/// @brief Fills @p config with sizeof and the default quantization ranges. A NULL @p config is
+///        ignored.
+void sonare_stream_quantize_config_init(SonareStreamQuantizeConfig* config);
 
 /// @brief Progressive estimate + counters snapshot.
 ///
@@ -244,9 +254,6 @@ typedef struct {
   /// analyzer.
   size_t non_finite_discard_blocks;
 } SonareStreamStats;
-
-/// @brief Fills @p config with real-time defaults (44100 Hz, n_fft 2048, etc.).
-SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config);
 
 /// @par Threading and lifecycle
 /// A handle supports one producer thread calling process, process_with_offset,
@@ -314,9 +321,6 @@ SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer
 /// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_i16).
 SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
                                                    size_t max_frames, SonareStreamFramesI16* out);
-
-/// @brief Fills @p config with the default quantization ranges.
-SonareError sonare_stream_quantize_config_default(SonareStreamQuantizeConfig* config);
 
 /// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer
 ///        using caller-supplied quantization ranges (NULL @p config = defaults).

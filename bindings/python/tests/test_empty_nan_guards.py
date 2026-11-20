@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import array
 import ast
+import inspect
 import math
 import pathlib
 
@@ -244,8 +245,7 @@ class TestPitchCAbiValidation:
         with pytest.raises(SonareValueError) as exc_info:
             pitch(_sine(SR), sample_rate=0)
         assert exc_info.value.code == 4
-        # The core's plain refusal; the facade's own argument errors say "must be".
-        assert "must be" not in str(exc_info.value)
+        assert str(exc_info.value).endswith(": sample_rate must be an integer in [8000, 384000]")
 
     @pytest.mark.parametrize("pitch", [pitch_yin, pitch_pyin], ids=["yin", "pyin"])
     def test_normal_audio_returns_pitch_result(self, pitch):
@@ -428,7 +428,9 @@ class TestSpectralTransformsMatchSiblingGuards:
         # Preflight covers the buffer only; scalar arguments stay the C ABI's job.
         with pytest.raises(SonareValueError) as exc_info:
             _SPECTRAL_TRANSFORMS[name](_sine(SR), 0)
-        assert str(exc_info.value) == f"{name}: sample_rate is out of the supported range"
+        # The refusal names the rate as this facade spells it (librosa mirrors take ``sr``).
+        rate = list(inspect.signature(_SPECTRAL_TRANSFORMS[name]).parameters)[1]
+        assert str(exc_info.value) == f"{name}: {rate} must be an integer in [8000, 384000]"
         assert exc_info.value.code == 4
 
 

@@ -30,20 +30,12 @@ inline constexpr float kDefaultClippingThreshold = 0.999f;
 /// Library default minimum run length: report every clipped run.
 inline constexpr size_t kDefaultClippingMinRegionSamples = 1;
 
-/// @brief Clipping detection parameters resolved against the library defaults.
-struct ClippingParams {
-  float threshold = kDefaultClippingThreshold;
-  size_t min_region_samples = kDefaultClippingMinRegionSamples;
-};
-
-/// Decodes the public C/JS sentinel convention into validated parameters.
-///
-/// Exactly 0 selects the library default, for both fields. Every other value is
-/// the caller's request, so a threshold outside the accepted [0, 1] domain is
-/// rejected with InvalidParameter instead of being promoted to the default:
-/// promoting it made a negative threshold indistinguishable from "use the
-/// default" while an equally out-of-domain 1.5 was correctly refused.
-ClippingParams clipping_params_from_public(float threshold, size_t min_region_samples);
+/// @brief The linear detection threshold for a caller's level in dBFS.
+/// @details NaN means not given and resolves to @ref kDefaultClippingThreshold; every other value
+///          must be finite and in [-120, 0] dBFS; a level below the numerical floor would read
+///          every sample as clipped.
+/// @throws SonareException (InvalidParameter) naming "threshold_db".
+float clipping_threshold_from_db(float threshold_db);
 
 ClippingResult detect_clipping(const Audio& audio, float threshold = kDefaultClippingThreshold,
                                size_t min_region_samples = kDefaultClippingMinRegionSamples);

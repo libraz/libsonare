@@ -1,4 +1,6 @@
 #include <array>
+#include <cmath>
+#include <limits>
 #include <type_traits>
 
 #include "c_api/features_internal.h"
@@ -90,16 +92,18 @@ void copy_stream_frame_arrays(const Buffer& buffer, Frames* out) {
 
 }  // namespace
 
-SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(config);
-  StreamConfig defaults;
+void sonare_stream_config_init(SonareStreamConfig* config) {
+  if (config == nullptr) return;
+  const StreamConfig defaults;
+  *config = {};
+  config->struct_size = sizeof(*config);
   config->sample_rate = defaults.sample_rate;
   config->n_fft = defaults.n_fft;
   config->hop_length = defaults.hop_length;
   config->n_mels = defaults.n_mels;
   config->fmin_hz = defaults.fmin;
-  config->fmax_hz = defaults.fmax;
+  // The core spells the Nyquist default as 0; the C field leaves it absent.
+  config->fmax_hz = defaults.fmax > 0.0f ? defaults.fmax : std::numeric_limits<float>::quiet_NaN();
   config->reference_hz = defaults.tuning_ref_hz;
   // The C ABI streaming surface has no magnitude read path, so the default
   // config advertises it as off (an explicit non-zero is rejected by _create).
@@ -116,7 +120,6 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
   config->window = SONARE_WINDOW_HANN;
   config->output_format = SONARE_STREAM_OUTPUT_FLOAT32;
   config->max_progression_entries = defaults.max_progression_entries;
-  return SONARE_OK;
 }
 
 SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
@@ -125,6 +128,8 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(config);
   if (const SonareError err = run_validation([&] {
+        sonare_c_detail::require_struct_size(config->struct_size, sizeof(SonareStreamConfig),
+                                             "config", "sonare_stream_config_init");
         check::integer_at_least(config->sample_rate, 1, "config.sample_rate");
         check::integer_at_least(config->n_fft, 1, "config.n_fft");
         check::integer_at_least(config->hop_length, 1, "config.hop_length");
@@ -133,10 +138,12 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
         }
         check::integer_at_least(config->n_mels, 1, "config.n_mels");
         check::at_least(config->fmin_hz, 0.0, "config.fmin_hz");
-        check::at_least(config->fmax_hz, 0.0, "config.fmax_hz");
-        if (config->fmax_hz > 0.0f && config->fmax_hz <= config->fmin_hz) {
-          check::refuse_relation({"config.fmax_hz", "config.fmin_hz"},
-                                 "{0} must be 0 or greater than {1}");
+        if (!std::isnan(config->fmax_hz)) {
+          check::greater_than(config->fmax_hz, 0.0, "config.fmax_hz");
+          if (config->fmax_hz <= config->fmin_hz) {
+            check::refuse_relation({"config.fmax_hz", "config.fmin_hz"},
+                                   "{0} must be greater than {1}");
+          }
         }
         check::in_range(config->reference_hz, kMinTuningRefHz, kMaxTuningRefHz,
                         "config.reference_hz");
@@ -173,7 +180,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.hop_length = config->hop_length;
   cfg.n_mels = config->n_mels;
   cfg.fmin = config->fmin_hz;
-  cfg.fmax = config->fmax_hz;
+  cfg.fmax = std::isnan(config->fmax_hz) ? 0.0f : config->fmax_hz;
   cfg.tuning_ref_hz = config->reference_hz;
   cfg.window = to_window_type(config->window);
   // The SOA read paths (read_frames / read_frames_u8 / read_frames_i16) do not
@@ -269,6 +276,8 @@ namespace {
 QuantizeConfig to_quantize_config(const SonareStreamQuantizeConfig* config) {
   QuantizeConfig q;
   if (config) {
+    sonare_c_detail::require_struct_size(config->struct_size, sizeof(SonareStreamQuantizeConfig),
+                                         "config", "sonare_stream_quantize_config_init");
     q.mel_db_min = config->mel_db_min;
     q.mel_db_max = config->mel_db_max;
     q.onset_max = config->onset_max;
@@ -280,16 +289,16 @@ QuantizeConfig to_quantize_config(const SonareStreamQuantizeConfig* config) {
 
 }  // namespace
 
-SonareError sonare_stream_quantize_config_default(SonareStreamQuantizeConfig* config) {
-  SONARE_C_API_ENTRY;
-  SONARE_C_REQUIRE_NONNULL(config);
+void sonare_stream_quantize_config_init(SonareStreamQuantizeConfig* config) {
+  if (config == nullptr) return;
   const QuantizeConfig q;
+  *config = {};
+  config->struct_size = sizeof(*config);
   config->mel_db_min = q.mel_db_min;
   config->mel_db_max = q.mel_db_max;
   config->onset_max = q.onset_max;
   config->rms_max = q.rms_max;
   config->centroid_max = q.centroid_max;
-  return SONARE_OK;
 }
 
 SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer, size_t max_frames,

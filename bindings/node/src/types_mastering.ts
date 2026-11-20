@@ -352,9 +352,7 @@ export interface MasteringProcessorParamMap {
     autoMakeup?: boolean;
     /** Default: 'rms'. */
     detector?: 'peak' | 'rms' | 'logRms';
-    /** Default: false. */
-    sidechainHighPassEnabled?: boolean;
-    /** Unit: Hz. Range: (0, inf). Default: 100. */
+    /** Unit: Hz. Range: [0, inf). Default: 0. */
     sidechainHighPassHz?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     pdrTimeMs?: number;
@@ -475,9 +473,7 @@ export interface MasteringProcessorParamMap {
     lookaheadMs?: number;
     /** Default: false. */
     monoSumming?: boolean;
-    /** Default: false. */
-    sidechainHighPassEnabled?: boolean;
-    /** Unit: Hz. Default: 90. */
+    /** Unit: Hz. Range: [0, inf). Default: 0. */
     sidechainHighPassHz?: number;
   };
   /** Parameters of the `dynamics.transientShaper` processor. */
@@ -560,15 +556,15 @@ export interface MasteringProcessorParamMap {
     absorption?: number;
     /** Default: true. */
     airAbsorptionEnabled?: boolean;
-    /** Unit: %. Range: [0, 100]. Default: 0. */
+    /** Unit: %. Range: [0, 100]. Default: 50. */
     airHumidityPercent?: number;
-    /** Unit: degC. Range: (-273.15, inf). Default: 0. */
+    /** Unit: degC. Range: (-273.15, inf). Default: 20. */
     airTemperatureC?: number;
     /** Default: unset. */
     bandAbsorption?: readonly number[];
     /** Default: unset. */
     bandScattering?: readonly number[];
-    /** Unit: ms. Range: [0, 1000]. Default: 0. */
+    /** Unit: ms. Range: [0, 1000]. Default: 5. */
     crossfadeMs?: number;
     /** Unit: m. Range: [1.7, 10000]. Default: 3. */
     heightM?: number;
@@ -590,7 +586,7 @@ export interface MasteringProcessorParamMap {
     mixingTimeMs?: number;
     /** Default: true. */
     preferEyring?: boolean;
-    /** Unit: m. Range: [0, 2.5]. Default: 0. */
+    /** Unit: m. Range: (0, 2.5]. Default: 0.5. */
     receiverSpacingM?: number;
     /** Range: [0, inf). Default: 1. */
     seed?: number;
@@ -1006,9 +1002,9 @@ export interface MasteringProcessorParamMap {
     absorption?: number;
     /** Default: true. */
     airAbsorptionEnabled?: boolean;
-    /** Unit: %. Range: [0, 100]. Default: 0. */
+    /** Unit: %. Range: [0, 100]. Default: 50. */
     airHumidityPercent?: number;
-    /** Unit: degC. Range: (-273.15, inf). Default: 0. */
+    /** Unit: degC. Range: (-273.15, inf). Default: 20. */
     airTemperatureC?: number;
     /** Unit: m. Range: [1.7, 10000]. Default: 3. */
     heightM?: number;
@@ -1024,7 +1020,7 @@ export interface MasteringProcessorParamMap {
     listenerZ?: number;
     /** Unit: s. Range: [0, 600]. Default: 0. */
     maxSec?: number;
-    /** Unit: m. Range: [0, 2.5]. Default: 0. */
+    /** Unit: m. Range: (0, 2.5]. Default: 0.5. */
     receiverSpacingM?: number;
     /** Range: [0, inf). Default: 1. */
     seed?: number;

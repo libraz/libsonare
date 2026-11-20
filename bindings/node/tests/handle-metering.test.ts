@@ -122,15 +122,20 @@ describe('Audio handle-form metering', () => {
     }
   });
 
-  it('detectClipping refuses a threshold the detector would read as 0', () => {
+  it('detectClipping refuses a level above 0 dBFS, or not finite, by its name', () => {
     const samples = new Float32Array(8000).fill(0.1);
-    // A level the detector reads as 0 would select the library threshold silently, so it is refused.
-    const below = 'thresholdDb is below the smallest level the detector can hold';
-    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: -890 })).not.toThrow();
-    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: -910 })).toThrow(below);
+    const refusal = 'meteringDetectClipping: thresholdDb must be finite and in [-120, 0]';
+    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: 0 })).not.toThrow();
+    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: 1 })).toThrow(
+      new RangeError(refusal),
+    );
+    // Below the numerical floor every sample would read as clipped.
+    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: -910 })).toThrow(
+      new RangeError(refusal),
+    );
     expect(() =>
       meteringDetectClipping(samples, SR, { thresholdDb: Number.NEGATIVE_INFINITY }),
-    ).toThrow(RangeError);
+    ).toThrow(new RangeError(refusal));
   });
 
   it('dynamicRange agrees with the buffer form, and lowPercentile 0 differs from default', () => {

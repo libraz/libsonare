@@ -399,7 +399,6 @@ const NOT_AUDIO: string[] = [
     'synthPresetNames',
     'synthPresetPatch',
     'realtimeVoiceChangerValidatePresetJson',
-    'streamAnalyzerConfigDefault',
     'voiceCharacterPresetId',
     'masteringRepairDereverbConfigForRoom',
     'masteringRepairNoiseBandBins',

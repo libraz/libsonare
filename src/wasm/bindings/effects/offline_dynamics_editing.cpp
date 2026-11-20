@@ -100,10 +100,9 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
     if (hasProperty(options, "sidechainHighPassHz")) {
       cfg.sidechain_high_pass_hz =
           checkedFloatFromVal(options["sidechainHighPassHz"], "sidechainHighPassHz");
-      if (!std::isfinite(cfg.sidechain_high_pass_hz) || !(cfg.sidechain_high_pass_hz > 0.0f)) {
-        throw WasmRangeError("sidechainHighPassHz must be finite and greater than 0");
+      if (!std::isfinite(cfg.sidechain_high_pass_hz) || !(cfg.sidechain_high_pass_hz >= 0.0f)) {
+        throw WasmRangeError("sidechainHighPassHz must be finite and at least 0");
       }
-      cfg.sidechain_high_pass_enabled = true;
     }
     if (hasProperty(options, "pdrTimeMs")) {
       cfg.pdr_time_ms = checkedFloatFromVal(options["pdrTimeMs"], "pdrTimeMs");

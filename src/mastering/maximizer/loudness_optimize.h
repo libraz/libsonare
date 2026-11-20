@@ -16,8 +16,8 @@ struct LoudnessOptimizeConfig {
   int true_peak_oversample = 4;
   /// Release time of the post true-peak limiter, in milliseconds. Mirrors
   /// @ref TruePeakLimiterConfig::release_ms so the standalone helper and the
-  /// in-chain loudness stage limit identically. 0 selects
-  /// @ref kDefaultLoudnessReleaseMs; a negative or non-finite value is rejected.
+  /// in-chain loudness stage limit identically. Must be finite and
+  /// greater than 0.
   float release_ms = kDefaultLoudnessReleaseMs;
   /// @copydoc TruePeakLimiterConfig::apply_gain_at_input_rate
   bool apply_gain_at_input_rate = false;
@@ -57,11 +57,9 @@ struct LoudnessOptimizeResult {
 /// branches of the named processor, and the chain's loudness stage route here,
 /// so one parameter map is accepted or rejected identically whichever entry
 /// point sees it. Nothing here needs the sample rate.
-/// @return The release time to run: the caller's value, or
-///         @ref kDefaultLoudnessReleaseMs for the documented 0 sentinel.
 /// @throws SonareException (InvalidParameter) naming the offending field.
-float validate_loudness_params(float target_lufs, float ceiling_dbtp, float release_ms,
-                               float max_limiter_gain_reduction_db, int true_peak_oversample);
+void validate_loudness_params(float target_lufs, float ceiling_dbtp, float release_ms,
+                              float max_limiter_gain_reduction_db, int true_peak_oversample);
 
 /// @brief Single-pass loudness normalization followed by a true-peak limiter.
 /// @details The helper computes one static gain from input LUFS and true peak,

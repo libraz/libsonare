@@ -48,7 +48,6 @@ _NOTE_STRUCT_VERSION = 1
 
 # The transcription config's own layout version. Unlike the note-object configs
 # above, 0 is rejected rather than read as version 1.
-_TRANSCRIBE_STRUCT_VERSION = 4
 
 # Monophonic note models, by C ABI value (0 is the default, segments).
 _MONOPHONIC_MODELS = {"segments": 0, "singing": 1}
@@ -316,17 +315,13 @@ def _transcribe_positive(value: float, arg_name: str) -> float:
 
 
 def _transcribe_ratio(value: float, arg_name: str) -> float:
-    """Narrow one polyphonic peak ratio to its C spelling: a real 0 travels as -1.
-
-    The C field reads 0 as "the transcription default" and a negative as 0.
-    A negative or a value above 1 is refused here.
-    """
+    """Narrow one polyphonic peak ratio; a negative or a value above 1 is refused here."""
     number = _validate_scalar(value, arg_name)
     if number < 0.0:
         raise _refuse(f"{arg_name} must not be negative")
     if number > 1.0:
         raise _refuse(f"{arg_name} must be at most 1")
-    return -1.0 if number == 0.0 else number
+    return number
 
 
 def _transcribe_reattack(value: float) -> float:
@@ -369,15 +364,14 @@ def _transcribe_config(
 ) -> SonareTranscribeConfig:
     """Build the transcription config, refusing an out-of-domain field by name.
 
-    ``None`` is this binding's spelling of "keep the library default" and the C
-    ABI's is 0, so a value the caller passed is always a request: an explicit
+    ``None`` keeps the default ``sonare_transcribe_config_init`` wrote (NaN or an
+    UNSET 0 for the optional fields), so a value the caller passed is always a request: an explicit
     ``velocity_floor_db=0.0`` or ``fixed_velocity=0`` is a mistake rather than
     the default, and is refused here. Whether ``f0_min_hz`` and ``f0_max_hz`` bracket each
     other is left to the core, which is the side that has both resolved
     defaults; passing both wrong way round is named here.
     """
     config = SonareTranscribeConfig()
-    config.struct_version = _TRANSCRIBE_STRUCT_VERSION
     config.polyphonic = 1 if polyphonic else 0
     if isinstance(reference_hz, str):
         if reference_hz != "auto":
@@ -391,17 +385,12 @@ def _transcribe_config(
         ("min_note_ms", min_note_ms),
         ("segmentation_threshold_cents", segmentation_threshold_cents),
     ):
-        setattr(
-            config,
-            arg_name,
-            0.0 if value is None else _transcribe_positive(value, arg_name),
-        )
+        if value is not None:
+            setattr(config, arg_name, _transcribe_positive(value, arg_name))
     if f0_min_hz is not None and f0_max_hz is not None and config.f0_max_hz <= config.f0_min_hz:
         raise _refuse("f0_max_hz must be above f0_min_hz")
 
-    if velocity_floor_db is None:
-        config.velocity_floor_db = 0.0
-    else:
+    if velocity_floor_db is not None:
         level = _validate_scalar(velocity_floor_db, "velocity_floor_db")
         if level >= 0.0:
             raise _refuse("velocity_floor_db must be negative")
@@ -418,17 +407,16 @@ def _transcribe_config(
     config.max_polyphony = (
         0 if max_polyphony is None else _transcribe_int(max_polyphony, "max_polyphony", 1, 64)
     )
-    config.min_frame_peak_ratio = (
-        0.0
-        if min_frame_peak_ratio is None
-        else _transcribe_ratio(min_frame_peak_ratio, "min_frame_peak_ratio")
-    )
-    config.min_ridge_peak_ratio = (
-        0.0
-        if min_ridge_peak_ratio is None
-        else _transcribe_ratio(min_ridge_peak_ratio, "min_ridge_peak_ratio")
-    )
-    config.reattack_ratio = 0.0 if reattack_ratio is None else _transcribe_reattack(reattack_ratio)
+    if min_frame_peak_ratio is not None:
+        config.min_frame_peak_ratio = _transcribe_ratio(
+            min_frame_peak_ratio, "min_frame_peak_ratio"
+        )
+    if min_ridge_peak_ratio is not None:
+        config.min_ridge_peak_ratio = _transcribe_ratio(
+            min_ridge_peak_ratio, "min_ridge_peak_ratio"
+        )
+    if reattack_ratio is not None:
+        config.reattack_ratio = _transcribe_reattack(reattack_ratio)
 
     # Both polyphonic and monophonic read the division; giving it together with
     # min_note_ms is refused by the C ABI, naming min_note_division.

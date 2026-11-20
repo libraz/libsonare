@@ -31,6 +31,20 @@
 /// @note  Defined in the top-level sonare_c.h once every subsystem macro is in
 ///        scope; do not redefine it here.
 
+/// @brief Caller-filled structs: every struct a caller fills that has a field with
+///        a library default starts with @c uint32_t struct_size and has a
+///        @c void sonare_<struct>_init(T*) that writes sizeof(T) and every
+///        default (a NULL pointer is ignored). Start from it rather than zeroing:
+///        an entry refuses a struct_size below sizeof(T) by name. A plain data
+///        record whose every field is the caller's own value (an event, a point,
+///        a segment) carries neither. Library-filled results carry no version.
+///
+/// @brief Optional floats: a float field or argument documented as optional is
+///        "not given" when it holds NaN (NAN from <math.h>). Its _init function
+///        seeds NaN, the library resolves the default, and every other value is
+///        checked against the field's domain, so 0 or a negative is never read
+///        as absence. An infinity is refused like any out-of-domain value.
+
 #ifdef __cplusplus
 extern "C" {
 #endif

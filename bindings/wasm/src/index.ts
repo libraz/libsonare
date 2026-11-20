@@ -1199,7 +1199,7 @@ export {
   scaleQuantizeMidi,
 } from './scale.js';
 export type { ProgressCallback } from './sonare.js';
-export { StreamAnalyzer, streamAnalyzerConfigDefault } from './stream_analyzer.js';
+export { StreamAnalyzer } from './stream_analyzer.js';
 export type {
   StreamBarChord,
   StreamChordChange,

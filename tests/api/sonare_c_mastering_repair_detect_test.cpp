@@ -16,7 +16,8 @@ constexpr int kSr = 48000;
 constexpr size_t kLength = 24000;  // 0.5 s
 
 SonareDeclickConfig default_declick_config() {
-  SonareDeclickConfig config{};
+  SonareDeclickConfig config;
+  sonare_declick_config_init(&config);
   config.threshold = 0.8f;
   config.neighbor_ratio = 4.0f;
   config.max_click_samples = 8;
@@ -26,7 +27,8 @@ SonareDeclickConfig default_declick_config() {
 }
 
 SonareDeclipConfig default_declip_config() {
-  SonareDeclipConfig config{};
+  SonareDeclipConfig config;
+  sonare_declip_config_init(&config);
   config.clip_threshold_db = sonare::linear_to_db(0.98f);
   config.lpc_order = 36;
   config.iterations = 2;
@@ -35,7 +37,8 @@ SonareDeclipConfig default_declip_config() {
 }
 
 SonareDecrackleConfig default_decrackle_config() {
-  SonareDecrackleConfig config{};
+  SonareDecrackleConfig config;
+  sonare_decrackle_config_init(&config);
   config.threshold = 0.4f;
   config.mode = SONARE_DECRACKLE_MODE_MEDIAN;
   config.levels = 4;
@@ -43,7 +46,8 @@ SonareDecrackleConfig default_decrackle_config() {
 }
 
 SonareDehumConfig default_dehum_config() {
-  SonareDehumConfig config{};
+  SonareDehumConfig config;
+  sonare_dehum_config_init(&config);
   config.fundamental_hz = 50.0f;
   config.harmonics = 4;
   config.q = 20.0f;
@@ -56,7 +60,8 @@ SonareDehumConfig default_dehum_config() {
 }
 
 SonareDenoiseClassicalConfig default_denoise_config() {
-  SonareDenoiseClassicalConfig config{};
+  SonareDenoiseClassicalConfig config;
+  sonare_denoise_classical_config_init(&config);
   config.mode = SONARE_DENOISE_MODE_LOG_MMSE;
   config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
   config.n_fft = 1024;
@@ -72,7 +77,8 @@ SonareDenoiseClassicalConfig default_denoise_config() {
 }
 
 SonareDereverbClassicalConfig default_dereverb_config() {
-  SonareDereverbClassicalConfig config{};
+  SonareDereverbClassicalConfig config;
+  sonare_dereverb_classical_config_init(&config);
   config.threshold = 0.0f;
   config.attenuation = 1.0f;
   config.n_fft = 1024;
@@ -89,7 +95,8 @@ SonareDereverbClassicalConfig default_dereverb_config() {
 }
 
 SonareTrimSilenceConfig default_trim_config() {
-  SonareTrimSilenceConfig config{};
+  SonareTrimSilenceConfig config;
+  sonare_trim_silence_config_init(&config);
   config.threshold_db = -60.0f;
   config.padding_samples = 0;
   config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;

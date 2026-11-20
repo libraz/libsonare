@@ -9,13 +9,13 @@ from typing import Any, cast
 
 from ._errors import _entry, _refuse, _unknown_error
 from ._ffi import (
-    SONARE_CHORD_DETECTION_OPTIONS_VERSION,
     SonareBoundaryOptions,
     SonareBoundaryResult,
     SonareChord,
     SonareChordAnalysisResult,
     SonareChordDetectionOptions,
     SonareMelodyResult,
+    SonareSectionOptions,
     SonareSectionResult,
     SonareStringArray,
 )
@@ -131,7 +131,6 @@ def detect_chords(
     # fraction, which int() truncated into a neighbouring pitch class or mode.
     tuning_value, tuning_auto = _tuning_arg(tuning_cents)
     options = SonareChordDetectionOptions(
-        SONARE_CHORD_DETECTION_OPTIONS_VERSION,
         min_duration_sec,
         smoothing_window_sec,
         threshold,
@@ -201,7 +200,6 @@ def chord_functional_analysis(
     # fraction, which int() truncated into a neighbouring pitch class or mode.
     tuning_value, tuning_auto = _tuning_arg(tuning_cents)
     options = SonareChordDetectionOptions(
-        SONARE_CHORD_DETECTION_OPTIONS_VERSION,
         min_duration_sec,
         smoothing_window_sec,
         threshold,
@@ -365,7 +363,7 @@ def analyze_sections(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    options = lib.sonare_section_options_default()
+    options = SonareSectionOptions()
     options.n_fft = _to_c_int(n_fft, "n_fft")
     options.hop_length = _to_c_int(hop_length, "hop_length")
     options.min_section_sec = _to_c_float(min_section_sec, "min_section_sec")

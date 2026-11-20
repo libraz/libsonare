@@ -44,123 +44,86 @@ QuantizeConfig quantizeConfigFromVal(const val& config) {
   return qconfig;
 }
 
-int streamWindowToCValue(WindowType window) {
-  switch (window) {
-    case WindowType::Hamming:
-      return SONARE_WINDOW_HAMMING;
-    case WindowType::Blackman:
-      return SONARE_WINDOW_BLACKMAN;
-    case WindowType::Rectangular:
-      return SONARE_WINDOW_RECTANGULAR;
-    case WindowType::Hann:
-    default:
-      return SONARE_WINDOW_HANN;
+/// @brief Whether a constructor field was given; an absent one keeps the StreamConfig default.
+bool given(const val& value) { return !value.isUndefined() && !value.isNull(); }
+
+/// @brief A given boolean field, refused by name when it is not a boolean.
+bool boolFromVal(const val& value, const char* key) {
+  if (value.typeOf().as<std::string>() != "boolean") {
+    throw WasmTypeError(std::string(key) + " must be a boolean");
   }
+  return value.as<bool>();
 }
-
-int streamOutputFormatToCValue(OutputFormat format) {
-  switch (format) {
-    case OutputFormat::Int16:
-      return SONARE_STREAM_OUTPUT_INT16;
-    case OutputFormat::Uint8:
-      return SONARE_STREAM_OUTPUT_UINT8;
-    case OutputFormat::Float32:
-    default:
-      return SONARE_STREAM_OUTPUT_FLOAT32;
-  }
-}
-
-val js_stream_analyzer_config_default() {
-  StreamConfig defaults;
-  val out = val::object();
-  out.set("sampleRate", defaults.sample_rate);
-  out.set("nFft", defaults.n_fft);
-  out.set("hopLength", defaults.hop_length);
-  out.set("nMels", defaults.n_mels);
-  out.set("fmin", defaults.fmin);
-  out.set("fmax", defaults.fmax);
-  out.set("referenceHz", defaults.tuning_ref_hz);
-  out.set("computeMagnitude", false);
-  out.set("computeMel", defaults.compute_mel);
-  out.set("computeChroma", defaults.compute_chroma);
-  out.set("computeOnset", defaults.compute_onset);
-  out.set("computeSpectral", defaults.compute_spectral);
-  out.set("emitEveryNFrames", defaults.emit_every_n_frames);
-  out.set("maxPendingFrames", defaults.max_pending_frames);
-  out.set("maxProgressionEntries", defaults.max_progression_entries);
-  out.set("keyUpdateIntervalSec", defaults.key_update_interval_sec);
-  out.set("bpmUpdateIntervalSec", defaults.bpm_update_interval_sec);
-  out.set("window", streamWindowToCValue(defaults.window));
-  out.set("outputFormat", streamOutputFormatToCValue(defaults.output_format));
-  return out;
-}
-
 /// @brief JavaScript wrapper for StreamAnalyzer.
 class StreamAnalyzerWrapper {
  public:
   StreamAnalyzerWrapper(const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
                         const val& n_mels_val, const val& fmin_val, const val& fmax_val,
-                        const val& tuning_ref_hz_val, bool compute_magnitude, bool compute_mel,
-                        bool compute_chroma, bool compute_onset, bool compute_spectral,
-                        const val& emit_every_n_frames_val, double max_pending_frames,
-                        double max_progression_entries, const val& key_update_interval_sec_val,
-                        const val& bpm_update_interval_sec_val, const val& window_val,
-                        const val& output_format_val) {
-    // The narrow integers arrive as val because embind's integer glue wraps, so
-    // a request past 2^32 would reach the config as a small legal one.
-    const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-    const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-    const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-    const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-    const int emit_every_n_frames = checkedIntFromVal(emit_every_n_frames_val, "emitEveryNFrames");
-    const int window = checkedIntFromVal(window_val, "window");
-    const int output_format = checkedIntFromVal(output_format_val, "outputFormat");
-    const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-    const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-    const float tuning_ref_hz = checkedFloatFromVal(tuning_ref_hz_val, "referenceHz");
-    const float key_update_interval_sec =
-        checkedFloatFromVal(key_update_interval_sec_val, "keyUpdateIntervalSec");
-    const float bpm_update_interval_sec =
-        checkedFloatFromVal(bpm_update_interval_sec_val, "bpmUpdateIntervalSec");
-    // The shared facade check rather than a message of this file's own, so the
-    // four surfaces answer an unsupported config identically.
-    StreamConfig requested;
-    requested.compute_magnitude = compute_magnitude;
-    validate_soa_stream_config(requested);
-    // Rejects an out-of-range window ordinal, mirroring the C ABI's
-    // valid_window (sonare_c_internal.h), which every entry point taking a
-    // window ordinal calls rather than silently defaulting to Hann.
-    requireOrdinalInRange(window, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR, "window");
+                        const val& tuning_ref_hz_val, const val& compute_mel_val,
+                        const val& compute_chroma_val, const val& compute_onset_val,
+                        const val& compute_spectral_val, const val& emit_every_n_frames_val,
+                        const val& max_pending_frames_val, const val& max_progression_entries_val,
+                        const val& key_update_interval_sec_val,
+                        const val& bpm_update_interval_sec_val, const val& window_val) {
+    // Every field but the rate may be absent, which keeps the StreamConfig default. The narrow
+    // integers arrive as val because embind's integer glue wraps, so a request past 2^32 would
+    // reach the config as a small legal one.
     StreamConfig config;
-    config.sample_rate = sample_rate;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    config.n_mels = n_mels;
-    config.window = window == 1   ? WindowType::Hamming
-                    : window == 2 ? WindowType::Blackman
-                    : window == 3 ? WindowType::Rectangular
-                                  : WindowType::Hann;
-    config.fmin = fmin;
-    config.fmax = fmax;
-    config.tuning_ref_hz = tuning_ref_hz;
-    config.compute_magnitude = false;
-    config.compute_mel = compute_mel;
-    config.compute_chroma = compute_chroma;
-    config.compute_onset = compute_onset;
-    config.compute_spectral = compute_spectral;
-    config.emit_every_n_frames = emit_every_n_frames;
-    if (!numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
+    config.sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+    if (given(n_fft_val)) config.n_fft = checkedIntFromVal(n_fft_val, "nFft");
+    if (given(hop_length_val)) config.hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+    if (given(n_mels_val)) config.n_mels = checkedIntFromVal(n_mels_val, "nMels");
+    if (given(fmin_val)) config.fmin = checkedFloatFromVal(fmin_val, "fmin");
+    if (given(fmax_val)) config.fmax = checkedFloatFromVal(fmax_val, "fmax");
+    if (given(tuning_ref_hz_val)) {
+      config.tuning_ref_hz = checkedFloatFromVal(tuning_ref_hz_val, "referenceHz");
+    }
+    if (given(compute_mel_val)) config.compute_mel = boolFromVal(compute_mel_val, "computeMel");
+    if (given(compute_chroma_val)) {
+      config.compute_chroma = boolFromVal(compute_chroma_val, "computeChroma");
+    }
+    if (given(compute_onset_val)) {
+      config.compute_onset = boolFromVal(compute_onset_val, "computeOnset");
+    }
+    if (given(compute_spectral_val)) {
+      config.compute_spectral = boolFromVal(compute_spectral_val, "computeSpectral");
+    }
+    if (given(emit_every_n_frames_val)) {
+      config.emit_every_n_frames = checkedIntFromVal(emit_every_n_frames_val, "emitEveryNFrames");
+    }
+    if (given(max_pending_frames_val) &&
+        !numeric::checked_integral_cast(numberFromVal(max_pending_frames_val, "maxPendingFrames"),
+                                        &config.max_pending_frames)) {
       throw WasmRangeError("maxPendingFrames must be an integer of at least 0");
     }
-    if (!numeric::checked_integral_cast(max_progression_entries, &config.max_progression_entries)) {
+    if (given(max_progression_entries_val) &&
+        !numeric::checked_integral_cast(
+            numberFromVal(max_progression_entries_val, "maxProgressionEntries"),
+            &config.max_progression_entries)) {
       throw WasmRangeError("maxProgressionEntries must be an integer of at least 0");
     }
-    if (output_format != 0) {
-      throw WasmRangeError("outputFormat is deprecated; use readFramesU8/readFramesI16");
+    if (given(key_update_interval_sec_val)) {
+      config.key_update_interval_sec =
+          checkedFloatFromVal(key_update_interval_sec_val, "keyUpdateIntervalSec");
     }
+    if (given(bpm_update_interval_sec_val)) {
+      config.bpm_update_interval_sec =
+          checkedFloatFromVal(bpm_update_interval_sec_val, "bpmUpdateIntervalSec");
+    }
+    if (given(window_val)) {
+      // Rejects an out-of-range window ordinal, mirroring the C ABI's valid_window.
+      const int window = checkedIntFromVal(window_val, "window");
+      requireOrdinalInRange(window, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR, "window");
+      config.window = window == 1   ? WindowType::Hamming
+                      : window == 2 ? WindowType::Blackman
+                      : window == 3 ? WindowType::Rectangular
+                                    : WindowType::Hann;
+    }
+    config.compute_magnitude = false;
+    // The shared facade check rather than a message of this file's own, so the four surfaces
+    // answer an unsupported config identically.
+    validate_soa_stream_config(config);
     config.output_format = OutputFormat::Float32;
-    config.key_update_interval_sec = key_update_interval_sec;
-    config.bpm_update_interval_sec = bpm_update_interval_sec;
     config_ = config;
     analyzer_ = std::make_unique<StreamAnalyzer>(config);
   }
@@ -398,11 +361,10 @@ class StreamAnalyzerWrapper {
 
 void registerStreamAnalyzerBindings() {
   // Streaming - StreamAnalyzer
-  function("streamAnalyzerConfigDefault", &js_stream_analyzer_config_default);
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
       .constructor<const val&, const val&, const val&, const val&, const val&, const val&,
-                   const val&, bool, bool, bool, bool, bool, const val&, double, double, const val&,
-                   const val&, const val&, const val&>()
+                   const val&, const val&, const val&, const val&, const val&, const val&,
+                   const val&, const val&, const val&, const val&, const val&>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("finalize", &StreamAnalyzerWrapper::finalize)

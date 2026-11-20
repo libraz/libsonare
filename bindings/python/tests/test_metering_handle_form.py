@@ -90,9 +90,9 @@ def test_detect_clipping_matches_the_buffer_form_field_by_field() -> None:
     samples = np.full(8000, 0.1, dtype=np.float32)
     samples[1000:1064] = 1.0
     with Audio.from_buffer(samples, sample_rate=SR) as audio:
-        handle_report = audio.detect_clipping(threshold=0.999, min_region_samples=1)
+        handle_report = audio.detect_clipping(threshold_db=-0.01, min_region_samples=1)
 
-    buffer_report = libsonare.metering_detect_clipping(samples, SR, threshold=0.999)
+    buffer_report = libsonare.metering_detect_clipping(samples, SR, threshold_db=-0.01)
 
     # Non-vacuity: the injected run must actually be found before the field
     # comparison below means anything.

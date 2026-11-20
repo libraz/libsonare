@@ -17,24 +17,27 @@ extern "C" {
 /// @brief Settings of the one-shot @ref sonare_mastering_process loudness helper.
 /// @details To combine loudness optimization with other processors use
 ///   @ref sonare_mastering_apply_processor with "maximizer.loudnessOptimize" or the full chain API.
-///   A field left 0 takes the library default; the loudness target and true-peak ceiling are real
-///   values and must be given explicitly. The ceiling is held on the true peak read at the
+///   Start from @ref sonare_mastering_config_init. The ceiling is held on the true peak read at the
 ///   configured oversample factor (4x by default); a finer meter can read up to about 0.15 dB
 ///   higher. Where peak headroom cannot supply the gain the target needs, the helper drives its
 ///   true-peak limiter up to 12 dB to close the distance and stops there, so peaky or
 ///   peak-normalized input can finish below the target with @c loudness_target_limited set.
 typedef struct {
-  float target_lufs;   ///< Target integrated loudness, LUFS.
-  float ceiling_dbtp;  ///< True-peak ceiling, dBTP.
-  /// True-peak oversample factor; 0 selects 4, otherwise one of 1, 2, 4, 8, 16.
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_mastering_config_init.
+  float target_lufs;     ///< Target integrated loudness, LUFS; finite. Default -14.
+  float ceiling_dbtp;    ///< True-peak ceiling, dBTP; at most 0. Default -1.
+  /// True-peak oversample factor, one of 1, 2, 4, 8, 16. Default 4.
   int true_peak_oversample;
   /// Release time of the post true-peak limiter in ms (one time constant, about 63% of the way
-  /// at the set time); 0 selects 50 ms. The limiter runs whenever peak headroom alone cannot reach
-  /// the target, so this shapes the result on low-headroom input.
+  /// at the set time); greater than 0. Default 50. The limiter runs whenever peak headroom alone
+  /// cannot reach the target, so this shapes the result on low-headroom input.
   float release_ms;
   /// Non-zero applies the static loudness gain at the input (pre-oversample) rate; 0 (default) off.
   int apply_gain_at_input_rate;
 } SonareMasteringConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_mastering_config_init(SonareMasteringConfig* config);
 
 /// @brief Mono audio and loudness measurements from the one-shot and named-processor entries.
 /// @details @c samples is heap-allocated; release the result with
@@ -1270,6 +1273,7 @@ void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* han
 /// @brief Flat POD mirror of @c mastering::repair::DeclickConfig.
 /// @details Pass NULL to @ref sonare_mastering_repair_declick to use library defaults.
 typedef struct {
+  uint32_t struct_size;      ///< sizeof of this struct; set by sonare_declick_config_init.
   float threshold;           ///< amplitude threshold vs LPC prediction (default 0.8)
   float neighbor_ratio;      ///< ratio vs neighbour amplitude (default 4.0)
   size_t max_click_samples;  ///< max click run length in samples (default 8)
@@ -1277,24 +1281,31 @@ typedef struct {
   float residual_ratio;      ///< residual / signal threshold (default 8.0)
 } SonareDeclickConfig;
 
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_declick_config_init(SonareDeclickConfig* config);
+
 /// @brief Flat POD mirror of @c mastering::repair::DenoiseClassicalConfig.
 /// @details Pass NULL to @ref sonare_mastering_repair_denoise_classical to use library
 ///          defaults. The library validates @c n_fft (must be a power of two) and
 ///          @c hop_length (in (0, n_fft / 2]); other fields are clamped by the underlying
 ///          processor.
 typedef struct {
-  int mode;                         ///< SONARE_DENOISE_MODE_*
-  int noise_estimator;              ///< SONARE_DENOISE_NOISE_ESTIMATOR_*
-  int n_fft;                        ///< STFT size (default 1024, power of two)
-  int hop_length;                   ///< hop in samples (default 256)
-  float dd_alpha;                   ///< decision-directed SNR smoothing (default 0.98)
-  float reduction_db;               ///< deepest attenuation in dB, >= 0 (default 26)
-  float over_subtraction;           ///< Berouti alpha (SpectralSubtraction only)
-  float spectral_floor;             ///< Berouti beta (SpectralSubtraction only)
+  uint32_t struct_size;    ///< sizeof of this struct; set by sonare_denoise_classical_config_init.
+  int mode;                ///< SONARE_DENOISE_MODE_* (default LOG_MMSE)
+  int noise_estimator;     ///< SONARE_DENOISE_NOISE_ESTIMATOR_* (default QUANTILE)
+  int n_fft;               ///< STFT size (default 1024, power of two)
+  int hop_length;          ///< hop in samples (default 256)
+  float dd_alpha;          ///< decision-directed SNR smoothing (default 0.98)
+  float reduction_db;      ///< deepest attenuation in dB, >= 0 (default 26)
+  float over_subtraction;  ///< Berouti alpha (SpectralSubtraction only; default 2)
+  float spectral_floor;    ///< Berouti beta (SpectralSubtraction only; default 0.05)
   float noise_estimation_quantile;  ///< noise-only frame fraction (default 0.1)
   int speech_presence_gain;         ///< 0/1 (default 1)
   int gain_smoothing;               ///< 0/1 (default 1)
 } SonareDenoiseClassicalConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_denoise_classical_config_init(SonareDenoiseClassicalConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::ClickDetection. Counts runs,
 ///        not samples.
@@ -1539,12 +1550,16 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
 
 /// @brief Flat POD mirror of @c mastering::repair::DeclipConfig.
 typedef struct {
+  uint32_t struct_size;     ///< sizeof of this struct; set by sonare_declip_config_init.
   float clip_threshold_db;  ///< level in dBFS at or above which a sample counts as clipped
                             ///< (default 20*log10(0.98), about -0.175 dBFS)
   int lpc_order;            ///< LPC order used for prediction (default 36)
   int iterations;           ///< LPC reconstruction iterations (default 2)
   float lpc_blend;          ///< LPC vs interpolation blend (default 0.65)
 } SonareDeclipConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_declip_config_init(SonareDeclipConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::ClipDetection.
 typedef struct {
@@ -1665,10 +1680,14 @@ void sonare_free_declip_result(SonareDeclipResult* result);
 
 /// @brief Flat POD mirror of @c mastering::repair::DecrackleConfig.
 typedef struct {
-  float threshold;  ///< crackle detection threshold (default 0.4)
-  int mode;         ///< SONARE_DECRACKLE_MODE_*
-  int levels;       ///< wavelet decomposition levels (default 4)
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_decrackle_config_init.
+  float threshold;       ///< crackle detection threshold (default 0.4)
+  int mode;              ///< SONARE_DECRACKLE_MODE_* (default MEDIAN)
+  int levels;            ///< wavelet decomposition levels (default 4)
 } SonareDecrackleConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_decrackle_config_init(SonareDecrackleConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::CrackleDetection.
 /// @details Measured by the median criterion whatever mode is configured:
@@ -1763,6 +1782,7 @@ void sonare_free_decrackle_result(SonareDecrackleResult* result);
 
 /// @brief Flat POD mirror of @c mastering::repair::DehumConfig.
 typedef struct {
+  uint32_t struct_size;   ///< sizeof of this struct; set by sonare_dehum_config_init.
   float fundamental_hz;   ///< mains-hum fundamental (default 50 Hz)
   int harmonics;          ///< notch count including fundamental (default 4)
   float q;                ///< notch Q (default 20)
@@ -1772,9 +1792,11 @@ typedef struct {
   float adaptation;       ///< tracking step size (default 0.25)
   int frame_size;         ///< analysis frame size (default 2048, must be >= 16)
   float pll_bandwidth;    ///< PLL bandwidth (default 0.01)
-  int mode;               ///< SONARE_DEHUM_MODE_* (default SUBTRACT, so a
-                          ///< zero-initialized config selects it)
+  int mode;               ///< SONARE_DEHUM_MODE_* (default SUBTRACT)
 } SonareDehumConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_dehum_config_init(SonareDehumConfig* config);
 
 /// Longest harmonic series a dehum pass tracks, and the length of
 /// SonareHumDetection::harmonic_dbfs. 16 harmonics reach 800 Hz from a 50 Hz
@@ -1882,6 +1904,7 @@ void sonare_free_dehum_result(SonareDehumResult* result);
 
 /// @brief Flat POD mirror of @c mastering::repair::DereverbClassicalConfig.
 typedef struct {
+  uint32_t struct_size;    ///< sizeof of this struct; set by sonare_dereverb_classical_config_init.
   float threshold;         ///< late-reverb detection threshold (default 0, no gate)
   float attenuation;       ///< suppression amount, linear (default 1, full)
   int n_fft;               ///< STFT size (default 1024, power of two)
@@ -1895,6 +1918,9 @@ typedef struct {
   int wpe_taps;            ///< WPE filter taps (default 3)
   float wpe_strength;      ///< WPE blend weight (default 0.7)
 } SonareDereverbClassicalConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_dereverb_classical_config_init(SonareDereverbClassicalConfig* config);
 
 /// @brief Flat POD mirror of @c mastering::repair::ReverbDetection.
 /// @details NOT an ISO 3382 reverberation time: no Schroeder integration, no
@@ -2047,18 +2073,17 @@ SonareError sonare_mastering_repair_dereverb_classical_linked(
 ///   of bands 2 and 3 itself -- band @c b is centred at 125 * 2^b Hz.
 ///
 ///   @p config is read AND written, and every field of it is taken literally:
-///   unlike the @c config argument of the dereverb call itself, which stands in
-///   for the library defaults when it is NULL, a struct passed HERE has no
-///   zero-is-default rule, so zero-initializing it and calling this leaves the
-///   taste fields at zero rather than at their defaults. Fill in what the
-///   render needs first, then call this to point it at the room.
+///   it must come from @ref sonare_dereverb_classical_config_init (a struct_size
+///   below sizeof is refused). Fill in what the render needs first, then call
+///   this to point it at the room.
 ///
 ///   A field whose measurement did not converge is left alone, so a partial
 ///   estimate still configures the half it measured -- and an estimate whose
 ///   @c confidence is low is still applied, because whether to trust it is the
 ///   caller's call and this reports no opinion on it.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL @p estimate or @p config,
-///         or SONARE_ERROR_OUT_OF_MEMORY if the band copy it takes fails.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL @p estimate or @p config or a
+///         @p config whose struct_size was not set, or SONARE_ERROR_OUT_OF_MEMORY
+///         if the band copy it takes fails.
 SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
     const SonareRoomEstimate* estimate, SonareDereverbClassicalConfig* config);
 
@@ -2068,12 +2093,16 @@ SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
 
 /// @brief Flat POD mirror of @c mastering::repair::TrimSilenceConfig.
 typedef struct {
+  uint32_t struct_size;    ///< sizeof of this struct; set by sonare_trim_silence_config_init.
   float threshold_db;      ///< peak threshold in dBFS, in [-890, 0] (default -60 for Peak mode)
   size_t padding_samples;  ///< leading/trailing samples to retain (default 0)
-  int mode;                ///< SONARE_TRIM_SILENCE_MODE_*
+  int mode;                ///< SONARE_TRIM_SILENCE_MODE_* (default PEAK)
   float gate_lufs;         ///< LUFS gate threshold (default -60 for LufsGated mode)
   float window_ms;         ///< analysis window in milliseconds (default 400)
 } SonareTrimSilenceConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_trim_silence_config_init(SonareTrimSilenceConfig* config);
 
 /// @brief One half-open sample range, in input-buffer coordinates.
 typedef struct {
@@ -2279,19 +2308,23 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t n
 /// @brief Flat POD mirror of @c mastering::dynamics::CompressorConfig.
 /// @details attack_ms and release_ms are one time constant: about 63% of the way at the set time.
 typedef struct {
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_compressor_config_init.
   float threshold_db;    ///< Level above which gain reduction starts, dB; default -18.
-  float ratio;           ///< Compression ratio; default 2.0, values below 1 are clamped to 1.
+  float ratio;           ///< Compression ratio, at least 1; default 2.0.
   float attack_ms;       ///< Attack time constant, ms; default 10.
   float release_ms;      ///< Release time constant, ms; default 100.
   float knee_db;         ///< Soft-knee width around the threshold, dB; default 0.
   float makeup_gain_db;  ///< Fixed gain added after compression, dB; default 0.
   int auto_makeup;  ///< Non-zero compensates the average gain reduction automatically; default 0.
   int detector;     ///< Level detector, SONARE_COMPRESSOR_DETECTOR_*; default RMS.
-  int sidechain_high_pass_enabled;  ///< Non-zero high-passes the detector input; default 0.
-  float sidechain_high_pass_hz;     ///< Detector high-pass corner, Hz; default 100.
-  float pdr_time_ms;                ///< Program-dependent release time, ms; default 0.
-  float pdr_release_scale;          ///< Program-dependent release multiplier; default 1.0.
+  /// Detector high-pass corner, Hz; at least 0. 0 passes everything, the same as off (default).
+  float sidechain_high_pass_hz;
+  float pdr_time_ms;        ///< Program-dependent release time, ms; default 0.
+  float pdr_release_scale;  ///< Program-dependent release multiplier; default 1.0.
 } SonareCompressorConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_compressor_config_init(SonareCompressorConfig* config);
 
 /// @brief Offline feed-forward compressor. Processes the buffer in place
 ///        (after copying) and returns a new heap-allocated output. Release
@@ -2305,15 +2338,19 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
 /// @brief Flat POD mirror of @c mastering::dynamics::GateConfig.
 /// @details attack_ms and release_ms are one time constant: about 63% of the way at the set time.
 typedef struct {
-  float threshold_db;  ///< Level above which the gate opens, dB; default -50.
-  float attack_ms;     ///< Attack time constant, ms; default 2.
-  float release_ms;    ///< Release time constant, ms; default 80.
-  float range_db;      ///< Attenuation while closed, dB; default -80.
-  float hold_ms;       ///< Minimum time the gate stays open, ms; default 0.
+  uint32_t struct_size;  ///< sizeof of this struct; set by sonare_gate_config_init.
+  float threshold_db;    ///< Level above which the gate opens, dB; default -50.
+  float attack_ms;       ///< Attack time constant, ms; default 2.
+  float release_ms;      ///< Release time constant, ms; default 80.
+  float range_db;        ///< Attenuation while closed, dB; default -80.
+  float hold_ms;         ///< Minimum time the gate stays open, ms; default 0.
   /// Level below which the gate closes, dB; clamped to at most threshold_db; default -50.
   float close_threshold_db;
   float key_high_pass_hz;  ///< Detector high-pass corner, Hz; 0 disables it (default).
 } SonareGateConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_gate_config_init(SonareGateConfig* config);
 
 /// @brief Offline noise gate. Output buffer is heap-allocated; release with
 ///        @ref sonare_free_floats. @p out_latency_samples may be NULL.
@@ -2324,6 +2361,7 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
 
 /// @brief Flat POD mirror of @c mastering::dynamics::TransientShaperConfig.
 typedef struct {
+  uint32_t struct_size;     ///< sizeof of this struct; set by sonare_transient_shaper_config_init.
   float attack_gain_db;     ///< Gain on the attack portion, dB; default +3.
   float sustain_gain_db;    ///< Gain on the sustain portion, dB; default 0.
   float fast_attack_ms;     ///< Fast envelope attack, ms; default 0.
@@ -2335,6 +2373,9 @@ typedef struct {
   float gain_smoothing_ms;  ///< Gain smoothing time, ms; 0 disables it (default).
   float lookahead_ms;       ///< Lookahead delay, ms; 0 disables it (default).
 } SonareTransientShaperConfig;
+
+/// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
+void sonare_transient_shaper_config_init(SonareTransientShaperConfig* config);
 
 /// @brief Offline transient shaper (envelope-difference based). Output buffer
 ///        is heap-allocated; release with @ref sonare_free_floats.

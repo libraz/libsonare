@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <type_traits>
@@ -265,7 +266,8 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  SonareMeterOptions options = sonare_meter_options_default();
+  SonareMeterOptions options;
+  sonare_meter_options_init(&options);
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object bag = info[2].As<Napi::Object>();
     options.denominator = IntProperty(bag, "denominator", options.denominator);
@@ -304,17 +306,7 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
   int sample_rate = input.sample_rate;
 
   SonareOnsetDetectConfig config{};
-  config.n_fft = 2048;
-  config.hop_length = 512;
-  config.threshold = 0.0f;
-  config.pre_max = 1;
-  config.post_max = 1;
-  config.pre_avg = 3;
-  config.post_avg = 4;
-  config.delta = 0.06f;
-  config.wait = 1;
-  config.backtrack = 0;
-  config.backtrack_range = 10;
+  sonare_onset_detect_config_init(&config);
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
     config.n_fft = IntProperty(options, "nFft", config.n_fft);
@@ -333,7 +325,7 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
   sonare::OnsetDetectConfig native;
   native.n_fft = config.n_fft;
   native.hop_length = config.hop_length;
-  native.threshold = config.threshold;
+  native.threshold = std::isnan(config.threshold) ? 0.0f : config.threshold;
   native.pre_max = config.pre_max;
   native.post_max = config.post_max;
   native.pre_avg = config.pre_avg;
@@ -1003,6 +995,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
 
   SonareChordAnalysisResult analysis{};
   SonareChordDetectionOptions options{};
+  sonare_chord_detection_options_init(&options);
   options.min_duration_sec = min_duration;
   options.smoothing_window_sec = smoothing_window;
   options.threshold = threshold;
@@ -1093,6 +1086,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   if (!RequiredBoolArg(env, info, 17, "tuningAuto", &tuning_auto)) return env.Undefined();
 
   SonareChordDetectionOptions options{};
+  sonare_chord_detection_options_init(&options);
   options.min_duration_sec = min_duration;
   options.smoothing_window_sec = smoothing_window;
   options.threshold = threshold;

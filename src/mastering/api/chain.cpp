@@ -46,14 +46,6 @@ bool valid_true_peak_oversample(int factor) noexcept {
   return factor == 1 || factor == 2 || factor == 4 || factor == 8 || factor == 16;
 }
 
-// The loudness stage's release time with the documented 0 sentinel resolved.
-// The values were already accepted by validate_mastering_chain_config().
-float loudness_release_ms(const LoudnessStage& stage) {
-  return maximizer::validate_loudness_params(stage.target_lufs, stage.ceiling_dbtp,
-                                             stage.release_ms, stage.max_limiter_gain_reduction_db,
-                                             stage.true_peak_oversample);
-}
-
 // Runs @p validate and rethrows its message behind the stage name, so a chain
 // rejection names the stage to fix rather than only the offending field.
 template <typename ValidateFn>
@@ -264,7 +256,7 @@ void validate_chain_multiband_config(const multiband::MultibandCompressorConfig&
       throw_invalid_multiband("multiband compressor fields must be finite");
     }
     if (!(band.ratio >= 1.0f) || band.attack_ms < 0.0f || band.release_ms < 0.0f ||
-        band.knee_db < 0.0f || !(band.sidechain_high_pass_hz > 0.0f) || band.pdr_time_ms < 0.0f ||
+        band.knee_db < 0.0f || band.sidechain_high_pass_hz < 0.0f || band.pdr_time_ms < 0.0f ||
         band.pdr_release_scale < 1.0f) {
       throw_invalid_multiband("multiband compressor field is out of range");
     }
@@ -636,7 +628,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
             config_.loudness.ceiling_dbtp, config_.loudness.true_peak_oversample,
-            loudness_release_ms(config_.loudness), config_.loudness.apply_gain_at_input_rate);
+            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
@@ -897,7 +889,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
             config_.loudness.ceiling_dbtp, config_.loudness.true_peak_oversample,
-            loudness_release_ms(config_.loudness), config_.loudness.apply_gain_at_input_rate);
+            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(

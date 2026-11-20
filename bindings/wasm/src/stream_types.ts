@@ -225,9 +225,8 @@ export interface StreamFramesI16 {
 /**
  * Configuration for StreamAnalyzer.
  *
- * Omitted values come from `streamAnalyzerConfigDefault()`, which reads the
- * native defaults. Integer fields must be integers; an out-of-domain value is a
- * RangeError.
+ * An omitted field takes the library default. Integer fields must be integers;
+ * an out-of-domain value is a RangeError.
  */
 export interface StreamConfig {
   /** Sample rate in Hz. Required. */

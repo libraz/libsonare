@@ -547,33 +547,6 @@ function assertStreamReferenceHz(referenceHz: unknown): asserts referenceHz is n
   }
 }
 
-/**
- * The native configuration defaults. `fmaxHz` is Nyquist, the value the
- * analyzer reads an absent upper edge as.
- */
-export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
-  const d = addon.streamAnalyzerConfigDefault();
-  return {
-    sampleRate: d.sampleRate,
-    nFft: d.nFft,
-    hopLength: d.hopLength,
-    nMels: d.nMels,
-    fminHz: d.fmin,
-    fmaxHz: d.fmax > 0 ? d.fmax : d.sampleRate / 2,
-    referenceHz: d.referenceHz,
-    computeMel: d.computeMel,
-    computeChroma: d.computeChroma,
-    computeOnset: d.computeOnset,
-    computeSpectral: d.computeSpectral,
-    emitEveryNFrames: d.emitEveryNFrames,
-    maxPendingFrames: d.maxPendingFrames,
-    maxProgressionEntries: d.maxProgressionEntries,
-    keyUpdateIntervalSec: d.keyUpdateIntervalSec,
-    bpmUpdateIntervalSec: d.bpmUpdateIntervalSec,
-    window: WINDOW_TYPES[d.window],
-  };
-}
-
 /** Validates the public config and spells it the way the addon reads it. */
 function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {

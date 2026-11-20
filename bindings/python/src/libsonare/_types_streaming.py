@@ -39,7 +39,7 @@ class CqtResult:
 class StreamQuantizeConfig:
     """Quantization ranges for the u8/i16 bandwidth-reduction read paths.
 
-    Defaults mirror ``sonare_stream_quantize_config_default``. Widen any range
+    Defaults mirror ``sonare_stream_quantize_config_init``. Widen any range
     whose source values exceed the defaults: the quantizers clamp normalized
     values to ``[0, 1]``, so a stream louder or quieter than these ranges
     otherwise saturates silently to the endpoints.

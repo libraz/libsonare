@@ -5,13 +5,11 @@
 
 namespace {
 
-// The C-layer fields: the struct version and the integer stand-ins for enums. The numeric
+// The C-layer fields: the struct size and the integer stand-ins for enums. The numeric
 // fields are the core's rule, applied by check_chord_detection_options.
 void validate_chord_detection_options(const SonareChordDetectionOptions& options) {
-  // 0 reads as the current layout, so a zero-filled struct with its fields set is valid.
-  util::check::one_of(options.struct_version,
-                      std::array<int, 2>{0, SONARE_CHORD_DETECTION_OPTIONS_VERSION},
-                      "options.struct_version");
+  sonare_c_detail::require_struct_size(options.struct_size, sizeof(SonareChordDetectionOptions),
+                                       "options", "sonare_chord_detection_options_init");
   // Reject out-of-range enum-like fields instead of silently mapping them to a
   // default (chroma_method only documents 0 = STFT, 1 = NNLS, 2 = CQT). When key context
   // is enabled, also require an in-range key_root / key_mode.
@@ -330,6 +328,30 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
       });
 }
 
+void sonare_chord_detection_options_init(SonareChordDetectionOptions* options) {
+  if (options == nullptr) return;
+  // Copied from the core defaults rather than restated, so the two cannot part.
+  const ChordConfig config;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->min_duration_sec = config.min_duration;
+  options->smoothing_window_sec = config.smoothing_window;
+  options->threshold = config.threshold;
+  options->use_triads_only = config.use_triads_only ? 1 : 0;
+  options->n_fft = config.n_fft;
+  options->hop_length = config.hop_length;
+  options->use_beat_sync = config.use_beat_sync ? 1 : 0;
+  options->use_hmm = config.use_hmm ? 1 : 0;
+  options->hmm_beam_width = config.hmm_beam_width;
+  options->use_key_context = config.use_key_context ? 1 : 0;
+  options->key_root = static_cast<SonarePitchClass>(static_cast<int>(config.key_root));
+  options->key_mode = static_cast<SonareMode>(static_cast<int>(config.key_mode));
+  options->detect_inversions = config.detect_inversions ? 1 : 0;
+  options->chroma_method = static_cast<SonareChromaMethod>(static_cast<int>(config.chroma_method));
+  options->tuning_cents = config.tuning ? tuning_to_cents(*config.tuning) : 0.0f;
+  options->tuning_auto = config.tuning ? 0 : 1;
+}
+
 SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
                                  float min_duration_sec, float smoothing_window_sec,
                                  float threshold, int use_triads_only, int n_fft, int hop_length,
@@ -340,10 +362,7 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_chord_analysis_result(&r) would delete[] an uninitialised
   // pointer.
-  if (out != nullptr) {
-    *out = {};
-    out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
-  }
+  if (out != nullptr) *out = {};
   ChordConfig config;
   config.min_duration = min_duration_sec;
   config.smoothing_window = smoothing_window_sec;
@@ -375,10 +394,7 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_chord_analysis_result(&r) would delete[] an uninitialised
   // pointer.
-  if (out != nullptr) {
-    *out = {};
-    out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
-  }
+  if (out != nullptr) *out = {};
   SONARE_C_REQUIRE_NONNULL(options);
   if (const SonareError err = check_chord_detection_options(*options); err != SONARE_OK) {
     return err;
@@ -447,10 +463,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
   // Zero the owned out-pointers BEFORE any validating early-return so a
   // rejected input always leaves NULL owned pointers; otherwise the free
   // functions would delete[] uninitialised pointers.
-  if (chords != nullptr) {
-    *chords = {};
-    chords->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
-  }
+  if (chords != nullptr) *chords = {};
   if (roman != nullptr) {
     roman->items = nullptr;
     roman->count = 0;
@@ -547,15 +560,16 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
   SONARE_C_CATCH
 }
 
-SonareSectionOptions sonare_section_options_default(void) {
+void sonare_section_options_init(SonareSectionOptions* options) {
+  if (options == nullptr) return;
   // Copied from the core defaults rather than restated, so the two cannot part.
   const SectionConfig config;
-  SonareSectionOptions options;
-  options.n_fft = config.n_fft;
-  options.hop_length = config.hop_length;
-  options.min_section_sec = config.min_section_sec;
-  options.threshold = config.boundary_threshold;
-  return options;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->n_fft = config.n_fft;
+  options->hop_length = config.hop_length;
+  options->min_section_sec = config.min_section_sec;
+  options->threshold = config.boundary_threshold;
 }
 
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate,
@@ -568,7 +582,11 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   config.hop_length = options->hop_length;
   config.min_section_sec = options->min_section_sec;
   config.boundary_threshold = options->threshold;
-  if (const SonareError err = run_validation([&] { validate_section_config(config); });
+  if (const SonareError err = run_validation([&] {
+        sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareSectionOptions),
+                                             "options", "sonare_section_options_init");
+        validate_section_config(config);
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -597,22 +615,23 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
                      });
 }
 
-SonareBoundaryOptions sonare_boundary_options_default(void) {
+void sonare_boundary_options_init(SonareBoundaryOptions* options) {
+  if (options == nullptr) return;
   // Copied from the core defaults rather than restated, so the two cannot part.
   const BoundaryConfig config;
-  SonareBoundaryOptions options;
-  options.n_fft = config.n_fft;
-  options.hop_length = config.hop_length;
-  options.kernel_size = config.kernel_size;
-  options.threshold = config.threshold;
-  options.absolute_threshold = config.absolute_threshold;
-  options.n_mfcc = config.n_mfcc;
-  options.n_chroma = config.n_chroma;
-  options.peak_distance_sec = config.peak_distance;
-  options.use_mfcc = config.use_mfcc ? 1 : 0;
-  options.use_chroma = config.use_chroma ? 1 : 0;
-  options.reference_window_sec = config.reference_window;
-  return options;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->n_fft = config.n_fft;
+  options->hop_length = config.hop_length;
+  options->kernel_size = config.kernel_size;
+  options->threshold = config.threshold;
+  options->absolute_threshold = config.absolute_threshold;
+  options->n_mfcc = config.n_mfcc;
+  options->n_chroma = config.n_chroma;
+  options->peak_distance_sec = config.peak_distance;
+  options->use_mfcc = config.use_mfcc ? 1 : 0;
+  options->use_chroma = config.use_chroma ? 1 : 0;
+  options->reference_window_sec = config.reference_window;
 }
 
 SonareError sonare_detect_boundaries(const float* samples, size_t length, int sample_rate,
@@ -633,7 +652,11 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
   config.use_mfcc = options->use_mfcc != 0;
   config.use_chroma = options->use_chroma != 0;
   config.reference_window = options->reference_window_sec;
-  if (const SonareError err = run_validation([&] { validate_boundary_config(config); });
+  if (const SonareError err = run_validation([&] {
+        sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareBoundaryOptions),
+                                             "options", "sonare_boundary_options_init");
+        validate_boundary_config(config);
+      });
       err != SONARE_OK) {
     return err;
   }

@@ -6,10 +6,9 @@
 /// chains, the tempo fallback and the note-off-before-note-on ordering all stay
 /// there, so the two doors cannot answer differently.
 ///
-/// The config's "0 keeps the documented default" rule is the header's, so an
-/// omitted field is left zero rather than seeded with a second copy of the
-/// defaults -- unlike project_midi.cpp's tempo options, whose zero values are
-/// not their defaults.
+/// An omitted field keeps what sonare_transcribe_config_init wrote (the C ABI's
+/// absence spelling: NaN or an UNSET macro), so no second copy of the defaults
+/// lives here.
 ///
 /// It sits beside project_midi.cpp because it is arrangement-gated in exactly
 /// the same way (the C-ABI unit reaches WASM only through
@@ -27,26 +26,21 @@
 
 namespace {
 
-// What a written value of a float field must be. Omission is always the C ABI's
-// 0 ("default"), so a written 0 is a value the caller chose and is either out of
-// domain or, for the ratio kinds, a real "none" that the C ABI spells as a
-// negative.
+// What a written value of a float field must be. Omission keeps the value the
+// config was initialised with, so a written 0 is a value the caller chose and
+// is either out of domain or, for the ratio kind, a real 0.
 enum class FloatDomain {
   kPositive,   // > 0
   kNegative,   // < 0
-  kUnitRatio,  // [0, 1]; a written 0 is the real 0, sent as -1
+  kUnitRatio,  // [0, 1]
 };
 
-// A field whose domain excludes 0 spells "use the documented default" as 0 in
-// the C ABI, which has no way to tell that from a caller who wrote it. Omission
-// already spells the default here, so a present 0 is a value the caller chose
-// and it is out of domain -- answering with the default would hand back a
-// number they did not ask for, indistinguishable downstream from one they did.
-// A present value is otherwise forwarded as given and range-checked once, by
-// the C ABI.
-float signedField(val config, const char* key, FloatDomain domain) {
+// A present value is range-checked here by the domain's own wording and
+// otherwise forwarded as given; the C ABI checks it once more. An omitted
+// field returns @p absent, the initialised value.
+float signedField(val config, const char* key, FloatDomain domain, float absent) {
+  if (!hasProperty(config, key)) return absent;
   const float value = floatProperty(config, key, 0.0f);
-  if (!hasProperty(config, key)) return value;
   const std::string name(key);
   switch (domain) {
     case FloatDomain::kPositive:
@@ -59,24 +53,19 @@ float signedField(val config, const char* key, FloatDomain domain) {
       if (!(value >= 0.0f && value <= 1.0f)) {
         throw WasmRangeError(name + " must be a number in [0, 1]");
       }
-      return value == 0.0f ? -1.0f : value;
+      return value;
   }
   return value;
 }
 
 // The same rule on the fields whose domain is an integer range rather than a
-// sign. 0 is the C ABI's default (fixedVelocity: "measure the level instead"),
-// and omitting the field already says that here, so a written 0 is a value --
-// and 0 is in none of [1, 127], [1, 64] and [1, 128].
-//
-// Presence is the only thing that can decide this one. The other fields have an
-// out-of-domain sentinel, so their written 0 is separable by value; these
-// fields' sentinel IS the default, and an omitted key still has to reach the C
-// ABI as 0, so a value check would either refuse omission or accept a written
-// zero. Wording is Node's verbatim, so one domain reports one way everywhere.
-int rangeField(val config, const char* key, int lo, int hi) {
+// sign. Omission keeps the initialised UNSET value; a written value is checked
+// against [lo, hi], and 0 is in none of [1, 127], [1, 64] and [1, 128].
+// Wording is Node's verbatim, so one domain reports one way everywhere.
+int rangeField(val config, const char* key, int lo, int hi, int absent) {
+  if (!hasProperty(config, key)) return absent;
   const int value = intProperty(config, key, 0);
-  if (hasProperty(config, key) && (value < lo || value > hi)) {
+  if (value < lo || value > hi) {
     throw WasmRangeError(std::string(key) + " must be an integer in [" + std::to_string(lo) + ", " +
                          std::to_string(hi) + "]");
   }
@@ -84,8 +73,8 @@ int rangeField(val config, const char* key, int lo, int hi) {
 }
 
 SonareTranscribeConfig transcribeConfigFromVal(val config) {
-  SonareTranscribeConfig out = {};
-  out.struct_version = 4;
+  SonareTranscribeConfig out;
+  sonare_transcribe_config_init(&out);
   if (config.isUndefined() || config.isNull()) return out;
   out.polyphonic = boolProperty(config, "polyphonic", out.polyphonic != 0) ? 1 : 0;
   // `referenceHz` is a positive number in Hz, or "auto" to measure it from the audio.
@@ -96,23 +85,27 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
     }
     out.reference_auto = 1;
   } else {
-    out.reference_hz = signedField(config, "referenceHz", FloatDomain::kPositive);
+    out.reference_hz = signedField(config, "referenceHz", FloatDomain::kPositive, out.reference_hz);
   }
-  out.f0_min_hz = signedField(config, "f0MinHz", FloatDomain::kPositive);
-  out.f0_max_hz = signedField(config, "f0MaxHz", FloatDomain::kPositive);
-  out.min_note_ms = signedField(config, "minNoteMs", FloatDomain::kPositive);
+  out.f0_min_hz = signedField(config, "f0MinHz", FloatDomain::kPositive, out.f0_min_hz);
+  out.f0_max_hz = signedField(config, "f0MaxHz", FloatDomain::kPositive, out.f0_max_hz);
+  out.min_note_ms = signedField(config, "minNoteMs", FloatDomain::kPositive, out.min_note_ms);
   // Both spellings written is forwarded; the C ABI refuses it naming min_note_division.
-  out.min_note_division = rangeField(config, "minNoteDivision", 1, 128);
+  out.min_note_division = rangeField(config, "minNoteDivision", 1, 128, SONARE_NOTE_DIVISION_UNSET);
   out.segmentation_threshold_cents =
-      signedField(config, "segmentationThresholdCents", FloatDomain::kPositive);
-  out.velocity_floor_db = signedField(config, "velocityFloorDb", FloatDomain::kNegative);
-  out.fixed_velocity = rangeField(config, "fixedVelocity", 1, 127);
+      signedField(config, "segmentationThresholdCents", FloatDomain::kPositive,
+                  out.segmentation_threshold_cents);
+  out.velocity_floor_db =
+      signedField(config, "velocityFloorDb", FloatDomain::kNegative, out.velocity_floor_db);
+  out.fixed_velocity = rangeField(config, "fixedVelocity", 1, 127, SONARE_FIXED_VELOCITY_UNSET);
   // Polyphonic only; a monophonic call with any of these written is refused by the C ABI.
-  out.max_polyphony = rangeField(config, "maxPolyphony", 1, 64);
-  out.min_frame_peak_ratio = signedField(config, "minFramePeakRatio", FloatDomain::kUnitRatio);
-  out.min_ridge_peak_ratio = signedField(config, "minRidgePeakRatio", FloatDomain::kUnitRatio);
-  // 0 (absent) never splits; any other value is forwarded and the C ABI refuses an invalid one.
-  out.reattack_ratio = floatProperty(config, "reattackRatio", 0.0f);
+  out.max_polyphony = rangeField(config, "maxPolyphony", 1, 64, SONARE_MAX_POLYPHONY_UNSET);
+  out.min_frame_peak_ratio =
+      signedField(config, "minFramePeakRatio", FloatDomain::kUnitRatio, out.min_frame_peak_ratio);
+  out.min_ridge_peak_ratio =
+      signedField(config, "minRidgePeakRatio", FloatDomain::kUnitRatio, out.min_ridge_peak_ratio);
+  // Absent never splits; a written value is forwarded and the C ABI refuses an invalid one.
+  out.reattack_ratio = floatProperty(config, "reattackRatio", out.reattack_ratio);
   // Absence is the segments model; the C ABI refuses a non-segments model on the polyphonic path.
   const std::string model = stringProperty(config, "monophonicModel", "segments");
   if (model == "singing") {

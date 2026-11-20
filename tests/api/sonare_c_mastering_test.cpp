@@ -135,7 +135,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
       sample *= 0.2f;
     }
 
-    SonareMasteringConfig config{};
+    SonareMasteringConfig config;
+
+    sonare_mastering_config_init(&config);
     config.target_lufs = -18.0f;
     config.ceiling_dbtp = -1.0f;
     config.true_peak_oversample = 4;
@@ -169,19 +171,20 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_free_mastering_result(&result);
   }
 
-  SECTION("accepts release_ms / apply_gain_at_input_rate and keeps zero-init behavior") {
+  SECTION("accepts release_ms / apply_gain_at_input_rate and init writes the defaults") {
     // These appended fields complete the simple helper's coverage of the
     // maximizer config (release_ms / apply_gain_at_input_rate already exist on
     // the chain and named-processor paths). The single-pass helper pre-clamps the
     // static gain to the ceiling, so the limiter rarely reduces gain and the
     // knobs are near-inert here; the contract verified is that they are accepted,
-    // produce valid output, and that a zero-initialized config still reproduces
-    // the library default (50 ms release, input-rate gain off).
+    // produce valid output, and that init writes the library default (50 ms
+    // release, input-rate gain off).
     auto samples = generate_sine(440.0f, 22050, 0.5f);
     for (auto& sample : samples) sample *= 0.2f;
 
     auto run = [&](float release_ms, int apply_gain_at_input_rate) {
-      SonareMasteringConfig config{};
+      SonareMasteringConfig config;
+      sonare_mastering_config_init(&config);
       config.target_lufs = -14.0f;
       config.ceiling_dbtp = -1.0f;
       config.true_peak_oversample = 4;
@@ -200,14 +203,12 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(tuned.size() == samples.size());
     for (float value : tuned) REQUIRE(std::isfinite(value));
 
-    // A zero-initialized config (release_ms == 0) must reproduce the explicit
-    // library default (50 ms) so older callers see no behavior change.
-    const std::vector<float> zero = run(0.0f, 0);
-    const std::vector<float> fifty = run(50.0f, 0);
-    REQUIRE(zero.size() == fifty.size());
-    for (size_t i = 0; i < zero.size(); ++i) {
-      REQUIRE(std::abs(zero[i] - fifty[i]) <= 1.0e-6f);
-    }
+    // The init-written release (50 ms) is the explicit library default.
+    SonareMasteringConfig defaults;
+    sonare_mastering_config_init(&defaults);
+    REQUIRE(defaults.release_ms == 50.0f);
+    const std::vector<float> fifty = run(defaults.release_ms, 0);
+    REQUIRE(fifty.size() == samples.size());
   }
 
   SECTION("an out-of-domain oversample or release is refused, not defaulted") {
@@ -215,7 +216,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     for (auto& sample : samples) sample *= 0.2f;
 
     auto run = [&](int oversample, float release_ms) {
-      SonareMasteringConfig config{};
+      SonareMasteringConfig config;
+      sonare_mastering_config_init(&config);
       config.target_lufs = -14.0f;
       config.ceiling_dbtp = -1.0f;
       config.true_peak_oversample = oversample;
@@ -233,7 +235,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     // check happening somewhere else.
     REQUIRE(run(3, 50.0f) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(run(4, 50.0f) == SONARE_OK);
-    REQUIRE(run(0, 0.0f) == SONARE_OK);
+    REQUIRE(run(0, 50.0f) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(run(4, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
 
     REQUIRE(run(-1, 50.0f) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(run(-4, 50.0f) == SONARE_ERROR_INVALID_PARAMETER);
@@ -244,7 +247,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
 
   SECTION("rejects invalid parameters") {
     auto samples = generate_sine(440.0f, 22050, 1.0f);
-    SonareMasteringConfig config{};
+    SonareMasteringConfig config;
+    sonare_mastering_config_init(&config);
     config.target_lufs = -18.0f;
     config.ceiling_dbtp = -1.0f;
     config.true_peak_oversample = 4;
@@ -1481,7 +1485,8 @@ TEST_CASE("loudness_target_limited agrees across the mastering entry points",
   // reported values. The chain stands in for master_audio: a preset chain runs
   // the same loudness stage, just with preset-chosen values.
   const auto run_all = [&](float target_lufs, float ceiling_dbtp) {
-    SonareMasteringConfig config{};
+    SonareMasteringConfig config;
+    sonare_mastering_config_init(&config);
     config.target_lufs = target_lufs;
     config.ceiling_dbtp = ceiling_dbtp;
     config.true_peak_oversample = 4;

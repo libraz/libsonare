@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -68,13 +69,11 @@ def _oversample_factor(oversample_factor: int | None) -> int | float:
     return _resolve_zero_default(oversample_factor, "oversample_factor")
 
 
-def _clipping_args(
-    threshold: float | None, min_region_samples: int | None
-) -> tuple[int | float, int | float]:
-    """The clipping arguments, ``None`` mapped to the C default and 0 refused."""
+def _clipping_args(threshold_db: float | None, min_region_samples: int | None) -> tuple[float, int]:
+    """The clipping arguments, an omitted level as the C ABI's NaN and an omitted run as 1."""
     return (
-        _resolve_zero_default(threshold, "threshold"),
-        _resolve_zero_default(min_region_samples, "min_region_samples"),
+        math.nan if threshold_db is None else _to_c_float(threshold_db, "threshold_db"),
+        1 if min_region_samples is None else min_region_samples,
     )
 
 
@@ -433,17 +432,16 @@ def metering_true_peak_dbtp(
 def metering_detect_clipping(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    threshold: float | None = None,
+    threshold_db: float | None = None,
     min_region_samples: int | None = None,
 ) -> ClippingReport:
     """Detect contiguous runs of clipped samples.
 
-    ``threshold`` is the absolute level a clipped sample reaches, in ``(0, 1]``.
-    Default: 0.999 (the library's). ``min_region_samples`` is the shortest run
-    reported. Default: 1 (the library's). An explicit 0 for either raises
-    :class:`SonareValueError`; leave it out for the default.
+    ``threshold_db`` is the level in dBFS a clipped sample reaches, in ``[-120, 0]``.
+    Default: the level of a linear 0.999 (the library's). ``min_region_samples``
+    is the shortest run reported; 0 and 1 both list every run. Default: 1.
     """
-    c_threshold, c_min_region = _clipping_args(threshold, min_region_samples)
+    c_threshold, c_min_region = _clipping_args(threshold_db, min_region_samples)
     sample_buf = _validate_samples(samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -452,7 +450,7 @@ def metering_detect_clipping(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_float(c_threshold, "threshold"),
+        c_threshold,
         _to_c_size_t(c_min_region, "min_region_samples"),
         ctypes.byref(out),
     )

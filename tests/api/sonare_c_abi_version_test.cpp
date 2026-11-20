@@ -619,8 +619,8 @@ TEST_CASE("sonare_lufs_series_interleaved publishes neither series when a copy f
 
 TEST_CASE("sonare_stream_analyzer_read_frames publishes no array when a copy fails",
           "[c_api][abi][entry_guard]") {
-  SonareStreamConfig config = {};
-  REQUIRE(sonare_stream_analyzer_config_default(&config) == SONARE_OK);
+  SonareStreamConfig config;
+  sonare_stream_config_init(&config);
   config.sample_rate = 8000;
   config.n_fft = 32;
   config.hop_length = 32;

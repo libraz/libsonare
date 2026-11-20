@@ -336,8 +336,7 @@ TEST_CASE("SidechainRouter set_config is safe to call concurrently with process"
         cfg.attack_ms = 1.0f + static_cast<float>(i % 10);
         cfg.release_ms = 50.0f + static_cast<float>(i % 200);
         cfg.range_db = 6.0f + static_cast<float>(i % 18);
-        cfg.sidechain_high_pass_enabled = (i % 3) == 0;
-        cfg.sidechain_high_pass_hz = 60.0f + static_cast<float>(i % 200);
+        cfg.sidechain_high_pass_hz = (i % 3) == 0 ? 60.0f + static_cast<float>(i % 200) : 0.0f;
         cfg.mono_summing = (i & 1) != 0;
         cfg.key_listen = false;
         cfg.lookahead_ms = 0.0f;

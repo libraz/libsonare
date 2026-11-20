@@ -3,12 +3,19 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdint>
+#include <functional>
 #include <limits>
+#include <map>
 #include <string>
+#include <string_view>
 #include <vector>
+
+#include "../../bindings/node/src/addon/field_spelling.h"
+#include "wasm/field_spelling.h"
 
 namespace {
 
@@ -287,7 +294,8 @@ TEST_CASE("the audio handle entries refuse a NULL argument by its name", "[c_api
 TEST_CASE("the chord entries refuse an option member and a chord element by its name",
           "[c_api][feature]") {
   const std::vector<float> samples(22050, 0.1f);
-  SonareChordDetectionOptions options{};
+  SonareChordDetectionOptions options;
+  sonare_chord_detection_options_init(&options);
   options.threshold = 0.5f;
   options.n_fft = 2048;
   options.hop_length = 512;
@@ -295,11 +303,12 @@ TEST_CASE("the chord entries refuse an option member and a chord element by its 
   CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, nullptr, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options must not be NULL");
-  options.struct_version = 1;
+  const uint32_t options_size = options.struct_size;
+  options.struct_size = 0;
   CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "options.struct_version must be one of 0, 2");
-  options.struct_version = 0;
+  CHECK(last_message() == "options.struct_size must be set by sonare_chord_detection_options_init");
+  options.struct_size = options_size;
   options.use_key_context = 1;
   options.key_root = static_cast<SonarePitchClass>(12);
   CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
@@ -440,9 +449,14 @@ TEST_CASE("the second-set entries name the first refused argument in header orde
   CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, nullptr, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options must not be NULL");
-  SonareStreamConfig config{};
+  SonareStreamConfig config;
+  sonare_stream_config_init(&config);
+  config.sample_rate = 0;
   CHECK(sonare_stream_analyzer_create(&config, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.sample_rate must be an integer in [1, 2147483647]");
+  SonareStreamConfig unset{};
+  CHECK(sonare_stream_analyzer_create(&unset, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.struct_size must be set by sonare_stream_config_init");
   CHECK(sonare_stream_analyzer_read_frames(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "analyzer must not be NULL");
 }
@@ -509,4 +523,89 @@ TEST_CASE("the project MIDI entries name a route field and a bank outside their 
   }
   CHECK(sonare_project_set_program_on_channel(project, clip, 0, 0, 0, -1) == SONARE_OK);
   sonare_project_destroy(project);
+}
+
+namespace {
+
+/// Drives one C entry to a refusal naming the subject its spelling-table row renames; null for
+/// an entry that refuses no value of that subject.
+const std::map<std::string_view, std::function<void()>>& spelling_row_drivers() {
+  static const std::map<std::string_view, std::function<void()>> drivers = {
+      {"mel_to_audio",
+       [] {
+         float* out = nullptr;
+         size_t out_length = 0;
+         sonare_mel_to_audio(nullptr, 2, 2, 22050, 2048, 512, 0.0f, 0.0f, 1, &out, &out_length);
+       }},
+      {"mel_to_stft",
+       [] {
+         SonareInverseResult out{};
+         sonare_mel_to_stft(nullptr, 2, 2, 22050, 2048, 0.0f, 0.0f, &out);
+       }},
+      // Every offset is accepted (one past the end reads silence), so no refusal names it.
+      {"metering_spectrum_frame", nullptr},
+      // A null buffer is refused as an unreadable document, never as a parameter.
+      {"note_targets_from_smf", nullptr},
+      // An unknown preset is refused as a document the chain loader cannot read, never as a
+      // parameter, and a null one selects the default.
+      {"voice_change_realtime", nullptr},
+      {"waveform_peaks",
+       [] {
+         std::vector<float> samples(1024, 0.1f);
+         SonareWaveformPeaksResult out{};
+         sonare_waveform_peaks(samples.data(), samples.size(), 0, 512, &out);
+       }},
+      {"waveform_peak_pyramid",
+       [] {
+         std::vector<float> samples(1024, 0.1f);
+         const size_t levels[] = {512};
+         SonareWaveformPeakPyramidResult out{};
+         sonare_waveform_peak_pyramid(samples.data(), samples.size(), 0, levels, 1, &out);
+       }},
+  };
+  return drivers;
+}
+
+std::vector<std::string> last_refusal_subjects() {
+  std::vector<std::string> subjects;
+  for (size_t i = 0; i < sonare_last_refusal_subject_count(); ++i) {
+    subjects.emplace_back(sonare_last_refusal_subject(i));
+  }
+  return subjects;
+}
+
+template <typename Overrides, typename Spell>
+void check_spelling_rows(const Overrides& rows, const Spell& spelled_last_refusal) {
+  for (const auto& row : rows) {
+    const std::string entry(row.entry);
+    CAPTURE(entry, std::string(row.subject), std::string(row.spelling));
+    const auto driver = spelling_row_drivers().find(row.entry);
+    REQUIRE(driver != spelling_row_drivers().end());
+    if (!driver->second) continue;
+    driver->second();
+    const char* refused = sonare_last_refusal_entry();
+    REQUIRE(refused != nullptr);
+    CHECK(std::string(refused) == entry);
+    const std::vector<std::string> subjects = last_refusal_subjects();
+    REQUIRE(std::find(subjects.begin(), subjects.end(), std::string(row.subject)) !=
+            subjects.end());
+    const auto shown = spelled_last_refusal();
+    REQUIRE(shown.has_value());
+    CHECK_THAT(std::string(shown->what()),
+               Catch::Matchers::ContainsSubstring(std::string(row.spelling)));
+  }
+}
+
+}  // namespace
+
+TEST_CASE("every renamed refusal subject reaches the caller under the facade's spelling",
+          "[c_api][field_spelling]") {
+  SECTION("node") {
+    check_spelling_rows(sonare_field_spelling::node::kOverrides,
+                        [] { return sonare_field_spelling::node::SpelledLastRefusal(); });
+  }
+  SECTION("wasm") {
+    check_spelling_rows(sonare_field_spelling::wasm::kOverrides,
+                        [] { return sonare_field_spelling::wasm::SpelledLastRefusal(); });
+  }
 }

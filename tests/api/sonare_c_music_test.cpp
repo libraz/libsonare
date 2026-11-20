@@ -290,7 +290,8 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
   SECTION("extended options enable HMM and inversion detection without changing legacy ABI") {
     auto samples = generate_harmonic_chord({82.41f, 261.63f, 329.63f, 392.00f}, 22050, 1.0f);
     SonareChordAnalysisResult result = {};
-    SonareChordDetectionOptions options{};
+    SonareChordDetectionOptions options;
+    sonare_chord_detection_options_init(&options);
     options.min_duration_sec = 0.0f;
     options.smoothing_window_sec = 2.0f;
     options.threshold = 0.5f;
@@ -333,7 +334,8 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
 
 TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
   auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
-  SonareChordDetectionOptions options{};
+  SonareChordDetectionOptions options;
+  sonare_chord_detection_options_init(&options);
   options.min_duration_sec = 0.3f;
   options.smoothing_window_sec = 2.0f;
   options.threshold = 0.5f;
@@ -365,7 +367,8 @@ TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
 }
 
 TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
-  SonareChordDetectionOptions options{};
+  SonareChordDetectionOptions options;
+  sonare_chord_detection_options_init(&options);
   options.min_duration_sec = 0.3f;
   options.smoothing_window_sec = 2.0f;
   options.threshold = 0.5f;
@@ -614,7 +617,8 @@ TEST_CASE(
   SECTION("sonare_detect_chords_ex") {
     SonareChordAnalysisResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    SonareChordDetectionOptions options{};
+    SonareChordDetectionOptions options;
+    sonare_chord_detection_options_init(&options);
     options.min_duration_sec = 0.3f;
     options.smoothing_window_sec = 2.0f;
     options.threshold = 0.5f;
@@ -634,7 +638,8 @@ TEST_CASE(
     std::memset(&detected, 0xAA, sizeof(detected));
     std::memset(&roman, 0xAA, sizeof(roman));
     std::memset(&functions, 0xAA, sizeof(functions));
-    SonareChordDetectionOptions options{};
+    SonareChordDetectionOptions options;
+    sonare_chord_detection_options_init(&options);
     options.min_duration_sec = -1.0f;  // invalid
     options.smoothing_window_sec = 2.0f;
     options.threshold = 0.5f;
@@ -654,7 +659,8 @@ TEST_CASE(
   SECTION("sonare_analyze_sections") {
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    SonareSectionOptions options = sonare_section_options_default();
+    SonareSectionOptions options;
+    sonare_section_options_init(&options);
     options.n_fft = 0;
     REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -685,7 +691,8 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
   SECTION("infinity") {
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    SonareSectionOptions options = sonare_section_options_default();
+    SonareSectionOptions options;
+    sonare_section_options_init(&options);
     options.min_section_sec = std::numeric_limits<float>::infinity();
     REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -697,7 +704,8 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
   SECTION("NaN") {
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    SonareSectionOptions options = sonare_section_options_default();
+    SonareSectionOptions options;
+    sonare_section_options_init(&options);
     options.min_section_sec = std::numeric_limits<float>::quiet_NaN();
     REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -709,7 +717,8 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
   SECTION("a legitimate value still produces a working result") {
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    SonareSectionOptions options = sonare_section_options_default();
+    SonareSectionOptions options;
+    sonare_section_options_init(&options);
     options.min_section_sec = 0.05f;
     REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
             SONARE_OK);
@@ -752,7 +761,8 @@ TEST_CASE("sonare_analyze_sections reports each section's material group", "[c_a
 
   SonareSectionResult result;
   std::memset(&result, 0xAA, sizeof(result));
-  SonareSectionOptions options = sonare_section_options_default();
+  SonareSectionOptions options;
+  sonare_section_options_init(&options);
   options.min_section_sec = config.min_section_sec;
   REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), kRate, &options, &result) ==
           SONARE_OK);
@@ -796,7 +806,8 @@ TEST_CASE("sonare_analyze_sections threshold reaches the boundary picker", "[c_a
   const auto samples = section_abab_signal(kRate);
 
   const auto run = [&](float threshold) {
-    SonareSectionOptions options = sonare_section_options_default();
+    SonareSectionOptions options;
+    sonare_section_options_init(&options);
     options.threshold = threshold;
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
@@ -844,7 +855,8 @@ TEST_CASE("sonare_analyze_sections refuses NULL options and a bad threshold", "[
 
   for (const float threshold :
        {-0.1f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
-    SonareSectionOptions options = sonare_section_options_default();
+    SonareSectionOptions options;
+    sonare_section_options_init(&options);
     options.threshold = threshold;
     std::memset(&result, 0xAA, sizeof(result));
     CHECK(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
@@ -854,15 +866,56 @@ TEST_CASE("sonare_analyze_sections refuses NULL options and a bad threshold", "[
   }
 }
 
-TEST_CASE("sonare_section_options_default mirrors the core section defaults", "[c_api][sections]") {
-  const SonareSectionOptions options = sonare_section_options_default();
+TEST_CASE("sonare_section_options_init mirrors the core section defaults", "[c_api][sections]") {
+  SonareSectionOptions options;
+  sonare_section_options_init(&options);
   const sonare::SectionConfig config;
   CHECK(options.n_fft == config.n_fft);
   CHECK(options.hop_length == config.hop_length);
   CHECK(options.min_section_sec == config.min_section_sec);
   CHECK(options.threshold == sonare::kSectionBoundaryThreshold);
   // Sections snap to downbeats and keep a minimum length, so they take a lower bar.
-  CHECK(options.threshold < sonare_boundary_options_default().threshold);
+  SonareBoundaryOptions boundary;
+  sonare_boundary_options_init(&boundary);
+  CHECK(options.struct_size == sizeof(SonareSectionOptions));
+  CHECK(boundary.struct_size == sizeof(SonareBoundaryOptions));
+  CHECK(options.threshold < boundary.threshold);
+}
+
+TEST_CASE("analysis option structs are refused until their init sets struct_size",
+          "[c_api][sections][boundaries]") {
+  const auto samples = generate_sine(440.0f, 22050, 0.5f);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  SonareSectionOptions section{};
+  SonareSectionResult sections{};
+  CHECK(sonare_analyze_sections(samples.data(), samples.size(), 22050, &section, &sections) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.struct_size must be set by sonare_section_options_init");
+
+  SonareBoundaryOptions boundary{};
+  SonareBoundaryResult boundaries{};
+  CHECK(sonare_detect_boundaries(samples.data(), samples.size(), 22050, &boundary, &boundaries) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.struct_size must be set by sonare_boundary_options_init");
+
+  SonareMusicAnalyzeOptions music{};
+  char* json = nullptr;
+  CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &music, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.struct_size must be set by sonare_music_analyze_options_init");
+
+  SonareMeterOptions meter{};
+  const float beats[] = {0.5f, 1.0f};
+  CHECK(sonare_estimate_meter_json(beats, beats, 2, &meter, &json) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.struct_size must be set by sonare_meter_options_init");
+
+  SonareChordDetectionOptions chord{};
+  SonareChordAnalysisResult chords{};
+  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &chord, &chords) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.struct_size must be set by sonare_chord_detection_options_init");
 }
 
 TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {
@@ -875,7 +928,9 @@ TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {
     samples[i] = 0.5f * std::sin(2.0f * 3.14159265f * freqs[i / seg] * t);
   }
 
-  SonareBoundaryOptions defaults = sonare_boundary_options_default();
+  SonareBoundaryOptions defaults;
+
+  sonare_boundary_options_init(&defaults);
   REQUIRE(defaults.reference_window_sec == 60.0f);
 
   auto count = [&](const SonareBoundaryOptions& options, SonareError* err) {
@@ -1013,16 +1068,8 @@ TEST_CASE("onset, analysis JSON and meter entries name the refused argument",
   CHECK(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, nullptr, &times, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "config must not be NULL");
-  SonareOnsetDetectConfig config = {};
-  config.n_fft = 2048;
-  config.hop_length = 512;
-  config.pre_max = 1;
-  config.post_max = 1;
-  config.pre_avg = 3;
-  config.post_avg = 4;
-  config.delta = 0.06f;
-  config.wait = 1;
-  config.backtrack_range = 10;
+  SonareOnsetDetectConfig config;
+  sonare_onset_detect_config_init(&config);
   config.backtrack = 2;
   CHECK(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -1036,24 +1083,26 @@ TEST_CASE("onset, analysis JSON and meter entries name the refused argument",
   CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, nullptr, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options must not be NULL");
-  SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
-  options.struct_version = 99;
+  SonareMusicAnalyzeOptions options;
+  sonare_music_analyze_options_init(&options);
+  options.struct_size = 0;
   CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "options.struct_version must be one of 2");
-  options = sonare_music_analyze_options_default();
+  CHECK(message() == "options.struct_size must be set by sonare_music_analyze_options_init");
+  sonare_music_analyze_options_init(&options);
   options.meter_candidate_numerator_count = SONARE_MAX_METER_CANDIDATE_NUMERATORS + 1;
   CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.meter_candidate_numerator_count must be an integer in [0, " +
                          std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) + "]");
-  options = sonare_music_analyze_options_default();
+  sonare_music_analyze_options_init(&options);
   CHECK(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_json must not be NULL");
 
   const float beats[] = {0.5f, 1.0f};
-  SonareMeterOptions meter = sonare_meter_options_default();
+  SonareMeterOptions meter;
+  sonare_meter_options_init(&meter);
   CHECK(sonare_estimate_meter_json(nullptr, beats, 2, &meter, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "beat_times must not be NULL when beat_count is not 0");
@@ -1068,7 +1117,7 @@ TEST_CASE("onset, analysis JSON and meter entries name the refused argument",
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.candidate_numerator_count must be an integer in [0, " +
                          std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) + "]");
-  meter = sonare_meter_options_default();
+  sonare_meter_options_init(&meter);
   CHECK(sonare_estimate_meter_json(beats, beats, 2, &meter, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_json must not be NULL");

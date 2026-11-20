@@ -3,18 +3,17 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
-#include "util/zero_is_default.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
-ClippingParams clipping_params_from_public(float threshold, size_t min_region_samples) {
-  ClippingParams params;
-  params.threshold =
-      ZeroIsDefault(threshold).checked(kDefaultClippingThreshold, 0.0f, 1.0f, "threshold");
-  params.min_region_samples =
-      min_region_samples == 0 ? kDefaultClippingMinRegionSamples : min_region_samples;
-  return params;
+float clipping_threshold_from_db(float threshold_db) {
+  if (std::isnan(threshold_db)) return kDefaultClippingThreshold;
+  util::check::in_interval(threshold_db, constants::kFloorDb, true, 0.0, true, "threshold_db");
+  return db_to_linear(threshold_db);
 }
 
 ClippingResult detect_clipping(const Audio& audio, float threshold, size_t min_region_samples) {

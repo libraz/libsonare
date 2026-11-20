@@ -77,7 +77,10 @@ class SonareKeyCandidate(CStruct):
 class SonareOnsetDetectConfig(CStruct):
     """Maps to SonareOnsetDetectConfig in sonare_c_types_functions.h."""
 
+    _c_init_ = "sonare_onset_detect_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("threshold", ctypes.c_float),

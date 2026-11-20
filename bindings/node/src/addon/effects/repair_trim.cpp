@@ -80,6 +80,7 @@ sonare::mastering::repair::TrimSilenceConfig ReadTrimConfig(const Napi::Object& 
 SonareTrimSilenceConfig ToCTrimConfig(const sonare::mastering::repair::TrimSilenceConfig& config,
                                       float threshold_db) {
   SonareTrimSilenceConfig out{};
+  sonare_trim_silence_config_init(&out);
   out.threshold_db = threshold_db;
   out.padding_samples = config.padding_samples;
   out.mode = config.mode == sonare::mastering::repair::TrimSilenceMode::LufsGated

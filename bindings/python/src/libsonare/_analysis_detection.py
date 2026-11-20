@@ -14,7 +14,7 @@ from ._ffi_types_core import (
     SonareKeyCandidate,
     SonareOnsetDetectConfig,
 )
-from ._narrowing import _narrow_double, _optional_nonzero
+from ._narrowing import _narrow_double
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -368,7 +368,6 @@ def detect_onsets(
         config = SonareOnsetDetectConfig(
             n_fft=n_fft,
             hop_length=hop_length,
-            threshold=_optional_nonzero(threshold, "threshold", "the adaptive threshold"),
             pre_max=pre_max,
             post_max=post_max,
             pre_avg=pre_avg,
@@ -378,6 +377,9 @@ def detect_onsets(
             backtrack=int(backtrack),
             backtrack_range=backtrack_range,
         )
+        # An omitted threshold keeps the init's NaN, which selects the adaptive path.
+        if threshold is not None:
+            config.threshold = threshold
         rc = lib.sonare_detect_onsets_ex(
             c_array,
             _to_c_size_t(length, "length"),

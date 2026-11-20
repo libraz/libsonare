@@ -654,7 +654,7 @@ describe('chain config: nested form only, tokens only', () => {
     );
   });
 
-  it('band sidechainHighPassHz is a positive frequency; absent is off', () => {
+  it('band sidechainHighPassHz is a non-negative frequency; absent or 0 is off', () => {
     const run = (sidechainHighPassHz: unknown) =>
       sonare.masterAudio({
         samples: left,
@@ -665,7 +665,7 @@ describe('chain config: nested form only, tokens only', () => {
       });
     expect(() => run(100)).not.toThrow();
     expect(() => run(undefined)).not.toThrow();
-    expectRefused(() => run(0), RangeError, 'sidechainHighPassHz');
+    expect(() => run(0)).not.toThrow();
     expectRefused(() => run(-5), RangeError, 'sidechainHighPassHz');
     expectRefused(
       () => run('100'),

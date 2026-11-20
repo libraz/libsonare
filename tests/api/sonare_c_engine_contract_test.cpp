@@ -552,8 +552,10 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
 
 TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_api]") {
   SECTION("is SONARE_OK when nothing is recorded") {
-    SonareStreamConfig config{};
-    REQUIRE(sonare_stream_analyzer_config_default(&config) == SONARE_OK);
+    // A successful error-returning entry clears whatever an earlier call recorded.
+    char* note = nullptr;
+    REQUIRE(sonare_hz_to_note(440.0f, &note) == SONARE_OK);
+    sonare_free_string(note);
     REQUIRE(std::string(sonare_last_error_message()).empty());
     REQUIRE(sonare_last_error_code() == SONARE_OK);
   }

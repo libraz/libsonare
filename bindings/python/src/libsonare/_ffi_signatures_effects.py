@@ -341,11 +341,9 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    # sonare_transcribe + sonare_free_transcribe_result. The defaults accessor
-    # returns the config by value; the facade spells a default as None and
-    # leaves the field 0, so it is declared rather than called.
-    lib.sonare_transcribe_config_default.restype = SonareTranscribeConfig
-    lib.sonare_transcribe_config_default.argtypes = []
+    # sonare_transcribe + sonare_free_transcribe_result.
+    lib.sonare_transcribe_config_init.restype = None
+    lib.sonare_transcribe_config_init.argtypes = [ctypes.POINTER(SonareTranscribeConfig)]
     lib.sonare_transcribe.restype = ctypes.c_int32
     lib.sonare_transcribe.argtypes = [
         ctypes.POINTER(ctypes.c_float),

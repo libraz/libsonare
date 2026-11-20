@@ -1,5 +1,8 @@
 #include <sonare/sonare_c_transcribe.h>
 
+#include <cmath>
+#include <limits>
+
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
@@ -23,9 +26,6 @@ namespace {
 
 namespace ntm = sonare::editing::note_model;
 
-constexpr int32_t kTranscribeConfigVersionMin = 1;
-constexpr int32_t kTranscribeConfigVersion = 4;
-constexpr int32_t kTranscribeResultVersion = 2;
 constexpr int32_t kMaxMinNoteDivision = 128;
 
 /// Refuses @p subject, named by its C field, so each binding respells it in its own keys.
@@ -38,10 +38,11 @@ constexpr int32_t kMaxMinNoteDivision = 128;
   sonare::util::check::refuse_relation({a, b}, text);
 }
 
-/// Reads the public config into the core one. Every numeric field spells its
-/// default as 0, so a zero-filled struct is the defaults; a value outside the
-/// field's domain is REFUSED rather than replaced, because a silently
-/// substituted default is indistinguishable downstream from a deliberate one.
+/// Reads the public config into the core one. A NaN float and an UNSET integer are absent and
+/// resolve from the selected source; every other value is checked against the field's domain and
+/// REFUSED when outside it, because a silently substituted default is indistinguishable
+/// downstream from a deliberate one. The core spells some defaults as 0 (and a real 0 as a
+/// negative), which is mapped here and nowhere else.
 void read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out, uint8_t* out_group,
                  uint8_t* out_channel, bool* out_reference_auto) {
   *out = ntm::TranscribeConfig{};
@@ -49,25 +50,22 @@ void read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out, u
   *out_channel = 0;
   *out_reference_auto = false;
   if (in == nullptr) return;
-  if (in->struct_version < kTranscribeConfigVersionMin ||
-      in->struct_version > kTranscribeConfigVersion) {
-    refuse("struct_version", "must be 1, 2, 3 or 4");
+  // Under run_validation_under("config"), so the subject is the bare field.
+  if (in->struct_size < sizeof(SonareTranscribeConfig)) {
+    refuse("struct_size", "must be set by sonare_transcribe_config_init");
   }
-  if (in->struct_version >= 2) *out_reference_auto = in->reference_auto != 0;
+  *out_reference_auto = in->reference_auto != 0;
 
   out->source =
       in->polyphonic != 0 ? ntm::TranscribeSource::kPolyphonic : ntm::TranscribeSource::kMonophonic;
 
-  // Zero keeps the default; other values must be valid, and this layer names the offending field.
-  if (in->reference_hz != 0.0f) {
-    if (!finite_positive(in->reference_hz)) refuse("reference_hz", "must be a positive number");
-    out->reference_hz = in->reference_hz;
-  }
-  if (in->f0_min_hz != 0.0f) {
+  if (!finite_positive(in->reference_hz)) refuse("reference_hz", "must be a positive number");
+  out->reference_hz = in->reference_hz;
+  if (!std::isnan(in->f0_min_hz)) {
     if (!finite_positive(in->f0_min_hz)) refuse("f0_min_hz", "must be a positive number");
     out->fmin = in->f0_min_hz;
   }
-  if (in->f0_max_hz != 0.0f) {
+  if (!std::isnan(in->f0_max_hz)) {
     if (!finite_positive(in->f0_max_hz)) refuse("f0_max_hz", "must be a positive number");
     out->fmax = in->f0_max_hz;
   }
@@ -75,23 +73,20 @@ void read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out, u
   if (range.fmax <= range.fmin) {
     refuse_pair("f0_max_hz", "f0_min_hz", "{0} must be greater than {1}");
   }
-  if (in->min_note_ms != 0.0f) {
+  const bool min_note_ms_given = !std::isnan(in->min_note_ms);
+  if (min_note_ms_given) {
     if (!finite_positive(in->min_note_ms)) refuse("min_note_ms", "must be a positive number");
     out->min_note_ms = in->min_note_ms;
   }
-  if (in->segmentation_threshold_cents != 0.0f) {
-    if (!finite_positive(in->segmentation_threshold_cents)) {
-      refuse("segmentation_threshold_cents", "must be a positive number");
-    }
-    out->segmentation_threshold_cents = in->segmentation_threshold_cents;
+  if (!finite_positive(in->segmentation_threshold_cents)) {
+    refuse("segmentation_threshold_cents", "must be a positive number");
   }
-  if (in->velocity_floor_db != 0.0f) {
-    if (!std::isfinite(in->velocity_floor_db) || in->velocity_floor_db >= 0.0f) {
-      refuse("velocity_floor_db", "must be a finite negative number");
-    }
-    out->velocity_floor_db = in->velocity_floor_db;
+  out->segmentation_threshold_cents = in->segmentation_threshold_cents;
+  if (!std::isfinite(in->velocity_floor_db) || in->velocity_floor_db >= 0.0f) {
+    refuse("velocity_floor_db", "must be a finite negative number");
   }
-  if (in->fixed_velocity != 0) {
+  out->velocity_floor_db = in->velocity_floor_db;
+  if (in->fixed_velocity != SONARE_FIXED_VELOCITY_UNSET) {
     if (in->fixed_velocity < 1 || in->fixed_velocity > 127) {
       refuse("fixed_velocity", "must be an integer in [1, 127]");
     }
@@ -103,57 +98,63 @@ void read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out, u
   }
   *out_group = static_cast<uint8_t>(in->group);
   *out_channel = static_cast<uint8_t>(in->channel);
-  if (in->struct_version < 3) return;
 
-  // The core shares these sentinels (0 => default, negative => 0 / off), so they are copied as-is,
-  // except reattack_ratio.
-  if (in->max_polyphony < 0 ||
-      in->max_polyphony > sonare::editing::polyphony::kMaxPolyphonyVoices) {
-    refuse("max_polyphony", "must be 0 or an integer in [1, 64]");
+  const bool polyphonic = out->source == ntm::TranscribeSource::kPolyphonic;
+  if (in->max_polyphony != SONARE_MAX_POLYPHONY_UNSET &&
+      (in->max_polyphony < 1 ||
+       in->max_polyphony > sonare::editing::polyphony::kMaxPolyphonyVoices)) {
+    refuse("max_polyphony", "must be an integer in [1, 64]");
   }
-  if (!std::isfinite(in->min_frame_peak_ratio) || in->min_frame_peak_ratio > 1.0f) {
-    refuse("min_frame_peak_ratio", "must be a finite number no greater than 1");
+  if (!std::isnan(in->min_frame_peak_ratio) &&
+      !(in->min_frame_peak_ratio >= 0.0f && in->min_frame_peak_ratio <= 1.0f)) {
+    refuse("min_frame_peak_ratio", "must be a finite number in [0, 1]");
   }
-  if (!std::isfinite(in->min_ridge_peak_ratio) || in->min_ridge_peak_ratio > 1.0f) {
-    refuse("min_ridge_peak_ratio", "must be a finite number no greater than 1");
+  if (!std::isnan(in->min_ridge_peak_ratio) &&
+      !(in->min_ridge_peak_ratio >= 0.0f && in->min_ridge_peak_ratio <= 1.0f)) {
+    refuse("min_ridge_peak_ratio", "must be a finite number in [0, 1]");
   }
-  if (in->reattack_ratio != 0.0f &&
+  if (!std::isnan(in->reattack_ratio) &&
       (!std::isfinite(in->reattack_ratio) || in->reattack_ratio <= 1.0f)) {
-    refuse("reattack_ratio", "must be 0 (no split) or a finite number above 1");
+    refuse("reattack_ratio", "must be a finite number above 1");
   }
-  if (in->min_note_division < 0 || in->min_note_division > kMaxMinNoteDivision) {
-    refuse("min_note_division", "must be 0 or an integer in [1, 128]");
+  if (in->min_note_division != SONARE_NOTE_DIVISION_UNSET &&
+      (in->min_note_division < 1 || in->min_note_division > kMaxMinNoteDivision)) {
+    refuse("min_note_division", "must be an integer in [1, 128]");
   }
-  if (in->min_note_division != 0 && in->min_note_ms != 0.0f) {
+  if (in->min_note_division != SONARE_NOTE_DIVISION_UNSET && min_note_ms_given) {
     refuse_pair("min_note_division", "min_note_ms", "{0} and {1} cannot both be set");
   }
   out->min_note_division = in->min_note_division;
-  if (out->source == ntm::TranscribeSource::kMonophonic) {
-    if (in->max_polyphony != 0) refuse("max_polyphony", "requires polyphonic transcription");
-    if (in->min_frame_peak_ratio != 0.0f) {
+  if (!polyphonic) {
+    if (in->max_polyphony != SONARE_MAX_POLYPHONY_UNSET) {
+      refuse("max_polyphony", "requires polyphonic transcription");
+    }
+    if (!std::isnan(in->min_frame_peak_ratio)) {
       refuse("min_frame_peak_ratio", "requires polyphonic transcription");
     }
-    if (in->min_ridge_peak_ratio != 0.0f) {
+    if (!std::isnan(in->min_ridge_peak_ratio)) {
       refuse("min_ridge_peak_ratio", "requires polyphonic transcription");
     }
-    if (in->reattack_ratio != 0.0f) {
+    if (!std::isnan(in->reattack_ratio)) {
       refuse("reattack_ratio", "requires polyphonic transcription");
     }
   }
   out->max_polyphony = in->max_polyphony;
-  out->min_frame_peak_ratio = in->min_frame_peak_ratio;
-  out->min_ridge_peak_ratio = in->min_ridge_peak_ratio;
+  // The core reads 0 as its default and a negative as a real 0.
+  const auto core_ratio = [](float given) {
+    if (std::isnan(given)) return 0.0f;
+    return given == 0.0f ? -1.0f : given;
+  };
+  out->min_frame_peak_ratio = core_ratio(in->min_frame_peak_ratio);
+  out->min_ridge_peak_ratio = core_ratio(in->min_ridge_peak_ratio);
   // The core spells "no split" as a negative ratio and reads 0 as its own default.
   out->reattack_ratio =
-      (in->reattack_ratio == 0.0f && out->source == ntm::TranscribeSource::kPolyphonic)
-          ? -1.0f
-          : in->reattack_ratio;
-  if (in->struct_version < 4) return;
+      std::isnan(in->reattack_ratio) ? (polyphonic ? -1.0f : 0.0f) : in->reattack_ratio;
 
   if (in->monophonic_model != 0 && in->monophonic_model != 1) {
     refuse("monophonic_model", "must be 0 (segments) or 1 (singing)");
   }
-  if (out->source == ntm::TranscribeSource::kPolyphonic && in->monophonic_model != 0) {
+  if (polyphonic && in->monophonic_model != 0) {
     refuse("monophonic_model", "requires monophonic transcription");
   }
   out->monophonic_model =
@@ -235,23 +236,31 @@ float resolve_tempo(float requested, const sonare::Audio& audio) {
 }  // namespace
 #endif
 
-SonareTranscribeConfig sonare_transcribe_config_default(void) {
-  SonareTranscribeConfig config = {};
-  config.struct_version = 4;
+void sonare_transcribe_config_init(SonareTranscribeConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  config->f0_min_hz = kNaN;
+  config->f0_max_hz = kNaN;
+  config->min_note_ms = kNaN;
+  config->min_frame_peak_ratio = kNaN;
+  config->min_ridge_peak_ratio = kNaN;
+  config->reattack_ratio = kNaN;
+  config->fixed_velocity = SONARE_FIXED_VELOCITY_UNSET;
+  config->max_polyphony = SONARE_MAX_POLYPHONY_UNSET;
+  config->min_note_division = SONARE_NOTE_DIVISION_UNSET;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
-  // Seeded from the core defaults so the two cannot drift apart.
+  // Seeded from the core defaults so the two cannot drift apart. The range, minimum note and
+  // the polyphonic-only fields stay absent: the selected source resolves each, so flipping
+  // polyphonic must not pin the monophonic values.
   const ntm::TranscribeConfig defaults;
-  config.polyphonic = defaults.source == ntm::TranscribeSource::kPolyphonic ? 1 : 0;
-  config.reference_hz = defaults.reference_hz;
-  config.monophonic_model = defaults.monophonic_model == ntm::MonophonicModel::kSinging ? 1 : 0;
-  // fmin/fmax, min_note_ms and the four polyphonic-only fields stay 0: the
-  // selected source resolves each, so flipping polyphonic must not pin the
-  // monophonic values.
-  config.segmentation_threshold_cents = defaults.segmentation_threshold_cents;
-  config.velocity_floor_db = defaults.velocity_floor_db;
-  config.fixed_velocity = defaults.fixed_velocity;
+  config->polyphonic = defaults.source == ntm::TranscribeSource::kPolyphonic ? 1 : 0;
+  config->reference_hz = defaults.reference_hz;
+  config->monophonic_model = defaults.monophonic_model == ntm::MonophonicModel::kSinging ? 1 : 0;
+  config->segmentation_threshold_cents = defaults.segmentation_threshold_cents;
+  config->velocity_floor_db = defaults.velocity_floor_db;
 #endif
-  return config;
 }
 
 void sonare_free_transcribe_result(SonareTranscribeResult* result) {
@@ -264,12 +273,7 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
                               const SonareTranscribeConfig* config, SonareTranscribeResult* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
-  // The result carries its own struct_version, so it is cleared by hand rather than by
-  // SONARE_C_ZERO_OUTS.
-  if (out != nullptr) {
-    *out = {};
-    out->struct_version = kTranscribeResultVersion;
-  }
+  SONARE_C_ZERO_OUTS(out);
   // The family's buffer policy, non-finite scan included. Transcription needs it
   // as much as any of them: a buffer of NaN tracks no pitch, so without the scan
   // it would answer SONARE_OK with zero notes -- an answer a caller cannot tell

@@ -90,18 +90,6 @@ evidence = "include/sonare/sonare_c_features.h:1119-1121: compared against the v
 
 [[name]]
 names = [
-  "metering_detect_clipping(threshold)",
-  "audio_detect_clipping(threshold)",
-  "Audio.detect_clipping(threshold)",
-  "clipping --threshold",
-  "meter --clip-threshold",
-]
-class = "magnitude"
-range = [0, 1]
-evidence = "include/sonare/sonare_c_metering.h:71: linear absolute sample level in [0, 1]"
-
-[[name]]
-names = [
   "OnsetDetectConfig.threshold",
   "OnsetDetectOptions.threshold",
   "DetectOnsetsRequest.threshold",

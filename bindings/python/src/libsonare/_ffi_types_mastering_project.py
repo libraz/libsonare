@@ -11,7 +11,10 @@ from ._ffi_types_core import SonareAutomationPoint
 class SonareMasteringConfig(CStruct):
     """Maps to SonareMasteringConfig in sonare_c.h."""
 
+    _c_init_ = "sonare_mastering_config_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("target_lufs", ctypes.c_float),
         ("ceiling_dbtp", ctypes.c_float),
         ("true_peak_oversample", ctypes.c_int32),
@@ -349,15 +352,17 @@ class SonareMidiEventPod(CStruct):
 
 
 class SonareTranscribeConfig(CStruct):
-    """Maps to SonareTranscribeConfig in sonare_c_transcribe.h (struct_version 4).
+    """Maps to SonareTranscribeConfig in sonare_c_transcribe.h.
 
-    Every numeric field spells its own default as 0, so a zero-filled struct
-    carrying ``struct_version`` is the defaults. A value outside a field's
-    domain is refused by the C ABI rather than replaced by the default.
+    Construction runs ``sonare_transcribe_config_init``, so a fresh struct is the
+    defaults. A value outside a field's domain is refused by the C ABI rather
+    than replaced by the default.
     """
 
+    _c_init_ = "sonare_transcribe_config_init"
+
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
+        ("struct_size", ctypes.c_uint32),
         ("polyphonic", ctypes.c_int32),
         ("reference_hz", ctypes.c_float),
         ("f0_min_hz", ctypes.c_float),
@@ -386,7 +391,6 @@ class SonareTranscribeResult(CStruct):
     """
 
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
         ("tuning_cents", ctypes.c_float),
         ("events", ctypes.POINTER(SonareMidiEventPod)),
         ("count", ctypes.c_size_t),

@@ -440,10 +440,8 @@ TEST_CASE("SidechainRouter validates configuration and sidechain buffers",
   REQUIRE_THROWS(SidechainRouter({-24.0f, 0.5f, 5.0f, 100.0f, 18.0f}));
   REQUIRE_THROWS(SidechainRouter({-24.0f, 4.0f, -1.0f, 100.0f, 18.0f}));
   REQUIRE_THROWS(SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, -1.0f}));
-  REQUIRE_THROWS(
-      SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, false, 90.0f, false, false, -1.0f}));
-  REQUIRE_NOTHROW(
-      SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, false, 0.0f, false, false, 0.0f}));
+  REQUIRE_THROWS(SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, 90.0f, false, false, -1.0f}));
+  REQUIRE_NOTHROW(SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, 0.0f, false, false, 0.0f}));
 
   SidechainRouter router;
   REQUIRE_THROWS(router.set_sidechain(nullptr, 1, 128));
@@ -460,7 +458,7 @@ TEST_CASE("SidechainRouter rejects non-finite configuration without changing a l
                &SidechainRouterConfig::range_db, &SidechainRouterConfig::lookahead_ms,
                &SidechainRouterConfig::sidechain_high_pass_hz);
   SidechainRouterConfig config;
-  config.sidechain_high_pass_enabled = true;
+  config.sidechain_high_pass_hz = 90.0f;
   SidechainRouter router(config);
   router.prepare(48000.0, 64);
   auto invalid = config;
@@ -518,8 +516,7 @@ TEST_CASE("SidechainRouter lookahead applies the current key's gain to the delay
           "[mastering][dynamics]") {
   // 2 ms at 1 kHz is two samples; a 1 ms attack makes the gain move over several.
   constexpr int kLookahead = 2;
-  const SidechainRouterConfig config{-18.0f, 8.0f,  1.0f,  100.0f, 18.0f,
-                                     false,  90.0f, false, false,  2.0f};
+  const SidechainRouterConfig config{-18.0f, 8.0f, 1.0f, 100.0f, 18.0f, 0.0f, false, false, 2.0f};
   SidechainRouterConfig no_lookahead = config;
   no_lookahead.lookahead_ms = 0.0f;
 
@@ -584,7 +581,7 @@ TEST_CASE("SidechainRouter treats empty sidechain as cleared", "[mastering][dyna
 }
 
 TEST_CASE("SidechainRouter supports HPF mono key and key listen", "[mastering][dynamics]") {
-  SidechainRouter listen({-30.0f, 4.0f, 0.0f, 20.0f, 18.0f, true, 120.0f, true, true});
+  SidechainRouter listen({-30.0f, 4.0f, 0.0f, 20.0f, 18.0f, 120.0f, true, true});
   listen.prepare(48000.0, 1024);
 
   std::vector<float> target(1024, 0.0f);
@@ -607,7 +604,6 @@ TEST_CASE("Compressor sidechain HPF attenuates lows in the detector", "[masterin
   config.attack_ms = 5.0f;
   config.release_ms = 50.0f;
   config.detector = DetectorMode::Peak;
-  config.sidechain_high_pass_enabled = true;
   config.sidechain_high_pass_hz = 1000.0f;
 
   Compressor low_comp(config);
@@ -982,7 +978,7 @@ TEST_CASE("SidechainRouter recovers poisoned HPF state in ducking and key listen
                               << ", listen " << scenario.key_listen) {
       CAPTURE(scenario.poison, scenario.mono_summing, scenario.key_listen);
       SidechainRouterConfig config;
-      config.sidechain_high_pass_enabled = true;
+      config.sidechain_high_pass_hz = 90.0f;
       config.attack_ms = 0.0f;
       config.release_ms = 0.0f;
       config.threshold_db = -30.0f;
@@ -1231,9 +1227,9 @@ TEST_CASE("Dynamics live parameters refuse exactly what the validator refuses",
                                       {2, &C::attack_ms, -1.0f, 0.0f},
                                       {3, &C::release_ms, -1.0f, 0.0f},
                                       {5, &C::knee_db, -1.0f, 0.0f},
-                                      {9, &C::sidechain_high_pass_hz, 0.0f, 0.5f},
-                                      {10, &C::pdr_time_ms, -1.0f, 0.0f},
-                                      {11, &C::pdr_release_scale, 0.5f, 1.0f}});
+                                      {8, &C::sidechain_high_pass_hz, -1.0f, 0.0f},
+                                      {9, &C::pdr_time_ms, -1.0f, 0.0f},
+                                      {10, &C::pdr_release_scale, 0.5f, 1.0f}});
   }
   SECTION("DeEsser") {
     using C = DeEsserConfig;

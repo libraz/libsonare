@@ -9,12 +9,14 @@ frame_offset = "startSample"
 preset = "config"
 bytes = "data"
 mel = "power"
+num_channels = "channels"
 
 [wasm]
 frame_offset = "startSample"
 preset = "config"
 bytes = "data"
 mel = "power"
+num_channels = "channels"
 
 # The librosa-mirror keywords, then the folded preset.
 [python]

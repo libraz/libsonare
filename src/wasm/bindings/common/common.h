@@ -131,6 +131,7 @@
 #include "util/peak.h"
 #include "util/types.h"
 #include "util/vector_normalize.h"
+#include "wasm/field_spelling.h"
 
 using namespace emscripten;
 using namespace sonare;
@@ -212,11 +213,12 @@ inline std::string cErrorMessage(SonareError err) {
   return detail != nullptr && detail[0] != '\0' ? detail : fallback;
 }
 
-/// @brief Rethrows the parameter refusal the last C-ABI call recorded, so the JS translation
-///        point renders it in request keys and classifies it by kind; returns when none was.
+/// @brief Rethrows the parameter refusal the last C-ABI call recorded, spelled under the refused
+///        entry's request keys, for the JS translation point to classify; returns when none was.
 inline void rethrowLastCRefusal() {
-  if (const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal()) {
-    throw *refusal;
+  if (std::optional<sonare::SonareParameterRefusal> shown =
+          sonare_field_spelling::wasm::SpelledLastRefusal()) {
+    throw *shown;
   }
 }
 
@@ -228,17 +230,11 @@ inline void rethrowLastCRefusal() {
 }
 
 /// @brief throwCodedCError for a call whose config struct's refusal subjects carry a
-///        "<c_root>." prefix the request keys do not: the prefix is stripped before the
-///        JS translation point spells them.
+///        "<c_root>." prefix the request keys do not: the prefix is stripped as they are spelled.
 [[noreturn]] inline void throwCodedCErrorFlattening(SonareError err, const char* c_root) {
-  if (const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal()) {
-    const std::string root = std::string(c_root) + ".";
-    throw refusal->respelled(
-        refusal->code(),
-        [&root](const std::string& subject) {
-          return subject.rfind(root, 0) == 0 ? subject.substr(root.size()) : subject;
-        },
-        false);
+  if (std::optional<sonare::SonareParameterRefusal> shown =
+          sonare_field_spelling::wasm::SpelledLastRefusal(c_root)) {
+    throw *shown;
   }
   throwCodedCError(err);
 }

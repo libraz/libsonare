@@ -165,18 +165,15 @@ def test_reference_window_default_matches_the_c_default() -> None:
     import inspect
 
     from libsonare._ffi_types_streaming import SonareBoundaryOptions
-    from libsonare._runtime import _get_lib
 
-    lib = _get_lib()
-    lib.sonare_boundary_options_default.restype = SonareBoundaryOptions
-    lib.sonare_boundary_options_default.argtypes = []
-    core = lib.sonare_boundary_options_default()
+    core = SonareBoundaryOptions()
     default = (
         inspect.signature(libsonare.detect_boundaries).parameters["reference_window_sec"].default
     )
     assert default == 60.0
     assert core.reference_window_sec == default
-    assert ctypes.sizeof(SonareBoundaryOptions) == 44
+    # The init writes the C sizeof, so the mirror's size is checked against the header's.
+    assert core.struct_size == ctypes.sizeof(SonareBoundaryOptions)
 
 
 @pytest.mark.parametrize("value", [-1.0, float("nan"), float("inf"), float("-inf")])

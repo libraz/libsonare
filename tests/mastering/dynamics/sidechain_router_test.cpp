@@ -25,7 +25,6 @@ SidechainRouterConfig ducking_config() {
   config.attack_ms = 0.0f;
   config.release_ms = 0.0f;
   config.range_db = 60.0f;
-  config.sidechain_high_pass_enabled = true;
   config.sidechain_high_pass_hz = 80.0f;
   return config;
 }
@@ -89,7 +88,7 @@ TEST_CASE("SidechainRouter sidechain HPF re-entry does not replay ordinary bypas
   process_mono(subject, warm);
   process_mono(control, warm_control);
   SidechainRouterConfig disabled = config;
-  disabled.sidechain_high_pass_enabled = false;
+  disabled.sidechain_high_pass_hz = 0.0f;
   subject.set_config(disabled);
 
   std::vector<float> gap(48000, 0.0f);
@@ -214,7 +213,7 @@ TEST_CASE("SidechainRouter a key shorter than the block behaves as a zero-padded
   const int idle_blocks = GENERATE(0, kIdleBlocks);
   const int mode = GENERATE(0, 1, 2, 3);
   CAPTURE(idle_blocks, mode);
-  if (mode == 1) config.sidechain_high_pass_enabled = false;
+  if (mode == 1) config.sidechain_high_pass_hz = 0.0f;
   if (mode == 2) config.key_listen = true;
   if (mode == 3) config.lookahead_ms = 2.0f;
 

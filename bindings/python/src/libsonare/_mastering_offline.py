@@ -24,7 +24,7 @@ from ._ffi import (
     SonareMasteringResult,
     SonareMasteringStereoResult,
 )
-from ._narrowing import _narrow_double, _resolve_zero_default
+from ._narrowing import _narrow_double
 from ._runtime import (
     _WITHOUT_MASTERING,
     _call_string,
@@ -89,10 +89,13 @@ def mastering(
     config = SonareMasteringConfig(
         target_lufs=target_lufs,
         ceiling_dbtp=ceiling_dbtp,
-        true_peak_oversample=_resolve_zero_default(true_peak_oversample, "true_peak_oversample"),
-        release_ms=_resolve_zero_default(release_ms, "release_ms"),
         apply_gain_at_input_rate=1 if apply_gain_at_input_rate else 0,
     )
+    # An omitted knob keeps the default sonare_mastering_config_init wrote.
+    if true_peak_oversample is not None:
+        config.true_peak_oversample = true_peak_oversample
+    if release_ms is not None:
+        config.release_ms = release_ms
     out = SonareMasteringResult()
     rc = lib.sonare_mastering_process(
         c_array,

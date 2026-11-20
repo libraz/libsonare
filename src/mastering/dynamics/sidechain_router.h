@@ -22,8 +22,8 @@ struct SidechainRouterConfig {
   float attack_ms = 5.0f;
   float release_ms = 100.0f;
   float range_db = 18.0f;
-  bool sidechain_high_pass_enabled = false;
-  float sidechain_high_pass_hz = 90.0f;
+  /// Detector high-pass corner in Hz; 0 passes everything, which is the same as off.
+  float sidechain_high_pass_hz = 0.0f;
   bool mono_summing = false;
   bool key_listen = false;
   float lookahead_ms = 0.0f;
