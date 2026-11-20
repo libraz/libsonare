@@ -25,6 +25,7 @@ from ._features_metering import (
     _oversample_factor,
     _spectrum_args,
 )
+from ._narrowing import _domain_float
 from ._runtime import (
     _channel_layout_value,
     _check,
@@ -1316,7 +1317,7 @@ class Audio:
         out = SonareClippingResult()
         rc = self._lib.sonare_audio_detect_clipping(
             handle,
-            c_threshold,
+            _domain_float(c_threshold, "threshold_db"),
             _to_c_size_t(c_min_region, "min_region_samples"),
             ctypes.byref(out),
         )

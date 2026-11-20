@@ -22,6 +22,7 @@ from ._ffi import (
     SonareWaveformPeakPyramidResult,
     SonareWaveformPeaksResult,
 )
+from ._narrowing import _domain_float, _narrow_float
 from ._runtime import (
     _C_INT_MAX,
     _SIZE_T_MAX,
@@ -72,7 +73,7 @@ def _oversample_factor(oversample_factor: int | None) -> int | float:
 def _clipping_args(threshold_db: float | None, min_region_samples: int | None) -> tuple[float, int]:
     """The clipping arguments, an omitted level as the C ABI's NaN and an omitted run as 1."""
     return (
-        math.nan if threshold_db is None else _to_c_float(threshold_db, "threshold_db"),
+        math.nan if threshold_db is None else _narrow_float(threshold_db, "threshold_db"),
         1 if min_region_samples is None else min_region_samples,
     )
 
@@ -450,7 +451,7 @@ def metering_detect_clipping(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        c_threshold,
+        _domain_float(c_threshold, "threshold_db"),
         _to_c_size_t(c_min_region, "min_region_samples"),
         ctypes.byref(out),
     )
