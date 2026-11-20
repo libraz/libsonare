@@ -651,8 +651,8 @@ int cmd_db_to_amplitude(const CliArgs& args, const Audio&) {
 
 int cmd_frame_signal(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  const int frame_length = args.get_int("frame-length", args.n_fft);
-  const int hop_length = args.get_int("hop-length", args.hop_length);
+  const int frame_length = args.get_int("frame-length", 0);
+  const int hop_length = args.get_int("hop-length", 0);
   auto frames = frame(values, frame_length, hop_length);
   if (args.json_output) {
     JsonBuilder()
@@ -694,8 +694,8 @@ int cmd_fix_frames(const CliArgs& args, const Audio&) {
 
 int cmd_peak_pick(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_int_values(args, peak_pick(values, args.get_int("pre-max", 1), args.get_int("post-max", 1),
-                                   args.get_int("pre-avg", 1), args.get_int("post-avg", 1),
+  print_int_values(args, peak_pick(values, args.get_int("pre-max", 0), args.get_int("post-max", 0),
+                                   args.get_int("pre-avg", 0), args.get_int("post-avg", 0),
                                    args.get_float("delta", 0.0f), args.get_int("wait", 0)));
   return 0;
 }

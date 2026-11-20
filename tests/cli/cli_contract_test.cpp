@@ -801,21 +801,52 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
   const auto reject = [&](std::initializer_list<const char*> words, bool requires_audio) {
     return validate_cli_arguments(parse(words), requires_audio);
   };
+  const auto parse_words = [](std::vector<std::string> storage) {
+    std::vector<char*> argv;
+    argv.reserve(storage.size());
+    for (auto& word : storage) argv.push_back(word.data());
+    return ArgParser::parse(static_cast<int>(argv.size()), argv.data());
+  };
 
   SECTION("a global option reaches the option map, so its value is used and checked") {
     // The parser used to write the dedicated field only. get_int() then missed
     // the value, fell back to the registry default, and `--hop-length 1`
     // silently framed at 512.
-    const CliArgs framed =
-        parse({"sonare-cli", "frame-signal", "--values", "1,2,3,4", "--hop-length", "1"});
+    const CliArgs framed = parse({"sonare-cli", "frame-signal", "--values", "1,2,3,4",
+                                  "--frame-length", "2", "--hop-length", "1"});
     REQUIRE(framed.has("hop-length"));
     REQUIRE(framed.hop_length == 1);
-    REQUIRE(framed.get_int("hop-length", framed.hop_length) == 1);
+    REQUIRE(framed.get_int("hop-length", 0) == 1);
     REQUIRE(validate_cli_arguments(framed, false).empty());
+  }
 
-    const CliArgs defaulted = parse({"sonare-cli", "frame-signal", "--values", "1,2,3,4"});
-    REQUIRE_FALSE(defaulted.has("hop-length"));
-    REQUIRE(defaulted.get_int("hop-length", defaulted.hop_length) == 512);
+  SECTION("an option the library takes without a default is required, never filled in") {
+    REQUIRE(
+        reject({"sonare-cli", "frame-signal", "--values", "1,2,3,4", "--frame-length", "2"}, false)
+            .message == "Missing required option '--hop-length'");
+    REQUIRE(
+        reject({"sonare-cli", "frame-signal", "--values", "1,2,3,4", "--hop-length", "1"}, false)
+            .message == "Missing required option '--frame-length'");
+    REQUIRE_THAT(reject({"sonare-cli", "frame-signal", "--values", "1,2,3,4", "--frame-length", "2",
+                         "--hop-length", "1", "--n-fft", "4"},
+                        false)
+                     .message,
+                 ContainsSubstring("Unknown option '--n-fft'"));
+    for (const char* omitted : {"pre-max", "post-max", "pre-avg", "post-avg", "delta", "wait"}) {
+      CAPTURE(omitted);
+      std::vector<std::string> words = {"sonare-cli", "peak-pick", "--values", "0,1,0"};
+      for (const char* option : {"pre-max", "post-max", "pre-avg", "post-avg", "delta", "wait"}) {
+        if (std::string(option) == omitted) continue;
+        words.push_back(std::string("--") + option);
+        words.push_back("1");
+      }
+      REQUIRE(validate_cli_arguments(parse_words(words), false).message ==
+              "Missing required option '--" + std::string(omitted) + "'");
+    }
+    REQUIRE(reject({"sonare-cli", "frames-to-samples"}, false).message ==
+            "Missing required option '--frames'");
+    REQUIRE(reject({"sonare-cli", "samples-to-frames"}, false).message ==
+            "Missing required option '--samples'");
   }
 
   SECTION("pitch domains are refused before dispatch") {
@@ -1781,6 +1812,8 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"vector-normalize", "--values 0.3,0.4", "threshold", "1"},
       {"frames-to-samples", "--frames 10", "n-fft", "2048"},
       {"samples-to-frames", "--samples 5000", "n-fft", "2048"},
+      {"frames-to-samples", "--frames 10", "hop-length", "256"},
+      {"samples-to-frames", "--samples 5000", "hop-length", "256"},
       {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "sample-rate", "44100"},
       {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "time-constant", "0.1"},
       {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "gain", "0.5"},
@@ -1907,6 +1940,8 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"onset-strength", p.tone_wav + " --json -q", "n-mels", "64"},
       {"fourier-tempogram", p.tone_wav + " --json -q", "hop-length", "256"},
       {"tempogram-ratio", p.tone_wav + " --json -q", "hop-length", "256"},
+      {"fourier-tempogram", p.tone_wav + " --json -q", "win-length", "192"},
+      {"tempogram-ratio", p.tone_wav + " --json -q", "win-length", "192"},
       {"tempogram", p.tone_wav + " --json -q", "n-fft", "1024"},
       {"tempogram", p.tone_wav + " --json -q", "hop-length", "256"},
       {"tempogram", p.tone_wav + " --json -q", "n-mels", "64"},
@@ -1928,6 +1963,14 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"rhythm", p.click_wav + " --json -q", "hop-length", "256"},
       {"boundaries", p.sections_wav + " --json -q", "n-fft", "1024"},
       {"boundaries", p.sections_wav + " --json -q", "hop-length", "256"},
+      {"boundaries", p.sections_wav + " --json -q", "threshold", "0.9"},
+      {"boundaries", p.sections_wav + " --json -q", "absolute-threshold", "0.5"},
+      {"boundaries", p.sections_wav + " --json -q", "kernel-size", "16"},
+      {"boundaries", p.sections_wav + " --json -q", "n-mfcc", "4"},
+      {"boundaries", p.sections_wav + " --no-mfcc --json -q", "n-chroma", "4"},
+      {"boundaries", p.sections_wav + " --json -q", "peak-distance", "20"},
+      // A 0.5 s window lets the weaker of the two boundaries clear --threshold 0.7 on its own.
+      {"boundaries", p.sections_wav + " --threshold 0.7 --json -q", "reference-window", "0.5"},
       {"hpss", p.tone_wav + " --harmonic-only" + to_out, "n-fft", "1024"},
       {"decompose-stems", p.short_tone_wav + to_out, "n-fft", "1024"},
       {"trim-silence", p.gapped_wav + to_out, "threshold-db", "-20"},
@@ -1948,6 +1991,7 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"mfcc-to-audio", p.short_tone_wav + to_out, "n-mels", "64"},
       {"mfcc-to-audio", p.short_tone_wav + to_out, "fmin-hz", "100"},
       {"mfcc-to-audio", p.short_tone_wav + to_out, "n-iter", "8"},
+      {"mfcc-to-audio", p.short_tone_wav + to_out, "n-mfcc", "13"},
 #ifdef SONARE_WITH_PITCH_EDITOR
       // A target three semitones up makes every correction setting audible; the scale
       // options act only in scale mode, where a root or mask off the tone puts it off-grid.

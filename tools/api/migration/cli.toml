@@ -978,6 +978,59 @@ test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reprodu
 
 [[entry]]
 kind = "flag"
+old = "frames-to-samples --frames"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) rather than converting frame 0"
+domain = "core"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI option domains are declared once and enforced before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "samples-to-frames --samples"
+frontend = "native"
+changed = "leaving it out is refused as a usage error (exit 2) rather than converting sample 0"
+domain = "core"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI option domains are declared once and enforced before dispatch"
+
+[[entry]]
+kind = "command"
+old = "frame-signal"
+frontend = "native"
+changed = "--frame-length and --hop-length are required, as the library takes no default for either; give --frame-length 2048 --hop-length 512 to keep the 1.x framing"
+domain = "core"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI option domains are declared once and enforced before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "frame-signal --n-fft"
+frontend = "native"
+removed = "give the frame length as --frame-length"
+domain = "core"
+rule = "library-owned-defaults"
+
+[[entry]]
+kind = "command"
+old = "peak-pick"
+frontend = "native"
+changed = "--pre-max, --post-max, --pre-avg, --post-avg, --delta and --wait are required, as the library takes no default for any of them; give --pre-max 1 --post-max 1 --pre-avg 1 --post-avg 1 --delta 0 --wait 0 to keep the 1.x result"
+domain = "core"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI option domains are declared once and enforced before dispatch"
+
+[[entry]]
+kind = "flag"
+old = "mfcc-to-audio --n-mfcc"
+frontend = "native"
+changed = "omitted, 20 coefficients are kept, the library's MFCC default, rather than 13; pass --n-mfcc 13 to keep the 1.x result"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
+
+[[entry]]
+kind = "flag"
 old = "melody --hop-length"
 frontend = "native"
 changed = "omitted, the library hop of 256 samples applies rather than 512; pass --hop-length 512 to keep 1.x output; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3), and the refusal states the upper bound the field holds (\"must be an integer in [N, 2147483647]\")"

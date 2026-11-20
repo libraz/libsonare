@@ -452,7 +452,7 @@ int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
   config.fmin = args.get_float("fmin-hz", config.fmin);
   config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
-  const int n_mfcc = args.get_int("n-mfcc", 13);
+  const int n_mfcc = args.get_int("n-mfcc", kMfccDefaultCount);
   const int n_iter = args.get_int("n-iter", sonare::constants::kDefaultGriffinLimIterations);
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
   std::vector<float> mfcc = mel.mfcc(n_mfcc);

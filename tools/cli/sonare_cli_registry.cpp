@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "analysis/boundary_detector.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/melody_analyzer.h"
 #include "analysis/music_analyzer.h"
@@ -15,6 +16,8 @@
 #include "core/channel_layout.h"
 #include "effects/normalize.h"
 #include "effects/silence.h"
+#include "feature/mel_spectrogram.h"
+#include "feature/rhythm.h"
 #include "util/constants.h"
 
 #ifdef SONARE_WITH_ARRANGEMENT
@@ -486,10 +489,6 @@ CliValidationError validate_project_bounce_channels(const CliArgs& args) {
 }
 #endif
 
-CliOptionSpec global_int(const char* name, int value) {
-  return int_value(name, value, false, true);
-}
-
 CliOptionSpec global_int(const char* name) { return int_value(name, false, true); }
 
 /// An option the handler leaves to the library when absent; @p library_value is what `--help`
@@ -691,15 +690,23 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // default and so are spelled as negations. Each size is refused at zero
     // because the detector has no behaviour there, and the C entry the other
     // surfaces reach refuses the same values with the same class.
+    const sonare::BoundaryConfig boundary_defaults;
     add_command(commands, "boundaries", true,
-                {with_domain(number_value("threshold", 0.3), at_least(0.0)),
-                 with_domain(number_value("absolute-threshold", 0.005), at_least(0.0)),
-                 with_domain(int_value("kernel-size", 64), greater_than(0.0)),
-                 with_domain(int_value("n-mfcc", 13), greater_than(0.0)),
-                 with_domain(int_value("n-chroma", 12), greater_than(0.0)),
-                 with_domain(number_value("peak-distance", 2.0), at_least(0.0)),
+                {library_default(with_domain(number_value("threshold"), at_least(0.0)),
+                                 boundary_defaults.threshold),
+                 library_default(with_domain(number_value("absolute-threshold"), at_least(0.0)),
+                                 boundary_defaults.absolute_threshold),
+                 library_default(with_domain(int_value("kernel-size"), greater_than(0.0)),
+                                 boundary_defaults.kernel_size),
+                 library_default(with_domain(int_value("n-mfcc"), greater_than(0.0)),
+                                 boundary_defaults.n_mfcc),
+                 library_default(with_domain(int_value("n-chroma"), greater_than(0.0)),
+                                 boundary_defaults.n_chroma),
+                 library_default(with_domain(number_value("peak-distance"), at_least(0.0)),
+                                 boundary_defaults.peak_distance),
                  // One-sided seconds the relative threshold is measured against; 0 disables it.
-                 with_domain(number_value("reference-window", 60.0), at_least(0.0)),
+                 library_default(with_domain(number_value("reference-window"), at_least(0.0)),
+                                 boundary_defaults.reference_window),
                  flag("no-mfcc"), flag("no-chroma"), library_default(global_int("n-fft"), "2048"),
                  library_default(global_int("hop-length"), "512")},
                 {}, validate_boundary_feature_streams);
@@ -1044,7 +1051,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  library_default(global_int("n-mels"), "128")});
     for (const char* path : {"fourier-tempogram", "tempogram-ratio"})
       add_command(commands, path, true,
-                  {int_value("win-length", 384), library_default(global_int("hop-length"), "512")});
+                  {library_default(int_value("win-length"), sonare::TempogramConfig{}.win_length),
+                   library_default(global_int("hop-length"), "512")});
     add_command(commands, "tempogram", true,
                 {library_default(global_int("n-fft"), "2048"),
                  library_default(global_int("hop-length"), "512"),
@@ -1080,7 +1088,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(number_value("fmax-hz", false, true), greater_than(0.0))});
     add_command(
         commands, "mfcc-to-audio", true,
-        {int_value("n-mfcc", 13),
+        {library_default(int_value("n-mfcc"), sonare::kMfccDefaultCount),
          library_default(int_value("n-iter"), sonare::constants::kDefaultGriffinLimIterations),
          required_output(), library_default(global_int("n-fft"), "2048"),
          library_default(global_int("hop-length"), "512"),
@@ -1166,11 +1174,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "phase", true, {path_value("reference")});
     // Without --n-fft the conversion applies no centring offset, as the library does.
     add_command(commands, "frames-to-samples", false,
-                {int_value("frames"), library_default(int_value("n-fft", false, true), "0"),
-                 global_int("hop-length", 512)});
+                {int_value("frames", true), library_default(int_value("n-fft", false, true), "0"),
+                 library_default(global_int("hop-length"), "512")});
     add_command(commands, "samples-to-frames", false,
-                {int_value("samples"), library_default(int_value("n-fft", false, true), "0"),
-                 global_int("hop-length", 512)});
+                {int_value("samples", true), library_default(int_value("n-fft", false, true), "0"),
+                 library_default(global_int("hop-length"), "512")});
     add_command(commands, "power-to-db", false,
                 {string_value("values"), library_default(number_value("ref"), "1.0"),
                  library_default(number_value("amin"), "1e-10"),
@@ -1184,8 +1192,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "db-to-amplitude", false,
                 {string_value("values"), library_default(number_value("ref"), "1.0")});
     add_command(commands, "frame-signal", false,
-                {string_value("values"), int_value("frame-length"), global_int("n-fft", 2048),
-                 global_int("hop-length", 512)});
+                {string_value("values"), int_value("frame-length", true),
+                 int_value("hop-length", true, true)});
     add_command(commands, "pad-center", false,
                 {string_value("values"), int_value("size"),
                  library_default(number_value("pad-value"), "0.0")});
@@ -1196,9 +1204,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {string_value("values"), library_default(int_value("x-min"), "0"),
                  library_default(int_value("x-max"), "-1"), flag("no-pad")});
     add_command(commands, "peak-pick", false,
-                {string_value("values"), int_value("pre-max", 1), int_value("post-max", 1),
-                 int_value("pre-avg", 1), int_value("post-avg", 1), number_value("delta", 0.0),
-                 int_value("wait", 0)});
+                {string_value("values"), int_value("pre-max", true), int_value("post-max", true),
+                 int_value("pre-avg", true), int_value("post-avg", true),
+                 number_value("delta", true), int_value("wait", true)});
     add_command(commands, "vector-normalize", false,
                 {string_value("values"),
                  // Indexes NormType (inf, L1, L2, power); an index past the end used to
