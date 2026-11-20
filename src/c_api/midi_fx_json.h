@@ -126,7 +126,8 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   namespace json = sonare::util::json;
   using namespace midi_fx_json_detail;
 
-  if (config_json == nullptr || chain == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (config_json == nullptr) return refuse_null("config_json");
+  if (chain == nullptr) return refuse_null("chain");
   const auto refuse = [](const std::string& message) {
     set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
