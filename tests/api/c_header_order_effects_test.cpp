@@ -46,13 +46,13 @@ TEST_CASE("effects entries refuse the input buffer before a NULL output", "[c_ap
   size_t out_length = 99;
   REQUIRE(sonare_harmonic(nullptr, kLength, kRate, &out, &out_length) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "harmonic: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
 
   REQUIRE(sonare_harmonic(nullptr, kLength, kRate, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "harmonic: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   REQUIRE(sonare_harmonic(samples.data(), kLength, kRate, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -71,7 +71,7 @@ TEST_CASE("effects entries refuse the input buffer before a NULL output", "[c_ap
   REQUIRE(sonare_hpss_with_residual(nullptr, kLength, kRate, 31, 31, &harmonic, &percussive,
                                     &residual, &length,
                                     &sample_rate) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "hpss_with_residual: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(harmonic == nullptr);
   CHECK(percussive == nullptr);
   CHECK(residual == nullptr);
@@ -80,7 +80,7 @@ TEST_CASE("effects entries refuse the input buffer before a NULL output", "[c_ap
 
   REQUIRE(sonare_hpss_with_residual(nullptr, kLength, kRate, 31, 31, nullptr, nullptr, nullptr,
                                     nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "hpss_with_residual: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   int* intervals_out = garbage_pointer<int>();
   size_t interval_count_out = 99;
@@ -129,14 +129,14 @@ TEST_CASE("stereo normalize refuses the left channel before a NULL result",
   std::memset(&result, 0xAB, sizeof(result));
   REQUIRE(sonare_normalize_stereo(nullptr, nullptr, kLength, kRate, -3.0f, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "normalize_stereo: left must be a non-empty buffer");
+  CHECK(last_message() == "left must be a non-empty buffer");
   CHECK(result.left == nullptr);
   CHECK(result.right == nullptr);
   CHECK(result.length == 0);
 
   REQUIRE(sonare_normalize_stereo(nullptr, nullptr, kLength, kRate, -3.0f, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "normalize_stereo: left must be a non-empty buffer");
+  CHECK(last_message() == "left must be a non-empty buffer");
 }
 
 #ifdef SONARE_WITH_VOICE_CHANGER
@@ -149,19 +149,19 @@ TEST_CASE("voice changer one-shots refuse the input buffer before a NULL output"
   size_t out_length = 99;
   REQUIRE(sonare_voice_change(nullptr, kLength, kRate, 0.0f, 1.0f, &out, &out_length) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "voice_change: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
 
   REQUIRE(sonare_voice_change(nullptr, kLength, kRate, 0.0f, 1.0f, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "voice_change: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   out = garbage_pointer<float>();
   out_length = 99;
   REQUIRE(sonare_voice_change_realtime(nullptr, kLength, kRate, nullptr, 3, &out, &out_length) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "voice_change_realtime: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
 

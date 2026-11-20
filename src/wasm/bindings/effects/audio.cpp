@@ -202,7 +202,7 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   const editing::pitch_editor::F0Track track =
       buildF0Track(sample_rate, hop_length, f0, has_voiced, voiced_vec, has_prob, prob_vec);
 
-  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
+  validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   editing::pitch_editor::PitchCorrector corrector;
   Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
@@ -289,7 +289,7 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   const editing::pitch_editor::F0Track track =
       buildF0Track(sample_rate, hop_length, f0, has_voiced, voiced_vec, has_prob, prob_vec);
 
-  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
+  validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   editing::pitch_editor::PitchCorrector corrector(config);
   Audio result = scale_mode ? corrector.correct_to_scale_timevarying(audio, track)

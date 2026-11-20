@@ -777,7 +777,7 @@ std::vector<std::string> stereo_processor_names() {
 MonoResult apply_named_processor(const std::string& name, const float* samples, std::size_t length,
                                  int sample_rate, const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
-  validate_offline_audio_input("apply_named_processor", "samples", samples, length, sample_rate);
+  validate_offline_audio_input("samples", samples, length, sample_rate);
   auto map = make_map(params);
   MonoResult result;
   result.samples.assign(samples, samples + length);
@@ -800,8 +800,8 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
                                           const float* right, std::size_t length, int sample_rate,
                                           const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
-  validate_offline_audio_input("apply_named_processor_stereo", "left", left, length, sample_rate);
-  validate_offline_audio_input("apply_named_processor_stereo", "right", right, length, sample_rate);
+  validate_offline_audio_input("left", left, length, sample_rate);
+  validate_offline_audio_input("right", right, length, sample_rate);
   auto map = make_map(params);
   StereoResult result;
   result.left.assign(left, left + length);
@@ -947,10 +947,8 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
                                       std::size_t reference_length, int sample_rate,
                                       int reference_sample_rate, const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
-  validate_offline_audio_input("apply_named_pair_processor", "source", source, source_length,
-                               sample_rate);
-  validate_offline_audio_input("apply_named_pair_processor", "reference", reference,
-                               reference_length, reference_sample_rate);
+  validate_offline_audio_input("source", source, source_length, sample_rate);
+  validate_offline_audio_input("reference", reference, reference_length, reference_sample_rate);
   auto map = make_map(params);
   auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
   auto reference_audio =
@@ -1013,14 +1011,12 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
   if (name != "match.abCrossfade") {
     throw SonareException(ErrorCode::NotSupported, "unsupported stereo pair processor: " + name);
   }
-  validate_offline_audio_input("apply_named_pair_processor_stereo", "source_left", source_left,
-                               source_length, sample_rate);
-  validate_offline_audio_input("apply_named_pair_processor_stereo", "source_right", source_right,
-                               source_length, sample_rate);
-  validate_offline_audio_input("apply_named_pair_processor_stereo", "reference_left",
-                               reference_left, reference_length, reference_sample_rate);
-  validate_offline_audio_input("apply_named_pair_processor_stereo", "reference_right",
-                               reference_right, reference_length, reference_sample_rate);
+  validate_offline_audio_input("source_left", source_left, source_length, sample_rate);
+  validate_offline_audio_input("source_right", source_right, source_length, sample_rate);
+  validate_offline_audio_input("reference_left", reference_left, reference_length,
+                               reference_sample_rate);
+  validate_offline_audio_input("reference_right", reference_right, reference_length,
+                               reference_sample_rate);
   const auto map = make_map(params);
   const float mix = f(map, "mix", 0.5f);
 
@@ -1063,9 +1059,8 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
                                int sample_rate, int reference_sample_rate,
                                const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
-  validate_offline_audio_input("analyze_named_pair", "source", source, source_length, sample_rate);
-  validate_offline_audio_input("analyze_named_pair", "reference", reference, reference_length,
-                               reference_sample_rate);
+  validate_offline_audio_input("source", source, source_length, sample_rate);
+  validate_offline_audio_input("reference", reference, reference_length, reference_sample_rate);
   auto map = make_map(params);
   auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
   auto reference_audio =
@@ -1140,8 +1135,8 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
                                  std::size_t length, int sample_rate,
                                  const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
-  validate_offline_audio_input("analyze_named_stereo", "left", left, length, sample_rate);
-  validate_offline_audio_input("analyze_named_stereo", "right", right, length, sample_rate);
+  validate_offline_audio_input("left", left, length, sample_rate);
+  validate_offline_audio_input("right", right, length, sample_rate);
   auto map = make_map(params);
   // See analyze_named_pair(): mono_compat_check reports +inf width for a fully
   // out-of-phase pair (zero mid energy), so the serializer has to be the one in

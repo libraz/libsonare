@@ -287,9 +287,8 @@ class EqualizerWrapper {
     // An omitted reference rate is the source's.
     const int reference_sample_rate = intProperty(options, "referenceSampleRate", sample_rate);
     const int max_bands = intProperty(options, "maxBands", 8);
-    validate_offline_audio_input(nullptr, "source", src.data(), src.size(), sample_rate);
-    validate_offline_audio_input(nullptr, "reference", ref.data(), ref.size(),
-                                 reference_sample_rate);
+    validate_offline_audio_input("source", src.data(), src.size(), sample_rate);
+    validate_offline_audio_input("reference", ref.data(), ref.size(), reference_sample_rate);
     if (max_bands <= 0) {
       throw WasmRangeError("maxBands must be an integer in [1, 2147483647]");
     }
@@ -308,7 +307,7 @@ class EqualizerWrapper {
   }
 
   void validateSidechainBuffer(const char* name, const std::vector<float>& samples) const {
-    validate_offline_audio_input(nullptr, name, samples.data(), samples.size(),
+    validate_offline_audio_input(name, samples.data(), samples.size(),
                                  static_cast<int>(std::lround(sample_rate_)));
   }
 

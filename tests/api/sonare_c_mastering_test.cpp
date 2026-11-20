@@ -519,7 +519,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                              nullptr, 0, &mono) == SONARE_ERROR_INVALID_PARAMETER);
     const std::string message = sonare_last_error_message();
     CHECK(message.find("width") == std::string::npos);
-    CHECK_THAT(message, Catch::Matchers::EndsWith(": samples must be a non-empty buffer"));
+    CHECK(message == "samples must be a non-empty buffer");
   }
 
   SECTION("applies pair processors and analyses") {

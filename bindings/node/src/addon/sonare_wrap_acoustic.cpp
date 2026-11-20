@@ -64,7 +64,7 @@ void ValidateRirShapeAndTiming(const sonare::acoustic::RirSynthConfig& cfg) {
 // Refuses a buffer under the shared offline-input policy, as the C ABI and WASM entries do.
 bool ValidateAcousticInput(const Napi::Env& env, const char* name, const float* data, size_t length,
                            int sr) {
-  const std::string problem = sonare::offline_audio_input_problem(nullptr, name, data, length, sr);
+  const std::string problem = sonare::offline_audio_input_problem(name, data, length, sr);
   if (!problem.empty()) {
     Napi::RangeError::New(env, problem).ThrowAsJavaScriptException();
     return false;

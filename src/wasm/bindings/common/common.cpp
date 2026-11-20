@@ -195,7 +195,7 @@ std::vector<float> float32ArrayToVector(val arr) {
 }
 
 static Audio validatedAudioFromVector(const char* name, std::vector<float> data, int sample_rate) {
-  validate_offline_audio_input(nullptr, name, data.data(), data.size(), sample_rate);
+  validate_offline_audio_input(name, data.data(), data.size(), sample_rate);
   return Audio::from_vector(std::move(data), sample_rate);
 }
 
@@ -274,14 +274,14 @@ Audio loadValidatedAudioWindow(const char* name, val samples, int sample_rate,
   const std::size_t length = wasmFloat32ArrayLength(samples);
   // The extent rules are asked about the whole buffer, as they are on the C ABI;
   // only the finiteness scan -- and the copy that feeds it -- narrows.
-  validate_offline_audio_extent(nullptr, name, length, sample_rate);
+  validate_offline_audio_extent(name, length, sample_rate);
   const std::size_t begin = std::min(scan_offset, length);
   const std::size_t count = std::min(scan_count, length - begin);
   std::vector<float> window = float32ArrayWindowToVector(samples, begin, count);
   // An offset at or past the end leaves no sample to read, which the core
   // answers with a zero-padded frame rather than a refusal.
   if (count != 0) {
-    validate_offline_audio_samples(nullptr, name, window.data(), count, begin);
+    validate_offline_audio_samples(name, window.data(), count, begin);
   }
   return Audio::from_vector(std::move(window), sample_rate);
 }
@@ -292,7 +292,7 @@ std::vector<float> loadValidatedInterleaved(const char* name, val samples, int c
     throw WasmRangeError("channels must be an integer in [1, 2147483647]");
   }
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(nullptr, name, data.data(), data.size(), sample_rate);
+  validate_offline_audio_input(name, data.data(), data.size(), sample_rate);
   if (data.size() % static_cast<size_t>(channels) != 0) {
     throw WasmRangeError("interleaved sample count must be a whole number of frames");
   }

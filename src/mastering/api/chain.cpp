@@ -440,8 +440,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   // Centralized offline-input validation so every surface (C ABI, Node, WASM,
   // Python) rejects empty / out-of-range-rate / non-finite input identically.
   // The realtime block path (process_block) intentionally does not funnel here.
-  validate_offline_audio_input("MasteringChain::process_mono", "samples", samples, length,
-                               sample_rate);
+  validate_offline_audio_input("samples", samples, length, sample_rate);
   validate_chain_config_for_rate(config_, sample_rate);
 
   MonoChainResult result;
@@ -682,10 +681,8 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
                                                                      int sample_rate,
                                                                      bool check_cancel) {
   // Centralized offline-input validation for both channels (see process_mono).
-  validate_offline_audio_input("MasteringChain::process_stereo", "left_in", left_in, length,
-                               sample_rate);
-  validate_offline_audio_input("MasteringChain::process_stereo", "right_in", right_in, length,
-                               sample_rate);
+  validate_offline_audio_input("left_in", left_in, length, sample_rate);
+  validate_offline_audio_input("right_in", right_in, length, sample_rate);
   validate_chain_config_for_rate(config_, sample_rate);
 
   StereoChainResult result;

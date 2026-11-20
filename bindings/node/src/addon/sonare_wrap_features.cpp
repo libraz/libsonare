@@ -34,7 +34,7 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
@@ -69,7 +69,7 @@ Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
@@ -113,7 +113,7 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
   if (!OptionalBoolArg(env, info, 7, "htk", false, &htk)) return env.Undefined();
   sonare::validate_mel_bounds(fmin, fmax);
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::MelConfig config;
   config.n_fft = args.frame_length;
@@ -176,7 +176,7 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 9, "lifter", 0.0f, &lifter)) return env.Undefined();
   sonare::validate_mel_bounds(fmin, fmax);
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::MelConfig config;
   config.n_fft = args.frame_length;
@@ -245,7 +245,7 @@ Napi::Value SonareWrap::Piptrack(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 5, "fmax", 4000.0f, &fmax)) return env.Undefined();
   float threshold{};
   if (!OptionalFloatArg(env, info, 6, "threshold", 0.1f, &threshold)) return env.Undefined();
-  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(),
+  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(),
                                        args.sample_rate);
   const sonare::PiptrackResult result = sonare::piptrack(
       sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), args.sample_rate),
@@ -272,7 +272,7 @@ Napi::Value SonareWrap::ReassignedSpectrogram(const Napi::CallbackInfo& info) {
   if (!OptionalBoolArg(env, info, 5, "fillNan", false, &fill_nan)) {
     return env.Undefined();
   }
-  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(),
+  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(),
                                        args.sample_rate);
   if (!std::isfinite(ref_power) || ref_power < 0.0f) {
     Napi::RangeError::New(env, "refPower must be finite and at least 0")
@@ -315,7 +315,7 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::ChromaConfig config;
   config.n_fft = args.frame_length;
@@ -441,7 +441,7 @@ Napi::Value SonareWrap::SpectralCentroid(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
@@ -470,7 +470,7 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   float p{};
   if (!RequiredFloatArg(env, info, 4, "p", &p)) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
@@ -499,7 +499,7 @@ Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
   float roll_percent{};
   if (!RequiredFloatArg(env, info, 4, "rollPercent", &roll_percent)) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
@@ -526,7 +526,7 @@ Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
@@ -548,7 +548,7 @@ Napi::Value SonareWrap::SpectralFlux(const Napi::CallbackInfo& info) {
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
   int lag{};
   if (!RequiredIntArg(env, info, 4, "lag", &lag)) return env.Undefined();
-  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(),
+  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(),
                                        args.sample_rate);
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
@@ -576,7 +576,7 @@ Napi::Value SonareWrap::ZeroCrossingRate(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args, "frameLength")) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   std::vector<float> zcr = sonare::zero_crossing_rate(audio, args.frame_length, args.hop_length);
 
@@ -598,7 +598,7 @@ Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args, "frameLength")) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   std::vector<float> rms = sonare::rms_energy(audio, args.frame_length, args.hop_length);
 
@@ -632,7 +632,7 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
 
   sonare::PitchResult result = sonare::yin_track(audio, config);
@@ -680,7 +680,7 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  sonare::validate_offline_audio_input(nullptr, "samples", data, length, args.sample_rate);
+  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
 
   sonare::PitchResult result = sonare::pyin(audio, config);

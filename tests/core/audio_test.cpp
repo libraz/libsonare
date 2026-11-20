@@ -10,6 +10,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/audio_io.h"
@@ -196,7 +197,7 @@ TEST_CASE("Audio decoded from memory obeys the offline-analysis policy", "[audio
     // The buffer entry point refuses the same samples, which is the agreement
     // that was missing: one rejected, the other returned a usable handle.
     REQUIRE_THROWS_AS(
-        validate_offline_audio_input("decode", "samples", poisoned.data(), poisoned.size(), 22050),
+        validate_offline_audio_input("samples", poisoned.data(), poisoned.size(), 22050),
         SonareException);
   }
 
@@ -353,7 +354,7 @@ TEST_CASE("Audio from_file_channel keeps the channels apart", "[audio]") {
 TEST_CASE("offline_audio_input_problem reports what validate_offline_audio_input throws",
           "[audio][offline_audio_input_problem]") {
   const std::vector<float> valid(64, 0.25f);
-  REQUIRE(offline_audio_input_problem("fn", "samples", valid.data(), valid.size(), 22050).empty());
+  REQUIRE(offline_audio_input_problem("samples", valid.data(), valid.size(), 22050).empty());
 
   std::vector<float> nan_buffer = valid;
   nan_buffer[10] = std::numeric_limits<float>::quiet_NaN();
@@ -373,11 +374,11 @@ TEST_CASE("offline_audio_input_problem reports what validate_offline_audio_input
                         {inf_buffer.data(), inf_buffer.size(), 22050}};
   for (const Case& c : cases) {
     const std::string problem =
-        offline_audio_input_problem("fn", "samples", c.samples, c.length, c.sample_rate);
+        offline_audio_input_problem("samples", c.samples, c.length, c.sample_rate);
     REQUIRE_FALSE(problem.empty());
     std::string thrown;
     try {
-      validate_offline_audio_input("fn", "samples", c.samples, c.length, c.sample_rate);
+      validate_offline_audio_input("samples", c.samples, c.length, c.sample_rate);
     } catch (const SonareException& e) {
       thrown = e.what();
     }
@@ -385,51 +386,42 @@ TEST_CASE("offline_audio_input_problem reports what validate_offline_audio_input
   }
 }
 
-TEST_CASE("the offline-input validators name the function, the buffer and the sample index",
+TEST_CASE("the offline-input validators refuse by subject with the shared predicate",
           "[audio][offline_audio_input_problem]") {
   std::vector<float> samples(64, 0.25f);
   samples[17] = std::numeric_limits<float>::quiet_NaN();
-  const auto message = [](auto&& validate) {
+  const auto refusal = [](auto&& validate) -> std::pair<std::string, std::string> {
     try {
       validate();
-    } catch (const SonareException& e) {
-      return std::string(e.what());
+    } catch (const SonareParameterRefusal& e) {
+      return {e.subject(), e.what()};
     }
-    return std::string();
+    return {};
   };
-  CHECK(message([&] {
-          validate_offline_audio_input("detect_bpm", "samples", samples.data(), samples.size(),
-                                       22050);
-        }) == "detect_bpm: samples contains a non-finite sample at index 17");
-  CHECK(message([&] {
-          validate_offline_audio_window("spectrum_frame", "samples", samples.data(), samples.size(),
-                                        22050, 16, 8);
-        }) == "spectrum_frame: samples contains a non-finite sample at index 17");
+  using Refusal = std::pair<std::string, std::string>;
+  CHECK(refusal([&] {
+          validate_offline_audio_input("samples", samples.data(), samples.size(), 22050);
+        }) == Refusal{"samples", "samples contains a non-finite sample at index 17"});
+  CHECK(refusal([&] {
+          validate_offline_audio_window("samples", samples.data(), samples.size(), 22050, 16, 8);
+        }) == Refusal{"samples", "samples contains a non-finite sample at index 17"});
   // A scanned copy reports the index in the caller's buffer, not in the copy.
-  CHECK(message([&] {
-          validate_offline_audio_samples("spectrum_frame", "samples", samples.data() + 16, 8, 16);
-        }) == "spectrum_frame: samples contains a non-finite sample at index 17");
-  CHECK(message([&] {
-          validate_offline_audio_input("detect_bpm", "samples", nullptr, 0, 22050);
-        }) == "detect_bpm: samples must be a non-empty buffer");
-  CHECK(offline_audio_input_problem("detect_bpm", "left", samples.data(), samples.size(), 1) ==
-        "detect_bpm: sample_rate is out of the supported range");
+  CHECK(refusal([&] { validate_offline_audio_samples("samples", samples.data() + 16, 8, 16); }) ==
+        Refusal{"samples", "samples contains a non-finite sample at index 17"});
+  CHECK(refusal([&] { validate_offline_audio_input("samples", nullptr, 0, 22050); }) ==
+        Refusal{"samples", "samples must be a non-empty buffer"});
+  CHECK(refusal([&] { validate_offline_audio_extent("left", 64, 1); }) ==
+        Refusal{"sample_rate", "sample_rate must be an integer in [8000, 384000]"});
 }
 
-TEST_CASE("a null function leaves the offline-input refusal without a subject",
+TEST_CASE("offline_audio_input_problem reports the refusal text instead of throwing",
           "[audio][offline_audio_input_problem]") {
   std::vector<float> samples(64, 0.25f);
-  CHECK(offline_audio_input_problem(nullptr, "samples", samples.data(), samples.size(), 1) ==
-        "sample_rate is out of the supported range");
-  CHECK(offline_audio_input_problem(nullptr, "samples", nullptr, 0, 22050) ==
+  CHECK(offline_audio_input_problem("samples", samples.data(), samples.size(), 1) ==
+        "sample_rate must be an integer in [8000, 384000]");
+  CHECK(offline_audio_input_problem("samples", nullptr, 0, 22050) ==
         "samples must be a non-empty buffer");
   samples[17] = std::numeric_limits<float>::infinity();
-  CHECK(offline_audio_input_problem(nullptr, "samples", samples.data(), samples.size(), 22050) ==
+  CHECK(offline_audio_input_problem("samples", samples.data(), samples.size(), 22050) ==
         "samples contains a non-finite sample at index 17");
-  try {
-    validate_offline_audio_window(nullptr, "samples", samples.data(), samples.size(), 22050, 16, 8);
-    FAIL("a non-finite sample in the window was accepted");
-  } catch (const SonareException& e) {
-    CHECK(std::string(e.what()) == "samples contains a non-finite sample at index 17");
-  }
 }

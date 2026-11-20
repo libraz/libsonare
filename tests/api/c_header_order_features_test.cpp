@@ -111,7 +111,7 @@ TEST_CASE("spectral and pitch entries name the earlier parameter first", "[c_api
   SECTION("spectral_centroid names samples before out") {
     REQUIRE(sonare_spectral_centroid(nullptr, 0, 22050, 2048, 512, nullptr, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_message() == "spectral_centroid: samples must be a non-empty buffer");
+    CHECK(last_message() == "samples must be a non-empty buffer");
 
     float* out = garbage_pointer<float>();
     size_t out_count = 7;
@@ -141,7 +141,7 @@ TEST_CASE("spectral and pitch entries name the earlier parameter first", "[c_api
 TEST_CASE("CQT entries name the audio buffer before out", "[c_api][header_order]") {
   REQUIRE(sonare_cqt(nullptr, 0, 22050, 512, 32.7f, 84, 12, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "cqt: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   SonareCqtResult result;
   result.n_bins = 5;
@@ -157,14 +157,14 @@ TEST_CASE("CQT entries name the audio buffer before out", "[c_api][header_order]
 
   REQUIRE(sonare_vqt(nullptr, 0, 22050, 512, 32.7f, 84, 12, 0.0f, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "vqt: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 }
 
 TEST_CASE("quick entries name the audio buffer before out", "[c_api][header_order]") {
   SECTION("detect_bpm") {
     REQUIRE(sonare_detect_bpm(nullptr, 0, 22050, 60.0f, 200.0f, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_message() == "detect_bpm: samples must be a non-empty buffer");
+    CHECK(last_message() == "samples must be a non-empty buffer");
 
     float bpm = 3.0f;
     REQUIRE(sonare_detect_bpm(nullptr, 0, 22050, 60.0f, 200.0f, &bpm) ==
@@ -175,7 +175,7 @@ TEST_CASE("quick entries name the audio buffer before out", "[c_api][header_orde
   SECTION("detect_beats") {
     REQUIRE(sonare_detect_beats(nullptr, 0, 22050, 60.0f, 200.0f, nullptr, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_message() == "detect_beats: samples must be a non-empty buffer");
+    CHECK(last_message() == "samples must be a non-empty buffer");
 
     float* times = garbage_pointer<float>();
     size_t count = 7;
@@ -187,7 +187,7 @@ TEST_CASE("quick entries name the audio buffer before out", "[c_api][header_orde
 
   SECTION("analyze") {
     REQUIRE(sonare_analyze(nullptr, 0, 22050, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_message() == "analyze: samples must be a non-empty buffer");
+    CHECK(last_message() == "samples must be a non-empty buffer");
   }
 }
 
@@ -217,7 +217,7 @@ TEST_CASE("transcribe entries name the audio buffer before out", "[c_api][header
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   REQUIRE(sonare_transcribe(nullptr, 0, 22050, 120.0f, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "transcribe: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   SonareTranscribeResult result;
   result.events = garbage_pointer<SonareMidiEventPod>();

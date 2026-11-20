@@ -416,7 +416,7 @@ Napi::Value SonareWrap::HpssWithResidual(const Napi::CallbackInfo& info) {
   HpssArguments args;
   if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
 
-  sonare::validate_offline_audio_input(nullptr, "samples", arr.Data(), arr.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", arr.Data(), arr.ElementLength(), sr);
   sonare::Audio audio = sonare::Audio::from_buffer(arr.Data(), arr.ElementLength(), sr);
   sonare::HpssConfig config;
   config.kernel_size_harmonic = args.kernel_harmonic;

@@ -188,7 +188,7 @@ ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate
   }
   if (samples == nullptr || size == 0) return {};
   // Keep null/empty compatibility; reject non-finite values before scan_clipped_runs.
-  validate_offline_audio_input("detect_clipping", "samples", samples, size, sample_rate);
+  validate_offline_audio_input("samples", samples, size, sample_rate);
 
   const std::vector<float> buffer(samples, samples + size);
   return to_detection(buffer, scan_clipped_runs(buffer, validated->clip_threshold));
@@ -201,7 +201,7 @@ Audio declip(const Audio& audio, const DeclipConfig& config) {
 Audio declip(const Audio& audio, const DeclipConfig& config, DeclipReport* report) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   const auto validated = Validated<DeclipConfig>::make(config);
-  validate_offline_audio_input("declip", "audio", audio.data(), audio.size(), audio.sample_rate());
+  validate_offline_audio_input("audio", audio.data(), audio.size(), audio.sample_rate());
 
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   const std::vector<ClipRun> runs = scan_clipped_runs(samples, validated->clip_threshold);
@@ -244,8 +244,8 @@ std::vector<DeclipReport> declip_linked(const Audio* const* channels, size_t cha
   const int sample_rate = channels[0]->sample_rate();
   for (size_t c = 0; c < channel_count; ++c) {
     const std::string name = "channels[" + std::to_string(c) + "]";
-    validate_offline_audio_input("declip_linked", name.c_str(), channels[c]->data(),
-                                 channels[c]->size(), sample_rate);
+    validate_offline_audio_input(name.c_str(), channels[c]->data(), channels[c]->size(),
+                                 sample_rate);
   }
 
   std::vector<std::vector<float>> samples;

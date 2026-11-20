@@ -31,7 +31,7 @@ TEST_CASE("the interleaved LUFS entries name themselves and the refused argument
   stereo[7] = std::numeric_limits<float>::quiet_NaN();
   CHECK(sonare_lufs_interleaved(stereo.data(), 4800, 2, 48000, &result) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("lufs_interleaved: samples"));
+  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("samples "));
 
   stereo[7] = 0.1f;
   float* momentary = nullptr;
@@ -47,7 +47,7 @@ TEST_CASE("the interleaved LUFS entries name themselves and the refused argument
   CHECK(sonare_lufs_series_interleaved(stereo.data(), 4800, 2, 48000, &momentary, &momentary_length,
                                        &short_term,
                                        &short_term_length) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("lufs_series_interleaved: samples"));
+  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("samples "));
 }
 
 TEST_CASE("the true-peak entries refuse an unsupported oversample factor by its parameter name",
@@ -83,13 +83,13 @@ TEST_CASE("take alignment names the buffer it refuses", "[c_api][project]") {
   CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
                                           take.size(), 22050, nullptr, &anchors, &count,
                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("align_take_to_reference_ex: take"));
+  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("take "));
 
   reference[5] = std::numeric_limits<float>::quiet_NaN();
   CHECK(sonare_align_take_to_reference_ex(reference.data(), reference.size(), 22050, take.data(),
                                           take.size(), 22050, nullptr, &anchors, &count,
                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("align_take_to_reference_ex: reference"));
+  CHECK_THAT(last_message(), Catch::Matchers::StartsWith("reference "));
 
   reference[5] = 0.0f;
   take[100] = 0.0f;

@@ -47,19 +47,19 @@ TEST_CASE("mastering apply entries refuse in header order", "[c_api][header_orde
   std::memset(&result, 0xAB, sizeof(result));
   REQUIRE(sonare_mastering_apply_processor("gain", nullptr, kLength, kRate, nullptr, 0, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_apply_processor: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(result.samples == nullptr);
   CHECK(result.length == 0);
 
   REQUIRE(sonare_mastering_apply_processor("gain", nullptr, kLength, kRate, nullptr, 0, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_apply_processor: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   char* json = garbage_pointer<char>();
   REQUIRE(sonare_mastering_analyze_pair_ex("loudness", nullptr, kLength, samples.data(), kLength,
                                            kRate, kRate, nullptr, 0,
                                            &json) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_analyze_pair_ex: source must be a non-empty buffer");
+  CHECK(last_message() == "source must be a non-empty buffer");
   CHECK(json == nullptr);
 
   REQUIRE(sonare_mastering_analyze_pair_ex("loudness", samples.data(), kLength, samples.data(),
@@ -74,7 +74,7 @@ TEST_CASE("mastering apply entries refuse in header order", "[c_api][header_orde
   REQUIRE(sonare_mastering_ab_match_loudness(nullptr, kLength, samples.data(), kLength, kRate,
                                              kRate, &out, &out_length,
                                              &match) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_ab_match_loudness: source must be a non-empty buffer");
+  CHECK(last_message() == "source must be a non-empty buffer");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
   CHECK(match.applied_gain_db == 0.0f);
@@ -105,14 +105,14 @@ TEST_CASE("master_audio default-chain entries refuse in header order", "[c_api][
   std::memset(&result, 0xAB, sizeof(result));
   REQUIRE(sonare_master_audio(nullptr, nullptr, kLength, kRate, nullptr, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "master_audio: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(result.samples == nullptr);
   CHECK(result.length == 0);
   CHECK(result.stages == nullptr);
 
   REQUIRE(sonare_master_audio(nullptr, nullptr, kLength, kRate, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "master_audio: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   REQUIRE(sonare_master_audio(nullptr, samples.data(), kLength, kRate, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -122,7 +122,7 @@ TEST_CASE("master_audio default-chain entries refuse in header order", "[c_api][
   std::memset(&stereo, 0xAB, sizeof(stereo));
   REQUIRE(sonare_master_audio_stereo(nullptr, samples.data(), nullptr, kLength, kRate, nullptr,
                                      &stereo) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "master_audio_stereo: right must be a non-empty buffer");
+  CHECK(last_message() == "right must be a non-empty buffer");
   CHECK(stereo.left == nullptr);
   CHECK(stereo.right == nullptr);
   CHECK(stereo.length == 0);
@@ -154,7 +154,7 @@ TEST_CASE("mastering eq entries refuse in header order", "[c_api][header_order]"
   CHECK(last_message() == "band_json must not be NULL");
   REQUIRE(sonare_eq_match_ex(eq, nullptr, kLength, kRate, samples.data(), kLength, kRate, 0) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "eq_match_ex: source must be a non-empty buffer");
+  CHECK(last_message() == "source must be a non-empty buffer");
   sonare_eq_destroy(eq);
 }
 
@@ -165,13 +165,13 @@ TEST_CASE("mastering preset entries refuse in header order", "[c_api][header_ord
   std::memset(&result, 0xAB, sizeof(result));
   REQUIRE(sonare_master_audio("streaming", nullptr, kLength, kRate, nullptr, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "master_audio: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(result.samples == nullptr);
   CHECK(result.length == 0);
 
   REQUIRE(sonare_master_audio("streaming", nullptr, kLength, kRate, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "master_audio: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   REQUIRE(sonare_master_audio("streaming", samples.data(), kLength, kRate, "{", &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -193,17 +193,17 @@ TEST_CASE("mastering repair entries refuse in header order", "[c_api][header_ord
   std::memset(&result, 0xAB, sizeof(result));
   REQUIRE(sonare_mastering_repair_declick(nullptr, kLength, kRate, nullptr, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_repair_declick: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(result.samples == nullptr);
   CHECK(result.length == 0);
 
   REQUIRE(sonare_mastering_repair_declick(nullptr, kLength, kRate, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_repair_declick: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   REQUIRE(sonare_mastering_repair_detect_clicks(nullptr, kLength, kRate, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_repair_detect_clicks: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   SonareDereverbReport report;
   std::memset(&report, 0xAB, sizeof(report));
@@ -224,12 +224,12 @@ TEST_CASE("mastering streaming entries refuse in header order", "[c_api][header_
   char* json = garbage_pointer<char>();
   REQUIRE(sonare_mastering_assistant_suggest(nullptr, kLength, kRate, nullptr, 0, &json) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_assistant_suggest: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(json == nullptr);
 
   REQUIRE(sonare_mastering_assistant_suggest(nullptr, kLength, kRate, nullptr, 0, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_assistant_suggest: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   SonareStreamingMasteringChain* handle = garbage_pointer<SonareStreamingMasteringChain>();
   REQUIRE(sonare_streaming_mastering_chain_create_ex("[]", 0.0f, 0.0f, &handle) ==
@@ -258,14 +258,14 @@ TEST_CASE("mastering dynamics entries refuse in header order", "[c_api][header_o
   int latency = 77;
   REQUIRE(sonare_mastering_dynamics_compressor(nullptr, kLength, kRate, nullptr, &out, &out_length,
                                                &latency) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_dynamics_compressor: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
   CHECK(out == nullptr);
   CHECK(out_length == 0);
   CHECK(latency == 0);
 
   REQUIRE(sonare_mastering_dynamics_gate(nullptr, kLength, kRate, nullptr, nullptr, nullptr,
                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "mastering_dynamics_gate: samples must be a non-empty buffer");
+  CHECK(last_message() == "samples must be a non-empty buffer");
 
   out = garbage_pointer<float>();
   latency = 77;

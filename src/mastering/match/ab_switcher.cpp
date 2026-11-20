@@ -30,7 +30,7 @@ void validate_pair(const Audio& a, const Audio& b) {
   }
 }
 
-void validate_stereo_pair(const char* fn, const StereoAudioPair& pair, const char* role) {
+void validate_stereo_pair(const StereoAudioPair& pair, const char* role) {
   if (pair.left.empty() || pair.right.empty()) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(role) + " stereo channels must not be empty");
@@ -45,9 +45,9 @@ void validate_stereo_pair(const char* fn, const StereoAudioPair& pair, const cha
   }
   const std::string left_name = std::string(role) + ".left";
   const std::string right_name = std::string(role) + ".right";
-  validate_offline_audio_input(fn, left_name.c_str(), pair.left.data(), pair.left.size(),
+  validate_offline_audio_input(left_name.c_str(), pair.left.data(), pair.left.size(),
                                pair.left.sample_rate());
-  validate_offline_audio_input(fn, right_name.c_str(), pair.right.data(), pair.right.size(),
+  validate_offline_audio_input(right_name.c_str(), pair.right.data(), pair.right.size(),
                                pair.right.sample_rate());
 }
 
@@ -88,8 +88,8 @@ Audio ab_crossfade(const Audio& a, const Audio& b, float mix) {
 }
 
 StereoAudioPair ab_crossfade_stereo(const StereoAudioPair& a, const StereoAudioPair& b, float mix) {
-  validate_stereo_pair("ab_crossfade_stereo", a, "a");
-  validate_stereo_pair("ab_crossfade_stereo", b, "b");
+  validate_stereo_pair(a, "a");
+  validate_stereo_pair(b, "b");
   if (a.left.sample_rate() != b.left.sample_rate()) {
     throw SonareException(ErrorCode::InvalidParameter, "stereo sample rates must match");
   }
@@ -133,8 +133,8 @@ LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b) {
 
 StereoLoudnessMatchedPair ab_match_loudness_stereo(const StereoAudioPair& a,
                                                    const StereoAudioPair& b) {
-  validate_stereo_pair("ab_match_loudness_stereo", a, "reference");
-  validate_stereo_pair("ab_match_loudness_stereo", b, "source");
+  validate_stereo_pair(a, "reference");
+  validate_stereo_pair(b, "source");
 
   const int sample_rate = b.left.sample_rate();
   const StereoAudioPair reference{resample(a.left, sample_rate), resample(a.right, sample_rate)};

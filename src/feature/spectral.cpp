@@ -589,7 +589,7 @@ std::vector<int> zero_crossings(const float* y, size_t n, float threshold, bool 
   // Finite, not merely non-negative: an infinite threshold zeroes every sample under
   // the sign test, and ref_magnitude scales it to NaN on silence, inverting that.
   util::check::at_least(threshold, 0.0, "threshold");
-  validate_offline_audio_samples(nullptr, "y", y, n, 0);
+  validate_offline_audio_samples("y", y, n, 0);
 
   std::vector<int> indices;
   if (n == 0) return indices;

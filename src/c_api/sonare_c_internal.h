@@ -125,9 +125,27 @@ void set_last_error_static(SonareError code, const char* msg) noexcept;
 ///          an earlier call can never leak into an unrelated later call. See the
 ///          @ref sonare_last_error_message contract in sonare_c.h.
 void clear_last_error() noexcept;
-/// @brief Clears the last error and marks @p entry (the exported function's __func__) as the
-///        entry running on this thread, so a parameter refusal it records can name it.
-void enter_c_api(const char* entry) noexcept;
+/// @brief Clears the last error and, unless an entry is already running on this thread, marks
+///        @p entry (the exported function's __func__) as that entry, so a parameter refusal it
+///        records names the call the caller made rather than a helper or a nested entry.
+/// @return Whether @p entry became the running entry; its scope then calls leave_c_api.
+bool enter_c_api(const char* entry) noexcept;
+/// @brief Ends the running entry that enter_c_api marked.
+void leave_c_api() noexcept;
+
+/// @brief The scope of one SONARE_C_API_ENTRY: the outermost one names the entry until it returns.
+class CApiEntryScope {
+ public:
+  explicit CApiEntryScope(const char* entry) noexcept : owns_(enter_c_api(entry)) {}
+  ~CApiEntryScope() {
+    if (owns_) leave_c_api();
+  }
+  CApiEntryScope(const CApiEntryScope&) = delete;
+  CApiEntryScope& operator=(const CApiEntryScope&) = delete;
+
+ private:
+  bool owns_;
+};
 /// @brief Clears the thread-local structured diagnostic list. Called at the entry
 /// of the C-ABI calls that may publish one, so a stale entry never leaks forward.
 void clear_last_diagnostics() noexcept;
@@ -173,8 +191,9 @@ SonareError refuse_null_when_count(const char* param, const char* count) noexcep
 ///          points (sonare_audio_* in sonare_c_types.h), which validate the
 ///          buffer at construction time and never re-scan per analysis.
 ///
-///          @p fn is the C entry's name without its `sonare_` prefix and @p name the
-///          entry's parameter; the refusal is recorded as "<fn>: <name> <predicate>".
+///          @p name is the entry's parameter; the refusal is recorded as
+///          "<name> <predicate>" with @p name as its subject, and the entry beside it.
+///          @p fn is no longer read: sonare_last_refusal_entry names the entry.
 SonareError validate_audio_params(const char* fn, const char* name, const float* samples,
                                   size_t length, int sample_rate) noexcept;
 
@@ -410,7 +429,7 @@ inline std::string join_names(const std::vector<std::string>& values) {
 // destroy it. SONARE_C_TRY also clears defensively for legacy/helper entry paths.
 // tests/conformance/check_c_api_entry_guard.py holds every exported entry to this
 // family: cleared on entry, and everything that can throw inside SONARE_C_TRY.
-#define SONARE_C_API_ENTRY sonare_c_detail::enter_c_api(__func__)
+#define SONARE_C_API_ENTRY const sonare_c_detail::CApiEntryScope sonare_c_api_entry_scope(__func__)
 
 namespace sonare_c_detail {
 
@@ -504,7 +523,7 @@ namespace sonare_c_detail {
 ///          every offline effects wrapper shares, inside the entry guard. The
 ///          callable receives the wrapped Audio and returns an Audio whose samples
 ///          are copied into a fresh array the caller frees with sonare_free_floats.
-/// @param fn            Core function the buffer feeds, the refusal's prefix.
+/// @param fn            Not read; sonare_last_refusal_entry names the entry.
 /// @param name          The entry's name for @p samples.
 /// @param samples       Caller-owned input buffer (validated for null / NaN /
 ///                      Inf / sample_rate by validate_audio_params).

@@ -112,7 +112,7 @@ std::vector<float> resample_checked(const float* samples, size_t size, int src_s
   if (size == 0) {
     return {};
   }
-  validate_offline_audio_input("resample", "samples", samples, size, src_sr);
+  validate_offline_audio_input("samples", samples, size, src_sr);
   // Computed in double so the product cannot overflow before the comparison.
   const double projected =
       static_cast<double>(size) * static_cast<double>(target_sr) / static_cast<double>(src_sr);

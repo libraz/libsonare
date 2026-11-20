@@ -63,3 +63,33 @@ TEST_CASE("sonare_last_refusal_entry is NULL exactly when no refusal is recorded
   CHECK(std::string(sonare_last_error_message()).find("fade_out_sec") != std::string::npos);
   CHECK(first == "fade");
 }
+
+TEST_CASE("an offline buffer entry records its sample_rate refusal with the shared range text",
+          "[c_api][refusal_entry]") {
+  const std::vector<float> samples = tone();
+  SonareChromaResult chroma{};
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 0, 512, 12, &chroma) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "sample_rate");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "sample_rate must be an integer in [8000, 384000]");
+  CHECK(std::string(sonare_last_refusal_entry()) == "chroma_cqt");
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_fade(nullptr, 0, kRate, 0.0f, 0.0f, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "samples");
+  CHECK(std::string(sonare_last_error_message()) == "samples must be a non-empty buffer");
+}
+
+TEST_CASE("sonare_last_refusal_entry names the called entry, not the helper it runs",
+          "[c_api][refusal_entry]") {
+  const std::vector<float> samples = tone();
+  SonareCqtResult cqt{};
+  REQUIRE(sonare_cqt(samples.data(), samples.size(), 0, 512, 32.7f, 84, 12, &cqt) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_refusal_entry()) == "cqt");
+}

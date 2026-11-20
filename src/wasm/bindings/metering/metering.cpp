@@ -132,8 +132,8 @@ float js_metering_crest_factor_db_stereo(val left_samples, val right_samples,
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  validate_offline_audio_input(nullptr, "left", left.data(), left.size(), sample_rate);
-  validate_offline_audio_input(nullptr, "right", right.data(), right.size(), sample_rate);
+  validate_offline_audio_input("left", left.data(), left.size(), sample_rate);
+  validate_offline_audio_input("right", right.data(), right.size(), sample_rate);
   std::vector<float> interleaved(left.size() * 2);
   for (size_t index = 0; index < left.size(); ++index) {
     interleaved[2 * index] = left[index];
@@ -232,9 +232,8 @@ void ensureStereoPair(const char* left_name, const char* right_name, const val& 
   }
   *out_left = float32ArrayToVector(left);
   *out_right = float32ArrayToVector(right);
-  validate_offline_audio_input(nullptr, left_name, out_left->data(), out_left->size(), sample_rate);
-  validate_offline_audio_input(nullptr, right_name, out_right->data(), out_right->size(),
-                               sample_rate);
+  validate_offline_audio_input(left_name, out_left->data(), out_left->size(), sample_rate);
+  validate_offline_audio_input(right_name, out_right->data(), out_right->size(), sample_rate);
 }
 
 val phaseScopeToVal(const metering::PhaseScopeResult& result) {

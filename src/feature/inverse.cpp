@@ -39,7 +39,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
   // binding so the C ABI, the WASM bindings (which call this directly) and the
   // in-process callers all inherit one rule.
   if (!numeric::all_finite(M, n_mels, n_frames)) {
-    validate_offline_audio_samples(nullptr, "M", M,
+    validate_offline_audio_samples("M", M,
                                    static_cast<size_t>(n_mels) * static_cast<size_t>(n_frames), 0);
   }
   constexpr int kMaxInverseFrames = 4096;
@@ -92,7 +92,7 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
   // Rejected here rather than at each binding so the C ABI, the WASM bindings
   // (which call this directly) and the in-process callers all inherit one rule.
   if (!numeric::all_finite(mfcc, n_mfcc, n_frames)) {
-    validate_offline_audio_samples(nullptr, "mfcc", mfcc,
+    validate_offline_audio_samples("mfcc", mfcc,
                                    static_cast<size_t>(n_mfcc) * static_cast<size_t>(n_frames), 0);
   }
 

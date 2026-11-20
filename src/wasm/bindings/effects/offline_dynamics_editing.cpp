@@ -73,7 +73,7 @@ val makeDynamicsResult(const std::vector<float>& samples, int latency_samples) {
 val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
+  validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::CompressorConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "thresholdDb")) {
@@ -121,7 +121,7 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
 val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
+  validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::GateConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "thresholdDb")) {
@@ -155,7 +155,7 @@ val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val opti
 val js_mastering_dynamics_transient_shaper(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
+  validate_offline_audio_input("samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::TransientShaperConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "attackGainDb")) {

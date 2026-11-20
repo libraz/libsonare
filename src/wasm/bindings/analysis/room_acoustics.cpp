@@ -160,7 +160,7 @@ void requireRirRequest(const sonare::acoustic::ShoeboxRoom& room,
 
 Audio acousticAudioFromVector(const char* name, std::vector<float> data, int sample_rate) {
   const std::string problem =
-      offline_audio_input_problem(nullptr, name, data.data(), data.size(), sample_rate);
+      offline_audio_input_problem(name, data.data(), data.size(), sample_rate);
   if (!problem.empty()) throw WasmRangeError(problem);
   return Audio::from_vector(std::move(data), sample_rate);
 }

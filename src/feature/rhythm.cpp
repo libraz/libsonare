@@ -193,8 +193,7 @@ std::vector<float> fourier_tempogram_of_envelope(const std::vector<float>& onset
 
 std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, int /*sr*/,
                                      const TempogramConfig& config) {
-  validate_offline_audio_samples(nullptr, "onset_envelope", onset_envelope.data(),
-                                 onset_envelope.size(), 0);
+  validate_offline_audio_samples("onset_envelope", onset_envelope.data(), onset_envelope.size(), 0);
   return detail::fourier_tempogram_of_envelope(onset_envelope, config);
 }
 
@@ -388,8 +387,7 @@ std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int
   // Every rejection below used to be answered with a zero-filled vector, which
   // reads as a genuine "no energy at this ratio" measurement. Reject instead so
   // a caller can never mistake an unanswerable call for a result.
-  validate_offline_audio_samples(nullptr, "tempogram_data", tempogram_data.data(),
-                                 tempogram_data.size(), 0);
+  validate_offline_audio_samples("tempogram_data", tempogram_data.data(), tempogram_data.size(), 0);
   if (tempogram_data.empty()) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "tempogram_data",
                                             "must not be empty");
