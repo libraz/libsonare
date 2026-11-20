@@ -23,7 +23,7 @@ from ._helpers import LIB_AVAILABLE
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
 SR = 48000
-_EMPTY_SCENE = '{"version":1,"strips":[],"buses":[],"connections":[]}'
+_EMPTY_SCENE = '{"version":2,"strips":[],"buses":[],"connections":[]}'
 
 
 def _voice_changer(size: int | None) -> object:

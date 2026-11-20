@@ -17,7 +17,7 @@ def _scene(kind: str, strip_id: str, processors: list[str]) -> str:
     strip = {"id": strip_id, "inserts": inserts}
     return json.dumps(
         {
-            "version": 1,
+            "version": 2,
             "strips": [strip] if kind == "strips" else [],
             "buses": [strip] if kind == "buses" else [],
             "connections": [],

@@ -178,7 +178,7 @@ def _scene_timing(processor: str, params: dict) -> tuple[int, int]:
     import libsonare
 
     scene = {
-        "version": 1,
+        "version": 2,
         "strips": [
             {"id": "a", "inserts": [{"slot": "pre", "processor": processor, "params": params}]}
         ],

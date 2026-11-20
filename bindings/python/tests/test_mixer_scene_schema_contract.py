@@ -123,7 +123,7 @@ def test_a_suggested_scene_satisfies_the_shipped_schema() -> None:
         (lambda s: s["strips"][0].update(faderDb="loud"), "is not number"),
         (lambda s: s["strips"][0].update(width=7.0), "over the maximum"),
         (lambda s: s["strips"][0].update(muted=1), "is not boolean"),
-        (lambda s: s.update(version=2), "is not the required 1"),
+        (lambda s: s.update(version=1), "is not the required 2"),
         (
             lambda s: s["strips"][0]["inserts"].append({"slot": "middle", "processor": "x"}),
             "outside ['pre', 'post']",

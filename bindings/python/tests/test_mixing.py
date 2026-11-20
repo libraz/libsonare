@@ -47,7 +47,7 @@ def _serial_tail_scene() -> str:
 
     return json.dumps(
         {
-            "version": 1,
+            "version": 2,
             "strips": [
                 {
                     "id": "source",
@@ -220,7 +220,7 @@ def _scene_with_pre_eq(gain_db: float, *, on_bus: bool) -> str:
         strip["inserts"] = [insert]
     return json.dumps(
         {
-            "version": 1,
+            "version": 2,
             "buses": [bus],
             "strips": [strip],
             "connections": [{"source": "a", "destination": "master"}],
@@ -407,7 +407,7 @@ def test_asymmetric_strip_controls_round_trip_in_scene_json(mixer) -> None:
 
 _SETTLE_SCENE = json.dumps(
     {
-        "version": 1,
+        "version": 2,
         "buses": [{"id": "master", "role": "master", "inserts": []}],
         "connections": [{"source": "s", "destination": "master"}],
         "strips": [
@@ -633,7 +633,7 @@ def _empty_mixer():
     from libsonare import Mixer
 
     return Mixer.from_json(
-        '{"version":1,"strips":[],"buses":[],"connections":[]}',
+        '{"version":2,"strips":[],"buses":[],"connections":[]}',
         sample_rate=48000,
         max_block_size=256,
     )
@@ -825,7 +825,7 @@ def _scene_with_insert_params(processor: str, params: dict[str, float]) -> str:
     """Build a one-strip scene whose post-fader insert carries `params`."""
     return json.dumps(
         {
-            "version": 1,
+            "version": 2,
             "buses": [{"id": "master", "role": "master"}],
             "strips": [
                 {
@@ -892,7 +892,7 @@ def test_scene_warnings_surface_a_send_to_an_undeclared_bus() -> None:
     def scene(destination: str) -> str:
         return json.dumps(
             {
-                "version": 1,
+                "version": 2,
                 "buses": [{"id": "master", "role": "master"}, {"id": "aux1", "role": "aux"}],
                 "strips": [
                     {
@@ -950,7 +950,7 @@ def test_from_json_refuses_an_unknown_scene_key_by_path() -> None:
     def build(top: dict, strip: dict) -> str:
         return json.dumps(
             {
-                "version": 1,
+                "version": 2,
                 **top,
                 "buses": [{"id": "master", "role": "master"}],
                 "strips": [{"id": "vocal", **strip}],

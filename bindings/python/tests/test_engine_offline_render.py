@@ -182,7 +182,7 @@ _RESET_BLOCK = 128
 _RESET_FRAMES = 9600
 _PLATE_STRIP = json.dumps(
     {
-        "version": 1,
+        "version": 2,
         "strips": [
             {
                 "id": "s",
@@ -304,7 +304,7 @@ def test_tail_and_latency_follow_the_configured_strips() -> None:
             scene_strip(
                 json.dumps(
                     {
-                        "version": 1,
+                        "version": 2,
                         "strips": [
                             {
                                 "id": "s",
@@ -336,7 +336,7 @@ def test_tail_samples_reports_a_lane_channel_delay() -> None:
             scene_strip(
                 json.dumps(
                     {
-                        "version": 1,
+                        "version": 2,
                         "strips": [{"id": "s", "inserts": []}],
                         "buses": [],
                         "connections": [],
@@ -353,7 +353,7 @@ def test_tail_samples_reports_a_lane_channel_delay() -> None:
 def _adaa1_clipper_strip() -> str:
     return json.dumps(
         {
-            "version": 1,
+            "version": 2,
             "strips": [
                 {
                     "id": "s",

@@ -38,7 +38,7 @@ _FIELDS = {
 
 _SCENE = json.dumps(
     {
-        "version": 1,
+        "version": 2,
         "strips": [{"id": "a"}],
         "buses": [{"id": "master", "role": "master"}],
         "connections": [],

@@ -17,7 +17,7 @@ from ._helpers import LIB_AVAILABLE
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not available")
 
 _INVALID_STATE = 7
-_SCENE = '{"version":1,"strips":[{"id":"strip0"}],"buses":[],"connections":[]}'
+_SCENE = '{"version":2,"strips":[{"id":"strip0"}],"buses":[],"connections":[]}'
 _BLOCK = [0.0] * 128
 
 

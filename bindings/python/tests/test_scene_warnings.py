@@ -9,9 +9,9 @@ from libsonare import ErrorCode, Project, RealtimeEngine, SonareError, SonareVal
 from ._helpers import scene_strip
 
 _TYPO_SCENE = (
-    '{"version":1,"$schema":"s","strips":[{"id":"lead","faderDB":-3,"x-note":1}],"buses":[]}'
+    '{"version":2,"$schema":"s","strips":[{"id":"lead","faderDB":-3,"x-note":1}],"buses":[]}'
 )
-_TYPO_STRIP = '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[]}'
+_TYPO_STRIP = '{"version":2,"strips":[{"id":"s","faderDB":-3}],"buses":[]}'
 
 
 def test_project_set_mixer_scene_json_refuses_an_unknown_key_by_path() -> None:
@@ -21,7 +21,7 @@ def test_project_set_mixer_scene_json_refuses_an_unknown_key_by_path() -> None:
         assert not isinstance(refused.value, SonareValueError)
         assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
         assert "unknown key strips[0].faderDB" in str(refused.value)
-        annotated = '{"version":1,"$schema":"s","strips":[{"id":"lead","x-note":1}],"buses":[]}'
+        annotated = '{"version":2,"$schema":"s","strips":[{"id":"lead","x-note":1}],"buses":[]}'
         assert project.set_mixer_scene_json(annotated) is None
 
 
@@ -37,5 +37,5 @@ def test_engine_strip_setters_refuse_an_unknown_key() -> None:
             assert not isinstance(refused.value, SonareValueError)
             assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
             assert "unknown key strips[0].faderDB" in str(refused.value)
-        annotated = '{"$schema":"s","version":1,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}'
+        annotated = '{"$schema":"s","version":2,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}'
         engine.set_strip(10, scene_strip(annotated))
