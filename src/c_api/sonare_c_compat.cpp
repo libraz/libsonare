@@ -49,8 +49,8 @@ namespace {
 // bindings, which call the core directly and do not go through this layer, share
 // one policy instead of a hand-mirrored copy. They arrive here as a
 // SonareException and map to SONARE_ERROR_INVALID_PARAMETER via SONARE_C_CATCH.
-void check_buffer(const char* name, const char* length_name, const float* values, size_t length,
-                  bool scan_finite) {
+void refuse_invalid_buffer(const char* name, const char* length_name, const float* values,
+                           size_t length, bool scan_finite) {
   util::check::non_null_when_count(values, length, name, length_name);
   if (!scan_finite) return;
   for (size_t i = 0; i < length; ++i) {
@@ -64,7 +64,8 @@ void check_buffer(const char* name, const char* length_name, const float* values
 // refuse a non-finite value itself) a non-finite sample.
 SonareError validate_buffer(const char* name, const float* values, size_t length,
                             bool scan_finite = true) {
-  return run_validation([&] { check_buffer(name, "length", values, length, scan_finite); });
+  return run_validation(
+      [&] { refuse_invalid_buffer(name, "length", values, length, scan_finite); });
 }
 
 // The array -> array transform for a core function that refuses its own non-finite input.
@@ -243,7 +244,8 @@ SonareError sonare_split_silence_common_ex(const float* const* signals, size_t s
         for (size_t index = 0; index < signal_count; ++index) {
           const std::string name = "signals[" + std::to_string(index) + "]";
           const std::string length_name = "lengths[" + std::to_string(index) + "]";
-          check_buffer(name.c_str(), length_name.c_str(), signals[index], lengths[index], true);
+          refuse_invalid_buffer(name.c_str(), length_name.c_str(), signals[index], lengths[index],
+                                true);
         }
       });
       err != SONARE_OK) {
@@ -326,7 +328,7 @@ SonareError sonare_vector_normalize(const float* values, size_t length, SonareNo
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   if (const SonareError err = run_validation([&] {
-        check_buffer("values", "length", values, length, true);
+        refuse_invalid_buffer("values", "length", values, length, true);
         util::check::one_of(
             static_cast<int>(norm),
             std::array<int, 4>{static_cast<int>(NormType::Inf), static_cast<int>(NormType::L1),
@@ -354,8 +356,8 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
         if (n_bins != 0 && n_frames != 0 && values == nullptr) {
           util::check::refuse("values", "must not be NULL when n_bins and n_frames are not 0");
         }
-        check_buffer("values", "length", values,
-                     static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), true);
+        refuse_invalid_buffer("values", "length", values,
+                              static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), true);
       });
       err != SONARE_OK) {
     return err;
@@ -385,8 +387,8 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
           util::check::refuse("chromagram",
                               "must not be NULL when n_chroma and n_frames are not 0");
         }
-        check_buffer("chromagram", "length", chromagram,
-                     static_cast<size_t>(n_chroma) * static_cast<size_t>(n_frames), true);
+        refuse_invalid_buffer("chromagram", "length", chromagram,
+                              static_cast<size_t>(n_chroma) * static_cast<size_t>(n_frames), true);
       });
       err != SONARE_OK) {
     return err;
@@ -405,7 +407,7 @@ SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t lengt
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length, out_n_frames);
   if (const SonareError err = run_validation([&] {
-        check_buffer("onset_envelope", "length", onset_envelope, length, true);
+        refuse_invalid_buffer("onset_envelope", "length", onset_envelope, length, true);
         util::check::one_of(
             mode, std::array<int, 2>{SONARE_TEMPOGRAM_AUTOCORRELATION, SONARE_TEMPOGRAM_COSINE},
             "mode");
