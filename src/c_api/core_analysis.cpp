@@ -1,28 +1,27 @@
+#include <array>
+
 #include "c_api/core_internal.h"
+#include "util/parameter_checks.h"
 
 namespace {
 
-// 0 reads as the current layout, so a zero-filled struct with its fields set is valid.
-bool valid_chord_options_version(int version) {
-  return version == 0 || version == SONARE_CHORD_DETECTION_OPTIONS_VERSION;
-}
-
 // The C-layer fields: the struct version and the integer stand-ins for enums. The numeric
 // fields are the core's rule, applied by check_chord_detection_options.
-bool valid_chord_detection_options(const SonareChordDetectionOptions& options) {
-  if (!valid_chord_options_version(options.struct_version)) return false;
+void validate_chord_detection_options(const SonareChordDetectionOptions& options) {
+  // 0 reads as the current layout, so a zero-filled struct with its fields set is valid.
+  util::check::one_of(options.struct_version,
+                      std::array<int, 2>{0, SONARE_CHORD_DETECTION_OPTIONS_VERSION},
+                      "options.struct_version");
   // Reject out-of-range enum-like fields instead of silently mapping them to a
   // default (chroma_method only documents 0 = STFT, 1 = NNLS, 2 = CQT). When key context
   // is enabled, also require an in-range key_root / key_mode.
-  if (options.chroma_method < 0 || options.chroma_method > 2) return false;
   if (options.use_key_context != 0) {
-    PitchClass root = PitchClass::C;
-    Mode mode = Mode::Major;
-    if (!from_c_pitch_class(options.key_root, &root) || !from_c_mode(options.key_mode, &mode)) {
-      return false;
-    }
+    util::check::integer_in_range(options.key_root, static_cast<int>(PitchClass::C),
+                                  static_cast<int>(PitchClass::B), "options.key_root");
+    util::check::integer_in_range(options.key_mode, static_cast<int>(Mode::Major),
+                                  static_cast<int>(Mode::Locrian), "options.key_mode");
   }
-  return true;
+  util::check::integer_in_range(options.chroma_method, 0, 2, "options.chroma_method");
 }
 
 ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options) {
@@ -37,7 +36,7 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
   config.use_hmm = options.use_hmm != 0;
   config.hmm_beam_width = options.hmm_beam_width;
   config.use_key_context = options.use_key_context != 0;
-  // valid_chord_detection_options admitted the key whenever key context reads it.
+  // validate_chord_detection_options admitted the key whenever key context reads it.
   if (config.use_key_context && (!from_c_pitch_class(options.key_root, &config.key_root) ||
                                  !from_c_mode(options.key_mode, &config.key_mode))) {
     throw SonareException(ErrorCode::InvalidParameter, "chord key context is out of range");
@@ -60,8 +59,10 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
 }
 
 SonareError check_chord_detection_options(const SonareChordDetectionOptions& options) {
-  if (!valid_chord_detection_options(options)) return SONARE_ERROR_INVALID_PARAMETER;
-  return run_validation([&] { validate_chord_config(chord_config_from_options(options)); });
+  return run_validation([&] {
+    validate_chord_detection_options(options);
+    validate_chord_config(chord_config_from_options(options));
+  });
 }
 
 }  // namespace
@@ -70,8 +71,7 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
                                int max_candidates, SonareBpmAnalysisResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = {};
+  if (out != nullptr) *out = {};
   BpmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
@@ -85,6 +85,7 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
       "analyze_bpm", "samples", samples, length, sample_rate,
@@ -128,7 +129,6 @@ SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t leng
                                                int n_octave_bands, float min_decay_db,
                                                SonareAcousticResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the whole struct up front, BEFORE any validating early-return (this
   // function's own n_octave_bands check or a validate_audio_params failure
@@ -137,7 +137,7 @@ SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t leng
   // well as the band pointers / band_count are all defined, not caller
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
-  *out = {};
+  if (out != nullptr) *out = {};
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
   config.min_decay_db = min_decay_db;
@@ -145,6 +145,7 @@ SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t leng
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("analyze_impulse_response_ex", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -158,7 +159,6 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
                                    float min_decay_db, float noise_floor_margin_db,
                                    SonareAcousticResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the whole struct up front, BEFORE any validating early-return (this
   // function's own scalar checks or a validate_audio_params failure inside
@@ -167,7 +167,7 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
   // well as the band pointers / band_count are all defined, not caller
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
-  *out = {};
+  if (out != nullptr) *out = {};
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
   config.n_octave_bands = n_octave_bands;
@@ -178,6 +178,7 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("detect_acoustic", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -190,13 +191,14 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
                                   int hop_length, SonareRhythmResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointer BEFORE any validating early-return so a
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_rhythm_result(&r) would delete[] an uninitialised pointer.
-  out->beat_intervals = nullptr;
-  out->beat_interval_count = 0;
+  if (out != nullptr) {
+    out->beat_intervals = nullptr;
+    out->beat_interval_count = 0;
+  }
   // Built inside each guarded call: RhythmConfig allocates, and a throw here must not escape.
   const auto make_config = [&] {
     RhythmConfig config;
@@ -211,6 +213,7 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("analyze_rhythm", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -238,14 +241,15 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
                                     float window_sec, int hop_length,
                                     float compression_threshold_db, SonareDynamicsResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointers BEFORE any validating early-return so a
   // rejected input always leaves NULL owned pointers; otherwise
   // sonare_free_dynamics_result(&r) would delete[] uninitialised pointers.
-  out->loudness_times_sec = nullptr;
-  out->loudness_rms_db = nullptr;
-  out->loudness_count = 0;
+  if (out != nullptr) {
+    out->loudness_times_sec = nullptr;
+    out->loudness_rms_db = nullptr;
+    out->loudness_count = 0;
+  }
   DynamicsConfig config;
   config.window_sec = window_sec;
   config.hop_length = hop_length;
@@ -254,6 +258,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("analyze_dynamics", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -285,19 +290,20 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
                                   int hop_length, int n_mels, int n_mfcc, float window_sec,
                                   SonareTimbreResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointers BEFORE any validating early-return so a
   // rejected input always leaves NULL owned pointers; otherwise
   // sonare_free_timbre_result(&r) would delete[] uninitialised pointers.
-  out->spectral_centroid = nullptr;
-  out->spectral_centroid_count = 0;
-  out->spectral_flatness = nullptr;
-  out->spectral_flatness_count = 0;
-  out->spectral_rolloff = nullptr;
-  out->spectral_rolloff_count = 0;
-  out->timbre_over_time = nullptr;
-  out->timbre_over_time_count = 0;
+  if (out != nullptr) {
+    out->spectral_centroid = nullptr;
+    out->spectral_centroid_count = 0;
+    out->spectral_flatness = nullptr;
+    out->spectral_flatness_count = 0;
+    out->spectral_rolloff = nullptr;
+    out->spectral_rolloff_count = 0;
+    out->timbre_over_time = nullptr;
+    out->timbre_over_time_count = 0;
+  }
   TimbreConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -308,6 +314,7 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
       "analyze_timbre", "samples", samples, length, sample_rate,
@@ -356,14 +363,15 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
                                  float threshold, int use_triads_only, int n_fft, int hop_length,
                                  int use_beat_sync, SonareChordAnalysisResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointer BEFORE any validating early-return so a
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_chord_analysis_result(&r) would delete[] an uninitialised
   // pointer.
-  *out = {};
-  out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
+  if (out != nullptr) {
+    *out = {};
+    out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
+  }
   ChordConfig config;
   config.min_duration = min_duration_sec;
   config.smoothing_window = smoothing_window_sec;
@@ -376,6 +384,7 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("detect_chords", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -389,18 +398,20 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
                                     const SonareChordDetectionOptions* options,
                                     SonareChordAnalysisResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointer BEFORE any validating early-return so a
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_chord_analysis_result(&r) would delete[] an uninitialised
   // pointer.
-  *out = {};
-  out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
-  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) {
+    *out = {};
+    out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
+  }
+  SONARE_C_REQUIRE_NONNULL(options);
   if (const SonareError err = check_chord_detection_options(*options); err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("detect_chords_ex", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -460,27 +471,43 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
                                              SonareStringArray* roman,
                                              SonareStringArray* functions) {
   SONARE_C_API_ENTRY;
-  if (!chords || !roman || !functions) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointers BEFORE any validating early-return so a
   // rejected input always leaves NULL owned pointers; otherwise the free
   // functions would delete[] uninitialised pointers.
-  *chords = {};
-  chords->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
-  roman->items = nullptr;
-  roman->count = 0;
-  functions->items = nullptr;
-  functions->count = 0;
-  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (chords != nullptr) {
+    *chords = {};
+    chords->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
+  }
+  if (roman != nullptr) {
+    roman->items = nullptr;
+    roman->count = 0;
+  }
+  if (functions != nullptr) {
+    functions->items = nullptr;
+    functions->count = 0;
+  }
+  SONARE_C_REQUIRE_NONNULL(options);
   if (const SonareError err = check_chord_detection_options(*options); err != SONARE_OK) {
     return err;
   }
   // The analysis key drives the Roman-numeral labelling.
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_in_range(key_root, static_cast<int>(PitchClass::C),
+                                      static_cast<int>(PitchClass::B), "key_root");
+        util::check::integer_in_range(key_mode, static_cast<int>(Mode::Major),
+                                      static_cast<int>(Mode::Locrian), "key_mode");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   PitchClass label_root = PitchClass::C;
   Mode label_mode = Mode::Major;
-  if (!from_c_pitch_class(key_root, &label_root) || !from_c_mode(key_mode, &label_mode)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  (void)from_c_pitch_class(key_root, &label_root);
+  (void)from_c_mode(key_mode, &label_mode);
+  SONARE_C_REQUIRE_NONNULL(chords);
+  SONARE_C_REQUIRE_NONNULL(roman);
+  SONARE_C_REQUIRE_NONNULL(functions);
 
   return run_offline("chord_functional_analysis", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -503,28 +530,46 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
                                    SonareStringArray* roman, SonareStringArray* functions) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!roman || !functions) return SONARE_ERROR_INVALID_PARAMETER;
-  roman->items = nullptr;
-  roman->count = 0;
-  functions->items = nullptr;
-  functions->count = 0;
-  if ((count > 0 && !chords) || count > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
+  if (roman != nullptr) {
+    roman->items = nullptr;
+    roman->count = 0;
+  }
+  if (functions != nullptr) {
+    functions->items = nullptr;
+    functions->count = 0;
+  }
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(chords, count);
+  util::check::integer_in_range(static_cast<long long>(count), 0,
+                                static_cast<long long>(kMaxBufferSize), "count");
   PitchClass label_root = PitchClass::C;
   Mode label_mode = Mode::Major;
-  if (!from_c_pitch_class(key_root, &label_root) || !from_c_mode(key_mode, &label_mode)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!from_c_pitch_class(key_root, &label_root)) {
+    util::check::integer_in_range(key_root, static_cast<int>(PitchClass::C),
+                                  static_cast<int>(PitchClass::B), "key_root");
+  }
+  if (!from_c_mode(key_mode, &label_mode)) {
+    util::check::integer_in_range(key_mode, static_cast<int>(Mode::Major),
+                                  static_cast<int>(Mode::Locrian), "key_mode");
   }
   std::vector<Chord> input;
   input.reserve(count);
   for (size_t i = 0; i < count; ++i) {
     Chord chord{};
-    if (!from_c_pitch_class(chords[i].root, &chord.root) ||
-        !ordinal_to_enum(chords[i].quality, 0, SONARE_CHORD_QUALITY_COUNT - 1, &chord.quality)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    // The element subject is built only on refusal, so a valid call allocates nothing per chord.
+    if (!from_c_pitch_class(chords[i].root, &chord.root)) {
+      util::check::integer_in_range(chords[i].root, static_cast<int>(PitchClass::C),
+                                    static_cast<int>(PitchClass::B),
+                                    ("chords[" + std::to_string(i) + "].root").c_str());
+    }
+    if (!ordinal_to_enum(chords[i].quality, 0, SONARE_CHORD_QUALITY_COUNT - 1, &chord.quality)) {
+      util::check::integer_in_range(chords[i].quality, 0, SONARE_CHORD_QUALITY_COUNT - 1,
+                                    ("chords[" + std::to_string(i) + "].quality").c_str());
     }
     chord.bass = chord.root;
     input.push_back(chord);
   }
+  SONARE_C_REQUIRE_NONNULL(roman);
+  SONARE_C_REQUIRE_NONNULL(functions);
   label_chords(input, label_root, label_mode, roman, functions);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -544,14 +589,15 @@ SonareSectionOptions sonare_section_options_default(void) {
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate,
                                     const SonareSectionOptions* options, SonareSectionResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointer BEFORE any validating early-return so a
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_section_result(&r) would delete[] an uninitialised pointer.
-  out->sections = nullptr;
-  out->section_count = 0;
-  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) {
+    out->sections = nullptr;
+    out->section_count = 0;
+  }
+  SONARE_C_REQUIRE_NONNULL(options);
   SectionConfig config;
   config.n_fft = options->n_fft;
   config.hop_length = options->hop_length;
@@ -561,6 +607,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("analyze_sections", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -605,21 +652,22 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
                                      const SonareBoundaryOptions* options,
                                      SonareBoundaryResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointers BEFORE any validating early-return so a rejected
   // input always leaves NULL owned pointers; otherwise
   // sonare_free_boundary_result(&r) would delete[] uninitialised pointers.
-  out->boundaries = nullptr;
-  out->boundary_count = 0;
-  out->novelty_curve = nullptr;
-  out->novelty_length = 0;
-  out->novelty_peak = 0.0f;
-  out->sample_rate = 0;
-  out->hop_length = 0;
-  out->n_frames = 0;
-  out->frame_stride = 0;
-  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) {
+    out->boundaries = nullptr;
+    out->boundary_count = 0;
+    out->novelty_curve = nullptr;
+    out->novelty_length = 0;
+    out->novelty_peak = 0.0f;
+    out->sample_rate = 0;
+    out->hop_length = 0;
+    out->n_frames = 0;
+    out->frame_stride = 0;
+  }
+  SONARE_C_REQUIRE_NONNULL(options);
   BoundaryConfig config;
   config.n_fft = options->n_fft;
   config.hop_length = options->hop_length;
@@ -636,6 +684,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("detect_boundaries", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -684,12 +733,11 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
                                      int hop_length, float threshold, int use_pyin, int center,
                                      SonareMelodyResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the whole struct BEFORE any validating early-return so a rejected
   // input always leaves a NULL owned pointer; otherwise
   // sonare_free_melody_result(&r) would delete[] an uninitialised pointer.
-  *out = {};
+  if (out != nullptr) *out = {};
   MelodyConfig config;
   config.fmin = f0_min_hz;
   config.fmax = f0_max_hz;
@@ -702,6 +750,7 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("analyze_melody_ex", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {

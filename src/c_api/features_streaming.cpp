@@ -1,6 +1,8 @@
+#include <array>
 #include <type_traits>
 
 #include "c_api/features_internal.h"
+#include "util/parameter_checks.h"
 
 // ============================================================================
 // Streaming - StreamAnalyzer (stateful real-time frame analyzer)
@@ -16,9 +18,7 @@ namespace {
 // Vector -> caller-owned C array copies funnel through copy_vector<T> in
 // sonare_c_internal.h (single canonical owner).
 
-bool finite_positive(float value) { return std::isfinite(value) && value > 0.0f; }
-
-bool finite_non_negative(float value) { return std::isfinite(value) && value >= 0.0f; }
+namespace check = sonare::util::check;
 
 SonareStreamChordChange* copy_chord_changes(const std::vector<ChordChange>& v) {
   if (v.empty()) return nullptr;
@@ -92,7 +92,7 @@ void copy_stream_frame_arrays(const Buffer& buffer, Frames* out) {
 
 SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
   SONARE_C_API_ENTRY;
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
   StreamConfig defaults;
   config->sample_rate = defaults.sample_rate;
   config->n_fft = defaults.n_fft;
@@ -122,23 +122,43 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
 SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
                                           SonareStreamAnalyzer** out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
-  if (config->sample_rate <= 0 || config->n_fft <= 0 || config->hop_length <= 0 ||
-      config->hop_length > config->n_fft || config->n_mels <= 0 ||
-      config->emit_every_n_frames <= 0 || config->magnitude_downsample <= 0 ||
-      config->max_pending_frames == 0 || config->max_pending_frames > kMaxStreamPendingFrames ||
-      config->max_progression_entries == 0 ||
-      config->max_progression_entries > kMaxStreamProgressionEntries ||
-      !finite_non_negative(config->fmin_hz) || !finite_non_negative(config->fmax_hz) ||
-      (config->fmax_hz > 0.0f && config->fmax_hz <= config->fmin_hz) ||
-      !finite_positive(config->reference_hz) || config->reference_hz < kMinTuningRefHz ||
-      config->reference_hz > kMaxTuningRefHz || !finite_positive(config->key_update_interval_sec) ||
-      !finite_positive(config->bpm_update_interval_sec) || !valid_window(config->window) ||
-      config->output_format != SONARE_STREAM_OUTPUT_FLOAT32) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = nullptr;
+  SONARE_C_REQUIRE_NONNULL(config);
+  if (const SonareError err = run_validation([&] {
+        check::integer_at_least(config->sample_rate, 1, "config.sample_rate");
+        check::integer_at_least(config->n_fft, 1, "config.n_fft");
+        check::integer_at_least(config->hop_length, 1, "config.hop_length");
+        if (config->hop_length > config->n_fft) {
+          check::refuse_relation({"config.hop_length", "config.n_fft"}, "{0} must be at most {1}");
+        }
+        check::integer_at_least(config->n_mels, 1, "config.n_mels");
+        check::at_least(config->fmin_hz, 0.0, "config.fmin_hz");
+        check::at_least(config->fmax_hz, 0.0, "config.fmax_hz");
+        if (config->fmax_hz > 0.0f && config->fmax_hz <= config->fmin_hz) {
+          check::refuse_relation({"config.fmax_hz", "config.fmin_hz"},
+                                 "{0} must be 0 or greater than {1}");
+        }
+        check::in_range(config->reference_hz, kMinTuningRefHz, kMaxTuningRefHz,
+                        "config.reference_hz");
+        check::integer_at_least(config->emit_every_n_frames, 1, "config.emit_every_n_frames");
+        check::integer_at_least(config->magnitude_downsample, 1, "config.magnitude_downsample");
+        check::integer_in_range(static_cast<long long>(config->max_pending_frames), 1,
+                                static_cast<long long>(kMaxStreamPendingFrames),
+                                "config.max_pending_frames");
+        check::greater_than(config->key_update_interval_sec, 0.0, "config.key_update_interval_sec");
+        check::greater_than(config->bpm_update_interval_sec, 0.0, "config.bpm_update_interval_sec");
+        check::integer_in_range(config->window, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR,
+                                "config.window");
+        check::one_of(config->output_format, std::array<int, 1>{SONARE_STREAM_OUTPUT_FLOAT32},
+                      "config.output_format");
+        check::integer_in_range(static_cast<long long>(config->max_progression_entries), 1,
+                                static_cast<long long>(kMaxStreamProgressionEntries),
+                                "config.max_progression_entries");
+      });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   StreamConfig cfg;
@@ -185,9 +205,8 @@ void sonare_stream_analyzer_destroy(SonareStreamAnalyzer* analyzer) { delete ana
 SonareError sonare_stream_analyzer_process(SonareStreamAnalyzer* analyzer, const float* samples,
                                            size_t n_samples) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || (!samples && n_samples > 0)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(samples, n_samples);
   SONARE_C_TRY
   analyzer->analyzer->process(samples, n_samples);
   return SONARE_OK;
@@ -198,9 +217,8 @@ SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* ana
                                                        const float* samples, size_t n_samples,
                                                        size_t sample_offset) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || (!samples && n_samples > 0)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(samples, n_samples);
   SONARE_C_TRY
   analyzer->analyzer->process(samples, n_samples, sample_offset);
   return SONARE_OK;
@@ -209,7 +227,7 @@ SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* ana
 
 SonareError sonare_stream_analyzer_finalize(SonareStreamAnalyzer* analyzer) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_TRY
   analyzer->analyzer->finalize();
   return SONARE_OK;
@@ -219,7 +237,8 @@ SonareError sonare_stream_analyzer_finalize(SonareStreamAnalyzer* analyzer) {
 SonareError sonare_stream_analyzer_available_frames(SonareStreamAnalyzer* analyzer,
                                                     size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
   *out_count = analyzer->analyzer->available_frames();
   return SONARE_OK;
@@ -229,10 +248,10 @@ SonareError sonare_stream_analyzer_available_frames(SonareStreamAnalyzer* analyz
 SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, size_t max_frames,
                                                SonareStreamFrames* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  *out = {};
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   FrameBuffer buffer;
@@ -262,7 +281,7 @@ QuantizeConfig to_quantize_config(const SonareStreamQuantizeConfig* config) {
 
 SonareError sonare_stream_quantize_config_default(SonareStreamQuantizeConfig* config) {
   SONARE_C_API_ENTRY;
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
   const QuantizeConfig q;
   config->mel_db_min = q.mel_db_min;
   config->mel_db_max = q.mel_db_max;
@@ -282,10 +301,10 @@ SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analy
                                                      const SonareStreamQuantizeConfig* config,
                                                      size_t max_frames, SonareStreamFramesU8* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  *out = {};
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   QuantizedFrameBufferU8 buffer;
@@ -306,10 +325,10 @@ SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* anal
                                                       size_t max_frames,
                                                       SonareStreamFramesI16* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  *out = {};
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   QuantizedFrameBufferI16 buffer;
@@ -322,7 +341,7 @@ SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* anal
 SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer,
                                          size_t base_sample_offset) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_TRY
   analyzer->analyzer->reset(base_sample_offset);
   return SONARE_OK;
@@ -331,10 +350,10 @@ SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer,
 
 SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareStreamStats* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  *out = {};
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   AnalyzerStats s = analyzer->analyzer->stats();
@@ -390,7 +409,8 @@ void sonare_free_stream_stats(SonareStreamStats* stats) {
 
 SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, int* out_count) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
   *out_count = analyzer->analyzer->frame_count();
   return SONARE_OK;
@@ -400,7 +420,8 @@ SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, i
 SonareError sonare_stream_analyzer_current_time_sec(SonareStreamAnalyzer* analyzer,
                                                     float* out_sec) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out_sec) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL(out_sec);
   SONARE_C_TRY
   *out_sec = analyzer->analyzer->current_time();
   return SONARE_OK;
@@ -410,7 +431,8 @@ SonareError sonare_stream_analyzer_current_time_sec(SonareStreamAnalyzer* analyz
 SonareError sonare_stream_analyzer_sample_rate(SonareStreamAnalyzer* analyzer,
                                                int* out_sample_rate) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out_sample_rate) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
+  SONARE_C_REQUIRE_NONNULL(out_sample_rate);
   SONARE_C_TRY
   *out_sample_rate = analyzer->analyzer->config().sample_rate;
   return SONARE_OK;
@@ -420,7 +442,7 @@ SonareError sonare_stream_analyzer_sample_rate(SonareStreamAnalyzer* analyzer,
 SonareError sonare_stream_analyzer_set_expected_duration(SonareStreamAnalyzer* analyzer,
                                                          float duration_sec) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_TRY
   analyzer->analyzer->set_expected_duration(duration_sec);
   return SONARE_OK;
@@ -430,7 +452,7 @@ SonareError sonare_stream_analyzer_set_expected_duration(SonareStreamAnalyzer* a
 SonareError sonare_stream_analyzer_set_normalization_gain(SonareStreamAnalyzer* analyzer,
                                                           float gain) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_TRY
   analyzer->analyzer->set_normalization_gain(gain);
   return SONARE_OK;
@@ -440,7 +462,7 @@ SonareError sonare_stream_analyzer_set_normalization_gain(SonareStreamAnalyzer* 
 SonareError sonare_stream_analyzer_set_reference_hz(SonareStreamAnalyzer* analyzer,
                                                     float reference_hz) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_TRY
   analyzer->analyzer->set_tuning_ref_hz(reference_hz);
   return SONARE_OK;

@@ -36,8 +36,7 @@ SonareError run_chroma_cqt_family(const char* fn, const char* name, const float*
                                   int bins_per_octave, SonareChromaResult* out,
                                   Transform&& transform) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = {};
+  if (out != nullptr) *out = {};
   Config config;
   if (const SonareError err = run_validation([&] {
         chroma_cqt_base(config) = make_chroma_cqt_config(hop_length, n_chroma, bins_per_octave);
@@ -45,6 +44,7 @@ SonareError run_chroma_cqt_family(const char* fn, const char* name, const float*
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(fn, name, samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -61,7 +61,10 @@ SonareError run_chroma_cqt_family(const char* fn, const char* name, const float*
 SonareError sonare_onset_strength(const float* samples, size_t length, int sample_rate, int n_fft,
                                   int hop_length, int n_mels, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = nullptr;
+  if (out_length != nullptr) *out_length = 0;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   return run_offline("onset_strength", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -80,14 +83,16 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
                                         int n_fft, int hop_length, int n_mels, int n_bands,
                                         float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  *out_n_frames = 0;
+  if (out != nullptr) *out = nullptr;
+  if (out_length != nullptr) *out_length = 0;
+  if (out_n_frames != nullptr) *out_n_frames = 0;
   if (const SonareError err = run_validation([&] { validate_onset_n_bands(n_bands); });
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
 
   return run_offline("onset_strength_multi", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -109,9 +114,9 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
                           int hop_length, SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  *out = {};
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("chroma", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -160,8 +165,7 @@ SonareError sonare_chroma_cqt_ex(const float* samples, size_t length, int sample
 SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = {};
+  if (out != nullptr) *out = {};
   BassChromaConfig config;
   config.cqt.hop_length = hop_length;
   config.n_chroma = n_chroma;
@@ -169,6 +173,7 @@ SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_r
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("bass_chroma", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -195,7 +200,6 @@ SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int samp
   if (out != nullptr) *out = nullptr;
   if (out_length != nullptr) *out_length = 0;
   if (out_n_frames != nullptr) *out_n_frames = 0;
-  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
   NnlsChromaConfig config;
   if (const SonareError err = run_validation([&] {
         config = NnlsChromaConfig::fast(hop_length);
@@ -207,6 +211,9 @@ SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int samp
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
 
   return run_offline("nnls_chroma_ex2", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {

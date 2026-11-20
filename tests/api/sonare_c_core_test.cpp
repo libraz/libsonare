@@ -298,10 +298,16 @@ TEST_CASE("sonare_decode_channels refuses unusable input and clears its outputs"
   REQUIRE(frames == 0);
   REQUIRE(channels == 0);
   REQUIRE(rate == 0);
+  REQUIRE(std::string(sonare_last_error_message()) == "data must not be NULL");
   REQUIRE(sonare_decode_channels(wav.data(), 0, &planar, &frames, &channels, &rate) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) == "length must be an integer of at least 1");
   REQUIRE(sonare_decode_channels(wav.data(), wav.size(), nullptr, &frames, &channels, &rate) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) == "out_samples must not be NULL");
+  REQUIRE(sonare_decode_channels(wav.data(), wav.size(), &planar, &frames, &channels, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) == "out_sample_rate must not be NULL");
 
   const std::vector<uint8_t> garbage(256, 0x5A);
   REQUIRE(sonare_decode_channels(garbage.data(), garbage.size(), &planar, &frames, &channels,
@@ -425,6 +431,8 @@ TEST_CASE("sonare_downmix folds an unmodelled channel count to mono by mean", "[
   sonare_free_floats(mono);
   REQUIRE(sonare_downmix(planes, 3, 3, SONARE_CHANNEL_LAYOUT_STEREO, nullptr, &mono) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) ==
+          "target_layout must be mono when num_channels has no speaker layout");
   REQUIRE(mono == nullptr);
 }
 
@@ -435,16 +443,23 @@ TEST_CASE("sonare_downmix refuses an upmix, an unknown layout and malformed argu
   REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_5_1, nullptr, &out) ==
           SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(out == nullptr);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
   REQUIRE(sonare_downmix(stereo.data(), 8, 2, 4, nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(message() == "target_layout must be an integer in [0, 3]");
   REQUIRE(sonare_downmix(stereo.data(), 8, 2, -1, nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(message() == "target_layout must be an integer in [0, 3]");
   REQUIRE(sonare_downmix(stereo.data(), 0, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(message() == "frames must be an integer of at least 1");
   REQUIRE(sonare_downmix(stereo.data(), 8, 0, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(message() == "num_channels must be an integer in [1, 2147483647]");
   REQUIRE(sonare_downmix(nullptr, 8, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(message() == "channels must not be NULL");
   REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(message() == "out_samples must not be NULL");
 }
 
 #ifndef __EMSCRIPTEN__
@@ -956,6 +971,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     bad.hop_length = bad.n_fft + 1;
     SonareStreamAnalyzer* analyzer = nullptr;
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "config.hop_length must be at most config.n_fft");
     REQUIRE(analyzer == nullptr);
   }
 
@@ -999,15 +1016,21 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     bad.key_update_interval_sec = 0.0f;
     SonareStreamAnalyzer* analyzer = nullptr;
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "config.key_update_interval_sec must be finite and greater than 0");
 
     bad = config;
     bad.max_progression_entries = 0;
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "config.max_progression_entries must be an integer in [1, 1048576]");
 
     bad = config;
     bad.fmin_hz = 1000.0f;
     bad.fmax_hz = 500.0f;
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) ==
+            "config.fmax_hz must be 0 or greater than config.fmin_hz");
   }
 
   SECTION("create and the live setter accept one tuning range") {

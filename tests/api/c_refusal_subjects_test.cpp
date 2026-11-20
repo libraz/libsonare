@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <vector>
@@ -104,7 +105,7 @@ TEST_CASE("the CQT-family entries refuse each member by its core name", "[c_api]
           SONARE_ERROR_INVALID_PARAMETER);
     return last_message();
   };
-  CHECK(refused(0, 32.7f, 24, 12) == "hop_length must be an integer in [1, 2147483647]");
+  CHECK(refused(0, 32.7f, 24, 12) == "hop_length must be an integer in [1, 65536]");
   CHECK(refused(512, 0.0f, 24, 12) == "fmin must be finite and greater than 0");
   CHECK(refused(512, 32.7f, 0, 12) == "n_bins must be an integer in [1, 2147483647]");
   CHECK(refused(512, 32.7f, 24, 0) == "bins_per_octave must be an integer in [1, 2147483647]");
@@ -114,7 +115,7 @@ TEST_CASE("the CQT-family entries refuse each member by its core name", "[c_api]
   CHECK(last_message() == "n_bins must be an integer in [1, 2147483647]");
   CHECK(sonare_vqt(samples.data(), samples.size(), 22050, 0, 32.7f, 24, 12, 0.0f, &out) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "hop_length must be an integer in [1, 2147483647]");
+  CHECK(last_message() == "hop_length must be an integer in [1, 65536]");
   CHECK(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 24, 12,
                    std::numeric_limits<float>::infinity(), &out) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring("gamma must not be infinite"));
@@ -150,7 +151,7 @@ TEST_CASE("the music feature entries refuse their own members", "[c_api][feature
   SonareChromaResult chroma{};
   CHECK(sonare_bass_chroma(samples.data(), samples.size(), 22050, 0, 12, &chroma) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "hop_length must be an integer in [1, 2147483647]");
+  CHECK(last_message() == "hop_length must be an integer in [1, 65536]");
   CHECK(sonare_bass_chroma(samples.data(), samples.size(), 22050, 512, 0, &chroma) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "n_chroma must be an integer in [1, 2147483647]");
@@ -179,6 +180,247 @@ TEST_CASE("the music feature entries refuse their own members", "[c_api][feature
   CHECK(sonare_estimate_tuning(samples.data(), samples.size(), 22050, 2048, 512, 0.01f, 0,
                                &tuning) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "bins_per_octave must be an integer in [1, 2147483647]");
+}
+
+TEST_CASE("the music and spectrogram entries refuse a NULL argument by its name",
+          "[c_api][feature]") {
+  const std::vector<float> samples(22050, 0.1f);
+  CHECK(sonare_chroma(samples.data(), samples.size(), 22050, 2048, 512, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out must not be NULL");
+  CHECK(sonare_bass_chroma(samples.data(), samples.size(), 22050, 512, 12, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out must not be NULL");
+  float* env = nullptr;
+  size_t env_length = 0;
+  CHECK(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env,
+                              nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_length must not be NULL");
+  CHECK(sonare_onset_strength_multi(samples.data(), samples.size(), 22050, 2048, 512, 128, 2, &env,
+                                    &env_length, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_n_frames must not be NULL");
+
+  CHECK(sonare_stft(samples.data(), samples.size(), 22050, 2048, 512, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out must not be NULL");
+  int n_bins = 0;
+  int n_frames = 0;
+  CHECK(sonare_stft_db(samples.data(), samples.size(), 22050, 2048, 512, &n_bins, &n_frames,
+                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_db must not be NULL");
+
+  const std::vector<float> features(4 * 9, 0.5f);
+  float* delta = nullptr;
+  CHECK(sonare_mel_delta(nullptr, 4, 9, 9, &delta) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "features must not be NULL");
+  CHECK(sonare_mel_delta(features.data(), 0, 9, 9, &delta) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "n_features must be an integer in [1, 2147483647]");
+  CHECK(sonare_mel_delta(features.data(), 4, 0, 9, &delta) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "n_frames must be an integer in [1, 2147483647]");
+  CHECK(sonare_mel_delta(features.data(), 1 << 16, 1 << 16, 9, &delta) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "n_features * n_frames must be at most 2147483647");
+  CHECK(sonare_mel_delta(features.data(), 4, 9, 4, &delta) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "width must be an odd integer in [3, 2147483647]");
+}
+
+TEST_CASE("the audio handle entries refuse a NULL argument by its name", "[c_api][audio_io]") {
+  const std::vector<uint8_t> bytes(16, 0);
+  SonareAudio* audio = nullptr;
+  CHECK(sonare_audio_from_memory(nullptr, 1, &audio) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "data must not be NULL");
+  CHECK(sonare_audio_from_memory(bytes.data(), 0, &audio) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "length must be an integer of at least 1");
+  CHECK(sonare_audio_from_memory(bytes.data(), bytes.size(), nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out must not be NULL");
+#ifndef __EMSCRIPTEN__
+  CHECK(sonare_audio_from_file(nullptr, &audio) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "path must not be NULL");
+  CHECK(sonare_audio_from_file_channel("x.wav", -1, &audio) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "channel_index must be an integer in [0, 2147483647]");
+  CHECK(sonare_audio_file_num_channels("x.wav", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_channels must not be NULL");
+#endif
+
+  const std::vector<float> samples(22050, 0.1f);
+  REQUIRE(sonare_audio_from_buffer(samples.data(), samples.size(), 22050, &audio) == SONARE_OK);
+  SonareKey key{};
+  CHECK(sonare_audio_detect_key(nullptr, &key) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "audio must not be NULL");
+  CHECK(sonare_audio_detect_key(audio, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_key must not be NULL");
+  CHECK(sonare_audio_detect_bpm(audio, 60.0f, 200.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_bpm must not be NULL");
+  float* times = nullptr;
+  CHECK(sonare_audio_detect_onsets(audio, &times, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out_count must not be NULL");
+  CHECK(sonare_audio_analyze(audio, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out must not be NULL");
+  sonare_audio_destroy(audio);
+}
+
+TEST_CASE("the chord entries refuse an option member and a chord element by its name",
+          "[c_api][feature]") {
+  const std::vector<float> samples(22050, 0.1f);
+  SonareChordDetectionOptions options{};
+  options.threshold = 0.5f;
+  options.n_fft = 2048;
+  options.hop_length = 512;
+  SonareChordAnalysisResult result{};
+  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, nullptr, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options must not be NULL");
+  options.struct_version = 1;
+  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.struct_version must be one of 0, 2");
+  options.struct_version = 0;
+  options.use_key_context = 1;
+  options.key_root = static_cast<SonarePitchClass>(12);
+  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.key_root must be an integer in [0, 11]");
+  options.key_root = SONARE_PITCH_C;
+  options.key_mode = static_cast<SonareMode>(7);
+  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.key_mode must be an integer in [0, 6]");
+  options.key_mode = SONARE_MODE_MAJOR;
+  options.chroma_method = static_cast<SonareChromaMethod>(3);
+  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.chroma_method must be an integer in [0, 2]");
+  options.chroma_method = SONARE_CHROMA_METHOD_STFT;
+
+  SonareStringArray roman{};
+  SonareStringArray functions{};
+  CHECK(sonare_chord_functional_analysis(
+            samples.data(), samples.size(), 22050, &options, static_cast<SonarePitchClass>(12),
+            SONARE_MODE_MAJOR, &result, &roman, &functions) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "key_root must be an integer in [0, 11]");
+  CHECK(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
+                                         SONARE_PITCH_C, SONARE_MODE_MAJOR, nullptr, &roman,
+                                         &functions) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "chords must not be NULL");
+
+  const SonareChord chords[2] = {
+      {SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f, SONARE_PITCH_C},
+      {SONARE_PITCH_G, static_cast<SonareChordQuality>(25), 1.0f, 2.0f, 1.0f, SONARE_PITCH_G},
+  };
+  CHECK(sonare_chord_functions(chords, 1, SONARE_PITCH_C, SONARE_MODE_MAJOR, nullptr, &functions) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "roman must not be NULL");
+  CHECK(sonare_chord_functions(nullptr, 2, SONARE_PITCH_C, SONARE_MODE_MAJOR, &roman, &functions) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "chords must not be NULL when count is not 0");
+  CHECK(sonare_chord_functions(chords, std::numeric_limits<size_t>::max() / 2, SONARE_PITCH_C,
+                               SONARE_MODE_MAJOR, &roman,
+                               &functions) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "count must be an integer in [0, 5e8]");
+  CHECK(sonare_chord_functions(chords, 1, SONARE_PITCH_C, static_cast<SonareMode>(-1), &roman,
+                               &functions) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "key_mode must be an integer in [0, 6]");
+  CHECK(sonare_chord_functions(chords, 2, SONARE_PITCH_C, SONARE_MODE_MAJOR, &roman, &functions) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "chords[1].quality must be an integer in [0, 24]");
+}
+
+TEST_CASE("the segment entries refuse each matrix argument by its name", "[c_api][feature]") {
+  const std::vector<float> features(2 * 3, 0.5f);
+  SonareSegmentMatrix matrix{};
+  SonareSegmentIndices indices{};
+
+  CHECK(sonare_segment_cross_similarity(features.data(), 2, 3, features.data(), 2, 3, 0, "cosine",
+                                        "affinity", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "out must not be NULL");
+  CHECK(sonare_segment_cross_similarity(nullptr, 2, 3, features.data(), 2, 3, 0, "cosine",
+                                        "affinity", &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "x must not be NULL");
+  CHECK(sonare_segment_cross_similarity(features.data(), 0, 3, features.data(), 2, 3, 0, "cosine",
+                                        "affinity", &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "x_rows must be an integer in [1, 2147483647]");
+  CHECK(sonare_segment_cross_similarity(features.data(), 2, 3, features.data(), 2, 0, 0, "cosine",
+                                        "affinity", &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "y_cols must be an integer in [1, 2147483647]");
+  CHECK(sonare_segment_cross_similarity(features.data(), 2, 3, features.data(), 1, 3, 0, "cosine",
+                                        "affinity", &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "y_rows must equal x_rows");
+  CHECK(sonare_segment_cross_similarity(features.data(), 2, 3, features.data(), 2, 3, -1, "cosine",
+                                        "affinity", &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "k must be an integer in [0, 2147483647]");
+  CHECK(sonare_segment_cross_similarity(features.data(), 2, 3, features.data(), 2, 3, 0, nullptr,
+                                        "affinity", &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "metric must not be NULL");
+  CHECK(sonare_segment_cross_similarity(features.data(), 2, 3, features.data(), 2, 3, 0, "cosine",
+                                        nullptr, &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "mode must not be NULL");
+
+  CHECK(sonare_segment_recurrence_matrix(features.data(), 1 << 16, 1 << 16, 0, 1, 1, "euclidean",
+                                         "connectivity",
+                                         &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "rows * cols must be at most 5e8");
+  CHECK(sonare_segment_recurrence_matrix(features.data(), 2, 3, 0, -1, 1, "euclidean",
+                                         "connectivity",
+                                         &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "width must be an integer in [0, 2147483647]");
+  CHECK(sonare_segment_recurrence_matrix(features.data(), 2, 3, 0, 1, 2, "euclidean",
+                                         "connectivity",
+                                         &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "sym must be one of 0, 1");
+
+  CHECK(sonare_segment_recurrence_to_lag(nullptr, 3, 1, &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "recurrence must not be NULL");
+  CHECK(sonare_segment_recurrence_to_lag(features.data(), 2, 2, &matrix) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "pad must be one of 0, 1");
+  CHECK(sonare_segment_lag_to_recurrence(features.data(), 0, 3, &matrix) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "n_rows must be an integer in [1, 2147483647]");
+
+  const std::vector<int> boundaries = {0, 3};
+  CHECK(sonare_segment_subsegment(features.data(), 2, 3, nullptr, 2, 2, &indices) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "boundaries must not be NULL when boundary_count is not 0");
+  CHECK(sonare_segment_subsegment(features.data(), 2, 3, boundaries.data(), boundaries.size(), 0,
+                                  &indices) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "n_segments must be an integer in [1, 2147483647]");
+  CHECK(sonare_segment_agglomerative(features.data(), 2, 3, 0, "average", &indices) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "k must be an integer in [1, 2147483647]");
+  CHECK(sonare_segment_agglomerative(features.data(), 2, 3, 2, nullptr, &indices) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "linkage must not be NULL");
+  CHECK(sonare_segment_path_enhance(features.data(), 2, 1, 0, 0, 7, &matrix) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "max_ratio must be an integer in [1, 2147483647]");
+  CHECK(sonare_segment_path_enhance(features.data(), 2, 1, 2, -1, 7, &matrix) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "min_ratio must be an integer in [0, 2147483647]");
+}
+
+TEST_CASE("the second-set entries name the first refused argument in header order",
+          "[c_api][feature]") {
+  const std::vector<float> samples(22050, 0.1f);
+  const std::vector<float> features(4 * 9, 0.5f);
+  CHECK(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 0, 12, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "hop_length must be an integer in [1, 2147483647]");
+  CHECK(sonare_mel_delta(nullptr, 4, 9, 9, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "features must not be NULL");
+  CHECK(sonare_segment_cross_similarity(nullptr, 2, 3, features.data(), 2, 3, 0, "cosine",
+                                        "affinity", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "x must not be NULL");
+  CHECK(sonare_audio_from_memory(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "data must not be NULL");
+  CHECK(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, nullptr, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options must not be NULL");
+  SonareStreamConfig config{};
+  CHECK(sonare_stream_analyzer_create(&config, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "config.sample_rate must be an integer in [1, 2147483647]");
+  CHECK(sonare_stream_analyzer_read_frames(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "analyzer must not be NULL");
 }
 
 TEST_CASE("the effects and metering entries refuse their own members", "[c_api][effects]") {

@@ -3,14 +3,15 @@
 #include "c_api/core_internal.h"
 #include "core/audio_io.h"
 #include "mixing/downmix.h"
+#include "util/parameter_checks.h"
 
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
                                      SonareAudio** out) {
   SONARE_C_API_ENTRY;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
+  if (out != nullptr) *out = nullptr;
   SonareError err = validate_audio_params("audio_from_buffer", "data", data, length, sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   *out = new SonareAudio{Audio::from_buffer(data, length, sample_rate)};
@@ -20,9 +21,14 @@ SonareError sonare_audio_from_buffer(const float* data, size_t length, int sampl
 
 SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareAudio** out) {
   SONARE_C_API_ENTRY;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  if (data == nullptr || length == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = nullptr;
+  SONARE_C_REQUIRE_NONNULL(data);
+  if (const SonareError err =
+          run_validation([&] { util::check::integer_at_least(length, 1, "length"); });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   *out = new SonareAudio{Audio::from_memory(data, length)};
@@ -37,10 +43,16 @@ SonareError sonare_decode_channels(const uint8_t* data, size_t length, float** o
   if (out_frames != nullptr) *out_frames = 0;
   if (out_channels != nullptr) *out_channels = 0;
   if (out_sample_rate != nullptr) *out_sample_rate = 0;
-  if (data == nullptr || length == 0 || out_samples == nullptr || out_frames == nullptr ||
-      out_channels == nullptr || out_sample_rate == nullptr) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(data);
+  if (const SonareError err =
+          run_validation([&] { util::check::integer_at_least(length, 1, "length"); });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_samples);
+  SONARE_C_REQUIRE_NONNULL(out_frames);
+  SONARE_C_REQUIRE_NONNULL(out_channels);
+  SONARE_C_REQUIRE_NONNULL(out_sample_rate);
 
   SONARE_C_TRY
   const std::vector<Audio> planes = Audio::from_memory_channels(data, length);
@@ -62,14 +74,20 @@ namespace {
 SonareError downmix_planar(const float* channels, size_t frames, size_t num_channels,
                            int target_layout, const mixing::DownmixOptions& options,
                            float** out_samples) {
-  if (out_samples == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_samples = nullptr;
+  if (out_samples != nullptr) *out_samples = nullptr;
+  SONARE_C_REQUIRE_NONNULL(channels);
   ChannelLayout to{};
-  if (channels == nullptr || frames == 0 || num_channels == 0 ||
-      num_channels > static_cast<size_t>(std::numeric_limits<int>::max()) ||
-      !ordinal_to_enum(target_layout, 0, kMaxChannelLayoutValue, &to)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        util::check::integer_at_least(frames, 1, "frames");
+        util::check::integer_in_range(static_cast<long long>(num_channels), 1,
+                                      std::numeric_limits<int>::max(), "num_channels");
+        util::check::integer_in_range(target_layout, 0, kMaxChannelLayoutValue, "target_layout");
+      });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_samples);
+  to = static_cast<ChannelLayout>(target_layout);
   const int channel_count = static_cast<int>(num_channels);
   const size_t in_channels = num_channels;
   const size_t out_channels = static_cast<size_t>(sonare::channel_count(to));
@@ -77,9 +95,17 @@ SonareError downmix_planar(const float* channels, size_t frames, size_t num_chan
   // mono as an unweighted mean and have no other target.
   const bool modelled =
       channel_count == sonare::channel_count(layout_from_channel_count(channel_count));
-  if (!modelled && to != ChannelLayout::Mono) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!modelled && to != ChannelLayout::Mono) {
+    return run_validation([&] {
+      util::check::refuse_relation({"target_layout", "num_channels"},
+                                   "{0} must be mono when {1} has no speaker layout");
+    });
+  }
   if (frames > std::numeric_limits<size_t>::max() / std::max(in_channels, out_channels)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([&] {
+      util::check::refuse_relation({"frames", "num_channels", "target_layout"},
+                                   "{0} * max({1}, the channel count of {2}) must fit in size_t");
+    });
   }
 
   SONARE_C_TRY
@@ -123,7 +149,8 @@ SonareError sonare_downmix(const float* channels, size_t frames, size_t num_chan
   SONARE_C_API_ENTRY;
   mixing::DownmixOptions fold;
   if (options != nullptr) {
-    if (options->struct_size < sizeof(SonareDownmixOptions)) {
+    if (!sonare_c_detail::struct_size_accepted(options->struct_size, sizeof(SonareDownmixOptions),
+                                               "options")) {
       if (out_samples != nullptr) *out_samples = nullptr;
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -136,9 +163,9 @@ SonareError sonare_downmix(const float* channels, size_t frames, size_t num_chan
 #ifndef __EMSCRIPTEN__
 SonareError sonare_audio_from_file(const char* path, SonareAudio** out) {
   SONARE_C_API_ENTRY;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  if (path == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = nullptr;
+  SONARE_C_REQUIRE_NONNULL(path);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   *out = new SonareAudio{Audio::from_file(path)};
@@ -148,11 +175,14 @@ SonareError sonare_audio_from_file(const char* path, SonareAudio** out) {
 
 SonareError sonare_audio_from_file_channel(const char* path, int channel_index, SonareAudio** out) {
   SONARE_C_API_ENTRY;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  if (path == nullptr || channel_index < 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = nullptr;
+  SONARE_C_REQUIRE_NONNULL(path);
+  if (const SonareError err =
+          run_validation([&] { util::check::integer_at_least(channel_index, 0, "channel_index"); });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   *out = new SonareAudio{Audio::from_file_channel(path, channel_index)};
@@ -163,9 +193,8 @@ SonareError sonare_audio_from_file_channel(const char* path, int channel_index, 
 SonareError sonare_audio_file_num_channels(const char* path, int* out_channels) {
   SONARE_C_API_ENTRY;
   if (out_channels != nullptr) *out_channels = 0;
-  if (path == nullptr || out_channels == nullptr) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(path);
+  SONARE_C_REQUIRE_NONNULL(out_channels);
 
   SONARE_C_TRY
   const int channels = sonare::audio_channel_count(path);
@@ -209,8 +238,8 @@ float sonare_audio_duration_sec(const SonareAudio* audio) {
 SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float bpm_min, float bpm_max,
                                     float* out_bpm) {
   SONARE_C_API_ENTRY;
-  if (audio == nullptr || out_bpm == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_bpm = 0.0f;
+  if (out_bpm != nullptr) *out_bpm = 0.0f;
+  SONARE_C_REQUIRE_NONNULL(audio);
   BpmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
@@ -218,6 +247,7 @@ SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float bpm_min, flo
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_bpm);
 
   SONARE_C_TRY
   *out_bpm = quick::detect_bpm(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate(),
@@ -228,7 +258,8 @@ SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float bpm_min, flo
 
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key) {
   SONARE_C_API_ENTRY;
-  if (audio == nullptr || out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(audio);
+  SONARE_C_REQUIRE_NONNULL(out_key);
 
   SONARE_C_TRY
   Key key = quick::detect_key(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
@@ -242,10 +273,9 @@ SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key
 SonareError sonare_audio_detect_beats(const SonareAudio* audio, float bpm_min, float bpm_max,
                                       float** out_times, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_times = nullptr;
-  *out_count = 0;
-  if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_times != nullptr) *out_times = nullptr;
+  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_REQUIRE_NONNULL(audio);
   BpmConfig tempo;
   tempo.bpm_min = bpm_min;
   tempo.bpm_max = bpm_max;
@@ -253,6 +283,8 @@ SonareError sonare_audio_detect_beats(const SonareAudio* audio, float bpm_min, f
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_times);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   BeatConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
@@ -267,10 +299,11 @@ SonareError sonare_audio_detect_beats(const SonareAudio* audio, float bpm_min, f
 SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_times,
                                           size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_times = nullptr;
-  *out_count = 0;
-  if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_times != nullptr) *out_times = nullptr;
+  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_REQUIRE_NONNULL(audio);
+  SONARE_C_REQUIRE_NONNULL(out_times);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
   SONARE_C_TRY
   std::vector<float> downbeats =
@@ -282,10 +315,11 @@ SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_times = nullptr;
-  *out_count = 0;
-  if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_times != nullptr) *out_times = nullptr;
+  if (out_count != nullptr) *out_count = 0;
+  SONARE_C_REQUIRE_NONNULL(audio);
+  SONARE_C_REQUIRE_NONNULL(out_times);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
   SONARE_C_TRY
   std::vector<float> onsets =
@@ -296,13 +330,13 @@ SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_tim
 
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out) {
   SONARE_C_API_ENTRY;
-  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the whole struct up front so a rejected input never leaves an
   // inconsistent (null beat_times, garbage beat_count) pair (matches
   // sonare_analyze_melody).
-  *out = {};
-  if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(audio);
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   AnalysisResult result =

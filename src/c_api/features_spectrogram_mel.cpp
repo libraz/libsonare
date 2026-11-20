@@ -1,6 +1,7 @@
 #include <limits>
 
 #include "c_api/features_internal.h"
+#include "util/parameter_checks.h"
 
 namespace {
 
@@ -24,10 +25,12 @@ MelConfig make_mel_config(int n_fft, int hop_length, int n_mels, float fmin, flo
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
                         int hop_length, SonareStftResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  out->magnitude = nullptr;
-  out->power = nullptr;
+  if (out != nullptr) {
+    out->magnitude = nullptr;
+    out->power = nullptr;
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("stft", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -59,14 +62,16 @@ SonareError sonare_stft(const float* samples, size_t length, int sample_rate, in
 SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate, int n_fft,
                            int hop_length, int* out_n_bins, int* out_n_frames, float** out_db) {
   SONARE_C_API_ENTRY;
-  if (!out_n_bins || !out_n_frames || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero every out param up front, not just the owned out_db pointer, so a
   // validate_audio_params rejection inside run_offline (which skips the body
   // below) never leaves *out_n_bins / *out_n_frames as caller stack garbage.
-  *out_n_bins = 0;
-  *out_n_frames = 0;
-  *out_db = nullptr;
+  if (out_n_bins != nullptr) *out_n_bins = 0;
+  if (out_n_frames != nullptr) *out_n_frames = 0;
+  if (out_db != nullptr) *out_db = nullptr;
+  SONARE_C_REQUIRE_NONNULL(out_n_bins);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
+  SONARE_C_REQUIRE_NONNULL(out_db);
 
   return run_offline("stft_db", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -92,9 +97,9 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
                                       int n_fft, int hop_length, int n_mels, float fmin_hz,
                                       float fmax_hz, int htk, SonareMelResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  *out = {};
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline("mel_spectrogram_ex", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -139,9 +144,9 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
                            int hop_length, int n_mels, int n_mfcc, float fmin_hz, float fmax_hz,
                            int htk, float lifter, SonareMfccResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  *out = {};
+  if (out != nullptr) *out = {};
+  SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(
       "mfcc_ex", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -178,14 +183,26 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
 SonareError sonare_mel_delta(const float* features, int n_features, int n_frames, int width,
                              float** out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  if (!features || n_features <= 0 || n_frames <= 0 || width < 3 || width % 2 == 0 ||
-      n_features > std::numeric_limits<int>::max() / n_frames) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (out != nullptr) *out = nullptr;
+  SONARE_C_REQUIRE_NONNULL(features);
+  if (const SonareError err = run_validation([&] {
+        namespace check = sonare::util::check;
+        constexpr int kIntMax = std::numeric_limits<int>::max();
+        check::integer_at_least(n_features, 1, "n_features");
+        check::integer_at_least(n_frames, 1, "n_frames");
+        if (n_features > kIntMax / n_frames) {
+          check::refuse_relation(
+              {"n_features", "n_frames"},
+              "{0} * {1} must be at most " + sonare::util::refusal::bound_text(kIntMax));
+        }
+        check::odd_integer_in_range(width, 3, kIntMax, "width");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   // Non-finite elements of `features` are rejected by MelSpectrogram::delta
   // itself; SONARE_C_CATCH maps that to SONARE_ERROR_INVALID_PARAMETER.
+  SONARE_C_REQUIRE_NONNULL(out);
 
   SONARE_C_TRY
   const std::vector<float> result = MelSpectrogram::delta(features, n_features, n_frames, width);
