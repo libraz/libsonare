@@ -5,9 +5,9 @@
 
 #include <sonare/sonare_c_effects.h>
 
-#include <cmath>
-
 #include "editing/note_model/note_renderer.h"
+#include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
 
@@ -19,13 +19,12 @@ namespace sonare_c_detail {
 inline SonareError resolve_note_render_config(const SonareNoteRenderConfig* config,
                                               sonare::editing::note_model::NoteRenderConfig& out) {
   if (config == nullptr) return SONARE_OK;
-  if (config->struct_version < 0 || config->struct_version > 1) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (!std::isfinite(config->fade_ms) || config->fade_ms < 0.0f ||
-      !std::isfinite(config->vibrato_cutoff_hz) || config->vibrato_cutoff_hz < 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  const SonareError error = run_validation([&] {
+    sonare::util::check::integer_in_range(config->struct_version, 0, 1, "config.struct_version");
+    sonare::util::check::at_least(config->fade_ms, 0.0, "config.fade_ms");
+    sonare::util::check::at_least(config->vibrato_cutoff_hz, 0.0, "config.vibrato_cutoff_hz");
+  });
+  if (error != SONARE_OK) return error;
   if (config->fade_ms > 0.0f) out.fade_ms = config->fade_ms;
   if (config->vibrato_cutoff_hz > 0.0f) {
     out.decomposition.vibrato_cutoff_hz = config->vibrato_cutoff_hz;

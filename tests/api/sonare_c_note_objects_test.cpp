@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -768,6 +769,31 @@ TEST_CASE("sonare_render_notes rejects a voiced mask without an F0 track",
   REQUIRE(sonare_render_notes(samples.data(), samples.size(), kSampleRate, &note, 1, nullptr, 0,
                               nullptr, voiced.data(), 0, kFrameRate, nullptr, &out,
                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare_render_notes refuses a note render config field by its member name",
+          "[c_api][note_objects]") {
+  const std::vector<float> samples = sine(440.0f, 0.25f, 1600);
+  SonareNoteObject note = hand_note(0, 1600);
+  auto refusal = [&](const SonareNoteRenderConfig& config) {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(render_at(samples, &note, 1, &config, &out, &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    return std::string(sonare_last_error_message());
+  };
+
+  SonareNoteRenderConfig config{};
+  config.struct_version = 2;
+  CHECK(refusal(config) == "config.struct_version must be an integer in [0, 1]");
+  config.struct_version = 1;
+  config.fade_ms = -1.0f;
+  CHECK(refusal(config) == "config.fade_ms must be finite and at least 0");
+  config.fade_ms = std::numeric_limits<float>::quiet_NaN();
+  CHECK(refusal(config) == "config.fade_ms must be finite and at least 0");
+  config.fade_ms = 0.0f;
+  config.vibrato_cutoff_hz = std::numeric_limits<float>::infinity();
+  CHECK(refusal(config) == "config.vibrato_cutoff_hz must be finite and at least 0");
 }
 
 TEST_CASE("sonare_render_notes silences a muted note", "[c_api][note_objects]") {
