@@ -25,6 +25,7 @@ from ._runtime import (
     _DEFAULT_EFFECT_N_FFT,
     _call_float_array_transform,
     _check,
+    _effect_hop,
     _from_c_float_array,
     _from_c_int_array,
     _get_lib,
@@ -587,7 +588,7 @@ def hpss(
     """
     _validate_samples(samples)
     n_fft = _validate_stft_n_fft(n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    hop_length = _effect_hop(hop_length)
     kernel_harmonic = _validate_hpss_kernel(kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel(kernel_percussive, "kernel_percussive")
     if not isinstance(hard_mask, bool):
@@ -711,7 +712,7 @@ def hpss_with_residual(
     """
     _validate_samples(samples)
     n_fft = _validate_stft_n_fft(n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    hop_length = _effect_hop(hop_length)
     kernel_harmonic = _validate_hpss_kernel(kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel(kernel_percussive, "kernel_percussive")
     if not isinstance(hard_mask, bool):
@@ -778,7 +779,7 @@ def phase_vocoder(
     """
     _validate_samples(samples)
     n_fft = _validate_stft_n_fft(n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    hop_length = _effect_hop(hop_length)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):

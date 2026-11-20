@@ -214,11 +214,11 @@ TEST_CASE("C effects _ex options reach their native processing paths", "[c_api][
     sonare_free_floats(residual);
   }
 
-  SECTION("HPSS runs a hop of 0 as a quarter of n_fft and names a negative hop") {
+  SECTION("HPSS runs SONARE_STFT_HOP_AUTO as a quarter of n_fft and names 0 and a negative hop") {
     SonareHpssResult absent{};
     SonareHpssResult quarter{};
-    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, 0, 1, 0,
-                           &absent, nullptr) == SONARE_OK);
+    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024,
+                           SONARE_STFT_HOP_AUTO, 1, 0, &absent, nullptr) == SONARE_OK);
     REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, 256, 1, 0,
                            &quarter, nullptr) == SONARE_OK);
     REQUIRE(absent.length == quarter.length);
@@ -227,11 +227,13 @@ TEST_CASE("C effects _ex options reach their native processing paths", "[c_api][
     sonare_free_hpss_result(&absent);
     sonare_free_hpss_result(&quarter);
 
-    SonareHpssResult refused{};
-    CHECK(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, -1, 1, 0,
-                         &refused, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message())
-              .find("hop_length must be an integer in [1, 2147483647]") != std::string::npos);
+    for (const int hop : {0, -2}) {
+      SonareHpssResult refused{};
+      CHECK(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, hop, 1, 0,
+                           &refused, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) ==
+            "hop_length must be an integer in [1, 2147483647]");
+    }
   }
 }
 

@@ -62,6 +62,8 @@ type StretchCase = {
   hop_length: number;
   cause?: Cause;
   message?: string;
+  /** The C ABI's text, where its hop rule refuses ahead of the core primitive. */
+  c_message?: string;
 };
 type AbsentHopCase = {
   id: string;
@@ -320,7 +322,7 @@ describe('an absent inverse-transform hop is derived from nFft by the core', () 
   type Route = {
     cases: InverseHops;
     facade: (nFft: number, hopLength?: number) => Float32Array;
-    native: (nFft: number, hopLength: number) => Float32Array;
+    native: (nFft: number, hopLength?: number) => Float32Array;
   };
   const routes: Array<[string, Route]> = [
     [
@@ -407,9 +409,16 @@ describe('an absent inverse-transform hop is derived from nFft by the core', () 
       ({ n_fft, hop_length, derived_hop_length }) => {
         const derived = derived_hop_length as number;
         expect(route.facade(n_fft)).toEqual(route.facade(n_fft, derived));
-        // The native entry takes a 0 hop as the derived one.
-        expect(route.native(n_fft, hop_length)).toEqual(route.native(n_fft, derived));
+        // The native entry reads an omitted hop and SONARE_STFT_HOP_AUTO (-1) as
+        // the derived one, and refuses a 0 like the facade.
+        expect(route.native(n_fft)).toEqual(route.native(n_fft, derived));
+        expect(route.native(n_fft, -1)).toEqual(route.native(n_fft, derived));
         expectRefusal(() => route.facade(n_fft, hop_length), RangeError, /hopLength/);
+        expectRefusal(
+          () => route.native(n_fft, hop_length),
+          RangeError,
+          /hopLength must be an integer in \[1, 2147483647\]/,
+        );
       },
     );
 
@@ -441,9 +450,10 @@ describe('native spectral stretch geometry refusals come from the core', () => {
     expect(viaShift.length).toBeGreaterThan(0);
   });
 
-  it.each(refused)('refuses $id', ({ n_fft, hop_length, cause, message }) => {
+  it.each(refused)('refuses $id', ({ n_fft, hop_length, cause, message, c_message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = new RegExp(message as string);
+    // The addon restates the C hop rule ahead of the core, so a hop it refuses carries the C text.
+    const text = c_message === undefined ? new RegExp(message as string) : publicText(c_message);
     const options = { nFft: n_fft, hopLength: hop_length };
     // The facade's own geometry domain refuses first, so only the class is pinned there.
     expectRefusal(
@@ -499,12 +509,21 @@ describe('an absent resynthesis hop is derived from nFft by the core', () => {
       expect(addon.pitchShift(samples, rate, input.pitch_semitones, n_fft)).toEqual(
         addon.pitchShift(samples, rate, input.pitch_semitones, n_fft, derived_hop_length),
       );
+      // SONARE_STFT_HOP_AUTO, which the facades send for an omitted hop.
+      expect(addon.timeStretch(samples, rate, input.speed_ratio, n_fft, -1)).toEqual(
+        addon.timeStretch(samples, rate, input.speed_ratio, n_fft, derived_hop_length),
+      );
     },
   );
 
   it.each(absent_hop)(
-    '$id: an explicit hop of 0 is refused by the facade',
+    '$id: an explicit hop of 0 is refused by the facade and the addon',
     ({ n_fft, hop_length }) => {
+      expectRefusal(
+        () => addon.timeStretch(samples, rate, input.speed_ratio, n_fft, hop_length),
+        RangeError,
+        /hopLength must be an integer in \[1, 2147483647\]/,
+      );
       const options = { nFft: n_fft, hopLength: hop_length };
       expectRefusal(
         () => timeStretch({ samples, sampleRate: rate, speedRatio: input.speed_ratio, ...options }),

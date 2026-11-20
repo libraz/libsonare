@@ -2067,3 +2067,123 @@ old = "sonare_transcribe_config_default"
 removed = "call sonare_transcribe_config_init(&config) on a caller-owned struct instead"
 domain = "analysis"
 rule = "options-struct"
+
+[[entry]]
+kind = "function"
+old = "sonare_hpss_ex"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_effects_extra_test.cpp::C effects _ex options reach their native processing paths"
+
+[[entry]]
+kind = "function"
+old = "sonare_time_stretch_ex"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::native spectral stretch geometry refusals"
+
+[[entry]]
+kind = "function"
+old = "sonare_pitch_shift_ex"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::native spectral stretch geometry refusals"
+
+[[entry]]
+kind = "function"
+old = "sonare_phase_vocoder"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::phase_vocoder derives an absent hop"
+
+[[entry]]
+kind = "function"
+old = "sonare_griffin_lim"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::griffin_lim derives an absent hop"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_audio"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_audio_ex"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_audio_checked"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mel_to_audio_checked_ex"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mel_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_ex"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_ex2"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_checked"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_checked_ex"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"
+
+[[entry]]
+kind = "function"
+old = "sonare_mfcc_to_audio_checked_ex2"
+changed = "pass SONARE_STFT_HOP_AUTO for a hop of a quarter of n_fft; a hop_length of 0 is refused rather than read as that default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/conformance/core_validation_refusals_test.cpp::mfcc_to_audio refusals are owned by the core function"

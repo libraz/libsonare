@@ -76,9 +76,7 @@ SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
                                           editing::event_model::PercussiveSeparationConfig& out) {
   if (const SonareError err = run_validation([&] {
         util::check::integer_at_least(n_fft, 1, "config.n_fft");
-        if (hop_length != SONARE_STFT_HOP_AUTO) {
-          util::check::integer_at_least(hop_length, 1, "config.hop_length");
-        }
+        check_stft_hop(hop_length, "config.hop_length");
         util::check::integer_at_least(kernel_harmonic, 1, "config.hpss_kernel_harmonic");
         util::check::integer_at_least(kernel_percussive, 1, "config.hpss_kernel_percussive");
       });
@@ -86,7 +84,7 @@ SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
     return err;
   }
   out.n_fft = n_fft;
-  out.hop_length = hop_length == SONARE_STFT_HOP_AUTO ? 0 : hop_length;
+  out.hop_length = core_stft_hop(hop_length);
   out.hpss.kernel_size_harmonic = kernel_harmonic;
   out.hpss.kernel_size_percussive = kernel_percussive;
   return SONARE_OK;

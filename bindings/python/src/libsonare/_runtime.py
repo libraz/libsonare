@@ -1135,12 +1135,12 @@ def _validate_stft_n_fft(n_fft: int) -> int:
 _DEFAULT_EFFECT_N_FFT = 2048
 
 
-def _validate_effect_hop(hop_length: object) -> int:
-    """Narrow a given STFT hop onto a positive C ``int``; 0 is refused, not a default.
+# SONARE_STFT_HOP_AUTO: the C hop for "a quarter of n_fft"; 0 is refused.
+_STFT_HOP_AUTO = -1
 
-    An omitted hop is not passed here: the caller sends the C ``0``, for which the
-    core derives ``n_fft / 4``.
-    """
+
+def _validate_effect_hop(hop_length: object) -> int:
+    """Narrow a given STFT hop onto a positive C ``int``; 0 is refused, not a default."""
     domain = f"must be an integer in [1, {_C_INT_MAX}]"
     try:
         hop = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
@@ -1149,6 +1149,11 @@ def _validate_effect_hop(hop_length: object) -> int:
     if hop <= 0:
         raise _refuse(f"hop_length {domain}")
     return hop
+
+
+def _effect_hop(hop_length: object) -> int:
+    """The C hop for a given STFT hop, or ``SONARE_STFT_HOP_AUTO`` when it is omitted."""
+    return _STFT_HOP_AUTO if hop_length is None else _validate_effect_hop(hop_length)
 
 
 def _synth_enum_value(value: object, names: Mapping[str, int], key: str) -> int:

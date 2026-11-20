@@ -35,7 +35,7 @@ val js_hpss_ex(val samples, const val& sample_rate, const val& kernel_harmonic,
 
   StftConfig stft_config;
   stft_config.n_fft = checkedIntFromVal(n_fft, "nFft");
-  stft_config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  stft_config.hop_length = resynthesisHopFromVal(hop_length);
 
   HpssAudioResult result = hpss(audio, config, stft_config);
 
@@ -82,7 +82,7 @@ val js_time_stretch_ex(val samples, const val& sample_rate, const val& rate_val,
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   TimeStretchConfig config;
   config.n_fft = checkedIntFromVal(n_fft, "nFft");
-  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  config.hop_length = resynthesisHopFromVal(hop_length);
   config.backend = StretchBackend::NativeSpectral;
   Audio result = time_stretch(audio, rate, config);
   return vectorToFloat32Array(result.data(), result.size());
@@ -105,7 +105,7 @@ val js_pitch_shift_ex(val samples, const val& sample_rate_val, const val& semito
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   PitchShiftConfig config;
   config.n_fft = checkedIntFromVal(n_fft, "nFft");
-  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  config.hop_length = resynthesisHopFromVal(hop_length);
   config.backend = StretchBackend::NativeSpectral;
   Audio result = pitch_shift(audio, semitones, config);
   return vectorToFloat32Array(result.data(), result.size());
@@ -413,7 +413,7 @@ val js_hpss_with_residual_ex(val samples, const val& sample_rate, const val& ker
 
   StftConfig stft_config;
   stft_config.n_fft = checkedIntFromVal(n_fft, "nFft");
-  stft_config.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  stft_config.hop_length = resynthesisHopFromVal(hop_length);
 
   HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
 
@@ -439,9 +439,8 @@ val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_va
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float rate = checkedFloatFromVal(rate_val, "speedRatio");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  // A hop of 0 is absent and runs a quarter of nFft, as the C entry resolves it.
-  const int hop_length =
-      resolve_resynthesis_hop(checkedIntFromVal(hop_length_val, "hopLength"), n_fft);
+  // An automatic hop runs a quarter of nFft, as the C entry resolves it.
+  const int hop_length = resolve_resynthesis_hop(resynthesisHopFromVal(hop_length_val), n_fft);
   // Guard the time-scale rate before deriving the output length. Mirrors the C
   // ABI rate > 0 check (sonare_phase_vocoder); no upper cap is imposed on fast
   // rates.

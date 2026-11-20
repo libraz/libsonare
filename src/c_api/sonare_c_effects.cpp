@@ -35,13 +35,6 @@ using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
 
-/// Refuses a hop that is neither positive nor SONARE_STFT_HOP_AUTO, by @p subject.
-void check_stft_hop(int hop_length, const char* subject) {
-  if (hop_length != SONARE_STFT_HOP_AUTO) {
-    sonare::util::check::integer_at_least(hop_length, 1, subject);
-  }
-}
-
 /// Checks a decompose-stems config and copies it onto the core one. Throws the refusal.
 void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
                                  DecomposeStemsConfig* core_config) {
@@ -57,7 +50,7 @@ void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
   check::at_least(config.mask_power, 1.0, "config.mask_power");
   core_config->n_components = config.n_components;
   core_config->n_fft = config.n_fft;
-  core_config->hop_length = config.hop_length == SONARE_STFT_HOP_AUTO ? 0 : config.hop_length;
+  core_config->hop_length = core_stft_hop(config.hop_length);
   core_config->n_iter = config.n_iter;
   core_config->beta = config.beta;
   core_config->init = config.init;
@@ -136,10 +129,11 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
       err != SONARE_OK) {
     return err;
   }
-  // The FFT size is refused before any input is decoded. A hop of 0 is absent and
-  // the core runs a quarter of n_fft; it names a negative one.
-  if (const SonareError err =
-          run_validation([&] { sonare::util::check::integer_at_least(n_fft, 1, "n_fft"); });
+  // The FFT size and hop are refused before any input is decoded.
+  if (const SonareError err = run_validation([&] {
+        sonare::util::check::integer_at_least(n_fft, 1, "n_fft");
+        check_stft_hop(hop_length, "hop_length");
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -155,7 +149,7 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
 
         StftConfig stft_config;
         stft_config.n_fft = n_fft;
-        stft_config.hop_length = hop_length;
+        stft_config.hop_length = core_stft_hop(hop_length);
 
         if (with_residual == 0) {
           HpssAudioResult result = hpss(audio, config, stft_config);
@@ -238,12 +232,16 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
       err != SONARE_OK) {
     return err;
   }
+  if (const SonareError err = run_validation([&] { check_stft_hop(hop_length, "hop_length"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
 
   TimeStretchConfig config;
   config.n_fft = n_fft;
-  config.hop_length = hop_length;
+  config.hop_length = core_stft_hop(hop_length);
   config.backend = StretchBackend::NativeSpectral;
   return run_mono_prevalidated(
       samples, length, sample_rate, out, out_length,
@@ -269,6 +267,10 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
       err != SONARE_OK) {
     return err;
   }
+  if (const SonareError err = run_validation([&] { check_stft_hop(hop_length, "hop_length"); });
+      err != SONARE_OK) {
+    return err;
+  }
 
   PitchShiftPlan plan;
   if (!make_pitch_shift_plan(length, sample_rate, pitch_semitones, &plan)) {
@@ -280,7 +282,7 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
 
   PitchShiftConfig config;
   config.n_fft = n_fft;
-  config.hop_length = hop_length;
+  config.hop_length = core_stft_hop(hop_length);
   config.backend = StretchBackend::NativeSpectral;
   return run_mono_prevalidated(samples, length, sample_rate, out, out_length,
                                [pitch_semitones, config](const Audio& a) {
@@ -880,7 +882,10 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation([&] { validate_stretch_rate(speed_ratio); });
+  if (const SonareError err = run_validation([&] {
+        validate_stretch_rate(speed_ratio);
+        check_stft_hop(hop_length, "hop_length");
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -889,9 +894,7 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
 
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-        // A hop of 0 is absent and runs a quarter of n_fft; a negative one is
-        // named by the core.
-        const int hop = resolve_resynthesis_hop(hop_length, n_fft);
+        const int hop = resolve_resynthesis_hop(core_stft_hop(hop_length), n_fft);
         StftConfig stft_config;
         stft_config.n_fft = n_fft;
         stft_config.hop_length = hop;
@@ -957,7 +960,7 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
       return err;
     }
     core_config.n_fft = config->n_fft;
-    core_config.hop_length = config->hop_length == SONARE_STFT_HOP_AUTO ? 0 : config->hop_length;
+    core_config.hop_length = core_stft_hop(config->hop_length);
     core_config.window = to_window_type(config->window);
     core_config.heal_radius_frames = config->heal_radius_frames;
   }

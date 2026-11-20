@@ -284,8 +284,11 @@ describe('the HPSS positional readers default only an omitted argument', () => {
       }
     }
 
-    it(`${entry.name}: a hopLength of 0 is the core's quarter of nFft`, () => {
-      expect(digest(entry.run(31, 31, 2048, 0))).toBe(digest(entry.run(31, 31, 2048, 512)));
+    it(`${entry.name}: a hopLength of -1 is the core's quarter of nFft and 0 is refused`, () => {
+      expect(digest(entry.run(31, 31, 2048, -1))).toBe(digest(entry.run(31, 31, 2048, 512)));
+      const error = captureError(() => entry.run(31, 31, 2048, 0));
+      expect(error).toBeInstanceOf(RangeError);
+      expect(error?.message).toMatch(/hopLength must be an integer in \[1, 2147483647\]/);
     });
 
     // A value that cannot be represented at all is the reader's to refuse, and

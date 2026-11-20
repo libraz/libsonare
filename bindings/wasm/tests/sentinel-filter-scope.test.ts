@@ -339,10 +339,6 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
     'The routing count on a patch the core produced, sizing the JS array it is copied into.',
   ],
   [
-    'src/c_api/features_streaming.cpp:fmax',
-    "The core streaming default, whose 0 spells Nyquist; the init function converts it to the C field's NaN. It reads a library constant, never a caller value.",
-  ],
-  [
     'src/c_api/project_bounce_mixer.cpp:stage_latency_q8',
     'A measured insert-chain latency used to shift authored automation to its processing stage. Zero means no arrival delay; it never selects a caller option default.',
   ],

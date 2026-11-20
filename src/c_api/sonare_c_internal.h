@@ -25,6 +25,7 @@
 #include <sonare/sonare_c.h>
 
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/types.h"
 
 struct SonareAudio {
@@ -103,6 +104,18 @@ inline void require_struct_size(uint32_t struct_size, size_t expected, const std
   throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter,
                                                   subject + ".struct_size",
                                                   std::string("must be set by ") + init_name);
+}
+/// @brief Refuses a C hop that is neither positive nor @ref SONARE_STFT_HOP_AUTO, by @p subject.
+/// @throws sonare::SonareParameterRefusal naming @p subject.
+inline void check_stft_hop(int hop_length, const char* subject) {
+  if (hop_length != SONARE_STFT_HOP_AUTO) {
+    sonare::util::check::integer_at_least(hop_length, 1, subject);
+  }
+}
+/// @brief The core spelling of a checked C hop: @ref SONARE_STFT_HOP_AUTO becomes 0, the hop
+///        the core derives as a quarter of the FFT size.
+inline int core_stft_hop(int hop_length) noexcept {
+  return hop_length == SONARE_STFT_HOP_AUTO ? 0 : hop_length;
 }
 /// @brief Records @p code with @p msg, a string with static storage duration.
 /// @details Never allocates: the message is read through the fallback pointer

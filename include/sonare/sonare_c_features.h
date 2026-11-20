@@ -405,8 +405,8 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
 /// @param n_frames Number of time frames.
 /// @param sample_rate Sample rate of the original audio (Hz).
 /// @param n_fft FFT size used for reconstruction.
-/// @param hop_length Hop length used for reconstruction, or 0 for a quarter of @p n_fft (at least
-/// 1).
+/// @param hop_length Hop length used for reconstruction, or @ref SONARE_STFT_HOP_AUTO for a
+/// quarter of @p n_fft (at least 1); 0 is refused.
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
 /// @param fmax_hz Maximum Mel frequency in Hz (0.0 = sr/2).
 /// @param n_iter Griffin-Lim iterations (e.g. 32).
@@ -419,7 +419,8 @@ SonareError sonare_mel_to_audio(const float* mel, int n_mels, int n_frames, int 
 /// @brief Reconstruct mono audio from an STFT magnitude matrix with Griffin-Lim.
 /// @details @p magnitude is row-major [n_bins x n_frames]; @p input_length must
 ///   equal n_bins * n_frames, n_bins must equal n_fft / 2 + 1, and momentum is in [0, 1).
-///   A @p hop_length of 0 is a quarter of @p n_fft (at least 1).
+///   A @p hop_length of @ref SONARE_STFT_HOP_AUTO is a quarter of @p n_fft (at least 1); 0 is
+///   refused.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int n_bins,
                                int n_frames, int n_fft, int hop_length, int sample_rate, int n_iter,
@@ -453,8 +454,8 @@ SonareError sonare_mfcc_to_mel_ex(const float* coefficients, int n_mfcc, int n_f
 /// @param n_mels Number of Mel bins (must match the MFCC source config).
 /// @param sample_rate Sample rate of the original audio (Hz).
 /// @param n_fft FFT size used for reconstruction.
-/// @param hop_length Hop length used for reconstruction, or 0 for a quarter of @p n_fft (at least
-/// 1).
+/// @param hop_length Hop length used for reconstruction, or @ref SONARE_STFT_HOP_AUTO for a
+/// quarter of @p n_fft (at least 1); 0 is refused.
 /// @param fmin_hz Minimum Mel frequency in Hz (0.0 for librosa default).
 /// @param fmax_hz Maximum Mel frequency in Hz (0.0 = sr/2).
 /// @param n_iter Griffin-Lim iterations (e.g. 32).

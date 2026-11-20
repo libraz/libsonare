@@ -21,7 +21,6 @@
 
 namespace sonare_node {
 
-using sonare::constants::kDefaultHopLength;
 using sonare::constants::kDefaultNFft;
 
 std::string ErrorMessageForCode(SonareError err) {
@@ -462,7 +461,7 @@ bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArgume
       !OptionalIntArg(env, info, 3, "kernelPercussive", defaults.kernel_size_percussive,
                       &out->kernel_percussive) ||
       !OptionalIntArg(env, info, 4, "nFft", kDefaultNFft, &out->n_fft) ||
-      !OptionalIntArg(env, info, 5, "hopLength", kDefaultHopLength, &out->hop_length) ||
+      !OptionalCoreResynthesisHopArg(env, info, 5, &out->hop_length) ||
       !OptionalBoolArg(env, info, 6, "hardMask", false, &out->hard_mask)) {
     return false;
   }

@@ -77,6 +77,20 @@ def test_hpss_options_reach_the_native_call(monkeypatch: pytest.MonkeyPatch) -> 
     assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 0]
 
 
+def test_an_omitted_hpss_hop_reaches_the_native_call_as_auto(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    new_call = _Call()
+    new = SimpleNamespace(
+        sonare_hpss_ex=new_call,
+        sonare_free_hpss_result=lambda *_args: None,
+    )
+    monkeypatch.setattr(separation, "_get_lib", lambda: new)
+    separation.hpss(_samples(), n_fft=1024, sample_rate=22050)
+    # SONARE_STFT_HOP_AUTO; the C ABI refuses a hop of 0.
+    assert int(new_call.calls[0][6].value) == -1
+
+
 def test_hpss_with_residual_options_reach_the_native_call(monkeypatch: pytest.MonkeyPatch) -> None:
     new_call = _Call()
     new = SimpleNamespace(

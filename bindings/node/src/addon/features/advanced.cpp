@@ -297,10 +297,7 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 4, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  // An absent hop stays 0, which the core runs as a quarter of n_fft.
-  if (!OptionalIntArg(env, info, 5, "hopLength", kZeroIsSentinel, &hop_length)) {
-    return env.Undefined();
-  }
+  if (!OptionalCoreResynthesisHopArg(env, info, 5, &hop_length)) return env.Undefined();
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 6, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
@@ -344,8 +341,8 @@ Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!RequiredIntArg(env, info, 4, "nFft", &n_fft)) return env.Undefined();
   int hop_length{};
-  // An absent hop stays 0, which the core runs as a quarter of n_fft.
-  if (!OptionalIntArg(env, info, 5, "hopLength", kZeroIsSentinel, &hop_length)) {
+  // An absent hop is SONARE_STFT_HOP_AUTO, which the C ABI runs as a quarter of n_fft.
+  if (!Int32Arg(env, info, 5, "hopLength", SONARE_STFT_HOP_AUTO, &hop_length)) {
     return env.Undefined();
   }
   int n_iter{};
@@ -417,10 +414,7 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  // An absent hop stays 0, which the core runs as a quarter of n_fft.
-  if (!OptionalIntArg(env, info, 6, "hopLength", kZeroIsSentinel, &hop_length)) {
-    return env.Undefined();
-  }
+  if (!OptionalCoreResynthesisHopArg(env, info, 6, &hop_length)) return env.Undefined();
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 7, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};

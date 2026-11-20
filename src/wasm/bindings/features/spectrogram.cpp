@@ -268,14 +268,13 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   validate_sample_rate(sample_rate);
   std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power", "nMels");
   validate_positive(n_fft, "nFft");
-  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
@@ -297,14 +296,13 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float momentum = checkedFloatFromVal(momentum_val, "momentum");
   validate_sample_rate(sample_rate);
   std::vector<float> data =
       load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");
   validate_positive(n_fft, "nFft");
-  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   validate_positive(n_iter, "nIter");
   if (n_bins != n_fft / 2 + 1 || n_iter > sonare::resource::kMaxGriffinLimIterations ||
       momentum < 0.0f || momentum >= 1.0f) {
@@ -347,7 +345,7 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
@@ -355,7 +353,6 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   validate_sample_rate(sample_rate);
   std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients", "nMfcc");
   validate_positive(n_fft, "nFft");
-  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;

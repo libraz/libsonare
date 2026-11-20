@@ -18,6 +18,7 @@ from ._field_spelling import surface_spelling
 from ._narrowing import _domain_float, _narrow_float
 from ._runtime import (
     _check,
+    _effect_hop,
     _from_c_float_array,
     _from_c_float_matrix,
     _get_lib,
@@ -31,7 +32,6 @@ from ._runtime import (
     _to_c_float_matrix,
     _to_c_int,
     _to_c_size_t,
-    _validate_effect_hop,
 )
 from .types import CqtResult
 
@@ -348,7 +348,7 @@ def mel_to_audio(
             _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
             _to_c_int(
-                0 if hop_length is None else _validate_effect_hop(hop_length),
+                _effect_hop(hop_length),
                 "hop_length",
             ),
             _to_c_float(fmin, "fmin"),
@@ -379,7 +379,7 @@ def griffin_lim(
     data, n_bins, n_frames = _to_c_float_matrix(magnitude, arg_name="magnitude")
     if n_fft is None:
         n_fft = (n_bins - 1) * 2
-    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    hop_length = _effect_hop(hop_length)
     length = n_bins * n_frames
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -466,7 +466,7 @@ def mfcc_to_audio(
     """
     lib = _get_lib()
     c_array, n_mfcc, n_frames = _to_c_float_matrix(coefficients, arg_name="coefficients")
-    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    hop_length = _effect_hop(hop_length)
     if lifter == 0.0:
         return _inverse_audio(
             lib,

@@ -163,8 +163,10 @@ TEST_CASE("mel_to_audio refusals are owned by the core function",
   for (const auto& item : route["absent_hop"].as_array()) {
     INFO(item["id"].as_string());
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
-    CHECK(run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_OK) ==
+    CHECK(run(n_fft, SONARE_STFT_HOP_AUTO, SONARE_OK) ==
           run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
+    run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
   }
   for (const auto& item : route["negative_hop"].as_array()) {
     INFO(item["id"].as_string());
@@ -230,8 +232,10 @@ TEST_CASE("mfcc_to_audio refusals are owned by the core function",
   for (const auto& item : route["absent_hop"].as_array()) {
     INFO(item["id"].as_string());
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
-    CHECK(run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_OK) ==
+    CHECK(run(n_fft, SONARE_STFT_HOP_AUTO, SONARE_OK) ==
           run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
+    run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
   }
   for (const auto& item : route["negative_hop"].as_array()) {
     INFO(item["id"].as_string());
@@ -266,11 +270,12 @@ TEST_CASE("griffin_lim derives an absent hop and names a negative one",
   for (const auto& item : route["absent_hop"].as_array()) {
     INFO(item["id"].as_string());
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
-    const std::vector<float> absent =
-        run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_OK);
+    const std::vector<float> absent = run(n_fft, SONARE_STFT_HOP_AUTO, SONARE_OK);
     CHECK_FALSE(absent.empty());
     CHECK(absent ==
           run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
+    run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
   }
   for (const auto& item : route["negative_hop"].as_array()) {
     INFO(item["id"].as_string());
@@ -304,11 +309,12 @@ TEST_CASE("phase_vocoder derives an absent hop and names a negative one",
   for (const auto& item : route["absent_hop"].as_array()) {
     INFO(item["id"].as_string());
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
-    const std::vector<float> absent =
-        run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_OK);
+    const std::vector<float> absent = run(n_fft, SONARE_STFT_HOP_AUTO, SONARE_OK);
     CHECK_FALSE(absent.empty());
     CHECK(absent ==
           run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
+    run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
   }
   for (const auto& item : route["negative_hop"].as_array()) {
     INFO(item["id"].as_string());
@@ -372,18 +378,21 @@ TEST_CASE("native spectral stretch geometry refusals are owned by the core funct
     shift.backend = sonare::StretchBackend::NativeSpectral;
     require_argument_refusal([&] { sonare::pitch_shift(audio, semitones, shift); }, message);
 
+    // The C entries refuse a hop before the core sees it, in the ruled integer-domain text.
+    const std::string c_message =
+        item.contains("c_message") ? item["c_message"].as_string() : message;
     float* out = nullptr;
     size_t out_length = 0;
     CHECK(sonare_time_stretch_ex(samples.data(), samples.size(), rate, speed, n_fft, hop, &out,
                                  &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(c_message));
     CHECK(sonare_pitch_shift_ex(samples.data(), samples.size(), rate, semitones, n_fft, hop, &out,
                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(c_message));
   }
 
-  // A hop of 0 in a config or a C entry is absent and runs the derived hop; the positional
-  // primitive takes the hop it is handed and still refuses it.
+  // A hop of 0 in a core config is absent and runs the derived hop, as SONARE_STFT_HOP_AUTO does
+  // in a C entry, which refuses 0; the positional primitive takes the hop it is handed.
   for (const auto& item : route["absent_hop"].as_array()) {
     const int n_fft = static_cast<int>(item["n_fft"].as_number());
     const int hop = static_cast<int>(item["hop_length"].as_number());
@@ -407,17 +416,29 @@ TEST_CASE("native spectral stretch geometry refusals are owned by the core funct
     size_t out_length = 0;
     float* expected = nullptr;
     size_t expected_length = 0;
-    REQUIRE(sonare_time_stretch_ex(samples.data(), samples.size(), rate, speed, n_fft, hop, &out,
-                                   &out_length) == SONARE_OK);
+    REQUIRE(sonare_time_stretch_ex(samples.data(), samples.size(), rate, speed, n_fft,
+                                   SONARE_STFT_HOP_AUTO, &out, &out_length) == SONARE_OK);
     REQUIRE(sonare_time_stretch_ex(samples.data(), samples.size(), rate, speed, n_fft, derived,
                                    &expected, &expected_length) == SONARE_OK);
     CHECK(std::vector<float>(out, out + out_length) ==
           std::vector<float>(expected, expected + expected_length));
     sonare_free_floats(out);
     sonare_free_floats(expected);
-    REQUIRE(sonare_pitch_shift_ex(samples.data(), samples.size(), rate, semitones, n_fft, hop, &out,
-                                  &out_length) == SONARE_OK);
+    REQUIRE(sonare_pitch_shift_ex(samples.data(), samples.size(), rate, semitones, n_fft,
+                                  SONARE_STFT_HOP_AUTO, &out, &out_length) == SONARE_OK);
+    REQUIRE(sonare_pitch_shift_ex(samples.data(), samples.size(), rate, semitones, n_fft, derived,
+                                  &expected, &expected_length) == SONARE_OK);
+    CHECK(std::vector<float>(out, out + out_length) ==
+          std::vector<float>(expected, expected + expected_length));
     sonare_free_floats(out);
+    sonare_free_floats(expected);
+
+    CHECK(sonare_time_stretch_ex(samples.data(), samples.size(), rate, speed, n_fft, hop, &out,
+                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
+    CHECK(sonare_pitch_shift_ex(samples.data(), samples.size(), rate, semitones, n_fft, hop, &out,
+                                &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_error_message() == "hop_length must be an integer in [1, 2147483647]");
   }
 }
 

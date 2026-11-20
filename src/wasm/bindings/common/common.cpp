@@ -475,6 +475,14 @@ int checkedIntFromVal(const val& value, const char* key) {
   return static_cast<int>(number);
 }
 
+int resynthesisHopFromVal(const val& value) {
+  constexpr int kStftHopAuto = -1;
+  const int hop_length = checkedIntFromVal(value, "hopLength");
+  if (hop_length == kStftHopAuto) return 0;
+  if (hop_length < 1) throw WasmRangeError("hopLength must be an integer in [1, 2147483647]");
+  return hop_length;
+}
+
 int checkedMidiNoteFromVal(const val& note) {
   if (!note.isNumber()) {
     throw WasmTypeError("note must be a number");

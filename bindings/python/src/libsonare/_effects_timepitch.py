@@ -26,6 +26,7 @@ from ._runtime import (
     _UINT32_MAX,
     _call_float_array_transform,
     _check,
+    _effect_hop,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -39,7 +40,6 @@ from ._runtime import (
     _to_c_int_array,
     _to_c_size_t,
     _token_arg,
-    _validate_effect_hop,
     _validate_samples,
     _validate_stft_n_fft,
 )
@@ -74,7 +74,7 @@ def time_stretch(
     """
     _validate_samples(samples)
     n_fft = _validate_stft_n_fft(n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    hop_length = _effect_hop(hop_length)
     return _call_float_array_transform(
         "sonare_time_stretch_ex",
         samples,
@@ -110,7 +110,7 @@ def pitch_shift(
     """
     _validate_samples(samples)
     n_fft = _validate_stft_n_fft(n_fft)
-    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
+    hop_length = _effect_hop(hop_length)
     return _call_float_array_transform(
         "sonare_pitch_shift_ex",
         samples,

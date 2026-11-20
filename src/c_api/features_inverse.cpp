@@ -178,8 +178,11 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(mel);
-  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   if (const SonareError err = validate_mel_inverse(n_mels, n_frames, n_fft, sample_rate);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err = run_validation([&] { check_stft_hop(hop_length, "hop_length"); });
       err != SONARE_OK) {
     return err;
   }
@@ -191,7 +194,7 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
   MelConfig config;
   config.n_mels = n_mels;
   config.n_fft = n_fft;
-  config.hop_length = hop_length;
+  config.hop_length = core_stft_hop(hop_length);
   config.fmin = fmin_hz;
   config.fmax = fmax_hz;
   config.htk = htk != 0;
@@ -214,11 +217,11 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(magnitude);
-  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   if (const SonareError err = run_validation([&] {
         check::integer_at_least(n_bins, 1, "n_bins");
         check::integer_at_least(n_frames, 1, "n_frames");
         check::integer_at_least(n_fft, 1, "n_fft");
+        check_stft_hop(hop_length, "hop_length");
         check::integer_in_range(sample_rate, kMinSampleRate, kMaxSampleRate, "sample_rate");
         check::integer_in_range(n_iter, 1, resource::kMaxGriffinLimIterations, "n_iter");
         check::in_interval(momentum, 0.0, true, 1.0, false, "momentum");
@@ -235,9 +238,9 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
   GriffinLimConfig config;
   config.n_iter = n_iter;
   config.momentum = momentum;
-  return fill_audio_samples(
-      griffin_lim(magnitude, n_bins, n_frames, n_fft, hop_length, sample_rate, config), out,
-      out_length);
+  return fill_audio_samples(griffin_lim(magnitude, n_bins, n_frames, n_fft,
+                                        core_stft_hop(hop_length), sample_rate, config),
+                            out, out_length);
   SONARE_C_CATCH
 }
 
@@ -267,9 +270,9 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
-  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   if (const SonareError err = run_validation([&] {
         check::integer_at_least(n_fft, 1, "n_fft");
+        check_stft_hop(hop_length, "hop_length");
         check::integer_at_least(sample_rate, 1, "sample_rate");
       });
       err != SONARE_OK) {
@@ -283,7 +286,7 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
   MelConfig config;
   config.n_mels = n_mels;
   config.n_fft = n_fft;
-  config.hop_length = hop_length;
+  config.hop_length = core_stft_hop(hop_length);
   config.fmin = fmin_hz;
   config.fmax = fmax_hz;
   config.htk = htk != 0;

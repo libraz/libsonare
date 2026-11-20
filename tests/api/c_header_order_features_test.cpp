@@ -23,14 +23,14 @@ T* garbage_pointer() {
 
 TEST_CASE("inverse entries name the input before the outputs", "[c_api][header_order]") {
   SECTION("mel_to_audio_ex names mel before out") {
-    REQUIRE(sonare_mel_to_audio_ex(nullptr, 4, 4, 22050, 512, 0, 0.0f, 0.0f, 0, 4, nullptr,
-                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mel_to_audio_ex(nullptr, 4, 4, 22050, 512, SONARE_STFT_HOP_AUTO, 0.0f, 0.0f, 0,
+                                   4, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "mel must not be NULL");
 
     float* out = garbage_pointer<float>();
     size_t out_length = 7;
-    REQUIRE(sonare_mel_to_audio_ex(nullptr, 4, 4, 22050, 512, 0, 0.0f, 0.0f, 0, 4, &out,
-                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mel_to_audio_ex(nullptr, 4, 4, 22050, 512, SONARE_STFT_HOP_AUTO, 0.0f, 0.0f, 0,
+                                   4, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "mel must not be NULL");
     CHECK(out == nullptr);
     CHECK(out_length == 0);

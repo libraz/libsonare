@@ -475,7 +475,8 @@ Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 3, "nFft", sonare::constants::kDefaultNFft, &n_fft))
     return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 4, "hopLength", sonare::constants::kDefaultHopLength, &hop_length))
+  // An absent hop is SONARE_STFT_HOP_AUTO, which the C ABI runs as a quarter of n_fft.
+  if (!Int32Arg(env, info, 4, "hopLength", SONARE_STFT_HOP_AUTO, &hop_length))
     return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;

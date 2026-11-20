@@ -61,6 +61,8 @@ type StretchCase = {
   hop_length: number;
   cause?: Cause;
   message?: string;
+  /** The C ABI's text, where its hop rule refuses ahead of the core primitive. */
+  c_message?: string;
 };
 type AbsentHopCase = {
   id: string;
@@ -440,8 +442,12 @@ describe('an absent inverse-transform hop is derived from nFft by the core', () 
       ({ n_fft, hop_length, derived_hop_length }) => {
         const derived = derived_hop_length as number;
         expect(route.facade(n_fft)).toEqual(route.facade(n_fft, derived));
-        // The native entry takes a 0 hop as the derived one.
-        expect(route.native(n_fft, hop_length)).toEqual(route.native(n_fft, derived));
+        // The native entry reads SONARE_STFT_HOP_AUTO (-1) as the derived hop and
+        // refuses a 0 like the facade.
+        expect(route.native(n_fft, -1)).toEqual(route.native(n_fft, derived));
+        expect(expectRefusalOf(() => route.native(n_fft, hop_length), RangeError).message).toMatch(
+          /hopLength must be an integer in \[1, 2147483647\]/,
+        );
         expect(expectRefusalOf(() => route.facade(n_fft, hop_length), RangeError).message).toMatch(
           /hopLength/,
         );
@@ -481,9 +487,10 @@ describe('native spectral stretch geometry refusals come from the core', () => {
     expect(viaShift.length).toBeGreaterThan(0);
   });
 
-  it.each(refused)('refuses $id', ({ n_fft, hop_length, cause, message }) => {
+  it.each(refused)('refuses $id', ({ n_fft, hop_length, cause, message, c_message }) => {
     const kind = errorClassFor[cause as Cause];
-    const text = new RegExp(message as string);
+    // The module restates the C hop rule ahead of the core, so a hop it refuses carries the C text.
+    const text = c_message === undefined ? new RegExp(message as string) : publicText(c_message);
     const options = { nFft: n_fft, hopLength: hop_length };
     // The facade's own geometry domain refuses first, so only the class is pinned there.
     const facadeCalls: Array<() => unknown> = [
@@ -519,7 +526,7 @@ describe('an absent resynthesis hop is derived from nFft by the core', () => {
   // the C++ corpus reader pins primitive_message.
   it.each(absent_hop)(
     '$id: an omitted hop runs as the derived one',
-    ({ n_fft, hop_length, derived_hop_length }) => {
+    ({ n_fft, derived_hop_length }) => {
       const stretch = { samples, sampleRate: rate, speedRatio: input.speed_ratio, nFft: n_fft };
       const shift = {
         samples,
@@ -530,19 +537,26 @@ describe('an absent resynthesis hop is derived from nFft by the core', () => {
       const derived = { hopLength: derived_hop_length };
       expect(timeStretch(stretch)).toEqual(timeStretch({ ...stretch, ...derived }));
       expect(pitchShift(shift)).toEqual(pitchShift({ ...shift, ...derived }));
-      // The C entry the module calls takes a 0 hop as the derived one.
-      expect(raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, hop_length)).toEqual(
+      // The module reads SONARE_STFT_HOP_AUTO (-1), which the facades send for an
+      // omitted hop, as the derived one.
+      expect(raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, -1)).toEqual(
         raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, derived_hop_length),
       );
-      expect(raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, hop_length)).toEqual(
+      expect(raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, -1)).toEqual(
         raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, derived_hop_length),
       );
     },
   );
 
   it.each(absent_hop)(
-    '$id: an explicit hop of 0 is refused by the facade',
+    '$id: an explicit hop of 0 is refused by the facade and the module',
     ({ n_fft, hop_length }) => {
+      expect(
+        expectRefusalOf(
+          () => raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, hop_length),
+          RangeError,
+        ).message,
+      ).toMatch(/hopLength must be an integer in \[1, 2147483647\]/);
       const options = { nFft: n_fft, hopLength: hop_length };
       const calls: Array<() => unknown> = [
         () => timeStretch({ samples, sampleRate: rate, speedRatio: input.speed_ratio, ...options }),

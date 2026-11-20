@@ -570,7 +570,7 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
   });
 });
 
-describe('an inverse-transform hop whose zero runs as a quarter of nFft', () => {
+describe('an inverse-transform hop whose SONARE_STFT_HOP_AUTO runs as a quarter of nFft', () => {
   const N_FFT = 256;
   const N_FRAMES = 6;
   const N_MELS = 16;
@@ -624,13 +624,12 @@ describe('an inverse-transform hop whose zero runs as a quarter of nFft', () => 
   ];
 
   for (const [name, render] of inverses) {
-    it(`refuses a fractional hopLength on ${name}, naming the sentinel`, () => {
-      expect(render(0)).toBe(render(undefined));
+    it(`reads -1 as the automatic hop on ${name} and refuses 0 and a fraction`, () => {
+      expect(render(-1)).toBe(render(undefined));
       expect(render(N_FFT / 8)).not.toBe(render(undefined)); // positive control
+      expect(() => render(0)).toThrow(/hopLength must be an integer in \[1, 2147483647\]/);
       for (const value of FRACTIONS) {
-        expect(() => render(value), `hopLength ${value}`).toThrow(
-          /hopLength must be a whole number: its zero selects the library default/,
-        );
+        expect(() => render(value), `hopLength ${value}`).toThrow(/hopLength must be an integer$/);
       }
     });
   }
