@@ -58,9 +58,8 @@ WindowType parseSpectralEditWindow(val window) {
 }
 
 // Reads float member @p key of op @p index, refusing it under its path "ops[i].key".
-float opFloat(const val& op, std::size_t index, const char* key) {
-  const std::string path = "ops[" + std::to_string(index) + "]." + key;
-  return checkedFloatFromVal(op[key], path.c_str());
+std::string opPath(std::size_t index, const char* key) {
+  return "ops[" + std::to_string(index) + "]." + key;
 }
 
 }  // namespace
@@ -123,9 +122,12 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
       if (hasProperty(op, "endSample")) {
         region.end_sample = requireInt64Property(op, "endSample", "region");
       }
-      if (hasProperty(op, "lowHz")) region.low_hz = opFloat(op, i, "lowHz");
-      if (hasProperty(op, "highHz")) region.high_hz = opFloat(op, i, "highHz");
-      if (hasProperty(op, "gainDb")) region.gain_db = opFloat(op, i, "gainDb");
+      if (hasProperty(op, "lowHz"))
+        region.low_hz = checkedFloatFromVal(op["lowHz"], opPath(i, "lowHz").c_str());
+      if (hasProperty(op, "highHz"))
+        region.high_hz = checkedFloatFromVal(op["highHz"], opPath(i, "highHz").c_str());
+      if (hasProperty(op, "gainDb"))
+        region.gain_db = checkedFloatFromVal(op["gainDb"], opPath(i, "gainDb").c_str());
       region.mode =
           hasProperty(op, "mode") ? parseSpectralEditMode(op["mode"]) : SpectralEditMode::Gain;
       region_ops.push_back(region);

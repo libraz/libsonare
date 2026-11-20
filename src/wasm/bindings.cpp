@@ -285,7 +285,7 @@ std::string string_field(const val& object, const char* key) {
 
 sonare::SonareParameterRefusal refusal_from_object(const val& object) {
   sonare_c_detail::RefusalParts parts;
-  parts.code = static_cast<sonare::ErrorCode>(object["code"].as<int>());
+  parts.code = static_cast<sonare::ErrorCode>(checkedIntFromVal(object["code"], "refusal.code"));
   parts.form = string_field(object, "form");
   const val subjects = object["subjects"];
   const int count = subjects.isArray() ? subjects["length"].as<int>() : 0;
@@ -293,14 +293,14 @@ sonare::SonareParameterRefusal refusal_from_object(const val& object) {
   parts.predicate = string_field(object, "predicate");
   parts.renamed_to = string_field(object, "renamedTo");
   parts.expected = string_field(object, "expected");
-  parts.caller_spelled = object["callerSpelled"].as<bool>();
+  parts.caller_spelled = boolProperty(object, "callerSpelled", false);
   const val domain = object["domain"];
   if (domain.typeOf().as<std::string>() == "object" && !domain.isNull()) {
     sonare::RefusalDomain parsed;
     if (domain["lo"].isNumber()) parsed.lo = domain["lo"].as<double>();
     if (domain["hi"].isNumber()) parsed.hi = domain["hi"].as<double>();
-    parsed.lo_included = domain["loIncluded"].as<bool>();
-    parsed.hi_included = domain["hiIncluded"].as<bool>();
+    parsed.lo_included = boolProperty(domain, "loIncluded", true);
+    parsed.hi_included = boolProperty(domain, "hiIncluded", true);
     parts.domain = parsed;
   }
   return sonare_c_detail::refusal_from_parts(parts);
