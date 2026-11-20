@@ -216,10 +216,8 @@ SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurrou
   SONARE_C_REQUIRE_NONNULL(pan);
   if (const SonareError err = sonare_c_detail::run_validation([&] {
         check::in_range(pan->azimuth, -kDegreesPerHalfTurn, kDegreesPerHalfTurn, "pan.azimuth");
-        check::finite_float(pan->elevation, "pan.elevation");
         check::in_range(pan->divergence, 0.0, 1.0, "pan.divergence");
         check::in_range(pan->lfe, 0.0, 1.0, "pan.lfe");
-        check::finite_float(pan->distance, "pan.distance");
       });
       err != SONARE_OK) {
     return err;
@@ -228,21 +226,12 @@ SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurrou
   // Stored on the scene strip and mirrored onto the live strip below. The
   // engine's track mixer reads it when the lane feeds a >2-channel
   // destination; the stereo-only mixer block entry points do not.
-  // A distance <= 0 (a zero-initialised host struct) resolves to the default 1.0 here.
-  const sonare::mixing::SurroundPanParams stored = sonare::mixing::clamp_surround_pan_params(
-      {pan->azimuth, pan->elevation, pan->divergence, pan->lfe, pan->distance});
+  const sonare::mixing::SurroundPanParams stored =
+      sonare::mixing::clamp_surround_pan_params({pan->azimuth, pan->divergence, pan->lfe});
   strip->scene_strip.surround_pan.azimuth = stored.azimuth;
-  strip->scene_strip.surround_pan.elevation = stored.elevation;
   strip->scene_strip.surround_pan.divergence = stored.divergence;
   strip->scene_strip.surround_pan.lfe = stored.lfe;
-  strip->scene_strip.surround_pan.distance = stored.distance;
-  sonare::mixing::SurroundPanParams live;
-  live.azimuth = strip->scene_strip.surround_pan.azimuth;
-  live.elevation = strip->scene_strip.surround_pan.elevation;
-  live.divergence = strip->scene_strip.surround_pan.divergence;
-  live.lfe = strip->scene_strip.surround_pan.lfe;
-  live.distance = strip->scene_strip.surround_pan.distance;
-  strip->strip.set_surround_pan_params(live);
+  strip->strip.set_surround_pan_params(stored);
   return SONARE_OK;
   SONARE_C_CATCH
 }

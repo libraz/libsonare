@@ -1694,3 +1694,17 @@ changed = "takes one JSON object of the chain's dot-notation keys (NULL for the 
 domain = "mastering"
 rule = "typed-results"
 test = "tests/api/sonare_c_mastering_streaming_test.cpp::sonare_streaming_loudness_gain refuses bad arguments"
+
+[[entry]]
+kind = "field"
+old = "SonareSurroundPan.elevation"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareSurroundPan.distance"
+removed = "had no effect: the surround panner reads only azimuth, divergence and lfe"
+domain = "mastering"
+rule = "individual"

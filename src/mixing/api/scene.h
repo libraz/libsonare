@@ -58,8 +58,7 @@ struct Send {
   SendTiming timing = SendTiming::PostFader;
 };
 
-// Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
-// azimuth/divergence/lfe; elevation/distance are reserved. Applied wherever the
+// Surround pan position for a strip feeding a >2-channel bus. Applied wherever the
 // strip's main output meets a destination wider than two planes: the engine's
 // lane scatter and the mixer graph's strip scatter (a project bounce at 6/8
 // channels). The public stereo mixer builds its master at two planes, so there
@@ -68,10 +67,8 @@ struct Send {
 // pure-data scene schema.
 struct SurroundPan {
   float azimuth = 0.0f;
-  float elevation = 0.0f;
   float divergence = 0.0f;
   float lfe = 0.0f;
-  float distance = 1.0f;
 };
 
 // Meter configuration for a strip's pre/post taps. Fixed when the strip is

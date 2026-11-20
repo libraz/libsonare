@@ -580,10 +580,8 @@ class Mixer:
         handle = self._strip_handle(strip)
         pan = SonareSurroundPan(
             azimuth=_to_c_float(azimuth, "azimuth"),
-            elevation=0.0,
             divergence=_to_c_float(divergence, "divergence"),
             lfe=_to_c_float(lfe, "lfe"),
-            distance=1.0,
         )
         _check(_get_lib().sonare_strip_set_surround_pan(handle, ctypes.byref(pan)))
 

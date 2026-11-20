@@ -702,10 +702,8 @@ class _EngineMixingMixin:
         track_id = _track_only("set_strip_surround_pan", ref)
         pan = SonareSurroundPan(
             azimuth=_to_c_float(azimuth, "azimuth"),
-            elevation=0.0,
             divergence=_to_c_float(divergence, "divergence"),
             lfe=_to_c_float(lfe, "lfe"),
-            distance=1.0,
         )
         _check(
             _get_lib().sonare_engine_set_track_strip_surround_pan(

@@ -987,11 +987,6 @@ fields = [
   "stream_config.compute_magnitude",
   "stream_config.magnitude_downsample",
   "stream_config.output_format",
-  # --- Reserved surround pan fields (category 4) ---
-  # The C struct still carries elevation and distance, documented as having no
-  # effect; the facades do not expose them and pass their fixed 0 / 1.
-  "surround_pan.elevation",
-  "surround_pan.distance",
 ]
 
 # Category 4 (intentionally one-sided): the facade record is a RICHER read model

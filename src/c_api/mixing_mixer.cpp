@@ -619,10 +619,8 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     strip->strip.set_pan_law(to_pan_law(scene_strip.pan_law));
     sonare::mixing::SurroundPanParams surround;
     surround.azimuth = scene_strip.surround_pan.azimuth;
-    surround.elevation = scene_strip.surround_pan.elevation;
     surround.divergence = scene_strip.surround_pan.divergence;
     surround.lfe = scene_strip.surround_pan.lfe;
-    surround.distance = scene_strip.surround_pan.distance;
     strip->strip.set_surround_pan_params(surround);
     strip->strip.set_polarity_invert(scene_strip.polarity_invert_left,
                                      scene_strip.polarity_invert_right);

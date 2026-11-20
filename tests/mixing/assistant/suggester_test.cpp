@@ -946,10 +946,8 @@ sonare::mixing::api::Scene make_fully_populated_scene() {
   lead.channel_delay_samples = 12;
   lead.source_layout = sonare::ChannelLayout::FivePointOne;
   lead.surround_pan.azimuth = 0.3f;
-  lead.surround_pan.elevation = 0.1f;
   lead.surround_pan.divergence = 0.2f;
   lead.surround_pan.lfe = 0.05f;
-  lead.surround_pan.distance = 1.5f;
   lead.metering.enabled = false;
   lead.metering.lufs = true;
   lead.metering.true_peak = true;

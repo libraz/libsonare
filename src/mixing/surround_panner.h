@@ -22,14 +22,11 @@ namespace sonare::mixing {
 /// Maximum number of output planes any phase-1 layout can have (7.1).
 inline constexpr int kMaxSurroundPlanes = 8;
 
-/// Surround pan parameters. Phase 1 honors azimuth, divergence and LFE;
-/// `elevation`/`distance` are reserved (no height beds / focus yet).
+/// Surround pan parameters.
 struct SurroundPanParams {
   float azimuth = 0.0f;     ///< -180..180 deg, 0 = front-center, +right
-  float elevation = 0.0f;   ///< reserved, 0 in phase 1 (no height beds)
   float divergence = 0.0f;  ///< 0 = point source, 1 = spread across the front
   float lfe = 0.0f;         ///< 0..1 scalar send into the LFE plane
-  float distance = 1.0f;    ///< reserved (focus/spread), 1 in phase 1
 };
 
 /// Documented azimuth domain (degrees); a position outside it is refused, never clamped.
@@ -47,16 +44,14 @@ inline bool surround_unit_in_range(float value) noexcept {
 /// @details Writers refuse an azimuth, divergence or lfe outside its domain before they get here;
 ///          every writer that caches what it was handed - ChannelStrip, the C ABI setter, the
 ///          scene walker - resolves through here so a read-back reports what the panner is
-///          using. A distance of zero or less (a zero-initialised host struct) means the default
-///          scale 1.0; elevation is reserved and passes through. The clamps below only bound
-///          the realtime store, which is never handed an out-of-domain value by a setter.
+///          using. The clamps only bound the realtime store, which is never handed an
+///          out-of-domain value by a setter.
 inline SurroundPanParams clamp_surround_pan_params(const SurroundPanParams& params) noexcept {
   SurroundPanParams out = params;
   out.azimuth = std::clamp(params.azimuth, -sonare::constants::kDegreesPerHalfTurn,
                            sonare::constants::kDegreesPerHalfTurn);
   out.divergence = std::clamp(params.divergence, 0.0f, 1.0f);
   out.lfe = std::clamp(params.lfe, 0.0f, 1.0f);
-  out.distance = params.distance > 0.0f ? params.distance : 1.0f;
   return out;
 }
 
@@ -104,8 +99,6 @@ class SurroundPanGlide {
   rt::ParamSmoother azimuth_;  // unwrapped; wrapped when evaluated
   rt::ParamSmoother divergence_;
   rt::ParamSmoother lfe_;
-  float elevation_ = 0.0f;
-  float distance_ = 1.0f;
   // The smoothed values gains_ was evaluated from; a settled glide reuses it.
   std::array<float, 3> evaluated_{};
   bool evaluated_valid_ = false;
@@ -158,10 +151,8 @@ class SurroundPannerProcessor {
   uint8_t rendered_layout_{kUnprimed};
   std::atomic<uint8_t> layout_{static_cast<uint8_t>(ChannelLayout::FivePointOne)};
   std::atomic<float> azimuth_{0.0f};
-  std::atomic<float> elevation_{0.0f};
   std::atomic<float> divergence_{0.0f};
   std::atomic<float> lfe_{0.0f};
-  std::atomic<float> distance_{1.0f};
 };
 
 }  // namespace sonare::mixing

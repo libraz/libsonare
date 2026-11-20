@@ -120,9 +120,6 @@ void MixerWasm::setSurroundPan(const val& strip_index_val, val pan) {
   sp.azimuth = field("azimuth", sp.azimuth);
   sp.divergence = field("divergence", sp.divergence);
   sp.lfe = field("lfe", sp.lfe);
-  // The C struct still carries the two reserved fields; they take their fixed values.
-  sp.elevation = 0.0f;
-  sp.distance = 1.0f;
   checkStripError(sonare_strip_set_surround_pan(stripAt(strip_index), &sp));
 }
 

@@ -548,7 +548,7 @@ static_assert(field_count<mixing::api::Strip>() == 22,
               "update this count and set it to a non-default value in make_fixture()");
 // Both nested structs are compared field by field by the helper above rather
 // than through an operator==, so each needs its own count.
-static_assert(field_count<mixing::api::SurroundPan>() == 5,
+static_assert(field_count<mixing::api::SurroundPan>() == 3,
               "SurroundPan gained or lost a field: compare it in eq(const mixing::api::Strip&) "
               "above and update this count");
 static_assert(field_count<mixing::api::StripMetering>() == 4,

@@ -142,10 +142,8 @@ SurroundPannerProcessor::SurroundPannerProcessor(ChannelLayout layout, SurroundP
     : smoothing_ms_(smoothing_ms),
       layout_(static_cast<uint8_t>(layout)),
       azimuth_(params.azimuth),
-      elevation_(params.elevation),
       divergence_(params.divergence),
-      lfe_(params.lfe),
-      distance_(params.distance) {}
+      lfe_(params.lfe) {}
 
 namespace {
 
@@ -167,8 +165,6 @@ void SurroundPanGlide::snap(const SurroundPanParams& params, ChannelLayout layou
   azimuth_.reset(params.azimuth);
   divergence_.reset(params.divergence);
   lfe_.reset(params.lfe);
-  elevation_ = params.elevation;
-  distance_ = params.distance;
   evaluated_valid_ = false;
 }
 
@@ -187,8 +183,6 @@ void SurroundPanGlide::set_target(const SurroundPanParams& params) noexcept {
   azimuth_.set_target(from + arc);
   divergence_.set_target(params.divergence);
   lfe_.set_target(params.lfe);
-  elevation_ = params.elevation;
-  distance_ = params.distance;
 }
 
 void SurroundPanGlide::settle() noexcept {
@@ -211,10 +205,8 @@ const SurroundPanGains& SurroundPanGlide::next() noexcept {
 void SurroundPanGlide::evaluate(float azimuth, float divergence, float lfe) noexcept {
   SurroundPanParams p;
   p.azimuth = wrap_degrees(azimuth);
-  p.elevation = elevation_;
   p.divergence = divergence;
   p.lfe = lfe;
-  p.distance = distance_;
   if (!try_compute_surround_pan_gains(p, layout_, &gains_)) gains_ = SurroundPanGains{};
   evaluated_ = {azimuth, divergence, lfe};
   evaluated_valid_ = true;
@@ -235,19 +227,15 @@ void SurroundPannerProcessor::reset() {
 void SurroundPannerProcessor::set_params(const SurroundPanParams& params) noexcept {
   const SurroundPanParams stored = clamp_surround_pan_params(params);
   azimuth_.store(stored.azimuth, std::memory_order_relaxed);
-  elevation_.store(stored.elevation, std::memory_order_relaxed);
   divergence_.store(stored.divergence, std::memory_order_relaxed);
   lfe_.store(stored.lfe, std::memory_order_relaxed);
-  distance_.store(stored.distance, std::memory_order_relaxed);
 }
 
 SurroundPanParams SurroundPannerProcessor::params() const noexcept {
   SurroundPanParams p;
   p.azimuth = azimuth_.load(std::memory_order_relaxed);
-  p.elevation = elevation_.load(std::memory_order_relaxed);
   p.divergence = divergence_.load(std::memory_order_relaxed);
   p.lfe = lfe_.load(std::memory_order_relaxed);
-  p.distance = distance_.load(std::memory_order_relaxed);
   return p;
 }
 

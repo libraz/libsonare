@@ -102,19 +102,16 @@ typedef struct {
   float right;  ///< Right sample value, linear
 } SonareMixGoniometerPoint;
 
-/// Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
-/// azimuth (-180..180 deg, 0 = front-center, + = right), divergence (0 = point
-/// source, 1 = spread across the front) and lfe (0..1 scalar send into the LFE
-/// plane); elevation and distance are reserved (0 / 1 in phase 1). Applied when
+/// Surround pan position for a strip feeding a >2-channel bus: azimuth (-180..180 deg,
+/// 0 = front-center, + = right), divergence (0 = point source, 1 = spread across the
+/// front) and lfe (0..1 scalar send into the LFE plane). Applied when
 /// the engine's track mixer feeds the strip's lane into a destination with more
 /// than two channels; ignored by sonare_mixer_process_stereo and
 /// sonare_mixer_drain_tail_stereo, which are stereo-only.
 typedef struct {
   float azimuth;     ///< Angle in degrees, -180..180; 0 is front-center, positive is right
-  float elevation;   ///< Reserved; must be finite, has no effect
   float divergence;  ///< 0 is a point source, 1 spreads across the front; range 0..1
   float lfe;         ///< Scalar send into the LFE plane, 0..1
-  float distance;    ///< Reserved; must be finite, a value of 0 or less is stored as 1
 } SonareSurroundPan;
 
 /// Creates a mixer. sample_rate must be in [8000, 384000] and max_block_size in
@@ -171,7 +168,7 @@ SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
 /// Sets the strip's surround pan position (used when the strip feeds a >2-channel
 /// bus). Returns SONARE_ERROR_INVALID_PARAMETER if strip or pan is NULL, an azimuth is outside
-/// -180..180, divergence or lfe is outside 0..1, or elevation or distance is not finite. The
+/// -180..180, or divergence or lfe is outside 0..1. The
 /// values are stored on the strip/scene and applied when the engine's track
 /// mixer renders this strip's lane into a destination with more than two
 /// channels; the stereo-only mixer block entry points ignore them.

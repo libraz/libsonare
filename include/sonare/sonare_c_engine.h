@@ -783,8 +783,7 @@ SonareError sonare_engine_set_track_strip_dual_pan(SonareEngine* engine, uint32_
 /// @details Applies when the lane feeds a destination wider than two channels
 ///   (5.1 / 7.1 bus or master); a stereo destination ignores it. Fields follow
 ///   @ref SonareSurroundPan: azimuth must be in [-180, 180] and divergence and lfe in
-///   [0, 1] (refused, never clamped), distance <= 0 keeps the default 1, and
-///   elevation / distance are reserved. Control-thread
+///   [0, 1] (refused, never clamped). Control-thread
 ///   mutation; glitch-free (atomic; a constant-power 5 ms one-pole glide). Returns
 ///   SONARE_ERROR_INVALID_PARAMETER if @p track_id has no bound lane strip,
 ///   @p pan is NULL, a field is not finite, or azimuth / divergence / lfe is out of range.

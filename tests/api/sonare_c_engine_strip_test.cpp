@@ -135,7 +135,6 @@ TEST_CASE("sonare_engine_set_track_strip_surround_pan moves a lane across the 5.
                            R"("strips":[{"id":"s"}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json) == SONARE_OK);
 
-  // A zero-initialized struct (distance 0) is accepted as the default distance.
   SonareSurroundPan pan{};
   pan.azimuth = -110.0f;
   REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, &pan) == SONARE_OK);
@@ -162,7 +161,7 @@ TEST_CASE("sonare_engine_set_track_strip_surround_pan moves a lane across the 5.
   REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, &bad) ==
           SONARE_ERROR_INVALID_PARAMETER);
   bad = pan;
-  bad.distance = std::numeric_limits<float>::infinity();
+  bad.lfe = 2.0f;
   REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, &bad) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, nullptr) ==

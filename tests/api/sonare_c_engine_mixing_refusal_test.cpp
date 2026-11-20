@@ -427,10 +427,10 @@ TEST_CASE("mixing setters name the cause of a refused engine edit", "[c_api][eng
   CHECK(last_message() == kNoStrip);
 
   SonareSurroundPan surround{};
-  surround.elevation = std::nanf("");
+  surround.divergence = std::nanf("");
   CHECK(sonare_engine_set_track_strip_surround_pan(engine, 10, &surround) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "pan.elevation must be finite and in [-3.4028235e38, 3.4028235e38]");
+  CHECK(last_message() == "pan.divergence must be finite and in [0, 1]");
 
   CHECK(sonare_engine_set_bus_strip_pan(engine, 7, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == kNoBus);

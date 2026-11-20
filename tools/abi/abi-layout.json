@@ -10156,30 +10156,18 @@
       },
       {
         "kind": "float",
-        "name": "elevation",
+        "name": "divergence",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "divergence",
-        "offset": 8,
-        "size": 4
-      },
-      {
-        "kind": "float",
         "name": "lfe",
-        "offset": 12,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "distance",
-        "offset": 16,
+        "offset": 8,
         "size": 4
       }
     ],
-    "size": 20
+    "size": 12
   },
   "SonareSynthEngineParam": {
     "align": 8,

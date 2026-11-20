@@ -114,9 +114,8 @@ class MixerWasm {
   // Sets independent left/right pan positions (dual-pan mode).
   void setDualPan(const val& strip_index_val, const val& left_pan_val, const val& right_pan_val);
 
-  // Sets the strip's surround pan from a JS object {azimuth, elevation,
-  // divergence, lfe, distance}; absent/non-numeric fields fall back to the
-  // centered point-source default.
+  // Sets the strip's surround pan from a JS object {azimuth, divergence, lfe};
+  // absent/non-numeric fields fall back to the centered default.
   void setSurroundPan(const val& strip_index_val, val pan);
 
   // Adds a post-construction send to the strip. timing mirrors SonareSendTiming:

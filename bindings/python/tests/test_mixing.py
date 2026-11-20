@@ -508,12 +508,6 @@ def test_set_surround_pan_reflected_in_scene(mixer) -> None:
     assert pan["lfe"] == pytest.approx(0.5)
 
 
-@pytest.mark.parametrize("field", ["elevation", "distance"])
-def test_set_surround_pan_has_no_reserved_fields(mixer, field) -> None:
-    with pytest.raises(TypeError, match=field):
-        mixer.set_surround_pan("vocal", **{field: 0.5})
-
-
 @pytest.mark.parametrize(
     "field", [{"azimuth": 181.0}, {"azimuth": -181.0}, {"divergence": 1.5}, {"lfe": -0.1}]
 )

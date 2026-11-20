@@ -26,9 +26,8 @@ void apply_shared_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::
   strip.set_dual_pan(spec.dual_pan_left, spec.dual_pan_right);
   strip.set_polarity_invert(spec.polarity_invert_left, spec.polarity_invert_right);
   strip.set_channel_delay_samples(spec.channel_delay_samples);
-  strip.set_surround_pan_params({spec.surround_pan.azimuth, spec.surround_pan.elevation,
-                                 spec.surround_pan.divergence, spec.surround_pan.lfe,
-                                 spec.surround_pan.distance});
+  strip.set_surround_pan_params(
+      {spec.surround_pan.azimuth, spec.surround_pan.divergence, spec.surround_pan.lfe});
 }
 
 }  // namespace

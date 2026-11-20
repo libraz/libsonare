@@ -85,10 +85,8 @@ class SonareSurroundPan(CStruct):
 
     _fields_ = [
         ("azimuth", ctypes.c_float),
-        ("elevation", ctypes.c_float),
         ("divergence", ctypes.c_float),
         ("lfe", ctypes.c_float),
-        ("distance", ctypes.c_float),
     ]
 
 

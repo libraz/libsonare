@@ -379,8 +379,7 @@ export function setStripSurroundPan(
         lfe: pan.lfe ?? 0,
       };
       mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
-        // The scene document still writes the two reserved fields at their fixed values.
-        entry.surroundPan = { ...resolved, elevation: 0, distance: 1 };
+        entry.surroundPan = { ...resolved };
       });
       ctx.postSync({ type: 'syncTrackStripSurroundPan', trackId, pan: resolved });
     },

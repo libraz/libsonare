@@ -224,18 +224,14 @@ class ChannelStrip : public rt::ProcessorBase {
     // place (clamp_surround_pan_params) so this copy cannot drift from it.
     const SurroundPanParams stored = clamp_surround_pan_params(p);
     surround_azimuth_.store(stored.azimuth, std::memory_order_relaxed);
-    surround_elevation_.store(stored.elevation, std::memory_order_relaxed);
     surround_divergence_.store(stored.divergence, std::memory_order_relaxed);
     surround_lfe_.store(stored.lfe, std::memory_order_relaxed);
-    surround_distance_.store(stored.distance, std::memory_order_relaxed);
   }
   SurroundPanParams surround_pan_params() const noexcept {
     SurroundPanParams p;
     p.azimuth = surround_azimuth_.load(std::memory_order_relaxed);
-    p.elevation = surround_elevation_.load(std::memory_order_relaxed);
     p.divergence = surround_divergence_.load(std::memory_order_relaxed);
     p.lfe = surround_lfe_.load(std::memory_order_relaxed);
-    p.distance = surround_distance_.load(std::memory_order_relaxed);
     return p;
   }
 
@@ -532,10 +528,8 @@ class ChannelStrip : public rt::ProcessorBase {
   PannerProcessor panner_;
   StereoWidthProcessor width_;
   std::atomic<float> surround_azimuth_{0.0f};
-  std::atomic<float> surround_elevation_{0.0f};
   std::atomic<float> surround_divergence_{0.0f};
   std::atomic<float> surround_lfe_{0.0f};
-  std::atomic<float> surround_distance_{1.0f};
   sonare::mastering::eq::ParametricEq eq_;
   // Both optional taps measure true-peak so a metering UI sees real
   // inter-sample peaks pre- and post-fader rather than a floor reading on the

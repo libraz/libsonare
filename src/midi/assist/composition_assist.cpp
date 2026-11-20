@@ -193,8 +193,7 @@ bool send_equal(const mixing::api::Send& a, const mixing::api::Send& b) {
 }
 
 bool surround_pan_equal(const mixing::api::SurroundPan& a, const mixing::api::SurroundPan& b) {
-  return a.azimuth == b.azimuth && a.elevation == b.elevation && a.divergence == b.divergence &&
-         a.lfe == b.lfe && a.distance == b.distance;
+  return a.azimuth == b.azimuth && a.divergence == b.divergence && a.lfe == b.lfe;
 }
 
 bool metering_equal(const mixing::api::StripMetering& a, const mixing::api::StripMetering& b) {
@@ -297,7 +296,7 @@ static_assert(field_count<mixing::api::Send>() == 4,
               "Send gained or lost a field: update send_equal");
 static_assert(field_count<mixing::api::Strip>() == 22,
               "Strip gained or lost a field: update strip_equal");
-static_assert(field_count<mixing::api::SurroundPan>() == 5,
+static_assert(field_count<mixing::api::SurroundPan>() == 3,
               "SurroundPan gained or lost a field: update surround_pan_equal");
 static_assert(field_count<mixing::api::StripMetering>() == 4,
               "StripMetering gained or lost a field: update metering_equal");

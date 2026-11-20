@@ -964,7 +964,6 @@ TEST_CASE("Mixing C API preserves surround pan in scene JSON", "[mixing][capi]")
   pan.azimuth = -45.0f;
   pan.divergence = 0.25f;
   pan.lfe = 0.5f;
-  pan.distance = 1.0f;
   REQUIRE(sonare_strip_set_surround_pan(strip, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_strip_set_surround_pan(strip, &pan) == SONARE_OK);
   const auto live_pan = strip->strip.surround_pan_params();
@@ -1010,7 +1009,6 @@ TEST_CASE("Mixing C API surround pan refuses an out-of-range field and keeps the
   good.azimuth = -45.0f;
   good.divergence = 0.25f;
   good.lfe = 0.5f;
-  good.distance = 1.0f;
   REQUIRE(sonare_strip_set_surround_pan(strip, &good) == SONARE_OK);
 
   const auto refused = [&](SonareSurroundPan bad) {
@@ -1045,33 +1043,6 @@ TEST_CASE("Mixing C API surround pan refuses an out-of-range field and keeps the
   edge.divergence = 1.0f;
   edge.lfe = 0.0f;
   REQUIRE(sonare_strip_set_surround_pan(strip, &edge) == SONARE_OK);
-  sonare_mixer_destroy(mixer);
-}
-
-TEST_CASE("Mixing C API surround pan zero-init distance keeps the core default", "[mixing][capi]") {
-  // A C host that only sets azimuth leaves SonareSurroundPan zero-initialized, so
-  // distance arrives as 0. The C ABI must treat distance <= 0 as "keep default"
-  // (core default 1.0), matching the Node/Python facades, instead of persisting a
-  // meaningless distance:0 that the scene serializer would emit as a non-default
-  // surroundPan.
-  SonareMixer* mixer = nullptr;
-  REQUIRE(sonare_mixer_create(48000, 8, &mixer) == SONARE_OK);
-  REQUIRE(mixer != nullptr);
-  SonareStrip* strip = sonare_mixer_add_strip(mixer, "surround");
-  REQUIRE(strip != nullptr);
-
-  SonareSurroundPan pan{};  // zero-initialized: azimuth only, distance == 0
-  pan.azimuth = -30.0f;
-  REQUIRE(sonare_strip_set_surround_pan(strip, &pan) == SONARE_OK);
-
-  char* json = nullptr;
-  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
-  REQUIRE(json != nullptr);
-  const std::string scene_json(json);
-  // The stored distance is the 1.0 default, never 0; the serializer omits the
-  // default distance, so no "distance":0 leaks into the scene.
-  REQUIRE(scene_json.find("\"distance\":0") == std::string::npos);
-  sonare_free_string(json);
   sonare_mixer_destroy(mixer);
 }
 

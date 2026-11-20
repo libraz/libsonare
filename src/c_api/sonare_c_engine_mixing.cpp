@@ -1557,17 +1557,14 @@ SonareError sonare_engine_set_track_strip_surround_pan(SonareEngine* engine, uin
   if (const SonareError err = run_validation([&] {
         util::check::in_range(pan->azimuth, -constants::kDegreesPerHalfTurn,
                               constants::kDegreesPerHalfTurn, "pan.azimuth");
-        util::check::finite_float(pan->elevation, "pan.elevation");
         util::check::in_range(pan->divergence, 0.0, 1.0, "pan.divergence");
         util::check::in_range(pan->lfe, 0.0, 1.0, "pan.lfe");
-        util::check::finite_float(pan->distance, "pan.distance");
       });
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_TRY
-  const sonare::mixing::SurroundPanParams params{pan->azimuth, pan->elevation, pan->divergence,
-                                                 pan->lfe, pan->distance};
+  const sonare::mixing::SurroundPanParams params{pan->azimuth, pan->divergence, pan->lfe};
   return engine->engine.set_track_surround_pan(track_id, params)
              ? SONARE_OK
              : refuse_track_without_strip(engine->engine, track_id);
