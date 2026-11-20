@@ -153,7 +153,7 @@ def test_an_empty_modes_set_is_refused_rather_than_read_as_the_default(
 @pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
 def test_section_types_are_tokens() -> None:
     tone = _chord_tone(6.0) + [0.5 * v for v in _chord_tone(6.0)]
-    sections = libsonare.analyze_sections(tone, sample_rate=SR, min_section_sec=2.0)
+    sections = libsonare.analyze_sections(tone, sample_rate=SR, min_section_sec=2.0).sections
     assert sections
     assert all(section.type in get_args(SectionType) for section in sections)
     result = libsonare.analyze(tone, SR)
