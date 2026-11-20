@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
@@ -172,6 +173,25 @@ void validate_cqt_fmin(float fmin);
 /// @details Checks hop_length, fmin, n_bins, bins_per_octave and filter_scale in that order.
 /// @throws SonareParameterRefusal(InvalidParameter).
 void validate_cqt_config(const CqtConfig& config);
+
+/// @brief The largest hop a CQT-family transform takes, half its largest FFT.
+inline constexpr int kMaxCqtHopLength = 65536;
+
+namespace detail {
+
+/// @brief Refuses a grid whose top bin is not below Nyquist, naming fmin, n_bins and
+///        bins_per_octave.
+void validate_cqt_top_bin(const std::vector<float>& frequencies, int sr);
+
+/// @brief Refuses a filter longer than @p max_length samples, naming @p subjects: the members
+///        the filter length is a function of.
+void validate_cqt_filter_length(double longest, int max_length, std::vector<std::string> subjects);
+
+/// @brief Refuses an @p n_bins whose kernel at @p fft_length exceeds @p max_elements, stating
+///        the largest n_bins that fits.
+void validate_cqt_kernel_bins(int n_bins, int fft_length, std::size_t max_elements);
+
+}  // namespace detail
 
 /// @brief Computes Constant-Q Transform.
 /// @param audio Input audio

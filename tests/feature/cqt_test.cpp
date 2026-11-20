@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -1457,9 +1458,9 @@ TEST_CASE("cqt, pseudo_cqt, hybrid_cqt and vqt refuse a member by its name", "[c
     return bad;
   };
   const CqtConfig bad_hop = refusal([](CqtConfig& c) { c.hop_length = 0; });
-  CHECK_THROWS_WITH(cqt(audio, bad_hop), "hop_length must be an integer in [1, 2147483647]");
-  CHECK_THROWS_WITH(pseudo_cqt(audio, bad_hop), "hop_length must be an integer in [1, 2147483647]");
-  CHECK_THROWS_WITH(hybrid_cqt(audio, bad_hop), "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(cqt(audio, bad_hop), "hop_length must be an integer in [1, 65536]");
+  CHECK_THROWS_WITH(pseudo_cqt(audio, bad_hop), "hop_length must be an integer in [1, 65536]");
+  CHECK_THROWS_WITH(hybrid_cqt(audio, bad_hop), "hop_length must be an integer in [1, 65536]");
   CHECK_THROWS_WITH(cqt(audio, refusal([](CqtConfig& c) { c.fmin = 0.0f; })),
                     "fmin must be finite and greater than 0");
   CHECK_THROWS_WITH(cqt(audio, refusal([](CqtConfig& c) { c.n_bins = 0; })),
@@ -1472,4 +1473,75 @@ TEST_CASE("cqt, pseudo_cqt, hybrid_cqt and vqt refuse a member by its name", "[c
   VqtConfig vqt_config;
   vqt_config.n_bins = 0;
   CHECK_THROWS_WITH(vqt(audio, vqt_config), "n_bins must be an integer in [1, 2147483647]");
+}
+
+TEST_CASE("a lone CQT bin takes the bandwidth of its grid spacing on all four transforms",
+          "[cqt]") {
+  const Audio audio = generate_sine(440.0f, 0.5f, 22050);
+  CqtConfig config;
+  config.fmin = 440.0f;
+  config.n_bins = 1;
+  const auto finite_single_bin = [](const CqtResult& result) {
+    REQUIRE(result.n_bins() == 1);
+    REQUIRE(result.n_frames() > 0);
+    for (int t = 0; t < result.n_frames(); ++t) {
+      if (!std::isfinite(std::abs(result.at(0, t)))) return false;
+    }
+    return true;
+  };
+  CHECK(finite_single_bin(cqt(audio, config)));
+  CHECK(finite_single_bin(pseudo_cqt(audio, config)));
+  CHECK(finite_single_bin(hybrid_cqt(audio, config)));
+  VqtConfig vqt_config;
+  vqt_config.fmin = 440.0f;
+  vqt_config.n_bins = 1;
+  CHECK(finite_single_bin(vqt(audio, vqt_config)));
+
+  // The lone bin's filter is the first filter of a two-bin grid at the same spacing.
+  const float scale = config.filter_scale;
+  const float q = scale / detail::geometric_relative_bandwidth(config.bins_per_octave);
+  const float lone = wavelet_lengths({440.0f}, 22050, scale, q)[0];
+  const float first_of_two =
+      wavelet_lengths(cqt_frequencies(440.0f, 2, config.bins_per_octave), 22050, scale)[0];
+  CHECK_THAT(lone, WithinRel(first_of_two, 1e-5f));
+  CHECK(vqt_bandwidths({440.0f}, config.bins_per_octave, 0.0f)[0] ==
+        vqt_bandwidths(cqt_frequencies(440.0f, 2, config.bins_per_octave), config.bins_per_octave,
+                       0.0f)[0]);
+}
+
+TEST_CASE(
+    "a CQT grid past Nyquist, a filter past the FFT cap and a kernel past its budget "
+    "are refused by the members that set them",
+    "[cqt]") {
+  const Audio audio = generate_sine(440.0f, 0.5f, 22050);
+  const std::string nyquist = "fmin * 2^((n_bins - 1) / bins_per_octave) must be less than sr / 2";
+  CqtConfig high;
+  high.fmin = 20000.0f;
+  CHECK_THROWS_WITH(cqt(audio, high), nyquist);
+  CHECK_THROWS_WITH(pseudo_cqt(audio, high), nyquist);
+  CHECK_THROWS_WITH(hybrid_cqt(audio, high), nyquist);
+  VqtConfig vqt_high;
+  vqt_high.fmin = 20000.0f;
+  CHECK_THROWS_WITH(vqt(audio, vqt_high), nyquist);
+  CqtConfig many;
+  many.n_bins = 100000;
+  CHECK_THROWS_WITH(cqt(audio, many), nyquist);
+  CHECK_THROWS_WITH(hybrid_cqt(audio, many), nyquist);
+
+  CqtConfig narrow;
+  narrow.bins_per_octave = 100000;
+  const std::string filter =
+      "fmin, bins_per_octave and filter_scale must keep every filter at most 131072 samples long "
+      "at sr";
+  CHECK_THROWS_WITH(cqt(audio, narrow), filter);
+  CHECK_THROWS_WITH(pseudo_cqt(audio, narrow), filter);
+  CHECK_THROWS_WITH(hybrid_cqt(audio, narrow), filter);
+
+  // 2000 bins per octave from 1 kHz gives 63623-sample filters, a 65536-point kernel FFT and
+  // room for 32 Mi / 65536 = 512 bins.
+  CqtConfig wide;
+  wide.fmin = 1000.0f;
+  wide.bins_per_octave = 2000;
+  wide.n_bins = 600;
+  CHECK_THROWS_WITH(cqt(audio, wide), "n_bins must be an integer in [1, 512]");
 }

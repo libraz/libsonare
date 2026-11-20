@@ -10,6 +10,7 @@
 #include "effects/hpss.h"
 #include "sonare_wrap_options.h"
 #include "util/constants.h"
+#include "util/error_classification.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_node {
@@ -33,7 +34,9 @@ std::string ExceptionMessage(const std::exception& e) {
   if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(&e)) {
     return sonare::util::check::camel_spelled(*refusal).what();
   }
-  const char* what = e.what();
+  const char* what = dynamic_cast<const sonare::SonareException*>(&e) != nullptr
+                         ? e.what()
+                         : sonare::message_for_std_exception(e);
   return what + sonare_c_entries::CEntryPrefixLength(what);
 }
 

@@ -115,8 +115,11 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
   std::vector<float> bandwidths(n);
 
   // Relative bandwidth is shared with wavelet_lengths so gamma=0 produces the
-  // same geometry as CQT for irregular frequency grids and at both endpoints.
-  const std::vector<float> alpha = detail::relative_bandwidths(frequencies);
+  // same geometry as CQT for irregular frequency grids and at both endpoints; a lone
+  // bin takes the bandwidth its grid spacing implies, as CQT's does.
+  const std::vector<float> alpha =
+      n == 1 ? std::vector<float>{detail::geometric_relative_bandwidth(bins_per_octave)}
+             : detail::relative_bandwidths(frequencies);
 
   for (size_t k = 0; k < n; ++k) {
     // VQT bandwidth: alpha * f_k + gamma.
@@ -128,19 +131,13 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
 }
 
 std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
-  validate_cqt_fmin(config.fmin);
-  SONARE_CHECK(sr > 0 && config.n_bins > 0 && config.bins_per_octave > 0 &&
-                   numeric::finite_positive(config.fmin) &&
-                   numeric::finite_non_negative(config.gamma) &&
-                   numeric::finite_positive(config.filter_scale),
-               ErrorCode::InvalidParameter);
+  validate_cqt_config(config.to_cqt_config());
+  SONARE_CHECK(sr > 0 && numeric::finite_non_negative(config.gamma), ErrorCode::InvalidParameter);
   auto kernel = std::unique_ptr<VqtKernel>(new VqtKernel());
 
   // Compute center frequencies
   kernel->frequencies_ = vqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
-  SONARE_CHECK(
-      !kernel->frequencies_.empty() && kernel->frequencies_.back() < static_cast<float>(sr) * 0.5f,
-      ErrorCode::InvalidParameter);
+  detail::validate_cqt_top_bin(kernel->frequencies_, sr);
   kernel->n_bins_ = config.n_bins;
 
   // Compute bandwidths
@@ -159,10 +156,10 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     float bandwidth = kernel->bandwidths_[k];
     const float raw_length = config.filter_scale * static_cast<float>(sr) / bandwidth;
     const long double rounded_length = std::ceil(static_cast<long double>(raw_length));
-    SONARE_CHECK(numeric::finite_positive(bandwidth) && numeric::finite_positive(raw_length) &&
-                     std::isfinite(rounded_length) && rounded_length >= 1.0L &&
-                     rounded_length <= static_cast<long double>(kMaxVqtFftLength),
-                 ErrorCode::InvalidParameter);
+    detail::validate_cqt_filter_length(static_cast<double>(rounded_length), kMaxVqtFftLength,
+                                       {"fmin", "bins_per_octave", "gamma", "filter_scale"});
+    SONARE_CHECK(numeric::finite_positive(raw_length) && rounded_length >= 1.0L,
+                 ErrorCode::InvalidState);
     int length = static_cast<int>(rounded_length);
     kernel->raw_lengths_[k] = raw_length;
     kernel->lengths_[k] = length;
@@ -170,14 +167,9 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   }
 
   // FFT length is next power of 2 of max filter length
-  SONARE_CHECK(max_length <= kMaxVqtFftLength, ErrorCode::InvalidParameter);
   kernel->fft_length_ = next_power_of_2(max_length);
-  size_t kernel_elements = 0;
-  SONARE_CHECK(kernel->fft_length_ <= kMaxVqtFftLength &&
-                   numeric::checked_size_product(static_cast<size_t>(config.n_bins),
-                                                 static_cast<size_t>(kernel->fft_length_),
-                                                 kMaxVqtKernelElements, &kernel_elements),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK(kernel->fft_length_ <= kMaxVqtFftLength, ErrorCode::InvalidState);
+  detail::validate_cqt_kernel_bins(config.n_bins, kernel->fft_length_, kMaxVqtKernelElements);
 
   // Create FFT processor
   FFT fft(kernel->fft_length_);

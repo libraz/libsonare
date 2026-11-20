@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
 
 #include "core/convert.h"
 #include "core/window.h"
@@ -11,6 +12,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -20,17 +22,33 @@ using sonare::constants::kTwoPi;
 namespace detail {
 
 // alpha is the bandwidth divisor in length = filter_scale * sr / (alpha * f + gamma).
+namespace {
+
+constexpr float kAlphaFloor = 1e-6f;
+
+void validate_frequencies(const std::vector<float>& freqs) {
+  for (size_t i = 0; i < freqs.size(); ++i) {
+    util::check::greater_than(freqs[i], 0.0, ("freqs[" + std::to_string(i) + "]").c_str());
+  }
+}
+
+// The relative bandwidth of a bin whose local spacing is @p bpo bins per octave.
+float bandwidth_at_spacing(float bpo) {
+  const float t = std::pow(2.0f, 2.0f / bpo);
+  return std::max((t - 1.0f) / (t + 1.0f), kAlphaFloor);
+}
+
+}  // namespace
+
+float geometric_relative_bandwidth(int bins_per_octave) {
+  return bandwidth_at_spacing(static_cast<float>(bins_per_octave));
+}
+
 std::vector<float> relative_bandwidths(const std::vector<float>& freqs) {
   constexpr float kLogGuard = 1e-9f;
-  constexpr float kAlphaFloor = 1e-6f;
 
   std::vector<float> alpha(freqs.size(), 1.0f);
-  for (float frequency : freqs) {
-    if (!numeric::finite_positive(frequency)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "relative_bandwidths: frequencies must be finite and positive");
-    }
-  }
+  validate_frequencies(freqs);
   if (freqs.size() < 2) return alpha;
 
   std::vector<float> logf(freqs.size(), 0.0f);
@@ -45,10 +63,7 @@ std::vector<float> relative_bandwidths(const std::vector<float>& freqs) {
   for (size_t k = 1; k + 1 < freqs.size(); ++k) {
     bpo[k] = 2.0f / std::max(logf[k + 1] - logf[k - 1], kLogGuard);
   }
-  for (size_t k = 0; k < freqs.size(); ++k) {
-    const float t = std::pow(2.0f, 2.0f / bpo[k]);
-    alpha[k] = std::max((t - 1.0f) / (t + 1.0f), kAlphaFloor);
-  }
+  for (size_t k = 0; k < freqs.size(); ++k) alpha[k] = bandwidth_at_spacing(bpo[k]);
   return alpha;
 }
 
@@ -56,26 +71,15 @@ std::vector<float> relative_bandwidths(const std::vector<float>& freqs) {
 
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param,
                                    float Q) {
-  if (sr <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "wavelet_lengths: sr must be positive");
-  if (!numeric::finite_positive(window_param)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "wavelet_lengths: window_param must be finite and positive");
-  }
-  if (!numeric::finite_non_negative(Q))
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "wavelet_lengths: Q must be finite and non-negative");
+  util::check::integer_at_least(sr, 1, "sr");
+  util::check::greater_than(window_param, 0.0, "window_param");
+  util::check::at_least(Q, 0.0, "Q");
   const bool use_Q = (Q > 0.0f);
   if (!use_Q && freqs.size() < 2) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "wavelet_lengths: at least two frequencies are required without Q");
+    util::check::refuse_relation({"freqs", "Q"},
+                                 "{0} must hold at least two frequencies when {1} is 0");
   }
-  for (float frequency : freqs) {
-    if (!numeric::finite_positive(frequency)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "wavelet_lengths: frequencies must be finite and positive");
-    }
-  }
+  detail::validate_frequencies(freqs);
 
   const std::vector<float> alpha =
       use_Q ? std::vector<float>() : detail::relative_bandwidths(freqs);
@@ -91,8 +95,7 @@ std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, floa
       lengths[i] = (window_param / alpha[i]) * static_cast<float>(sr) / freqs[i];
     }
     if (!numeric::finite_positive(lengths[i])) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "wavelet_lengths: derived length must be finite and positive");
+      util::check::refuse("freqs", "must give every filter a finite length at sr");
     }
   }
   return lengths;

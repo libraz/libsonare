@@ -47,6 +47,10 @@ TEST_CASE("C exception recording preserves the existing classifications", "[c_ap
   REQUIRE(std::string(sonare_last_error_message()) == "encode failed");
 
   REQUIRE(classify([] { throw std::bad_alloc(); }) == SONARE_ERROR_OUT_OF_MEMORY);
+  // An allocation failure reads as its code, not as the standard library's what().
+  REQUIRE(std::string(sonare_last_error_message()) == "Out of memory");
+  REQUIRE(classify([] { throw std::bad_array_new_length(); }) == SONARE_ERROR_OUT_OF_MEMORY);
+  REQUIRE(std::string(sonare_last_error_message()) == "Out of memory");
   REQUIRE(classify([] { throw std::invalid_argument("bad argument"); }) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(classify([] { throw std::logic_error("bad state"); }) == SONARE_ERROR_INVALID_STATE);

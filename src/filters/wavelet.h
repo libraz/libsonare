@@ -26,6 +26,11 @@ std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& f
 /// single frequency uses the caller-compatible default alpha of 1.0.
 std::vector<float> relative_bandwidths(const std::vector<float>& freqs);
 
+/// @brief The relative bandwidth every bin of a geometric grid has at @p bins_per_octave.
+/// @details Equal to relative_bandwidths over any two or more bins of that grid, so a lone bin
+///          whose grid spacing is known takes it without a neighbour.
+float geometric_relative_bandwidth(int bins_per_octave);
+
 }  // namespace detail
 
 /// @brief Complex Hann-windowed sinusoid kernels at @p freqs.

@@ -108,7 +108,7 @@ SonareError record_current_exception() noexcept {
     return code;
   } catch (const std::exception& e) {
     const SonareError code = static_cast<SonareError>(sonare::error_code_for_std_exception(e));
-    set_last_error(code, e.what());
+    set_last_error(code, sonare::message_for_std_exception(e));
     return code;
   } catch (...) {
     set_last_error(SONARE_ERROR_UNKNOWN, kUnknownExceptionMessage);

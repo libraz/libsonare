@@ -3,7 +3,10 @@
 /// @file error_classification.h
 /// @brief Classifies a std::exception the way the C-ABI catch chain does.
 
+#include <new>
 #include <stdexcept>
+
+#include "util/types.h"
 
 namespace sonare {
 
@@ -26,6 +29,16 @@ inline int error_code_for_std_exception(const std::exception& e) {
   if (dynamic_cast<const std::invalid_argument*>(&e) != nullptr) return 4;  // InvalidParameter
   if (dynamic_cast<const std::logic_error*>(&e) != nullptr) return 7;       // InvalidState
   return 99;                                                                // Unknown
+}
+
+/// @brief The text a caught non-Sonare std::exception is reported with. An allocation failure
+///        reads as its error code does ("Out of memory"), never as the standard library's
+///        implementation-defined what(); every other class keeps its own text.
+inline const char* message_for_std_exception(const std::exception& e) {
+  if (dynamic_cast<const std::bad_alloc*>(&e) != nullptr) {
+    return error_message(ErrorCode::OutOfMemory);
+  }
+  return e.what();
 }
 
 }  // namespace sonare

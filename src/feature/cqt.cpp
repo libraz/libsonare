@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -81,6 +82,7 @@ constexpr size_t kMaxCqtCacheSize = 12;
 // low-fmin / oversized requests.
 constexpr size_t kMaxCqtKernelElements = 32 * 1024 * 1024;
 constexpr int kMaxCqtFftLength = 131072;
+static_assert(kMaxCqtHopLength == kMaxCqtFftLength / 2, "a hop spans at most half the FFT");
 
 /// @brief Scratch the builders of one kernel may hold between them.
 constexpr uint64_t kMaxCqtBuildScratchBytes = 64u * 1024u * 1024u;
@@ -217,15 +219,63 @@ const std::complex<float>& CqtResult::at(int bin, int frame) const {
   return data_[bin * n_frames_ + frame];
 }
 
+namespace {
+
+// A bandwidth is measured against a neighbour, so a lone bin takes the Q its grid spacing implies;
+// 0 lets wavelet_lengths measure every bin against its neighbours.
+float lone_bin_q(const CqtConfig& config) {
+  if (config.n_bins != 1) return 0.0f;
+  return config.filter_scale / detail::geometric_relative_bandwidth(config.bins_per_octave);
+}
+
+// The lowest bin carries the longest filter. Refused before any length is derived, so a length
+// past the float range meets the same refusal as one past the FFT cap.
+void validate_longest_filter(const CqtConfig& config, int sr) {
+  const double alpha = detail::geometric_relative_bandwidth(config.bins_per_octave);
+  detail::validate_cqt_filter_length(
+      std::ceil(static_cast<double>(config.filter_scale) * sr / (alpha * config.fmin)),
+      kMaxCqtFftLength, {"fmin", "bins_per_octave", "filter_scale"});
+}
+
+}  // namespace
+
 void validate_cqt_fmin(float fmin) { util::check::greater_than(fmin, 0.0, "fmin"); }
 
 void validate_cqt_config(const CqtConfig& config) {
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_in_range(config.hop_length, 1, kMaxCqtHopLength, "hop_length");
   validate_cqt_fmin(config.fmin);
   util::check::integer_at_least(config.n_bins, 1, "n_bins");
   util::check::integer_at_least(config.bins_per_octave, 1, "bins_per_octave");
   util::check::greater_than(config.filter_scale, 0.0, "filter_scale");
 }
+
+namespace detail {
+
+void validate_cqt_top_bin(const std::vector<float>& frequencies, int sr) {
+  if (frequencies.empty() || !(frequencies.back() < static_cast<float>(sr) * 0.5f)) {
+    util::check::refuse_relation({"fmin", "n_bins", "bins_per_octave"},
+                                 "{0} * 2^(({1} - 1) / {2}) must be less than sr / 2");
+  }
+}
+
+void validate_cqt_filter_length(double longest, int max_length, std::vector<std::string> subjects) {
+  if (std::isfinite(longest) && longest <= static_cast<double>(max_length)) return;
+  std::string text;
+  for (size_t i = 0; i < subjects.size(); ++i) {
+    if (i > 0) text += i + 1 == subjects.size() ? " and " : ", ";
+    text += "{" + std::to_string(i) + "}";
+  }
+  util::check::refuse_relation(std::move(subjects), text + " must keep every filter at most " +
+                                                        std::to_string(max_length) +
+                                                        " samples long at sr");
+}
+
+void validate_cqt_kernel_bins(int n_bins, int fft_length, std::size_t max_elements) {
+  const auto most = static_cast<long long>(max_elements / static_cast<std::size_t>(fft_length));
+  util::check::integer_in_range(n_bins, 1, most, "n_bins");
+}
+
+}  // namespace detail
 
 // CqtKernel implementation
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
@@ -243,43 +293,32 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
 
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
                                              const CqtKernel* donor, int host_concurrency) {
-  validate_cqt_fmin(config.fmin);
-  SONARE_CHECK(sr > 0 && config.hop_length > 0 && config.hop_length <= kMaxCqtFftLength / 2 &&
-                   config.n_bins > 0 && config.bins_per_octave > 0 && std::isfinite(config.fmin) &&
-                   config.fmin > 0.0f && std::isfinite(config.filter_scale) &&
-                   config.filter_scale > 0.0f,
-               ErrorCode::InvalidParameter);
+  validate_cqt_config(config);
+  SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
   auto kernel = std::unique_ptr<CqtKernel>(new CqtKernel());
 
   // Center frequencies for all bins.
   kernel->frequencies_ = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
-  SONARE_CHECK(
-      !kernel->frequencies_.empty() && kernel->frequencies_.back() < static_cast<float>(sr) * 0.5f,
-      ErrorCode::InvalidParameter);
+  detail::validate_cqt_top_bin(kernel->frequencies_, sr);
+  validate_longest_filter(config, sr);
   kernel->n_bins_ = config.n_bins;
 
   // Raw fractional lengths from librosa's wavelet_lengths (bpo-based).
-  std::vector<float> raw_lengths = wavelet_lengths(kernel->frequencies_, sr, config.filter_scale);
+  std::vector<float> raw_lengths =
+      wavelet_lengths(kernel->frequencies_, sr, config.filter_scale, lone_bin_q(config));
   const float longest =
       raw_lengths.empty() ? 0.0f : *std::max_element(raw_lengths.begin(), raw_lengths.end());
-  SONARE_CHECK(
-      numeric::finite_non_negative(longest) && longest <= static_cast<float>(kMaxCqtFftLength),
-      ErrorCode::InvalidParameter);
+  detail::validate_cqt_filter_length(std::ceil(static_cast<double>(longest)), kMaxCqtFftLength,
+                                     {"fmin", "bins_per_octave", "filter_scale"});
   const long double longest_ceil = std::ceil(static_cast<long double>(longest));
-  SONARE_CHECK(std::isfinite(longest_ceil) && longest_ceil >= 1.0L &&
-                   longest_ceil <= static_cast<long double>(kMaxCqtFftLength),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK(longest_ceil >= 1.0L, ErrorCode::InvalidParameter);
   const int predicted_max_length = std::max(2, static_cast<int>(longest_ceil));
   int predicted_n_fft = next_power_of_2(predicted_max_length);
   if (config.hop_length > 0) {
     predicted_n_fft = std::max(predicted_n_fft, 2 * next_power_of_2(config.hop_length));
   }
-  size_t predicted_elements = 0;
-  SONARE_CHECK(predicted_n_fft <= kMaxCqtFftLength &&
-                   numeric::checked_size_product(static_cast<size_t>(config.n_bins),
-                                                 static_cast<size_t>(predicted_n_fft),
-                                                 kMaxCqtKernelElements, &predicted_elements),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK(predicted_n_fft <= kMaxCqtFftLength, ErrorCode::InvalidState);
+  detail::validate_cqt_kernel_bins(config.n_bins, predicted_n_fft, kMaxCqtKernelElements);
 
   // Effective integer lengths, librosa's index range n in [floor(-ilen/2), floor(ilen/2)).
   const auto effective_length = [](float ilen) {
@@ -353,9 +392,10 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
         const int first = k > 0 ? k - 1 : 0;
         const int last = run_end < config.n_bins ? run_end : run_end - 1;
         const std::vector<float> run_freqs(freqs.begin() + first, freqs.begin() + last + 1);
-        const std::vector<float> run_lengths = wavelet_lengths(run_freqs, sr, config.filter_scale);
+        const std::vector<float> run_lengths =
+            wavelet_lengths(run_freqs, sr, config.filter_scale, lone_bin_q(config));
         packed = detail::wavelet_with_window(run_freqs, sr, config.filter_scale, /*is_cqt=*/true,
-                                             /*pad_fft=*/false, /*Q=*/0.0f, config.window);
+                                             /*pad_fft=*/false, lone_bin_q(config), config.window);
         size_t packed_total = 0;
         for (int g = first; g <= last; ++g) {
           const float length = run_lengths[static_cast<size_t>(g - first)];
@@ -715,10 +755,13 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
 
   const int sr = audio.sample_rate();
   std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
+  detail::validate_cqt_top_bin(freqs, sr);
+  validate_longest_filter(config, sr);
 
   // librosa.hybrid_cqt's split: a bin whose filter, rounded up to a power of two,
   // is shorter than two hops takes the pseudo CQT; longer ones the full CQT.
-  const std::vector<float> lengths = wavelet_lengths(freqs, sr, config.filter_scale);
+  const std::vector<float> lengths =
+      wavelet_lengths(freqs, sr, config.filter_scale, lone_bin_q(config));
   int n_split = config.n_bins;
   for (int k = 0; k < config.n_bins; ++k) {
     if (std::exp2(std::ceil(std::log2(lengths[static_cast<size_t>(k)]))) <

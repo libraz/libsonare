@@ -307,6 +307,7 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
       // Not a SonareException: classify by RTTI the same way the C-ABI catch
       // chain does, via the shared classifier.
       code = sonare::error_code_for_std_exception(*base);
+      message = sonare::message_for_std_exception(*base);
       switch (code) {
         case 4:
           code_name = "InvalidParameter";
