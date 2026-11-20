@@ -200,10 +200,12 @@ describe('a bend outside its domain is refused, never truncated into it', () => 
     // 16384 is 0 masked to 14 bits — a FULL BEND DOWN — so a truncating reader
     // would accept it and bend the wrong way rather than report anything.
     expect(() => engine.pushMidiPitchBend(0, 0, 0, BEND_MAX + 1)).toThrow(
-      new RangeError('RealtimeEngine.pushMidiPitchBend: bend14 must be in [0, 16383]'),
+      new RangeError('RealtimeEngine.pushMidiPitchBend: bend14 must be an integer in [0, 16383]'),
     );
     expect(() => engine.pushMidiInputPitchBend(0, 0, BEND_MAX + 1, 0)).toThrow(
-      new RangeError('RealtimeEngine.pushMidiInputPitchBend: bend14 must be in [0, 16383]'),
+      new RangeError(
+        'RealtimeEngine.pushMidiInputPitchBend: bend14 must be an integer in [0, 16383]',
+      ),
     );
     engine.destroy();
   });
@@ -240,10 +242,14 @@ describe('a bend outside its domain is refused, never truncated into it', () => 
   it('reports a pressure past the 7-bit domain rather than masking it', () => {
     const engine = preparedEngine();
     expect(() => engine.pushMidiChannelPressure(0, 0, 0, 128)).toThrow(
-      new RangeError('RealtimeEngine.pushMidiChannelPressure: pressure must be in [0, 127]'),
+      new RangeError(
+        'RealtimeEngine.pushMidiChannelPressure: pressure must be an integer in [0, 127]',
+      ),
     );
     expect(() => engine.pushMidiInputPolyPressure(0, 0, NOTE, 128, 0)).toThrow(
-      new RangeError('RealtimeEngine.pushMidiInputPolyPressure: pressure must be in [0, 127]'),
+      new RangeError(
+        'RealtimeEngine.pushMidiInputPolyPressure: pressure must be an integer in [0, 127]',
+      ),
     );
     engine.destroy();
   });
