@@ -5,7 +5,6 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
-import re
 import sys
 import tempfile
 import unittest
@@ -790,14 +789,14 @@ class CliContractSelfTest(unittest.TestCase):
             for path, record in self.manifest["commands"].items()
             if record.get("reason_kind") == "by_design"
         }
-        self.assertEqual(by_design, {"sections", "vqt"})
+        self.assertEqual(by_design, {"sections"})
 
     def test_a_missing_reason_is_rejected(self) -> None:
         candidate = copy.deepcopy(self.manifest)
-        candidate["commands"]["vqt"].pop("reason")
+        candidate["commands"]["sections"].pop("reason")
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(
-            any("commands.vqt: missing keys reason" in error for error in errors),
+            any("commands.sections: missing keys reason" in error for error in errors),
             errors,
         )
 
@@ -819,19 +818,19 @@ class CliContractSelfTest(unittest.TestCase):
 
     def test_a_reason_too_short_to_say_anything_is_rejected(self) -> None:
         candidate = copy.deepcopy(self.manifest)
-        candidate["commands"]["vqt"]["reason"] = "TODO"
+        candidate["commands"]["sections"]["reason"] = "TODO"
         errors = CHECKER.validate_manifest(candidate)
-        self.assertTrue(any("commands.vqt.reason" in error for error in errors), errors)
+        self.assertTrue(any("commands.sections.reason" in error for error in errors), errors)
 
     def test_a_reason_citing_a_function_the_package_does_not_export_is_rejected(self) -> None:
         """A route a reason sends the caller down must exist on the Python side."""
         candidate = copy.deepcopy(self.manifest)
-        candidate["commands"]["vqt"]["reason"] = (
+        candidate["commands"]["sections"]["reason"] = (
             "a librosa-style primitive; a Python caller reaches it as libsonare.constant_q()"
         )
         errors = CHECKER.validate_manifest(candidate)
         self.assertIn(
-            "manifest.commands.vqt.reason: cites libsonare.constant_q(), "
+            "manifest.commands.sections.reason: cites libsonare.constant_q(), "
             "which the Python package does not export",
             errors,
         )
@@ -839,28 +838,32 @@ class CliContractSelfTest(unittest.TestCase):
     def test_a_reason_cites_a_function_through_the_package_name(self) -> None:
         """A bare name cannot be resolved, so it cannot be checked either."""
         candidate = copy.deepcopy(self.manifest)
-        candidate["commands"]["vqt"]["reason"] = (
+        candidate["commands"]["sections"]["reason"] = (
             "a librosa-style primitive; a Python caller reaches it as cqt()"
         )
         errors = CHECKER.validate_manifest(candidate)
         self.assertIn(
-            "manifest.commands.vqt.reason: cites cqt(); "
+            "manifest.commands.sections.reason: cites cqt(); "
             "write a library entry point as libsonare.<name>()",
             errors,
         )
 
     def test_every_function_a_reason_cites_is_resolved(self) -> None:
-        """With nothing exported, every citation the ledger carries must fail."""
+        """Each citation is resolved against the package: exported, it passes; unexported, it fails.
+
+        No reason in the ledger cites a function today, so the citations are written into one.
+        """
         schema = sys.modules["cli_contract_schema"]
-        cited = sum(
-            len(re.findall(r"libsonare\.\w+\(\)", record.get("reason", "")))
-            for record in self.manifest["commands"].values()
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["sections"]["reason"] = (
+            "a Python caller reaches the form through libsonare.cqt() and libsonare.vqt()"
         )
-        self.assertGreater(cited, 0)
+        resolved = CHECKER.validate_manifest(copy.deepcopy(candidate))
+        self.assertEqual([e for e in resolved if "commands.sections.reason" in e], [])
         with mock.patch.object(schema, "_python_package_exports", return_value=frozenset()):
-            errors = CHECKER.validate_manifest(copy.deepcopy(self.manifest))
+            errors = CHECKER.validate_manifest(candidate)
         unresolved = [e for e in errors if "which the Python package does not export" in e]
-        self.assertEqual(len(unresolved), cited, errors)
+        self.assertEqual(len(unresolved), 2, errors)
 
     def test_a_requires_entry_names_a_build_feature_the_binary_can_report(self) -> None:
         """A gate the capability descriptor cannot name is one nothing can satisfy.
@@ -954,7 +957,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared"
         }
-        self.assertEqual(len(shared), 117)
+        self.assertEqual(len(shared), 118)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
             self.assertEqual(self.manifest["commands"][path]["option_status"], "active", path)

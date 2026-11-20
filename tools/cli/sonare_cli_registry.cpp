@@ -1462,7 +1462,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         commands, "vqt", true,
         {library_default(with_domain(int_value("n-bins"), at_least(1.0)), "84"),
          library_default(with_domain(int_value("bins-per-octave"), at_least(1.0)), "12"),
-         library_default(number_value("gamma"), "-1.0"),
+         with_stated_default(with_domain(number_value("gamma"), at_least(0.0)),
+                             "derived from the ERB bandwidths"),
          library_default(with_domain(number_value("filter-scale"), greater_than(0.0)), "1.0"),
          with_domain(library_default(global_int("hop-length"), "512"), cqt_hop_domain()),
          with_domain(number_value("fmin-hz", false, true), greater_than(0.0))});

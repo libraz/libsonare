@@ -382,12 +382,12 @@ int cmd_vqt(const CliArgs& args, const Audio& audio) {
   if (args.has("fmin-hz")) config.fmin = args.fmin;
   config.n_bins = args.get_int("n-bins", config.n_bins);
   config.bins_per_octave = args.get_int("bins-per-octave", config.bins_per_octave);
-  config.gamma = args.get_float("gamma", config.gamma);
+  // Left out, the core derives gamma from the ERB bandwidths; a given value is never negative.
+  if (args.has("gamma")) config.gamma = args.get_float("gamma", 0.0f);
   config.filter_scale = args.get_float("filter-scale", config.filter_scale);
 
   VqtResult result = vqt(audio, config);
-  // A negative gamma is the automatic sentinel, so report what the bandwidths were
-  // built from rather than the sentinel that selected it.
+  // Report the gamma the bandwidths were built from, derived or given.
   const float gamma = resolve_vqt_gamma(config);
 
   if (args.json_output) {

@@ -1936,7 +1936,6 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"cqt", p.tone_wav + " --json -q", "bins-per-octave", "24"},
       {"vqt", p.tone_wav + " --json -q", "n-bins", "48"},
       {"vqt", p.tone_wav + " --json -q", "bins-per-octave", "24"},
-      {"vqt", p.tone_wav + " --json -q", "gamma", "0"},
       // The vqt JSON prints only shape, fmin, bins per octave and gamma, none of which depend on
       // it.
       {"vqt", p.tone_wav + " --json -q", "filter-scale", ""},
@@ -2185,6 +2184,7 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"frames-to-samples", "n-fft", "no centring offset is applied"},
       {"samples-to-frames", "n-fft", "no centring offset is applied"},
       {"fix-frames", "x-max", "the indices have no upper bound"},
+      {"vqt", "gamma", "derived from the ERB bandwidths"},
       {"meter", "clip-threshold-db", "a sample counts as clipped from a linear 0.999"},
       {"clipping", "threshold-db", "a sample counts as clipped from a linear 0.999"},
 #ifdef SONARE_WITH_ACOUSTIC_SIM

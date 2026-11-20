@@ -160,6 +160,7 @@ TOP_LEVEL_ROUTES = (
     "fourier-tempogram",
     "tempogram-ratio",
     "cqt",
+    "vqt",
     "preemphasis",
     "deemphasis",
     "mel-to-audio",

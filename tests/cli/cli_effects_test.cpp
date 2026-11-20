@@ -917,12 +917,17 @@ TEST_CASE("CLI vqt reports the gamma its bandwidths were built from", "[cli]") {
   // a case that reads it has to write it: relying on a sibling leaves this green
   // under the whole-tag run and red under ctest.
   create_test_wav(TEST_WAV);
-  // A negative gamma is the automatic sentinel, and the ERB value it selects
-  // depends on bins-per-octave, so echoing the sentinel told a consumer nothing
-  // about the transform it just ran.
-  auto [auto_code, auto_output] = exec_command(CLI + " vqt --gamma -1 " + TEST_WAV + " --json -q");
+  // Left out, gamma is derived from the ERB bandwidths, which depend on bins-per-octave, so the
+  // report carries the derived value.
+  auto [auto_code, auto_output] = exec_command(CLI + " vqt " + TEST_WAV + " --json -q");
   REQUIRE(auto_code == 0);
   REQUIRE_THAT(auto_output, ContainsSubstring("\"gamma\": 13.19"));
+
+  // A negative gamma is refused before the read rather than read as "derive it".
+  auto [negative_code, negative_output] =
+      exec_command(CLI + " vqt --gamma -1 " + TEST_WAV + " --json -q");
+  REQUIRE(negative_code == 2);
+  REQUIRE_THAT(negative_output, ContainsSubstring("argument --gamma:"));
 
   // An explicit gamma is not a sentinel and is reported unchanged.
   auto [explicit_code, explicit_output] =

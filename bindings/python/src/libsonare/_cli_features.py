@@ -424,6 +424,54 @@ def cmd_cqt(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_vqt(args: argparse.Namespace) -> int:
+    from . import vqt
+
+    samples, sr = _load_audio(args.file)
+    result = vqt(
+        samples,
+        sr=sr,
+        **_given(
+            args,
+            "hop_length",
+            "n_bins",
+            "bins_per_octave",
+            "gamma",
+            "filter_scale",
+            fmin="fmin_hz",
+        ),
+    )
+    n_bins, n_frames = result.magnitude.shape
+    duration = n_frames * result.hop_length / result.sample_rate if result.sample_rate else 0.0
+    fmin = _effective(args, vqt, "fmin", "fmin_hz")
+    bins_per_octave = _effective(args, vqt, "bins_per_octave")
+    if args.json:
+        print(
+            _strict_json_dumps(
+                {
+                    "n_bins": n_bins,
+                    "n_frames": n_frames,
+                    "duration": duration,
+                    "fmin_hz": fmin,
+                    "bins_per_octave": bins_per_octave,
+                    "gamma": result.gamma,
+                }
+            )
+        )
+    else:
+        requested_bins = _effective(args, vqt, "n_bins")
+        fmax = fmin * 2.0 ** (requested_bins / bins_per_octave)
+        print("Variable-Q Transform:")
+        print(f"  Shape:           {n_bins} bins x {n_frames} frames")
+        print(
+            f"  Frequency Range: {fmin:.1f} - {fmax:.1f} Hz "
+            f"({requested_bins // bins_per_octave} octaves)"
+        )
+        print(f"  Gamma:           {result.gamma:.2f}")
+        print(f"  Duration:        {duration:.2f}s")
+    return 0
+
+
 def register_feature_parsers(
     sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
 ) -> None:
@@ -644,5 +692,48 @@ def register_feature_parsers(
         maximum=65536,
     )
     cqt_p.add_argument(
+        "--fmin-hz", type=_positive_finite_float, default=None, help="Lowest center frequency in Hz"
+    )
+
+    vqt_p = sub.add_parser("vqt", parents=[stdout_options], help="Compute Variable-Q Transform")
+    _cli_domain(
+        vqt_p.add_argument(
+            "--n-bins", type=_c_int, default=None, help="Number of bins (default: 84)"
+        ),
+        minimum=1,
+    )
+    _cli_domain(
+        vqt_p.add_argument(
+            "--bins-per-octave", type=_c_int, default=None, help="Bins per octave (default: 12)"
+        ),
+        minimum=1,
+    )
+    _cli_domain(
+        vqt_p.add_argument(
+            "--gamma",
+            type=_finite_float,
+            default=None,
+            help="Bandwidth offset in Hz; 0 is the CQT (default: derived from the ERB bandwidths)",
+        ),
+        minimum=0,
+    )
+    _cli_domain(
+        vqt_p.add_argument(
+            "--filter-scale",
+            type=_finite_float,
+            default=None,
+            help="Filter length scale factor (default: 1.0)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+    )
+    _cli_domain(
+        vqt_p.add_argument(
+            "--hop-length", type=_c_int, default=None, help="Hop length in samples (default: 512)"
+        ),
+        minimum=1,
+        maximum=65536,
+    )
+    vqt_p.add_argument(
         "--fmin-hz", type=_positive_finite_float, default=None, help="Lowest center frequency in Hz"
     )

@@ -1042,10 +1042,10 @@ test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reprodu
 kind = "flag"
 old = "vqt --gamma"
 frontend = "native"
-changed = "omitted, the library chooses the bandwidth offset automatically rather than using 0 (a constant-Q transform); pass --gamma 0 to keep 1.x output"
+changed = "omitted, the library derives the bandwidth offset from the ERB bandwidths rather than using 0 (a constant-Q transform); pass --gamma 0 to keep 1.x output; a negative value is refused as a usage error (exit 2) rather than read as the derived offset"
 domain = "analysis"
 rule = "library-owned-defaults"
-test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
+test = "tests/cli/cli_effects_test.cpp::CLI vqt reports the gamma its bandwidths were built from"
 
 [[entry]]
 kind = "command"

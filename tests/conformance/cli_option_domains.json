@@ -1612,6 +1612,15 @@
       "exclusive_maximum": false
     },
     {
+      "command": "vqt",
+      "option": "gamma",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusive_minimum": false,
+      "maximum": null,
+      "exclusive_maximum": false
+    },
+    {
       "command": "mel-to-audio",
       "option": "n-iter",
       "choices": [],

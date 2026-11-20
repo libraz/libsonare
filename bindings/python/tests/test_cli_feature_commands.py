@@ -455,6 +455,44 @@ def test_cqt_nyquist_relation_is_a_library_refusal(source: Path) -> None:
     assert "must be less than sr / 2" in result.stderr
 
 
+def test_vqt_matches_library(source: Path) -> None:
+    from libsonare import vqt
+
+    payload = _json(
+        _run_cli(["vqt", str(source), "--n-bins", "48", "--filter-scale", "0.5", "--json"])
+    )
+    samples, rate = _load(source)
+    result = vqt(samples, sr=rate, n_bins=48, filter_scale=0.5)
+    assert set(payload) == {
+        "n_bins",
+        "n_frames",
+        "duration",
+        "fmin_hz",
+        "bins_per_octave",
+        "gamma",
+    }
+    assert (payload["n_bins"], payload["n_frames"]) == result.magnitude.shape
+    assert payload["gamma"] == pytest.approx(result.gamma)
+    assert payload["gamma"] > 0.0
+
+
+def test_vqt_gamma_reaches_the_library(source: Path) -> None:
+    payload = _json(_run_cli(["vqt", str(source), "--gamma", "3.5", "--json"]))
+    assert payload["gamma"] == pytest.approx(3.5)
+
+
+def test_vqt_negative_gamma_is_a_usage_refusal(source: Path) -> None:
+    result = _run_cli(["vqt", str(source), "--gamma", "-1"])
+    assert result.returncode == EXIT_USAGE
+    assert "--gamma" in result.stderr
+
+
+def test_vqt_human_report(source: Path) -> None:
+    out = _run_cli(["vqt", str(source)]).stdout
+    assert "Variable-Q Transform:" in out
+    assert "  Gamma:           " in out
+
+
 def test_cqt_hop_domain_is_a_usage_refusal(source: Path) -> None:
     result = _run_cli(["cqt", str(source), "--hop-length", "0"])
     assert result.returncode == EXIT_USAGE

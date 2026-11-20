@@ -8007,6 +8007,114 @@
           "required": false,
           "domain": null
         }
+      ],
+      "vqt": [
+        {
+          "name": "bins-per-octave",
+          "type": "integer",
+          "default": null,
+          "stated_default": "12",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "filter-scale",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "gamma",
+          "type": "number",
+          "default": null,
+          "stated_default": "derived from the ERB bandwidths",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 65536,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-bins",
+          "type": "integer",
+          "default": null,
+          "stated_default": "84",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        }
       ]
     }
   },
@@ -8564,11 +8672,9 @@
       "option_status": "active"
     },
     "vqt": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.vqt() over the array it already holds, where it composes"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mel-to-audio": {
       "classification": "shared",
@@ -26306,6 +26412,181 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "vqt",
+      "options": [
+        {
+          "name": "bins-per-octave",
+          "type": "integer",
+          "default": null,
+          "stated_default": "12",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "filter-scale",
+          "type": "number",
+          "default": null,
+          "stated_default": "1.0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "gamma",
+          "type": "number",
+          "default": null,
+          "stated_default": "derived from the ERB bandwidths",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": null,
+          "stated_default": "512",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 65536,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-bins",
+          "type": "integer",
+          "default": null,
+          "stated_default": "84",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 2147483647,
+            "exclusive_maximum": false
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "n_bins": "integer",
+            "n_frames": "integer",
+            "duration": "number",
+            "fmin_hz": "number",
+            "bins_per_octave": "integer",
+            "gamma": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "vqt",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "gamma_negative",
+          "argv": [
+            "vqt",
+            "{audio}",
+            "--gamma",
+            "-1",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "hop_domain",
+          "argv": [
+            "vqt",
+            "{audio}",
+            "--hop-length",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}

@@ -249,6 +249,10 @@ _ROWS: tuple[tuple[str, str, str, str, int | None], ...] = (
     ("cqt", "--n-bins", "_features_transforms:cqt", "n_bins", None),
     ("cqt", "--bins-per-octave", "_features_transforms:cqt", "bins_per_octave", None),
     ("cqt", "--hop-length", "_features_transforms:cqt", "hop_length", None),
+    ("vqt", "--n-bins", "_features_transforms:vqt", "n_bins", None),
+    ("vqt", "--bins-per-octave", "_features_transforms:vqt", "bins_per_octave", None),
+    ("vqt", "--filter-scale", "_features_transforms:vqt", "filter_scale", None),
+    ("vqt", "--hop-length", "_features_transforms:vqt", "hop_length", None),
 )
 
 # Axes of the tuple-valued ``source`` / ``listener`` defaults, one flag per axis.
@@ -269,6 +273,7 @@ _NOT_A_SIGNATURE_DEFAULT: dict[tuple[str, str], str] = {
     ("clicks", "--length"): "None renders through the last click and its decay",
     ("fix-frames", "--x-max"): "None leaves the frames unbounded above",
     ("frames-to-samples", "--n-fft"): "None applies no centring offset",
+    ("vqt", "--gamma"): "None derives the offset from the ERB bandwidths",
     ("samples-to-frames", "--n-fft"): "None applies no centring offset",
     ("room-morph", "--seed"): "None selects the core seed, 1",
     ("room-morph", "--receiver-spacing"): "None selects the core spacing, 0.5 m",
