@@ -43,6 +43,7 @@ TEST_CASE("the interleaved LUFS entries name themselves and the refused argument
   float* short_term = nullptr;
   size_t momentary_length = 0;
   size_t short_term_length = 0;
+  stereo[7] = std::numeric_limits<float>::quiet_NaN();
   CHECK(sonare_lufs_series_interleaved(stereo.data(), 4800, 2, 48000, &momentary, &momentary_length,
                                        &short_term,
                                        &short_term_length) == SONARE_ERROR_INVALID_PARAMETER);

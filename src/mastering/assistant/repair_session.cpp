@@ -268,11 +268,11 @@ struct StagePlan {
 
 StagePlan parse_stages(const std::string& stages_json) {
   const json::Value root = parse_request(stages_json.empty() ? "[]" : stages_json);
-  if (!root.is_array()) refuse_document(schema::must_be("", schema::Kind::Array));
+  if (!root.is_array()) refuse_document(schema::must_be("stages", schema::Kind::Array));
   StagePlan plan;
   std::size_t position = 0;
   for (const json::Value& entry : root.as_array()) {
-    const std::string stage_path = schema::index_path("", position++);
+    const std::string stage_path = schema::index_path("stages", position++);
     if (!entry.is_object()) refuse_document(schema::must_be(stage_path, schema::Kind::Object));
     const json::Object& object = entry.as_object();
     const std::string name_path = schema::child_path(stage_path, "stage");
