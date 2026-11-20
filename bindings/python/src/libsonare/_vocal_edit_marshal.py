@@ -189,7 +189,8 @@ class VocalEditError(SonareError):
         super().__init__(code, message)
 
 
-def _vocal_check(rc: int) -> None:
+def _vocal_check(rc: int, *, flattened: str | None = None) -> None:
+    """Raise VocalEditError for a failing vocal-edit call; flattened is as for _check."""
     if int(rc) == 0:
         return
     lib = _get_lib()
@@ -197,7 +198,7 @@ def _vocal_check(rc: int) -> None:
     lib.sonare_vocal_error_detail_init(ctypes.byref(detail))
     lib.sonare_vocal_last_error_detail(ctypes.byref(detail))
     try:
-        _check(int(rc))
+        _check(int(rc), flattened=flattened)
     except SonareError as exc:
         message = str(exc)
         prefix = f"[{exc.code}] "
@@ -207,12 +208,20 @@ def _vocal_check(rc: int) -> None:
             exc.code,
             message,
             reason=cast(VocalReason, _ordinal_token(int(detail.reason), _VOCAL_REASONS, "reason")),
-            field=_text(detail.field),
+            field=_unrooted(_text(detail.field), flattened),
             expected=int(detail.expected),
             actual=int(detail.actual),
             expected_text=_text(detail.expected_text),
             actual_text=_text(detail.actual_text),
         ) from exc
+
+
+def _unrooted(field: str, root: str | None) -> str:
+    """``field`` without a leading ``root.`` segment, matching the rendered refusal."""
+    if root is None:
+        return field
+    head, dot, rest = field.partition(".")
+    return rest if dot and head == root else field
 
 
 def _new_result(lib: ctypes.CDLL, name: str, cls: type[Any]) -> Any:

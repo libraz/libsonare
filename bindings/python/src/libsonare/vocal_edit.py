@@ -434,7 +434,8 @@ class VocalEditSession(_HandleOwner):
                 _to_c_int(rate, "sample_rate"),
                 ctypes.byref(raw_options),
                 ctypes.byref(handle),
-            )
+            ),
+            flattened="options",
         )
         self._handle = handle
         self._source_length = int(source.size)
@@ -484,7 +485,8 @@ class VocalEditSession(_HandleOwner):
                 len(state_bytes),
                 ctypes.byref(restore_options),
                 ctypes.byref(handle),
-            )
+            ),
+            flattened="options",
         )
         obj._handle = handle
         obj._source_length = int(source.size)
