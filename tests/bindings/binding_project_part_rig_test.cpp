@@ -180,4 +180,58 @@ TEST_CASE("sonare_engine_set_part_rig reaches NativeSynth and Sf2Player, not the
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("project part rig entries refuse an argument by its header name",
+          "[project][part_rig][refusal]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  REQUIRE(sonare_project_set_part_rig(nullptr, kDestination, 0, SONARE_PART_RIG_BANK, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  REQUIRE(sonare_project_set_part_rig(project, kDestination, 16, SONARE_PART_RIG_BANK, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "part must be an integer in [0, 15] or 255");
+  REQUIRE(sonare_project_set_part_rig(project, kDestination, 0, 3, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "mode must be an integer in [0, 2]");
+  // Part is declared before mode, so a bad part is named when both are wrong.
+  REQUIRE(sonare_project_set_part_rig(project, kDestination, 16, 3, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "part must be an integer in [0, 15] or 255");
+  REQUIRE(sonare_project_set_part_rig(project, kDestination, 0, SONARE_PART_RIG_CHAIN, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "inserts_json must not be NULL when mode is SONARE_PART_RIG_CHAIN");
+  REQUIRE(sonare_project_set_part_rig(project, kDestination, 0, SONARE_PART_RIG_NONE,
+                                      kSoftClipChain) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "inserts_json must be NULL unless mode is SONARE_PART_RIG_CHAIN");
+
+  int mode = 7;
+  int present = 7;
+  REQUIRE(sonare_project_get_part_rig(nullptr, kDestination, 0, &mode, nullptr, &present) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mode == SONARE_PART_RIG_BANK);
+  CHECK(present == 0);
+  CHECK(message() == "project must not be NULL");
+  REQUIRE(sonare_project_get_part_rig(project, kDestination, 16, &mode, nullptr, &present) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "part must be an integer in [0, 15] or 255");
+  // Two NULL outs: the first one in header order is named.
+  REQUIRE(sonare_project_get_part_rig(project, kDestination, 0, nullptr, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_mode must not be NULL");
+  REQUIRE(sonare_project_get_part_rig(project, kDestination, 0, &mode, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_present must not be NULL");
+
+  REQUIRE(sonare_project_clear_part_rig(nullptr, kDestination, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  REQUIRE(sonare_project_clear_part_rig(project, kDestination, 16) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "part must be an integer in [0, 15] or 255");
+
+  sonare_project_destroy(project);
+}
+
 #endif  // SONARE_WITH_ARRANGEMENT

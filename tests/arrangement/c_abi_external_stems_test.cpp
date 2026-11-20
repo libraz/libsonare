@@ -6,6 +6,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -152,6 +153,76 @@ TEST_CASE("C ABI external stem import rejects source-id collisions without mutat
   REQUIRE(project->audio.sources.size() == 1);
   REQUIRE(project->audio.sources.find(1) != project->audio.sources.end());
   REQUIRE(project->history.undo_depth() == undo_depth_before);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("C ABI external stem import refuses an argument by its header name",
+          "[arrangement][external_stems][c_api]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  StemBuffers buffers(8);
+  const SonareExternalStemDesc stem = {
+      "vocals", nullptr, SONARE_EXTERNAL_STEM_STEREO, buffers.planes.data(), 8, 0};
+  SonareExternalStemImportRequest request{};
+  request.sample_rate = 48000;
+  request.stems = &stem;
+  request.stem_count = 1;
+  SonareExternalStemImportResult result{};
+
+  REQUIRE(sonare_project_import_external_stems(nullptr, &request, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  // Two NULL pointers: the first one in header order is named.
+  REQUIRE(sonare_project_import_external_stems(project, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "request must not be NULL");
+  REQUIRE(sonare_project_import_external_stems(project, &request, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out must not be NULL");
+
+  SonareExternalStemImportRequest bad = request;
+  bad.struct_version = 2;
+  REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "request.struct_version must be one of 0, 1");
+  bad = request;
+  bad.stems = nullptr;
+  REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "request.stems must not be NULL when request.stem_count is not 0");
+  bad = request;
+  bad.stem_count = 0;
+  REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "request.stem_count must be an integer in [1, 500000000]");
+
+  SonareExternalStemDesc bad_stem = stem;
+  bad = request;
+  bad.stems = &bad_stem;
+  bad_stem.name = nullptr;
+  REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "request.stems[0].name must not be NULL");
+  bad_stem = stem;
+  bad_stem.layout = 7;
+  REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "request.stems[0].layout must be an integer in [1, 2]");
+  bad_stem = stem;
+  bad_stem.frame_count = 0;
+  REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "request.stems[0].frame_count must be an integer of at least 1");
+
+  bad = request;
+  bad.sample_rate = 44100;
+  REQUIRE(sonare_project_import_external_stems(project, &bad, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "request.sample_rate must equal the sample rate of the project");
 
   sonare_project_destroy(project);
 }

@@ -18,6 +18,7 @@
 
 #include "c_api/project_internal.h"
 #include "editing/vocal_edit/source_digest.h"
+#include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 #include "util/sha256.h"
 
@@ -45,6 +46,15 @@ template <typename T>
 bool initialized(const T* value) noexcept {
   return value != nullptr && value->struct_size >= sizeof(T) &&
          value->schema_version == SONARE_VOCAL_PROJECT_ABI_VERSION;
+}
+
+/// Refuses a versioned struct whose header this library cannot read.
+template <typename T>
+void check_header(const T& value, const std::string& name) {
+  namespace check = sonare::util::check;
+  check::integer_at_least<uint32_t>(value.struct_size, sizeof(T), (name + ".struct_size").c_str());
+  check::one_of(value.schema_version, std::array<uint32_t, 1>{SONARE_VOCAL_PROJECT_ABI_VERSION},
+                (name + ".schema_version").c_str());
 }
 
 template <size_t N>
@@ -314,16 +324,24 @@ struct SourceInput {
 };
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
-bool valid_original_input(const SonareProjectVocalOriginalSource& value, SourceInput* out) {
-  if (!initialized(&value) || !valid_id(value.source_id) || value.mono == nullptr ||
-      value.sample_count <= 0 ||
-      value.sample_count > static_cast<int64_t>(sonare::kMaxAudioBufferSize) ||
-      !valid_source_rate(value.sample_rate)) {
-    return false;
-  }
+void check_original_input(const SonareProjectVocalOriginalSource& value, size_t index,
+                          SourceInput* out) {
+  namespace check = sonare::util::check;
+  const auto member = [index](const char* field) {
+    return check::indexed_subject("originals", index, field);
+  };
+  check_header(value, "originals[" + std::to_string(index) + "]");
+  check::integer_in_range(value.source_id, 1, std::numeric_limits<uint32_t>::max() - 1,
+                          member("source_id").c_str());
+  check::non_null(value.mono, member("mono").c_str());
+  check::integer_in_range(value.sample_count, 1,
+                          static_cast<long long>(sonare::kMaxAudioBufferSize),
+                          member("sample_count").c_str());
+  check::integer_in_range(value.sample_rate, sonare::kMinAudioSampleRate,
+                          sonare::kMaxAudioSampleRate, member("sample_rate").c_str());
   const size_t count = static_cast<size_t>(value.sample_count);
   std::vector<float> samples(value.mono, value.mono + count);
-  if (!finite_pcm(samples)) return false;
+  if (!finite_pcm(samples)) check::refuse(member("mono").c_str(), "must hold only finite samples");
   if (out != nullptr) {
     out->source_id = value.source_id;
     out->mono = value.mono;
@@ -331,7 +349,6 @@ bool valid_original_input(const SonareProjectVocalOriginalSource& value, SourceI
     out->sample_rate = value.sample_rate;
     out->digest = digest_samples(samples);
   }
-  return true;
 }
 #endif
 
@@ -366,36 +383,65 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
                                             const SonareProjectVocalEditApplyDesc* desc,
                                             SonareProjectVocalEditApplyResult* result) {
   SONARE_C_API_ENTRY;
-  if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
-  *result = {};
-  result->struct_size = sizeof(*result);
-  result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
-#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
-  if (project == nullptr || desc == nullptr || !initialized(desc) || !valid_id(desc->clip_id) ||
-      desc->take_id == std::numeric_limits<uint32_t>::max()) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  // The result's header is read before the struct is written, so a zeroing waits for it.
+  const bool result_ready = initialized(result);
+  if (result_ready) {
+    *result = {};
+    result->struct_size = sizeof(*result);
+    result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
   }
-  if (desc->expected_source_sample_count <= 0 ||
-      desc->expected_source_sample_count > static_cast<int64_t>(sonare::kMaxAudioBufferSize) ||
-      !valid_source_rate(desc->expected_source_sample_rate) ||
-      desc->rendered_sample_count != desc->expected_source_sample_count ||
-      desc->rendered_sample_rate != desc->expected_source_sample_rate ||
-      desc->rendered_start_sample != 0 || desc->rendered_mono == nullptr || desc->sve1 == nullptr ||
-      desc->sve1_size == 0 ||
-      desc->sve1_size >
-          sonare::resource::kDefaultProjectImportResourceLimits.max_decoded_payload_bytes ||
-      !std::isfinite(desc->expected_clip_length_ppq) ||
-      !std::isfinite(desc->expected_source_offset_ppq)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(desc);
+  if (const SonareError invalid = sonare_c_detail::run_validation([&] {
+        namespace check = sonare::util::check;
+        constexpr uint32_t kMaxId = std::numeric_limits<uint32_t>::max() - 1;
+        const auto max_payload = static_cast<long long>(
+            sonare::resource::kDefaultProjectImportResourceLimits.max_decoded_payload_bytes);
+        check_header(*desc, "desc");
+        check::integer_in_range(desc->clip_id, 1, kMaxId, "desc.clip_id");
+        check::integer_in_range(desc->take_id, 0, kMaxId, "desc.take_id");
+        check::integer_in_range(desc->expected_source_sample_rate, sonare::kMinAudioSampleRate,
+                                sonare::kMaxAudioSampleRate, "desc.expected_source_sample_rate");
+        check::integer_in_range(desc->expected_source_sample_count, 1,
+                                static_cast<long long>(sonare::kMaxAudioBufferSize),
+                                "desc.expected_source_sample_count");
+        check::finite(desc->expected_clip_length_ppq, "desc.expected_clip_length_ppq");
+        check::finite(desc->expected_source_offset_ppq, "desc.expected_source_offset_ppq");
+        check::non_null(desc->rendered_mono, "desc.rendered_mono");
+        if (desc->rendered_sample_count != desc->expected_source_sample_count) {
+          check::refuse_relation(
+              {"desc.rendered_sample_count", "desc.expected_source_sample_count"},
+              "{0} must equal {1}");
+        }
+        if (desc->rendered_sample_rate != desc->expected_source_sample_rate) {
+          check::refuse_relation({"desc.rendered_sample_rate", "desc.expected_source_sample_rate"},
+                                 "{0} must equal {1}");
+        }
+        if (desc->rendered_start_sample != 0) {
+          check::refuse("desc.rendered_start_sample", "must be 0");
+        }
+        check::non_null(desc->sve1, "desc.sve1");
+        check::integer_in_range(static_cast<long long>(desc->sve1_size), 1, max_payload,
+                                "desc.sve1_size");
+      });
+      invalid != SONARE_OK) {
+    return invalid;
+  }
+  SONARE_C_REQUIRE_NONNULL(result);
+  if (!result_ready) {
+    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
   }
   SONARE_C_TRY
   if (rehydrate_in_progress(project)) return refuse_during_rehydrate();
   const Project& model = project->history.project();
   const EditClip* clip = resolve_clip(model, desc->clip_id);
-  if (clip == nullptr || clip->source_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (clip == nullptr || clip->source_id == 0) {
+    sonare::util::check::refuse_unknown_id("desc.clip_id", "a clip with a source", "project");
+  }
   const arr::Track* track = model.find_track(clip->track_id);
   if (track == nullptr || track->kind != arr::Track::Kind::kAudio) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    sonare::util::check::refuse_unknown_id("desc.clip_id", "a clip on an audio track", "project");
   }
   double target_offset = 0.0;
   const SourceId bound_source_id = resolved_source(*clip, desc->take_id, &target_offset);
@@ -467,7 +513,9 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   }
   std::vector<float> rendered(
       desc->rendered_mono, desc->rendered_mono + static_cast<size_t>(desc->rendered_sample_count));
-  if (!finite_pcm(rendered)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!finite_pcm(rendered)) {
+    sonare::util::check::refuse("desc.rendered_mono", "must hold only finite samples");
+  }
   const auto derived_digest = digest_samples(rendered);
   const SourceId derived_source_id = model.next_source_id();
   if (!valid_id(derived_source_id) || model.find_source(derived_source_id) != nullptr ||
@@ -515,7 +563,9 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
         break;
       }
     }
-    if (selected == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+    if (selected == nullptr) {
+      sonare::util::check::refuse_unknown_id("desc.take_id", "a take", "clip");
+    }
     selected->source_id = derived_source_id;
     commands.push_back(
         std::make_unique<arr::SetClipTakes>(clip->id, std::move(takes), clip->active_take_id));
@@ -553,6 +603,10 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  SONARE_C_REQUIRE_NONNULL(result);
+  if (!result_ready) {
+    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
+  }
   SONARE_C_STUB_NOT_SUPPORTED(project, desc, result);
 #endif
 }
@@ -560,12 +614,18 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
 SonareError sonare_project_get_vocal_edit_dependencies(
     const SonareProject* project, SonareProjectVocalEditDependenciesResult* result) {
   SONARE_C_API_ENTRY;
-  if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
-  *result = {};
-  result->struct_size = sizeof(*result);
-  result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
+  const bool result_ready = initialized(result);
+  if (result_ready) {
+    *result = {};
+    result->struct_size = sizeof(*result);
+    result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
+  }
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (project == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(result);
+  if (!result_ready) {
+    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
+  }
   SONARE_C_TRY
   std::vector<SonareProjectVocalEditDependency> dependencies;
   for (const arr::AssistSidecar& sidecar : project->history.project().assist_sidecars()) {
@@ -642,6 +702,10 @@ SonareError sonare_project_get_vocal_edit_dependencies(
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  SONARE_C_REQUIRE_NONNULL(result);
+  if (!result_ready) {
+    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
+  }
   SONARE_C_STUB_NOT_SUPPORTED(project, result);
 #endif
 }
@@ -652,14 +716,28 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
                                                  SonareVocalCancelCallback cancel, void* user_data,
                                                  SonareProjectVocalRehydrateResult* result) {
   SONARE_C_API_ENTRY;
-  if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
-  *result = {};
-  result->struct_size = sizeof(*result);
-  result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
+  const bool result_ready = initialized(result);
+  if (result_ready) {
+    *result = {};
+    result->struct_size = sizeof(*result);
+    result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
+  }
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
-  if (project == nullptr || (original_count != 0 && originals == nullptr) ||
-      original_count > sonare::resource::kDefaultProjectImportResourceLimits.max_entities) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(originals, original_count);
+  if (const SonareError invalid = sonare_c_detail::run_validation([&] {
+        sonare::util::check::integer_in_range(
+            static_cast<long long>(original_count), 0,
+            static_cast<long long>(
+                sonare::resource::kDefaultProjectImportResourceLimits.max_entities),
+            "original_count");
+      });
+      invalid != SONARE_OK) {
+    return invalid;
+  }
+  SONARE_C_REQUIRE_NONNULL(result);
+  if (!result_ready) {
+    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
   }
   SONARE_C_TRY
   if (rehydrate_in_progress(project)) return refuse_during_rehydrate();
@@ -669,8 +747,12 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   std::set<uint32_t> source_ids;
   for (uint64_t i = 0; i < original_count; ++i) {
     SourceInput input;
-    if (!valid_original_input(originals[i], &input) || !source_ids.insert(input.source_id).second) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    check_original_input(originals[i], static_cast<size_t>(i), &input);
+    if (!source_ids.insert(input.source_id).second) {
+      sonare::util::check::refuse(
+          sonare::util::check::indexed_subject("originals", static_cast<size_t>(i), "source_id")
+              .c_str(),
+          "must not repeat the source_id of an earlier original");
     }
     source_inputs.push_back(input);
   }
@@ -948,6 +1030,10 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  SONARE_C_REQUIRE_NONNULL(result);
+  if (!result_ready) {
+    return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
+  }
   SONARE_C_STUB_NOT_SUPPORTED(project, originals, original_count, cancel, user_data, result);
 #endif
 }

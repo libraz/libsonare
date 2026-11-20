@@ -8,6 +8,7 @@
 
 #include "c_api/project_internal.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include <cmath>
@@ -165,21 +166,17 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
   if (out_num_channels) *out_num_channels = 0;
-  // Above the pointer rejection, not below it: sonare_project_bounce routes
-  // straight here with no clear of its own, so a rejected call used to leave the
-  // previous bounce's diagnostics queryable. Null-safe, and the four
-  // bounce_with_* entries already cleared before calling, so this is idempotent
-  // for them.
+  // Every entry has already refused a NULL pointer; the recorded result is cleared here as well
+  // so a call rejected for its options leaves no previous bounce's diagnostics queryable.
   clear_last_bounce_result(project);
-  if (!project || !out_interleaved || !out_len || !out_num_channels) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
 
+  namespace check = sonare::util::check;
   SonareProjectBounceOptions opts{};
   if (options) opts = *options;
-  if (opts.block_size < 0 || opts.num_channels < 0 || opts.sample_rate < 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  check::integer_at_least(opts.block_size, 0, "options.block_size");
+  check::integer_at_least(opts.num_channels, 0, "options.num_channels");
+  check::integer_at_least(opts.sample_rate, 0, "options.sample_rate");
+  check::integer_at_least(opts.instrument_latency_samples, 0, "options.instrument_latency_samples");
   const int block_size =
       opts.block_size == 0 ? sonare::engine::RealtimeEngine::kDefaultOfflineBlock : opts.block_size;
   const int num_channels = opts.num_channels == 0
@@ -188,22 +185,25 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   // The master is built at the requested width, so only a speaker-layout count
   // is meaningful, and the scene's master layout caps it.
   if (num_channels != 1 && num_channels != 2 && !sonare::is_surround_channel_count(num_channels)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    check::one_of(num_channels, std::array<int, 4>{1, 2, 6, 8}, "options.num_channels");
   }
   if (num_channels > max_output_channels(project->history.project().scene())) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    check::refuse("options.num_channels", "must be at most the width of the scene master's layout");
   }
   const double project_sr = project->history.project().sample_rate();
   const double sample_rate =
       opts.sample_rate != 0 ? static_cast<double>(opts.sample_rate) : project_sr;
+  if (opts.sample_rate != 0) {
+    check::integer_in_range(opts.sample_rate, sonare::kMinAudioSampleRate,
+                            sonare::kMaxAudioSampleRate, "options.sample_rate");
+  }
   if (!sonare::is_supported_sample_rate(sample_rate)) return SONARE_ERROR_INVALID_PARAMETER;
   if (opts.sample_rate != 0 && std::abs(sample_rate - project_sr) > 1.0e-6) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    check::refuse("options.sample_rate", "must equal the sample rate of the project");
   }
-  if (opts.instrument_latency_samples < 0) return SONARE_ERROR_INVALID_PARAMETER;
   size_t block_floats = 0;
   if (!checked_frame_shape(static_cast<int64_t>(block_size), 2, &block_floats)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    check::refuse("options.block_size", "must be small enough for its buffer to be addressed");
   }
   for (const HostedInstrument& hosted : instruments) {
     if (hosted.instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
@@ -283,7 +283,10 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   int64_t frames = opts.total_frames;
   if (frames <= 0) {
     // An unbounded tail has no auto length; the caller has to name one.
-    if (unbounded_tail && arrangement_frames > 0) return SONARE_ERROR_INVALID_PARAMETER;
+    if (unbounded_tail && arrangement_frames > 0) {
+      check::refuse("options.total_frames",
+                    "must be positive when a hosted instrument's tail is unbounded");
+    }
     frames = arrangement_frames;
     if (frames > 0 && !checked_nonnegative_add(frames, instrument_tail, &frames)) {
       return SONARE_ERROR_INVALID_STATE;
@@ -322,11 +325,11 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 #endif
   int64_t single_render_frames = 0;
   if (frames > 0 && !checked_nonnegative_add(frames, pdc, &single_render_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    check::refuse("options.total_frames", "must be small enough for the render to be addressed");
   }
   size_t total = 0;
   if (!checked_frame_shape(frames, static_cast<size_t>(num_channels), &total)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    check::refuse("options.total_frames", "must be small enough for the render to be addressed");
   }
 
   if (frames == 0) {
@@ -506,6 +509,11 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
   if (out_num_channels) *out_num_channels = 0;
+  clear_last_bounce_result(project);
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out_interleaved);
+  SONARE_C_REQUIRE_NONNULL(out_len);
+  SONARE_C_REQUIRE_NONNULL(out_num_channels);
   return do_project_bounce(project, options, {}, out_interleaved, out_len, out_num_channels);
   SONARE_C_CATCH
 #else
@@ -530,10 +538,18 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
-  if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(instruments, instrument_count);
+  SONARE_C_REQUIRE_NONNULL(out_interleaved);
+  SONARE_C_REQUIRE_NONNULL(out_len);
+  SONARE_C_REQUIRE_NONNULL(out_num_channels);
   // Every callback instrument must supply a render function (the audio source).
   for (size_t i = 0; i < instrument_count; ++i) {
-    if (instruments[i].callbacks.render == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+    if (instruments[i].callbacks.render == nullptr) {
+      sonare::util::check::refuse(
+          sonare::util::check::indexed_subject("instruments", i, "callbacks.render").c_str(),
+          sonare::util::refusal::kNonNullPredicate);
+    }
   }
   std::vector<std::unique_ptr<CallbackInstrument>> owned;
   std::vector<HostedInstrument> hosted;
@@ -567,7 +583,11 @@ SonareError sonare_project_bounce_with_builtin_instruments(
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
-  if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(instruments, instrument_count);
+  SONARE_C_REQUIRE_NONNULL(out_interleaved);
+  SONARE_C_REQUIRE_NONNULL(out_len);
+  SONARE_C_REQUIRE_NONNULL(out_num_channels);
   std::vector<std::unique_ptr<sonare::midi::BuiltinSynth>> owned;
   std::vector<HostedInstrument> hosted;
   owned.reserve(instrument_count);
@@ -576,9 +596,9 @@ SonareError sonare_project_bounce_with_builtin_instruments(
     // Checked before any instrument is constructed, so a bad ordinal anywhere in
     // the list refuses the whole bounce rather than rendering the earlier
     // bindings and then failing.
-    if (!sonare_c_detail::valid_builtin_waveform(instruments[i].config.waveform)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    sonare::util::check::integer_in_range(
+        instruments[i].config.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1,
+        sonare::util::check::indexed_subject("instruments", i, "config.waveform").c_str());
   }
   for (size_t i = 0; i < instrument_count; ++i) {
     owned.push_back(std::make_unique<sonare::midi::BuiltinSynth>(
@@ -609,8 +629,11 @@ SonareError sonare_project_bounce_with_synth_instruments(
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
-  if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(instruments, instrument_count);
+  SONARE_C_REQUIRE_NONNULL(out_interleaved);
+  SONARE_C_REQUIRE_NONNULL(out_len);
+  SONARE_C_REQUIRE_NONNULL(out_num_channels);
   std::vector<std::unique_ptr<sonare::midi::synth::NativeSynth>> owned;
   std::vector<HostedInstrument> hosted;
   owned.reserve(instrument_count);
@@ -671,15 +694,18 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
-  if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(instruments, instrument_count);
+  SONARE_C_REQUIRE_NONNULL(out_interleaved);
+  SONARE_C_REQUIRE_NONNULL(out_len);
+  SONARE_C_REQUIRE_NONNULL(out_num_channels);
   // No loaded SoundFont is allowed: the player's NativeSynth GM fallback is
   // the data-free floor (every program still sounds; the manifest reports the
   // synth backend honestly).
   for (size_t i = 0; i < instrument_count; ++i) {
-    if (!sonare_c_detail::sf2_config_version_supported(instruments[i].config)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    sonare::util::check::integer_in_range(
+        instruments[i].config.struct_version, 0, sonare_c_detail::kSf2InstrumentConfigVersion,
+        sonare::util::check::indexed_subject("instruments", i, "config.struct_version").c_str());
   }
   std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> owned;
   std::vector<HostedInstrument> hosted;

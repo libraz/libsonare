@@ -3,6 +3,7 @@
 #include "c_api/project_internal.h"
 #include "mixing/panner.h"
 #include "mixing/stereo_width.h"
+#include "util/parameter_checks.h"
 #if defined(SONARE_WITH_MIXING)
 #include "engine/mixing_runtime.h"
 #endif
@@ -48,53 +49,58 @@ static_assert(static_cast<int>(arr::MarkerKind::kKeySignature) == SONARE_MARKER_
 
 namespace {
 
-// True when @p value is outside the domain of the pan or width parameter the lane drives.
-bool lane_value_out_of_domain(sonare::automation::AutomationTargetKind kind, uint32_t param_id,
-                              float value) {
+// Refuses @p value unless it is inside the domain of the pan or width parameter the lane drives.
+void check_lane_value(sonare::automation::AutomationTargetKind kind, uint32_t param_id, float value,
+                      const char* subject) {
+  namespace check = sonare::util::check;
   if (kind == sonare::automation::AutomationTargetKind::kTrackPan) {
-    return !sonare::mixing::pan_in_range(value);
+    check::in_range(value, sonare::mixing::kPanMin, sonare::mixing::kPanMax, subject);
+    return;
   }
 #if defined(SONARE_WITH_MIXING)
   if (kind == sonare::automation::AutomationTargetKind::kOpaque) {
     if (param_id == sonare::engine::MixingRuntime::kPan) {
-      return !sonare::mixing::pan_in_range(value);
+      check::in_range(value, sonare::mixing::kPanMin, sonare::mixing::kPanMax, subject);
+      return;
     }
     if (param_id == sonare::engine::MixingRuntime::kWidth) {
-      return !sonare::mixing::width_in_range(value);
+      check::in_range(value, sonare::mixing::kWidthMin, sonare::mixing::kWidthMax, subject);
+      return;
     }
   }
 #else
   (void)param_id;
 #endif
-  return false;
+  check::finite_float(value, subject);
 }
 
-// Validates lane descriptor fields and builds an automation::AutomationLane.
-// The target parameter id must be non-zero; each breakpoint's ppq must be
-// finite and >= 0, its value finite (and inside the pan or width domain for such lanes), and its
-// curve ordinal in range.
-SonareError automation_lane_from_values(uint32_t target_param_id, uint32_t target_kind,
-                                        const SonareAutomationPoint* point_data, size_t point_count,
-                                        sonare::automation::AutomationLane* out) {
+// Validates lane descriptor fields and builds an automation::AutomationLane, refusing by throwing.
+// The target parameter id must be non-zero; each breakpoint's ppq must be finite and >= 0, its
+// value finite (and inside the pan or width domain for such lanes), and its curve ordinal in range.
+void automation_lane_from_values(uint32_t target_param_id, uint32_t target_kind,
+                                 const SonareAutomationPoint* point_data, size_t point_count,
+                                 sonare::automation::AutomationLane* out) {
+  namespace check = sonare::util::check;
+  check::integer_at_least(target_param_id, 1, "desc.target_param_id");
   sonare::automation::AutomationTargetKind kind{};
-  if (out == nullptr || target_param_id == 0 ||
-      !ordinal_to_enum(target_kind, 0, SONARE_AUTOMATION_TARGET_TRACK_PAN, &kind)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!ordinal_to_enum(target_kind, 0, SONARE_AUTOMATION_TARGET_TRACK_PAN, &kind)) {
+    check::refuse("desc.target_kind", sonare::util::refusal::kDeclaredValuePredicate);
   }
-  if (point_count > 0 && point_data == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (point_count > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
+  check::non_null_when_count(point_data, point_count, "desc.points", "desc.point_count");
+  check::integer_in_range(static_cast<long long>(point_count), 0,
+                          static_cast<long long>(kMaxBufferSize), "desc.point_count");
   std::vector<sonare::automation::Breakpoint> breakpoints;
   breakpoints.reserve(point_count);
   for (size_t i = 0; i < point_count; ++i) {
     const SonareAutomationPoint& p = point_data[i];
-    if (!finite_non_negative(p.ppq) || !std::isfinite(p.value) ||
-        lane_value_out_of_domain(kind, target_param_id, p.value)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    check::at_least(p.ppq, 0.0, check::indexed_subject("desc.points", i, "ppq").c_str());
+    check_lane_value(kind, target_param_id, p.value,
+                     check::indexed_subject("desc.points", i, "value").c_str());
     sonare::automation::Breakpoint bp;
     if (!ordinal_to_enum(p.curve_to_next, 0, static_cast<int>(sonare::AutomationCurve::SCurve),
                          &bp.curve_to_next)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      check::refuse(check::indexed_subject("desc.points", i, "curve_to_next").c_str(),
+                    sonare::util::refusal::kDeclaredValuePredicate);
     }
     bp.ppq = p.ppq;
     bp.value = p.value;
@@ -103,22 +109,58 @@ SonareError automation_lane_from_values(uint32_t target_param_id, uint32_t targe
   out->set_target_param_id(target_param_id);
   out->set_target_kind(kind);
   out->set_points(std::move(breakpoints));
-  return SONARE_OK;
 }
 
-SonareError automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
-                                      sonare::automation::AutomationLane* out) {
-  if (desc == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  return automation_lane_from_values(desc->target_param_id, SONARE_AUTOMATION_TARGET_OPAQUE,
-                                     desc->points, desc->point_count, out);
+void automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
+                               sonare::automation::AutomationLane* out) {
+  automation_lane_from_values(desc->target_param_id, SONARE_AUTOMATION_TARGET_OPAQUE, desc->points,
+                              desc->point_count, out);
 }
 
-SonareError automation_lane_from_desc_ex(const SonareAutomationLaneDescEx* desc,
-                                         sonare::automation::AutomationLane* out) {
-  if (desc == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  return automation_lane_from_values(desc->target_param_id,
-                                     static_cast<uint32_t>(desc->target_kind), desc->points,
-                                     desc->point_count, out);
+void automation_lane_from_desc_ex(const SonareAutomationLaneDescEx* desc,
+                                  sonare::automation::AutomationLane* out) {
+  automation_lane_from_values(desc->target_param_id, static_cast<uint32_t>(desc->target_kind),
+                              desc->points, desc->point_count, out);
+}
+
+// Refuses a track_id that names no track of the project.
+SonareError require_track(const SonareProject* project, uint32_t track_id) {
+  if (track_id != 0 && project->history.project().has_track(track_id)) return SONARE_OK;
+  return run_validation(
+      [] { sonare::util::check::refuse_unknown_id("track_id", "a track", "project"); });
+}
+
+// Refuses a target_param_id that names no automation lane of @p track.
+void require_lane(const arr::Track& track, uint32_t target_param_id) {
+  if (target_param_id != 0 &&
+      std::any_of(track.automation_lanes.begin(), track.automation_lanes.end(),
+                  [target_param_id](const auto& lane) {
+                    return lane.target_param_id() == target_param_id;
+                  })) {
+    return;
+  }
+  sonare::util::check::refuse_unknown_id("target_param_id", "an automation lane", "track");
+}
+
+// Refuses an entity id the arrangement reserves as its exhausted-counter sentinel.
+void check_assignable_entity_id(uint32_t id, const char* subject) {
+  sonare::util::check::integer_in_range(
+      id, 0, static_cast<long long>(std::numeric_limits<uint32_t>::max()) - 1, subject);
+}
+
+// Refuses a marker whose kind, position, id or key signature the project cannot store.
+void check_marker(const SonareProjectMarker* marker) {
+  namespace check = sonare::util::check;
+  check::at_least(marker->ppq, 0.0, "marker.ppq");
+  if (marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE) {
+    check::refuse("marker.kind", sonare::util::refusal::kDeclaredValuePredicate);
+  }
+  check_assignable_entity_id(marker->id, "marker.id");
+  // Key signatures encode the SMF `sf` byte, which is constrained to -7..7
+  // (7 flats to 7 sharps), so an out-of-range value would not serialize to a conformant SMF.
+  if (marker->kind == SONARE_MARKER_KIND_KEY_SIGNATURE) {
+    check::integer_in_range(marker->key_fifths, -7, 7, "marker.key_fifths");
+  }
 }
 
 }  // namespace
@@ -134,10 +176,14 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_track_id) *out_track_id = 0;
-  if (!project || !desc || !out_track_id) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(desc);
+  SONARE_C_REQUIRE_NONNULL(out_track_id);
   arr::Track track;
   if (!ordinal_to_enum(desc->kind, SONARE_TRACK_AUDIO, SONARE_TRACK_AUX, &track.kind)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([] {
+      sonare::util::check::refuse("desc.kind", sonare::util::refusal::kDeclaredValuePredicate);
+    });
   }
   SONARE_C_TRY
   if (desc->name) track.name = desc->name;
@@ -159,9 +205,12 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
 SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t overlap_policy) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
   arr::OverlapPolicy policy{};
-  if (!project || !ordinal_to_enum(overlap_policy, 0, SONARE_PROJECT_OVERLAP_ALLOW, &policy)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!ordinal_to_enum(overlap_policy, 0, SONARE_PROJECT_OVERLAP_ALLOW, &policy)) {
+    return run_validation([] {
+      sonare::util::check::refuse("overlap_policy", sonare::util::refusal::kDeclaredValuePredicate);
+    });
   }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetOverlapPolicy>(policy);
@@ -179,9 +228,11 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
-  if (!project || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  namespace check = sonare::util::check;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(segments, segment_count);
+  check::integer_in_range(static_cast<long long>(segment_count), 0,
+                          static_cast<long long>(kMaxBufferSize), "segment_count");
   std::vector<sonare::transport::TempoSegment> out;
   // The staging vector is sized from a caller-supplied count, so its allocation
   // has to sit inside the try or a bad_alloc crosses the extern "C" boundary.
@@ -195,10 +246,17 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
     // raw TempoMap from the stored segments (sonare_project_set_loop_from_audio,
     // sonare_project_snap_to_grid_ex) then computed silently clamped, meaningless
     // sample positions from it.
-    const sonare::transport::TempoSegment candidate{in.start_ppq, in.bpm, 0.0, in.end_bpm};
-    if (!sonare::transport::valid_public_tempo_segment(candidate) ||
-        in.start_ppq <= previous_start_ppq) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    const std::string prefix = "segments[" + std::to_string(i) + "].";
+    check::in_range(in.start_ppq, 0.0, sonare::transport::kMaxPublicPpq,
+                    (prefix + "start_ppq").c_str());
+    check::in_interval(in.bpm, 0.0, false, sonare::transport::kMaxPublicTempoBpm, true,
+                       (prefix + "bpm").c_str());
+    check::in_range(in.end_bpm, 0.0, sonare::transport::kMaxPublicTempoBpm,
+                    (prefix + "end_bpm").c_str());
+    if (in.start_ppq <= previous_start_ppq) {
+      check::refuse_relation(
+          {prefix + "start_ppq", "segments[" + std::to_string(i - 1) + "].start_ppq"},
+          "{0} must be greater than {1}");
     }
     sonare::transport::TempoSegment seg;
     seg.start_ppq = in.start_ppq;
@@ -223,9 +281,11 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
-  if (!project || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  namespace check = sonare::util::check;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(segments, segment_count);
+  check::integer_in_range(static_cast<long long>(segment_count), 0,
+                          static_cast<long long>(kMaxBufferSize), "segment_count");
   std::vector<sonare::transport::TimeSignatureSegment> out;
   // Same reason as sonare_project_set_tempo_segments: a caller-sized allocation
   // must not throw outside the try.
@@ -238,14 +298,20 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
     // stored verbatim and read back "in stored order", so an out-of-order list
     // survives a round trip and only the compiler's own sort hides it at
     // playback time.
+    const std::string prefix = "segments[" + std::to_string(i) + "].";
+    check::in_range(in.start_ppq, 0.0, sonare::transport::kMaxPublicPpq,
+                    (prefix + "start_ppq").c_str());
+    check::integer_at_least(in.numerator, 1, (prefix + "numerator").c_str());
+    check::integer_at_least(in.denominator, 1, (prefix + "denominator").c_str());
+    if (in.start_ppq <= previous_start_ppq) {
+      check::refuse_relation(
+          {prefix + "start_ppq", "segments[" + std::to_string(i - 1) + "].start_ppq"},
+          "{0} must be greater than {1}");
+    }
     sonare::transport::TimeSignatureSegment seg;
     seg.start_ppq = in.start_ppq;
     seg.time_sig.numerator = in.numerator;
     seg.time_sig.denominator = in.denominator;
-    if (!sonare::transport::valid_public_time_signature_segment(seg) ||
-        in.start_ppq <= previous_start_ppq) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
     out.push_back(seg);
     previous_start_ppq = in.start_ppq;
   }
@@ -263,11 +329,17 @@ SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out_marker_id);
   // A marker id of UINT32_MAX would serialize but could never be loaded back:
   // the deserializer enforces the [1, UINT32_MAX-1] entity-id convention and
   // drops the whole document over one reserved id.
-  if (!project || !out_marker_id || !finite_non_negative(ppq) || reserved_entity_id(marker_id)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check_assignable_entity_id(marker_id, "marker_id");
+        sonare::util::check::at_least(ppq, 0.0, "ppq");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetMarker>(marker_id, ppq, name ? name : "");
@@ -292,16 +364,11 @@ SonareError sonare_project_set_marker_ex(SonareProject* project, const SonarePro
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
-  if (!project || !out_marker_id || !marker || !finite_non_negative(marker->ppq) ||
-      marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE || reserved_entity_id(marker->id)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  // Key signatures encode the SMF `sf` byte, which is constrained to -7..7
-  // (7 flats to 7 sharps). Reject out-of-range fifths so the marker cannot
-  // serialize to a non-conformant SMF key signature.
-  if (marker->kind == SONARE_MARKER_KIND_KEY_SIGNATURE &&
-      (marker->key_fifths < -7 || marker->key_fifths > 7)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(marker);
+  SONARE_C_REQUIRE_NONNULL(out_marker_id);
+  if (const SonareError err = run_validation([&] { check_marker(marker); }); err != SONARE_OK) {
+    return err;
   }
   SONARE_C_TRY
   const char* name_end = std::find(marker->name, marker->name + sizeof(marker->name), '\0');
@@ -328,12 +395,13 @@ SonareError sonare_project_set_marker_ex_name(SonareProject* project,
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
-  if (!project || !out_marker_id || !marker || !name || !finite_non_negative(marker->ppq) ||
-      marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE || reserved_entity_id(marker->id))
-    return SONARE_ERROR_INVALID_PARAMETER;
-  if (marker->kind == SONARE_MARKER_KIND_KEY_SIGNATURE &&
-      (marker->key_fifths < -7 || marker->key_fifths > 7))
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(marker);
+  SONARE_C_REQUIRE_NONNULL(name);
+  SONARE_C_REQUIRE_NONNULL(out_marker_id);
+  if (const SonareError err = run_validation([&] { check_marker(marker); }); err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetMarker>(marker->id, marker->ppq, name, marker->kind,
                                                   marker->key_fifths, marker->key_minor != 0);
@@ -359,7 +427,8 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   // topology" section) — this used to require SONARE_WITH_MIXING too, which
   // made a documented mixing-OFF-available API unreachable in exactly that
   // build.
-  if (!project || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(scene_json);
   SONARE_C_TRY
   sonare::mixing::api::Scene scene;
   sonare_c_detail::clear_last_diagnostics();
@@ -385,11 +454,14 @@ SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track
                                           uint32_t kind) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   arr::Track::Kind track_kind{};
-  if (!project || track_id == 0 || !ordinal_to_enum(kind, 0, SONARE_TRACK_AUX, &track_kind)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!ordinal_to_enum(kind, 0, SONARE_TRACK_AUX, &track_kind)) {
+    return run_validation([] {
+      sonare::util::check::refuse("kind", sonare::util::refusal::kDeclaredValuePredicate);
+    });
   }
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackKind>(track_id, track_kind);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -405,22 +477,33 @@ SonareError sonare_project_set_warp_map(SonareProject* project,
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
-  if (!project || !desc || desc->id == 0 || desc->anchor_count < 2 || !desc->anchors ||
-      desc->anchor_count > kMaxBufferSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  namespace check = sonare::util::check;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(desc);
+  check::integer_at_least(desc->id, 1, "desc.id");
+  check::integer_in_range(static_cast<long long>(desc->anchor_count), 2,
+                          static_cast<long long>(kMaxBufferSize), "desc.anchor_count");
+  check::non_null(desc->anchors, "desc.anchors");
   std::vector<arr::WarpAnchorRef> anchors;
   // Same reason as the two segment setters: anchor_count is caller-supplied.
   anchors.reserve(desc->anchor_count);
   for (size_t i = 0; i < desc->anchor_count; ++i) {
     const SonareProjectWarpAnchor& in = desc->anchors[i];
-    if (!finite_non_negative(in.warp_sample) || !finite_non_negative(in.source_sample)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    check::at_least(in.warp_sample, 0.0,
+                    check::indexed_subject("desc.anchors", i, "warp_sample").c_str());
+    check::at_least(in.source_sample, 0.0,
+                    check::indexed_subject("desc.anchors", i, "source_sample").c_str());
     if (!anchors.empty()) {
       const auto& prev = anchors.back();
-      if (!(in.warp_sample > prev.warp_sample && in.source_sample > prev.source_sample)) {
-        return SONARE_ERROR_INVALID_PARAMETER;
+      if (!(in.warp_sample > prev.warp_sample)) {
+        check::refuse_relation({check::indexed_subject("desc.anchors", i, "warp_sample"),
+                                check::indexed_subject("desc.anchors", i - 1, "warp_sample")},
+                               "{0} must be greater than {1}");
+      }
+      if (!(in.source_sample > prev.source_sample)) {
+        check::refuse_relation({check::indexed_subject("desc.anchors", i, "source_sample"),
+                                check::indexed_subject("desc.anchors", i - 1, "source_sample")},
+                               "{0} must be greater than {1}");
       }
     }
     anchors.push_back(arr::WarpAnchorRef{in.warp_sample, in.source_sample});
@@ -442,8 +525,11 @@ SonareError sonare_project_set_warp_map(SonareProject* project,
 SonareError sonare_project_remove_warp_map(SonareProject* project, uint32_t warp_ref_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || warp_ref_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project->history.project().has_warp_map(warp_ref_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (warp_ref_id == 0 || !project->history.project().has_warp_map(warp_ref_id)) {
+    return run_validation(
+        [] { sonare::util::check::refuse_unknown_id("warp_ref_id", "a warp map", "project"); });
+  }
   SONARE_C_TRY
   auto command = std::make_unique<arr::RemoveWarpMap>(warp_ref_id);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -458,8 +544,8 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
                                                       uint32_t destination_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackMidiDestination>(track_id, destination_id);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -473,10 +559,13 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
 SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track_id, float gain) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0 || !std::isfinite(gain) || gain < 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
+  if (const SonareError err =
+          run_validation([&] { sonare::util::check::at_least(gain, 0.0, "gain"); });
+      err != SONARE_OK) {
+    return err;
   }
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackGain>(track_id, gain);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -490,8 +579,8 @@ SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track
 SonareError sonare_project_set_track_mute(SonareProject* project, uint32_t track_id, int mute) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackMute>(track_id, mute != 0);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -505,8 +594,8 @@ SonareError sonare_project_set_track_mute(SonareProject* project, uint32_t track
 SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track_id, int solo) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackSolo>(track_id, solo != 0);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -520,10 +609,14 @@ SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track
 SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_id, float pan) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0 || !sonare::mixing::pan_in_range(pan)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
+  if (const SonareError err = run_validation([&] {
+        sonare::util::check::in_range(pan, sonare::mixing::kPanMin, sonare::mixing::kPanMax, "pan");
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackPan>(track_id, pan);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -537,9 +630,9 @@ SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_
 SonareError sonare_project_remove_track(SonareProject* project, uint32_t track_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   const arr::Project& edit_project = project->history.project();
-  if (!edit_project.has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   const std::vector<arr::SourceId> orphaned_sources =
       sonare_project_collect_orphaned_sources_for_track(edit_project, track_id);
@@ -569,8 +662,8 @@ SonareError sonare_project_rename_track(SonareProject* project, uint32_t track_i
                                         const char* name) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   auto command =
       std::make_unique<arr::RenameTrack>(track_id, name ? std::string(name) : std::string());
@@ -587,8 +680,8 @@ SonareError sonare_project_set_track_route(SonareProject* project, uint32_t trac
                                            const char* output_target) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackRoute>(
       track_id, channel_strip_ref ? std::string(channel_strip_ref) : std::string(),
@@ -607,12 +700,12 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_target_param_id) *out_target_param_id = 0;
-  if (!project || track_id == 0 || !desc) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(desc);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   sonare::automation::AutomationLane lane;
-  const SonareError err = automation_lane_from_desc(desc, &lane);
-  if (err != SONARE_OK) return err;
+  automation_lane_from_desc(desc, &lane);
   auto command = std::make_unique<arr::AddAutomationLane>(track_id, std::move(lane));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   if (out_target_param_id) *out_target_param_id = desc->target_param_id;
@@ -630,12 +723,12 @@ SonareError sonare_project_add_automation_lane_ex(SonareProject* project, uint32
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_target_param_id) *out_target_param_id = 0;
-  if (!project || track_id == 0 || !desc) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(desc);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   sonare::automation::AutomationLane lane;
-  const SonareError err = automation_lane_from_desc_ex(desc, &lane);
-  if (err != SONARE_OK) return err;
+  automation_lane_from_desc_ex(desc, &lane);
   auto command = std::make_unique<arr::AddAutomationLane>(track_id, std::move(lane));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   if (out_target_param_id) *out_target_param_id = desc->target_param_id;
@@ -652,22 +745,21 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
                                                 const SonareAutomationLaneDesc* desc) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(desc);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
-  if (!project || track_id == 0 || target_param_id == 0 || !desc) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   const arr::Track* track = project->history.project().find_track(track_id);
-  if (track == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  require_lane(*track, target_param_id);
   const auto found = std::find_if(
       track->automation_lanes.begin(), track->automation_lanes.end(),
       [target_param_id](const auto& lane) { return lane.target_param_id() == target_param_id; });
-  if (found == track->automation_lanes.end()) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   sonare::automation::AutomationLane lane;
-  const SonareError err = automation_lane_from_desc(desc, &lane);
-  if (err != SONARE_OK) return err;
-  if (lane.target_param_id() != target_param_id) return SONARE_ERROR_INVALID_PARAMETER;
+  automation_lane_from_desc(desc, &lane);
+  if (lane.target_param_id() != target_param_id) {
+    sonare::util::check::refuse_relation({"target_param_id", "desc.target_param_id"},
+                                         "{0} must equal {1}");
+  }
   // The legacy descriptor has no target kind. Preserve the lane's existing
   // classification so editing points cannot silently turn a typed lane into
   // an opaque lane.
@@ -687,20 +779,18 @@ SonareError sonare_project_edit_automation_lane_ex(SonareProject* project, uint3
                                                    const SonareAutomationLaneDescEx* desc) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(desc);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
-  if (!project || track_id == 0 || target_param_id == 0 || !desc) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   const arr::Track* track = project->history.project().find_track(track_id);
-  if (track == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  const auto found = std::find_if(
-      track->automation_lanes.begin(), track->automation_lanes.end(),
-      [target_param_id](const auto& lane) { return lane.target_param_id() == target_param_id; });
-  if (found == track->automation_lanes.end()) return SONARE_ERROR_INVALID_PARAMETER;
+  require_lane(*track, target_param_id);
   sonare::automation::AutomationLane lane;
-  const SonareError err = automation_lane_from_desc_ex(desc, &lane);
-  if (err != SONARE_OK) return err;
-  if (lane.target_param_id() != target_param_id) return SONARE_ERROR_INVALID_PARAMETER;
+  automation_lane_from_desc_ex(desc, &lane);
+  if (lane.target_param_id() != target_param_id) {
+    sonare::util::check::refuse_relation({"target_param_id", "desc.target_param_id"},
+                                         "{0} must equal {1}");
+  }
   auto command =
       std::make_unique<arr::EditAutomationLane>(track_id, target_param_id, std::move(lane));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -715,16 +805,10 @@ SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32
                                                   uint32_t target_param_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
-  if (!project || track_id == 0 || target_param_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  const arr::Track* track = project->history.project().find_track(track_id);
-  if (track == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  const auto found = std::find_if(
-      track->automation_lanes.begin(), track->automation_lanes.end(),
-      [target_param_id](const auto& lane) { return lane.target_param_id() == target_param_id; });
-  if (found == track->automation_lanes.end()) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  require_lane(*project->history.project().find_track(track_id), target_param_id);
   auto command = std::make_unique<arr::RemoveAutomationLane>(track_id, target_param_id);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
@@ -737,7 +821,7 @@ SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32
 SonareError sonare_project_undo(SonareProject* project) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_TRY
   return project->history.undo() ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH
@@ -749,7 +833,7 @@ SonareError sonare_project_undo(SonareProject* project) {
 SonareError sonare_project_redo(SonareProject* project) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_TRY
   return project->history.redo() ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH
@@ -761,7 +845,7 @@ SonareError sonare_project_redo(SonareProject* project) {
 SonareError sonare_project_clear_history(SonareProject* project) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_TRY
   project->history.clear_history();
   return SONARE_OK;
@@ -774,7 +858,7 @@ SonareError sonare_project_clear_history(SonareProject* project) {
 SonareError sonare_project_set_max_undo_depth(SonareProject* project, size_t depth) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_TRY
   project->history.set_max_undo_depth(depth);
   return SONARE_OK;
@@ -787,7 +871,7 @@ SonareError sonare_project_set_max_undo_depth(SonareProject* project, size_t dep
 SonareError sonare_project_set_max_history_bytes(SonareProject* project, size_t bytes) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_TRY
   project->history.set_max_history_bytes(bytes);
   return SONARE_OK;

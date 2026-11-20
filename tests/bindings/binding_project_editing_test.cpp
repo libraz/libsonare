@@ -332,3 +332,106 @@ TEST_CASE("project C surface composite edits roll back on failure", "[project]")
 
   sonare_project_destroy(project);
 }
+
+TEST_CASE("project C surface MIR refusals name the parameter", "[project]") {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  constexpr int kRate = 22050;
+  std::vector<float> audio(static_cast<std::size_t>(kRate) * 5u);
+  for (std::size_t i = 0; i < audio.size(); ++i) {
+    audio[i] = 0.25f * std::sin(0.05f * static_cast<float>(i));
+  }
+
+  // Two NULL pointers: the first one in header order is named.
+  REQUIRE(sonare_project_snap_to_grid_ex(nullptr, 0.0, 0.5, 1, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+
+  double snapped = 0.0;
+  REQUIRE(sonare_project_snap_to_grid_ex(project, -1.0, 0.5, 1, &snapped) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "ppq must be finite and at least 0");
+  REQUIRE(sonare_project_snap_to_grid_ex(project, 1.0, 2.0, 1, &snapped) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "strength must be finite and in [0, 1]");
+  REQUIRE(sonare_project_snap_to_grid_ex(project, 1.0, 0.5, 2000, &snapped) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "division must be an integer in [0, 1024]");
+  REQUIRE(sonare_project_snap_to_grid_ex(project, 1.0, 0.5, 1, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_ppq must not be NULL");
+
+  size_t count = 0;
+  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kRate, nullptr, 2,
+                                       &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "candidates must not be NULL when capacity is not 0");
+
+  SonareProjectTempoOptions options = sonare_project_tempo_options_default();
+  options.tempo_update_interval_beats = 0;
+  SonareProjectTempoCandidate candidates[4];
+  REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kRate,
+                                                    &options, candidates, 4,
+                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.tempo_update_interval_beats must be an integer in [1, 2147483647]");
+  options = sonare_project_tempo_options_default();
+  options.ramp_threshold = -0.5f;
+  REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kRate,
+                                                    &options, candidates, 4,
+                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.ramp_threshold must be finite and at least 0");
+
+  SonareProjectKeySegment key{0.0, 4.0, 12u, 1u};
+  REQUIRE(sonare_project_annotate_keys(project, &key, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "keys[0].tonic_pc must be an integer in [0, 11] or 255");
+  key = {4.0, 4.0, 0u, 1u};
+  REQUIRE(sonare_project_annotate_keys(project, &key, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "keys[0].end_ppq must be greater than keys[0].start_ppq");
+  key = {0.0, 4.0, 0u, 8u};
+  REQUIRE(sonare_project_annotate_keys(project, &key, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "keys[0].mode must name a declared value");
+  REQUIRE(sonare_project_annotate_keys(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "keys must not be NULL when count is not 0");
+
+  const uint8_t degrees[1] = {7};
+  SonareProjectChordSymbol chord{};
+  chord.end_ppq = 4.0;
+  chord.root_pc = 255u;
+  chord.quality = 1u;
+  chord.extensions = degrees;
+  chord.extension_count = 33;
+  chord.slash_bass_pc = 255u;
+  REQUIRE(sonare_project_annotate_chords(project, &chord, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "chords[0].extension_count must be an integer in [0, 32]");
+
+  uint32_t root_pc = 0;
+  uint32_t quality = 0;
+  uint32_t bass_pc = 0;
+  size_t extension_count = 0;
+  REQUIRE(sonare_chord_symbol_from_analysis(
+              static_cast<SonarePitchClass>(12), SONARE_CHORD_MAJOR, SONARE_PITCH_C, &root_pc,
+              &quality, nullptr, 0, &extension_count, &bass_pc) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "root must be an integer in [0, 11]");
+  REQUIRE(sonare_chord_symbol_from_analysis(
+              SONARE_PITCH_C, SONARE_CHORD_DOMINANT7_SHARP9, SONARE_PITCH_C, &root_pc, &quality,
+              nullptr, 0, &extension_count, &bass_pc) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message().rfind("extension_capacity must be an integer of at least ", 0) == 0);
+
+  uint32_t mode = 0;
+  REQUIRE(sonare_key_mode_from_analysis(static_cast<SonareMode>(7), &mode) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "mode must be an integer in [0, 6]");
+  REQUIRE(sonare_key_mode_from_analysis(SONARE_MODE_MAJOR, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_mode must not be NULL");
+
+  REQUIRE(sonare_align_take_to_reference_ex(audio.data(), audio.size(), kRate, audio.data(),
+                                            audio.size(), kRate, nullptr, nullptr, nullptr,
+                                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_anchors must not be NULL");
+
+  sonare_project_destroy(project);
+#endif
+}

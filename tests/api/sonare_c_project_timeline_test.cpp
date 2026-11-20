@@ -569,3 +569,26 @@ TEST_CASE("project diagnostic codes and severities are named by their facade tok
   CHECK(sonare_project_diagnostic_severity_name(2) == nullptr);
   CHECK(sonare_project_diagnostic_severity_name(-1) == nullptr);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("compile_timeline refuses a NULL pointer by its header name", "[project][timeline]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareProjectCompileResult result{};
+  SonareProjectTimeline* timeline = nullptr;
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  REQUIRE(sonare_project_compile_timeline(nullptr, &result, &timeline) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  // Two NULL outs: the first one in header order is named.
+  REQUIRE(sonare_project_compile_timeline(project, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_result must not be NULL");
+  REQUIRE(sonare_project_compile_timeline(project, &result, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_timeline must not be NULL");
+
+  sonare_project_destroy(project);
+}
+#endif

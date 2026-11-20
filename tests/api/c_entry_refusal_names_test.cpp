@@ -68,40 +68,34 @@ TEST_CASE("a source id of 0 is refused by name on the three source entries", "[c
 
   CHECK(sonare_project_set_clip_source(built.project, built.clip_id, 0) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "project_set_clip_source: source_id must not be 0"));
+  CHECK(last_message() == "source_id must not be 0");
 
   CHECK(sonare_project_set_source_audio(built.project, 0, &sample, 1, 1, 48000) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "project_set_source_audio: source_id must not be 0"));
+  CHECK(last_message() == "source_id must not be 0");
 
   CHECK(sonare_project_set_audio_source_metadata(built.project, 0, "hash", "role") ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "project_set_audio_source_metadata: source_id must not be 0"));
+  CHECK(last_message() == "source_id must not be 0");
 }
 
-TEST_CASE("an unknown source id is named with its value", "[c_api][project]") {
+TEST_CASE("an unknown source or clip id is refused as an id of this project", "[c_api][project]") {
   ClipProject built;
   const float sample = 0.0f;
 
   CHECK(sonare_project_set_clip_source(built.project, built.clip_id, 987654) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "project_set_clip_source: unknown source_id 987654"));
+  CHECK(last_message() == "source_id must be the id of a source in this project");
 
   CHECK(sonare_project_set_source_audio(built.project, 987654, &sample, 1, 1, 48000) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "project_set_source_audio: unknown source_id 987654"));
+  CHECK(last_message() == "source_id must be the id of a source in this project");
 
   CHECK(sonare_project_set_clip_source(built.project, 424242, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(),
-             Catch::Matchers::ContainsSubstring("project_set_clip_source: unknown clip_id 424242"));
+  CHECK(last_message() == "clip_id must be the id of a clip in this project");
 }
 
-TEST_CASE("an unknown take id is named with its value", "[c_api][project]") {
+TEST_CASE("an unknown take id is refused as an id of its clip or takes", "[c_api][project]") {
   ClipProject built;
 
   SonareProjectClipCompSegment segment{};
@@ -110,22 +104,19 @@ TEST_CASE("an unknown take id is named with its value", "[c_api][project]") {
   segment.take_id = 77;
   CHECK(sonare_project_set_clip_comp_segments(built.project, built.clip_id, &segment, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "project_set_clip_comp_segments: unknown take_id 77"));
+  CHECK(last_message() == "segments[0].take_id must be the id of a take in this clip");
 
   SonareProjectClipTake take{};
   take.id = 1;
   CHECK(sonare_project_set_clip_takes(built.project, built.clip_id, &take, 1, 55) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(), Catch::Matchers::ContainsSubstring(
-                                 "project_set_clip_takes: unknown active_take_id 55"));
+  CHECK(last_message() == "active_take_id must be the id of a take in takes");
 }
 
-TEST_CASE("a NULL project is refused under the clip-edit entry's name", "[c_api][project]") {
+TEST_CASE("a NULL project is refused by its parameter name on a clip edit", "[c_api][project]") {
   uint32_t out_clip_id = 0;
   CHECK(sonare_project_split_clip(nullptr, 1, 1.0, &out_clip_id) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(),
-             Catch::Matchers::ContainsSubstring("project_split_clip: project must not be NULL"));
+  CHECK(last_message() == "project must not be NULL");
 }
 
 #endif  // defined(SONARE_WITH_ARRANGEMENT)

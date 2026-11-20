@@ -2170,3 +2170,195 @@ TEST_CASE("C-ABI clip edits refuse an unknown clip or track id as a parameter",
   CHECK(sonare_project_split_clip(project, clip, 2.0, &new_clip) == SONARE_OK);
   sonare_project_destroy(project);
 }
+
+TEST_CASE("C-ABI clip edits name the parameter they refuse as \"<param> <predicate>\"",
+          "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+  uint32_t new_clip = 0;
+  auto message = [] { return std::string(sonare_last_error_message()); };
+
+  SECTION("NULL pointers, in header order") {
+    CHECK(sonare_project_trim_clip(nullptr, clip, 0.0, 2.0) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "project must not be NULL");
+    // Two NULLs: the first one in header order is named, not the out parameter.
+    uint32_t* no_out = nullptr;
+    CHECK(sonare_project_add_clip(project, nullptr, no_out) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "desc must not be NULL");
+    CHECK(sonare_project_set_clip_takes(project, clip, nullptr, 1, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "takes must not be NULL when take_count is not 0");
+    uint32_t curve = 5;
+    CHECK(sonare_project_fade_curve_from_name(nullptr, &curve) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "name must not be NULL");
+    CHECK(curve == 0);
+  }
+
+  SECTION("scalar domains") {
+    CHECK(sonare_project_trim_clip(project, 0, 0.0, 2.0) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "clip_id must not be 0");
+    CHECK(sonare_project_trim_clip(project, clip, -1.0, 2.0) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "new_start_ppq must be finite and at least 0");
+    CHECK(sonare_project_trim_clip(project, clip, 0.0, 0.0) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "new_length_ppq must be finite and greater than 0");
+    CHECK(sonare_project_split_clip(project, clip, std::nan(""), &new_clip) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "split_ppq must be finite");
+    CHECK(sonare_project_set_clip_gain(project, clip, -0.5f) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "gain must be finite and at least 0");
+    CHECK(sonare_project_add_midi_clip(project, 0.0, 4.0, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "out_track_id must not be NULL");
+  }
+
+  SECTION("enumerations") {
+    CHECK(sonare_project_set_clip_warp_mode(project, clip, static_cast<SonareProjectWarpMode>(9)) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "mode must be one of 0, 1, 2, 3");
+    CHECK(sonare_project_set_clip_loop(project, clip, 7, 0.0, 0.0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "loop_mode must be one of 0, 1");
+    uint32_t curve = 5;
+    CHECK(sonare_project_fade_curve_from_name("sine", &curve) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "name must name a declared value");
+    CHECK(curve == 0);
+    SonareProjectClipFade good{};
+    SonareProjectClipFade bad{};
+    bad.curve = 9;
+    CHECK(sonare_project_set_clip_fade(project, clip, &good, &bad) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "fade_out.curve must be one of 0, 1, 2, 3");
+    bad.curve = 0;
+    bad.length_ppq = -1.0;
+    CHECK(sonare_project_set_clip_fade(project, clip, &bad, &good) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "fade_in.length_ppq must be finite and at least 0");
+  }
+
+  SECTION("ids that name nothing in the project") {
+    const uint32_t unknown = clip + 1000;
+    CHECK(sonare_project_split_clip(project, unknown, 2.0, &new_clip) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "clip_id must be the id of a clip in this project");
+    CHECK(sonare_project_move_clip(project, clip, 1.0, track + 1000) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "new_track_id must be the id of a track in this project");
+    CHECK(sonare_project_set_clip_warp_ref(project, clip, 77) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "warp_ref_id must be the id of a warp map in this project");
+    CHECK(sonare_project_set_clip_source(project, clip, 9999) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "source_id must be the id of a source in this project");
+    SonareProjectClipTake take{};
+    take.id = 1;
+    take.source_id = 9999;
+    CHECK(sonare_project_set_clip_takes(project, clip, &take, 1, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "takes[0].source_id must be the id of a source in this project");
+    take.source_id = 0;
+    CHECK(sonare_project_set_clip_takes(project, clip, &take, 1, 5) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "active_take_id must be the id of a take in takes");
+  }
+
+  SECTION("array elements are named by index") {
+    SonareProjectClipTake take{};
+    take.id = 0;
+    CHECK(sonare_project_set_clip_takes(project, clip, &take, 1, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "takes[0].id must not be 0");
+    SonareProjectClipCompSegment segment{};
+    segment.start_ppq = 2.0;
+    segment.end_ppq = 1.0;
+    CHECK(sonare_project_set_clip_comp_segments(project, clip, &segment, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "segments[0].end_ppq must be greater than segments[0].start_ppq");
+    segment.take_id = 3;
+    segment.end_ppq = 3.0;
+    CHECK(sonare_project_set_clip_comp_segments(project, clip, &segment, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message() == "segments[0].take_id must be the id of a take in this clip");
+  }
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("C-ABI audio clip payloads name the member they refuse", "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareProjectTrackDesc track_desc{};
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+  uint32_t clip = 0;
+  auto message = [] { return std::string(sonare_last_error_message()); };
+  std::vector<float> samples = make_stereo(64);
+
+  SonareProjectClipDesc desc{};
+  desc.track_id = track;
+  desc.length_ppq = 1.0;
+  desc.gain = 1.0f;
+  desc.audio_interleaved = samples.data();
+  desc.audio_frames = 64;
+  desc.audio_channels = 2;
+  desc.audio_sample_rate = 48000;
+
+  desc.gain = -1.0f;
+  CHECK(sonare_project_add_clip(project, &desc, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.gain must be finite and at least 0");
+  desc.gain = 1.0f;
+  desc.track_id = track + 1000;
+  CHECK(sonare_project_add_clip(project, &desc, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.track_id must be the id of a track in this project");
+  desc.track_id = track;
+  desc.audio_channels = 0;
+  CHECK(sonare_project_add_clip(project, &desc, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.audio_channels must be an integer in [1, 2147483647]");
+  desc.audio_channels = 2;
+  desc.audio_sample_rate = 100;
+  CHECK(sonare_project_add_clip(project, &desc, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.audio_sample_rate must be an integer in [8000, 384000]");
+  desc.audio_sample_rate = 48000;
+  desc.audio_frames = -1;
+  CHECK(sonare_project_add_clip(project, &desc, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.audio_frames must be an integer of at least 1");
+  desc.audio_frames = 64;
+  desc.audio_interleaved = nullptr;
+  CHECK(sonare_project_add_clip(project, &desc, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.audio_interleaved must not be NULL when desc.audio_frames is not 0");
+  samples[3] = std::nanf("");
+  desc.audio_interleaved = samples.data();
+  CHECK(sonare_project_add_clip(project, &desc, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.audio_interleaved contains a non-finite sample at index 3");
+  samples[3] = 0.0f;
+  REQUIRE(sonare_project_add_clip(project, &desc, &clip) == SONARE_OK);
+
+  // The same payload refused through the positional spelling uses the parameter names.
+  CHECK(sonare_project_set_source_audio(project, 0, samples.data(), 64, 2, 48000) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "source_id must not be 0");
+  CHECK(sonare_project_set_source_audio(project, 1, samples.data(), 0, 2, 48000) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "frames must be an integer of at least 1");
+  CHECK(sonare_project_set_source_audio(project, 9999, samples.data(), 64, 2, 48000) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "source_id must be the id of a source in this project");
+
+  // A loop recording needs an audio track, and names the descriptor member it refuses.
+  SonareProjectLoopRecordingDesc loop{};
+  loop.track_id = track;
+  loop.loop_length_ppq = 1.0;
+  loop.audio_interleaved = samples.data();
+  loop.audio_frames = 64;
+  loop.audio_channels = 2;
+  loop.audio_sample_rate = 48000;
+  loop.flags = 2;
+  CHECK(sonare_project_add_loop_recording_takes(project, &loop, &clip, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.flags has unknown bits set");
+  loop.flags = 0;
+  loop.audio_interleaved = nullptr;
+  CHECK(sonare_project_add_loop_recording_takes(project, &loop, &clip, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.audio_interleaved must not be NULL");
+  sonare_project_destroy(project);
+}

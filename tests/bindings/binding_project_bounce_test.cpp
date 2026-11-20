@@ -2990,6 +2990,90 @@ TEST_CASE("bounce_with_builtin_instruments follows CC7 volume and CC11 expressio
   REQUIRE(right_energy < left_energy * 1e-4);
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("project bounce entries refuse a NULL pointer by its header name", "[project][refusal]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  float* out = nullptr;
+  size_t len = 0;
+  int channels = 0;
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  REQUIRE(sonare_project_bounce(nullptr, nullptr, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  // Two NULL outs: the first one in header order is named.
+  REQUIRE(sonare_project_bounce(project, nullptr, nullptr, nullptr, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_interleaved must not be NULL");
+  REQUIRE(sonare_project_bounce(project, nullptr, &out, nullptr, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_len must not be NULL");
+
+  REQUIRE(sonare_project_bounce_with_instruments(project, nullptr, nullptr, 1, &out, &len,
+                                                 &channels) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "instruments must not be NULL when instrument_count is not 0");
+  const SonareInstrumentBinding no_render{};
+  REQUIRE(sonare_project_bounce_with_instruments(project, nullptr, &no_render, 1, &out, &len,
+                                                 &channels) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "instruments[0].callbacks.render must not be NULL");
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project bounce refuses options and instrument members by their header names",
+          "[project][refusal]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  float* out = nullptr;
+  size_t len = 0;
+  int channels = 0;
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  SonareProjectBounceOptions options{};
+  options.block_size = -1;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.block_size must be an integer in [0, 2147483647]");
+  options = {};
+  options.num_channels = 3;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.num_channels must be one of 1, 2, 6, 8");
+  options = {};
+  options.sample_rate = 100;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.sample_rate must be an integer in [8000, 384000]");
+  options = {};
+  options.sample_rate = 44100;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.sample_rate must equal the sample rate of the project");
+  options = {};
+  options.instrument_latency_samples = -1;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &len, &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "options.instrument_latency_samples must be an integer in [0, 2147483647]");
+
+  SonareBuiltinInstrumentBinding builtin{};
+  builtin.config.waveform = 9;
+  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, nullptr, &builtin, 1, &out, &len,
+                                                         &channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "instruments[0].config.waveform must be an integer in [0, 3]");
+
+  SonareSf2InstrumentBinding sf2{};
+  sf2.config.struct_version = 99;
+  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, nullptr, &sf2, 1, &out, &len,
+                                                     &channels) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "instruments[0].config.struct_version must be an integer in [0, 4]");
+
+  sonare_project_destroy(project);
+}
+#endif  // SONARE_WITH_ARRANGEMENT
+
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_FX)
 TEST_CASE(
     "legacy opaque width automation follows the pre-fader clock across rates and insert topologies",

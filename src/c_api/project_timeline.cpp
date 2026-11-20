@@ -13,7 +13,9 @@ SonareError sonare_project_compile_timeline(SonareProject* project,
   if (out_result) *out_result = {};
   if (out_timeline) *out_timeline = nullptr;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || !out_result || !out_timeline) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out_result);
+  SONARE_C_REQUIRE_NONNULL(out_timeline);
   SONARE_C_TRY
   arr::CompileResult result =
       arr::compile(project->history.project(), project->history.midi_content(), project->audio);

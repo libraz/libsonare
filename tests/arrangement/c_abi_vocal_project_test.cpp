@@ -1126,3 +1126,115 @@ TEST_CASE("vocal project entry points define an initialized result on a rejected
   CHECK(stale.clip_id == 99);
   CHECK(stale.struct_size == 0);
 }
+
+#if defined(SONARE_WITH_PITCH_EDITOR)
+TEST_CASE("vocal project entries refuse an argument by its header name",
+          "[project][vocal][refusal]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  std::vector<float> pcm(static_cast<size_t>(kSampleCount), 0.0f);
+  const uint8_t sve1_byte = 0;
+  SonareProjectVocalEditApplyDesc valid;
+  sonare_project_vocal_edit_apply_desc_init(&valid);
+  valid.clip_id = 1;
+  valid.expected_source_sample_rate = kSampleRate;
+  valid.expected_source_sample_count = kSampleCount;
+  valid.rendered_mono = pcm.data();
+  valid.rendered_sample_count = kSampleCount;
+  valid.rendered_sample_rate = kSampleRate;
+  valid.sve1 = &sve1_byte;
+  valid.sve1_size = 1;
+  SonareProjectVocalEditApplyResult applied;
+  sonare_project_vocal_edit_apply_result_init(&applied);
+
+  REQUIRE(sonare_project_apply_vocal_edit(nullptr, &valid, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  // Two NULL pointers: the first one in header order is named.
+  REQUIRE(sonare_project_apply_vocal_edit(project, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc must not be NULL");
+  REQUIRE(sonare_project_apply_vocal_edit(project, &valid, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "result must not be NULL");
+
+  SonareProjectVocalEditApplyDesc bad = valid;
+  bad.clip_id = 0;
+  REQUIRE(sonare_project_apply_vocal_edit(project, &bad, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.clip_id must be an integer in [1, 4294967294]");
+  bad = valid;
+  bad.expected_source_sample_rate = 100;
+  REQUIRE(sonare_project_apply_vocal_edit(project, &bad, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.expected_source_sample_rate must be an integer in [8000, 384000]");
+  bad = valid;
+  bad.rendered_sample_count = kSampleCount - 1;
+  REQUIRE(sonare_project_apply_vocal_edit(project, &bad, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.rendered_sample_count must equal desc.expected_source_sample_count");
+  bad = valid;
+  bad.sve1 = nullptr;
+  REQUIRE(sonare_project_apply_vocal_edit(project, &bad, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.sve1 must not be NULL");
+  bad = valid;
+  bad.struct_size = 0;
+  REQUIRE(sonare_project_apply_vocal_edit(project, &bad, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.struct_size must be an integer in [" +
+                         std::to_string(sizeof(SonareProjectVocalEditApplyDesc)) + ", 4294967295]");
+  SonareProjectVocalEditApplyResult stale;
+  std::memset(&stale, 0, sizeof(stale));
+  REQUIRE(sonare_project_apply_vocal_edit(project, &valid, &stale) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "result.struct_size must be an integer in [" +
+                         std::to_string(sizeof(SonareProjectVocalEditApplyResult)) +
+                         ", 4294967295]");
+  REQUIRE(sonare_project_apply_vocal_edit(project, &valid, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "desc.clip_id must be the id of a clip with a source in this project");
+
+  SonareProjectVocalEditDependenciesResult dependencies;
+  sonare_project_vocal_edit_dependencies_result_init(&dependencies);
+  REQUIRE(sonare_project_get_vocal_edit_dependencies(nullptr, &dependencies) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  REQUIRE(sonare_project_get_vocal_edit_dependencies(project, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "result must not be NULL");
+
+  SonareProjectVocalRehydrateResult rehydrated;
+  sonare_project_vocal_rehydrate_result_init(&rehydrated);
+  REQUIRE(sonare_project_rehydrate_vocal_edits(nullptr, nullptr, 0, nullptr, nullptr,
+                                               &rehydrated) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  REQUIRE(sonare_project_rehydrate_vocal_edits(project, nullptr, 1, nullptr, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "originals must not be NULL when original_count is not 0");
+  REQUIRE(sonare_project_rehydrate_vocal_edits(project, nullptr, 0, nullptr, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "result must not be NULL");
+
+  SonareProjectVocalOriginalSource originals[2];
+  for (SonareProjectVocalOriginalSource& original : originals) {
+    sonare_project_vocal_original_source_init(&original);
+    original.source_id = 1;
+    original.mono = pcm.data();
+    original.sample_count = kSampleCount;
+    original.sample_rate = kSampleRate;
+  }
+  originals[0].mono = nullptr;
+  REQUIRE(sonare_project_rehydrate_vocal_edits(project, originals, 2, nullptr, nullptr,
+                                               &rehydrated) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "originals[0].mono must not be NULL");
+  originals[0].mono = pcm.data();
+  REQUIRE(sonare_project_rehydrate_vocal_edits(project, originals, 2, nullptr, nullptr,
+                                               &rehydrated) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "originals[1].source_id must not repeat the source_id of an earlier original");
+
+  sonare_project_destroy(project);
+}
+#endif

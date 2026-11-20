@@ -775,3 +775,123 @@ TEST_CASE("bounce is bit-exact across two renders through the C surface", "[proj
   sonare_free_floats(second);
   sonare_project_destroy(built.project);
 }
+
+namespace {
+
+std::string last_refusal() { return std::string(sonare_last_error_message()); }
+
+}  // namespace
+
+TEST_CASE("project core entries refuse by the parameter the header spells", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  // Two NULL pointers: the first in header order is named.
+  CHECK(sonare_project_deserialize(nullptr, 0, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "json must not be NULL");
+
+  CHECK(sonare_project_serialize(project, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "out_json must not be NULL");
+
+  CHECK(sonare_project_set_sample_rate(project, 44100.5) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "sample_rate must be a whole number of hertz in [8000, 384000]");
+
+  SonareProjectTrack track{};
+  CHECK(sonare_project_track_by_index(project, 0, &track) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "index must be less than the number of tracks");
+
+  char* name = reinterpret_cast<char*>(0x1);
+  CHECK(sonare_project_track_name_by_index(project, 0, &name) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(name == nullptr);
+  CHECK(last_refusal() == "index must be less than the number of tracks");
+  CHECK(sonare_project_track_name_by_index(project, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "out_name must not be NULL");
+
+  char* uri = nullptr;
+  CHECK(sonare_project_get_audio_source_uri(project, 99, &uri) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "source_id must be the id of an audio source in this project");
+
+  const uint8_t payload[1] = {0};
+  CHECK(sonare_project_set_assist_sidecar(project, "", 1, 0, 0.0, 1.0, payload, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "module_id must not be empty");
+  CHECK(sonare_project_set_assist_sidecar(project, "m", 1, 0, 0.0, 1.0, nullptr, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "payload must not be NULL when payload_len is not 0");
+  CHECK(sonare_project_set_assist_sidecar(project, "m", 1, 0, -1.0, 1.0, payload, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "region_start_ppq must be finite and at least 0");
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project track edit entries refuse by the parameter the header spells", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  // Two NULL pointers: the first in header order is named.
+  SonareProjectTrackDesc track_desc{SONARE_TRACK_AUDIO, "t"};
+  CHECK(sonare_project_add_track(project, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "desc must not be NULL");
+
+  SonareProjectTrackDesc bad_kind{99, "t"};
+  uint32_t track_id = 0;
+  CHECK(sonare_project_add_track(project, &bad_kind, &track_id) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "desc.kind must name a declared value");
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track_id) == SONARE_OK);
+
+  CHECK(sonare_project_set_track_gain(project, 99, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "track_id must be the id of a track in this project");
+  CHECK(sonare_project_set_track_gain(project, track_id, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "gain must be finite and at least 0");
+  CHECK(sonare_project_set_track_pan(project, track_id, 2.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "pan must be finite and in [-1, 1]");
+  CHECK(sonare_project_set_track_kind(project, track_id, 9) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "kind must name a declared value");
+  CHECK(sonare_project_remove_warp_map(project, 5) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "warp_ref_id must be the id of a warp map in this project");
+
+  SonareProjectTempoSegment segments[2] = {{0.0, 120.0, 0.0, 0.0}, {0.0, 120.0, 0.0, 0.0}};
+  CHECK(sonare_project_set_tempo_segments(project, nullptr, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "segments must not be NULL when segment_count is not 0");
+  CHECK(sonare_project_set_tempo_segments(project, segments, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "segments[1].start_ppq must be greater than segments[0].start_ppq");
+
+  SonareProjectTimeSignatureSegment signature{0.0, 0, 4};
+  CHECK(sonare_project_set_time_signatures(project, &signature, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "segments[0].numerator must be an integer in [1, 2147483647]");
+
+  uint32_t marker_id = 0;
+  CHECK(sonare_project_set_marker(project, 0, -1.0, "m", &marker_id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "ppq must be finite and at least 0");
+  CHECK(sonare_project_set_marker(project, 0xFFFFFFFFu, 1.0, "m", &marker_id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "marker_id must be an integer in [0, 4294967294]");
+
+  SonareAutomationLaneDesc lane{0, nullptr, 0};
+  uint32_t lane_param = 0;
+  CHECK(sonare_project_add_automation_lane(project, track_id, &lane, &lane_param) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "desc.target_param_id must be an integer in [1, 4294967295]");
+  lane.target_param_id = 7;
+  CHECK(sonare_project_remove_automation_lane(project, track_id, 7) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "target_param_id must be the id of an automation lane in this track");
+  REQUIRE(sonare_project_add_automation_lane(project, track_id, &lane, &lane_param) == SONARE_OK);
+  lane.target_param_id = 8;
+  CHECK(sonare_project_edit_automation_lane(project, track_id, 7, &lane) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "target_param_id must equal desc.target_param_id");
+
+  SonareProjectWarpMapDesc warp{};
+  warp.anchor_count = 2;
+  CHECK(sonare_project_set_warp_map(project, &warp) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "desc.id must be an integer in [1, 4294967295]");
+
+  CHECK(sonare_project_undo(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal() == "project must not be NULL");
+
+  sonare_project_destroy(project);
+}

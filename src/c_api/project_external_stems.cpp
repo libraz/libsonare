@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <map>
 #include <memory>
 #include <utility>
@@ -8,6 +9,8 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 #include "arrangement/external_stems.h"
+#include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 namespace {
 
@@ -158,13 +161,19 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out != nullptr) *out = {};
-  if (project == nullptr || request == nullptr || out == nullptr ||
-      (request->stem_count > 0 && request->stems == nullptr) || request->stem_count == 0 ||
-      request->stem_count > sonare::resource::kMaxOfflineAudioSamples ||
-      (request->struct_version != 0 && request->struct_version != 1)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(request);
+  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
+  namespace check = sonare::util::check;
+  constexpr size_t kMaxSamples = sonare::resource::kMaxOfflineAudioSamples;
+  check::one_of(request->struct_version, std::array<int, 2>{0, 1}, "request.struct_version");
+  check::non_null_when_count(request->stems, request->stem_count, "request.stems",
+                             "request.stem_count");
+  if (request->stem_count == 0 || request->stem_count > kMaxSamples) {
+    check::refuse("request.stem_count", sonare::util::refusal::integer_range_predicate(
+                                            1, static_cast<double>(kMaxSamples)));
+  }
   sonare::arrangement::ExternalSeparatedStemSet input;
   input.sample_rate = request->sample_rate;
   input.stems.reserve(request->stem_count);
@@ -172,16 +181,21 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
   for (size_t i = 0; i < request->stem_count; ++i) {
     const SonareExternalStemDesc& desc = request->stems[i];
     sonare::arrangement::ExternalSeparatedStemLayout layout{};
-    if (desc.name == nullptr || desc.planar_samples == nullptr || desc.frame_count <= 0 ||
-        !ordinal_to_enum(desc.layout, SONARE_EXTERNAL_STEM_MONO, SONARE_EXTERNAL_STEM_STEREO,
-                         &layout)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    const auto member = [i](const char* field) {
+      return check::indexed_subject("request.stems", i, field);
+    };
+    check::non_null(desc.name, member("name").c_str());
+    check::integer_in_range(desc.layout, SONARE_EXTERNAL_STEM_MONO, SONARE_EXTERNAL_STEM_STEREO,
+                            member("layout").c_str());
+    layout =
+        admitted_ordinal_to_enum<sonare::arrangement::ExternalSeparatedStemLayout>(desc.layout);
+    check::non_null(desc.planar_samples, member("planar_samples").c_str());
+    check::integer_at_least<int64_t>(desc.frame_count, 1, member("frame_count").c_str());
     const size_t channels = channel_count(desc.layout);
     const size_t frames = static_cast<size_t>(desc.frame_count);
-    if (frames > sonare::resource::kMaxOfflineAudioSamples / channels ||
-        total_samples > sonare::resource::kMaxOfflineAudioSamples - frames * channels) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    if (frames > kMaxSamples / channels || total_samples > kMaxSamples - frames * channels) {
+      check::refuse("request.stems",
+                    "must hold at most " + std::to_string(kMaxSamples) + " samples in total");
     }
     sonare::arrangement::ExternalSeparatedStem stem;
     stem.name = desc.name;
@@ -190,7 +204,8 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     stem.start_frame = desc.start_frame;
     stem.planar_samples.reserve(channels);
     for (size_t channel = 0; channel < channels; ++channel) {
-      if (desc.planar_samples[channel] == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+      check::non_null(desc.planar_samples[channel],
+                      (member("planar_samples") + "[" + std::to_string(channel) + "]").c_str());
       stem.planar_samples.emplace_back(desc.planar_samples[channel],
                                        desc.planar_samples[channel] + frames);
     }
@@ -206,6 +221,14 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
   arr::AudioContentStore validation_audio;
   const auto validation =
       arr::import_external_separated_stems(&validation_project, &validation_audio, input);
+  using ImportError = sonare::arrangement::ExternalSeparatedStemImportError;
+  if (validation.error == ImportError::kSampleRateMismatch) {
+    check::refuse("request.sample_rate", "must equal the sample rate of the project");
+  }
+  if (validation.error == ImportError::kFramePositionNotRepresentable) {
+    check::refuse("request.stems",
+                  "must start and end where the project's tempo map can place them");
+  }
   const SonareError validation_error = import_error_to_c(validation.error);
   if (validation_error != SONARE_OK) return validation_error;
 

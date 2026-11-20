@@ -2084,3 +2084,104 @@ TEST_CASE("project C surface MIDI builders define the event on a rejected call",
   REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 #endif
 }
+
+TEST_CASE("project C surface MIDI refusals name the parameter", "[project][midi]") {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+  SonareMidiEventPod pod;
+
+  REQUIRE(sonare_midi_note_on(-1.0, 0, 0, 60, 100, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "ppq must be finite and in [0, 1e12]");
+  REQUIRE(sonare_midi_note_on(0.0, 16, 0, 60, 100, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "group must be an integer in [0, 15]");
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 128, 100, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "note must be an integer in [0, 127]");
+  REQUIRE(sonare_midi_pitch_bend(0.0, 0, 0, 16384, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bend must be an integer in [0, 16383]");
+  REQUIRE(sonare_midi2_program(0.0, 0, 0, 0, 0, 1, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bank_msb and bank_lsb must be 0 when bank_valid is 0");
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out must not be NULL");
+
+  size_t count = 7;
+  SonareMidiEventPod events[2];
+  REQUIRE(sonare_midi_bank_program(0.0, 0, 0, 0, 0, 0, events, 2, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_capacity must be an integer of at least 3");
+  CHECK(count == 0);
+
+  SonareMidiEventPod bad_event{0.0, 0u, 0u};
+  REQUIRE(sonare_midi_route_events(&bad_event, 1, nullptr, events, 2, &count, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "events[0].word0 must be a MIDI 1.0 or MIDI 2.0 channel voice message");
+  REQUIRE(sonare_midi_route_events(nullptr, 1, nullptr, events, 2, &count, nullptr, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "events must not be NULL when count is not 0");
+
+  SonareMidiCcBinding binding{};
+  binding.cc_number = 128;
+  binding.channel = SONARE_MIDI_CC_ANY_CHANNEL;
+  binding.param_id = 1;
+  binding.max_value = 1.0f;
+  SonareAutomationPoint point{};
+  SonareMidiEventPod cc_event{0.0, 0xB0000000u | (0x20u << 16), 0u};
+  REQUIRE(sonare_midi_cc_to_breakpoint(&binding, 1, &cc_event, &point) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bindings[0].cc_number must be an integer in [0, 127]");
+  binding.cc_number = 1;
+  binding.kind = SONARE_MIDI_CC_CONTROL_CHANGE_14;
+  binding.cc_lsb_number = 2;
+  REQUIRE(sonare_midi_cc_to_breakpoint(&binding, 1, &cc_event, &point) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bindings[0].cc_lsb_number must be bindings[0].cc_number + 32");
+
+  SonareMidiCcBinding learned;
+  REQUIRE(sonare_midi_cc_learn(nullptr, 0, 0, 0.0f, 1.0f, 0, &learned) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "param_id must be an integer in [1, 4294967295]");
+  REQUIRE(sonare_midi_cc_learn(nullptr, 0, 1, 1.0f, 0.0f, 0, &learned) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "max_value must be at least min_value");
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+
+  REQUIRE(sonare_project_set_midi_events(project, clip + 100, nullptr, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "clip_id must be the id of a MIDI clip in this project");
+  REQUIRE(sonare_project_set_midi_events(project, clip, nullptr, 3) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "events must not be NULL when count is not 0");
+  REQUIRE(sonare_project_set_midi_events(project, clip, &bad_event, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "events[0].word0 must be a MIDI 1.0 or MIDI 2.0 channel voice message");
+  REQUIRE(sonare_project_set_program_on_channel(project, clip, 16, 0, 0, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "group must be an integer in [0, 15]");
+  uint32_t first_clip = 5;
+  REQUIRE(sonare_project_import_smf(project, nullptr, 4, &first_clip) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "bytes must not be NULL");
+  CHECK(first_clip == 0u);
+
+  SonareNotePairValidation validation;
+  REQUIRE(sonare_project_validate_midi_notes(project, clip, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out must not be NULL");
+  REQUIRE(sonare_project_validate_midi_notes(project, clip + 100, &validation) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "clip_id must be the id of a MIDI clip in this project");
+  REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, nullptr, nullptr, 0, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "config_json must not be NULL");
+
+  // Two NULL pointers: the first one in header order is named.
+  REQUIRE(sonare_project_export_smf(project, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_bytes must not be NULL");
+
+  sonare_project_destroy(project);
+#endif
+}

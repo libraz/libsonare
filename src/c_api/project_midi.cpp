@@ -1,6 +1,52 @@
 #include "c_api/project_internal.h"
+#include "util/parameter_checks.h"
 
 using sonare::constants::kDefaultBpm;
+
+namespace check = sonare::util::check;
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+// The refusal for a clip_id that names no MIDI clip in the project.
+SonareError refuse_unknown_midi_clip() {
+  return run_validation([] { check::refuse_unknown_id("clip_id", "a MIDI clip", "project"); });
+}
+
+// Refuses an event whose position is out of range or that is not a channel voice message.
+void check_midi_event_pod(const SonareMidiEventPod& event, const std::string& ppq_subject,
+                          const std::string& word0_subject) {
+  check::in_range(event.ppq, 0.0, sonare::transport::kMaxPublicPpq, ppq_subject.c_str());
+  const uint8_t mt = static_cast<uint8_t>((event.word0 >> 28u) & 0x0Fu);
+  if (mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi1ChannelVoice) &&
+      mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice)) {
+    check::refuse(word0_subject.c_str(), "must be a MIDI 1.0 or MIDI 2.0 channel voice message");
+  }
+}
+
+void check_u7(uint8_t value, const char* subject) {
+  check::integer_in_range(value, 0, 127, subject);
+}
+
+// Checks the fields every MIDI builder carries: the position, the group and the channel.
+void check_midi_head(double ppq, uint8_t group, uint8_t channel) {
+  check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq, "ppq");
+  check::integer_in_range(group, 0, 15, "group");
+  check::integer_in_range(channel, 0, 15, "channel");
+}
+
+// Refuses through `check`, then `out` being NULL, then packs the event `build` makes into `out`.
+template <typename Check, typename Build>
+SonareError emit_midi_pod(SonareMidiEventPod* out, double ppq, Check&& check_fields,
+                          Build&& build) {
+  if (const SonareError err = run_validation(check_fields); err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
+  *out = pod_from_ump(ppq, build());
+  return SONARE_OK;
+}
+
+}  // namespace
+#endif
 
 // ============================================================================
 // MIDI
@@ -10,16 +56,22 @@ SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip
                                            const SonareMidiEventPod* events, size_t count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || clip_id == 0 || (count > 0 && !events) || count > kMaxBufferSize / 16) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(events, count);
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(count), 0,
+                                static_cast<long long>(kMaxBufferSize / 16), "count");
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  if (!project->history.project().has_clip(clip_id)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (find_midi_clip(project, clip_id) == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   arr::MidiClipEventList list;
   list.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    if (!valid_midi_event_pod(events[i])) return SONARE_ERROR_INVALID_PARAMETER;
+    check_midi_event_pod(events[i], check::indexed_subject("events", i, "ppq"),
+                         check::indexed_subject("events", i, "word0"));
     arr::MidiClipEvent event;
     event.ppq = events[i].ppq;
     event.word0 = events[i].word0;
@@ -35,33 +87,19 @@ SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip
 #endif
 }
 
-#if defined(SONARE_WITH_ARRANGEMENT)
-namespace {
-
-// Checks the fields every MIDI builder carries: the position, the group and the channel.
-bool valid_midi_head(double ppq, uint8_t group, uint8_t channel) {
-  return sonare::transport::valid_public_ppq(ppq) && valid_nibble(group) && valid_nibble(channel);
-}
-
-// Packs `ump` into `out` unless `out` is null or the arguments were `invalid`.
-SonareError emit_midi_pod(SonareMidiEventPod* out, bool invalid, double ppq,
-                          const sonare::midi::Ump& ump) {
-  if (!out || invalid) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = pod_from_ump(ppq, ump);
-  return SONARE_OK;
-}
-
-}  // namespace
-#endif
-
 SonareError sonare_midi_note_on(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                 uint8_t velocity, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note) || !valid_u7(velocity), ppq,
-      sonare::midi::make_midi1_note_on(group, channel, note, velocity));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+        check_u7(velocity, "velocity");
+      },
+      [&] { return sonare::midi::make_midi1_note_on(group, channel, note, velocity); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity, out);
 #endif
@@ -73,8 +111,13 @@ SonareError sonare_midi_note_off(double ppq, uint8_t group, uint8_t channel, uin
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note) || !valid_u7(velocity), ppq,
-      sonare::midi::make_midi1_note_off(group, channel, note, velocity));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+        check_u7(velocity, "velocity");
+      },
+      [&] { return sonare::midi::make_midi1_note_off(group, channel, note, velocity); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity, out);
 #endif
@@ -86,8 +129,13 @@ SonareError sonare_midi_cc(double ppq, uint8_t group, uint8_t channel, uint8_t c
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(controller) || !valid_u7(value), ppq,
-      sonare::midi::make_midi1_control_change(group, channel, controller, value));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(controller, "controller");
+        check_u7(value, "value");
+      },
+      [&] { return sonare::midi::make_midi1_control_change(group, channel, controller, value); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, controller, value, out);
 #endif
@@ -99,8 +147,13 @@ SonareError sonare_midi_poly_pressure(double ppq, uint8_t group, uint8_t channel
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note) || !valid_u7(pressure), ppq,
-      sonare::midi::make_midi1_poly_pressure(group, channel, note, pressure));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+        check_u7(pressure, "pressure");
+      },
+      [&] { return sonare::midi::make_midi1_poly_pressure(group, channel, note, pressure); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, pressure, out);
 #endif
@@ -111,8 +164,13 @@ SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(program), ppq,
-                       sonare::midi::make_midi1_program_change(group, channel, program));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(program, "program");
+      },
+      [&] { return sonare::midi::make_midi1_program_change(group, channel, program); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, program, out);
 #endif
@@ -124,9 +182,16 @@ SonareError sonare_midi2_note_on(double ppq, uint8_t group, uint8_t channel, uin
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
-                       sonare::midi::make_midi2_note_on(group, channel, note, velocity16,
-                                                        attribute_type, attribute_data));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+      },
+      [&] {
+        return sonare::midi::make_midi2_note_on(group, channel, note, velocity16, attribute_type,
+                                                attribute_data);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity16, attribute_type, attribute_data,
                               out);
@@ -138,8 +203,13 @@ SonareError sonare_midi2_note_off(double ppq, uint8_t group, uint8_t channel, ui
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
-                       sonare::midi::make_midi2_note_off(group, channel, note, velocity16));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+      },
+      [&] { return sonare::midi::make_midi2_note_off(group, channel, note, velocity16); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity16, out);
 #endif
@@ -151,8 +221,12 @@ SonareError sonare_midi2_cc(double ppq, uint8_t group, uint8_t channel, uint8_t 
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(controller), ppq,
-      sonare::midi::make_midi2_control_change(group, channel, controller, value32));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(controller, "controller");
+      },
+      [&] { return sonare::midi::make_midi2_control_change(group, channel, controller, value32); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, controller, value32, out);
 #endif
@@ -163,8 +237,13 @@ SonareError sonare_midi2_poly_pressure(double ppq, uint8_t group, uint8_t channe
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
-                       sonare::midi::make_midi2_poly_pressure(group, channel, note, pressure32));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+      },
+      [&] { return sonare::midi::make_midi2_poly_pressure(group, channel, note, pressure32); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, pressure32, out);
 #endif
@@ -175,8 +254,9 @@ SonareError sonare_midi2_channel_pressure(double ppq, uint8_t group, uint8_t cha
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel), ppq,
-                       sonare::midi::make_midi2_channel_pressure(group, channel, pressure32));
+  return emit_midi_pod(
+      out, ppq, [&] { check_midi_head(ppq, group, channel); },
+      [&] { return sonare::midi::make_midi2_channel_pressure(group, channel, pressure32); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, pressure32, out);
 #endif
@@ -187,8 +267,9 @@ SonareError sonare_midi2_pitch_bend(double ppq, uint8_t group, uint8_t channel, 
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel), ppq,
-                       sonare::midi::make_midi2_pitch_bend(group, channel, bend32));
+  return emit_midi_pod(
+      out, ppq, [&] { check_midi_head(ppq, group, channel); },
+      [&] { return sonare::midi::make_midi2_pitch_bend(group, channel, bend32); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bend32, out);
 #endif
@@ -200,13 +281,22 @@ SonareError sonare_midi2_program(double ppq, uint8_t group, uint8_t channel, uin
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out,
-                       !valid_midi_head(ppq, group, channel) || !valid_u7(program) ||
-                           !valid_u7(bank_msb) || !valid_u7(bank_lsb) ||
-                           (bank_valid == 0 && (bank_msb != 0 || bank_lsb != 0)),
-                       ppq,
-                       sonare::midi::make_midi2_program_change(group, channel, program, bank_msb,
-                                                               bank_lsb, bank_valid != 0));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(program, "program");
+        check_u7(bank_msb, "bank_msb");
+        check_u7(bank_lsb, "bank_lsb");
+        if (bank_valid == 0 && (bank_msb != 0 || bank_lsb != 0)) {
+          check::refuse_relation({"bank_valid", "bank_msb", "bank_lsb"},
+                                 "{1} and {2} must be 0 when {0} is 0");
+        }
+      },
+      [&] {
+        return sonare::midi::make_midi2_program_change(group, channel, program, bank_msb, bank_lsb,
+                                                       bank_valid != 0);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, program, bank_valid, bank_msb, bank_lsb, out);
 #endif
@@ -219,8 +309,15 @@ SonareError sonare_midi2_registered_controller(double ppq, uint8_t group, uint8_
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index), ppq,
-      sonare::midi::make_midi2_registered_controller(group, channel, bank, index, value32));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(bank, "bank");
+        check_u7(index, "index");
+      },
+      [&] {
+        return sonare::midi::make_midi2_registered_controller(group, channel, bank, index, value32);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, value32, out);
 #endif
@@ -233,8 +330,15 @@ SonareError sonare_midi2_assignable_controller(double ppq, uint8_t group, uint8_
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index), ppq,
-      sonare::midi::make_midi2_assignable_controller(group, channel, bank, index, value32));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(bank, "bank");
+        check_u7(index, "index");
+      },
+      [&] {
+        return sonare::midi::make_midi2_assignable_controller(group, channel, bank, index, value32);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, value32, out);
 #endif
@@ -247,9 +351,16 @@ SonareError sonare_midi2_relative_registered_controller(double ppq, uint8_t grou
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index), ppq,
-      sonare::midi::make_midi2_relative_registered_controller(group, channel, bank, index,
-                                                              static_cast<uint32_t>(delta32)));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(bank, "bank");
+        check_u7(index, "index");
+      },
+      [&] {
+        return sonare::midi::make_midi2_relative_registered_controller(
+            group, channel, bank, index, static_cast<uint32_t>(delta32));
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, delta32, out);
 #endif
@@ -262,9 +373,16 @@ SonareError sonare_midi2_relative_assignable_controller(double ppq, uint8_t grou
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index), ppq,
-      sonare::midi::make_midi2_relative_assignable_controller(group, channel, bank, index,
-                                                              static_cast<uint32_t>(delta32)));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(bank, "bank");
+        check_u7(index, "index");
+      },
+      [&] {
+        return sonare::midi::make_midi2_relative_assignable_controller(
+            group, channel, bank, index, static_cast<uint32_t>(delta32));
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, delta32, out);
 #endif
@@ -277,8 +395,14 @@ SonareError sonare_midi2_registered_per_note_controller(double ppq, uint8_t grou
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
-      sonare::midi::make_midi2_per_note_controller(group, channel, note, index, value32));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+      },
+      [&] {
+        return sonare::midi::make_midi2_per_note_controller(group, channel, note, index, value32);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, index, value32, out);
 #endif
@@ -290,9 +414,16 @@ SonareError sonare_midi2_assignable_per_note_controller(double ppq, uint8_t grou
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
-                       sonare::midi::make_midi2_assignable_per_note_controller(group, channel, note,
-                                                                               index, value32));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+      },
+      [&] {
+        return sonare::midi::make_midi2_assignable_per_note_controller(group, channel, note, index,
+                                                                       value32);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, index, value32, out);
 #endif
@@ -304,8 +435,13 @@ SonareError sonare_midi2_per_note_pitch_bend(double ppq, uint8_t group, uint8_t 
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
-                       sonare::midi::make_midi2_per_note_pitch_bend(group, channel, note, bend32));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+      },
+      [&] { return sonare::midi::make_midi2_per_note_pitch_bend(group, channel, note, bend32); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, bend32, out);
 #endif
@@ -318,8 +454,15 @@ SonareError sonare_midi2_per_note_management(double ppq, uint8_t group, uint8_t 
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(
-      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
-      sonare::midi::make_midi2_per_note_management(group, channel, note, detach != 0, reset != 0));
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(note, "note");
+      },
+      [&] {
+        return sonare::midi::make_midi2_per_note_management(group, channel, note, detach != 0,
+                                                            reset != 0);
+      });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, detach, reset, out);
 #endif
@@ -339,15 +482,40 @@ sonare::midi::Ump ump_from_pod(const SonareMidiEventPod& pod) noexcept {
   return out;
 }
 
-bool binding_from_c(const SonareMidiCcBinding& src, sonare::midi::CcBinding* out) noexcept {
-  sonare::midi::CcBinding binding{};
-  if (out == nullptr || src.cc_number > 127 || src.param_id == 0 ||
-      !ordinal_to_enum(src.kind, 0, SONARE_MIDI_CC_NRPN, &binding.kind) ||
-      (src.channel != sonare::midi::kCcAnyChannel && src.channel > 15) ||
-      !std::isfinite(src.min_value) || !std::isfinite(src.max_value) ||
-      src.max_value < src.min_value) {
-    return false;
+// Refuses a binding row the table cannot hold, naming the row.
+void check_cc_binding(const SonareMidiCcBinding& src, size_t index) {
+  const auto subject = [index](const char* field) {
+    return check::indexed_subject("bindings", index, field);
+  };
+  check::integer_in_range(src.cc_number, 0, 127, subject("cc_number").c_str());
+  check::integer_in_range(src.param_id, 1, std::numeric_limits<uint32_t>::max(),
+                          subject("param_id").c_str());
+  if (src.kind > SONARE_MIDI_CC_NRPN) {
+    check::refuse(subject("kind").c_str(), sonare::util::refusal::kDeclaredValuePredicate);
   }
+  if (src.channel != sonare::midi::kCcAnyChannel && src.channel > 15) {
+    check::refuse(subject("channel").c_str(),
+                  "must be an integer in [0, 15] or " +
+                      std::to_string(static_cast<unsigned>(sonare::midi::kCcAnyChannel)));
+  }
+  check::finite_float(src.min_value, subject("min_value").c_str());
+  check::finite_float(src.max_value, subject("max_value").c_str());
+  if (src.max_value < src.min_value) {
+    check::refuse_relation({subject("max_value"), subject("min_value")},
+                           "{0} must be at least {1}");
+  }
+  if (src.kind == SONARE_MIDI_CC_CONTROL_CHANGE_14) {
+    check::integer_in_range(src.cc_number, 0, 31, subject("cc_number").c_str());
+    if (src.cc_lsb_number != src.cc_number + 32u) {
+      check::refuse_relation({subject("cc_lsb_number"), subject("cc_number")},
+                             "{0} must be {1} + 32");
+    }
+  }
+}
+
+sonare::midi::CcBinding binding_from_c(const SonareMidiCcBinding& src) noexcept {
+  sonare::midi::CcBinding binding{};
+  binding.kind = static_cast<sonare::midi::CcBindingKind>(src.kind);
   binding.cc_number = src.cc_number;
   binding.channel = src.channel;
   binding.param_id = src.param_id;
@@ -356,12 +524,7 @@ bool binding_from_c(const SonareMidiCcBinding& src, sonare::midi::CcBinding* out
   binding.cc_lsb_number = src.cc_lsb_number;
   binding.selector_msb = src.selector_msb;
   binding.selector_lsb = src.selector_lsb;
-  if (binding.kind == sonare::midi::CcBindingKind::kControlChange14 &&
-      (binding.cc_number > 31 || binding.cc_lsb_number != binding.cc_number + 32u)) {
-    return false;
-  }
-  *out = binding;
-  return true;
+  return binding;
 }
 
 SonareMidiCcBinding binding_to_c(const sonare::midi::CcBinding& binding) noexcept {
@@ -378,19 +541,18 @@ SonareMidiCcBinding binding_to_c(const sonare::midi::CcBinding& binding) noexcep
   return out;
 }
 
-bool populate_cc_map(const SonareMidiCcBinding* bindings, size_t binding_count,
+// Refuses a binding table over the map's capacity, then each row the map cannot hold.
+void check_cc_bindings(const SonareMidiCcBinding* bindings, size_t binding_count) {
+  check::integer_in_range(static_cast<long long>(binding_count), 0,
+                          static_cast<long long>(sonare::midi::CcMap::kMaxBindings),
+                          "binding_count");
+  for (size_t i = 0; i < binding_count; ++i) check_cc_binding(bindings[i], i);
+}
+
+// Binds a table that check_cc_bindings accepted; its count never exceeds the map's capacity.
+void populate_cc_map(const SonareMidiCcBinding* bindings, size_t binding_count,
                      sonare::midi::CcMap* out) {
-  if (out == nullptr || (binding_count > 0 && bindings == nullptr) ||
-      binding_count > sonare::midi::CcMap::kMaxBindings) {
-    return false;
-  }
-  for (size_t i = 0; i < binding_count; ++i) {
-    sonare::midi::CcBinding binding{};
-    if (!binding_from_c(bindings[i], &binding) || !out->bind(binding)) {
-      return false;
-    }
-  }
-  return true;
+  for (size_t i = 0; i < binding_count; ++i) out->bind(binding_from_c(bindings[i]));
 }
 
 }  // namespace
@@ -521,14 +683,24 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
                                      int bank_lsb, int program, SonareMidiEventPod* out_events,
                                      size_t out_capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out_count) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_count = 0;
-  if (!out_events || out_capacity < 3 || !sonare::transport::valid_public_ppq(ppq) ||
-      !valid_nibble(group) || !valid_nibble(channel) || bank_msb < 0 || bank_msb > 127 ||
-      bank_lsb < 0 || bank_lsb > 127 || program < 0 || program > 127) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check_midi_head(ppq, group, channel);
+        check::integer_in_range(bank_msb, 0, 127, "bank_msb");
+        check::integer_in_range(bank_lsb, 0, 127, "bank_lsb");
+        check::integer_in_range(program, 0, 127, "program");
+      });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_events);
+  if (const SonareError err =
+          run_validation([&] { check::integer_at_least<size_t>(out_capacity, 3, "out_capacity"); });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out_count);
   sonare::midi::ProgramSelection selection{};
   selection.bank_msb = static_cast<uint8_t>(bank_msb);
   selection.bank_lsb = static_cast<uint8_t>(bank_lsb);
@@ -541,7 +713,6 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
   *out_count = messages.count;
   return SONARE_OK;
 #else
-  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank_msb, bank_lsb, program, out_events,
                               out_capacity, out_count);
 #endif
@@ -553,13 +724,17 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
                                      size_t* out_count, int* out_overflowed,
                                      uint32_t* out_overflow_count) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT)
   if (out_overflowed) *out_overflowed = 0;
   if (out_overflow_count) *out_overflow_count = 0;
-  if (!out_count) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_count = 0;
-  if ((count > 0 && !events) || (out_capacity > 0 && !out_events) || count > kMaxBufferSize / 16) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_count) *out_count = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(events, count);
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(count), 0,
+                                static_cast<long long>(kMaxBufferSize / 16), "count");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SonareMidiRouteConfig default_config{-1, -1, -1, 1};
   const SonareMidiRouteConfig& c = config != nullptr ? *config : default_config;
@@ -570,6 +745,8 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
       !valid_route_field(c.remap_channel)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out_events, out_capacity);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
   SONARE_C_TRY
   std::vector<sonare::midi::MidiEvent> input;
@@ -577,7 +754,8 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
   std::vector<double> ppq_by_index;
   ppq_by_index.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    if (!valid_midi_event_pod(events[i])) return SONARE_ERROR_INVALID_PARAMETER;
+    check_midi_event_pod(events[i], check::indexed_subject("events", i, "ppq"),
+                         check::indexed_subject("events", i, "word0"));
     sonare::midi::MidiEvent event{};
     event.render_frame = static_cast<int64_t>(i);
     event.ump = ump_from_pod(events[i]);
@@ -614,9 +792,6 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_count) *out_count = {};
-  if (out_overflow_count) *out_overflow_count = {};
-  if (out_overflowed) *out_overflowed = {};
   SONARE_C_STUB_NOT_SUPPORTED(events, count, config, out_events, out_capacity, out_count,
                               out_overflowed, out_overflow_count);
 #endif
@@ -626,21 +801,32 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
                                  float min_value, float max_value, uint8_t min_movement,
                                  SonareMidiCcBinding* out_binding) {
   SONARE_C_API_ENTRY;
+  if (out_binding) *out_binding = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out_binding) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_binding = {};
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(events, count);
   // The core compares movement in 7-bit CC units, so a larger threshold could never be met.
-  if (param_id == 0 || (count > 0 && !events) || count > kMaxBufferSize / 16 ||
-      !std::isfinite(min_value) || !std::isfinite(max_value) || max_value < min_value ||
-      min_movement > 127) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(count), 0,
+                                static_cast<long long>(kMaxBufferSize / 16), "count");
+        check::integer_in_range(param_id, 1, std::numeric_limits<uint32_t>::max(), "param_id");
+        check::finite_float(min_value, "min_value");
+        check::finite_float(max_value, "max_value");
+        if (max_value < min_value) {
+          check::refuse_relation({"max_value", "min_value"}, "{0} must be at least {1}");
+        }
+        check::integer_in_range(min_movement, 0, 127, "min_movement");
+      });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_binding);
   SONARE_C_TRY
   sonare::midi::CcMap map;
   map.begin_learn(param_id, min_value, max_value, min_movement);
   sonare::midi::CcBinding learned{};
   for (size_t i = 0; i < count; ++i) {
-    if (!valid_midi_event_pod(events[i])) return SONARE_ERROR_INVALID_PARAMETER;
+    check_midi_event_pod(events[i], check::indexed_subject("events", i, "ppq"),
+                         check::indexed_subject("events", i, "word0"));
     if (map.observe_for_learn(ump_from_pod(events[i]), &learned)) {
       *out_binding = binding_to_c(learned);
       return SONARE_OK;
@@ -649,7 +835,6 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
   return SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH
 #else
-  if (out_binding) *out_binding = {};
   SONARE_C_STUB_NOT_SUPPORTED(events, count, param_id, min_value, max_value, min_movement,
                               out_binding);
 #endif
@@ -659,12 +844,23 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
                                          const SonareMidiEventPod* event,
                                          SonareAutomationPoint* out_point) {
   SONARE_C_API_ENTRY;
+  if (out_point) *out_point = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!event || !out_point || !valid_midi_event_pod(*event)) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_point = {};
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(bindings, binding_count);
+  if (const SonareError err = run_validation([&] { check_cc_bindings(bindings, binding_count); });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(event);
+  if (const SonareError err =
+          run_validation([&] { check_midi_event_pod(*event, "event.ppq", "event.word0"); });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out_point);
   SONARE_C_TRY
   sonare::midi::CcMap map;
-  if (!populate_cc_map(bindings, binding_count, &map)) return SONARE_ERROR_INVALID_PARAMETER;
+  populate_cc_map(bindings, binding_count, &map);
   std::vector<sonare::automation::Breakpoint> points;
   if (!map.cc_to_breakpoint(ump_from_pod(*event), event->ppq, &points) || points.empty()) {
     return SONARE_ERROR_INVALID_STATE;
@@ -675,7 +871,6 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_point) *out_point = {};
   SONARE_C_STUB_NOT_SUPPORTED(bindings, binding_count, event, out_point);
 #endif
 }
@@ -684,22 +879,29 @@ SonareError sonare_midi_param_to_cc(const SonareMidiCcBinding* bindings, size_t 
                                     uint32_t param_id, float unit_value, uint8_t group, double ppq,
                                     SonareMidiEventPod* out_event) {
   SONARE_C_API_ENTRY;
+  if (out_event) *out_event = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out_event || param_id == 0 || group > 15 || !sonare::transport::valid_public_ppq(ppq) ||
-      !std::isfinite(unit_value)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(bindings, binding_count);
+  if (const SonareError err = run_validation([&] {
+        check_cc_bindings(bindings, binding_count);
+        check::integer_in_range(param_id, 1, std::numeric_limits<uint32_t>::max(), "param_id");
+        check::finite_float(unit_value, "unit_value");
+        check::integer_in_range(group, 0, 15, "group");
+        check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq, "ppq");
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  *out_event = {};
+  SONARE_C_REQUIRE_NONNULL(out_event);
   SONARE_C_TRY
   sonare::midi::CcMap map;
-  if (!populate_cc_map(bindings, binding_count, &map)) return SONARE_ERROR_INVALID_PARAMETER;
+  populate_cc_map(bindings, binding_count, &map);
   sonare::midi::Ump ump{};
   if (!map.param_to_cc(param_id, unit_value, group, &ump)) return SONARE_ERROR_INVALID_STATE;
   *out_event = pod_from_ump(ppq, ump);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_event) *out_event = {};
   SONARE_C_STUB_NOT_SUPPORTED(bindings, binding_count, param_id, unit_value, group, ppq, out_event);
 #endif
 }
@@ -709,8 +911,13 @@ SonareError sonare_midi_channel_pressure(double ppq, uint8_t group, uint8_t chan
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(pressure), ppq,
-                       sonare::midi::make_midi1_channel_pressure(group, channel, pressure));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check_u7(pressure, "pressure");
+      },
+      [&] { return sonare::midi::make_midi1_channel_pressure(group, channel, pressure); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, pressure, out);
 #endif
@@ -721,8 +928,13 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
   SONARE_C_API_ENTRY;
   if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || bend > 16383u, ppq,
-                       sonare::midi::make_midi1_pitch_bend(group, channel, bend));
+  return emit_midi_pod(
+      out, ppq,
+      [&] {
+        check_midi_head(ppq, group, channel);
+        check::integer_in_range(bend, 0, 16383, "bend");
+      },
+      [&] { return sonare::midi::make_midi1_pitch_bend(group, channel, bend); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bend, out);
 #endif
@@ -733,8 +945,14 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_first_clip_id) *out_first_clip_id = 0;
-  if (!project || len == 0 || !bytes || len > kMaxBufferSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(bytes);
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(len), 1,
+                                static_cast<long long>(kMaxBufferSize), "len");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   const auto& import_limits = sonare::resource::kProjectMidiImportResourceLimits;
   if (len > import_limits.max_file_bytes) {
@@ -771,8 +989,14 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_first_clip_id) *out_first_clip_id = 0;
-  if (!project || len == 0 || !bytes || len > kMaxBufferSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(bytes);
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(len), 1,
+                                static_cast<long long>(kMaxBufferSize), "len");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   const auto& import_limits = sonare::resource::kProjectMidiImportResourceLimits;
   if (len > import_limits.max_file_bytes) {
@@ -800,7 +1024,9 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bytes) *out_bytes = nullptr;
   if (out_len) *out_len = 0;
-  if (!project || !out_bytes || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out_bytes);
+  SONARE_C_REQUIRE_NONNULL(out_len);
   SONARE_C_TRY
   const arr::Project& model = project->history.project();
   std::vector<sonare::transport::TempoSegment> tempo = model.tempo_segments();
@@ -867,7 +1093,9 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bytes) *out_bytes = nullptr;
   if (out_len) *out_len = 0;
-  if (!project || !out_bytes || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out_bytes);
+  SONARE_C_REQUIRE_NONNULL(out_len);
   SONARE_C_TRY
   const arr::Project& model = project->history.project();
   std::vector<sonare::transport::TempoSegment> tempo = model.tempo_segments();
@@ -939,11 +1167,17 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
                                                   int bank) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || clip_id == 0 || !valid_nibble(group) || !valid_nibble(channel) || program < 0 ||
-      program > 127 || bank < -1 || bank > 16383) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(group, 0, 15, "group");
+        check::integer_in_range(channel, 0, 15, "channel");
+        check::integer_in_range(program, 0, 127, "program");
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  if (find_midi_clip(project, clip_id) == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (bank < -1 || bank > 16383) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   arr::MidiClipEventList next;
   const auto it = project->history.midi_content().events.find(clip_id);
@@ -977,13 +1211,13 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
 SonareError sonare_project_validate_midi_notes(const SonareProject* project, uint32_t clip_id,
                                                SonareNotePairValidation* out) {
   SONARE_C_API_ENTRY;
+  if (out) *out = {};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || !out || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  out->ok = 1;
-  out->unmatched_note_ons = 0;
-  out->unmatched_note_offs = 0;
+  SONARE_C_REQUIRE_NONNULL(project);
   const arr::EditClip* edit_clip = find_midi_clip(project, clip_id);
-  if (edit_clip == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (edit_clip == nullptr) return refuse_unknown_midi_clip();
+  SONARE_C_REQUIRE_NONNULL(out);
+  out->ok = 1;
   SONARE_C_TRY
   sonare::midi::MidiClip clip;
   const auto it = project->history.midi_content().events.find(clip_id);
@@ -1006,7 +1240,6 @@ SonareError sonare_project_validate_midi_notes(const SonareProject* project, uin
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, out);
 #endif
 }
@@ -1022,8 +1255,9 @@ SonareError sonare_project_bake_midi_fx_ex(SonareProject* project, uint32_t clip
                                            size_t out_capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || clip_id == 0 || !config_json) return SONARE_ERROR_INVALID_PARAMETER;
-  if (find_midi_clip(project, clip_id) == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
+  SONARE_C_REQUIRE_NONNULL(config_json);
   SONARE_C_TRY
   sonare::midi::MidiFxChain chain;
   const SonareError parse_err = midi_fx_chain_from_json(config_json, &chain);
@@ -1063,8 +1297,10 @@ SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, u
                                                  const char* config_json, size_t* out_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || clip_id == 0 || !config_json || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-  if (find_midi_clip(project, clip_id) == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
+  SONARE_C_REQUIRE_NONNULL(config_json);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
   sonare::midi::MidiFxChain chain;
   const SonareError parse_err = midi_fx_chain_from_json(config_json, &chain);

@@ -865,3 +865,39 @@ TEST_CASE("an SF2 patch selects how the GS insertion effects are realised", "[c_
 }
 #endif
 #endif
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("project SoundFont entries refuse an argument by its header name", "[project][sf2]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+  const uint8_t byte = 0;
+
+  REQUIRE(sonare_project_load_soundfont(nullptr, &byte, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+  REQUIRE(sonare_project_load_soundfont(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "data must not be NULL");
+  REQUIRE(sonare_project_load_soundfont(project, &byte, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "size must be an integer of at least 1");
+  REQUIRE(sonare_project_clear_soundfont(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "project must not be NULL");
+
+  size_t count = 7;
+  REQUIRE(sonare_project_soundfont_preset_count(project, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_count must not be NULL");
+  REQUIRE(sonare_project_soundfont_preset_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(count == 0);
+  CHECK(message() == "project must not be NULL");
+
+  // Two NULL pointers: the first one in header order is named.
+  REQUIRE(sonare_project_soundfont_manifest(project, nullptr, 4, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out must not be NULL when max_entries is not 0");
+  REQUIRE(sonare_project_soundfont_manifest(project, nullptr, 0, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "out_count must not be NULL");
+
+  sonare_project_destroy(project);
+}
+#endif

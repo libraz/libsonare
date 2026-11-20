@@ -5,6 +5,7 @@
 #include "c_api/part_rig_json.h"
 #include "midi/part_rig.h"
 #include "util/json_budget.h"
+#include "util/parameter_checks.h"
 
 namespace midi = sonare::midi;
 
@@ -18,6 +19,13 @@ static_assert(midi::kPartRigAllParts == SONARE_PART_RIG_ALL_PARTS,
               "SONARE_PART_RIG_ALL_PARTS drift");
 
 namespace {
+
+/// Refuses a part that is neither a GS part slot nor the destination default.
+void check_part(uint8_t part) {
+  if (part >= 16 && part != SONARE_PART_RIG_ALL_PARTS) {
+    sonare::util::check::refuse("part", "must be an integer in [0, 15] or 255");
+  }
+}
 
 std::string inserts_to_json(const std::vector<midi::PartRigStage>& stages) {
   json::Array inserts;
@@ -39,12 +47,24 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi::PartRig rig;
-  if (!project || !ordinal_to_enum(mode, SONARE_PART_RIG_BANK, SONARE_PART_RIG_CHAIN, &rig.mode)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if ((rig.mode == midi::PartRigMode::kChain) != (inserts_json != nullptr) ||
-      (part >= 16 && part != SONARE_PART_RIG_ALL_PARTS)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        check_part(part);
+        sonare::util::check::integer_in_range(mode, SONARE_PART_RIG_BANK, SONARE_PART_RIG_CHAIN,
+                                              "mode");
+        rig.mode = static_cast<midi::PartRigMode>(mode);
+        const bool chain = rig.mode == midi::PartRigMode::kChain;
+        if (chain && inserts_json == nullptr) {
+          sonare::util::check::refuse_relation(
+              {"inserts_json", "mode"}, "{0} must not be NULL when {1} is SONARE_PART_RIG_CHAIN");
+        }
+        if (!chain && inserts_json != nullptr) {
+          sonare::util::check::refuse_relation(
+              {"inserts_json", "mode"}, "{0} must be NULL unless {1} is SONARE_PART_RIG_CHAIN");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_TRY
   if (inserts_json != nullptr) {
@@ -82,8 +102,13 @@ SonareError sonare_project_get_part_rig(const SonareProject* project, uint32_t d
   if (out_mode) *out_mode = SONARE_PART_RIG_BANK;
   if (out_inserts_json) *out_inserts_json = nullptr;
   if (out_present) *out_present = 0;
-  if (!project || !out_mode || !out_present) return SONARE_ERROR_INVALID_PARAMETER;
-  if (part >= 16 && part != SONARE_PART_RIG_ALL_PARTS) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = sonare_c_detail::run_validation([&] { check_part(part); });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out_mode);
+  SONARE_C_REQUIRE_NONNULL(out_present);
   SONARE_C_TRY
   const arr::ProjectPartRig* entry = project->history.project().find_part_rig(destination_id, part);
   if (entry == nullptr) return SONARE_OK;
@@ -107,8 +132,11 @@ SonareError sonare_project_clear_part_rig(SonareProject* project, uint32_t desti
                                           uint8_t part) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
-  if (part >= 16 && part != SONARE_PART_RIG_ALL_PARTS) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = sonare_c_detail::run_validation([&] { check_part(part); });
+      err != SONARE_OK) {
+    return err;
+  }
   if (project->history.project().find_part_rig(destination_id, part) == nullptr) {
     return SONARE_OK;
   }

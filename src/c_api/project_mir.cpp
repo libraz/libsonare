@@ -1,4 +1,7 @@
 #include "c_api/project_internal.h"
+#include "util/parameter_checks.h"
+
+namespace check = sonare::util::check;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "arrangement/harmonic_limits.h"
@@ -81,9 +84,18 @@ std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(const float* au
 // A caller who zeroed the struct instead of seeding it would silently get a
 // whole-take single segment and an interval the local estimate cannot use, so
 // the values are checked rather than clamped.
-bool tempo_options_valid(const SonareProjectTempoOptions& options) noexcept {
-  return options.tempo_update_interval_beats > 0 && std::isfinite(options.ramp_threshold) &&
-         options.ramp_threshold >= 0.0f;
+void check_tempo_options(const SonareProjectTempoOptions& options) {
+  check::integer_at_least(options.tempo_update_interval_beats, 1,
+                          "options.tempo_update_interval_beats");
+  check::at_least(options.ramp_threshold, 0.0, "options.ramp_threshold");
+}
+
+// The refusal for a candidate_index that names no usable tempo candidate.
+void check_tempo_candidate(const std::vector<sonare::mir::TempoEstimate>& estimates,
+                           size_t candidate_index) {
+  if (candidate_index >= estimates.size() || estimates[candidate_index].segments.empty()) {
+    check::refuse("candidate_index", "must be the index of a tempo candidate of this take");
+  }
 }
 
 }  // namespace
@@ -96,11 +108,11 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_count) *out_count = 0;
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
-  if (capacity > 0 && !candidates) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SonareError err =
       validate_audio_params("project_analyze_tempo", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(candidates, capacity);
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =
       analyze_tempo_candidates(audio, len, sample_rate);
@@ -125,14 +137,14 @@ SonareError sonare_project_analyze_tempo_with_options(const SonareProject* proje
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_count) *out_count = 0;
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
-  if (capacity > 0 && !candidates) return SONARE_ERROR_INVALID_PARAMETER;
-  const SonareProjectTempoOptions resolved =
-      options ? *options : sonare_project_tempo_options_default();
-  if (!tempo_options_valid(resolved)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SonareError err =
       validate_audio_params("project_analyze_tempo_with_options", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
+  const SonareProjectTempoOptions resolved =
+      options ? *options : sonare_project_tempo_options_default();
+  if (err = run_validation([&] { check_tempo_options(resolved); }); err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(candidates, capacity);
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =
       analyze_tempo_candidates(audio, len, sample_rate, resolved);
@@ -157,19 +169,17 @@ SonareError sonare_project_auto_tempo_with_options(SonareProject* project, const
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bpm) *out_bpm = 0.0f;
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
-  const SonareProjectTempoOptions resolved =
-      options ? *options : sonare_project_tempo_options_default();
-  if (!tempo_options_valid(resolved)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SonareError err =
       validate_audio_params("project_auto_tempo_with_options", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
+  const SonareProjectTempoOptions resolved =
+      options ? *options : sonare_project_tempo_options_default();
+  if (err = run_validation([&] { check_tempo_options(resolved); }); err != SONARE_OK) return err;
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =
       analyze_tempo_candidates(audio, len, sample_rate, resolved);
-  if (candidate_index >= estimates.size() || estimates[candidate_index].segments.empty()) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  check_tempo_candidate(estimates, candidate_index);
   const sonare::mir::TempoEstimate& selected = estimates[candidate_index];
   auto command = std::make_unique<arr::SetTempoSegment>(selected.segments);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -195,16 +205,14 @@ SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* au
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bpm) *out_bpm = 0.0f;
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   SonareError err =
       validate_audio_params("project_auto_tempo_ex", "audio", audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   const std::vector<sonare::mir::TempoEstimate> estimates =
       analyze_tempo_candidates(audio, len, sample_rate);
-  if (candidate_index >= estimates.size() || estimates[candidate_index].segments.empty()) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  check_tempo_candidate(estimates, candidate_index);
   const sonare::mir::TempoEstimate& selected = estimates[candidate_index];
   auto command = std::make_unique<arr::SetTempoSegment>(selected.segments);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -235,10 +243,16 @@ SonareError sonare_project_snap_to_grid_ex(const SonareProject* project, double 
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_ppq) *out_ppq = ppq;
-  if (!project || !out_ppq || !finite_non_negative(ppq) || !std::isfinite(strength) ||
-      strength < 0.0 || strength > 1.0 || division < 0 || division > 1024) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  if (const SonareError err = run_validation([&] {
+        check::at_least(ppq, 0.0, "ppq");
+        check::in_range(strength, 0.0, 1.0, "strength");
+        check::integer_in_range(division, 0, 1024, "division");
+      });
+      err != SONARE_OK) {
+    return err;
   }
+  SONARE_C_REQUIRE_NONNULL(out_ppq);
   SONARE_C_TRY
   sonare::transport::TempoMap map;
   fill_project_tempo_map(project->history.project(), &map);
@@ -261,7 +275,14 @@ SonareError sonare_project_snap_to_grid_ex(const SonareProject* project, double 
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
-bool valid_pitch_class(uint32_t value) noexcept { return value <= 11u || value == 255u; }
+// Refuses a pitch class that is neither 0..11 nor the unknown marker.
+void check_pitch_class(uint32_t value, const std::string& subject) {
+  if (value > 11u && value != arr::kUnknownPitchClass) {
+    check::refuse(subject.c_str(),
+                  "must be an integer in [0, 11] or " +
+                      std::to_string(static_cast<unsigned>(arr::kUnknownPitchClass)));
+  }
+}
 
 bool key_mode_from_c(uint32_t value, arr::KeyMode* out) noexcept {
   return ordinal_to_enum(value, 0, static_cast<int>(arr::KeyMode::kLocrian), out);
@@ -271,8 +292,14 @@ bool chord_quality_from_c(uint32_t value, arr::ChordQuality* out) noexcept {
   return ordinal_to_enum(value, 0, static_cast<int>(arr::ChordQuality::kSuspended), out);
 }
 
-bool valid_ppq_span(double start, double end) noexcept {
-  return finite_non_negative(start) && std::isfinite(end) && end > start;
+// Refuses a span that does not start at a finite, non-negative position and end after it.
+void check_ppq_span(double start, double end, const std::string& start_subject,
+                    const std::string& end_subject) {
+  check::at_least(start, 0.0, start_subject.c_str());
+  check::finite(end, end_subject.c_str());
+  if (!(end > start)) {
+    check::refuse_relation({end_subject, start_subject}, "{0} must be greater than {1}");
+  }
 }
 
 }  // namespace
@@ -282,8 +309,14 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
                                          const SonareProjectKeySegment* keys, size_t count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || (count > 0 && !keys) || count > kMaxBufferSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(keys, count);
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(count), 0,
+                                static_cast<long long>(kMaxBufferSize), "count");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_TRY
   arr::ProjectAnnotation annotation = project->history.project().annotation();
@@ -292,9 +325,13 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
   for (size_t i = 0; i < count; ++i) {
     const SonareProjectKeySegment& in = keys[i];
     arr::KeySegment out;
-    if (!valid_ppq_span(in.start_ppq, in.end_ppq) || !valid_pitch_class(in.tonic_pc) ||
-        !key_mode_from_c(in.mode, &out.mode)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    const auto subject = [i](const char* field) {
+      return check::indexed_subject("keys", i, field);
+    };
+    check_ppq_span(in.start_ppq, in.end_ppq, subject("start_ppq"), subject("end_ppq"));
+    check_pitch_class(in.tonic_pc, subject("tonic_pc"));
+    if (!key_mode_from_c(in.mode, &out.mode)) {
+      check::refuse(subject("mode").c_str(), sonare::util::refusal::kDeclaredValuePredicate);
     }
     out.start_ppq = in.start_ppq;
     out.end_ppq = in.end_ppq;
@@ -314,8 +351,14 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
                                            const SonareProjectChordSymbol* chords, size_t count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || (count > 0 && !chords) || count > kMaxBufferSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(chords, count);
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(count), 0,
+                                static_cast<long long>(kMaxBufferSize), "count");
+      });
+      err != SONARE_OK) {
+    return err;
   }
   SONARE_C_TRY
   std::vector<arr::ChordSymbol> out;
@@ -323,12 +366,20 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
   for (size_t i = 0; i < count; ++i) {
     const SonareProjectChordSymbol& in = chords[i];
     arr::ChordSymbol chord;
-    if (!valid_ppq_span(in.start_ppq, in.end_ppq) || !valid_pitch_class(in.root_pc) ||
-        !chord_quality_from_c(in.quality, &chord.quality) || !valid_pitch_class(in.slash_bass_pc) ||
-        (in.extension_count > 0 && !in.extensions) ||
-        in.extension_count > arr::kMaxChordExtensions) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+    const auto subject = [i](const char* field) {
+      return check::indexed_subject("chords", i, field);
+    };
+    check_ppq_span(in.start_ppq, in.end_ppq, subject("start_ppq"), subject("end_ppq"));
+    check_pitch_class(in.root_pc, subject("root_pc"));
+    if (!chord_quality_from_c(in.quality, &chord.quality)) {
+      check::refuse(subject("quality").c_str(), sonare::util::refusal::kDeclaredValuePredicate);
     }
+    check::non_null_when_count(in.extensions, in.extension_count, subject("extensions").c_str(),
+                               subject("extension_count").c_str());
+    check::integer_in_range(static_cast<long long>(in.extension_count), 0,
+                            static_cast<long long>(arr::kMaxChordExtensions),
+                            subject("extension_count").c_str());
+    check_pitch_class(in.slash_bass_pc, subject("slash_bass_pc"));
     chord.start_ppq = in.start_ppq;
     chord.end_ppq = in.end_ppq;
     chord.root_pc = static_cast<uint8_t>(in.root_pc);
@@ -374,20 +425,34 @@ SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChord
   if (out_quality) *out_quality = static_cast<uint32_t>(arr::ChordQuality::kUnknown);
   if (out_extension_count) *out_extension_count = 0;
   if (out_slash_bass_pc) *out_slash_bass_pc = arr::kUnknownPitchClass;
-  if (!out_root_pc || !out_quality || !out_extension_count || !out_slash_bass_pc ||
-      (extension_capacity > 0 && !out_extensions)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(root), SONARE_PITCH_C, SONARE_PITCH_B,
+                                "root");
+        check::integer_in_range(static_cast<long long>(quality), 0, SONARE_CHORD_QUALITY_COUNT - 1,
+                                "quality");
+        check::integer_in_range(static_cast<long long>(bass), SONARE_PITCH_C, SONARE_PITCH_B,
+                                "bass");
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  sonare::ChordQuality core_quality = sonare::ChordQuality::Major;
-  if (!valid_c_enum(root, SONARE_PITCH_C, SONARE_PITCH_B) ||
-      !valid_c_enum(bass, SONARE_PITCH_C, SONARE_PITCH_B) ||
-      !ordinal_to_enum(quality, 0, SONARE_CHORD_QUALITY_COUNT - 1, &core_quality)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(out_root_pc);
+  SONARE_C_REQUIRE_NONNULL(out_quality);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out_extensions, extension_capacity);
+  SONARE_C_REQUIRE_NONNULL(out_extension_count);
+  SONARE_C_REQUIRE_NONNULL(out_slash_bass_pc);
   SONARE_C_TRY
+  const auto core_quality = static_cast<sonare::ChordQuality>(quality);
   const sonare::mir::MappedQuality mapped = sonare::mir::map_chord_quality(core_quality);
   *out_extension_count = mapped.extensions.size();
-  if (mapped.extensions.size() > extension_capacity) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check::integer_at_least<size_t>(extension_capacity,
+                                        static_cast<long long>(mapped.extensions.size()),
+                                        "extension_capacity");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
   std::copy(mapped.extensions.begin(), mapped.extensions.end(), out_extensions);
   // Root kept even for an unknown quality, and a bass equal to the root is no
   // slash bass: both are the rules build_harmonic_timeline applies.
@@ -408,22 +473,26 @@ SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChord
 
 SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode) {
   SONARE_C_API_ENTRY;
-  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_mode) *out_mode = static_cast<uint32_t>(arr::KeyMode::kUnknown);
   // The core maps an out-of-range mode to unknown without a word, so the
   // refusal has to happen here.
-  sonare::Mode core_mode = sonare::Mode::Major;
-  if (!out_mode || !ordinal_to_enum(mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, &core_mode)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = run_validation([&] {
+        check::integer_in_range(static_cast<long long>(mode), SONARE_MODE_MAJOR,
+                                SONARE_MODE_LOCRIAN, "mode");
+      });
+      err != SONARE_OK) {
+    return err;
   }
-  *out_mode = static_cast<uint32_t>(sonare::mir::map_key_mode(core_mode));
+  SONARE_C_REQUIRE_NONNULL(out_mode);
+  SONARE_C_TRY
+  *out_mode = static_cast<uint32_t>(sonare::mir::map_key_mode(static_cast<sonare::Mode>(mode)));
   return SONARE_OK;
+  SONARE_C_CATCH
 #else
   if (out_mode) *out_mode = {};
   SONARE_C_STUB_NOT_SUPPORTED(mode, out_mode);
 #endif
-  SONARE_C_CATCH
 }
 
 // ============================================================================
@@ -450,16 +519,6 @@ SonareError sonare_align_take_to_reference_ex(
   if (out_count != nullptr) *out_count = 0;
   if (out_alignment != nullptr) *out_alignment = SonareTakeAlignment{};
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (out_anchors == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "align_take_to_reference_ex: out_anchors must not be NULL");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (out_count == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "align_take_to_reference_ex: out_count must not be NULL");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   if (const SonareError err =
           validate_audio_params("align_take_to_reference_ex", "reference", reference, reference_len,
                                 reference_sample_rate);
@@ -478,12 +537,13 @@ SonareError sonare_align_take_to_reference_ex(
   if (resample_take &&
       !sonare::numeric::checked_converted_count(take_len, take_sample_rate, reference_sample_rate,
                                                 kMaxBufferSize, &resampled_take_len)) {
-    set_last_error(
-        SONARE_ERROR_INVALID_PARAMETER,
-        "align_take_to_reference_ex: take resampled to the reference sample rate exceeds "
-        "the buffer size limit");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return run_validation([] {
+      check::refuse_relation({"take_len", "take_sample_rate", "reference_sample_rate"},
+                             "{0} resampled from {1} to {2} must not exceed the buffer size limit");
+    });
   }
+  SONARE_C_REQUIRE_NONNULL(out_anchors);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
   sonare::mir::ChromaDtwConfig dtw_config;
   if (config != nullptr) {
@@ -522,11 +582,13 @@ SonareError sonare_align_take_to_reference_ex(
   // The reduction hands back its input when it cannot produce two distinct
   // anchors, so the count is checked here rather than assumed from the alignment
   // having succeeded.
-  if (anchors.size() < 2) return SONARE_ERROR_INVALID_PARAMETER;
+  bool usable = anchors.size() >= 2;
   for (const sonare::mir::WarpAnchor& anchor : anchors) {
-    if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    usable = usable && std::isfinite(anchor.warp_sample) && std::isfinite(anchor.source_sample);
+  }
+  if (!usable) {
+    check::refuse_relation({"reference", "take"},
+                           "{0} and {1} must produce at least two distinct alignment anchors");
   }
 
   auto rows = std::make_unique<SonareProjectWarpAnchor[]>(anchors.size());

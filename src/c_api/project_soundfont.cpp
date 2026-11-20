@@ -10,6 +10,7 @@
 #include "c_api/project_bounce_internal.h"
 #include "midi/channel_voice_decode.h"
 #include "midi/synth/sf2_player.h"
+#include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
 namespace {
@@ -116,7 +117,13 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
                                           size_t size) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(data);
+  if (const SonareError err = sonare_c_detail::run_validation(
+          [&] { sonare::util::check::integer_at_least<size_t>(size, 1, "size"); });
+      err != SONARE_OK) {
+    return err;
+  }
   SONARE_C_TRY
   // Both rejections are statements about the supplied data rather than about the
   // call's arguments, so they carry INVALID_FORMAT and leave INVALID_PARAMETER
@@ -146,7 +153,7 @@ SonareError sonare_project_clear_soundfont(SonareProject* project) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(project);
   project->soundfont.reset();
   return SONARE_OK;
 #else
@@ -158,7 +165,9 @@ SonareError sonare_project_clear_soundfont(SonareProject* project) {
 SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_count) *out_count = 0;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out_count = project->soundfont ? project->soundfont->presets().size() : 0;
   return SONARE_OK;
 #else
@@ -171,10 +180,10 @@ SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2P
                                               size_t max_entries, size_t* out_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || !out_count || (max_entries > 0 && out == nullptr)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out_count = 0;
+  if (out_count) *out_count = 0;
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(out, max_entries);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
   arr::CompileResult compiled =
       arr::compile(project->history.project(), project->history.midi_content(), project->audio, {});
