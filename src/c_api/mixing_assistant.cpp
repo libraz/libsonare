@@ -95,7 +95,7 @@ SonareError sonare_mixing_assistant_suggest(
     size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
     char** json_out) {
   SONARE_C_API_ENTRY;
-  if (json_out != nullptr) *json_out = nullptr;
+  SONARE_C_ZERO_OUTS(json_out);
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   if (const SonareError err =
           check_track_arrays(input_left, track_ids, track_lengths, track_sample_rates, input_count,

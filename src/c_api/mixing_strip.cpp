@@ -56,7 +56,7 @@ SonareError refuse_out_of_domain(const char* subject, float lo, float hi) {
 
 SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer** out) {
   SONARE_C_API_ENTRY;
-  if (out) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
   if (max_block_size == 0) max_block_size = sonare::mixing::api::kMixerDefaultMaxBlock;
   if (const SonareError err = sonare_c_detail::run_validation([&] {
         check::integer_in_range(sample_rate, static_cast<long long>(sonare::kMinAudioSampleRate),
@@ -373,7 +373,7 @@ SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
                                   const char* destination_bus_id, float send_db, int timing,
                                   size_t* index_out) {
   SONARE_C_API_ENTRY;
-  if (index_out != nullptr) *index_out = 0;
+  SONARE_C_ZERO_OUTS(index_out);
   SONARE_C_REQUIRE_NONNULL(strip);
   SONARE_C_REQUIRE_NONNULL(destination_bus_id);
   if (const SonareError err = require_finite(send_db, "send_db"); err != SONARE_OK) return err;
@@ -452,6 +452,7 @@ SonareError sonare_strip_remove_send(SonareStrip* strip, unsigned int index) {
 
 SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(strip);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
@@ -462,6 +463,7 @@ SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot*
 
 SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(strip);
   sonare::mixing::TapPoint tap_point;
   switch (tap) {

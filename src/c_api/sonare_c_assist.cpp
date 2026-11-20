@@ -246,7 +246,7 @@ std::string build_document(const assist::AssistResult& result) {
 
 SonareError run_assist(SonareProject* project, const char* request_json, bool apply,
                        char** out_json) {
-  if (out_json != nullptr) *out_json = nullptr;
+  SONARE_C_ZERO_OUTS(out_json);
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(request_json);
   SONARE_C_REQUIRE_NONNULL(out_json);
@@ -326,7 +326,7 @@ SonareError sonare_project_assist_preview_json(const SonareProject* project,
   // Defined before any other exit, and in both configurations: the document is
   // written on the refusal path too, so a caller that reads it after an error
   // must not be handed an untouched slot.
-  if (out_json != nullptr) *out_json = nullptr;
+  SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_ASSIST)
   SONARE_C_TRY
   // const_cast is safe on this path: run_assist is called with apply = false and
@@ -344,7 +344,7 @@ SonareError sonare_project_assist_apply_json(SonareProject* project, const char*
                                              char** out_json) {
   SONARE_C_API_ENTRY;
   // See the preview entry point: defined before any other exit, both configurations.
-  if (out_json != nullptr) *out_json = nullptr;
+  SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_ASSIST)
   SONARE_C_TRY
   return run_assist(project, request_json, true, out_json);

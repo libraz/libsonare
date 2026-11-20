@@ -71,7 +71,7 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
                                int max_candidates, SonareBpmAnalysisResult* out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   BpmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
@@ -137,7 +137,7 @@ SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t leng
   // well as the band pointers / band_count are all defined, not caller
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
   config.min_decay_db = min_decay_db;
@@ -167,7 +167,7 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
   // well as the band pointers / band_count are all defined, not caller
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
   config.n_octave_bands = n_octave_bands;
@@ -191,14 +191,7 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
                                   int hop_length, SonareRhythmResult* out) {
   SONARE_C_API_ENTRY;
-
-  // Zero the owned out-pointer BEFORE any validating early-return so a
-  // rejected input always leaves a NULL owned pointer; otherwise
-  // sonare_free_rhythm_result(&r) would delete[] an uninitialised pointer.
-  if (out != nullptr) {
-    out->beat_intervals = nullptr;
-    out->beat_interval_count = 0;
-  }
+  SONARE_C_ZERO_OUTS(out);
   // Built inside each guarded call: RhythmConfig allocates, and a throw here must not escape.
   const auto make_config = [&] {
     RhythmConfig config;
@@ -241,15 +234,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
                                     float window_sec, int hop_length,
                                     float compression_threshold_db, SonareDynamicsResult* out) {
   SONARE_C_API_ENTRY;
-
-  // Zero the owned out-pointers BEFORE any validating early-return so a
-  // rejected input always leaves NULL owned pointers; otherwise
-  // sonare_free_dynamics_result(&r) would delete[] uninitialised pointers.
-  if (out != nullptr) {
-    out->loudness_times_sec = nullptr;
-    out->loudness_rms_db = nullptr;
-    out->loudness_count = 0;
-  }
+  SONARE_C_ZERO_OUTS(out);
   DynamicsConfig config;
   config.window_sec = window_sec;
   config.hop_length = hop_length;
@@ -290,20 +275,7 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
                                   int hop_length, int n_mels, int n_mfcc, float window_sec,
                                   SonareTimbreResult* out) {
   SONARE_C_API_ENTRY;
-
-  // Zero the owned out-pointers BEFORE any validating early-return so a
-  // rejected input always leaves NULL owned pointers; otherwise
-  // sonare_free_timbre_result(&r) would delete[] uninitialised pointers.
-  if (out != nullptr) {
-    out->spectral_centroid = nullptr;
-    out->spectral_centroid_count = 0;
-    out->spectral_flatness = nullptr;
-    out->spectral_flatness_count = 0;
-    out->spectral_rolloff = nullptr;
-    out->spectral_rolloff_count = 0;
-    out->timbre_over_time = nullptr;
-    out->timbre_over_time_count = 0;
-  }
+  SONARE_C_ZERO_OUTS(out);
   TimbreConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -589,14 +561,7 @@ SonareSectionOptions sonare_section_options_default(void) {
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate,
                                     const SonareSectionOptions* options, SonareSectionResult* out) {
   SONARE_C_API_ENTRY;
-
-  // Zero the owned out-pointer BEFORE any validating early-return so a
-  // rejected input always leaves a NULL owned pointer; otherwise
-  // sonare_free_section_result(&r) would delete[] an uninitialised pointer.
-  if (out != nullptr) {
-    out->sections = nullptr;
-    out->section_count = 0;
-  }
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(options);
   SectionConfig config;
   config.n_fft = options->n_fft;
@@ -652,21 +617,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
                                      const SonareBoundaryOptions* options,
                                      SonareBoundaryResult* out) {
   SONARE_C_API_ENTRY;
-
-  // Zero the owned out-pointers BEFORE any validating early-return so a rejected
-  // input always leaves NULL owned pointers; otherwise
-  // sonare_free_boundary_result(&r) would delete[] uninitialised pointers.
-  if (out != nullptr) {
-    out->boundaries = nullptr;
-    out->boundary_count = 0;
-    out->novelty_curve = nullptr;
-    out->novelty_length = 0;
-    out->novelty_peak = 0.0f;
-    out->sample_rate = 0;
-    out->hop_length = 0;
-    out->n_frames = 0;
-    out->frame_stride = 0;
-  }
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(options);
   BoundaryConfig config;
   config.n_fft = options->n_fft;
@@ -737,7 +688,7 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
   // Zero the whole struct BEFORE any validating early-return so a rejected
   // input always leaves a NULL owned pointer; otherwise
   // sonare_free_melody_result(&r) would delete[] an uninitialised pointer.
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   MelodyConfig config;
   config.fmin = f0_min_hz;
   config.fmax = f0_max_hz;

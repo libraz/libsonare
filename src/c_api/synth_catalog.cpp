@@ -310,7 +310,7 @@ std::string synth_patch_param_info_json() {
 
 SonareError sonare_synth_engine_param_info(int engine_mode, char** out_json) {
   SONARE_C_API_ENTRY;
-  if (out_json != nullptr) *out_json = nullptr;
+  SONARE_C_ZERO_OUTS(out_json);
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (const SonareError err = run_validation([&] {
         sonare::util::check::integer_in_range(engine_mode, 0, SONARE_SYNTH_ENGINE_MODE_COUNT - 1,
@@ -357,7 +357,7 @@ SonareError sonare_synth_engine_param_info(int engine_mode, char** out_json) {
 
 SonareError sonare_synth_patch_param_info(char** out_json) {
   SONARE_C_API_ENTRY;
-  if (out_json != nullptr) *out_json = nullptr;
+  SONARE_C_ZERO_OUTS(out_json);
   SONARE_C_REQUIRE_NONNULL(out_json);
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY

@@ -122,7 +122,7 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
 SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
                                           SonareStreamAnalyzer** out) {
   SONARE_C_API_ENTRY;
-  if (out != nullptr) *out = nullptr;
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(config);
   if (const SonareError err = run_validation([&] {
         check::integer_at_least(config->sample_rate, 1, "config.sample_rate");
@@ -237,6 +237,7 @@ SonareError sonare_stream_analyzer_finalize(SonareStreamAnalyzer* analyzer) {
 SonareError sonare_stream_analyzer_available_frames(SonareStreamAnalyzer* analyzer,
                                                     size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
@@ -249,7 +250,7 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
                                                SonareStreamFrames* out) {
   SONARE_C_API_ENTRY;
 
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -302,7 +303,7 @@ SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analy
                                                      size_t max_frames, SonareStreamFramesU8* out) {
   SONARE_C_API_ENTRY;
 
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -326,7 +327,7 @@ SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* anal
                                                       SonareStreamFramesI16* out) {
   SONARE_C_API_ENTRY;
 
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -351,7 +352,7 @@ SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer,
 SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareStreamStats* out) {
   SONARE_C_API_ENTRY;
 
-  if (out != nullptr) *out = {};
+  SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out);
 
@@ -409,6 +410,7 @@ void sonare_free_stream_stats(SonareStreamStats* stats) {
 
 SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, int* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_count);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out_count);
   SONARE_C_TRY
@@ -420,6 +422,7 @@ SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, i
 SonareError sonare_stream_analyzer_current_time_sec(SonareStreamAnalyzer* analyzer,
                                                     float* out_sec) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_sec);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out_sec);
   SONARE_C_TRY
@@ -431,6 +434,7 @@ SonareError sonare_stream_analyzer_current_time_sec(SonareStreamAnalyzer* analyz
 SonareError sonare_stream_analyzer_sample_rate(SonareStreamAnalyzer* analyzer,
                                                int* out_sample_rate) {
   SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_sample_rate);
   SONARE_C_REQUIRE_NONNULL(analyzer);
   SONARE_C_REQUIRE_NONNULL(out_sample_rate);
   SONARE_C_TRY
