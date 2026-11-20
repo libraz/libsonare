@@ -74,7 +74,7 @@ describe('failure class follows the cause', () => {
     [
       'analyze (sync)',
       () => analyze(badHop),
-      /^analyze: MusicAnalyzerConfig: hopLength must be positive/,
+      /^analyze: hopLength must be an integer in \[1, 2147483647\]$/,
     ],
     [
       'synthPresetPatch',
