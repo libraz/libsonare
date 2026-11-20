@@ -79,7 +79,7 @@ TEST_CASE("CLI numeric option validation", "[cli]") {
     auto [code, output] = exec_command(CLI + " clipping " + clipped + " --min-region -1 --json");
     REQUIRE(code == 2);
     REQUIRE_THAT(output,
-                 ContainsSubstring("argument --min-region: must be an integer in [1, 2147483647]"));
+                 ContainsSubstring("argument --min-region: must be an integer in [0, 2147483647]"));
     std::remove(clipped.c_str());
   }
 
@@ -1940,9 +1940,7 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       // The vqt JSON prints only shape, fmin, bins per octave and gamma, none of which depend on
       // it.
       {"vqt", p.tone_wav + " --json -q", "filter-scale", ""},
-      {"meter", p.clipped_wav + " --json -q", "clip-threshold", "0.2"},
       {"meter", p.clipped_wav + " --json -q", "oversample", "1"},
-      {"clipping", p.clipped_wav + " --json -q", "threshold", "0.2"},
       {"clipping", p.clipped_wav + " --json -q", "min-region", "100000"},
       {"dynamic-range", p.stepped_wav + " --json -q", "window-sec", "1"},
       {"dynamic-range", p.stepped_wav + " --window-sec 0.5 --json -q", "hop-sec", "0.25"},
@@ -2187,6 +2185,8 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"frames-to-samples", "n-fft", "no centring offset is applied"},
       {"samples-to-frames", "n-fft", "no centring offset is applied"},
       {"fix-frames", "x-max", "the indices have no upper bound"},
+      {"meter", "clip-threshold-db", "a sample counts as clipped from a linear 0.999"},
+      {"clipping", "threshold-db", "a sample counts as clipped from a linear 0.999"},
 #ifdef SONARE_WITH_ACOUSTIC_SIM
       {"synthesize-rir", "max-sec", "the synthesized tail runs to its own end"},
       {"room-morph", "max-sec", "the synthesized tail runs to its own end"},

@@ -1557,12 +1557,15 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 /*preserves_stereo_input=*/false, /*preserves_multichannel_input=*/true);
     add_command(
         commands, "meter", true,
-        {library_default(number_value("clip-threshold"), "0.999"),
+        {with_stated_default(with_domain(number_value("clip-threshold-db"), between(-120.0, 0.0)),
+                             "the level of a linear 0.999"),
          library_default(
              with_domain(int_value("oversample"), choices_of({"1", "2", "4", "8", "16"})), "4")});
-    add_command(commands, "clipping", true,
-                {library_default(number_value("threshold"), "0.999"),
-                 library_default(with_domain(int_value("min-region"), at_least(1.0)), "1")});
+    add_command(
+        commands, "clipping", true,
+        {with_stated_default(with_domain(number_value("threshold-db"), between(-120.0, 0.0)),
+                             "the level of a linear 0.999"),
+         library_default(with_domain(int_value("min-region"), at_least(0.0)), "1")});
     add_command(
         commands, "dynamic-range", true,
         {library_default(with_domain(number_value("window-sec"), greater_than(0.0)), "3.0"),

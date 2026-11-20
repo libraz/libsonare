@@ -272,54 +272,62 @@ def register_dsp_parsers(
         help="Run the filter forward and backward, which cancels the phase shift",
     )
 
-    for name, help_text in (
-        ("preemphasis", "Apply pre-emphasis filtering"),
-        ("deemphasis", "Apply de-emphasis filtering"),
-    ):
-        emphasis_p = sub.add_parser(name, parents=[common], help=help_text)
-        emphasis_p.add_argument(
-            "--coef", type=_finite_float, default=None, help="Filter coefficient (default: 0.97)"
-        )
+    preemphasis_p = sub.add_parser(
+        "preemphasis", parents=[common], help="Apply pre-emphasis filtering"
+    )
+    _emphasis_options(preemphasis_p)
+    deemphasis_p = sub.add_parser(
+        "deemphasis", parents=[common], help="Apply de-emphasis filtering"
+    )
+    _emphasis_options(deemphasis_p)
 
-    for name, help_text in (
-        ("mel-to-audio", "Reconstruct audio from a mel spectrogram"),
-        ("mfcc-to-audio", "Reconstruct audio from MFCC"),
-    ):
-        inverse_p = sub.add_parser(name, parents=[common], help=help_text)
-        if name == "mfcc-to-audio":
-            _cli_domain(
-                inverse_p.add_argument(
-                    "--n-mfcc", type=_c_int, default=None, help="MFCC count (default: 20)"
-                ),
-                minimum=1,
-            )
-        _cli_domain(
-            inverse_p.add_argument(
-                "--n-iter", type=_c_int, default=None, help="Griffin-Lim iterations (default: 32)"
-            ),
-            minimum=1,
-        )
-        inverse_p.add_argument(
-            "--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"
-        )
-        inverse_p.add_argument(
-            "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
-        )
-        inverse_p.add_argument(
-            "--n-mels", type=_c_int, default=None, help="Number of mel bands (default: 128)"
-        )
-        _cli_domain(
-            inverse_p.add_argument(
-                "--fmin-hz",
-                type=_finite_float,
-                default=None,
-                help="Lowest mel band frequency in Hz (default: 0.0)",
-            ),
-            minimum=0,
-        )
-        inverse_p.add_argument(
-            "--fmax-hz",
-            type=_positive_finite_float,
+    mel_inverse_p = sub.add_parser(
+        "mel-to-audio", parents=[common], help="Reconstruct audio from a mel spectrogram"
+    )
+    _inverse_options(mel_inverse_p)
+    mfcc_inverse_p = sub.add_parser(
+        "mfcc-to-audio", parents=[common], help="Reconstruct audio from MFCC"
+    )
+    _cli_domain(
+        mfcc_inverse_p.add_argument(
+            "--n-mfcc", type=_c_int, default=None, help="MFCC count (default: 20)"
+        ),
+        minimum=1,
+    )
+    _inverse_options(mfcc_inverse_p)
+
+
+def _emphasis_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--coef", type=_finite_float, default=None, help="Filter coefficient (default: 0.97)"
+    )
+
+
+def _inverse_options(parser: argparse.ArgumentParser) -> None:
+    """The Griffin-Lim and mel geometry options the two inversions share."""
+    _cli_domain(
+        parser.add_argument(
+            "--n-iter", type=_c_int, default=None, help="Griffin-Lim iterations (default: 32)"
+        ),
+        minimum=1,
+    )
+    parser.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
+    parser.add_argument("--hop-length", type=_c_int, default=None, help="Hop length (default: 512)")
+    parser.add_argument(
+        "--n-mels", type=_c_int, default=None, help="Number of mel bands (default: 128)"
+    )
+    _cli_domain(
+        parser.add_argument(
+            "--fmin-hz",
+            type=_finite_float,
             default=None,
-            help="Highest mel band frequency in Hz (default: the Nyquist frequency)",
-        )
+            help="Lowest mel band frequency in Hz (default: 0.0)",
+        ),
+        minimum=0,
+    )
+    parser.add_argument(
+        "--fmax-hz",
+        type=_positive_finite_float,
+        default=None,
+        help="Highest mel band frequency in Hz (default: the Nyquist frequency)",
+    )

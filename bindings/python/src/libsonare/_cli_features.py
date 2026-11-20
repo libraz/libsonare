@@ -162,7 +162,7 @@ def cmd_meter(args: argparse.Namespace) -> int:
     # The ratio counts every clipped sample whatever the region length, so the report's
     # own ratio at the requested threshold is the quantity the native meter prints.
     clipping_ratio = metering_detect_clipping(
-        samples, sr, **_given(args, threshold="clip_threshold")
+        samples, sr, **_given(args, threshold_db="clip_threshold_db")
     ).clipping_ratio
     silence = metering_silence_ratio(samples, sr)
     dc_offset = metering_dc_offset(samples, sr)
@@ -199,7 +199,7 @@ def cmd_clipping(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     result = metering_detect_clipping(
-        samples, sr, **_given(args, "threshold", min_region_samples="min_region")
+        samples, sr, **_given(args, "threshold_db", min_region_samples="min_region")
     )
     regions = result.regions
     if args.json:
@@ -510,11 +510,15 @@ def register_feature_parsers(
         parents=[stdout_options],
         help="Measure basic level meters (peak/RMS/crest/true-peak)",
     )
-    meter_p.add_argument(
-        "--clip-threshold",
-        type=_finite_float,
-        default=None,
-        help="Clipping threshold (default: 0.999)",
+    _cli_domain(
+        meter_p.add_argument(
+            "--clip-threshold-db",
+            type=_finite_float,
+            default=None,
+            help="Clipping level in dBFS (default: the level of a linear 0.999)",
+        ),
+        minimum=-120,
+        maximum=0,
     )
     _cli_domain(
         meter_p.add_argument(
@@ -529,8 +533,15 @@ def register_feature_parsers(
     clipping_p = sub.add_parser(
         "clipping", parents=[stdout_options], help="Detect clipped sample regions"
     )
-    clipping_p.add_argument(
-        "--threshold", type=_finite_float, default=None, help="Clipping threshold (default: 0.999)"
+    _cli_domain(
+        clipping_p.add_argument(
+            "--threshold-db",
+            type=_finite_float,
+            default=None,
+            help="Clipping level in dBFS (default: the level of a linear 0.999)",
+        ),
+        minimum=-120,
+        maximum=0,
     )
     _cli_domain(
         clipping_p.add_argument(
@@ -539,7 +550,7 @@ def register_feature_parsers(
             default=None,
             help="Shortest region in samples (default: 1)",
         ),
-        minimum=1,
+        minimum=0,
     )
 
     dynamic_p = sub.add_parser(

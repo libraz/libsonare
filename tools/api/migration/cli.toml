@@ -2127,9 +2127,27 @@ rule = "cli-front-end-parity"
 test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the command line decides before reading input"
 
 [[entry]]
+kind = "flag"
+old = "clipping --threshold"
+changed = "the detection level is given in dBFS as --threshold-db, in [-120, 0]; a linear threshold t becomes 20*log10(t), and a level outside the range is refused as a usage error (exit 2)"
+to = "clipping --threshold-db"
+domain = "analysis"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_cli_feature_commands.py::test_clipping_threshold_db_reaches_the_library"
+
+[[entry]]
+kind = "flag"
+old = "meter --clip-threshold"
+changed = "the clipping level is given in dBFS as --clip-threshold-db, in [-120, 0]; a linear threshold t becomes 20*log10(t), and a level outside the range is refused as a usage error (exit 2)"
+to = "meter --clip-threshold-db"
+domain = "analysis"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_cli_feature_commands.py::test_meter_clip_threshold_db_reaches_the_library"
+
+[[entry]]
 kind = "command"
 old = "clipping"
-changed = "a --min-region below 1 is refused as a usage error (exit 2) rather than exit 3"
+changed = "a negative --min-region is refused as a usage error (exit 2) rather than exit 3, and 0 lists every run as 1 does"
 frontend = "native"
 domain = "analysis"
 rule = "cli-front-end-parity"

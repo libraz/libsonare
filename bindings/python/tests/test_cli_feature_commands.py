@@ -253,9 +253,43 @@ def test_clipping_human_report_caps_the_region_list(clipped: Path) -> None:
 
 
 def test_clipping_min_region_domain_is_a_usage_refusal(source: Path) -> None:
-    result = _run_cli(["clipping", str(source), "--min-region", "0"])
+    result = _run_cli(["clipping", str(source), "--min-region", "-1"])
     assert result.returncode == EXIT_USAGE
     assert "--min-region" in result.stderr
+
+
+def test_clipping_threshold_db_reaches_the_library(clipped: Path) -> None:
+    from libsonare import metering_detect_clipping
+
+    payload = _json(
+        _run_cli(["clipping", str(clipped), "--threshold-db", "-14", "--min-region", "0", "--json"])
+    )
+    samples, rate = _load(clipped)
+    expected = metering_detect_clipping(samples, rate, threshold_db=-14.0, min_region_samples=0)
+    assert payload["clipped_samples"] == expected.clipped_samples
+    assert payload["clipped_samples"] > metering_detect_clipping(samples, rate).clipped_samples
+    assert len(payload["regions"]) == len(expected.regions)
+
+
+def test_meter_clip_threshold_db_reaches_the_library(clipped: Path) -> None:
+    from libsonare import metering_detect_clipping
+
+    payload = _json(_run_cli(["meter", str(clipped), "--clip-threshold-db", "-14", "--json"]))
+    samples, rate = _load(clipped)
+    expected = metering_detect_clipping(samples, rate, threshold_db=-14.0).clipping_ratio
+    assert payload["clipping_ratio"] == pytest.approx(expected)
+    assert expected > metering_detect_clipping(samples, rate).clipping_ratio
+
+
+@pytest.mark.parametrize(
+    ("command", "flag"), [("meter", "--clip-threshold-db"), ("clipping", "--threshold-db")]
+)
+def test_clipping_level_above_full_scale_is_a_usage_refusal(
+    source: Path, command: str, flag: str
+) -> None:
+    result = _run_cli([command, str(source), flag, "0.5"])
+    assert result.returncode == EXIT_USAGE
+    assert flag in result.stderr
 
 
 def test_dynamic_range_matches_library(source: Path) -> None:

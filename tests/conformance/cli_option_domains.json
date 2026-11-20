@@ -1549,10 +1549,28 @@
       "exclusive_maximum": false
     },
     {
+      "command": "meter",
+      "option": "clip-threshold-db",
+      "choices": [],
+      "minimum": -120.0,
+      "exclusive_minimum": false,
+      "maximum": 0.0,
+      "exclusive_maximum": false
+    },
+    {
+      "command": "clipping",
+      "option": "threshold-db",
+      "choices": [],
+      "minimum": -120.0,
+      "exclusive_minimum": false,
+      "maximum": 0.0,
+      "exclusive_maximum": false
+    },
+    {
       "command": "clipping",
       "option": "min-region",
       "choices": [],
-      "minimum": 1.0,
+      "minimum": 0.0,
       "exclusive_minimum": false,
       "maximum": 2147483647,
       "exclusive_maximum": false

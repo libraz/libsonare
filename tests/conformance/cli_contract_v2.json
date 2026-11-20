@@ -812,21 +812,27 @@
           "required": false,
           "domain": {
             "choices": [],
-            "minimum": 1,
+            "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
         {
-          "name": "threshold",
+          "name": "threshold-db",
           "type": "number",
           "default": null,
-          "stated_default": "0.999",
+          "stated_default": "the level of a linear 0.999",
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": -120,
+            "exclusive_minimum": false,
+            "maximum": 0,
+            "exclusive_maximum": false
+          }
         }
       ],
       "cqt": [
@@ -3166,14 +3172,20 @@
       ],
       "meter": [
         {
-          "name": "clip-threshold",
+          "name": "clip-threshold-db",
           "type": "number",
           "default": null,
-          "stated_default": "0.999",
+          "stated_default": "the level of a linear 0.999",
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": -120,
+            "exclusive_minimum": false,
+            "maximum": 0,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -24917,14 +24929,20 @@
       "path": "meter",
       "options": [
         {
-          "name": "clip-threshold",
+          "name": "clip-threshold-db",
           "type": "number",
           "default": null,
-          "stated_default": "0.999",
+          "stated_default": "the level of a linear 0.999",
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": -120,
+            "exclusive_minimum": false,
+            "maximum": 0,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -25033,21 +25051,27 @@
           "required": false,
           "domain": {
             "choices": [],
-            "minimum": 1,
+            "minimum": 0,
             "exclusive_minimum": false,
             "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
         {
-          "name": "threshold",
+          "name": "threshold-db",
           "type": "number",
           "default": null,
-          "stated_default": "0.999",
+          "stated_default": "the level of a linear 0.999",
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": -120,
+            "exclusive_minimum": false,
+            "maximum": 0,
+            "exclusive_maximum": false
+          }
         }
       ],
       "positionals": [
@@ -25097,7 +25121,7 @@
             "clipping",
             "{audio}",
             "--min-region",
-            "0",
+            "-1",
             "--json"
           ],
           "exit": 2,
@@ -25107,15 +25131,15 @@
           "stderr": "nonempty"
         },
         {
-          "id": "threshold_above_one",
+          "id": "threshold_above_full_scale",
           "argv": [
             "clipping",
             "{audio}",
-            "--threshold",
-            "2",
+            "--threshold-db",
+            "0.5",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",

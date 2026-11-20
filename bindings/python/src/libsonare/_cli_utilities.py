@@ -417,50 +417,74 @@ def _register_conversions(
 ) -> None:
     out = shared.stdout_options
 
-    for name, label in (("frames-to-samples", "frames"), ("samples-to-frames", "samples")):
-        convert_p = sub.add_parser(
-            name, parents=[out], help=f"Convert a count of {label} to the other unit"
-        )
-        if label == "frames":
-            convert_p.add_argument("--frames", type=_c_int, help="Number of frames")
-        else:
-            convert_p.add_argument("--samples", type=_c_int, help="Number of samples")
-        _cli_domain(
-            convert_p.add_argument(
-                "--n-fft", type=_c_int, default=None, help="FFT size (default: no centring offset)"
-            ),
-            minimum=1,
-        )
-        _cli_domain(
-            convert_p.add_argument(
-                "--hop-length", type=_c_int, default=None, help=_stated("Hop length", "512")
-            ),
-            minimum=1,
-        )
+    frames_p = sub.add_parser(
+        "frames-to-samples", parents=[out], help="Convert a count of frames to the other unit"
+    )
+    frames_p.add_argument("--frames", type=_c_int, help="Number of frames")
+    _conversion_geometry(frames_p)
+    samples_p = sub.add_parser(
+        "samples-to-frames", parents=[out], help="Convert a count of samples to the other unit"
+    )
+    samples_p.add_argument("--samples", type=_c_int, help="Number of samples")
+    _conversion_geometry(samples_p)
 
-    for name, amin, label in (
-        ("power-to-db", "1e-10", "power"),
-        ("amplitude-to-db", "1e-05", "amplitude"),
-    ):
-        db_p = sub.add_parser(name, parents=[out], help=f"Convert {label} values to decibels")
-        _values_option(db_p)
-        db_p.add_argument(
-            "--ref", type=_finite_float, default=None, help=_stated("Reference", "1.0")
-        )
-        db_p.add_argument("--amin", type=_finite_float, default=None, help=_stated("Floor", amin))
-        db_p.add_argument(
-            "--top-db",
-            type=_finite_float,
-            default=None,
-            help=_stated("Dynamic range below the peak in dB", "80.0"),
-        )
+    power_db_p = sub.add_parser(
+        "power-to-db", parents=[out], help="Convert power values to decibels"
+    )
+    _to_db_options(power_db_p, "1e-10")
+    amplitude_db_p = sub.add_parser(
+        "amplitude-to-db", parents=[out], help="Convert amplitude values to decibels"
+    )
+    _to_db_options(amplitude_db_p, "1e-05")
 
-    for name, label in (("db-to-power", "power"), ("db-to-amplitude", "amplitude")):
-        gain_p = sub.add_parser(name, parents=[out], help=f"Convert decibels to {label} values")
-        _values_option(gain_p)
-        gain_p.add_argument(
-            "--ref", type=_finite_float, default=None, help=_stated("Reference", "1.0")
-        )
+    db_power_p = sub.add_parser(
+        "db-to-power", parents=[out], help="Convert decibels to power values"
+    )
+    _from_db_options(db_power_p)
+    db_amplitude_p = sub.add_parser(
+        "db-to-amplitude", parents=[out], help="Convert decibels to amplitude values"
+    )
+    _from_db_options(db_amplitude_p)
+
+
+def _conversion_geometry(parser: argparse.ArgumentParser) -> None:
+    _cli_domain(
+        parser.add_argument(
+            "--n-fft", type=_c_int, default=None, help="FFT size (default: no centring offset)"
+        ),
+        minimum=1,
+    )
+    _cli_domain(
+        parser.add_argument(
+            "--hop-length", type=_c_int, default=None, help=_stated("Hop length", "512")
+        ),
+        minimum=1,
+    )
+
+
+def _to_db_options(parser: argparse.ArgumentParser, amin: str) -> None:
+    _values_option(parser)
+    parser.add_argument("--ref", type=_finite_float, default=None, help=_stated("Reference", "1.0"))
+    parser.add_argument("--amin", type=_finite_float, default=None, help=_stated("Floor", amin))
+    parser.add_argument(
+        "--top-db",
+        type=_finite_float,
+        default=None,
+        help=_stated("Dynamic range below the peak in dB", "80.0"),
+    )
+
+
+def _from_db_options(parser: argparse.ArgumentParser) -> None:
+    _values_option(parser)
+    parser.add_argument("--ref", type=_finite_float, default=None, help=_stated("Reference", "1.0"))
+
+
+def _sizing_options(parser: argparse.ArgumentParser) -> None:
+    _values_option(parser)
+    _cli_domain(parser.add_argument("--size", type=_c_int, help="Target size"), minimum=1)
+    parser.add_argument(
+        "--pad-value", type=_finite_float, default=None, help=_stated("Padding value", "0.0")
+    )
 
 
 def _register_arrays(
@@ -473,13 +497,10 @@ def _register_arrays(
     frame_p.add_argument("--frame-length", type=_c_int, help="Frame length in samples")
     frame_p.add_argument("--hop-length", type=_c_int, help="Hop length in samples")
 
-    for name, label in (("pad-center", "Centre-pad"), ("fix-length", "Pad or trim")):
-        size_p = sub.add_parser(name, parents=[out], help=f"{label} values to a size")
-        _values_option(size_p)
-        _cli_domain(size_p.add_argument("--size", type=_c_int, help="Target size"), minimum=1)
-        size_p.add_argument(
-            "--pad-value", type=_finite_float, default=None, help=_stated("Padding value", "0.0")
-        )
+    pad_p = sub.add_parser("pad-center", parents=[out], help="Centre-pad values to a size")
+    _sizing_options(pad_p)
+    fix_length_p = sub.add_parser("fix-length", parents=[out], help="Pad or trim values to a size")
+    _sizing_options(fix_length_p)
 
     fix_p = sub.add_parser("fix-frames", parents=[out], help="Fix a frame index list")
     _values_option(fix_p)

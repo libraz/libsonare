@@ -927,8 +927,8 @@ int cmd_lufs(const CliArgs& args, const Audio&) {
 }
 
 int cmd_meter(const CliArgs& args, const Audio& audio) {
-  const float clip_threshold =
-      args.get_float("clip-threshold", metering::kDefaultClippingThreshold);
+  const float clip_threshold = metering::clipping_threshold_from_db(
+      args.get_float("clip-threshold-db", std::numeric_limits<float>::quiet_NaN()));
   const int oversample = args.get_int("oversample", metering::kDefaultTruePeakOversample);
 
   const float peak = metering::peak_db(audio);
@@ -968,7 +968,8 @@ int cmd_meter(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_clipping(const CliArgs& args, const Audio& audio) {
-  const float threshold = args.get_float("threshold", metering::kDefaultClippingThreshold);
+  const float threshold = metering::clipping_threshold_from_db(
+      args.get_float("threshold-db", std::numeric_limits<float>::quiet_NaN()));
   const auto min_region = static_cast<size_t>(
       args.get_int("min-region", static_cast<int>(metering::kDefaultClippingMinRegionSamples)));
 
