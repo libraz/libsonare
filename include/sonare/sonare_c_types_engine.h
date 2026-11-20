@@ -392,8 +392,7 @@ typedef struct {
   uint32_t output_bus_id;
   /// A @ref SonareChannelLayout giving the input channel layout of the source feeding this lane.
   /// Only SONARE_CHANNEL_LAYOUT_STEREO is accepted; any other value makes
-  /// sonare_engine_set_track_lanes fail with SONARE_ERROR_INVALID_PARAMETER
-  /// until multichannel lanes are implemented.
+  /// sonare_engine_set_track_lanes fail with SONARE_ERROR_NOT_SUPPORTED.
   uint8_t source_channel_layout;
 } SonareEngineTrackLane;
 
@@ -439,7 +438,8 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SIDECHAIN_REFUSAL_CYCLE = 6,
   /// The sidechain binding table has no free entry.
   SONARE_SIDECHAIN_REFUSAL_TABLE_FULL = 7,
-  /// No delay plan exists: an alignment past the ceiling or an overflow.
+  /// The latency the key would add to the mix is past the alignment ceiling of 192000 samples;
+  /// the setter fails with SONARE_ERROR_INVALID_STATE.
   SONARE_SIDECHAIN_REFUSAL_PLAN_REFUSED = 8,
 } SonareSidechainRefusal;
 

@@ -383,13 +383,14 @@ SonareError sonare_engine_clip_count(SonareEngine* engine, size_t* out_count);
 ///   with @ref sonare_engine_process.
 /// @return SONARE_ERROR_INVALID_PARAMETER for an invalid lane list (an unknown
 ///   output or send bus included; more than @ref SONARE_ENGINE_MAX_TRACK_LANES
-///   lanes sets the last-error message "at most 32 track lanes are supported");
+///   lanes sets the last-error message "lane_count must be an integer in [0, 32]");
 ///   SONARE_ERROR_INVALID_STATE when the list is
 ///   valid but earlier configuration refuses it: added tracks whose fader/pan and
 ///   insert ids would not fit the automation id table, a retained clip delay past
 ///   the lane alignment ceiling, or a combined latency the lanes cannot align;
 ///   SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state unchanged);
-///   SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled.
+///   SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled or a lane's
+///   source_channel_layout is not stereo.
 SonareError sonare_engine_set_track_lanes(SonareEngine* engine, const SonareEngineTrackLane* lanes,
                                           size_t lane_count);
 /// @brief Replaces one track lane's sends, leaving its output bus, layout and
@@ -426,7 +427,9 @@ SonareError sonare_engine_set_track_output_bus(SonareEngine* engine, uint32_t tr
 ///   not declared, an @p insert_index the target strip does not have, a lane
 ///   keying itself and a binding that would close a cycle over the lane bindings;
 ///   rejects with SONARE_ERROR_INVALID_STATE (bindings unchanged) a full binding
-///   table and an alignment past the delay ceiling. Control-thread only; must
+///   table and a key latency past the alignment ceiling, and with
+///   SONARE_ERROR_OUT_OF_MEMORY an allocation failure while planning the
+///   delays. Control-thread only; must
 ///   not be called concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_lane_sidechain(SonareEngine* engine, uint32_t track_id,
                                              unsigned int insert_index, uint32_t source_track_id);
@@ -464,7 +467,9 @@ SonareError sonare_engine_set_track_buses(SonareEngine* engine, const SonareEngi
 ///   bus. Rejects (SONARE_ERROR_INVALID_PARAMETER) an undeclared bus or source,
 ///   an out-of-range insert index, a bus keying itself, and a bus source that
 ///   would form a cycle; rejects with SONARE_ERROR_INVALID_STATE a full binding
-///   table and an alignment past the delay ceiling. Control-thread only; must not
+///   table and a key latency past the alignment ceiling, and with
+///   SONARE_ERROR_OUT_OF_MEMORY an allocation failure while planning the
+///   delays. Control-thread only; must not
 ///   run concurrently with process().
 SonareError sonare_engine_set_bus_sidechain(SonareEngine* engine, uint32_t bus_id,
                                             unsigned int insert_index, int source_kind,
