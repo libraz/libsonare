@@ -33,6 +33,7 @@ from ._runtime import (
     _narrow_int,
     _resolve_sample_bound,
     _resolve_time_offset,
+    _Respelling,
     _respellings,
     _to_c_float,
     _to_c_float_array,
@@ -522,7 +523,7 @@ def _note_pitch_hz(value: float | None, name: str) -> float:
 
 def _notes_to_c(
     notes: Sequence[NoteObject], sample_rate: int
-) -> tuple[object, int, object, int, dict[str, str]]:
+) -> tuple[object, int, object, int, dict[str, _Respelling]]:
     """Marshal a note list into the C note array plus its shared envelope pool.
 
     The C ABI carries every note's envelope in one array the edits index into,
@@ -534,7 +535,7 @@ def _notes_to_c(
     note_count = len(notes)
     if note_count == 0:
         return None, 0, None, 0, {}
-    respelled: dict[str, str] = {}
+    respelled: dict[str, _Respelling] = {}
 
     c_notes = (SonareNoteObject * note_count)()
     curves: list[np.ndarray] = []

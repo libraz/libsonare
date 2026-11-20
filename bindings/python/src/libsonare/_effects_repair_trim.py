@@ -56,7 +56,8 @@ def _resolve_padding(
     if resolved.value is None:
         return _SampleBound(0, {})
     if resolved.value > _SIZE_T_MAX:
-        name = resolved.respelled.get("padding_samples", "padding_samples")
+        given = resolved.respelled.get("padding_samples")
+        name = "padding_samples" if given is None else given.name
         raise _refuse(f"{name} must fit a size_t")
     return resolved
 

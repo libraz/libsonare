@@ -32,6 +32,7 @@ from ._ffi_types_vocal import (
 )
 from ._runtime import (
     _get_lib,
+    _Respelling,
     _to_c_int,
     _validate_samples,
 )
@@ -698,12 +699,15 @@ class VocalEditDraft(_HandleOwner):
         generation = _uint64(expected_generation, "expected_generation")
         raw_ops = (SonareVocalOperation * len(ops))()
         keepalive: list[Any] = []
-        respelled: dict[str, str] = {}
+        respelled: dict[str, _Respelling] = {}
         for i, operation in enumerate(ops):
             raw_ops[i], buffers, given = _operation_to_c(lib, operation, self._session._sample_rate)
             keepalive.extend(buffers)
             respelled.update(
-                {f"operations[{i}].{key}": f"operations[{i}].{name}" for key, name in given.items()}
+                {
+                    f"operations[{i}].{key}": _Respelling(f"operations[{i}].{r.name}", r.scale)
+                    for key, r in given.items()
+                }
             )
         with _owned_edit_result(lib) as raw:
             pointer = ctypes.cast(raw_ops, ctypes.POINTER(SonareVocalOperation)) if ops else None

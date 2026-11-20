@@ -14,6 +14,7 @@ from ._runtime import (
     _check,
     _not_planar_channels,
     _optional_from_c_float_array,
+    _Respelling,
     _to_c_int,
     _to_c_size_t,
     _validate_samples,
@@ -27,7 +28,7 @@ def _run_detection(
     config: Any,
     detection_type: Any,
     *,
-    respelled: Mapping[str, str] | None = None,
+    respelled: Mapping[str, _Respelling] | None = None,
 ) -> Any:
     """Call one measure-only repair entry and hand back the filled C struct.
 
@@ -64,7 +65,7 @@ def _run_repair(
     sample_rate: int,
     config: Any,
     *,
-    respelled: Mapping[str, str] | None = None,
+    respelled: Mapping[str, _Respelling] | None = None,
 ) -> tuple[np.ndarray, _Report]:
     """Run one mono repair entry and return its audio with the report it filled.
 

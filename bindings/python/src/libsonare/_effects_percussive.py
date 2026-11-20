@@ -27,6 +27,7 @@ from ._runtime import (
     _out_float_array,
     _resolve_sample_bound,
     _resolve_time_offset,
+    _Respelling,
     _respellings,
     _to_c_float_array,
     _to_c_int,
@@ -180,7 +181,7 @@ def _percussive_event_from_c(row: SonarePercussiveEvent) -> PercussiveEvent:
 
 def _percussive_events_to_c(
     events: Sequence[PercussiveEvent], sample_rate: int
-) -> tuple[object, int, dict[str, str]]:
+) -> tuple[object, int, dict[str, _Respelling]]:
     """Marshal an event list into the C event array; an empty set is NULL and 0.
 
     The last element is the respelling of the bounds given in seconds, for :func:`_check`.
@@ -188,7 +189,7 @@ def _percussive_events_to_c(
     count = len(events)
     if count == 0:
         return None, 0, {}
-    respelled: dict[str, str] = {}
+    respelled: dict[str, _Respelling] = {}
 
     c_events = (SonarePercussiveEvent * count)()
     for i, event in enumerate(events):

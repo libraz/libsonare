@@ -205,6 +205,32 @@ class TestTrimPadding:
         with pytest.raises(SonareValueError, match="padding_samples"):
             libsonare.mastering_repair_trim_silence(self.samples, SR, padding_samples=-1)
 
+    def test_a_library_domain_reads_in_the_unit_the_caller_gave(self) -> None:
+        with pytest.raises(
+            SonareValueError,
+            match=r"^mastering_repair_trim_silence: padding_sec must be finite and in \[0, 20\]$",
+        ):
+            libsonare.mastering_repair_trim_silence(
+                np.zeros(48000, np.float32), 48000, padding_sec=1e9
+            )
+        # 960000 samples at 44.1 kHz is 21.768... s, rounded inward to four significant digits.
+        with pytest.raises(
+            SonareValueError,
+            match=r"^mastering_repair_trim_silence: "
+            r"padding_sec must be finite and in \[0, 21\.76\]$",
+        ):
+            libsonare.mastering_repair_trim_silence(
+                np.zeros(48000, np.float32), 44100, padding_sec=1e9
+            )
+        with pytest.raises(
+            SonareValueError,
+            match=r"^mastering_repair_trim_silence: "
+            r"padding_samples must be an integer in \[0, 960000\]$",
+        ):
+            libsonare.mastering_repair_trim_silence(
+                np.zeros(48000, np.float32), 48000, padding_samples=10**9
+            )
+
 
 class TestEngine:
     def test_punch_in_window_seconds_and_required_bounds(self) -> None:
@@ -249,6 +275,27 @@ class TestEngine:
                     capacity_frames=128,
                     punch=libsonare.CapturePunch(start_sec=0.5, end_sample=4800),
                 )
+            with pytest.raises(
+                SonareValueError,
+                match=r"^RealtimeEngine\.configure_capture: "
+                r"punch\.end_sec must not equal punch\.start_sec$",
+            ):
+                engine.configure_capture(
+                    capacity_frames=128,
+                    punch=libsonare.CapturePunch(start_sec=0.5, end_sec=0.5),
+                )
+
+    def test_a_note_edit_refusal_names_and_scales_the_seconds_spelling(self) -> None:
+        samples = np.zeros(48000, np.float32)
+        with pytest.raises(
+            SonareValueError, match=r"^note_stretch: offset_sec must be greater than onset_sec$"
+        ):
+            libsonare.note_stretch(samples, 48000, stretch_ratio=1.5, onset_sec=0.5, offset_sec=0.1)
+        with pytest.raises(
+            SonareValueError,
+            match=r"^note_move: target_onset_sec must be finite and in \[0, 0\.9999\]$",
+        ):
+            libsonare.note_move(samples, 48000, onset_sec=0.1, offset_sec=0.2, target_onset_sec=5.0)
 
     def test_render_frame_none_is_immediate_and_negative_is_refused(self) -> None:
         with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:

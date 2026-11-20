@@ -26,6 +26,7 @@ from ._runtime import (
     _out_float_array,
     _require_power_of_two,
     _resolve_sample_bound,
+    _Respelling,
     _respellings,
     _to_c_float_array,
     _to_c_int,
@@ -165,7 +166,7 @@ def spectral_edit(
 
     n_ops = len(ops)
     c_ops = None
-    respelled: dict[str, str] = {}
+    respelled: dict[str, _Respelling] = {}
     if n_ops > 0:
         c_ops = (SonareSpectralRegionOp * n_ops)()
         for i, op in enumerate(ops):

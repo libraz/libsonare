@@ -65,6 +65,7 @@ from ._runtime import (
     _require_instance,
     _resolve_render_frame,
     _resolve_sample_bound,
+    _Respelling,
     _to_c_float,
     _to_c_int,
     _to_c_int64,
@@ -117,7 +118,7 @@ class _EngineIoMixin:
         self._capture_arrays = arrays
         self._capture_ptrs = ptrs
 
-    def _punch_bound(self, punch: CapturePunch, edge: str) -> tuple[int, str]:
+    def _punch_bound(self, punch: CapturePunch, edge: str) -> tuple[int, _Respelling]:
         """One punch edge in samples, with the spelling the caller gave it."""
         ppq = getattr(punch, f"{edge}_ppq")
         sample = getattr(punch, f"{edge}_sample")
@@ -129,13 +130,14 @@ class _EngineIoMixin:
             beats = _narrow_double(ppq, f"punch.{edge}_ppq")
             if not beats >= 0.0:
                 raise _refuse(f"punch.{edge}_ppq must be at least 0")
-            return self.sample_at_ppq(beats), f"punch.{edge}_ppq"
+            # Beats map to samples through the tempo map, so no single scale applies.
+            return self.sample_at_ppq(beats), _Respelling(f"punch.{edge}_ppq")
         bound = _resolve_sample_bound(
             sample, sec, self._sample_rate, f"punch.{edge}_sample", f"punch.{edge}_sec"
         )
         assert bound.value is not None
         given = f"punch.{edge}_sample"
-        return bound.value, bound.respelled.get(given, given)
+        return bound.value, bound.respelled.get(given, _Respelling(given))
 
     @_entry("RealtimeEngine.configure_capture")
     def configure_capture(
@@ -192,13 +194,15 @@ class _EngineIoMixin:
             )
         )
         (start, start_given), (end, end_given) = (
-            bounds if bounds is not None else ((0, "start_sample"), (0, "end_sample"))
+            bounds
+            if bounds is not None
+            else ((0, _Respelling("start_sample")), (0, _Respelling("end_sample")))
         )
         _check(
             lib.sonare_engine_set_capture_punch(
                 handle,
-                _to_c_int64(start, start_given),
-                _to_c_int64(end, end_given),
+                _to_c_int64(start, start_given.name),
+                _to_c_int64(end, end_given.name),
                 0 if bounds is None else 1,
             ),
             respelled={"start_sample": start_given, "end_sample": end_given},

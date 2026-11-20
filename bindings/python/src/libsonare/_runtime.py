@@ -45,6 +45,7 @@ from ._narrowing import _resolve_render_frame as _resolve_render_frame
 from ._narrowing import _resolve_sample_bound as _resolve_sample_bound
 from ._narrowing import _resolve_time_offset as _resolve_time_offset
 from ._narrowing import _resolve_zero_default as _resolve_zero_default
+from ._narrowing import _Respelling as _Respelling
 from ._narrowing import _respellings as _respellings
 from ._narrowing import _SampleBound as _SampleBound
 from ._narrowing import _utf8_arg as _utf8_arg
@@ -134,30 +135,39 @@ def _coded_error(code: int, message: str) -> SonareError:
     return exc
 
 
-def _render_as_given(lib: Any, root: str | None, respelled: Mapping[str, str] | None) -> str | None:
-    """Render the last parameter refusal under the names the caller wrote.
+def _render_as_given(
+    lib: Any, root: str | None, respelled: Mapping[str, _Respelling] | None
+) -> str | None:
+    """Render the last parameter refusal under the names and units the caller wrote.
 
     ``root.`` is dropped from each subject under it, then a subject ``respelled`` names is
-    replaced by the spelling the caller gave. None when no parameter refusal is recorded,
-    so the caller keeps the message it read.
+    replaced by the spelling the caller gave, with its domain in the caller's unit when the
+    respelling carries a scale. None when no parameter refusal is recorded, so the caller
+    keeps the message it read.
     """
     count = lib.sonare_last_refusal_subject_count()
     if count == 0:
         return None
     subjects = []
+    scales = []
     for index in range(count):
         subject = (lib.sonare_last_refusal_subject(index) or b"").decode("utf-8")
         if root is not None:
             head, dot, rest = subject.partition(".")
             if dot and head == root:
                 subject = rest
-        if respelled:
-            subject = respelled.get(subject, subject)
+        given = respelled.get(subject) if respelled else None
+        scale = 1.0
+        if given is not None:
+            subject = given.name
+            scale = 1.0 if given.scale is None else given.scale
         subjects.append(_utf8_arg(subject, "subject"))
+        scales.append(scale)
+    c_scales = (ctypes.c_double * count)(*scales) if any(s != 1.0 for s in scales) else None
     out = ctypes.c_char_p()
     if (
         lib.sonare_last_refusal_render(
-            (ctypes.c_char_p * count)(*subjects), count, ctypes.byref(out)
+            (ctypes.c_char_p * count)(*subjects), c_scales, count, ctypes.byref(out)
         )
         != SONARE_OK
     ):
@@ -172,7 +182,7 @@ def _check(
     rc: int,
     *,
     flattened: str | None = None,
-    respelled: Mapping[str, str] | None = None,
+    respelled: Mapping[str, _Respelling] | None = None,
 ) -> None:
     """Check a SonareError return code and raise on failure.
 
@@ -1364,7 +1374,7 @@ def _call_float_array_transform(
     values: Sequence[float] | list[float] | np.ndarray,
     *args: object,
     arg_name: str = "samples",
-    respelled: Mapping[str, str] | None = None,
+    respelled: Mapping[str, _Respelling] | None = None,
 ) -> np.ndarray:
     """Run a buffer-in, buffer-out C transform and return a ``float32`` ndarray.
 

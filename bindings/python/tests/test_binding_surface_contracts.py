@@ -174,7 +174,7 @@ def test_source_span_destination_positions_are_required_and_zero_is_a_position()
         destination_start_sample=0,
         destination_length_samples=800,
     )
-    raw, _ = _operation_to_c(lib, complete, 48000)
+    raw, _, _ = _operation_to_c(lib, complete, 48000)
     assert isinstance(raw, SonareVocalOperation)
     assert raw.destination_start_sample == 0
     assert raw.destination_length_samples == 800

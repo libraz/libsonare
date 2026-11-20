@@ -208,6 +208,17 @@ def _seconds_to_samples(seconds: object, sample_rate: float, name: str) -> int:
     return samples
 
 
+class _Respelling(NamedTuple):
+    """The spelling a caller gave a converted argument, and its scale.
+
+    ``scale`` is library units per caller unit (samples per second for a bound
+    given in seconds); ``None`` renames the subject without rescaling its domain.
+    """
+
+    name: str
+    scale: float | None = None
+
+
 class _SampleBound(NamedTuple):
     """A time bound resolved from its samples or seconds spelling.
 
@@ -217,12 +228,12 @@ class _SampleBound(NamedTuple):
     """
 
     value: int | None
-    respelled: dict[str, str]
+    respelled: dict[str, _Respelling]
 
 
-def _respellings(*bounds: _SampleBound) -> dict[str, str]:
+def _respellings(*bounds: _SampleBound) -> dict[str, _Respelling]:
     """The respellings of several bounds of one call, for :func:`_check`."""
-    merged: dict[str, str] = {}
+    merged: dict[str, _Respelling] = {}
     for bound in bounds:
         merged.update(bound.respelled)
     return merged
@@ -258,7 +269,7 @@ def _resolve_sample_bound(
     if sec_value is not None:
         value = _seconds_to_samples(sec_value, sample_rate, sec_name)
         name = sec_name
-        respelled = {sample_name: sec_name}
+        respelled: dict[str, _Respelling] = {sample_name: _Respelling(sec_name, float(sample_rate))}
     else:
         value = _narrow_int(sample_value, sample_name, _INT64_MIN, _INT64_MAX)
         name = sample_name

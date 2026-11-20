@@ -42,6 +42,7 @@ from ._runtime import (
     _narrow_int,
     _ordinal_token,
     _resolve_sample_bound,
+    _Respelling,
     _respellings,
     _SampleBound,
     _token_ordinal,
@@ -195,7 +196,7 @@ def _vocal_check(
     rc: int,
     *,
     flattened: str | None = None,
-    respelled: Mapping[str, str] | None = None,
+    respelled: Mapping[str, _Respelling] | None = None,
 ) -> None:
     """Raise VocalEditError for a failing vocal-edit call; the keywords are as for _check."""
     if int(rc) == 0:
@@ -223,13 +224,14 @@ def _vocal_check(
         ) from exc
 
 
-def _as_given(field: str, root: str | None, respelled: Mapping[str, str] | None) -> str:
+def _as_given(field: str, root: str | None, respelled: Mapping[str, _Respelling] | None) -> str:
     """``field`` under the name the caller wrote, matching the rendered refusal."""
     if root is not None:
         head, dot, rest = field.partition(".")
         if dot and head == root:
             field = rest
-    return respelled.get(field, field) if respelled else field
+    given = respelled.get(field) if respelled else None
+    return field if given is None else given.name
 
 
 def _new_result(lib: ctypes.CDLL, name: str, cls: type[Any]) -> Any:
@@ -258,7 +260,7 @@ def _range(
     sample_rate: int,
     start_sec: float | None = None,
     end_sec: float | None = None,
-) -> tuple[SonareVocalRange, dict[str, str]]:
+) -> tuple[SonareVocalRange, dict[str, _Respelling]]:
     """Resolve a render range from a pair of samples or from seconds.
 
     The range is ``value`` (a :class:`VocalRange` or a ``(start_sample,
@@ -516,12 +518,12 @@ def _operation_position(
 
 def _operation_to_c(
     lib: ctypes.CDLL, operation: VocalOperation, sample_rate: int
-) -> tuple[SonareVocalOperation, list[Any], dict[str, str]]:
+) -> tuple[SonareVocalOperation, list[Any], dict[str, _Respelling]]:
     """Marshal one operation; the last element respells the positions given in seconds."""
     raw = SonareVocalOperation()
     lib.sonare_vocal_operation_init(ctypes.byref(raw))
     keepalive: list[Any] = []
-    respelled: dict[str, str] = {}
+    respelled: dict[str, _Respelling] = {}
     if isinstance(operation, VocalSetNoteEdit):
         raw.kind = _operation_kind("setEdit")
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
@@ -803,7 +805,7 @@ def _callback(cancel: Callable[[], bool] | None) -> tuple[Any, list[BaseExceptio
 
 
 def _probe_check(
-    errors: list[BaseException], error: int, *, respelled: Mapping[str, str] | None = None
+    errors: list[BaseException], error: int, *, respelled: Mapping[str, _Respelling] | None = None
 ) -> None:
     if errors:
         raise errors[0]
