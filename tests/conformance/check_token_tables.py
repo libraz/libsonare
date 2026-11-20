@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # Source kinds: ordinal tables map token -> ordinal; set sources only list tokens.
 # A field kind's symbol is ``Owner.field``: an interface member or a class attribute.
-ORDINAL_KINDS = ("ts_object", "ts_array", "py_tuple")
+ORDINAL_KINDS = ("ts_object", "ts_array", "py_tuple", "py_dict")
 SET_KINDS = ("ts_union", "ts_field", "py_literal", "py_field")
 
 
@@ -58,7 +58,9 @@ class CoreTable(typing.NamedTuple):
 
 class TokenSet(typing.NamedTuple):
     name: str
-    core: CoreTable
+    # None for a set the core spells only as C enumerators: its tokens are the enumerator
+    # names, matched by normalized name (``c_aliases`` where that differs), never a writer's.
+    core: CoreTable | None
     sources: tuple[Source, ...]
     c_enum: tuple[str, str] | None = None  # (header, enumerator prefix)
     # Token -> enumerator suffix, only where the names do not normalize alike.
@@ -176,6 +178,28 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_features.ts", "ts_union", "EqBandType"),
             _src("wasm", "bindings/wasm/src/public_types_realtime.ts", "ts_union", "EqBandType"),
+        ),
+    ),
+    TokenSet(
+        name="biquad filter type",
+        core=None,
+        c_enum=("include/sonare/sonare_c_effects.h", "SONARE_BIQUAD_FILTER_"),
+        sources=(
+            _src("node", "bindings/node/src/feature_framing.ts", "ts_union", "BiquadFilterType"),
+            _src("node", "bindings/node/src/feature_framing.ts", "ts_array", "BIQUAD_FILTER_TYPES"),
+            _src("wasm", "bindings/wasm/src/feature_spectrogram.ts", "ts_union", "BiquadFilterType"),
+            _src("wasm", "bindings/wasm/src/feature_spectrogram.ts", "ts_array", "BIQUAD_FILTER_TYPES"),
+            _src("python", "bindings/python/src/libsonare/_effects_level.py", "py_literal", "BiquadFilterType"),
+            _src("python", "bindings/python/src/libsonare/_effects_level.py", "py_dict", "_BIQUAD_FILTER_TYPES"),
+            _src("python", "bindings/python/src/libsonare/analyzer.pyi", "py_literal", "BiquadFilterType"),
+        ),
+    ),
+    TokenSet(
+        name="parameter refusal form",
+        core=CoreTable("src/c_api/sonare_c_refusal_record.h", "sonare::SonareParameterRefusal::Form", None, "refusal_form_token"),
+        sources=(
+            _src("node", "bindings/node/src/internal/entry.ts", "ts_field", "RefusalRecord.form"),
+            _src("wasm", "bindings/wasm/src/internal/entry.ts", "ts_field", "RefusalRecord.form"),
         ),
     ),
     TokenSet(
@@ -565,6 +589,12 @@ def read_source(text: str, src: Source) -> dict[str, int] | set[str] | None:
         m = re.search(rf"^{sym}\s*(?::[^=\n]*)?=\s*Literal\[", text, re.MULTILINE)
         body = m and _balanced(text, m.end() - 1, "[", "]")
         return {tok for _q, tok in _STR.findall(body)} if body else None
+    if src.kind == "py_dict":
+        m = re.search(rf"^{sym}\s*(?::[^=\n]*)?=\s*\{{", text, re.MULTILINE)
+        body = m and _balanced(text, m.end() - 1, "{", "}")
+        if not body:
+            return None
+        return {tok: int(n) for _q, tok, n in re.findall(r"""(['"])([^'"]+)\1\s*:\s*(-?\d+)""", body)}
     if src.kind == "py_tuple":
         m = re.search(rf"^{sym}\s*(?::[^=]*)?=\s*(.*)$", text, re.MULTILINE)
         if m is None:
@@ -592,6 +622,9 @@ def evaluate(root: Path, rows: tuple[TokenSet, ...] = ROWS) -> tuple[list[str], 
         return p.read_text(encoding="utf-8") if p.is_file() else None
 
     for row in rows:
+        if row.core is None:
+            compared += _compare_to_c_enum(row, read, problems)
+            continue
         core_text = read(row.core.path) or ""
         tokens = written_tokens(core_text, row.core.enum, row.core.writer)
         if not tokens:
@@ -665,6 +698,41 @@ def evaluate(root: Path, rows: tuple[TokenSet, ...] = ROWS) -> tuple[list[str], 
                             f"{where}: token {tok!r} has ordinal {got[tok]}, the C ABI's is {expected[tok]}"
                         )
     return problems, len(rows), compared
+
+
+def _compare_to_c_enum(
+    row: TokenSet, read: typing.Callable[[str], str | None], problems: list[str]
+) -> int:
+    """Compare a writer-less row's sources against its C enumerators; sources compared."""
+    if row.c_enum is None:
+        problems.append(f"{row.name}: a row with no core writer must name its C enum")
+        return 0
+    enumerators = c_enumerators(read(row.c_enum[0]) or "", row.c_enum[1])
+    if not enumerators:
+        problems.append(f"{row.name}: no {row.c_enum[1]}* enumerators in {row.c_enum[0]}")
+        return 0
+    by_norm = {_norm(k): v for k, v in enumerators.items()}
+    compared = 0
+    for src in row.sources:
+        text = read(src.path)
+        got = read_source(text, src) if text is not None else None
+        where = f"{row.name}: {src.surface} {src.symbol} ({src.path})"
+        if got is None:
+            problems.append(f"{where}: not found")
+            continue
+        compared += 1
+        keyed = {tok: _norm(row.c_aliases.get(tok, tok)) for tok in got}
+        for tok in sorted(t for t, k in keyed.items() if k not in by_norm):
+            problems.append(f"{where}: token {tok!r} matches no {row.c_enum[1]}* enumerator")
+        if not src.subset:
+            for name in sorted(n for n in enumerators if _norm(n) not in set(keyed.values())):
+                problems.append(f"{where}: missing a token for {row.c_enum[1]}{name}")
+        if isinstance(got, dict):
+            for tok in sorted(t for t, k in keyed.items() if k in by_norm and got[t] != by_norm[k]):
+                problems.append(
+                    f"{where}: token {tok!r} has ordinal {got[tok]}, the C ABI's is {by_norm[keyed[tok]]}"
+                )
+    return compared
 
 
 # A facade literal set draws on a core writer when it shares two or more of the
@@ -830,6 +898,15 @@ def facade_sets(root: Path) -> dict[tuple[str, str], set[str]]:
     return {k: v for k, v in found.items() if len(v) >= 2}
 
 
+def _named_writers(rows: tuple[TokenSet, ...]) -> set[tuple[str, str, str]]:
+    return {
+        (t.path, t.writer, t.enum)
+        for row in rows
+        for t in (row.core, *row.also_written_by)
+        if t is not None
+    }
+
+
 def evaluate_population(
     root: Path,
     rows: tuple[TokenSet, ...] = ROWS,
@@ -842,9 +919,13 @@ def evaluate_population(
         k: v for k, v in writers.items() if not k[1].startswith("legacy_") and k[1] not in FAMILY_WRITERS
     }
     pinned = {(s.path, s.symbol) for row in rows for s in row.sources}
-    named = {(t.path, t.writer, t.enum) for row in rows for t in (row.core, *row.also_written_by)}
+    # A set pinned to C enumerators draws on no writer, whatever tokens it shares with one.
+    enum_pinned = {(s.path, s.symbol) for row in rows if row.core is None for s in row.sources}
+    named = _named_writers(rows)
     drawing: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
     for key, toks in facade_sets(root).items():
+        if key in enum_pinned:
+            continue
         # The closest writers: those whose set exceeds this one by the fewest tokens.
         candidates: dict[tuple[str, str, str], int] = {}
         for wkey, wtoks in current.items():
@@ -977,7 +1058,7 @@ def not_compared(
     declared: typing.Mapping[tuple[str, str, str], str] = NOT_COMPARED,
 ) -> tuple[list[str], list[str]]:
     """Problems (a declared entry a row now names) and the not-compared lines to print."""
-    named = {(t.path, t.writer, t.enum) for row in rows for t in (row.core, *row.also_written_by)}
+    named = _named_writers(rows)
     problems = [
         f"not-compared entry {w}({e}) in {p} is named by a row" for p, w, e in sorted(set(declared) & named)
     ]

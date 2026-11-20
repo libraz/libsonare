@@ -684,5 +684,86 @@ class FamilyTests(unittest.TestCase):
             self.assertTrue(reason.strip(), key)
 
 
+_ENUM_FILES = {
+    "include/c.h": "typedef enum { SONARE_TAP_PRE_FADER = 0, SONARE_TAP_POST_FADER = 1 } SonareTap;\n",
+    "src/law.cpp": _POP_FILES["src/law.cpp"],
+    "ts/tap.ts": "export type Tap = 'preFader' | 'postFader';\nconst TAPS: readonly Tap[] = ['preFader', 'postFader'];\n",
+    "py/tap.py": 'Tap = Literal["preFader", "postFader"]\n_TAPS = {"preFader": 0, "postFader": 1}\n',
+}
+
+_ENUM_ROW = check.TokenSet(
+    name="tap",
+    core=None,
+    c_enum=("include/c.h", "SONARE_TAP_"),
+    sources=(
+        check.Source("node", "ts/tap.ts", "ts_union", "Tap"),
+        check.Source("node", "ts/tap.ts", "ts_array", "TAPS"),
+        check.Source("python", "py/tap.py", "py_literal", "Tap"),
+        check.Source("python", "py/tap.py", "py_dict", "_TAPS"),
+    ),
+)
+
+
+class EnumOnlyRowTests(unittest.TestCase):
+    """A row with no core writer takes its tokens from the C enumerators."""
+
+    def tree(self, edits: dict[str, tuple[str, str]] | None = None) -> tempfile.TemporaryDirectory:
+        d = tempfile.TemporaryDirectory()
+        root = Path(d.name)
+        for rel, text in _ENUM_FILES.items():
+            old, new = (edits or {}).get(rel, ("", ""))
+            if old:
+                self.assertIn(old, text, f"fixture edit does not apply to {rel}")
+                text = text.replace(old, new)
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(text)
+        return d
+
+    def run_with(self, edits: dict[str, tuple[str, str]] | None = None) -> tuple[list[str], int, int]:
+        with self.tree(edits) as d:
+            return check.evaluate(Path(d), (_ENUM_ROW,))
+
+    def test_clean_tree_passes_and_compares_every_source(self) -> None:
+        self.assertEqual(self.run_with(), ([], 1, len(_ENUM_ROW.sources)))
+
+    def test_a_token_matching_no_enumerator_is_named(self) -> None:
+        problems, _, _ = self.run_with({"ts/tap.ts": ("'postFader';", "'postFader' | 'preSend';")})
+        self.assertEqual(problems, ["tap: node Tap (ts/tap.ts): token 'preSend' matches no SONARE_TAP_* enumerator"])
+
+    def test_a_missing_token_is_named(self) -> None:
+        problems, _, _ = self.run_with({"py/tap.py": ('"preFader", "postFader"]', '"preFader"]')})
+        self.assertEqual(problems, ["tap: python Tap (py/tap.py): missing a token for SONARE_TAP_POST_FADER"])
+
+    def test_a_swapped_ordinal_in_a_py_dict_is_named(self) -> None:
+        problems, _, _ = self.run_with({"py/tap.py": ('"preFader": 0, "postFader": 1', '"preFader": 1, "postFader": 0')})
+        self.assertEqual(
+            problems,
+            [
+                "tap: python _TAPS (py/tap.py): token 'postFader' has ordinal 0, the C ABI's is 1",
+                "tap: python _TAPS (py/tap.py): token 'preFader' has ordinal 1, the C ABI's is 0",
+            ],
+        )
+
+    def test_a_row_without_writer_or_enum_is_named(self) -> None:
+        with self.tree() as d:
+            problems, _, compared = check.evaluate(Path(d), (_ENUM_ROW._replace(c_enum=None),))
+        self.assertEqual((problems, compared), (["tap: a row with no core writer must name its C enum"], 0))
+
+    def test_an_enum_pinned_set_draws_on_no_writer(self) -> None:
+        # Tap shares no writer here; pin law.ts's Law to an enum row and it stops drawing on law_text.
+        with self.tree({"ts/tap.ts": ("export type Tap", "export type Law = 'soft' | 'hard';\nexport type Tap")}) as d:
+            root = Path(d)
+            (root / "bindings/node/src").mkdir(parents=True)
+            (root / "bindings/node/src/law.ts").write_text("export type Law = 'soft' | 'hard';\n")
+            unpinned, _, _ = check.evaluate_population(root, (), {})
+            row = _ENUM_ROW._replace(sources=(check.Source("node", "bindings/node/src/law.ts", "ts_union", "Law"),))
+            pinned, sets, writers = check.evaluate_population(root, (row,), {})
+        self.assertIn(
+            "Law (bindings/node/src/law.ts) spells the tokens of law_text(Law) in src/law.cpp and no row pins it",
+            unpinned,
+        )
+        self.assertEqual((pinned, sets, writers), ([], 0, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
