@@ -108,11 +108,6 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   band.dyn.attack_ms = static_cast<float>(DoubleProperty(object, "attackMs", band.dyn.attack_ms));
   band.dyn.release_ms =
       static_cast<float>(DoubleProperty(object, "releaseMs", band.dyn.release_ms));
-  if (object.Has("lookaheadMs") && !object.Get("lookaheadMs").IsUndefined() &&
-      !object.Get("lookaheadMs").IsNull()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "lookaheadMs is an earlier spelling; write detectorDelayMs");
-  }
   band.dyn.detector_delay_ms =
       static_cast<float>(DoubleProperty(object, "detectorDelayMs", band.dyn.detector_delay_ms));
   band.dyn.external_sidechain =

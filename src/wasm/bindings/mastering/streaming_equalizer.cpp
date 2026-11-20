@@ -97,10 +97,6 @@ mastering::eq::EqBand eqBandFromVal(val band) {
   result.dyn.range_db = floatProperty(band, "rangeDb", result.dyn.range_db);
   result.dyn.attack_ms = floatProperty(band, "attackMs", result.dyn.attack_ms);
   result.dyn.release_ms = floatProperty(band, "releaseMs", result.dyn.release_ms);
-  const val earlier_lookahead = band["lookaheadMs"];
-  if (!earlier_lookahead.isUndefined() && !earlier_lookahead.isNull()) {
-    throw WasmRangeError("lookaheadMs is an earlier spelling; write detectorDelayMs");
-  }
   result.dyn.detector_delay_ms =
       floatProperty(band, "detectorDelayMs", result.dyn.detector_delay_ms);
   result.dyn.external_sidechain =

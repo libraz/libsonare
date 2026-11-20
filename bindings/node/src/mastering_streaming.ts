@@ -838,6 +838,46 @@ const EQ_PHASE_MODE_ORDINALS: Record<EqPhaseMode, number> = {
 };
 const EQ_PHASE_MODES = Object.keys(EQ_PHASE_MODE_ORDINALS) as EqPhaseMode[];
 
+/** Every key a streaming EQ band reads; the record type keeps it complete. */
+const EQ_BAND_KEYS: Readonly<Record<keyof EqBandInput, true>> = {
+  type: true,
+  frequencyHz: true,
+  gainDb: true,
+  q: true,
+  enabled: true,
+  coeffMode: true,
+  slopeDbOct: true,
+  placement: true,
+  phase: true,
+  soloed: true,
+  bypassed: true,
+  proportionalQ: true,
+  proportionalQStrength: true,
+  dynamic: true,
+  thresholdDb: true,
+  autoThreshold: true,
+  ratio: true,
+  rangeDb: true,
+  attackMs: true,
+  releaseMs: true,
+  detectorDelayMs: true,
+  externalSidechain: true,
+  sidechainFreqHz: true,
+  sidechainQ: true,
+};
+
+/** Refuse a band that is not an object or carries a key no band reads. */
+function assertEqBand(band: unknown): asserts band is EqBandInput {
+  if (typeof band !== 'object' || band === null || Array.isArray(band)) {
+    throw refuseType('band must be an object');
+  }
+  for (const key of Object.keys(band)) {
+    if (!Object.hasOwn(EQ_BAND_KEYS, key)) {
+      throw refuseUnknownKey(`band.${key}`, Object.keys(EQ_BAND_KEYS));
+    }
+  }
+}
+
 /**
  * Block-by-block unified equalizer (zero-latency / natural / linear phase).
  *
@@ -879,6 +919,7 @@ export class StreamingEqualizer {
 
   /** Configure one EQ band (0-based index). */
   setBand(index: number, band: EqBandInput): void {
+    assertEqBand(band);
     const native: Record<string, unknown> = { ...band };
     if (band.placement !== undefined) {
       native.placement = checkedEqPlacement(band.placement);

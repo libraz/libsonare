@@ -25310,6 +25310,14 @@ test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEquali
 
 [[entry]]
 kind = "method"
+old = "StreamingEqualizer.setBand"
+changed = "a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent"
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::refuses the undeclared band key"
+
+[[entry]]
+kind = "method"
 old = "StreamingEqualizer.setPhaseMode"
 changed = "setPhaseMode(mode: EqPhaseMode) with EqPhaseMode = 'zero' | 'natural' | 'linear'; synonyms and numbers refused"
 domain = "mastering"

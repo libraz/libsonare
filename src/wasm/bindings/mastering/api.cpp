@@ -552,9 +552,6 @@ mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) 
   std::string preset;
   bool has_preset = false;
   if (!params_obj.isNull() && !params_obj.isUndefined()) {
-    if (hasProperty(params_obj, "target_platform")) {
-      throw WasmRangeError("'target_platform' is an earlier spelling; write targetPlatform");
-    }
     if (hasProperty(params_obj, "targetPlatform")) {
       val value = params_obj["targetPlatform"];
       if (value.typeOf().as<std::string>() != "string") {

@@ -1,5 +1,11 @@
 import { chainConfigJson } from './internal/chain_config.js';
-import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
+import {
+  entryClass,
+  nameNativeError,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+} from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -347,6 +353,47 @@ export class StreamingMasteringChain {
 // StreamingEqualizer Class
 // ============================================================================
 
+/** Every key a streaming EQ band reads; the record type keeps it complete. */
+const EQ_BAND_KEYS: Readonly<Record<keyof EqBandInput, true>> = {
+  type: true,
+  frequencyHz: true,
+  gainDb: true,
+  q: true,
+  enabled: true,
+  coeffMode: true,
+  slopeDbOct: true,
+  placement: true,
+  phase: true,
+  soloed: true,
+  bypassed: true,
+  proportionalQ: true,
+  proportionalQStrength: true,
+  dynamic: true,
+  thresholdDb: true,
+  autoThreshold: true,
+  ratio: true,
+  rangeDb: true,
+  attackMs: true,
+  releaseMs: true,
+  detectorDelayMs: true,
+  externalSidechain: true,
+  sidechainFreqHz: true,
+  sidechainQ: true,
+};
+
+/** Refuse a band that is not an object or carries a key no band reads. */
+function assertEqBand(band: unknown): asserts band is EqBandInput {
+  if (typeof band !== 'object' || band === null || Array.isArray(band)) {
+    throw refuseType('band must be an object');
+  }
+  for (const key of Object.keys(band)) {
+    // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
+    if (!Object.prototype.hasOwnProperty.call(EQ_BAND_KEYS, key)) {
+      throw refuseUnknownKey(`band.${key}`, Object.keys(EQ_BAND_KEYS));
+    }
+  }
+}
+
 /**
  * Block-by-block streaming equalizer wrapping the unified C++
  * `EqualizerProcessor` (up to 24 bands, RBJ/Vicanek biquads, dynamic EQ,
@@ -404,6 +451,7 @@ export class StreamingEqualizer {
    * Configure the band at `index` (0..23). Omitted fields use C++ defaults.
    */
   setBand(index: number, band: EqBandInput): void {
+    assertEqBand(band);
     if (band.placement !== undefined) {
       eqPlacementOrdinal(band.placement);
     }
