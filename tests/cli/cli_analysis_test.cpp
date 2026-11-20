@@ -751,7 +751,7 @@ TEST_CASE("CLI pitch command", "[cli]") {
     auto [code, output] =
         exec_command(CLI + " pitch " + short_wav + " --f0-min-hz 5 --f0-max-hz 10 --json -q");
     REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("fmin=5 is too small for frame_length=2048"));
+    REQUIRE_THAT(output, ContainsSubstring("sr / fmin must be less than frame_length - 1"));
     std::remove(short_wav.c_str());
   }
 }
