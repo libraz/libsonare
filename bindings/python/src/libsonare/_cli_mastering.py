@@ -36,7 +36,7 @@ from ._cli_repair import (
     register_repair_parsers,
 )
 from ._errors import _unknown_error
-from ._mastering_offline import _chain_config_paths, _nest_chain_config
+from ._mastering_offline import _chain_config_paths, _check_chain_document, _nest_chain_config
 from ._result_records import _result_to_json_dict
 
 if TYPE_CHECKING:
@@ -276,6 +276,9 @@ def cmd_mastering(args: argparse.Namespace) -> int:
 
     # _validate_mastering_selection() has settled the chain selector before the input was read.
     params = _parse_kv_params(params_raw, names=True) if params_raw else {}
+    # Read as a chain document's params, as on the native CLI, so a refusal names params.<path>.
+    if params:
+        _check_chain_document(params)
 
     def _run_chain(config: dict[str, Any]) -> Any:
         """Run one chain config over however many channels the source has."""
