@@ -63,6 +63,7 @@ _ROWS: tuple[tuple[str, str, str, str, int | None], ...] = (
     ("analyze", "--chroma-high-pass-hz", "_analysis_reports:analyze", "chroma_high_pass_hz", None),
     ("analyze", "--meter-denominator", "_analysis_reports:analyze", "meter_denominator", None),
     ("pitch", "--threshold", "_features_pitch:pitch_pyin", "threshold", None),
+    ("filter", "--order", "_effects_level:biquad_filter", "order", None),
     ("pitch", "--f0-min-hz", "_features_pitch:pitch_pyin", "f0_min_hz", None),
     ("pitch", "--f0-max-hz", "_features_pitch:pitch_pyin", "f0_max_hz", None),
     ("hpss", "--kernel-harmonic", "_effects_separation:hpss", "kernel_harmonic", None),

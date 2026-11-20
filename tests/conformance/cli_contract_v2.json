@@ -2266,7 +2266,13 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusive_minimum": false,
+            "maximum": 65536,
+            "exclusive_maximum": false
+          }
         },
         {
           "name": "json",
@@ -5438,6 +5444,230 @@
             "exclusive_maximum": false
           }
         }
+      ],
+      "fade": [
+        {
+          "name": "fade-in-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fade-out-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "filter": [
+        {
+          "name": "bandwidth-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "center-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "cutoff-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "order",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "2",
+              "4"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [
+              "high-pass",
+              "low-pass",
+              "band-pass",
+              "notch"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "zero-phase",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "gain": [
+        {
+          "name": "gain-db",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "system-info": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
       ]
     }
   },
@@ -5939,25 +6169,19 @@
       "option_status": "active"
     },
     "gain": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a whole-file sample transform; the native binary is the surface that ships without a Python runtime, and a Python caller scales the array itself"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "fade": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a whole-file sample transform; the native binary is the surface that ships without a Python runtime, and a Python caller shapes the array itself"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "filter": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "a whole-file sample transform of the native binary; the biquad behind it has no Python entry point, so mirroring the command would mean binding the capability first, which is a bindings question rather than a CLI one"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "tone": {
       "classification": "native_only",
@@ -6147,11 +6371,9 @@
       "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.pcen() over the array it already holds, where it composes"
     },
     "system-info": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "reports the configuration of the binary it is run from, so the same command on the other front-end would describe a different process"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mix-strip": {
       "classification": "shared",
@@ -19109,6 +19331,439 @@
         {
           "id": "seven_one",
           "argv": ["playback", "{audio}", "-o", "{output}", "--target", "7.1", "--json"],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "gain",
+      "options": [
+        {
+          "name": "gain-db",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "gain_db": "number",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "gain",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--gain-db",
+            "-3",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "fade",
+      "options": [
+        {
+          "name": "fade-in-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "fade-out-sec",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "fade_in_sec": "number",
+            "fade_out_sec": "number",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "fade",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--fade-in-sec",
+            "0.1",
+            "--fade-out-sec",
+            "0.1",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "filter",
+      "options": [
+        {
+          "name": "bandwidth-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "center-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "cutoff-hz",
+          "type": "number",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": true,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "order",
+          "type": "integer",
+          "default": null,
+          "stated_default": "2",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "2",
+              "4"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "stated_default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "default": null,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [
+              "high-pass",
+              "low-pass",
+              "band-pass",
+              "notch"
+            ],
+            "minimum": null,
+            "exclusive_minimum": false,
+            "maximum": null,
+            "exclusive_maximum": false
+          }
+        },
+        {
+          "name": "zero-phase",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "type": "string",
+            "order": "integer",
+            "cutoff_hz": "number|null",
+            "center_hz": "number|null",
+            "bandwidth_hz": "number|null",
+            "zero_phase": "boolean",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "low_pass",
+          "argv": [
+            "filter",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--type",
+            "low-pass",
+            "--cutoff-hz",
+            "2000",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "notch",
+          "argv": [
+            "filter",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--type",
+            "notch",
+            "--center-hz",
+            "1000",
+            "--bandwidth-hz",
+            "200",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "cutoff_above_nyquist",
+          "argv": [
+            "filter",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--type",
+            "low-pass",
+            "--cutoff-hz",
+            "30000",
+            "--json"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "cutoff_hz must be finite and in (0, 11025)"
+          ]
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "system-info",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "cpu": {
+              "keys": {
+                "logical_cores": "integer",
+                "physical_cores": "integer"
+              }
+            },
+            "memory": {
+              "keys": {
+                "total_gb": "number",
+                "available_gb": "number"
+              }
+            },
+            "parallel": {
+              "keys": {
+                "enabled": "boolean",
+                "workers": "integer",
+                "strategy": "string"
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "system-info",
+            "--json"
+          ],
           "exit": 0,
           "payload": "success",
           "artifact": "none",

@@ -691,6 +691,28 @@ def _validate_note_stretch_bounds(
     _refuse_both_bound_spellings(args, parser, ("onset", "offset"))
 
 
+def _validate_fade_sides(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.fade_in_sec is None and args.fade_out_sec is None:
+        parser.error("give --fade-in-sec or --fade-out-sec")
+
+
+def _validate_filter_frequencies(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    corner = args.type in ("high-pass", "low-pass")
+    types = "high-pass or low-pass" if corner else "band-pass or notch"
+    read = ("cutoff_hz",) if corner else ("center_hz", "bandwidth_hz")
+    unread = ("center_hz", "bandwidth_hz") if corner else ("cutoff_hz",)
+    for name in read:
+        if getattr(args, name) is None:
+            parser.error(f"--{name.replace('_', '-')} is required when --type is {types}")
+    for name in unread:
+        if getattr(args, name) is not None:
+            parser.error(f"--{name.replace('_', '-')} does not apply when --type is {types}")
+    if not corner and args.order not in (None, 2):
+        parser.error(f"--order must be 2 when --type is {types}")
+
+
 # Cross-option checks, keyed by command path, run once parsing has succeeded and
 # before any handler reads its input -- the native registry's command validators.
 # Each refuses as a usage failure: it is decided from the command line alone.
@@ -707,6 +729,8 @@ _COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentPa
     "mastering-streaming": _validate_streaming_platforms,
     "project.bounce": _validate_render_channels,
     "midi-render": _validate_render_channels,
+    "fade": _validate_fade_sides,
+    "filter": _validate_filter_frequencies,
 }
 
 
@@ -754,6 +778,9 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "pitch-shift",
         "time-stretch",
         "normalize",
+        "gain",
+        "fade",
+        "filter",
         "trim-silence",
         "resample",
         "voice-change",

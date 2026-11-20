@@ -75,6 +75,9 @@ _REQUIRED_OPTIONS: dict[str, tuple[str, ...]] = {
             "voice-change",
         )
     },
+    "fade": ("output",),
+    "filter": ("type", "output"),
+    "gain": ("gain-db", "output"),
     "mastering-pair-analyze": ("analysis", "reference"),
     "mastering-pair-processor": ("processor", "reference"),
     "mastering-processor": ("processor",),

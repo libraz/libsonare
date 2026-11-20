@@ -125,6 +125,7 @@ from ._cli_common import (
 from ._cli_common import (
     cmd_doctor as cmd_doctor,
 )
+from ._cli_dsp import *  # noqa: F403
 from ._cli_effects import *  # noqa: F403
 from ._cli_effects import (
     _DEFAULT_UNMATCHED_POLICY as _DEFAULT_UNMATCHED_POLICY,
@@ -214,6 +215,7 @@ from ._cli_project import (
 from ._cli_project import (
     _write_project_json as _write_project_json,
 )
+from ._cli_utilities import *  # noqa: F403
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 
 
@@ -247,12 +249,14 @@ def _build_parser() -> _ContractArgumentParser:
     # subcommands appear where its registrar runs, not where its module sorts.
     register_analysis_parsers(sub, shared)
     register_effects_parsers(sub, shared)
+    register_dsp_parsers(sub, shared)
     register_acoustic_parsers(sub, shared)
     register_advanced_parsers(sub, shared)
     register_mastering_parsers(sub, shared)
     register_project_parsers(sub, shared)
     register_mixing_parsers(sub, shared)
     register_playback_parsers(sub, shared)
+    register_utilities_parsers(sub, shared)
 
     # Add file argument to all subcommands that need it
     for name in [
@@ -282,6 +286,9 @@ def _build_parser() -> _ContractArgumentParser:
         "pitch-shift",
         "time-stretch",
         "normalize",
+        "gain",
+        "fade",
+        "filter",
         "trim-silence",
         "resample",
         "voice-change",
@@ -434,6 +441,10 @@ def _dispatch() -> None:
         "mix": cmd_mix,
         "mix-strip": cmd_mix_strip,
         "playback": cmd_playback,
+        "gain": cmd_gain,
+        "fade": cmd_fade,
+        "filter": cmd_filter,
+        "system-info": cmd_system_info,
     }
 
     handler = commands.get(args.command)

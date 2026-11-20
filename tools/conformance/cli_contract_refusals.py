@@ -438,6 +438,43 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
         ["midi-render", "{input}", "--channels", "3", "-o", "{output}"],
         "argument --channels: must be one of 1, 2, 6, 8; leave it out for the scene master's width",
     ),
+    (
+        ["fade", "{input}", "-o", "{output}"],
+        "give --fade-in-sec or --fade-out-sec",
+    ),
+    (
+        ["filter", "{input}", "-o", "{output}", "--type", "low-pass"],
+        "--cutoff-hz is required when --type is high-pass or low-pass",
+    ),
+    (
+        ["filter", "{input}", "-o", "{output}", "--type", "notch", "--bandwidth-hz", "100"],
+        "--center-hz is required when --type is band-pass or notch",
+    ),
+    (
+        ["filter", "{input}", "-o", "{output}", "--type", "notch", "--center-hz", "1000"],
+        "--bandwidth-hz is required when --type is band-pass or notch",
+    ),
+    (
+        [
+            "filter", "{input}", "-o", "{output}", "--type", "high-pass",
+            "--cutoff-hz", "1000", "--center-hz", "1000",
+        ],
+        "--center-hz does not apply when --type is high-pass or low-pass",
+    ),
+    (
+        [
+            "filter", "{input}", "-o", "{output}", "--type", "band-pass",
+            "--center-hz", "1000", "--bandwidth-hz", "100", "--cutoff-hz", "1000",
+        ],
+        "--cutoff-hz does not apply when --type is band-pass or notch",
+    ),
+    (
+        [
+            "filter", "{input}", "-o", "{output}", "--type", "notch",
+            "--center-hz", "1000", "--bandwidth-hz", "100", "--order", "4",
+        ],
+        "--order must be 2 when --type is band-pass or notch",
+    ),
 )
 
 
