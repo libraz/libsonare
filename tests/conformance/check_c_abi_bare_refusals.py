@@ -65,8 +65,8 @@ INTERIM_MARKERS = (
 )
 STRING_LITERAL = re.compile(r'"(?:[^"\\\n]|\\.)*"')
 FUNCTION_HEAD = re.compile(r"\b([A-Za-z_]\w*)\s*\([^;{}()]*\)\s*(?:const\s*)?(?:noexcept\s*)?\{")
-# Ceiling-only while several changes lower the counts at once; the line is rewritten per batch.
-CEILING_ONLY = True
+# Exact: every key is 0, so any new bare refusal and any stale line fail.
+CEILING_ONLY = False
 
 ACCESSOR_PREFIX = "sonare_last_"
 ACCESSOR_CONTRACT = "Like every sonare_last_* accessor, it records no error"
