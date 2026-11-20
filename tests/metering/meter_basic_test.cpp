@@ -1874,7 +1874,7 @@ TEST_CASE("the basic meters refuse in the shared parameter vocabulary", "[meteri
         "threshold_db must be finite and in [-3.4028235e38, 3.4028235e38]");
 
   CHECK(message_of([&] { (void)metering::true_peak(nullptr, 4, 4); }) ==
-        "samples must not be null when length is greater than 0");
+        "samples must not be NULL when length is not 0");
 
   std::vector<float> poisoned = samples;
   poisoned[10] = nan_value;

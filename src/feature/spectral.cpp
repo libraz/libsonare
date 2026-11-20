@@ -68,7 +68,7 @@ std::vector<float> spectral_centroid(const Spectrogram& spec, int sr) {
 
 std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_frames, int sr,
                                      int n_fft) {
-  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  util::check::non_null(magnitude, "magnitude");
   check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
 
   std::vector<float> freqs = util::bin_frequencies(n_bins, sr, n_fft);
@@ -105,7 +105,7 @@ std::vector<float> spectral_bandwidth(const Spectrogram& spec, int sr, float p) 
 
 std::vector<float> spectral_bandwidth(const float* magnitude, int n_bins, int n_frames, int sr,
                                       int n_fft, float p) {
-  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  util::check::non_null(magnitude, "magnitude");
   check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
   // An infinite p survives a bare p > 0 and is laundered into a finite lie:
   // pow(sum, 1/p) collapses to pow(x, 0) == 1, so every frame reads 1.0 Hz.
@@ -150,7 +150,7 @@ std::vector<float> spectral_rolloff(const Spectrogram& spec, int sr, float roll_
 
 std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_frames, int sr,
                                     int n_fft, float roll_percent) {
-  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  util::check::non_null(magnitude, "magnitude");
   check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
   util::check::in_interval(roll_percent, 0.0, false, 1.0, false, "roll_percent");
 
@@ -213,7 +213,7 @@ std::vector<float> spectral_flatness(const Spectrogram& spec) {
 }
 
 std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_frames) {
-  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  util::check::non_null(magnitude, "magnitude");
   util::check::integer_at_least(n_bins, 1, "n_bins");
   util::check::integer_at_least(n_frames, 1, "n_frames");
 
@@ -284,14 +284,6 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   util::check::integer_at_least(n_bins, 1, "n_bins");
   util::check::integer_at_least(n_frames, 1, "n_frames");
   util::check::integer_at_least(n_fft, 1, "n_fft");
-  if (magnitude.empty()) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "magnitude",
-                                            "must not be empty");
-  }
-  if (magnitude.size() < static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames)) {
-    util::check::refuse_relation({"magnitude", "n_bins", "n_frames"},
-                                 "{0} must hold at least {1} * {2} values");
-  }
 
   float nyquist = 0.5f * static_cast<float>(sr);
   if (!(fmin * std::pow(2.0f, static_cast<float>(n_bands - 1)) < nyquist)) {
@@ -426,7 +418,7 @@ std::vector<float> poly_features(const Spectrogram& spec, int sr, int order) {
 
 std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frames, int sr,
                                  int n_fft, int order) {
-  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  util::check::non_null(magnitude, "magnitude");
   check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
   util::check::integer_at_least(order, 0, "order");
 
@@ -513,10 +505,7 @@ std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, in
                                       int hop_length) {
   util::check::integer_at_least(frame_length, 1, "frame_length");
   util::check::integer_at_least(hop_length, 1, "hop_length");
-  if (n_samples != 0 && samples == nullptr) {
-    util::check::refuse_relation({"samples", "n_samples"},
-                                 "{0} must not be null when {1} is greater than 0");
-  }
+  util::check::non_null_when_count(samples, n_samples, "samples", "n_samples");
 
   // Empty input: no zero crossings to count. Return a single zero-rate frame so
   // downstream callers always get a defined, non-empty result (and we never
@@ -564,10 +553,7 @@ std::vector<float> rms_energy(const Audio& audio, int frame_length, int hop_leng
 
 std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_length,
                               int hop_length) {
-  if (n_samples != 0 && samples == nullptr) {
-    util::check::refuse_relation({"samples", "n_samples"},
-                                 "{0} must not be null when {1} is greater than 0");
-  }
+  util::check::non_null_when_count(samples, n_samples, "samples", "n_samples");
   util::check::integer_at_least(frame_length, 1, "frame_length");
   util::check::integer_at_least(hop_length, 1, "hop_length");
 
@@ -599,9 +585,7 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
 
 std::vector<int> zero_crossings(const float* y, size_t n, float threshold, bool ref_magnitude,
                                 bool pad, bool zero_pos) {
-  if (n > 0 && y == nullptr) {
-    util::check::refuse_relation({"y", "n"}, "{0} must not be null when {1} is greater than 0");
-  }
+  util::check::non_null_when_count(y, n, "y", "n");
   // Finite, not merely non-negative: an infinite threshold zeroes every sample under
   // the sign test, and ref_magnitude scales it to NaN on silence, inverting that.
   util::check::at_least(threshold, 0.0, "threshold");

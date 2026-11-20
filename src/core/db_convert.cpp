@@ -17,9 +17,7 @@ namespace sonare {
 namespace {
 
 void require_buffer(const float* data, std::size_t n, const char* subject) {
-  if (n != 0 && data == nullptr) {
-    util::check::refuse_relation({subject, "n"}, "{0} must not be null when {1} is greater than 0");
-  }
+  util::check::non_null_when_count(data, n, subject, "n");
 }
 
 float resolve_ref(const float* S, std::size_t n, float ref) {

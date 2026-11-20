@@ -115,10 +115,7 @@ float true_peak(const float* data, size_t length, int oversample_factor) {
   if (!::sonare::rt::is_supported_polyphase_oversample_factor(oversample_factor)) {
     util::check::one_of(oversample_factor, std::array<int, 5>{1, 2, 4, 8, 16}, "oversample_factor");
   }
-  if (data == nullptr && length != 0) {
-    util::check::refuse_relation({"samples", "length"},
-                                 "{0} must not be null when {1} is greater than 0");
-  }
+  util::check::non_null_when_count(data, length, "samples", "length");
   if (length == 0) return 0.0f;
   // peak_abs absorbs a non-finite sample, and the skip test below compares an
   // interpolation bound against the running peak, so one would be dropped twice

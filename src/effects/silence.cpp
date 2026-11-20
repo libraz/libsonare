@@ -83,9 +83,7 @@ FrameDecision decide_frames(const float* x, std::size_t n, float top_db, int fra
   if (n == 0) {
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "x", "must not be empty");
   }
-  if (x == nullptr) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "x", "must not be null");
-  }
+  util::check::non_null(x, "x");
   util::check::integer_at_least(frame_length, 1, "frame_length");
   util::check::integer_at_least(hop_length, 1, "hop_length");
   require_indexable_length(n);
@@ -180,14 +178,8 @@ CommonSplitReport split_common_with_report(const float* const* signals, const st
                                            std::size_t signal_count, float top_db, int frame_length,
                                            int hop_length) {
   util::check::integer_at_least(static_cast<long long>(signal_count), 1, "signal_count");
-  if (signals == nullptr) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "signals",
-                                            "must not be null");
-  }
-  if (lengths == nullptr) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "lengths",
-                                            "must not be null");
-  }
+  util::check::non_null(signals, "signals");
+  util::check::non_null(lengths, "lengths");
   CommonSplitReport out;
   std::vector<std::pair<int, int>> collected;
   for (std::size_t index = 0; index < signal_count; ++index) {

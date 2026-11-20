@@ -30,9 +30,7 @@ constexpr float kMinLift = 1.0e-3f;
 
 std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
                                const MelConfig& mel_config, int sr) {
-  if (M == nullptr) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "M", "must not be null");
-  }
+  util::check::non_null(M, "M");
   if (n_mels <= 0 || n_frames <= 0) return {};
   util::check::integer_at_least(mel_config.n_fft, 1, "n_fft");
   util::check::integer_at_least(sr, 1, "sr");
@@ -83,10 +81,7 @@ Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& me
 
 std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                float lifter) {
-  if (mfcc == nullptr) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "mfcc",
-                                            "must not be null");
-  }
+  util::check::non_null(mfcc, "mfcc");
   util::check::integer_at_least(n_mfcc, 1, "n_mfcc");
   util::check::integer_at_least(n_frames, 1, "n_frames");
   util::check::integer_at_least(n_mels, 1, "n_mels");

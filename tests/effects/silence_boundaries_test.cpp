@@ -55,7 +55,7 @@ TEST_CASE("trim and split refusals read as core member names", "[silence]") {
   const float nan = std::numeric_limits<float>::quiet_NaN();
 
   REQUIRE_THROWS_WITH(trim(data, 0, 60.0f, kFrame, kHop), "x must not be empty");
-  REQUIRE_THROWS_WITH(trim(nullptr, kSamples, 60.0f, kFrame, kHop), "x must not be null");
+  REQUIRE_THROWS_WITH(trim(nullptr, kSamples, 60.0f, kFrame, kHop), "x must not be NULL");
   REQUIRE_THROWS_WITH(trim(data, kSamples, 60.0f, 0, kHop),
                       "frame_length must be an integer in [1, 2147483647]");
   REQUIRE_THROWS_WITH(split(data, kSamples, 60.0f, kFrame, 0),
@@ -72,9 +72,9 @@ TEST_CASE("trim and split refusals read as core member names", "[silence]") {
   REQUIRE_THROWS_WITH(split_common_with_report(signals, lengths, 0, 60.0f, kFrame, kHop),
                       "signal_count must be an integer of at least 1");
   REQUIRE_THROWS_WITH(split_common_with_report(nullptr, lengths, 1, 60.0f, kFrame, kHop),
-                      "signals must not be null");
+                      "signals must not be NULL");
   REQUIRE_THROWS_WITH(split_common_with_report(signals, nullptr, 1, 60.0f, kFrame, kHop),
-                      "lengths must not be null");
+                      "lengths must not be NULL");
   const float* with_empty[2] = {data, data};
   const std::size_t empty_lengths[2] = {kSamples, 0};
   REQUIRE_THROWS_WITH(split_common_with_report(with_empty, empty_lengths, 2, 60.0f, kFrame, kHop),

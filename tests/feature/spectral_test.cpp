@@ -1047,6 +1047,12 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
 
   CHECK_THROWS_WITH(spectral_centroid(m, 0, 1, 22050, 2048),
                     "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_centroid(nullptr, 3, 1, 22050, 4), "magnitude must not be NULL");
+  CHECK_THROWS_WITH(spectral_bandwidth(nullptr, 3, 1, 22050, 4, 2.0f),
+                    "magnitude must not be NULL");
+  CHECK_THROWS_WITH(spectral_rolloff(nullptr, 3, 1, 22050, 4, 0.85f), "magnitude must not be NULL");
+  CHECK_THROWS_WITH(spectral_flatness(nullptr, 3, 1), "magnitude must not be NULL");
+  CHECK_THROWS_WITH(poly_features(nullptr, 3, 1, 22050, 4, 1), "magnitude must not be NULL");
   CHECK_THROWS_WITH(spectral_centroid(m, 3, 0, 22050, 2048),
                     "n_frames must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(spectral_centroid(m, 3, 1, 0, 2048),
@@ -1095,9 +1101,9 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
   CHECK_THROWS_WITH(zero_crossing_rate(samples.data(), samples.size(), 4, 0),
                     "hop_length must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(zero_crossing_rate(nullptr, 8, 4, 4),
-                    "samples must not be null when n_samples is greater than 0");
+                    "samples must not be NULL when n_samples is not 0");
   CHECK_THROWS_WITH(rms_energy(nullptr, 8, 4, 4),
-                    "samples must not be null when n_samples is greater than 0");
+                    "samples must not be NULL when n_samples is not 0");
   CHECK_THROWS_WITH(rms_energy(samples.data(), samples.size(), 0, 4),
                     "frame_length must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(rms_energy(samples.data(), samples.size(), 4, 0),
@@ -1105,7 +1111,7 @@ TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spec
 
   const std::vector<float> with_nan = {0.5f, nan, 0.5f};
   CHECK_THROWS_WITH(zero_crossings(nullptr, 3, 1e-5f, true, true, true),
-                    "y must not be null when n is greater than 0");
+                    "y must not be NULL when n is not 0");
   CHECK_THROWS_WITH(zero_crossings(with_nan.data(), with_nan.size(), -1.0f, true, true, true),
                     "threshold must be finite and at least 0");
   CHECK_THROWS_WITH(zero_crossings(with_nan.data(), with_nan.size(), 1e-5f, true, true, true),
@@ -1189,7 +1195,7 @@ TEST_CASE("inverse features refuse a bad parameter by its core name", "[spectral
   config.n_mels = 4;
   const std::vector<float> mel(16, 1.0f);
 
-  CHECK_THROWS_WITH(mel_to_stft(nullptr, 4, 4, config, 22050), "M must not be null");
+  CHECK_THROWS_WITH(mel_to_stft(nullptr, 4, 4, config, 22050), "M must not be NULL");
   MelConfig bad_fft = config;
   bad_fft.n_fft = 0;
   CHECK_THROWS_WITH(mel_to_stft(mel.data(), 4, 4, bad_fft, 22050),
@@ -1211,7 +1217,7 @@ TEST_CASE("inverse features refuse a bad parameter by its core name", "[spectral
                     "n_iter must be an integer in [1, 2147483647]");
 
   const std::vector<float> mfcc(8, 1.0f);
-  CHECK_THROWS_WITH(mfcc_to_mel(nullptr, 2, 4, 8, 0.0f), "mfcc must not be null");
+  CHECK_THROWS_WITH(mfcc_to_mel(nullptr, 2, 4, 8, 0.0f), "mfcc must not be NULL");
   CHECK_THROWS_WITH(mfcc_to_mel(mfcc.data(), 0, 4, 8, 0.0f),
                     "n_mfcc must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(mfcc_to_mel(mfcc.data(), 2, 0, 8, 0.0f),

@@ -400,15 +400,15 @@ TEST_CASE("the dB conversions refuse in the shared parameter vocabulary", "[conv
           "top_db " + finite_float);
   }
   CHECK(refusal_message([] { (void)power_to_db(nullptr, 2, 1.0f, 1e-10f, 80.0f); }) ==
-        "S must not be null when n is greater than 0");
+        "S must not be NULL when n is not 0");
   CHECK(refusal_message([] { (void)amplitude_to_db(nullptr, 2, 1.0f, 1e-5f, 80.0f); }) ==
-        "S must not be null when n is greater than 0");
+        "S must not be NULL when n is not 0");
 
   CHECK(refusal_message([&] { (void)db_to_power(values, nan_value); }) == "ref " + finite_float);
   CHECK(refusal_message([&] { (void)db_to_amplitude(values, nan_value); }) ==
         "ref " + finite_float);
   CHECK(refusal_message([] { (void)db_to_power(nullptr, 2, 1.0f); }) ==
-        "S_db must not be null when n is greater than 0");
+        "S_db must not be NULL when n is not 0");
   CHECK(refusal_message([] { (void)db_to_amplitude(nullptr, 2, 1.0f); }) ==
-        "S_db must not be null when n is greater than 0");
+        "S_db must not be NULL when n is not 0");
 }
