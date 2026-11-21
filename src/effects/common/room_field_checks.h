@@ -15,6 +15,10 @@
 
 namespace sonare::effects::common {
 
+/// @brief What RirSynthConfig::ism_order accepts.
+inline constexpr util::check::NumericDomain kRirIsmOrderDomain =
+    util::check::integer_domain(0, std::numeric_limits<int>::max());
+
 /// Config member paths of the three geometry members a room config holds.
 struct RoomMemberPaths {
   std::string dims;      ///< RoomDimensions member, e.g. "dims"
@@ -53,7 +57,7 @@ inline void check_room_geometry(const RoomDimensions& dims, const ::sonare::acou
 /// on, a temperature at or below absolute zero or a humidity outside [0, 100].
 inline void check_rir_synth_config(const ::sonare::acoustic::RirSynthConfig& config) {
   namespace check = ::sonare::util::check;
-  check::integer_in_range(config.ism_order, 0, std::numeric_limits<int>::max(), "ism_order");
+  check::integer_within(config.ism_order, kRirIsmOrderDomain, "ism_order");
   check::in_range(config.max_seconds, 0.0, ::sonare::acoustic::kMaxRirSeconds, "max_seconds");
   check::in_range(config.mixing_time_ms, 0.0, ::sonare::acoustic::kMaxRirMixingTimeMs,
                   "mixing_time_ms");

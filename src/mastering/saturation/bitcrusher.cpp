@@ -335,8 +335,7 @@ std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
 }
 
 void BitCrusher::validate_config(const BitCrusherConfig& config) {
-  check::integer_in_range(config.bit_depth, kBitCrusherMinBitDepth, kBitCrusherMaxBitDepth,
-                          "bit_depth");
+  check::integer_within(config.bit_depth, kBitCrusherBitDepthDomain, "bit_depth");
   check::integer_in_range(config.downsample_factor, 1, std::numeric_limits<int>::max(),
                           "downsample_factor");
   check::in_range(config.mix, 0.0, 1.0, "mix");

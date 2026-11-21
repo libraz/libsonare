@@ -279,7 +279,7 @@ StreamingMasteringChain& StreamingMasteringChain::operator=(StreamingMasteringCh
     default;
 
 void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, int num_channels) {
-  util::check::integer_in_range(num_channels, 1, 2, "num_channels");
+  util::check::integer_within(num_channels, kStreamingChainChannelCountDomain, "num_channels");
   if (!is_valid_realtime_block_size(max_block_size)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamingMasteringChain::prepare: max_block_size must be within [1, " +

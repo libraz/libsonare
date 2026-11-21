@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "util/parameter_checks.h"
+
 namespace sonare::metering {
 
 struct WaveformPeaksResult {
@@ -15,6 +17,10 @@ struct WaveformPeaksResult {
   size_t bucket_count = 0;
   size_t samples_per_bucket = 0;
 };
+
+/// @brief What samples_per_bucket accepts, compared as a 64-bit count.
+inline constexpr util::check::NumericDomain kSamplesPerBucketDomain =
+    util::check::integer_domain_of<long long>(1);
 
 /// @brief Refuses a zero bucket width, naming samples_per_bucket.
 /// @throws SonareParameterRefusal(InvalidParameter).

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::repair {
 
@@ -22,6 +23,10 @@ inline constexpr float kDecrackleMaxThreshold = 1000.0f;
 /// @details Levels past log2 of the signal length are skipped, so 24 covers inputs of 16 million
 /// samples; the shipped presets and the corpus use 4.
 inline constexpr int kDecrackleMaxLevels = 24;
+
+/// @brief Domain of @c DecrackleConfig::levels, stated once for the core check.
+inline constexpr util::check::NumericDomain kDecrackleLevelsDomain =
+    util::check::integer_domain(1, kDecrackleMaxLevels);
 
 struct DecrackleConfig {
   float threshold = 0.4f;

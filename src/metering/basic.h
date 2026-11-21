@@ -7,6 +7,7 @@
 
 #include "core/audio.h"
 #include "metering/clipping.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
@@ -27,6 +28,13 @@ float crest_factor_db(const Audio& audio);
 ///         the mono `crest_factor_db` convention.
 float crest_factor_db_interleaved(const float* samples, std::size_t frames, int channels);
 float clipping_ratio(const Audio& audio, float threshold = kDefaultClippingThreshold);
+/// @brief What the frame length of silence_ratio accepts.
+inline constexpr util::check::NumericDomain kSilenceRatioFrameLengthDomain =
+    util::check::integer_domain_of<int>(1);
+/// @brief What the hop length of silence_ratio accepts.
+inline constexpr util::check::NumericDomain kSilenceRatioHopLengthDomain =
+    util::check::integer_domain_of<int>(1);
+
 float silence_ratio(const Audio& audio, float threshold_db = -45.0f, int frame_length = 1024,
                     int hop_length = 256);
 float dc_offset(const Audio& audio);

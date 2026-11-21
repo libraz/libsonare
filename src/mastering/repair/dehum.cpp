@@ -672,11 +672,11 @@ void fill_report(DehumReport* report, const PassTrace& trace, const float* sampl
 void validate_config(const DehumConfig& config) {
   check::in_interval(config.fundamental_hz, 0.0, false, kDehumMaxFundamentalHz, true,
                      "fundamental_hz");
-  check::integer_in_range(config.harmonics, 1, kDehumMaxHarmonics, "harmonics");
+  check::integer_within(config.harmonics, kDehumHarmonicsDomain, "harmonics");
   check::in_interval(config.q, 0.0, false, kDehumMaxQ, true, "q");
   check::in_range(config.search_range_hz, 0.0, kDehumMaxSearchRangeHz, "search_range_hz");
   check::in_range(config.adaptation, 0.0, 1.0, "adaptation");
-  check::integer_in_range(config.frame_size, 16, kDehumMaxFrameSize, "frame_size");
+  check::integer_within(config.frame_size, kDehumFrameSizeDomain, "frame_size");
   check::in_range(config.pll_bandwidth, 0.0, kDehumMaxPllBandwidth, "pll_bandwidth");
   check::integer_in_range(static_cast<int>(config.mode), 0, static_cast<int>(DehumMode::Notch),
                           "mode");

@@ -175,8 +175,8 @@ float clip_threshold_from_db(float threshold_db, const char* subject) {
 
 void validate_config(const DeclipConfig& config) {
   check::in_interval(config.clip_threshold, 0.0, false, 1.0, true, "clip_threshold");
-  check::integer_in_range(config.lpc_order, 0, kDeclipMaxLpcOrder, "lpc_order");
-  check::integer_in_range(config.iterations, 1, kDeclipMaxIterations, "iterations");
+  check::integer_within(config.lpc_order, kDeclipLpcOrderDomain, "lpc_order");
+  check::integer_within(config.iterations, kDeclipIterationsDomain, "iterations");
   check::in_range(config.lpc_blend, 0.0, 1.0, "lpc_blend");
 }
 

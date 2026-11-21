@@ -77,8 +77,7 @@ float trim_threshold_from_db(float threshold_db, const char* subject) {
 
 void validate_config(const TrimSilenceConfig& config) {
   check::in_range(config.threshold, 0.0, 1.0, "threshold");
-  check::integer_in_range(static_cast<long long>(config.padding_samples), 0,
-                          static_cast<long long>(kMaxTrimPaddingSamples), "padding_samples");
+  check::integer_within(config.padding_samples, kTrimPaddingSamplesDomain, "padding_samples");
   check::integer_in_range(static_cast<int>(config.mode), 0,
                           static_cast<int>(TrimSilenceMode::LufsGated), "mode");
   check::in_range(config.gate_lufs, kMinTrimGateLufs, kMaxTrimGateLufs, "gate_lufs");

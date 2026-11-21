@@ -16,6 +16,7 @@
 #include "c_api/c_ordinal.h"
 #include "core/audio.h"
 #include "core/diagnostic.h"
+#include "core/spectrum.h"
 #include "engine/realtime_engine.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "host/midi_io.h"
@@ -71,6 +72,16 @@ constexpr int kMinSampleRate = sonare::kMinAudioSampleRate;
 constexpr int kMaxSampleRate = sonare::kMaxAudioSampleRate;
 constexpr size_t kMaxBufferSize = sonare::kMaxAudioBufferSize;
 
+/// @brief What a row or column count of a caller's matrix accepts.
+inline constexpr sonare::util::check::NumericDomain kMatrixDimensionDomain =
+    sonare::util::check::integer_domain_of<int>(0);
+/// @brief What the octave-band count of a room estimate accepts.
+inline constexpr sonare::util::check::NumericDomain kRoomEstimateOctaveBandsDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+/// @brief What the channel count of an interleaved buffer accepts.
+inline constexpr sonare::util::check::NumericDomain kInterleavedChannelsDomain =
+    sonare::util::check::integer_domain_of<int>(1);
+
 // Single source of truth for the message recorded when a caught exception is not
 // a std::exception subtype. Shared by SONARE_C_CATCH, SONARE_C_CATCH_RETURN, and
 // the run_*_offline helpers so the wording never drifts between them.
@@ -110,7 +121,7 @@ inline void require_struct_size(uint32_t struct_size, size_t expected, const std
 /// @throws sonare::SonareParameterRefusal naming @p subject.
 inline void check_stft_hop(int hop_length, const char* subject) {
   if (hop_length != SONARE_STFT_HOP_AUTO) {
-    sonare::util::check::integer_at_least(hop_length, 1, subject);
+    sonare::util::check::integer_within(hop_length, sonare::kStftHopDomain, subject);
   }
 }
 /// @brief The core spelling of a checked C hop: @ref SONARE_STFT_HOP_AUTO becomes 0, the hop

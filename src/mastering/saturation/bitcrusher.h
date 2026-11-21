@@ -24,6 +24,7 @@
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::saturation {
 
@@ -62,6 +63,10 @@ inline constexpr int kBitCrusherDiscTypeCount = static_cast<int>(kDiscClickRateH
 /// Word-length bounds. One bit leaves 2^(b-1) - 1 = 0 levels, which quantizes to 0/0.
 inline constexpr int kBitCrusherMinBitDepth = 2;
 inline constexpr int kBitCrusherMaxBitDepth = 24;
+
+/// @brief Domain of @c BitCrusherConfig::bit_depth, stated once for the core check.
+inline constexpr util::check::NumericDomain kBitCrusherBitDepthDomain =
+    util::check::integer_domain(kBitCrusherMinBitDepth, kBitCrusherMaxBitDepth);
 
 /// One-pole corner the radio generator is shaped by before its own low-pass.
 inline constexpr float kRadioNoiseCornerHz = 16000.0f;

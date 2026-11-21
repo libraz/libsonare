@@ -6,7 +6,15 @@
 #include <cstddef>
 #include <vector>
 
+#include "util/parameter_checks.h"
+
 namespace sonare {
+
+/// @brief Domains of the frame length and hop that frame() refuses outside.
+inline constexpr util::check::NumericDomain kFrameLengthDomain =
+    util::check::integer_domain_of<int>(1);
+inline constexpr util::check::NumericDomain kFrameHopLengthDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Slice signal into overlapping frames.
 /// @param x Input signal

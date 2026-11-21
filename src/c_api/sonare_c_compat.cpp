@@ -99,8 +99,8 @@ SonareError transform_buffer(const char* name, const float* values, size_t lengt
 
 // Refuses a row-major matrix whose element count would pass the buffer size limit.
 void check_matrix_size(int rows, int columns, const char* rows_name, const char* columns_name) {
-  util::check::integer_at_least(rows, 0, rows_name);
-  util::check::integer_at_least(columns, 0, columns_name);
+  util::check::integer_within(rows, kMatrixDimensionDomain, rows_name);
+  util::check::integer_within(columns, kMatrixDimensionDomain, columns_name);
   if (columns != 0 && static_cast<size_t>(rows) > kMaxBufferSize / static_cast<size_t>(columns)) {
     util::check::refuse_relation({rows_name, columns_name},
                                  "{0} times {1} must be at most " + std::to_string(kMaxBufferSize));
@@ -112,7 +112,7 @@ void check_matrix_size(int rows, int columns, const char* rows_name, const char*
 SonareError validate_interleaved_lufs_input(const float* samples, size_t frames, int num_channels,
                                             int sample_rate) {
   if (const SonareError err = run_validation([&] {
-        util::check::integer_at_least(num_channels, 1, "num_channels");
+        util::check::integer_within(num_channels, kInterleavedChannelsDomain, "num_channels");
         if (frames != 0 && static_cast<size_t>(num_channels) > kMaxBufferSize / frames) {
           util::check::refuse_relation(
               {"frames", "num_channels"},

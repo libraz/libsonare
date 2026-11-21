@@ -3,13 +3,19 @@
 /// @file phase_align.h
 /// @brief Integer-sample stereo phase alignment delay.
 
+#include <limits>
 #include <vector>
 
 #include "mastering/stereo/cross_channel_delay.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::stereo {
+
+/// @brief Domain of @c PhaseAlignConfig::delay_samples, stated once for the core check.
+inline constexpr util::check::NumericDomain kPhaseAlignDelaySamplesDomain =
+    util::check::integer_domain(0, std::numeric_limits<int>::max());
 
 struct PhaseAlignConfig {
   int delay_samples = 0;

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::repair {
 
@@ -31,6 +32,12 @@ inline constexpr size_t kDeclickMaxArContextRadius = 8 * kDeclickMaxClickSamples
 /// @details The AR fill lowers the order to a quarter of its context, which spans at most two
 /// capped radii plus the gap, so this is the largest order it runs as requested at every gap.
 inline constexpr int kDeclickMaxLpcOrder = static_cast<int>(2 * kDeclickMaxArContextRadius / 4);
+
+/// @brief Domains of the integer @c DeclickConfig members, stated once for the core check.
+inline constexpr util::check::NumericDomain kDeclickMaxClickSamplesDomain =
+    util::check::integer_domain(1, static_cast<long long>(kDeclickMaxClickSamples));
+inline constexpr util::check::NumericDomain kDeclickLpcOrderDomain =
+    util::check::integer_domain(0, kDeclickMaxLpcOrder);
 
 struct DeclickConfig {
   float threshold = 0.8f;

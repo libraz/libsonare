@@ -7,7 +7,9 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "mastering/common/noise_profile.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::repair {
 
@@ -60,6 +62,10 @@ inline constexpr int kDenoiseNoiseEstimatorCount = 4;
 /// @details 120 dB leaves the floor at 1e-6 of the input, below a 24-bit signal's own
 /// quantization step; the shipped presets use at most 32.
 inline constexpr float kDenoiseMaxReductionDb = 120.0f;
+
+/// @brief Domain of @c DenoiseClassicalConfig::n_fft, stated once for the core check.
+inline constexpr util::check::NumericDomain kDenoiseNFftDomain =
+    util::check::integer_domain(2, kMaxStftNFft);
 
 struct DenoiseClassicalConfig {
   DenoiseMode mode = DenoiseMode::LogMmse;

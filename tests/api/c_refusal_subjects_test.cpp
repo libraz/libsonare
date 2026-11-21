@@ -492,7 +492,7 @@ TEST_CASE("the second-set entries name the first refused argument in header orde
   sonare_stream_config_init(&config);
   config.sample_rate = 0;
   CHECK(sonare_stream_analyzer_create(&config, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config.sample_rate must be an integer in [1, 2147483647]");
+  CHECK(last_message() == "config.sample_rate must be an integer in [8000, 384000]");
   SonareStreamConfig unset{};
   CHECK(sonare_stream_analyzer_create(&unset, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "config.struct_size must be set by sonare_stream_config_init");

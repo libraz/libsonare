@@ -13,6 +13,7 @@
 #include <sonare/sonare_c.h>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "sonare_c_internal.h"
 #include "util/parameter_checks.h"
 
@@ -40,7 +41,8 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
         require_struct_size(in->struct_size, sizeof(SonarePolyphonicConfig), "config",
                             "sonare_polyphonic_config_init");
         if (in->win_length != SONARE_POLYPHONIC_WIN_LENGTH_FFT) {
-          sonare::util::check::integer_at_least(in->win_length, 1, "config.win_length");
+          sonare::util::check::integer_within(in->win_length, sonare::kColaWinLengthDomain,
+                                              "config.win_length");
         }
         if (!std::isnan(in->max_refine_hz)) {
           sonare::util::check::greater_than(in->max_refine_hz, 0.0, "config.max_refine_hz");

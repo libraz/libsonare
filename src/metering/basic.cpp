@@ -95,8 +95,8 @@ float clipping_ratio(const Audio& audio, float threshold) {
 }
 
 float silence_ratio(const Audio& audio, float threshold_db, int frame_length, int hop_length) {
-  util::check::integer_at_least(frame_length, 1, "frame_length");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within(frame_length, kSilenceRatioFrameLengthDomain, "frame_length");
+  util::check::integer_within(hop_length, kSilenceRatioHopLengthDomain, "hop_length");
   // A NaN threshold makes every comparison below false, so the function reports
   // "no silence at all" for a request it could not evaluate. The check belongs
   // here rather than in the C-ABI wrapper: WASM calls this core function

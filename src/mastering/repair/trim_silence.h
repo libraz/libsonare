@@ -3,6 +3,7 @@
 #include <cstddef>
 
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::repair {
 
@@ -24,6 +25,10 @@ struct TrimSilenceConfig {
 /// "keep it all" at every supported rate. The bound also keeps `last + padding_samples` from
 /// wrapping, which a negative count that crossed a language boundary would otherwise reach.
 inline constexpr size_t kMaxTrimPaddingSamples = 960000;
+
+/// @brief Domain of @c TrimSilenceConfig::padding_samples, stated once for the core check.
+inline constexpr util::check::NumericDomain kTrimPaddingSamplesDomain =
+    util::check::integer_domain(0, static_cast<long long>(kMaxTrimPaddingSamples));
 
 /// The default threshold in dBFS, the 0.001 linear TrimSilenceConfig::threshold holds.
 inline constexpr float kTrimThresholdDefaultDb = -60.0f;

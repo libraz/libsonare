@@ -170,8 +170,8 @@ void MultibandDynamicEq::validate_config(const MultibandDynamicEqConfig& config)
                           static_cast<long long>(expected_bands), "bands");
   for (std::size_t index = 0; index < config.bands.size(); ++index) {
     const std::string subject = "bands[" + std::to_string(index) + "]";
-    check::integer_in_range(static_cast<long long>(config.bands[index].size()), 0,
-                            static_cast<long long>(eq::DynamicEq::kMaxBands), subject.c_str());
+    check::integer_within(config.bands[index].size(), kMultibandDynamicBandCountDomain,
+                          subject.c_str());
   }
   // The crossover and every band are checked here, so set_config() refuses
   // before it commits anything.

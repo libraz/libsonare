@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
 namespace sonare {
@@ -156,6 +157,9 @@ constexpr bool is_supported_sample_rate(double hz) noexcept {
   return hz >= kMinAudioSampleRate && hz <= kMaxAudioSampleRate &&
          hz == static_cast<double>(static_cast<int>(hz));
 }
+/// The integer sample rates a rate argument accepts, for a check refusing one by name.
+inline constexpr util::check::NumericDomain kAudioSampleRateDomain =
+    util::check::integer_domain(kMinAudioSampleRate, kMaxAudioSampleRate);
 inline constexpr std::size_t kMaxAudioBufferSize = resource::kMaxOfflineAudioSamples;
 
 /// @brief The O(1) half of the policy: the rules that describe a buffer's extent

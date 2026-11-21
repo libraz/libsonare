@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "c_api/eq_band_json.h"
+#include "c_api/mastering_input_domains.h"
 #include "mastering/eq/band_strings.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/match/match_eq.h"
@@ -64,8 +65,7 @@ SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(eq);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_in_range(index, 0, static_cast<long long>(SONARE_EQ_MAX_BANDS) - 1,
-                                      "index");
+        util::check::integer_within(index, sonare_c_detail::kEqBandIndexDomain, "index");
       });
       err != SONARE_OK) {
     return err;
@@ -114,8 +114,7 @@ SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_
                               reference_sample_rate);
   if (err != SONARE_OK) return err;
   err = run_validation([&] {
-    util::check::integer_in_range(max_bands, 1, static_cast<long long>(SONARE_EQ_MAX_BANDS),
-                                  "max_bands");
+    util::check::integer_within(max_bands, sonare_c_detail::kEqMatchMaxBandsDomain, "max_bands");
   });
   if (err != SONARE_OK) return err;
 

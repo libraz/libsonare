@@ -19,7 +19,6 @@ from typing import TypeVar
 from ._errors import _entry, _refuse, _refuse_type
 from ._narrowing import _domain_float, _narrow_double
 from ._runtime import (
-    _C_INT_MAX,
     SonareRirSynthConfig,
     SonareRirSynthResult,
     SonareRoomEstimate,
@@ -31,7 +30,6 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_diagnostics,
-    _narrow_int,
     _optional_from_c_float_array,
     _to_c_float_array,
     _to_c_int,
@@ -161,7 +159,7 @@ def _fill_room_config(
     config.material_preset = _material_preset(material_preset)
     config.prefer_eyring = int(prefer_eyring)
     config.air_absorption_enabled = int(air_absorption_enabled)
-    config.ism_order = _narrow_int(ism_order, "ism_order", 0, _C_INT_MAX)
+    config.ism_order = _to_c_int(ism_order, "ism_order").value
     if seed is not None:
         config.seed = _to_c_uint(seed, "seed").value
     for name in ("max_sec", "mixing_time_ms"):

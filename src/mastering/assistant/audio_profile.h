@@ -17,6 +17,7 @@
 #include "mastering/repair/dereverb_classical.h"
 #include "util/constants.h"
 #include "util/json.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::assistant {
 
@@ -108,6 +109,12 @@ struct AudioProfile {
 /// @brief Rate at which @ref AudioProfileConfig states its window and hop.
 inline constexpr int kProfileReferenceRate =
     static_cast<int>(sonare::constants::kDefaultDawSampleRate);
+
+/// @brief Domains of the integer @c AudioProfileConfig members, stated once for the core check.
+inline constexpr util::check::NumericDomain kAudioProfileNFftDomain =
+    util::check::integer_domain(1, kMaxStftNFft);
+inline constexpr util::check::NumericDomain kAudioProfileHopLengthDomain =
+    util::check::integer_domain_of<int>(1);
 
 struct AudioProfileConfig {
   /// Window length in samples at @ref kProfileReferenceRate, converted to the input

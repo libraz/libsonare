@@ -641,7 +641,7 @@ void validate_config(const DenoiseClassicalConfig& config) {
     check::integer_in_range(static_cast<int>(config.noise_estimator), 0,
                             kDenoiseNoiseEstimatorCount - 1, "noise_estimator");
   }
-  check::power_of_two_in_range(config.n_fft, 2, kMaxStftNFft, "n_fft");
+  check::power_of_two_within(config.n_fft, kDenoiseNFftDomain, "n_fft");
   check::integer_in_range(config.hop_length, 1, config.n_fft / 2, "hop_length");
   check::in_interval(config.dd_alpha, 0.0, true, 1.0, false, "dd_alpha");
   check::in_range(config.reduction_db, 0.0, kDenoiseMaxReductionDb, "reduction_db");

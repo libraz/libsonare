@@ -32,8 +32,8 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
                                const MelConfig& mel_config, int sr) {
   util::check::non_null(M, "M");
   if (n_mels <= 0 || n_frames <= 0) return {};
-  util::check::integer_at_least(mel_config.n_fft, 1, "n_fft");
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within(mel_config.n_fft, kMelToStftFftSizeDomain, "n_fft");
+  util::check::integer_within(sr, kInverseSampleRateDomain, "sr");
   // A non-finite mel band poisons the NNLS active set, which then returns an
   // all-NaN spectrogram of the expected shape. Rejected here rather than at each
   // binding so the C ABI, the WASM bindings (which call this directly) and the
@@ -42,9 +42,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
     validate_offline_audio_samples("M", M,
                                    static_cast<size_t>(n_mels) * static_cast<size_t>(n_frames), 0);
   }
-  constexpr int kMaxInverseFrames = 4096;
-  util::check::integer_in_range(n_frames, 1, kMaxInverseFrames, "n_frames");
-  util::check::integer_in_range(mel_config.n_fft, 1, 8192, "n_fft");
+  util::check::integer_within(n_frames, kMelToStftFramesDomain, "n_frames");
   const int n_freq = mel_config.n_fft / 2 + 1;
   MelFilterConfig fcfg = mel_config.to_mel_filter_config();
   std::shared_ptr<const std::vector<float>> filterbank =
@@ -67,7 +65,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
                    int n_iter, int sr) {
-  util::check::integer_at_least(n_iter, 1, "n_iter");
+  util::check::integer_within(n_iter, kInverseIterationsDomain, "n_iter");
   // mel_to_stft already returns a magnitude spectrogram (librosa-compatible), so
   // no additional square root is applied here before Griffin-Lim.
   std::vector<float> magnitude = mel_to_stft(M, n_mels, n_frames, mel_config, sr);
@@ -82,9 +80,9 @@ Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& me
 std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                float lifter) {
   util::check::non_null(mfcc, "mfcc");
-  util::check::integer_at_least(n_mfcc, 1, "n_mfcc");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
-  util::check::integer_at_least(n_mels, 1, "n_mels");
+  util::check::integer_within(n_mfcc, kInverseMfccCountDomain, "n_mfcc");
+  util::check::integer_within(n_frames, kInverseFramesDomain, "n_frames");
+  util::check::integer_within(n_mels, kInverseMelBandsDomain, "n_mels");
   util::check::at_least(lifter, 0.0, "lifter");
   // A non-finite coefficient spreads across every Mel band through the inverse
   // DCT, and the dB-to-power conversion turns part of it back into 0 or Inf, so
@@ -135,6 +133,9 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
 
 Audio mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, const MelConfig& mel_config,
                     int n_iter, int sr, float lifter) {
+  // The frame and FFT ranges mel_to_stft inverts, stated before mfcc_to_mel's own floors.
+  util::check::integer_within(n_frames, kMelToStftFramesDomain, "n_frames");
+  util::check::integer_within(mel_config.n_fft, kMelToStftFftSizeDomain, "n_fft");
   std::vector<float> mel = mfcc_to_mel(mfcc, n_mfcc, n_frames, mel_config.n_mels, lifter);
   return mel_to_audio(mel.data(), mel_config.n_mels, n_frames, mel_config, n_iter, sr);
 }

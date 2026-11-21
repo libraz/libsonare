@@ -8,6 +8,8 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::repair {
 
@@ -21,6 +23,15 @@ inline constexpr int kDereverbMaxWpeTaps = 32;
 /// @details Each pass repeats the whole per-bin solve; the predictor stops moving
 /// well before this, so the ceiling bounds the cost rather than the quality.
 inline constexpr int kDereverbMaxWpeIterations = 16;
+
+/// @brief Domains of the integer @c DereverbClassicalConfig members, stated once for the core
+///        check.
+inline constexpr util::check::NumericDomain kDereverbNFftDomain =
+    util::check::integer_domain(2, kMaxStftNFft);
+inline constexpr util::check::NumericDomain kDereverbWpeIterationsDomain =
+    util::check::integer_domain(1, kDereverbMaxWpeIterations);
+inline constexpr util::check::NumericDomain kDereverbWpeTapsDomain =
+    util::check::integer_domain(1, kDereverbMaxWpeTaps);
 
 /// @brief Largest accepted @c DereverbClassicalConfig::t60_sec, in seconds.
 /// @details Past 10 s the decay model describes a cavern; the corpus rooms measure up to 1.2 s.

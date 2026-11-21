@@ -130,13 +130,14 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   if (const SonareError err = run_validation([&] {
         sonare_c_detail::require_struct_size(config->struct_size, sizeof(SonareStreamConfig),
                                              "config", "sonare_stream_config_init");
-        check::integer_at_least(config->sample_rate, 1, "config.sample_rate");
-        check::integer_at_least(config->n_fft, 1, "config.n_fft");
-        check::integer_at_least(config->hop_length, 1, "config.hop_length");
+        check::integer_within(config->sample_rate, kAudioSampleRateDomain, "config.sample_rate");
+        check::integer_within(config->n_fft, kStreamConfigNFftDomain, "config.n_fft");
+        check::integer_within(config->hop_length, kStreamConfigHopLengthDomain,
+                              "config.hop_length");
         if (config->hop_length > config->n_fft) {
           check::refuse_relation({"config.hop_length", "config.n_fft"}, "{0} must be at most {1}");
         }
-        check::integer_at_least(config->n_mels, 1, "config.n_mels");
+        check::integer_within(config->n_mels, kStreamConfigNMelsDomain, "config.n_mels");
         check::at_least(config->fmin_hz, 0.0, "config.fmin_hz");
         if (!std::isnan(config->fmax_hz)) {
           check::greater_than(config->fmax_hz, 0.0, "config.fmax_hz");
@@ -147,20 +148,20 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
         }
         check::in_range(config->reference_hz, kMinTuningRefHz, kMaxTuningRefHz,
                         "config.reference_hz");
-        check::integer_at_least(config->emit_every_n_frames, 1, "config.emit_every_n_frames");
+        check::integer_within(config->emit_every_n_frames, kStreamConfigEmitEveryNFramesDomain,
+                              "config.emit_every_n_frames");
         check::integer_at_least(config->magnitude_downsample, 1, "config.magnitude_downsample");
-        check::integer_in_range(static_cast<long long>(config->max_pending_frames), 1,
-                                static_cast<long long>(kMaxStreamPendingFrames),
-                                "config.max_pending_frames");
+        check::integer_within(static_cast<long long>(config->max_pending_frames),
+                              kStreamConfigMaxPendingFramesDomain, "config.max_pending_frames");
         check::greater_than(config->key_update_interval_sec, 0.0, "config.key_update_interval_sec");
         check::greater_than(config->bpm_update_interval_sec, 0.0, "config.bpm_update_interval_sec");
         check::integer_in_range(config->window, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR,
                                 "config.window");
         check::one_of(config->output_format, std::array<int, 1>{SONARE_STREAM_OUTPUT_FLOAT32},
                       "config.output_format");
-        check::integer_in_range(static_cast<long long>(config->max_progression_entries), 1,
-                                static_cast<long long>(kMaxStreamProgressionEntries),
-                                "config.max_progression_entries");
+        check::integer_within(static_cast<long long>(config->max_progression_entries),
+                              kStreamConfigMaxProgressionEntriesDomain,
+                              "config.max_progression_entries");
       });
       err != SONARE_OK) {
     return err;

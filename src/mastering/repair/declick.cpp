@@ -256,9 +256,9 @@ void validate_config(const DeclickConfig& config) {
   check::in_interval(config.threshold, 0.0, false, kDeclickMaxThreshold, true, "threshold");
   check::in_interval(config.neighbor_ratio, 0.0, false, kDeclickMaxNeighborRatio, true,
                      "neighbor_ratio");
-  check::integer_in_range(static_cast<long long>(config.max_click_samples), 1,
-                          static_cast<long long>(kDeclickMaxClickSamples), "max_click_samples");
-  check::integer_in_range(config.lpc_order, 0, kDeclickMaxLpcOrder, "lpc_order");
+  check::integer_within(config.max_click_samples, kDeclickMaxClickSamplesDomain,
+                        "max_click_samples");
+  check::integer_within(config.lpc_order, kDeclickLpcOrderDomain, "lpc_order");
   check::in_interval(config.residual_ratio, 0.0, false, kDeclickMaxResidualRatio, true,
                      "residual_ratio");
 }

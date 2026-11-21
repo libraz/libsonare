@@ -1,6 +1,7 @@
 #include <string>
 
 #include "c_api/features_internal.h"
+#include "c_api/inverse_input_domains.h"
 #include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
@@ -33,10 +34,12 @@ void check_inverse_input_length(size_t input_length, int rows, int n_frames,
 
 // Refuses a non-positive row or frame count, then an input length that does not match them.
 SonareError validate_inverse_input(size_t input_length, int rows, int n_frames,
+                                   const check::NumericDomain& rows_domain,
+                                   const check::NumericDomain& frames_domain,
                                    const char* rows_subject) {
   return run_validation([&] {
-    check::integer_at_least(rows, 1, rows_subject);
-    check::integer_at_least(n_frames, 1, "n_frames");
+    check::integer_within(rows, rows_domain, rows_subject);
+    check::integer_within(n_frames, frames_domain, "n_frames");
     check_inverse_input_length(input_length, rows, n_frames, rows_subject);
   });
 }
@@ -44,10 +47,10 @@ SonareError validate_inverse_input(size_t input_length, int rows, int n_frames,
 // Refuses the mel / mfcc inverse dimensions every entry reads before the core runs.
 SonareError validate_mel_inverse(int n_mels, int n_frames, int n_fft, int sample_rate) {
   return run_validation([&] {
-    check::integer_at_least(n_mels, 1, "n_mels");
-    check::integer_at_least(n_frames, 1, "n_frames");
-    check::integer_at_least(n_fft, 1, "n_fft");
-    check::integer_at_least(sample_rate, 1, "sample_rate");
+    check::integer_within(n_mels, sonare::kInverseMelBandsDomain, "n_mels");
+    check::integer_within(n_frames, sonare::kMelToStftFramesDomain, "n_frames");
+    check::integer_within(n_fft, sonare::kMelToStftFftSizeDomain, "n_fft");
+    check::integer_within(sample_rate, sonare::kInverseSampleRateDomain, "sample_rate");
   });
 }
 
@@ -67,14 +70,14 @@ SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, in
                                  int bins_per_octave, const float* gamma, int n_iter) {
   SONARE_C_REQUIRE_NONNULL(magnitude);
   return run_validation([&] {
-    check::integer_at_least(n_bins, 1, "n_bins");
-    check::integer_at_least(n_frames, 1, "n_frames");
-    check::integer_in_range(sample_rate, kMinSampleRate, kMaxSampleRate, "sample_rate");
-    check::integer_in_range(hop_length, 1, sonare::kMaxCqtHopLength, "hop_length");
+    check::integer_within(n_bins, sonare::kCqtCountDomain, "n_bins");
+    check::integer_within(n_frames, sonare_c_detail::kInverseSpectrogramExtentDomain, "n_frames");
+    check::integer_within(sample_rate, sonare::kAudioSampleRateDomain, "sample_rate");
+    check::integer_within(hop_length, sonare::kCqtHopLengthDomain, "hop_length");
     check::greater_than(fmin, 0.0, "fmin_hz");
-    check::integer_at_least(bins_per_octave, 1, "bins_per_octave");
+    check::integer_within(bins_per_octave, sonare::kCqtCountDomain, "bins_per_octave");
     if (gamma != nullptr) validate_vqt_gamma(*gamma);
-    check::integer_in_range(n_iter, 1, sonare::resource::kMaxGriffinLimIterations, "n_iter");
+    check::integer_within(n_iter, sonare_c_detail::kGriffinLimIterationsDomain, "n_iter");
     check_inverse_input_length(input_length, n_bins, n_frames, "n_bins");
   });
 }
@@ -236,12 +239,13 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(magnitude);
   if (const SonareError err = run_validation([&] {
-        check::integer_at_least(n_bins, 1, "n_bins");
-        check::integer_at_least(n_frames, 1, "n_frames");
-        check::integer_at_least(n_fft, 1, "n_fft");
+        check::integer_within(n_bins, sonare_c_detail::kInverseSpectrogramExtentDomain, "n_bins");
+        check::integer_within(n_frames, sonare_c_detail::kInverseSpectrogramExtentDomain,
+                              "n_frames");
+        check::integer_within(n_fft, sonare_c_detail::kInverseSpectrogramExtentDomain, "n_fft");
         check_stft_hop(hop_length, "hop_length");
-        check::integer_in_range(sample_rate, kMinSampleRate, kMaxSampleRate, "sample_rate");
-        check::integer_in_range(n_iter, 1, resource::kMaxGriffinLimIterations, "n_iter");
+        check::integer_within(sample_rate, sonare::kAudioSampleRateDomain, "sample_rate");
+        check::integer_within(n_iter, sonare_c_detail::kGriffinLimIterationsDomain, "n_iter");
         check::in_interval(momentum, 0.0, true, 1.0, false, "momentum");
         if (n_bins != n_fft / 2 + 1)
           check::refuse_relation({"n_bins", "n_fft"}, "{0} must equal {1} / 2 + 1");
@@ -290,9 +294,9 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
   if (const SonareError err = run_validation([&] {
-        check::integer_at_least(n_fft, 1, "n_fft");
+        check::integer_within(n_fft, sonare::kMelToStftFftSizeDomain, "n_fft");
         check_stft_hop(hop_length, "hop_length");
-        check::integer_at_least(sample_rate, 1, "sample_rate");
+        check::integer_within(sample_rate, sonare::kInverseSampleRateDomain, "sample_rate");
       });
       err != SONARE_OK) {
     return err;
@@ -339,7 +343,9 @@ SonareError sonare_mel_to_stft_checked(const float* mel, size_t input_length, in
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(mel);
-  if (const SonareError err = validate_inverse_input(input_length, n_mels, n_frames, "n_mels");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mels, n_frames, sonare::kInverseMelBandsDomain,
+                                 sonare::kMelToStftFramesDomain, "n_mels");
       err != SONARE_OK) {
     return err;
   }
@@ -352,7 +358,9 @@ SonareError sonare_mel_to_stft_checked_ex(const float* mel, size_t input_length,
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(mel);
-  if (const SonareError err = validate_inverse_input(input_length, n_mels, n_frames, "n_mels");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mels, n_frames, sonare::kInverseMelBandsDomain,
+                                 sonare::kMelToStftFramesDomain, "n_mels");
       err != SONARE_OK) {
     return err;
   }
@@ -367,7 +375,9 @@ SonareError sonare_mel_to_audio_checked(const float* mel, size_t input_length, i
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(mel);
-  if (const SonareError err = validate_inverse_input(input_length, n_mels, n_frames, "n_mels");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mels, n_frames, sonare::kInverseMelBandsDomain,
+                                 sonare::kMelToStftFramesDomain, "n_mels");
       err != SONARE_OK) {
     return err;
   }
@@ -382,7 +392,9 @@ SonareError sonare_mel_to_audio_checked_ex(const float* mel, size_t input_length
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(mel);
-  if (const SonareError err = validate_inverse_input(input_length, n_mels, n_frames, "n_mels");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mels, n_frames, sonare::kInverseMelBandsDomain,
+                                 sonare::kMelToStftFramesDomain, "n_mels");
       err != SONARE_OK) {
     return err;
   }
@@ -395,7 +407,9 @@ SonareError sonare_mfcc_to_mel_checked(const float* coefficients, size_t input_l
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(coefficients);
-  if (const SonareError err = validate_inverse_input(input_length, n_mfcc, n_frames, "n_mfcc");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mfcc, n_frames, sonare::kInverseMfccCountDomain,
+                                 sonare::kInverseFramesDomain, "n_mfcc");
       err != SONARE_OK) {
     return err;
   }
@@ -408,7 +422,9 @@ SonareError sonare_mfcc_to_mel_checked_ex(const float* coefficients, size_t inpu
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(coefficients);
-  if (const SonareError err = validate_inverse_input(input_length, n_mfcc, n_frames, "n_mfcc");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mfcc, n_frames, sonare::kInverseMfccCountDomain,
+                                 sonare::kInverseFramesDomain, "n_mfcc");
       err != SONARE_OK) {
     return err;
   }
@@ -422,7 +438,9 @@ SonareError sonare_mfcc_to_audio_checked(const float* coefficients, size_t input
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
-  if (const SonareError err = validate_inverse_input(input_length, n_mfcc, n_frames, "n_mfcc");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mfcc, n_frames, sonare::kInverseMfccCountDomain,
+                                 sonare::kMelToStftFramesDomain, "n_mfcc");
       err != SONARE_OK) {
     return err;
   }
@@ -437,7 +455,9 @@ SonareError sonare_mfcc_to_audio_checked_ex(const float* coefficients, size_t in
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
-  if (const SonareError err = validate_inverse_input(input_length, n_mfcc, n_frames, "n_mfcc");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mfcc, n_frames, sonare::kInverseMfccCountDomain,
+                                 sonare::kMelToStftFramesDomain, "n_mfcc");
       err != SONARE_OK) {
     return err;
   }
@@ -453,7 +473,9 @@ SonareError sonare_mfcc_to_audio_checked_ex2(const float* coefficients, size_t i
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_length);
   SONARE_C_REQUIRE_NONNULL(coefficients);
-  if (const SonareError err = validate_inverse_input(input_length, n_mfcc, n_frames, "n_mfcc");
+  if (const SonareError err =
+          validate_inverse_input(input_length, n_mfcc, n_frames, sonare::kInverseMfccCountDomain,
+                                 sonare::kMelToStftFramesDomain, "n_mfcc");
       err != SONARE_OK) {
     return err;
   }

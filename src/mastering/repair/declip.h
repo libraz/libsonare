@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::repair {
 
@@ -57,6 +58,12 @@ inline constexpr int kDeclipMaxLpcOrder = static_cast<int>(2 * kDeclipMaxLpcCont
 /// @details Each round re-estimates the AR model over the whole input; the estimate has
 /// converged by the second, and the detection sweeps run up to 7.
 inline constexpr int kDeclipMaxIterations = 8;
+
+/// @brief Domains of the integer @c DeclipConfig members, stated once for the core check.
+inline constexpr util::check::NumericDomain kDeclipLpcOrderDomain =
+    util::check::integer_domain(0, kDeclipMaxLpcOrder);
+inline constexpr util::check::NumericDomain kDeclipIterationsDomain =
+    util::check::integer_domain(1, kDeclipMaxIterations);
 
 struct DeclipConfig {
   float clip_threshold = 0.98f;

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::repair {
 
@@ -56,6 +57,12 @@ inline constexpr float kDehumMaxSearchRangeHz = 100.0f;
 /// @brief Largest accepted @c DehumConfig::frame_size, in samples (8 times the default).
 /// @details The frame is both the adaptive analysis block and its look-ahead.
 inline constexpr int kDehumMaxFrameSize = 16384;
+
+/// @brief Domains of the integer @c DehumConfig members, stated once for the core check.
+inline constexpr util::check::NumericDomain kDehumHarmonicsDomain =
+    util::check::integer_domain(1, kDehumMaxHarmonics);
+inline constexpr util::check::NumericDomain kDehumFrameSizeDomain =
+    util::check::integer_domain(16, kDehumMaxFrameSize);
 
 /// @brief Largest accepted @c DehumConfig::pll_bandwidth, a fraction of the tracked frequency.
 inline constexpr float kDehumMaxPllBandwidth = 1.0f;

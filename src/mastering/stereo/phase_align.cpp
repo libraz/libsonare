@@ -87,8 +87,7 @@ std::vector<rt::ParamDescriptor> PhaseAlign::parameter_descriptors() const {
 }
 
 void PhaseAlign::validate_config(const PhaseAlignConfig& config) {
-  check::integer_in_range(config.delay_samples, 0, std::numeric_limits<int>::max(),
-                          "delay_samples");
+  check::integer_within(config.delay_samples, kPhaseAlignDelaySamplesDomain, "delay_samples");
   check::in_interval(config.fractional_delay_samples, 0.0, true, 1.0, false,
                      "fractional_delay_samples");
 }

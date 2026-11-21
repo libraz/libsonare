@@ -95,7 +95,7 @@ def mastering_repair_declick(
         samples, the same length as the input, and the pass's report.
     """
     # Narrowed, not int()-coerced: int() takes 8.7 as 8, a run length nobody asked for.
-    max_click_value = _narrow_int(max_click_samples, "max_click_samples", 1, _C_INT_MAX)
+    max_click_value = _narrow_int(max_click_samples, "max_click_samples", _C_INT_MIN, _C_INT_MAX)
     lpc_order_value = _narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX)
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
@@ -245,12 +245,7 @@ def mastering_repair_declick_stereo(
         :class:`DeclickStereoResult` with the declicked channels and each
         channel's own detection/repair report.
     """
-    max_click_value = _narrow_int(
-        max_click_samples,
-        "max_click_samples",
-        1,
-        _C_INT_MAX,
-    )
+    max_click_value = _narrow_int(max_click_samples, "max_click_samples", _C_INT_MIN, _C_INT_MAX)
     lpc_order_value = _narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX)
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)

@@ -184,12 +184,13 @@ def lufs_interleaved(
         loudness range.
     """
     sample_buf = _validate_samples(samples)
-    num_channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
+    num_channels = _to_c_int(num_channels, "num_channels").value
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
-    if total % num_channels != 0:
+    # A channel count below one is left to the core, which refuses it by name.
+    if num_channels > 0 and total % num_channels != 0:
         raise _refuse("samples length must be a multiple of num_channels")
-    frames = total // num_channels
+    frames = total // num_channels if num_channels > 0 else 0
     out = SonareLufsResult()
     rc = lib.sonare_lufs_interleaved(
         c_array,
@@ -234,12 +235,13 @@ def lufs_series_interleaved(
         it, not an error.
     """
     sample_buf = _validate_samples(samples)
-    num_channels = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
+    num_channels = _to_c_int(num_channels, "num_channels").value
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
-    if total % num_channels != 0:
+    # A channel count below one is left to the core, which refuses it by name.
+    if num_channels > 0 and total % num_channels != 0:
         raise _refuse("samples length must be a multiple of num_channels")
-    frames = total // num_channels
+    frames = total // num_channels if num_channels > 0 else 0
     with (
         _out_float_array(lib) as (out_momentary, momentary_length),
         _out_float_array(lib) as (out_short_term, short_term_length),

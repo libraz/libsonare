@@ -23,8 +23,8 @@ int frame_count(std::size_t n, int frame_length, int hop_length) {
 }
 
 std::vector<float> frame(const float* x, std::size_t n, int frame_length, int hop_length) {
-  util::check::integer_at_least(frame_length, 1, "frame_length");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within(frame_length, kFrameLengthDomain, "frame_length");
+  util::check::integer_within(hop_length, kFrameHopLengthDomain, "hop_length");
   if (n > 0 && x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "frame: null input with non-zero length");
   }

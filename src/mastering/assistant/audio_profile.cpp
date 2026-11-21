@@ -175,8 +175,8 @@ float noise_power_to_db(double power) {
 }  // namespace
 
 void validate_audio_profile_config(const AudioProfileConfig& config) {
-  util::check::integer_in_range(config.n_fft, 1, kMaxStftNFft, "n_fft");
-  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_within(config.n_fft, kAudioProfileNFftDomain, "n_fft");
+  util::check::integer_within(config.hop_length, kAudioProfileHopLengthDomain, "hop_length");
   util::check::one_of(config.true_peak_oversample, std::array<int, 5>{1, 2, 4, 8, 16},
                       "true_peak_oversample");
 }

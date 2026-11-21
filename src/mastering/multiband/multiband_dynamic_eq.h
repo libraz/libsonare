@@ -9,8 +9,13 @@
 #include "mastering/multiband/crossover.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::multiband {
+
+/// @brief Domain of the dynamic-band count of each crossover band, stated once for the core check.
+inline constexpr util::check::NumericDomain kMultibandDynamicBandCountDomain =
+    util::check::integer_domain(0, static_cast<long long>(eq::DynamicEq::kMaxBands));
 
 struct MultibandDynamicEqConfig {
   CrossoverConfig crossover;

@@ -8,8 +8,40 @@
 #include "core/audio.h"
 #include "feature/mel_spectrogram.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
+
+/// @brief The most frames @ref mel_to_stft inverts at once.
+inline constexpr int kMaxInverseFrames = 4096;
+
+/// @brief The sample rates the inverse transforms take (sr): at least 1.
+inline constexpr util::check::NumericDomain kInverseSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+
+/// @brief The FFT sizes @ref mel_to_stft inverts: [1, 8192].
+inline constexpr util::check::NumericDomain kMelToStftFftSizeDomain =
+    util::check::integer_domain(1, 8192);
+
+/// @brief The frame counts @ref mel_to_stft inverts: [1, @ref kMaxInverseFrames].
+inline constexpr util::check::NumericDomain kMelToStftFramesDomain =
+    util::check::integer_domain(1, kMaxInverseFrames);
+
+/// @brief The Griffin-Lim iteration counts of @ref mel_to_audio: at least 1.
+inline constexpr util::check::NumericDomain kInverseIterationsDomain =
+    util::check::integer_domain_of<int>(1);
+
+/// @brief The coefficient counts of @ref mfcc_to_mel (n_mfcc): at least 1.
+inline constexpr util::check::NumericDomain kInverseMfccCountDomain =
+    util::check::integer_domain_of<int>(1);
+
+/// @brief The frame counts of @ref mfcc_to_mel (n_frames): at least 1.
+inline constexpr util::check::NumericDomain kInverseFramesDomain =
+    util::check::integer_domain_of<int>(1);
+
+/// @brief The Mel band counts of the inverse transforms (n_mels): at least 1.
+inline constexpr util::check::NumericDomain kInverseMelBandsDomain =
+    util::check::integer_domain_of<int>(1);
 
 /// @brief Approximate inverse of a Mel filterbank.
 /// @details Uses the pseudo-inverse of the Mel filterbank matrix (the same

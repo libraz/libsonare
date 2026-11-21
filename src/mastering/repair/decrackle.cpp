@@ -263,7 +263,7 @@ void validate_config(const DecrackleConfig& config) {
   check::in_interval(config.threshold, 0.0, false, kDecrackleMaxThreshold, true, "threshold");
   check::integer_in_range(static_cast<int>(config.mode), 0,
                           static_cast<int>(DecrackleMode::WaveletShrinkage), "mode");
-  check::integer_in_range(config.levels, 1, kDecrackleMaxLevels, "levels");
+  check::integer_within(config.levels, kDecrackleLevelsDomain, "levels");
 }
 
 CrackleDetection detect_crackle(const float* samples, size_t size, int sample_rate,

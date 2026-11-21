@@ -1,6 +1,7 @@
 #include <array>
 
 #include "c_api/features_internal.h"
+#include "c_api/segment_input_domains.h"
 #include "feature/segment.h"
 #include "util/parameter_checks.h"
 
@@ -13,8 +14,8 @@ SonareError refuse_matrix(const float* values, const char* values_name, int rows
                           const char* rows_name, int cols, const char* cols_name) {
   if (values == nullptr) return sonare_c_detail::refuse_null(values_name);
   return run_validation([&] {
-    check::integer_at_least(rows, 1, rows_name);
-    check::integer_at_least(cols, 1, cols_name);
+    check::integer_within(rows, sonare_c_detail::kSegmentMatrixExtentDomain, rows_name);
+    check::integer_within(cols, sonare_c_detail::kSegmentMatrixExtentDomain, cols_name);
     if (static_cast<size_t>(rows) > sonare_c_detail::kMaxBufferSize / static_cast<size_t>(cols)) {
       check::refuse_relation(
           {rows_name, cols_name},
@@ -63,7 +64,7 @@ SonareError sonare_segment_cross_similarity(const float* x, int x_rows, int x_co
   }
   if (const SonareError err = run_validation([&] {
         if (x_rows != y_rows) check::refuse_relation({"y_rows", "x_rows"}, "{0} must equal {1}");
-        check::integer_at_least(k, 0, "k");
+        check::integer_within(k, sonare_c_detail::kSegmentNeighbourCountDomain, "k");
       });
       err != SONARE_OK) {
     return err;
@@ -92,8 +93,8 @@ SonareError sonare_segment_recurrence_matrix(const float* data, int rows, int co
     return err;
   }
   if (const SonareError err = run_validation([&] {
-        check::integer_at_least(k, 0, "k");
-        check::integer_at_least(width, 0, "width");
+        check::integer_within(k, sonare_c_detail::kSegmentNeighbourCountDomain, "k");
+        check::integer_within(width, sonare_c_detail::kSegmentRecurrenceWidthDomain, "width");
         check::one_of(sym, kFlagValues, "sym");
       });
       err != SONARE_OK) {
@@ -151,8 +152,9 @@ SonareError sonare_segment_subsegment(const float* data, int rows, int cols, con
     return err;
   }
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(boundaries, boundary_count);
-  if (const SonareError err =
-          run_validation([&] { check::integer_at_least(n_segments, 1, "n_segments"); });
+  if (const SonareError err = run_validation([&] {
+        check::integer_within(n_segments, sonare_c_detail::kSubsegmentCountDomain, "n_segments");
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -172,7 +174,9 @@ SonareError sonare_segment_agglomerative(const float* data, int rows, int cols, 
       err != SONARE_OK) {
     return err;
   }
-  if (const SonareError err = run_validation([&] { check::integer_at_least(k, 1, "k"); });
+  if (const SonareError err = run_validation([&] {
+        check::integer_within(k, sonare_c_detail::kAgglomerativeClusterCountDomain, "k");
+      });
       err != SONARE_OK) {
     return err;
   }
@@ -192,10 +196,11 @@ SonareError sonare_segment_path_enhance(const float* recurrence, int n, int win,
     return err;
   }
   if (const SonareError err = run_validation([&] {
-        check::integer_at_least(win, 1, "win");
-        check::integer_at_least(max_ratio, 1, "max_ratio");
-        check::integer_at_least(min_ratio, 0, "min_ratio");
-        check::integer_at_least(n_filters, 1, "n_filters");
+        check::integer_within(win, sonare_c_detail::kPathEnhanceWindowDomain, "win");
+        check::integer_within(max_ratio, sonare_c_detail::kPathEnhanceMaxRatioDomain, "max_ratio");
+        check::integer_within(min_ratio, sonare_c_detail::kPathEnhanceMinRatioDomain, "min_ratio");
+        check::integer_within(n_filters, sonare_c_detail::kPathEnhanceFilterCountDomain,
+                              "n_filters");
       });
       err != SONARE_OK) {
     return err;

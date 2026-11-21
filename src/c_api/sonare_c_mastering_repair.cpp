@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "analysis/acoustic_analyzer.h"
+#include "c_api/mastering_input_domains.h"
 #include "core/audio.h"
 #include "mastering/assistant/repair_session.h"
 #include "mastering/common/noise_profile.h"
@@ -417,8 +418,10 @@ SonareError run_detection(const char* fn, const char* name, const float* samples
 
 /// Refuses a zero channel count, named as the header spells it.
 SonareError require_channel_count(size_t channel_count) {
-  return run_validation(
-      [&] { util::check::integer_at_least<size_t>(channel_count, 1, "num_channels"); });
+  return run_validation([&] {
+    util::check::integer_within(channel_count, sonare_c_detail::kRepairChannelCountDomain,
+                                "num_channels");
+  });
 }
 
 /// Refuses a channel count the containers cannot represent.
@@ -788,8 +791,9 @@ SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, 
   // The same power-of-two rule the denoise config validator applies, so a grid
   // this hands back is always one the detector can report on.
   if (const SonareError err = run_validation([&] {
-        util::check::power_of_two_in_range(n_fft, 1, std::numeric_limits<int>::max(), "n_fft");
-        util::check::integer_at_least(sample_rate, 1, "sample_rate");
+        util::check::power_of_two_within(n_fft, sonare_c_detail::kNoiseBandFftSizeDomain, "n_fft");
+        util::check::integer_within(sample_rate, sonare_c_detail::kNoiseBandSampleRateDomain,
+                                    "sample_rate");
       });
       err != SONARE_OK) {
     return err;

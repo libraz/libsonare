@@ -274,14 +274,14 @@ double dereverb_subtraction_gain(double current_power, double late_psd,
 void validate_config(const DereverbClassicalConfig& config) {
   check::in_range(config.threshold, 0.0, 1.0, "threshold");
   check::in_range(config.attenuation, 0.0, 1.0, "attenuation");
-  check::power_of_two_in_range(config.n_fft, 2, kMaxStftNFft, "n_fft");
+  check::power_of_two_within(config.n_fft, kDereverbNFftDomain, "n_fft");
   check::integer_in_range(config.hop_length, 1, config.n_fft / 2, "hop_length");
   check::in_interval(config.t60_sec, 0.0, false, kDereverbMaxT60Sec, true, "t60_sec");
   check::in_range(config.late_delay_ms, 0.0, kDereverbMaxLateDelayMs, "late_delay_ms");
   check::in_range(config.over_subtraction, 0.0, 16.0, "over_subtraction");
   check::in_range(config.spectral_floor, 0.0, 1.0, "spectral_floor");
-  check::integer_in_range(config.wpe_iterations, 1, kDereverbMaxWpeIterations, "wpe_iterations");
-  check::integer_in_range(config.wpe_taps, 1, kDereverbMaxWpeTaps, "wpe_taps");
+  check::integer_within(config.wpe_iterations, kDereverbWpeIterationsDomain, "wpe_iterations");
+  check::integer_within(config.wpe_taps, kDereverbWpeTapsDomain, "wpe_taps");
   check::in_range(config.wpe_strength, 0.0, 1.0, "wpe_strength");
   if (!common::has_reconstructible_hann_geometry(config.n_fft, config.hop_length)) {
     check::refuse_relation({"n_fft", "hop_length"},

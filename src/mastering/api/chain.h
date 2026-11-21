@@ -32,6 +32,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mastering::api {
 
@@ -383,6 +384,10 @@ struct StreamingMasteringChainOptions {
   /// NaN (the default) applies the static gain verbatim.
   float loudness_static_gain_peak_db = std::numeric_limits<float>::quiet_NaN();
 };
+
+/// @brief What StreamingMasteringChain::prepare accepts as a channel count: mono or stereo.
+inline constexpr util::check::NumericDomain kStreamingChainChannelCountDomain =
+    util::check::integer_domain(1, 2);
 
 class StreamingMasteringChain {
  public:

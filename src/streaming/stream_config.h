@@ -32,6 +32,20 @@ inline constexpr size_t kMaxStreamPendingFrames = 1u << 20;
 inline constexpr size_t kDefaultStreamMaxProgressionEntries = 4096;
 inline constexpr size_t kMaxStreamProgressionEntries = 1u << 20;
 
+/// @brief Domains of the StreamConfig members the analyzer and the C ABI create refuse.
+inline constexpr util::check::NumericDomain kStreamConfigNFftDomain =
+    util::check::integer_domain(1, kMaxStftNFft);
+inline constexpr util::check::NumericDomain kStreamConfigNMelsDomain =
+    util::check::integer_domain(1, kMaxMelBands);
+inline constexpr util::check::NumericDomain kStreamConfigHopLengthDomain =
+    util::check::integer_domain_of<int>(1);
+inline constexpr util::check::NumericDomain kStreamConfigEmitEveryNFramesDomain =
+    util::check::integer_domain_of<int>(1);
+inline constexpr util::check::NumericDomain kStreamConfigMaxPendingFramesDomain =
+    util::check::integer_domain(1, static_cast<long long>(kMaxStreamPendingFrames));
+inline constexpr util::check::NumericDomain kStreamConfigMaxProgressionEntriesDomain =
+    util::check::integer_domain(1, static_cast<long long>(kMaxStreamProgressionEntries));
+
 /// @brief Accepted A4 tuning reference range, one octave either side of concert
 ///        pitch.
 /// @details StreamConfig validation and StreamAnalyzer::set_tuning_ref_hz share
@@ -155,10 +169,9 @@ struct StreamConfig {
 ///          same values before any allocation. n_fft is a duration at 44100 Hz, so the ceiling
 ///          applies to the requested value whichever rate branch the analyzer later takes.
 inline void validate_stream_config_sizing(const StreamConfig& config) {
-  util::check::integer_in_range(config.sample_rate, kMinAudioSampleRate, kMaxAudioSampleRate,
-                                "sample_rate");
-  util::check::integer_in_range(config.n_fft, 1, kMaxStftNFft, "n_fft");
-  util::check::integer_in_range(config.n_mels, 1, kMaxMelBands, "n_mels");
+  util::check::integer_within(config.sample_rate, kAudioSampleRateDomain, "sample_rate");
+  util::check::integer_within(config.n_fft, kStreamConfigNFftDomain, "n_fft");
+  util::check::integer_within(config.n_mels, kStreamConfigNMelsDomain, "n_mels");
 }
 
 /// @brief Rejects a config that a caller limited to the SOA read paths could

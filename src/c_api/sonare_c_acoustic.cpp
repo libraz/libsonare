@@ -21,6 +21,7 @@
 #include "acoustic/material.h"
 #include "analysis/room_estimator.h"
 #include "core/audio.h"
+#include "effects/common/room_field_checks.h"
 #include "util/parameter_checks.h"
 #endif
 
@@ -234,8 +235,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   require_struct_size(config->struct_size, sizeof(SonareRirSynthConfig), "config",
                       "sonare_rir_synth_config_init");
   namespace check = sonare::util::check;
-  check::integer_in_range(sample_rate, sonare_c_detail::kMinSampleRate,
-                          sonare_c_detail::kMaxSampleRate, "sample_rate");
+  check::integer_within(sample_rate, sonare::kAudioSampleRateDomain, "sample_rate");
   check::finite_float(config->length_m, "config.length_m");
   check::finite_float(config->width_m, "config.width_m");
   check::finite_float(config->height_m, "config.height_m");
@@ -245,7 +245,8 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   check::finite_float(config->listener.x, "config.listener.x");
   check::finite_float(config->listener.y, "config.listener.y");
   check::finite_float(config->listener.z, "config.listener.z");
-  check::integer_at_least(config->ism_order, 0, "config.ism_order");
+  check::integer_within(config->ism_order, sonare::effects::common::kRirIsmOrderDomain,
+                        "config.ism_order");
   check::in_range(config->max_sec, 0.0, sonare::acoustic::kMaxRirSeconds, "config.max_sec");
   check::in_range(config->mixing_time_ms, 0.0, sonare::acoustic::kMaxRirMixingTimeMs,
                   "config.mixing_time_ms");
@@ -321,7 +322,8 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
                   sonare::kRoomReferenceAbsorptionMax, "config.reference_absorption");
   check::greater_than(config->min_decay_db, 0.0, "config.min_decay_db");
   check::at_least(config->noise_floor_margin_db, 0.0, "config.noise_floor_margin_db");
-  check::integer_at_least(config->n_octave_bands, 1, "config.n_octave_bands");
+  check::integer_within(config->n_octave_bands, sonare_c_detail::kRoomEstimateOctaveBandsDomain,
+                        "config.n_octave_bands");
   SONARE_C_REQUIRE_NONNULL(out);
 
   return run_offline(

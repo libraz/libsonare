@@ -73,15 +73,14 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// breaks the emission throttle. The C-ABI validates before constructing, so
   /// it never reaches here with these values; this guard catches the binding
   /// layers that construct directly.
-  util::check::integer_at_least(config_.hop_length, 1, "hop_length");
-  util::check::integer_at_least(config_.emit_every_n_frames, 1, "emit_every_n_frames");
+  util::check::integer_within(config_.hop_length, kStreamConfigHopLengthDomain, "hop_length");
+  util::check::integer_within(config_.emit_every_n_frames, kStreamConfigEmitEveryNFramesDomain,
+                              "emit_every_n_frames");
   util::check::integer_at_least(config_.magnitude_downsample, 1, "magnitude_downsample");
-  util::check::integer_in_range(static_cast<long long>(config_.max_pending_frames), 1,
-                                static_cast<long long>(kMaxStreamPendingFrames),
-                                "max_pending_frames");
-  util::check::integer_in_range(static_cast<long long>(config_.max_progression_entries), 1,
-                                static_cast<long long>(kMaxStreamProgressionEntries),
-                                "max_progression_entries");
+  util::check::integer_within(static_cast<long long>(config_.max_pending_frames),
+                              kStreamConfigMaxPendingFramesDomain, "max_pending_frames");
+  util::check::integer_within(static_cast<long long>(config_.max_progression_entries),
+                              kStreamConfigMaxProgressionEntriesDomain, "max_progression_entries");
 
   if (config_.output_format != OutputFormat::Float32) {
     throw SonareParameterRefusal::predicate(

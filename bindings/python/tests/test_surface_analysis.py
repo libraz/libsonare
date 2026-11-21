@@ -1096,7 +1096,7 @@ _INT_MAX = "2147483647"
     [
         (
             lambda: libsonare.mel_to_stft(_MEL, SR, n_fft=0),
-            f"mel_to_stft: n_fft must be an integer in [1, {_INT_MAX}]",
+            "mel_to_stft: n_fft must be an integer in [1, 8192]",
         ),
         (
             lambda: libsonare.mel_to_stft(_MEL, 0),
@@ -1104,11 +1104,11 @@ _INT_MAX = "2147483647"
         ),
         (
             lambda: libsonare.mel_to_audio(_MEL, SR, n_fft=0, n_iter=1),
-            f"mel_to_audio: n_fft must be an integer in [1, {_INT_MAX}]",
+            "mel_to_audio: n_fft must be an integer in [1, 8192]",
         ),
         (
             lambda: libsonare.mfcc_to_audio(_MFCC, n_mels=16, sr=SR, n_fft=0, n_iter=1),
-            f"mfcc_to_audio: n_fft must be an integer in [1, {_INT_MAX}]",
+            "mfcc_to_audio: n_fft must be an integer in [1, 8192]",
         ),
         (
             lambda: libsonare.griffin_lim(_STFT_MAGNITUDE, 1000, n_iter=1),
