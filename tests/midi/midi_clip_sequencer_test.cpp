@@ -121,7 +121,7 @@ TEST_CASE("MidiClip SysEx preparation survives source bank destruction", "[midi]
     event.sysex_payload = source_bank->payloads.front().data();
     event.sysex_payload_size = expected.size();
     event.prepared_sysex = prepared.get();
-    schedules.front().events = {event};
+    schedules.front().events = std::vector<MidiEvent>{event};
     schedules.front().sysex_payload_bank = source_bank;
     REQUIRE(sonare::midi::own_sysex_payloads(schedules));
   }
@@ -150,14 +150,14 @@ TEST_CASE("MidiClip SysEx preparation preserves a token borrowed by a later sche
   first.sysex_payload = source_bank->payloads.front().data();
   first.sysex_payload_size = expected.size();
   first.prepared_sysex = prepared.get();
-  schedules.front().events = {first};
+  schedules.front().events = std::vector<MidiEvent>{first};
   schedules.front().sysex_payload_bank = source_bank;
 
   MidiClipSchedule second;
   MidiEvent borrowed = first;
   borrowed.render_frame = 20;
   borrowed.ump = sonare::midi::make_sysex_handle(0, 3);
-  second.events = {borrowed};
+  second.events = std::vector<MidiEvent>{borrowed};
   schedules.push_back(std::move(second));
 
   REQUIRE(sonare::midi::own_sysex_payloads(schedules));
@@ -179,7 +179,7 @@ TEST_CASE("MidiClip SysEx preparation failure leaves schedules untouched", "[mid
   event.ump = sonare::midi::make_sysex_handle(0, 4);
   event.sysex_payload = source.data();
   event.sysex_payload_size = source.size();
-  schedule.events = {event};
+  schedule.events = std::vector<MidiEvent>{event};
   std::vector<MidiClipSchedule> schedules{schedule};
   const uint8_t* original_pointer = schedules.front().events.front().sysex_payload;
   sonare::midi::MidiSysExPayloadError error = sonare::midi::MidiSysExPayloadError::kNone;
@@ -201,7 +201,7 @@ TEST_CASE("MidiClip SysEx allocation failure is reported separately", "[midi][sy
   event.ump = sonare::midi::make_sysex_handle(0, 5);
   event.sysex_payload = source.data();
   event.sysex_payload_size = source.size();
-  schedule.events = {event};
+  schedule.events = std::vector<MidiEvent>{event};
   std::vector<MidiClipSchedule> schedules{schedule};
   const uint8_t* original_pointer = schedules.front().events.front().sysex_payload;
   sonare::midi::MidiSysExPayloadError error = sonare::midi::MidiSysExPayloadError::kNone;
@@ -243,7 +243,7 @@ TEST_CASE("MidiSequencer bypasses MIDI FX timing for SysEx", "[midi][sysex]") {
   MidiEvent note;
   note.render_frame = 60;
   note.ump = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
-  clip.events = {sysex, note};
+  clip.events = std::vector<MidiEvent>{sysex, note};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 128);
@@ -600,7 +600,7 @@ TEST_CASE("MidiSequencer releases notes from clips dropped by a republished set"
   clip.destination_id = 5;
   clip.start_sample = 0;
   clip.length_samples = 0;  // open-ended: the note-on has no matching note-off
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
   };
   seq.set_midi_clips({clip});
@@ -640,7 +640,7 @@ TEST_CASE("MidiSequencer keeps notes sounding when a republished set still conta
   clip.id = 7;
   clip.destination_id = 2;
   clip.length_samples = 0;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {0, sonare::midi::make_midi1_note_on(0, 0, 64, 90)},
   };
   seq.set_midi_clips({clip});
@@ -678,7 +678,7 @@ TEST_CASE(
   MidiClipSchedule original;
   original.id = 43;
   original.destination_id = 5;
-  original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  original.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({original});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 32);
@@ -730,7 +730,7 @@ TEST_CASE("MidiSequencer refresh releases a clip whose source track changed", "[
   original.id = 44;
   original.track_id = 10;
   original.destination_id = 5;
-  original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  original.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({original});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 32);
@@ -763,7 +763,7 @@ TEST_CASE("MidiSequencer note-off fallback keeps a different source track active
   track_a.id = 101;
   track_a.track_id = 10;
   track_a.destination_id = 5;
-  track_a.events = {
+  track_a.events = std::vector<MidiEvent>{
       {0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
       {10, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},
       {20, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},
@@ -772,7 +772,7 @@ TEST_CASE("MidiSequencer note-off fallback keeps a different source track active
   track_b.id = 102;
   track_b.track_id = 20;
   track_b.destination_id = 5;
-  track_b.events = {{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  track_b.events = std::vector<MidiEvent>{{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({track_a, track_b});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 32);
@@ -954,7 +954,7 @@ TEST_CASE("MidiSequencer dispatches in-block events in order and frame", "[midi]
   MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 7;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {100, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
       {150, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},
       {300, sonare::midi::make_midi1_note_on(0, 0, 64, 90)},
@@ -1006,7 +1006,7 @@ TEST_CASE("MidiSequencer preserves source track through MIDI FX and a synthetic 
   clip.destination_id = 7;
   clip.start_sample = 0;
   clip.length_samples = 80;
-  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 128);
@@ -1036,7 +1036,7 @@ TEST_CASE("MidiSequencer dispatches pre-resolved SysEx payload views", "[midi]")
   MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 7;
-  clip.events = {sysex};
+  clip.events = std::vector<MidiEvent>{sysex};
   seq.set_midi_clips({clip});
   // The control setter must snapshot caller-owned bytes. Mutating the source
   // after publication must not alter the event adopted by the audio thread.
@@ -1069,7 +1069,7 @@ TEST_CASE("MidiSequencer rejects null SysEx payload without replacing its snapsh
   good_event.sysex_payload_size = good_payload.size();
   MidiClipSchedule good_clip;
   good_clip.id = 7;
-  good_clip.events = {good_event};
+  good_clip.events = std::vector<MidiEvent>{good_event};
   seq.set_midi_clips({good_clip});
   seq.acquire_midi_clips();
 
@@ -1078,7 +1078,7 @@ TEST_CASE("MidiSequencer rejects null SysEx payload without replacing its snapsh
     invalid.sysex_payload = nullptr;
     invalid.sysex_payload_size = 1;
     MidiClipSchedule invalid_clip = good_clip;
-    invalid_clip.events = {invalid};
+    invalid_clip.events = std::vector<MidiEvent>{invalid};
     REQUIRE_THROWS_AS(seq.set_midi_clips({invalid_clip}), sonare::SonareException);
   }
 
@@ -1108,7 +1108,7 @@ TEST_CASE("MidiSequencer owns an arbitrary-size scheduled SysEx payload", "[midi
   event.sysex_payload = payload.data();
   event.sysex_payload_size = payload.size();
   MidiClipSchedule clip;
-  clip.events = {event};
+  clip.events = std::vector<MidiEvent>{event};
   seq.set_midi_clips({clip});
   payload[37] ^= 0xFFu;
   seq.acquire_midi_clips();
@@ -1142,7 +1142,7 @@ TEST_CASE("MidiSequencer preserves payloads borrowed by later schedules", "[midi
     first_event.sysex_payload = source_bank->payloads.front().data();
     first_event.sysex_payload_size = expected.size();
     first_event.prepared_sysex = prepared.get();
-    schedules.front().events = {first_event};
+    schedules.front().events = std::vector<MidiEvent>{first_event};
     schedules.front().sysex_payload_bank = source_bank;
   }
 
@@ -1155,7 +1155,7 @@ TEST_CASE("MidiSequencer preserves payloads borrowed by later schedules", "[midi
   second_event.ump = sonare::midi::make_sysex_handle(0, 4);
   second_event.sysex_payload = schedules.front().events.front().sysex_payload;
   second_event.sysex_payload_size = schedules.front().events.front().sysex_payload_size;
-  second.events = {second_event};
+  second.events = std::vector<MidiEvent>{second_event};
   schedules.push_back(std::move(second));
 
   seq.set_midi_clips(std::move(schedules));
@@ -1196,8 +1196,8 @@ TEST_CASE("MidiSequencer applies live MIDI FX per destination before dispatch", 
   MidiClipSchedule processed;
   processed.id = 1;
   processed.destination_id = 7;
-  processed.events = {{10, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                      {20, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  processed.events = std::vector<MidiEvent>{{10, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                            {20, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   MidiClipSchedule bypassed = processed;
   bypassed.id = 2;
   bypassed.destination_id = 8;
@@ -1246,7 +1246,7 @@ TEST_CASE("MidiSequencer preserves same-frame controller stream order after MIDI
   MidiClipSchedule clip;
   clip.id = 1201;
   clip.destination_id = 9;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {60, sonare::midi::make_midi1_control_change(0, 0, 101, 0)},
       {60, sonare::midi::make_midi1_control_change(0, 0, 100, 0)},
       {60, sonare::midi::make_midi1_control_change(0, 0, 6, 12)},
@@ -1311,14 +1311,14 @@ TEST_CASE("MidiSequencer ranks same-frame note-off before note-on across clips",
   incoming.id = 1206;
   incoming.track_id = 91;
   incoming.destination_id = 9;
-  incoming.events = {{100, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  incoming.events = std::vector<MidiEvent>{{100, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
 
   MidiClipSchedule old;
   old.id = 1207;
   old.track_id = 91;
   old.destination_id = 9;
-  old.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                {100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  old.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                      {100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
 
   // The incoming clip is deliberately first in the published vector. Its
   // note-on must still follow the old clip's same-frame note-off after the
@@ -1360,12 +1360,13 @@ TEST_CASE("MidiSequencer globally ranks a scheduled note-off before a pending no
   pending_on.id = 1202;
   pending_on.track_id = 77;
   pending_on.destination_id = 9;
-  pending_on.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  pending_on.events = std::vector<MidiEvent>{{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   MidiClipSchedule scheduled_off;
   scheduled_off.id = 1203;
   scheduled_off.track_id = 77;
   scheduled_off.destination_id = 9;
-  scheduled_off.events = {{100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  scheduled_off.events =
+      std::vector<MidiEvent>{{100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
 
   seq.set_midi_clips({pending_on, scheduled_off});
   seq.acquire_midi_clips();
@@ -1401,7 +1402,7 @@ TEST_CASE("MidiSequencer rescans pending events after a channel reset removes a 
   // The note-on quantizes to 100 and waits in the pending queue; the reset and
   // the CC keep their frames. Dispatching the reset removes the pending note-on,
   // and the CC after it still dispatches.
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
       {61, sonare::midi::make_midi1_control_change(0, 0, 120, 0)},
       {62, sonare::midi::make_midi1_control_change(0, 0, 1, 64)},
@@ -1475,7 +1476,7 @@ TEST_CASE("MidiSequencer plays a clip published with unordered events in frame o
   MidiClipSchedule clip;
   clip.id = 1210;
   clip.destination_id = 9;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {200, sonare::midi::make_midi1_control_change(0, 0, 3, 0)},
       {100, sonare::midi::make_midi1_control_change(0, 0, 1, 0)},
       {150, sonare::midi::make_midi1_control_change(0, 0, 2, 0)},
@@ -1515,7 +1516,7 @@ TEST_CASE("MidiSequencer ranks a pending note-on after a one-shot clip-end relea
   ending.destination_id = 9;
   ending.loop_mode = sonare::midi::MidiLoopMode::kOneShot;
   ending.length_samples = 100;
-  ending.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  ending.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
 
   // This note is transformed at frame 60 and becomes a pending note-on at the
   // exact exclusive end of the first clip. The synthetic clip-end release for
@@ -1524,7 +1525,7 @@ TEST_CASE("MidiSequencer ranks a pending note-on after a one-shot clip-end relea
   incoming.id = 1205;
   incoming.track_id = 88;
   incoming.destination_id = 9;
-  incoming.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  incoming.events = std::vector<MidiEvent>{{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
 
   seq.set_midi_clips({incoming, ending});
   seq.acquire_midi_clips();
@@ -1606,8 +1607,8 @@ TEST_CASE("MidiSequencer live MIDI FX keeps future arpeggiator events pending", 
   MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 9;
-  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {120, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {120, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
@@ -1650,7 +1651,7 @@ TEST_CASE("MidiSequencer clamps overdue pending MIDI FX events to block start", 
   MidiClipSchedule clip;
   clip.id = 121;
   clip.destination_id = 9;
-  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
@@ -1694,7 +1695,7 @@ TEST_CASE("MidiSequencer keeps arpeggiator pending events across loop wrap", "[m
   clip.loop_mode = sonare::midi::MidiLoopMode::kLoop;
   clip.loop_length_samples = 20;
   clip.destination_id = 9;
-  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
@@ -1734,8 +1735,8 @@ TEST_CASE("MidiSequencer MIDI FX hot-swap releases transformed active notes", "[
   MidiClipSchedule clip;
   clip.id = 111;
   clip.destination_id = 7;
-  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 64);
@@ -1861,7 +1862,7 @@ TEST_CASE("MidiSequencer clears MIDI FX timing state on stop", "[midi]") {
   MidiClipSchedule clip;
   clip.id = 501;
   clip.destination_id = 7;
-  clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events = std::vector<MidiEvent>{{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 128);
@@ -1906,8 +1907,8 @@ TEST_CASE("MidiSequencer keeps unchanged destination MIDI FX timing across updat
   MidiClipSchedule clip;
   clip.id = 502;
   clip.destination_id = 7;
-  clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {80, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events = std::vector<MidiEvent>{{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {80, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
@@ -1950,7 +1951,7 @@ TEST_CASE("MidiSequencer releases an active clip note after its published end is
   original.track_id = 17;
   original.destination_id = 7;
   original.length_samples = 1000;
-  original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  original.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({original});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 256);
@@ -1993,12 +1994,12 @@ TEST_CASE("MidiSequencer clears only a removed clip's MIDI FX timing state", "[m
   removed.id = 504;
   removed.track_id = 10;
   removed.destination_id = 7;
-  removed.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  removed.events = std::vector<MidiEvent>{{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   MidiClipSchedule retained;
   retained.id = 505;
   retained.track_id = 20;
   retained.destination_id = 7;
-  retained.events = {{70, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  retained.events = std::vector<MidiEvent>{{70, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({removed, retained});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 128);
@@ -2012,8 +2013,9 @@ TEST_CASE("MidiSequencer clears only a removed clip's MIDI FX timing state", "[m
   replacement.id = 506;
   replacement.track_id = 10;
   replacement.destination_id = 7;
-  replacement.events = {{170, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                        {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  replacement.events =
+      std::vector<MidiEvent>{{170, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                             {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({replacement, retained});
   seq.acquire_midi_clips();
   sink.events.clear();
@@ -2057,7 +2059,7 @@ TEST_CASE("MidiSequencer clears matching MIDI FX timing after a channel-mode res
   clip.id = 507;
   clip.track_id = 10;
   clip.destination_id = 7;
-  clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events = std::vector<MidiEvent>{{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 128);
@@ -2070,9 +2072,9 @@ TEST_CASE("MidiSequencer clears matching MIDI FX timing after a channel-mode res
   // timing entry. The new in-block gate quantizes 170 -> 200 (+30), and its
   // off must land at 220 rather than inherit the old +40 shift and land at
   // 230.
-  clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {170, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events = std::vector<MidiEvent>{{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {170, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   sink.events.clear();
@@ -2263,7 +2265,7 @@ TEST_CASE("MidiSequencer all_notes_off releases sounding notes (hang-note safety
   MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 3;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {10, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
       {20, sonare::midi::make_midi1_note_on(0, 1, 64, 90)},
       {30, sonare::midi::make_midi1_note_on(0, 2, 67, 80)},
@@ -2307,13 +2309,13 @@ TEST_CASE("MidiSequencer one-shot clip end releases only that clip's sounding no
   ending.start_sample = 0;
   ending.length_samples = 50;
   ending.destination_id = 7;
-  ending.events = {{10, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                   {70, sonare::midi::make_midi1_note_on(0, 0, 62, 100)}};
+  ending.events = std::vector<MidiEvent>{{10, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                         {70, sonare::midi::make_midi1_note_on(0, 0, 62, 100)}};
 
   MidiClipSchedule open;
   open.id = 12;
   open.destination_id = 7;
-  open.events = {{20, sonare::midi::make_midi1_note_on(0, 0, 65, 100)}};
+  open.events = std::vector<MidiEvent>{{20, sonare::midi::make_midi1_note_on(0, 0, 65, 100)}};
 
   seq.set_midi_clips({ending, open});
   seq.acquire_midi_clips();
@@ -2364,9 +2366,9 @@ TEST_CASE("MidiSequencer loops MIDI clip schedules on the RT path", "[midi]") {
   clip.loop_mode = sonare::midi::MidiLoopMode::kLoop;
   clip.loop_length_samples = 40;
   clip.destination_id = 9;
-  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {20, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},
-                 {30, sonare::midi::make_midi1_note_on(0, 0, 64, 100)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {20, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},
+                                       {30, sonare::midi::make_midi1_note_on(0, 0, 64, 100)}};
 
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
@@ -2419,7 +2421,7 @@ TEST_CASE("MidiSequencer treats MIDI 1.0 note-on velocity zero as note-off", "[m
   MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 3;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {10, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
       {20, sonare::midi::make_midi1_note_on(0, 0, 60, 0)},
   };
@@ -2471,12 +2473,13 @@ TEST_CASE("MidiSequencer note-off is keyed by destination", "[midi]") {
   MidiClipSchedule a;
   a.id = 1;
   a.destination_id = 10;
-  a.events = {{10, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};  // held, never released
+  a.events = std::vector<MidiEvent>{
+      {10, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};  // held, never released
   MidiClipSchedule b;
   b.id = 2;
   b.destination_id = 20;
-  b.events = {{20, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-              {30, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  b.events = std::vector<MidiEvent>{{20, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                    {30, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({a, b});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 128);
@@ -2548,7 +2551,7 @@ TEST_CASE("MidiSequencer reports the frames of a block's events", "[midi]") {
 
   MidiClipSchedule clip;
   clip.id = 1;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
       {64, sonare::midi::make_midi1_note_on(0, 0, 62, 100)},
       {64, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},  // duplicate offset deduped.
@@ -2593,7 +2596,7 @@ TEST_CASE("MidiSequencer takes a clip event's UMP group from its own word0", "[m
   MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 3;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {32, packed(0x9, 60, 100)},
       {96, packed(0x8, 60, 0)},
   };
@@ -2622,7 +2625,7 @@ TEST_CASE("MidiSequencer keeps a clip event's group when it already agrees with 
   MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 3;
-  clip.events = {
+  clip.events = std::vector<MidiEvent>{
       {32, sonare::midi::make_midi1_note_on(9, 2, 60, 100)},
       {96, sonare::midi::make_midi2_note_off(9, 2, 60, 0)},
   };
@@ -2667,7 +2670,7 @@ TEST_CASE("MidiSequencer gives a groupless clip event group 0, not the packed ni
   MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 3;
-  clip.events = {{32, stream}, {96, utility}};
+  clip.events = std::vector<MidiEvent>{{32, stream}, {96, utility}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 256);
@@ -2698,11 +2701,11 @@ TEST_CASE("MidiSequencer clip removal preserves another clip's gate on the same 
   removed.track_id = 10;
   removed.destination_id = 7;
   removed.length_samples = 1000;
-  removed.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  removed.events = std::vector<MidiEvent>{{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   MidiClipSchedule surviving = removed;
   surviving.id = 902;
-  surviving.events = {{70, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                      {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  surviving.events = std::vector<MidiEvent>{{70, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                            {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({removed, surviving});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 128);
@@ -2735,9 +2738,9 @@ TEST_CASE("MidiSequencer pending clip trim preserves an earlier overlapping note
   clip.track_id = 10;
   clip.destination_id = 7;
   clip.length_samples = 1000;
-  clip.events = {{99, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {151, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {195, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events = std::vector<MidiEvent>{{99, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {151, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {195, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 128);
@@ -2769,7 +2772,8 @@ TEST_CASE("MidiSequencer saturates a clip ending past INT64_MAX like the clip en
   clip.start_sample = kMax - 100;
   clip.length_samples = 1000;
   clip.gain = 0.5f;
-  clip.events = {{kMax - 90, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events =
+      std::vector<MidiEvent>{{kMax - 90, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   const std::vector<MidiClipSchedule> clips{clip};
   seq.set_midi_clips(clips);
   seq.acquire_midi_clips();
@@ -2805,8 +2809,8 @@ TEST_CASE("MidiSequencer loops a clip whose iterations run past INT64_MAX", "[mi
   clip.start_sample = kMax - 100;
   clip.loop_mode = sonare::midi::MidiLoopMode::kLoop;
   clip.loop_length_samples = 30;
-  clip.events = {{kMax - 95, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {kMax - 80, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events = std::vector<MidiEvent>{{kMax - 95, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {kMax - 80, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
@@ -2859,8 +2863,8 @@ TEST_CASE("MidiSequencer releases clip playback and leaves live input sounding",
   MidiClipSchedule clip;
   clip.id = 61;
   clip.destination_id = 1;
-  clip.events = {{0, sonare::midi::make_midi1_control_change(0, 0, 64, 127)},
-                 {0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_control_change(0, 0, 64, 127)},
+                                       {0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   seq.process_block(SequencerClock::aligned(0), 8);
@@ -2923,14 +2927,14 @@ TEST_CASE("MidiSequencer plays a written-out loop exactly as the repeated body",
   looped.length_samples = 90;
   looped.loop_mode = sonare::midi::MidiLoopMode::kLoop;
   looped.loop_length_samples = 30;
-  looped.events = {{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  looped.events = std::vector<MidiEvent>{{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
 
   MidiClipSchedule written = looped;
   written.loop_mode = sonare::midi::MidiLoopMode::kOneShot;
   written.loop_length_samples = 0;
-  written.events = {{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                    {35, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                    {65, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  written.events = std::vector<MidiEvent>{{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                          {35, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                          {65, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   written.loop_iteration_starts = {30, 60};
 
   const std::vector<std::pair<int64_t, bool>> expected{{5, true},   {30, false}, {35, true},
@@ -3154,7 +3158,8 @@ TEST_CASE("MidiSequencer quantizes live MIDI FX on a PPQ grid through the clock'
       MidiClipSchedule clip;
       clip.id = 71;
       clip.destination_id = 9;
-      clip.events = {{grid_line + 90, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+      clip.events =
+          std::vector<MidiEvent>{{grid_line + 90, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
       seq.set_midi_clips({clip});
       seq.acquire_midi_clips();
 

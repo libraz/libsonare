@@ -256,7 +256,9 @@ TEST_CASE("SVE1 rejects truncation and trailing bytes", "[vocal_state_codec]") {
   for (size_t size = 0; size < encoded.size(); ++size) {
     CHECK_THROWS(decode_vocal_state(encoded.data(), size));
   }
-  auto trailing = encoded;
+  std::vector<uint8_t> trailing;
+  trailing.reserve(encoded.size() + 1);
+  trailing.assign(encoded.begin(), encoded.end());
   trailing.push_back(0);
   CHECK_THROWS(decode_vocal_state(trailing));
 }

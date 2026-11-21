@@ -919,7 +919,7 @@ TEST_CASE("RealtimeEngine preserves the latest control clip snapshot on rebind",
     sonare::midi::MidiClipSchedule clip;
     clip.id = id;
     clip.destination_id = 0;
-    clip.events = {event};
+    clip.events = std::vector<MidiEvent>{event};
     return std::vector<sonare::midi::MidiClipSchedule>{clip};
   };
 
@@ -960,7 +960,7 @@ TEST_CASE("RealtimeEngine adopts a pending rebind after an exactly full clip rin
     sonare::midi::MidiClipSchedule clip;
     clip.id = id;
     clip.destination_id = 0;
-    clip.events = {event};
+    clip.events = std::vector<MidiEvent>{event};
     return std::vector<sonare::midi::MidiClipSchedule>{clip};
   };
 
@@ -1021,7 +1021,7 @@ TEST_CASE("RealtimeEngine rebinds clip and queued SysEx domains transactionally"
   scheduled.ump = sonare::midi::make_sysex_handle(0, 9);
   scheduled.sysex_payload = payload.data();
   scheduled.sysex_payload_size = payload.size();
-  clip.events = {scheduled};
+  clip.events = std::vector<MidiEvent>{scheduled};
   engine.set_midi_clips({clip});
   REQUIRE(engine.push_midi_sysex(0, payload.data(), payload.size(), 64));
 
@@ -1058,7 +1058,7 @@ TEST_CASE("RealtimeEngine rejects a failed SysEx rebind without replacing its do
   scheduled.ump = sonare::midi::make_sysex_handle(0, 10);
   scheduled.sysex_payload = payload.data();
   scheduled.sysex_payload_size = payload.size();
-  clip.events = {scheduled};
+  clip.events = std::vector<MidiEvent>{scheduled};
   engine.set_midi_clips({clip});
 
   REQUIRE_FALSE(engine.set_midi_instrument(0, &failing_instrument));
@@ -1333,7 +1333,7 @@ TEST_CASE("prepare re-prepares the newest clip snapshot after more than 64 publi
     sonare::midi::MidiClipSchedule clip;
     clip.id = id;
     clip.destination_id = 0;
-    clip.events = {event};
+    clip.events = std::vector<MidiEvent>{event};
     return std::vector<sonare::midi::MidiClipSchedule>{clip};
   };
 
@@ -1369,7 +1369,7 @@ TEST_CASE("prepare reports a scheduled SysEx the bound instrument refuses",
   event.ump = sonare::midi::make_sysex_handle(0, 1);
   event.sysex_payload = payload.data();
   event.sysex_payload_size = payload.size();
-  clip.events = {event};
+  clip.events = std::vector<MidiEvent>{event};
   engine.set_midi_clips({clip});
 
   // The re-prepared instrument now refuses: prepare commits, clears the clips
@@ -1416,7 +1416,7 @@ TEST_CASE("RealtimeEngine reports why an instrument bind was refused", "[engine]
   event.ump = sonare::midi::make_sysex_handle(0, 1);
   event.sysex_payload = payload.data();
   event.sysex_payload_size = payload.size();
-  clip.events = {event};
+  clip.events = std::vector<MidiEvent>{event};
   engine.set_midi_clips({clip});
 
   PreparedTokenInstrument refusing(2, /*fail=*/true);
@@ -1466,7 +1466,7 @@ TEST_CASE("RealtimeEngine forwards a handle-carrying clip SysEx to the merged ou
   event.ump = sonare::midi::make_sysex_handle(0, 42);
   event.sysex_payload = payload.data();
   event.sysex_payload_size = payload.size();
-  clip.events = {event};
+  clip.events = std::vector<MidiEvent>{event};
   engine.set_midi_clips({clip});
   push_play(engine);
 
@@ -1552,8 +1552,8 @@ TEST_CASE("RealtimeEngine mirrors sequenced MIDI to live output sink", "[engine]
   clip.start_sample = 0;
   clip.length_samples = 128;
   clip.destination_id = 0;
-  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 64, 100)},
-                 {32, sonare::midi::make_midi1_note_off(0, 0, 64, 0)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 64, 100)},
+                                       {32, sonare::midi::make_midi1_note_off(0, 0, 64, 0)}};
   engine.set_midi_clips({clip});
   push_play(engine);
 
@@ -1592,13 +1592,15 @@ TEST_CASE("RealtimeEngine does not mirror external destinations to the merged ou
   internal_clip.start_sample = 0;
   internal_clip.length_samples = 128;
   internal_clip.destination_id = 0;
-  internal_clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                          {32, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  internal_clip.events =
+      std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                             {32, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   sonare::midi::MidiClipSchedule external_clip = internal_clip;
   external_clip.id = 2;
   external_clip.destination_id = 5;
-  external_clip.events = {{0, sonare::midi::make_midi1_note_on(0, 1, 64, 110)},
-                          {48, sonare::midi::make_midi1_note_off(0, 1, 64, 0)}};
+  external_clip.events =
+      std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 1, 64, 110)},
+                             {48, sonare::midi::make_midi1_note_off(0, 1, 64, 0)}};
   engine.set_midi_clips({internal_clip, external_clip});
   push_play(engine);
 
@@ -1639,13 +1641,15 @@ TEST_CASE("RealtimeEngine routes external destinations to the output queue, bypa
   internal_clip.start_sample = 0;
   internal_clip.length_samples = 128;
   internal_clip.destination_id = 0;
-  internal_clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                          {32, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  internal_clip.events =
+      std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                             {32, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   sonare::midi::MidiClipSchedule external_clip = internal_clip;
   external_clip.id = 2;
   external_clip.destination_id = 5;
-  external_clip.events = {{0, sonare::midi::make_midi1_note_on(0, 1, 64, 110)},
-                          {48, sonare::midi::make_midi1_note_off(0, 1, 64, 0)}};
+  external_clip.events =
+      std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 1, 64, 110)},
+                             {48, sonare::midi::make_midi1_note_off(0, 1, 64, 0)}};
   engine.set_midi_clips({internal_clip, external_clip});
   push_play(engine);
 
@@ -1768,8 +1772,8 @@ TEST_CASE("a block refused for its channel count still dispatches its note-off",
   // The clip outlasts the test, so only the in-span note-off can release the note.
   clip.length_samples = 4096;
   clip.destination_id = 0;
-  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 {96, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events = std::vector<MidiEvent>{{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                                       {96, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   engine.set_midi_clips({clip});
   push_play(engine);
 
@@ -3404,8 +3408,9 @@ std::vector<float> arpeggiated_render(int block) {
   REQUIRE(engine.set_midi_fx(0, fx));
   sonare::midi::MidiClipSchedule clip;
   clip.id = 1;
-  clip.events = {MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 MidiEvent{100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events =
+      std::vector<MidiEvent>{MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                             MidiEvent{100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   engine.set_midi_clips({clip});
   push_play(engine);
   return render_blocks(engine, 128, block);
@@ -3438,7 +3443,8 @@ TEST_CASE("RealtimeEngine renders a clip's last span before its clip-end release
   sonare::midi::MidiClipSchedule clip;
   clip.id = 1;
   clip.length_samples = kBlock;
-  clip.events = {MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events =
+      std::vector<MidiEvent>{MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   engine.set_midi_clips({clip});
   push_play(engine);
 
@@ -3492,7 +3498,8 @@ TEST_CASE("RealtimeEngine applies a queued Play's loop wraps from the first bloc
   engine.set_loop(0.0, 16.0 / 24000.0, true);
   sonare::midi::MidiClipSchedule clip;
   clip.id = 1;
-  clip.events = {MidiEvent{4, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  clip.events =
+      std::vector<MidiEvent>{MidiEvent{4, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   engine.set_midi_clips({clip});
   push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
   render_blocks(engine, kBlock, kBlock);
@@ -3516,8 +3523,9 @@ TEST_CASE("RealtimeEngine places MIDI after a loop wrap at its own device frame"
   engine.set_loop(0.0, 128.0 / 24000.0, true);
   sonare::midi::MidiClipSchedule clip;
   clip.id = 1;
-  clip.events = {MidiEvent{8, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 MidiEvent{16, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events =
+      std::vector<MidiEvent>{MidiEvent{8, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                             MidiEvent{16, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   engine.set_midi_clips({clip});
   push_transport(engine, sonare::rt::CommandType::kTransportSeekSample, 0, 96);
   push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
@@ -3549,8 +3557,9 @@ TEST_CASE("RealtimeEngine keeps clip MIDI inside the loop across an oversized bl
   sonare::midi::MidiClipSchedule clip;
   clip.id = 1;
   clip.length_samples = 4096;
-  clip.events = {MidiEvent{100, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 MidiEvent{200, sonare::midi::make_midi1_note_on(0, 0, 62, 100)}};
+  clip.events =
+      std::vector<MidiEvent>{MidiEvent{100, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                             MidiEvent{200, sonare::midi::make_midi1_note_on(0, 0, 62, 100)}};
   engine.set_midi_clips({clip});
   push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
   render_blocks(engine, kBlock, kBlock);
@@ -3580,9 +3589,10 @@ TEST_CASE("RealtimeEngine restores a controller set before the loop at every wra
   engine.set_loop(16.0 / 24000.0, 48.0 / 24000.0, true);
   sonare::midi::MidiClipSchedule clip;
   clip.id = 1;
-  clip.events = {MidiEvent{4, sonare::midi::make_midi1_control_change(0, 0, 11, 100)},
-                 MidiEvent{20, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 MidiEvent{30, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events =
+      std::vector<MidiEvent>{MidiEvent{4, sonare::midi::make_midi1_control_change(0, 0, 11, 100)},
+                             MidiEvent{20, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                             MidiEvent{30, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   engine.set_midi_clips({clip});
   push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
   render_blocks(engine, 2 * kBlock, kBlock);
@@ -3641,7 +3651,8 @@ TEST_CASE("RealtimeEngine keeps live-input notes held across a loop wrap and a s
   // so it shows the release ran at all.
   sonare::midi::MidiClipSchedule clip;
   clip.id = 1;
-  clip.events = {MidiEvent{4, sonare::midi::make_midi1_note_on(0, 0, 50, 100)}};
+  clip.events =
+      std::vector<MidiEvent>{MidiEvent{4, sonare::midi::make_midi1_note_on(0, 0, 50, 100)}};
   engine.set_midi_clips({clip});
   const auto offs_of = [&log](uint8_t note) {
     std::vector<int64_t> frames;
@@ -3697,8 +3708,9 @@ TEST_CASE("RealtimeEngine drains external clock and notes in time order", "[engi
   sonare::midi::MidiClipSchedule clip;
   clip.id = 1;
   clip.destination_id = 3;
-  clip.events = {MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
-                 MidiEvent{1500, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  clip.events =
+      std::vector<MidiEvent>{MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                             MidiEvent{1500, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   engine.set_midi_clips({clip});
   push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
   render_blocks(engine, kBlock, kBlock);

@@ -100,7 +100,7 @@ void push_name_packet(std::vector<uint8_t>* bytes, uint8_t group, uint8_t addres
                       uint8_t status, uint8_t format, const std::string& text) {
   REQUIRE(text.size() <= 12u);
   std::array<uint8_t, 12> chunk{};
-  std::copy(text.begin(), text.end(), chunk.begin());
+  std::copy_n(text.begin(), std::min(text.size(), chunk.size()), chunk.begin());
   const uint8_t byte1 =
       static_cast<uint8_t>(((format & 0x03u) << 6) | ((address & 0x0Fu) << 4) | (channel & 0x0Fu));
   push_word(bytes, (0xDu << 28) | (static_cast<uint32_t>(group & 0x0Fu) << 24) |
