@@ -744,10 +744,10 @@ export function midiCcIndexForName(name: string): number {
 /**
  * Returns the MIDI 2.0 per-note controller name for `index`.
  *
- * @param index - Per-note controller index, `0`..`255`
+ * @param index - Per-note controller index, an integer in `[0, 255]`
  * @returns The name, or `undefined` when the number names nothing in the table
  * @throws TypeError when `index` is not a number
- * @throws RangeError when `index` is outside `0`..`255`
+ * @throws RangeError when `index` is outside `[0, 255]`
  */
 export function perNoteControllerName(index: number): string | undefined {
   return withEntry('perNoteControllerName', () => {
