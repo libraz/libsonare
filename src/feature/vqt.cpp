@@ -64,7 +64,7 @@ struct CachedVqtKernel {
 /// @brief Maximum number of cached VQT kernels
 constexpr size_t kMaxVqtCacheSize = 2;
 constexpr size_t kMaxVqtKernelElements = 32 * 1024 * 1024;
-constexpr int kMaxVqtFftLength = 131072;
+constexpr int kMaxVqtFftLength = kMaxCqtFftLength;
 
 /// @brief Get or create a cached sparse VQT kernel.
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {

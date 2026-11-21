@@ -10,6 +10,9 @@ namespace {
 const std::array<CName, 3> kInverseNames{
     {{"sr", "sample_rate"}, {"M", "mel"}, {"mfcc", "coefficients"}}};
 
+// The CQT-family core names, as the CQT and VQT inverse entries spell them.
+const std::array<CName, 2> kCqtInverseNames{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}};
+
 namespace check = sonare::util::check;
 
 // Refuses an inverse-transform input buffer that does not hold exactly rows * n_frames floats,
@@ -97,8 +100,12 @@ SonareError sonare_cqt_to_audio_checked(const float* magnitude, size_t input_len
   config.fmin = fmin_hz;
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
-  return fill_audio_samples(
-      griffinlim_cqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter), out, out_length);
+  const Audio audio = with_c_names(kCqtInverseNames, [&] {
+    return sonare::detail::with_fixed_filter_scale({"fmin", "bins_per_octave"}, "sr", [&] {
+      return griffinlim_cqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter);
+    });
+  });
+  return fill_audio_samples(audio, out, out_length);
   SONARE_C_CATCH
 }
 
@@ -131,8 +138,12 @@ SonareError sonare_vqt_to_audio_checked(const float* magnitude, size_t input_len
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
   config.gamma = gamma;
-  return fill_audio_samples(
-      griffinlim_vqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter), out, out_length);
+  const Audio audio = with_c_names(kCqtInverseNames, [&] {
+    return sonare::detail::with_fixed_filter_scale({"fmin", "bins_per_octave", "gamma"}, "sr", [&] {
+      return griffinlim_vqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter);
+    });
+  });
+  return fill_audio_samples(audio, out, out_length);
   SONARE_C_CATCH
 }
 

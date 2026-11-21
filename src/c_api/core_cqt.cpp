@@ -3,8 +3,8 @@
 
 namespace {
 
-// The core spells the lowest frequency "fmin"; every CQT-family entry takes it as fmin_hz.
-const std::array<CName, 1> kFminName{{{"fmin", "fmin_hz"}}};
+// The core's names for the lowest frequency and the rate, as every CQT-family entry spells them.
+const std::array<CName, 2> kCqtNames{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}};
 
 // Shared body of the CQT-family entry points; @p transform maps (Audio, CqtConfig) to a CqtResult.
 template <typename Transform>
@@ -25,7 +25,7 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
         config.n_bins = n_bins;
         config.bins_per_octave = bins_per_octave;
         config.filter_scale = filter_scale;
-        with_c_names(kFminName, [&] { validate_cqt_config(config); });
+        with_c_names(kCqtNames, [&] { validate_cqt_config(config); });
       });
       err != SONARE_OK) {
     return err;
@@ -40,7 +40,7 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
         config.n_bins = n_bins;
         config.bins_per_octave = bins_per_octave;
         config.filter_scale = filter_scale;
-        CqtResult result = with_c_names(kFminName, [&] { return transform(audio, config); });
+        CqtResult result = with_c_names(kCqtNames, [&] { return transform(audio, config); });
         return fill_cqt_result(result, out);
       });
 }
@@ -93,7 +93,7 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
         config.n_bins = n_bins;
         config.bins_per_octave = bins_per_octave;
         config.filter_scale = filter_scale;
-        with_c_names(kFminName, [&] { validate_cqt_config(config.to_cqt_config()); });
+        with_c_names(kCqtNames, [&] { validate_cqt_config(config.to_cqt_config()); });
         // NaN is the automatic spelling; every other value is a bandwidth offset in Hz.
         if (!std::isnan(gamma)) util::check::at_least(gamma, 0.0, "gamma");
       });
@@ -111,7 +111,7 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
         config.bins_per_octave = bins_per_octave;
         config.filter_scale = filter_scale;
         config.gamma = gamma;
-        VqtResult result = with_c_names(kFminName, [&] { return vqt(audio, config); });
+        VqtResult result = with_c_names(kCqtNames, [&] { return vqt(audio, config); });
         const SonareError filled = fill_cqt_result(result, out);
         if (filled == SONARE_OK) out->gamma = resolve_vqt_gamma(config);
         return filled;

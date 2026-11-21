@@ -81,7 +81,6 @@ constexpr size_t kMaxCqtCacheSize = 12;
 // ceiling must admit that shipped configuration while still rejecting hostile
 // low-fmin / oversized requests.
 constexpr size_t kMaxCqtKernelElements = 32 * 1024 * 1024;
-constexpr int kMaxCqtFftLength = 131072;
 static_assert(kMaxCqtHopLength == kMaxCqtFftLength / 2, "a hop spans at most half the FFT");
 
 /// @brief Scratch the builders of one kernel may hold between them.
@@ -253,21 +252,26 @@ namespace detail {
 
 void validate_cqt_top_bin(const std::vector<float>& frequencies, int sr) {
   if (frequencies.empty() || !(frequencies.back() < static_cast<float>(sr) * 0.5f)) {
-    util::check::refuse_relation({"fmin", "n_bins", "bins_per_octave"},
-                                 "{0} * 2^(({1} - 1) / {2}) must be less than sr / 2");
+    util::check::refuse_relation({"fmin", "n_bins", "bins_per_octave", "sr"},
+                                 "{0} * 2^(({1} - 1) / {2}) must be less than {3} / 2");
   }
 }
 
 void validate_cqt_filter_length(double longest, int max_length, std::vector<std::string> subjects) {
   if (std::isfinite(longest) && longest <= static_cast<double>(max_length)) return;
+  refuse_cqt_filter_length(max_length, std::move(subjects), "sr");
+}
+
+void refuse_cqt_filter_length(int max_length, std::vector<std::string> subjects, std::string rate) {
   std::string text;
   for (size_t i = 0; i < subjects.size(); ++i) {
     if (i > 0) text += i + 1 == subjects.size() ? " and " : ", ";
     text += "{" + std::to_string(i) + "}";
   }
-  util::check::refuse_relation(std::move(subjects), text + " must keep every filter at most " +
-                                                        std::to_string(max_length) +
-                                                        " samples long at sr");
+  text += " must keep every filter at most " + std::to_string(max_length) + " samples long at {" +
+          std::to_string(subjects.size()) + "}";
+  subjects.push_back(std::move(rate));
+  util::check::refuse_relation(std::move(subjects), text);
 }
 
 void validate_cqt_kernel_bins(int n_bins, int fft_length, std::size_t max_elements) {

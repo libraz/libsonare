@@ -212,12 +212,12 @@ const FLOAT_FIELDS: FloatField[] = [
   },
   {
     entry: 'pseudoCqt',
-    key: 'fmin',
+    key: 'fminHz',
     run: (v) => m().pseudoCqt(pureTone300, SR, 256, v, 12, 12, undefined),
   },
   {
     entry: 'hybridCqt',
-    key: 'fmin',
+    key: 'fminHz',
     run: (v) => m().hybridCqt(pureTone300, SR, 256, v, 12, 12, undefined),
   },
   {

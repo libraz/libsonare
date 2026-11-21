@@ -128,6 +128,7 @@
 #include "util/exception.h"
 #include "util/frame.h"
 #include "util/padding.h"
+#include "util/parameter_checks.h"
 #include "util/peak.h"
 #include "util/types.h"
 #include "util/vector_normalize.h"
@@ -281,6 +282,9 @@ inline constexpr std::size_t kMaxWasmFloat32Elements = 64u * 1024u * 1024u;
 /// as elements are read and validated — so a fabricated `.length` cannot turn
 /// into an allocation the actual data does not back.
 inline constexpr std::size_t kMaxWasmObjectArrayReserve = 1u * 1024u * 1024u;
+/// The CQT-family core names for the lowest frequency and the rate, as its requests spell them.
+inline constexpr std::array<sonare::util::check::MemberKey, 2> kCqtRequestKeys{
+    {{"fmin", "fminHz"}, {"sr", "sampleRate"}}};
 /// Validates a caller-supplied COUNT that arrived as a bare JS number, before
 /// it is allowed anywhere near an allocation.
 /// @details The array-like readers below cannot help here: there is no object

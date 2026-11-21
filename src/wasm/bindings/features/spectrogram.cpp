@@ -393,7 +393,13 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   config.fmin = fmin;
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
-  const Audio result = griffinlim_cqt(data.data(), n_bins, n_frames, config, sample_rate, n_iter);
+  const Audio result = sonare::util::check::with_camel_paths(
+      [&] {
+        return sonare::detail::with_fixed_filter_scale({"fmin", "bins_per_octave"}, "sr", [&] {
+          return griffinlim_cqt(data.data(), n_bins, n_frames, config, sample_rate, n_iter);
+        });
+      },
+      kCqtRequestKeys);
   return vectorToFloat32Array(result.data(), result.size());
 }
 
@@ -425,7 +431,14 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
   config.gamma = gamma;
-  const Audio result = griffinlim_vqt(data.data(), n_bins, n_frames, config, sample_rate, n_iter);
+  const Audio result = sonare::util::check::with_camel_paths(
+      [&] {
+        return sonare::detail::with_fixed_filter_scale(
+            {"fmin", "bins_per_octave", "gamma"}, "sr", [&] {
+              return griffinlim_vqt(data.data(), n_bins, n_frames, config, sample_rate, n_iter);
+            });
+      },
+      kCqtRequestKeys);
   return vectorToFloat32Array(result.data(), result.size());
 }
 

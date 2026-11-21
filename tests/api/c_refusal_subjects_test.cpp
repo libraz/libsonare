@@ -183,6 +183,18 @@ TEST_CASE("the CQT inverse refuses each member by its core name", "[c_api][featu
         "bins_per_octave must be an integer in [1, 2147483647]");
   CHECK(message(24, 4, 22050, 512, 32.7f, 12, 0) == "n_iter must be an integer in [1, 256]");
   CHECK(message(24, 4, 22050, 512, 32.7f, 12, 257) == "n_iter must be an integer in [1, 256]");
+  CHECK(message(24, 4, 22050, 512, 20000.0f, 12, 4) ==
+        "fmin_hz * 2^((n_bins - 1) / bins_per_octave) must be less than sample_rate / 2");
+  // The filter scale is fixed at 1, so the filter-length relation names only what a caller moves.
+  CHECK(message(24, 4, 22050, 512, 0.01f, 12, 4) ==
+        "fmin_hz and bins_per_octave must keep every filter at most 131072 samples long at "
+        "sample_rate");
+  CHECK(sonare_vqt_to_audio_checked(magnitude.data(), magnitude.size(), 24, 4, 22050, 512, 0.01f,
+                                    12, 0.0f, 4, &out,
+                                    &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "fmin_hz, bins_per_octave and gamma must keep every filter at most 131072 samples long at "
+        "sample_rate");
 }
 
 TEST_CASE("the music feature entries refuse their own members", "[c_api][feature]") {

@@ -3,6 +3,7 @@
 /// @file cqt.h
 /// @brief Constant-Q Transform (CQT) for music signal analysis.
 
+#include <algorithm>
 #include <complex>
 #include <cstddef>
 #include <functional>
@@ -12,6 +13,7 @@
 
 #include "core/audio.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -174,18 +176,40 @@ void validate_cqt_fmin(float fmin);
 /// @throws SonareParameterRefusal(InvalidParameter).
 void validate_cqt_config(const CqtConfig& config);
 
+/// @brief The longest filter, and so the largest FFT, a CQT-family kernel builds.
+inline constexpr int kMaxCqtFftLength = 131072;
+
 /// @brief The largest hop a CQT-family transform takes, half its largest FFT.
 inline constexpr int kMaxCqtHopLength = 65536;
 
 namespace detail {
 
-/// @brief Refuses a grid whose top bin is not below Nyquist, naming fmin, n_bins and
-///        bins_per_octave.
+/// @brief Refuses a grid whose top bin is not below Nyquist, naming fmin, n_bins,
+///        bins_per_octave and sr.
 void validate_cqt_top_bin(const std::vector<float>& frequencies, int sr);
 
-/// @brief Refuses a filter longer than @p max_length samples, naming @p subjects: the members
-///        the filter length is a function of.
+/// @brief Refuses a filter longer than @p max_length samples at sr, naming @p subjects: the
+///        members the filter length is a function of.
 void validate_cqt_filter_length(double longest, int max_length, std::vector<std::string> subjects);
+
+/// @brief Refuses a filter past @p max_length samples, naming @p subjects and then @p rate, the
+///        sample rate the length is measured at.
+[[noreturn]] void refuse_cqt_filter_length(int max_length, std::vector<std::string> subjects,
+                                           std::string rate);
+
+/// @brief Runs @p call for an entry whose filter_scale is fixed, restating a filter-length
+///        refusal in @p subjects and @p rate, the members such a caller can move.
+template <typename Call>
+auto with_fixed_filter_scale(std::vector<std::string> subjects, std::string rate,
+                             Call&& call) -> decltype(call()) {
+  try {
+    return call();
+  } catch (const SonareParameterRefusal& e) {
+    const std::vector<std::string>& named = e.subjects();
+    if (std::find(named.begin(), named.end(), "filter_scale") == named.end()) throw;
+    refuse_cqt_filter_length(kMaxCqtFftLength, std::move(subjects), std::move(rate));
+  }
+}
 
 /// @brief Refuses an @p n_bins whose kernel at @p fft_length exceeds @p max_elements, stating
 ///        the largest n_bins that fits.

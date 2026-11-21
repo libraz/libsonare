@@ -307,7 +307,7 @@ val cqtResultToVal(const CqtResult& result, float gamma = 0.0f) {
 
 val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
            const val& n_bins, const val& bins_per_octave, const val& filter_scale_val) {
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
@@ -319,12 +319,13 @@ val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val
   config.filter_scale =
       optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
-  return cqtResultToVal(cqt(audio, config));
+  return cqtResultToVal(
+      util::check::with_camel_paths([&] { return cqt(audio, config); }, kCqtRequestKeys));
 }
 
 val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
                   const val& n_bins, const val& bins_per_octave, const val& filter_scale_val) {
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
@@ -336,12 +337,13 @@ val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, co
   config.filter_scale =
       optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
-  return cqtResultToVal(pseudo_cqt(audio, config));
+  return cqtResultToVal(
+      util::check::with_camel_paths([&] { return pseudo_cqt(audio, config); }, kCqtRequestKeys));
 }
 
 val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
                   const val& n_bins, const val& bins_per_octave, const val& filter_scale_val) {
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
@@ -353,13 +355,14 @@ val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, co
   config.filter_scale =
       optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
 
-  return cqtResultToVal(hybrid_cqt(audio, config));
+  return cqtResultToVal(
+      util::check::with_camel_paths([&] { return hybrid_cqt(audio, config); }, kCqtRequestKeys));
 }
 
 val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
            const val& n_bins, const val& bins_per_octave, const val& filter_scale_val,
            const val& gamma_val) {
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
@@ -376,7 +379,9 @@ val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val
   if (gamma.has_value() && !std::isnan(*gamma)) util::check::at_least(*gamma, 0.0, "gamma");
   config.gamma = gamma.value_or(std::numeric_limits<float>::quiet_NaN());
 
-  return cqtResultToVal(vqt(audio, config), resolve_vqt_gamma(config));
+  return cqtResultToVal(
+      util::check::with_camel_paths([&] { return vqt(audio, config); }, kCqtRequestKeys),
+      resolve_vqt_gamma(config));
 }
 
 void registerFeatureMusicBindings() {
