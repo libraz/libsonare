@@ -313,18 +313,18 @@ def mastering_insert_param_info(
 ) -> list[MasteringInsertParamInfo]:
     """Return parameter metadata for a given insert/FX processor.
 
-    Each entry describes one parameter the insert reads, with keys ``name``
-    (camelCase parameter name), ``id`` (stable numeric parameter id) and
-    ``rtSafe`` (whether the parameter can be changed on the realtime audio
-    thread), and optional ``unit`` metadata. Any id of
+    Each :class:`MasteringInsertParamInfo` describes one parameter the insert
+    reads, with ``name`` (camelCase parameter name), ``id`` (stable numeric
+    parameter id) and ``rt_safe`` (whether the parameter can be changed on the
+    realtime audio thread), and optional ``unit`` metadata. Any id of
     :func:`mastering_processor_catalog` is served, an offline repair stage
     (``repair.declick``, ``repair.declip``, ``repair.trimSilence``) included,
     with the rows its catalog entry's ``params`` carries; those rows have a
     ``None`` ``id``. Returns an empty list for an unknown ``insert`` (or one whose
     insert needs an unavailable build feature, e.g. FX).
 
-    With ``sample_rate``, a key whose ``maxRelativeTo`` is ``"nyquist"`` reports
-    as ``max`` / ``maxExclusive`` the bound accepted when the insert is built and
+    With ``sample_rate``, a key whose ``max_relative_to`` is ``"nyquist"`` reports
+    as ``max`` / ``max_exclusive`` the bound accepted when the insert is built and
     prepared at that rate (an EQ band frequency reaches 48000 for a 96000 Hz
     host). Without it the rate-less answer is returned, with the 24000 cap of
     the 48 kHz probe. A rate outside the supported range raises.
@@ -352,7 +352,7 @@ def mastering_insert_timing(
     linear-phase crossover, a lookahead). The insert is built exactly as a
     scene or strip would build it and asked after ``prepare``, so the answer
     is the one that instance will report. :func:`capability_catalog`'s
-    ``latencySamples`` and ``tailSamples`` are this query at default
+    ``latency_samples`` and ``tail_samples`` are this query at default
     parameters and 48 kHz.
 
     ``params`` is keyed as in :func:`mastering_insert_param_info` and shaped as
@@ -385,15 +385,16 @@ def mastering_insert_timing(
 def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
     """Return the full catalog of mastering processors.
 
-    Each entry describes one processor with keys ``id`` (camelCase processor
-    id, e.g. ``dynamics.compressor``), ``kind`` (one of ``"realtime"``,
-    ``"offline"`` or ``"pair"``), ``realtimeInsertable`` (whether the processor
-    can run as a realtime insert), ``stereoOnly`` (whether it requires a
-    stereo signal), ``latencySamples`` and ``tailSamples`` (reported processing
-    latency and audible decay for one default 48 kHz / 512-sample prepared
-    probe; 0 for offline processors and representative values for
-    configuration-dependent processors), and ``channelPolicy`` (how the
-    mixer wraps the processor on a >2-channel surround bus insert:
+    Each :class:`MasteringProcessorCatalogEntry` describes one processor with
+    ``id`` (camelCase processor id, e.g. ``dynamics.compressor``), ``kind``
+    (one of ``"realtime"``, ``"offline"`` or ``"pair"``), ``realtime_insertable``
+    (whether the processor can run as a realtime insert), ``stereo_only``
+    (whether it requires a stereo signal), ``latency_samples`` and
+    ``tail_samples`` (reported processing latency and audible decay for one
+    default 48 kHz / 512-sample prepared probe; 0 for offline processors and
+    representative values for configuration-dependent processors), and
+    ``channel_policy`` (how the mixer wraps the processor on a >2-channel
+    surround bus insert:
     ``"multichannel"`` for one full-buffer call, ``"stereoPairOnly"`` for
     front-L/R-only with surround planes passed through dry). ``kind`` follows
     the precedence pair > realtime > offline:

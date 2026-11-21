@@ -49,7 +49,7 @@ from ._result_records import _result_to_json_dict
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
-    """Map ``suggest-mix --params`` keys onto ``suggest_mix_scene`` keywords.
+    """Map ``suggest-mix --params`` keys onto ``mixing_assistant_suggest`` keywords.
 
     The accepted set is the assistant's own option table, so either spelling the
     C ABI reads is accepted and nothing here restates the list. Two conversions

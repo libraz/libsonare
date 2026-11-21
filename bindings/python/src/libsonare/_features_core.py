@@ -389,10 +389,9 @@ def chroma(
     The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
     librosa.feature.chroma_stft -- which estimates tuning from the signal when
     none is given -- this does NOT auto-estimate and takes no tuning argument.
-    A tuning offset (a fraction of a semitone, which :func:`estimate_tuning`
-    returns at 12 bins per octave) is applied through :func:`analyze` (and to
-    chords through :func:`detect_chords`); both also measure it themselves with
-    ``tuning="auto"``.
+    A tuning offset in cents is applied through :func:`analyze` (and to chords
+    through :func:`detect_chords`); both also measure it themselves with
+    ``tuning_cents="auto"``.
 
     Args:
         samples: Audio samples.
