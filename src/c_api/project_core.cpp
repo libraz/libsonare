@@ -652,15 +652,25 @@ SonareError sonare_project_time_signature_count(const SonareProject* project, si
 }
 
 const char* sonare_project_diagnostic_code_name(int code) {
+#if defined(SONARE_WITH_ARRANGEMENT)
   if (code < 0) return nullptr;
   return sonare::arrangement::diagnostic_code_name(
       static_cast<sonare::arrangement::Diagnostic::Code>(code));
+#else
+  (void)code;
+  return nullptr;
+#endif
 }
 
 const char* sonare_project_diagnostic_severity_name(int severity) {
+#if defined(SONARE_WITH_ARRANGEMENT)
   if (severity < 0) return nullptr;
   return sonare::arrangement::diagnostic_severity_name(
       static_cast<sonare::arrangement::Diagnostic::Severity>(severity));
+#else
+  (void)severity;
+  return nullptr;
+#endif
 }
 
 SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out) {

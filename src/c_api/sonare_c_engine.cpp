@@ -13,6 +13,7 @@
 #include "rt/command.h"
 #include "sonare_c_engine_internal.h"
 #include "sonare_c_internal.h"
+#include "streaming/realtime_limits.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
 
